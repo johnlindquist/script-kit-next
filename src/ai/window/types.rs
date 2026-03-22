@@ -553,6 +553,11 @@ pub(super) enum AiCommand {
         text: String,
         submit: bool,
     },
+    SetInputWithContextParts {
+        text: String,
+        parts: Vec<crate::ai::message_parts::AiContextPart>,
+        submit: bool,
+    },
     /// Set input with an attached image (base64 encoded PNG)
     SetInputWithImage {
         text: String,

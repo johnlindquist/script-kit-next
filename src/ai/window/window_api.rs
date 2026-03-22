@@ -420,6 +420,48 @@ pub fn set_ai_input(cx: &mut App, text: &str, submit: bool) {
     }
 }
 
+/// Set the main input text in the AI window along with pending context parts.
+pub fn set_ai_input_with_context_parts(
+    cx: &mut App,
+    text: &str,
+    parts: &[crate::ai::message_parts::AiContextPart],
+    submit: bool,
+) {
+    use crate::logging;
+
+    let handle = {
+        let slot = AI_WINDOW.get_or_init(|| std::sync::Mutex::new(None));
+        slot.lock().ok().and_then(|g| *g)
+    };
+    let window_is_open = handle.is_some();
+    let command_queued = get_pending_commands()
+        .lock()
+        .ok()
+        .map(|mut commands| {
+            ai_window_queue_command_if_open(
+                &mut commands,
+                window_is_open,
+                AiCommand::SetInputWithContextParts {
+                    text: text.to_string(),
+                    parts: parts.to_vec(),
+                    submit,
+                },
+            )
+        })
+        .unwrap_or(false);
+
+    if !command_queued {
+        logging::log("AI", "Cannot set input with context parts - AI window not open");
+        return;
+    }
+
+    if let Some(handle) = handle {
+        let _ = handle.update(cx, |_root, _window, cx| {
+            cx.notify();
+        });
+    }
+}
+
 /// Set the main input text with an attached image in the AI window and optionally submit.
 /// The image should be base64 encoded PNG data.
 /// Used by AI commands like "Send Screen to AI Chat".

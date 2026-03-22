@@ -1,7 +1,12 @@
 use super::model::{
     PromptCompilerDecision, PromptCompilerPreview, PromptCompilerRowKind, PromptCompilerSnapshot,
 };
-use crate::ai::message_parts::PreparedMessageReceipt;
+use crate::ai::message_parts::{
+    AiContextPart, ContextAssemblyDuplicate, ContextAssemblyOrigin, ContextAssemblyReceipt,
+    ContextPartPreparationOutcome, ContextPartPreparationOutcomeKind, ContextResolutionFailure,
+    ContextResolutionReceipt, PreparedMessageDecision, PreparedMessageReceipt,
+    AI_MESSAGE_PREPARATION_SCHEMA_VERSION,
+};
 use serde_json::json;
 
 fn make_receipt(value: serde_json::Value) -> PreparedMessageReceipt {
@@ -503,4 +508,343 @@ fn metadata_only_outcome_produces_correct_row_kind() {
     assert_eq!(preview.rows.len(), 1);
     assert_eq!(preview.rows[0].kind, PromptCompilerRowKind::MetadataOnly);
     assert_eq!(preview.rows[0].label, "big.bin");
+}
+
+// ---------------------------------------------------------------------------
+// Struct-based edge-case tests for lossless contract verification
+// ---------------------------------------------------------------------------
+
+/// Build a receipt with all edge-case fields populated using direct struct
+/// construction (no JSON round-trip) for precise control.
+fn partial_receipt_struct() -> PreparedMessageReceipt {
+    PreparedMessageReceipt {
+        schema_version: AI_MESSAGE_PREPARATION_SCHEMA_VERSION,
+        decision: PreparedMessageDecision::Partial,
+        raw_content: "Explain this".to_string(),
+        final_user_content:
+            "<context source=\"kit://selection\" mimeType=\"text/plain\">\nselected text\n</context>\n\nExplain this"
+                .to_string(),
+        context: ContextResolutionReceipt {
+            attempted: 3,
+            resolved: 2,
+            failures: vec![ContextResolutionFailure {
+                label: "broken.txt".to_string(),
+                source: "/tmp/broken.txt".to_string(),
+                error: "Failed to stat attachment: boom".to_string(),
+            }],
+            prompt_prefix:
+                "<context source=\"kit://selection\" mimeType=\"text/plain\">\nselected text\n</context>"
+                    .to_string(),
+        },
+        assembly: Some(ContextAssemblyReceipt {
+            mention_count: 1,
+            pending_count: 3,
+            merged_count: 3,
+            duplicates_removed: 1,
+            duplicates: vec![ContextAssemblyDuplicate {
+                kept_from: ContextAssemblyOrigin::Mention,
+                dropped_from: ContextAssemblyOrigin::Pending,
+                label: "Selection".to_string(),
+                source: "kit://selection".to_string(),
+            }],
+            merged_parts: vec![
+                AiContextPart::ResourceUri {
+                    uri: "kit://selection".to_string(),
+                    label: "Selection".to_string(),
+                },
+                AiContextPart::FilePath {
+                    path: "/tmp/readme.txt".to_string(),
+                    label: "readme.txt".to_string(),
+                },
+                AiContextPart::FilePath {
+                    path: "/tmp/broken.txt".to_string(),
+                    label: "broken.txt".to_string(),
+                },
+            ],
+        }),
+        outcomes: vec![
+            ContextPartPreparationOutcome {
+                label: "Selection".to_string(),
+                source: "kit://selection".to_string(),
+                kind: ContextPartPreparationOutcomeKind::FullContent,
+                detail: Some("mimeType=text/plain".to_string()),
+            },
+            ContextPartPreparationOutcome {
+                label: "readme.txt".to_string(),
+                source: "/tmp/readme.txt".to_string(),
+                kind: ContextPartPreparationOutcomeKind::MetadataOnly,
+                detail: Some("textReadError=invalid utf-8".to_string()),
+            },
+            ContextPartPreparationOutcome {
+                label: "broken.txt".to_string(),
+                source: "/tmp/broken.txt".to_string(),
+                kind: ContextPartPreparationOutcomeKind::Failed,
+                detail: Some("Failed to stat attachment: boom".to_string()),
+            },
+        ],
+        unresolved_parts: vec![AiContextPart::FilePath {
+            path: "/tmp/broken.txt".to_string(),
+            label: "broken.txt".to_string(),
+        }],
+        user_error: Some(
+            "Failed to resolve context: broken.txt: Failed to stat attachment: boom".to_string(),
+        ),
+    }
+}
+
+fn has_row(
+    preview: &PromptCompilerPreview,
+    kind: PromptCompilerRowKind,
+    label: &str,
+    source: &str,
+) -> bool {
+    preview
+        .rows
+        .iter()
+        .any(|row| row.kind == kind && row.label == label && row.source == source)
+}
+
+#[test]
+fn from_receipt_preserves_exact_strings_and_counts() {
+    let preview = PromptCompilerPreview::from_receipt(&partial_receipt_struct());
+
+    assert_eq!(preview.decision, PromptCompilerDecision::Partial);
+    assert_eq!(preview.raw_content, "Explain this");
+    assert!(preview.final_user_content.ends_with("Explain this"));
+    assert!(preview
+        .final_user_content
+        .starts_with("<context source=\"kit://selection\""));
+    assert_eq!(preview.attempted, 3);
+    assert_eq!(preview.resolved, 2);
+    assert_eq!(preview.failures, 1);
+    assert_eq!(preview.duplicates_removed, 1);
+    assert!(
+        preview.approx_tokens > 0,
+        "non-empty final_user_content must produce nonzero token estimate"
+    );
+
+    tracing::info!(
+        decision = ?preview.decision,
+        attempted = preview.attempted,
+        resolved = preview.resolved,
+        failures = preview.failures,
+        duplicates_removed = preview.duplicates_removed,
+        approx_tokens = preview.approx_tokens,
+        "from_receipt_preserves_exact_strings_and_counts: preview summary"
+    );
+}
+
+#[test]
+fn from_receipt_synthesizes_duplicate_and_unresolved_rows() {
+    let preview = PromptCompilerPreview::from_receipt(&partial_receipt_struct());
+
+    assert!(
+        has_row(
+            &preview,
+            PromptCompilerRowKind::DuplicateDropped,
+            "Selection",
+            "kit://selection"
+        ),
+        "must synthesize DuplicateDropped row from assembly duplicates"
+    );
+    assert!(
+        has_row(
+            &preview,
+            PromptCompilerRowKind::UnresolvedPart,
+            "broken.txt",
+            "/tmp/broken.txt"
+        ),
+        "must synthesize UnresolvedPart row from unresolved_parts"
+    );
+
+    tracing::info!(
+        row_count = preview.rows.len(),
+        "from_receipt_synthesizes_duplicate_and_unresolved_rows: verified"
+    );
+}
+
+#[test]
+fn from_receipt_preserves_all_outcome_kinds() {
+    let preview = PromptCompilerPreview::from_receipt(&partial_receipt_struct());
+
+    assert!(
+        has_row(
+            &preview,
+            PromptCompilerRowKind::FullContent,
+            "Selection",
+            "kit://selection"
+        ),
+        "FullContent outcome must map to FullContent row"
+    );
+    assert!(
+        has_row(
+            &preview,
+            PromptCompilerRowKind::MetadataOnly,
+            "readme.txt",
+            "/tmp/readme.txt"
+        ),
+        "MetadataOnly outcome must map to MetadataOnly row"
+    );
+    assert!(
+        has_row(
+            &preview,
+            PromptCompilerRowKind::Failed,
+            "broken.txt",
+            "/tmp/broken.txt"
+        ),
+        "Failed outcome must map to Failed row"
+    );
+
+    // Total rows: 1 duplicate + 3 outcomes + 1 unresolved = 5
+    assert_eq!(preview.rows.len(), 5);
+
+    tracing::info!(
+        row_count = preview.rows.len(),
+        "from_receipt_preserves_all_outcome_kinds: all 5 row kinds verified"
+    );
+}
+
+#[test]
+fn from_receipt_exact_final_user_content_preservation() {
+    let receipt = partial_receipt_struct();
+    let preview = PromptCompilerPreview::from_receipt(&receipt);
+
+    // final_user_content must be byte-identical to the receipt's field
+    assert_eq!(
+        preview.final_user_content, receipt.final_user_content,
+        "final_user_content must be exactly preserved from receipt"
+    );
+
+    // raw_content must be byte-identical
+    assert_eq!(
+        preview.raw_content, receipt.raw_content,
+        "raw_content must be exactly preserved from receipt"
+    );
+
+    // prompt_prefix must be byte-identical
+    assert_eq!(
+        preview.prompt_prefix, receipt.context.prompt_prefix,
+        "prompt_prefix must be exactly preserved from receipt"
+    );
+}
+
+#[test]
+fn from_receipt_decision_mapping_is_exhaustive() {
+    let base = partial_receipt_struct();
+
+    // Ready
+    let mut ready = base.clone();
+    ready.decision = PreparedMessageDecision::Ready;
+    assert_eq!(
+        PromptCompilerPreview::from_receipt(&ready).decision,
+        PromptCompilerDecision::Ready
+    );
+
+    // Partial
+    let mut partial = base.clone();
+    partial.decision = PreparedMessageDecision::Partial;
+    assert_eq!(
+        PromptCompilerPreview::from_receipt(&partial).decision,
+        PromptCompilerDecision::Partial
+    );
+
+    // Blocked
+    let mut blocked = base;
+    blocked.decision = PreparedMessageDecision::Blocked;
+    assert_eq!(
+        PromptCompilerPreview::from_receipt(&blocked).decision,
+        PromptCompilerDecision::Blocked
+    );
+
+    tracing::info!("from_receipt_decision_mapping_is_exhaustive: all 3 decisions verified");
+}
+
+#[test]
+fn from_receipt_no_assembly_yields_zero_duplicates() {
+    let receipt = PreparedMessageReceipt {
+        schema_version: AI_MESSAGE_PREPARATION_SCHEMA_VERSION,
+        decision: PreparedMessageDecision::Ready,
+        raw_content: "hello".to_string(),
+        final_user_content: "hello".to_string(),
+        context: ContextResolutionReceipt {
+            attempted: 0,
+            resolved: 0,
+            failures: vec![],
+            prompt_prefix: String::new(),
+        },
+        assembly: None,
+        outcomes: vec![],
+        unresolved_parts: vec![],
+        user_error: None,
+    };
+
+    let preview = PromptCompilerPreview::from_receipt(&receipt);
+
+    assert_eq!(preview.duplicates_removed, 0);
+    assert!(
+        !preview
+            .rows
+            .iter()
+            .any(|r| r.kind == PromptCompilerRowKind::DuplicateDropped),
+        "no assembly means no DuplicateDropped rows"
+    );
+}
+
+#[test]
+fn from_receipt_empty_content_yields_zero_tokens() {
+    let receipt = PreparedMessageReceipt {
+        schema_version: AI_MESSAGE_PREPARATION_SCHEMA_VERSION,
+        decision: PreparedMessageDecision::Blocked,
+        raw_content: String::new(),
+        final_user_content: String::new(),
+        context: ContextResolutionReceipt {
+            attempted: 0,
+            resolved: 0,
+            failures: vec![],
+            prompt_prefix: String::new(),
+        },
+        assembly: None,
+        outcomes: vec![],
+        unresolved_parts: vec![],
+        user_error: Some("No content".to_string()),
+    };
+
+    let preview = PromptCompilerPreview::from_receipt(&receipt);
+
+    assert_eq!(preview.approx_tokens, 0, "empty content must yield zero tokens");
+    assert_eq!(preview.rows.len(), 0);
+}
+
+#[test]
+fn from_receipt_duplicate_row_detail_contains_origin_info() {
+    let preview = PromptCompilerPreview::from_receipt(&partial_receipt_struct());
+
+    let dup_row = preview
+        .rows
+        .iter()
+        .find(|r| r.kind == PromptCompilerRowKind::DuplicateDropped)
+        .expect("must have a DuplicateDropped row");
+
+    let detail = dup_row.detail.as_deref().unwrap_or("");
+    assert!(
+        detail.contains("Mention") && detail.contains("Pending"),
+        "duplicate row detail must contain origin info, got: {detail}"
+    );
+}
+
+#[test]
+fn from_receipt_unresolved_row_detail_marks_submit_time() {
+    let preview = PromptCompilerPreview::from_receipt(&partial_receipt_struct());
+
+    let unresolved_row = preview
+        .rows
+        .iter()
+        .find(|r| r.kind == PromptCompilerRowKind::UnresolvedPart)
+        .expect("must have an UnresolvedPart row");
+
+    let detail = unresolved_row.detail.as_deref().unwrap_or("");
+    assert!(
+        detail.contains("unresolved"),
+        "unresolved row detail must indicate submit-time status, got: {detail}"
+    );
 }

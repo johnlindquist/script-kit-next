@@ -98,6 +98,17 @@ fn format_context_summary(
     parts.join(" \u{00b7} ")
 }
 
+/// Pure helper: select the best available receipt for the prompt compiler pane.
+///
+/// Prefers the preflight receipt (pre-send preview) over the last prepared
+/// receipt (post-send). Returns `None` when neither exists.
+fn select_prompt_compiler_receipt<'a>(
+    preflight: &'a context_preflight::ContextPreflightState,
+    last_prepared: &'a Option<crate::ai::message_parts::PreparedMessageReceipt>,
+) -> Option<&'a crate::ai::message_parts::PreparedMessageReceipt> {
+    preflight.receipt.as_ref().or(last_prepared.as_ref())
+}
+
 impl AiApp {
     pub(super) fn render_main_panel(&self, cx: &mut Context<Self>) -> impl IntoElement {
         // Build input area at bottom:
@@ -573,10 +584,10 @@ impl AiApp {
     fn active_prompt_compiler_receipt(
         &self,
     ) -> Option<&crate::ai::message_parts::PreparedMessageReceipt> {
-        self.context_preflight
-            .receipt
-            .as_ref()
-            .or(self.last_prepared_message_receipt.as_ref())
+        select_prompt_compiler_receipt(
+            &self.context_preflight,
+            &self.last_prepared_message_receipt,
+        )
     }
 
     /// Render the prompt compiler pane: a human-readable, keyboard-first
@@ -1151,5 +1162,80 @@ mod tests {
         assert_eq!(resolved, 2);
         assert_eq!(failures, 0);
         assert_eq!(tokens, 2);
+    }
+
+    // --- select_prompt_compiler_receipt tests ---
+
+    fn test_receipt(
+        raw: &str,
+        final_user_content: &str,
+        decision: crate::ai::message_parts::PreparedMessageDecision,
+    ) -> crate::ai::message_parts::PreparedMessageReceipt {
+        crate::ai::message_parts::PreparedMessageReceipt {
+            schema_version: crate::ai::message_parts::AI_MESSAGE_PREPARATION_SCHEMA_VERSION,
+            decision,
+            raw_content: raw.to_string(),
+            final_user_content: final_user_content.to_string(),
+            context: crate::ai::message_parts::ContextResolutionReceipt {
+                attempted: 0,
+                resolved: 0,
+                failures: vec![],
+                prompt_prefix: String::new(),
+            },
+            assembly: None,
+            outcomes: vec![],
+            unresolved_parts: vec![],
+            user_error: None,
+        }
+    }
+
+    #[test]
+    fn test_select_prompt_compiler_receipt_prefers_preflight_receipt() {
+        let preflight_receipt = test_receipt(
+            "preflight raw",
+            "preflight final",
+            crate::ai::message_parts::PreparedMessageDecision::Ready,
+        );
+        let post_send_receipt = test_receipt(
+            "post raw",
+            "post final",
+            crate::ai::message_parts::PreparedMessageDecision::Ready,
+        );
+
+        let preflight = context_preflight::ContextPreflightState {
+            receipt: Some(preflight_receipt),
+            ..Default::default()
+        };
+        let last_prepared = Some(post_send_receipt);
+
+        let selected = select_prompt_compiler_receipt(&preflight, &last_prepared)
+            .expect("expected a selected receipt");
+
+        assert_eq!(selected.raw_content, "preflight raw");
+        assert_eq!(selected.final_user_content, "preflight final");
+    }
+
+    #[test]
+    fn test_select_prompt_compiler_receipt_falls_back_to_last_prepared() {
+        let preflight = context_preflight::ContextPreflightState::default();
+        let last_prepared = Some(test_receipt(
+            "post raw",
+            "post final",
+            crate::ai::message_parts::PreparedMessageDecision::Ready,
+        ));
+
+        let selected = select_prompt_compiler_receipt(&preflight, &last_prepared)
+            .expect("expected fallback receipt");
+
+        assert_eq!(selected.raw_content, "post raw");
+        assert_eq!(selected.final_user_content, "post final");
+    }
+
+    #[test]
+    fn test_select_prompt_compiler_receipt_returns_none_when_no_receipt_exists() {
+        let preflight = context_preflight::ContextPreflightState::default();
+        let last_prepared = None;
+
+        assert!(select_prompt_compiler_receipt(&preflight, &last_prepared).is_none());
     }
 }

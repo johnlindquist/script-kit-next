@@ -14,6 +14,40 @@ pub(super) struct OutboundUserMessagePreparation {
     pub(super) has_context_parts: bool,
 }
 
+/// Choose the correct saved user content based on the compiler decision.
+///
+/// For `Ready` and `Partial`, persists `receipt.final_user_content` (compiled
+/// with resolved context blocks). For `Blocked`, persists the authored content
+/// (directives stripped but no context injected) so saved turns never contain
+/// raw `@file` / `@context` directive lines.
+fn start_chat_saved_user_content(
+    decision: &crate::ai::message_parts::PreparedMessageDecision,
+    receipt: &crate::ai::message_parts::PreparedMessageReceipt,
+    authored_content: &str,
+) -> String {
+    match decision {
+        crate::ai::message_parts::PreparedMessageDecision::Ready
+        | crate::ai::message_parts::PreparedMessageDecision::Partial => {
+            tracing::info!(
+                checkpoint = "start_chat_saved_content",
+                source = "final_user_content",
+                len = receipt.final_user_content.len(),
+                "persisting compiled content"
+            );
+            receipt.final_user_content.clone()
+        }
+        crate::ai::message_parts::PreparedMessageDecision::Blocked => {
+            tracing::info!(
+                checkpoint = "start_chat_saved_content",
+                source = "authored_content",
+                len = authored_content.len(),
+                "persisting authored content (blocked resolution)"
+            );
+            authored_content.to_string()
+        }
+    }
+}
+
 impl AiApp {
     /// Shared outbound message compiler used by both send paths.
     ///
@@ -499,10 +533,12 @@ impl AiApp {
             None
         };
 
-        let final_user_content = match decision {
+        let final_user_content =
+            start_chat_saved_user_content(&decision, &receipt, &authored_content);
+
+        match decision {
             crate::ai::message_parts::PreparedMessageDecision::Ready => {
                 self.streaming_error = None;
-                receipt.final_user_content.clone()
             }
             crate::ai::message_parts::PreparedMessageDecision::Partial => {
                 tracing::warn!(
@@ -515,7 +551,6 @@ impl AiApp {
                     "start_chat_context: partial resolution failure"
                 );
                 self.streaming_error = receipt.user_error.clone();
-                receipt.final_user_content.clone()
             }
             crate::ai::message_parts::PreparedMessageDecision::Blocked => {
                 tracing::warn!(
@@ -528,11 +563,8 @@ impl AiApp {
                     "start_chat_context: blocked due to unresolved context"
                 );
                 self.streaming_error = receipt.user_error.clone();
-                // Still create the chat with raw message so the SDK gets a valid chatId,
-                // but surface the error so it's not silently swallowed.
-                message.clone()
             }
-        };
+        }
 
         if let Some(on_created) = on_created {
             on_created(resolved_model_id.clone(), resolved_provider.clone());
@@ -706,6 +738,79 @@ mod tests {
                 provider: "openai".to_string(),
             },
             "Missing aiStartChat model_id should fall back to the active selected model"
+        );
+    }
+
+    fn test_start_chat_receipt(
+        decision: crate::ai::message_parts::PreparedMessageDecision,
+    ) -> crate::ai::message_parts::PreparedMessageReceipt {
+        crate::ai::message_parts::PreparedMessageReceipt {
+            schema_version: crate::ai::message_parts::AI_MESSAGE_PREPARATION_SCHEMA_VERSION,
+            decision,
+            raw_content: "@file /tmp/missing.txt\nExplain this".to_string(),
+            final_user_content:
+                "<context source=\"kit://selection\">selected</context>\n\nExplain this".to_string(),
+            context: crate::ai::message_parts::ContextResolutionReceipt {
+                attempted: 1,
+                resolved: 0,
+                failures: vec![],
+                prompt_prefix: String::new(),
+            },
+            assembly: None,
+            outcomes: vec![],
+            unresolved_parts: vec![],
+            user_error: Some("Failed".to_string()),
+        }
+    }
+
+    #[test]
+    fn test_start_chat_saved_user_content_uses_authored_content_when_blocked() {
+        let receipt = test_start_chat_receipt(
+            crate::ai::message_parts::PreparedMessageDecision::Blocked,
+        );
+
+        let saved = start_chat_saved_user_content(
+            &crate::ai::message_parts::PreparedMessageDecision::Blocked,
+            &receipt,
+            "Explain this",
+        );
+
+        assert_eq!(saved, "Explain this");
+    }
+
+    #[test]
+    fn test_start_chat_saved_user_content_uses_final_user_content_when_partial() {
+        let receipt = test_start_chat_receipt(
+            crate::ai::message_parts::PreparedMessageDecision::Partial,
+        );
+
+        let saved = start_chat_saved_user_content(
+            &crate::ai::message_parts::PreparedMessageDecision::Partial,
+            &receipt,
+            "Explain this",
+        );
+
+        assert_eq!(
+            saved,
+            "<context source=\"kit://selection\">selected</context>\n\nExplain this"
+        );
+    }
+
+    #[test]
+    fn test_start_chat_saved_user_content_uses_final_user_content_when_ready() {
+        let receipt = test_start_chat_receipt(
+            crate::ai::message_parts::PreparedMessageDecision::Ready,
+        );
+
+        let saved = start_chat_saved_user_content(
+            &crate::ai::message_parts::PreparedMessageDecision::Ready,
+            &receipt,
+            "Explain this",
+        );
+
+        assert_eq!(
+            saved,
+            "<context source=\"kit://selection\">selected</context>\n\nExplain this"
         );
     }
 

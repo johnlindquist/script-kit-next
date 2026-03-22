@@ -300,6 +300,43 @@ fn test_ai_window_queue_command_if_open_preserves_start_chat_provider_metadata()
 }
 
 #[test]
+fn test_ai_window_queue_command_if_open_enqueues_context_parts_input_command() {
+    let mut pending_commands = Vec::new();
+    let parts = vec![crate::ai::message_parts::AiContextPart::ResourceUri {
+        uri: "kit://context?profile=minimal".to_string(),
+        label: "Current Context".to_string(),
+    }];
+
+    let was_queued = ai_window_queue_command_if_open(
+        &mut pending_commands,
+        true,
+        AiCommand::SetInputWithContextParts {
+            text: "Summarize this".to_string(),
+            parts: parts.clone(),
+            submit: false,
+        },
+    );
+
+    assert!(
+        was_queued,
+        "Context-part input command should queue when window is open"
+    );
+
+    match pending_commands.first() {
+        Some(AiCommand::SetInputWithContextParts {
+            text,
+            parts: queued_parts,
+            submit,
+        }) => {
+            assert_eq!(text, "Summarize this");
+            assert_eq!(queued_parts, &parts);
+            assert!(!submit, "Submit flag should be preserved");
+        }
+        _ => panic!("Expected queued command to be AiCommand::SetInputWithContextParts"),
+    }
+}
+
+#[test]
 fn test_should_retry_existing_user_turn_only_when_last_message_is_user() {
     let chat_id = ChatId::new();
 

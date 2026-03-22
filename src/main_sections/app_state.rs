@@ -305,6 +305,24 @@ struct ScriptListApp {
     /// Cached provider registry built in background at startup.
     /// Avoids blocking the UI thread when opening inline AI chat.
     cached_provider_registry: Option<crate::ai::ProviderRegistry>,
+    /// Selected context parts for the main window context rail (ScriptList only).
+    /// These are attached when launching AI from the main window.
+    main_window_context_parts: Vec<crate::ai::message_parts::AiContextPart>,
+    /// Index of the context part currently being previewed (if any).
+    #[allow(dead_code)]
+    main_window_context_preview_index: Option<usize>,
+    /// Cached JSON snapshot from the last successful context capture.
+    #[allow(dead_code)]
+    main_window_context_last_snapshot: Option<String>,
+    /// Error message from the last failed context capture.
+    #[allow(dead_code)]
+    main_window_context_error: Option<SharedString>,
+    /// Background task for capturing context snapshots.
+    #[allow(dead_code)]
+    main_window_context_capture_task: Option<gpui::Task<()>>,
+    /// Generation counter for stale-update protection on context captures.
+    #[allow(dead_code)]
+    main_window_context_gen: u64,
 }
 
 /// Result of alias matching - either a Script or Scriptlet
