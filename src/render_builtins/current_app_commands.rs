@@ -16,12 +16,8 @@ impl ScriptListApp {
         let ui_border = self.theme.colors.ui.border;
 
         // Filter entries from cached data
-        let filtered_entries: Vec<(usize, &builtins::BuiltInEntry)> = self
-            .cached_current_app_entries
-            .iter()
-            .enumerate()
-            .filter(|(_, e)| builtins::menu_bar_entry_matches_query(e, &filter))
-            .collect();
+        let (filtered_entries, _) =
+            builtins::filter_menu_bar_entries(&self.cached_current_app_entries, &filter);
         let filtered_len = filtered_entries.len();
 
         // Key handler
@@ -71,12 +67,8 @@ impl ScriptListApp {
                 };
 
                 // Compute filtered list
-                let filtered: Vec<(usize, &builtins::BuiltInEntry)> = this
-                    .cached_current_app_entries
-                    .iter()
-                    .enumerate()
-                    .filter(|(_, e)| builtins::menu_bar_entry_matches_query(e, &current_filter))
-                    .collect();
+                let (filtered, _) =
+                    builtins::filter_menu_bar_entries(&this.cached_current_app_entries, &current_filter);
                 let current_filtered_len = filtered.len();
 
                 if is_key_up(key) {

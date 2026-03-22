@@ -18,13 +18,44 @@ pub struct FrontmostMenuSnapshot {
     pub items: Vec<MenuBarItem>,
 }
 
+/// A machine-readable receipt for a frontmost-menu snapshot capture.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FrontmostMenuSnapshotReceipt {
+    pub app_name: String,
+    pub bundle_id: String,
+    pub top_level_menu_count: usize,
+    pub leaf_entry_count: usize,
+    pub placeholder: String,
+    pub source: &'static str,
+}
+
 impl FrontmostMenuSnapshot {
     /// Convert the snapshot into flat, searchable built-in entries.
     ///
     /// Delegates to [`crate::builtins::menu_bar_items_to_entries`] which skips
     /// the Apple menu, separators, and disabled items.
     pub fn into_entries(self) -> Vec<BuiltInEntry> {
-        crate::builtins::menu_bar_items_to_entries(&self.items, &self.bundle_id, &self.app_name)
+        self.into_entries_with_receipt().0
+    }
+
+    /// Convert the snapshot into entries and an audit-friendly receipt.
+    pub fn into_entries_with_receipt(self) -> (Vec<BuiltInEntry>, FrontmostMenuSnapshotReceipt) {
+        let entries = crate::builtins::menu_bar_items_to_entries(
+            &self.items,
+            &self.bundle_id,
+            &self.app_name,
+        );
+
+        let receipt = FrontmostMenuSnapshotReceipt {
+            app_name: self.app_name.clone(),
+            bundle_id: self.bundle_id.clone(),
+            top_level_menu_count: self.items.len(),
+            leaf_entry_count: entries.len(),
+            placeholder: self.placeholder(),
+            source: "frontmost_app_tracker",
+        };
+
+        (entries, receipt)
     }
 
     /// Placeholder text for the filter input (e.g. "Search Safari commands…").
@@ -147,6 +178,32 @@ mod tests {
             items: vec![],
         };
         assert_eq!(snap.placeholder(), "Search Safari commands\u{2026}");
+    }
+
+    #[test]
+    fn into_entries_with_receipt_reports_counts() {
+        let snap = FrontmostMenuSnapshot {
+            app_name: "TestApp".into(),
+            bundle_id: "com.test.app".into(),
+            items: vec![
+                apple_menu(),
+                menu(
+                    "File",
+                    vec![leaf("New Tab", vec![1, 0])],
+                    vec![1],
+                ),
+            ],
+        };
+
+        let (entries, receipt) = snap.into_entries_with_receipt();
+
+        assert_eq!(entries.len(), 1);
+        assert_eq!(receipt.app_name, "TestApp");
+        assert_eq!(receipt.bundle_id, "com.test.app");
+        assert_eq!(receipt.top_level_menu_count, 2);
+        assert_eq!(receipt.leaf_entry_count, 1);
+        assert_eq!(receipt.placeholder, "Search TestApp commands\u{2026}");
+        assert_eq!(receipt.source, "frontmost_app_tracker");
     }
 
     #[cfg(target_os = "macos")]
