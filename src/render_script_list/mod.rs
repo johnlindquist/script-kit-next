@@ -62,9 +62,8 @@ fn inline_calc_list_item_selected_overlay_rgba(
     theme: &crate::theme::Theme,
     color_resolver: crate::theme::ColorResolver,
 ) -> u32 {
-    let selected_overlay_alpha = ((theme.get_opacity().selected.clamp(0.0, 1.0) * 255.0).round()
-        as u32)
-        .max(0x2E);
+    let selected_overlay_alpha =
+        ((theme.get_opacity().selected.clamp(0.0, 1.0) * 255.0).round() as u32).max(0x2E);
     (color_resolver.primary_accent() << 8) | selected_overlay_alpha
 }
 
@@ -123,6 +122,7 @@ impl ScriptListApp {
     fn render_script_list(&mut self, cx: &mut Context<Self>) -> AnyElement {
         let render_list_start = std::time::Instant::now();
         let filter_for_log = self.filter_text.clone();
+        let is_mini = self.main_window_mode == MainWindowMode::Mini;
 
         // Get grouped or flat results based on filter state (cached) - MUST come first
         // to avoid borrow conflicts with theme access below
@@ -990,12 +990,20 @@ impl ScriptListApp {
             .child({
                 // Use shared header constants for default design, design tokens for others
                 let header_padding_x = if is_default_design {
-                    HEADER_PADDING_X
+                    if is_mini {
+                        12.0
+                    } else {
+                        HEADER_PADDING_X
+                    }
                 } else {
                     design_spacing.padding_lg
                 };
                 let header_padding_y = if is_default_design {
-                    HEADER_PADDING_Y
+                    if is_mini {
+                        10.0
+                    } else {
+                        HEADER_PADDING_Y
+                    }
                 } else {
                     design_spacing.padding_sm
                 };
@@ -1036,37 +1044,39 @@ impl ScriptListApp {
                                 ),
                             )
                             // "Ask AI [Tab]" keyboard hint - styled as non-clickable to match behavior
-                            .child(
-                                div()
-                                    .id("ask-ai-button")
-                                    .flex()
-                                    .flex_row()
-                                    .items_center()
-                                    .gap(px(ASK_AI_BUTTON_GAP))
-                                    .px(px(ASK_AI_BUTTON_PADDING_X))
-                                    .py(px(ASK_AI_BUTTON_PADDING_Y))
-                                    .rounded(px(ASK_AI_BUTTON_RADIUS))
-                                    .bg(rgba(chrome.accent_badge_bg_rgba))
-                                    .cursor_default()
-                                    // "Ask AI" text - YELLOW (accent)
-                                    .child(
-                                        div()
-                                            .text_sm()
-                                            .text_color(rgb(chrome.accent_badge_text_hex))
-                                            .child("Ask AI"),
-                                    )
-                                    // "Tab" badge - grey background via chrome contract (no border)
-                                    .child(
-                                        div()
-                                            .px(px(TAB_BADGE_PADDING_X))
-                                            .py(px(TAB_BADGE_PADDING_Y))
-                                            .rounded(px(TAB_BADGE_RADIUS))
-                                            .bg(rgba(chrome.badge_bg_rgba))
-                                            .text_xs()
-                                            .text_color(rgb(chrome.badge_text_hex))
-                                            .child("Tab"),
-                                    ),
-                            ),
+                            .when(!is_mini, |d| {
+                                d.child(
+                                    div()
+                                        .id("ask-ai-button")
+                                        .flex()
+                                        .flex_row()
+                                        .items_center()
+                                        .gap(px(ASK_AI_BUTTON_GAP))
+                                        .px(px(ASK_AI_BUTTON_PADDING_X))
+                                        .py(px(ASK_AI_BUTTON_PADDING_Y))
+                                        .rounded(px(ASK_AI_BUTTON_RADIUS))
+                                        .bg(rgba(chrome.accent_badge_bg_rgba))
+                                        .cursor_default()
+                                        // "Ask AI" text - YELLOW (accent)
+                                        .child(
+                                            div()
+                                                .text_sm()
+                                                .text_color(rgb(chrome.accent_badge_text_hex))
+                                                .child("Ask AI"),
+                                        )
+                                        // "Tab" badge - grey background via chrome contract (no border)
+                                        .child(
+                                            div()
+                                                .px(px(TAB_BADGE_PADDING_X))
+                                                .py(px(TAB_BADGE_PADDING_Y))
+                                                .rounded(px(TAB_BADGE_RADIUS))
+                                                .bg(rgba(chrome.badge_bg_rgba))
+                                                .text_xs()
+                                                .text_color(rgb(chrome.badge_text_hex))
+                                                .child("Tab"),
+                                        ),
+                                )
+                            }),
                     )
             })
             // Divider between header and list content
@@ -1088,6 +1098,59 @@ impl ScriptListApp {
                     .h(px(border_width))
                     .bg(rgba(chrome.divider_rgba))
             });
+
+        if is_mini {
+            // Mini mode: single column, no preview, no footer
+            let chrome = crate::theme::AppChromeColors::from_theme(&self.theme);
+
+            main_div = main_div.child(
+                div()
+                    .flex_1()
+                    .min_h(px(0.))
+                    .w_full()
+                    .overflow_hidden()
+                    .child(div().w_full().h_full().min_h(px(0.)).child(list_element)),
+            );
+
+            // Compact hint strip instead of footer
+            main_div = main_div.child(
+                div()
+                    .w_full()
+                    .px(px(14.))
+                    .py(px(8.))
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .justify_between()
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(rgba(chrome.divider_rgba))
+                            .child("↵ Run  ·  ⌘K Actions  ·  Tab AI"),
+                    ),
+            );
+
+            if let Some(panel) = log_panel {
+                main_div = main_div.child(panel);
+            }
+
+            if state_changed {
+                let total_elapsed = render_list_start.elapsed();
+                logging::log(
+                    "RENDER_PERF",
+                    &format!(
+                        "[RENDER_SCRIPT_LIST_END] filter='{}' total={:.2}ms mode=mini",
+                        filter_for_log,
+                        total_elapsed.as_secs_f64() * 1000.0
+                    ),
+                );
+                self.last_render_log_filter = self.filter_text.clone();
+                self.last_render_log_selection = self.selected_index;
+                self.last_render_log_item_count = item_count_for_log;
+            }
+
+            return main_div.into_any_element();
+        }
 
         // Main content area - 50/50 split: List on left, Preview on right
         main_div = main_div
@@ -1229,7 +1292,8 @@ mod render_script_list_footer_tests {
     use super::{
         app_shell_footer_colors, inline_calc_list_item_hint_text_color,
         inline_calc_list_item_result_text_color, inline_calc_list_item_selected_overlay_rgba,
-        inline_calc_list_item_title, script_list_footer_info_label, script_list_footer_primary_label,
+        inline_calc_list_item_title, script_list_footer_info_label,
+        script_list_footer_primary_label,
     };
     use crate::designs::DesignVariant;
     use crate::theme::ColorResolver;
@@ -1322,9 +1386,8 @@ mod render_script_list_footer_tests {
         theme.colors.accent.selected_subtle = 0x010203;
         let color_resolver = ColorResolver::new(&theme, DesignVariant::NeonCyberpunk);
 
-        let expected_alpha = ((theme.get_opacity().selected.clamp(0.0, 1.0) * 255.0).round()
-            as u32)
-            .max(0x2E);
+        let expected_alpha =
+            ((theme.get_opacity().selected.clamp(0.0, 1.0) * 255.0).round() as u32).max(0x2E);
         let expected = (color_resolver.primary_accent() << 8) | expected_alpha;
 
         assert_eq!(
