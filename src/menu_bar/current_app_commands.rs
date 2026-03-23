@@ -492,6 +492,133 @@ pub fn build_current_app_intent_trace_receipt(
 }
 
 // ---------------------------------------------------------------------------
+// Turn This Into a Command
+// ---------------------------------------------------------------------------
+
+/// The human-readable label used in the main command list.
+pub const TURN_THIS_INTO_A_COMMAND_LABEL: &str = "Turn This Into a Command";
+
+/// Schema version for [`CurrentAppCommandRecipe`].
+pub const CURRENT_APP_COMMAND_RECIPE_SCHEMA_VERSION: u32 = 1;
+
+/// A machine-readable recipe that packages current-app routing + prompt state
+/// for later script creation or auditing.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CurrentAppCommandRecipe {
+    pub schema_version: u32,
+    pub recipe_type: &'static str,
+    pub raw_query: String,
+    pub effective_query: String,
+    pub suggested_script_name: String,
+    pub trace: CurrentAppIntentTraceReceipt,
+    pub prompt_receipt: CurrentAppScriptPromptReceipt,
+    pub prompt: String,
+}
+
+/// Returns the effective user request for the "Turn This Into a Command" command.
+///
+/// Behavior:
+/// - empty / whitespace-only -> None
+/// - exact label -> None
+/// - "Turn This Into a Command <request>" -> Some("<request>")
+/// - anything else -> Some(trimmed raw input)
+pub fn normalize_turn_this_into_a_command_request(raw: Option<&str>) -> Option<String> {
+    let raw = raw.map(str::trim).filter(|text| !text.is_empty())?;
+    let label = TURN_THIS_INTO_A_COMMAND_LABEL;
+    let raw_lower = raw.to_ascii_lowercase();
+    let label_lower = label.to_ascii_lowercase();
+
+    if raw_lower == label_lower {
+        return None;
+    }
+
+    if raw_lower.starts_with(&label_lower) {
+        let rest = raw[label.len()..]
+            .trim_start_matches(|ch: char| {
+                ch.is_ascii_whitespace() || matches!(ch, ':' | '-' | '\u{2014}' | '\u{2013}')
+            })
+            .trim();
+
+        if rest.is_empty() {
+            None
+        } else {
+            Some(rest.to_string())
+        }
+    } else {
+        Some(raw.to_string())
+    }
+}
+
+fn title_case_words(text: &str) -> String {
+    text.split_whitespace()
+        .map(|part| {
+            let mut chars = part.chars();
+            match chars.next() {
+                Some(first) => {
+                    let mut word = String::new();
+                    word.extend(first.to_uppercase());
+                    word.push_str(chars.as_str());
+                    word
+                }
+                None => String::new(),
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// Suggest a stable, human-readable script name from app + request.
+pub fn suggest_current_app_command_name(app_name: &str, raw_request: &str) -> String {
+    let normalized = normalize_intent_match_text(raw_request);
+    if normalized.is_empty() {
+        return format!("{app_name} Command");
+    }
+
+    format!("{app_name} {}", title_case_words(&normalized))
+}
+
+/// Build a deterministic recipe for turning a current-app request into a reusable command.
+///
+/// This does not execute anything. It packages:
+/// - a normalized request
+/// - a route trace
+/// - a generation prompt
+/// - a suggested script name
+pub fn build_current_app_command_recipe(
+    snapshot: FrontmostMenuSnapshot,
+    raw_query: Option<&str>,
+    selected_text: Option<&str>,
+    browser_url: Option<&str>,
+) -> CurrentAppCommandRecipe {
+    let raw_query_string = raw_query.unwrap_or_default().to_string();
+    let effective_query =
+        normalize_turn_this_into_a_command_request(raw_query).unwrap_or_default();
+
+    let request = (!effective_query.is_empty()).then_some(effective_query.as_str());
+
+    let mut trace = build_current_app_intent_trace_receipt(snapshot.clone(), request);
+    trace.raw_query = raw_query_string.clone();
+
+    let (prompt, prompt_receipt) =
+        build_generate_script_prompt_from_snapshot(snapshot, request, selected_text, browser_url);
+
+    CurrentAppCommandRecipe {
+        schema_version: CURRENT_APP_COMMAND_RECIPE_SCHEMA_VERSION,
+        recipe_type: "currentAppCommand",
+        raw_query: raw_query_string,
+        effective_query: effective_query.clone(),
+        suggested_script_name: suggest_current_app_command_name(
+            &prompt_receipt.app_name,
+            &effective_query,
+        ),
+        trace,
+        prompt_receipt,
+        prompt,
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Platform loader
 // ---------------------------------------------------------------------------
 
@@ -996,5 +1123,115 @@ mod tests {
             !prompt.contains("User Request:"),
             "Prompt should omit User Request when input matches the built-in label"
         );
+    }
+
+    // -----------------------------------------------------------------------
+    // Turn This Into a Command
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn normalize_turn_this_into_a_command_request_strips_label_prefix() {
+        assert_eq!(
+            normalize_turn_this_into_a_command_request(Some(TURN_THIS_INTO_A_COMMAND_LABEL)),
+            None
+        );
+
+        assert_eq!(
+            normalize_turn_this_into_a_command_request(Some(
+                "Turn This Into a Command close duplicate tabs"
+            )),
+            Some("close duplicate tabs".to_string())
+        );
+
+        assert_eq!(
+            normalize_turn_this_into_a_command_request(Some(
+                "Turn This Into a Command: new tab"
+            )),
+            Some("new tab".to_string())
+        );
+    }
+
+    #[test]
+    fn suggest_current_app_command_name_title_cases_request() {
+        assert_eq!(
+            suggest_current_app_command_name("Safari", "close duplicate tabs"),
+            "Safari Close Duplicate Tabs"
+        );
+
+        assert_eq!(
+            suggest_current_app_command_name("Finder", ""),
+            "Finder Command"
+        );
+    }
+
+    #[test]
+    fn build_current_app_command_recipe_contains_trace_and_prompt() {
+        let snap = FrontmostMenuSnapshot {
+            app_name: "Safari".into(),
+            bundle_id: "com.apple.Safari".into(),
+            items: vec![
+                apple_menu(),
+                menu(
+                    "File",
+                    vec![leaf_with_shortcut("New Tab", "T", vec![1, 0])],
+                    vec![1],
+                ),
+            ],
+        };
+
+        let recipe = build_current_app_command_recipe(
+            snap,
+            Some("Turn This Into a Command close duplicate tabs"),
+            None,
+            None,
+        );
+
+        assert_eq!(recipe.schema_version, CURRENT_APP_COMMAND_RECIPE_SCHEMA_VERSION);
+        assert_eq!(recipe.recipe_type, "currentAppCommand");
+        assert_eq!(
+            recipe.raw_query,
+            "Turn This Into a Command close duplicate tabs"
+        );
+        assert_eq!(recipe.effective_query, "close duplicate tabs");
+        assert_eq!(
+            recipe.trace.raw_query,
+            "Turn This Into a Command close duplicate tabs"
+        );
+        assert_eq!(recipe.trace.effective_query, "close duplicate tabs");
+        assert_eq!(recipe.suggested_script_name, "Safari Close Duplicate Tabs");
+        assert_eq!(recipe.trace.action, "generate_script");
+        assert!(recipe.prompt.contains("User Request:\nclose duplicate tabs"));
+        assert_eq!(recipe.prompt_receipt.app_name, "Safari");
+        assert_eq!(recipe.prompt_receipt.bundle_id, "com.apple.Safari");
+    }
+
+    #[test]
+    fn current_app_command_recipe_serializes_with_camel_case_fields() {
+        let snap = FrontmostMenuSnapshot {
+            app_name: "Safari".into(),
+            bundle_id: "com.apple.Safari".into(),
+            items: vec![
+                apple_menu(),
+                menu(
+                    "File",
+                    vec![leaf_with_shortcut("New Tab", "T", vec![1, 0])],
+                    vec![1],
+                ),
+            ],
+        };
+
+        let recipe = build_current_app_command_recipe(
+            snap,
+            Some("Turn This Into a Command new tab"),
+            None,
+            None,
+        );
+
+        let value = serde_json::to_value(&recipe).expect("recipe should serialize");
+        assert!(value.get("schemaVersion").is_some());
+        assert!(value.get("recipeType").is_some());
+        assert!(value.get("suggestedScriptName").is_some());
+        assert!(value.get("trace").is_some());
+        assert!(value.get("promptReceipt").is_some());
     }
 }

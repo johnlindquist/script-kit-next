@@ -183,6 +183,9 @@ pub enum UtilityCommandType {
     /// Interpret a free-text request against the frontmost app:
     /// execute a matching menu command or fall back to script generation
     DoInCurrentApp,
+    /// Capture a reusable automation recipe from the frontmost app
+    /// and hand it off to script generation
+    TurnThisIntoCommand,
     /// Search and run menu bar commands from the frontmost app
     CurrentAppCommands,
     /// Capture a deterministic JSON snapshot of current desktop context and copy to clipboard
@@ -1328,6 +1331,29 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             ],
             BuiltInFeature::UtilityCommand(UtilityCommandType::DoInCurrentApp),
             "🎯",
+        ));
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin-turn-this-into-a-command",
+            crate::menu_bar::current_app_commands::TURN_THIS_INTO_A_COMMAND_LABEL,
+            "Describe what you want in the frontmost app; Script Kit captures a reusable automation recipe and opens script generation",
+            vec![
+                "turn",
+                "this",
+                "into",
+                "command",
+                "teach",
+                "automation",
+                "current",
+                "app",
+                "save",
+                "script",
+                "recipe",
+                "intent",
+                "generate",
+            ],
+            BuiltInFeature::UtilityCommand(UtilityCommandType::TurnThisIntoCommand),
+            "🧩",
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
