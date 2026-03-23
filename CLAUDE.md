@@ -98,6 +98,7 @@ Rules:
 - Call `cx.stop_propagation()` after handling a key to prevent parent handlers from also processing it.
 - In the `_ =>` fallthrough arm of key handlers, call `cx.propagate()` so unhandled keys bubble up.
 - Use `window.dispatch_action(action)` (not `cx.dispatch_action`) to dispatch actions from key handlers.
+- **Deep dive**: See [`GPUI.md`](GPUI.md) for the full event dispatch architecture — dual dispatch (actions vs raw key events), propagation asymmetry, two-phase capture/bubble model, and common pitfalls.
 
 ## ObjC Interop Rules
 
