@@ -62,6 +62,7 @@ struct ScriptListApp {
     last_scroll_time: Option<std::time::Instant>,
     // Interactive script state
     current_view: AppView,
+    pub(crate) main_window_mode: MainWindowMode,
     script_session: SharedSession,
     // Prompt-specific state (used when view is ArgPrompt or DivPrompt)
     // Uses TextInputState for selection and clipboard support

@@ -112,6 +112,21 @@ mod tests {
         );
     }
 
+    /// Verify the main window starts in full mode.
+    ///
+    /// Mini mode is an explicit launcher variant and should never be the
+    /// default for the primary ScriptListApp startup path.
+    #[test]
+    fn test_main_window_mode_defaults_to_full_in_startup_state() {
+        let new_body = read_new_startup_sequence();
+
+        assert!(
+            new_body.contains("main_window_mode: MainWindowMode::Full,"),
+            "ScriptListApp::new() must initialize main_window_mode to MainWindowMode::Full \
+             in startup_new_state.rs so the standard launcher remains the default."
+        );
+    }
+
     /// Verify that scripts are loaded before sync_list_state is called.
     ///
     /// This ensures there are scripts available when we sync the list state.

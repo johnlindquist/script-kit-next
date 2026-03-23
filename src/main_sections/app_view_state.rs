@@ -220,6 +220,13 @@ enum FocusedInput {
     None,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) enum MainWindowMode {
+    #[default]
+    Full,
+    Mini,
+}
+
 /// Pending focus target - identifies which element should receive focus
 /// when window access becomes available. This prevents the "perpetual focus
 /// enforcement in render()" anti-pattern that causes focus thrash.

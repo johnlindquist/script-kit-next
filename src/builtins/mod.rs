@@ -172,6 +172,8 @@ pub enum SettingsCommandType {
 /// Utility command types for quick access tools
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UtilityCommandType {
+    /// Open the main launcher in compact mini-window mode
+    MiniMainWindow,
     /// Open scratch pad - auto-saving editor
     ScratchPad,
     /// Open quick terminal for running commands
@@ -1275,6 +1277,24 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
+            "builtin-mini-main-window",
+            "Mini Main Window",
+            "Open a compact launcher with the same search and actions",
+            vec![
+                "mini",
+                "compact",
+                "launcher",
+                "main",
+                "window",
+                "minimal",
+                "spotlight",
+                "raycast",
+            ],
+            BuiltInFeature::UtilityCommand(UtilityCommandType::MiniMainWindow),
+            "search",
+        ));
+
+        entries.push(BuiltInEntry::new_with_icon(
             "builtin-quick-terminal",
             "Quick Terminal",
             "Open a quick terminal for running shell commands",
@@ -2346,6 +2366,29 @@ mod tests {
         assert!(process_manager.keywords.iter().any(|k| k == "running"));
         assert!(process_manager.keywords.iter().any(|k| k == "kill"));
     }
+
+    #[test]
+    fn test_get_builtin_entries_includes_mini_main_window_command() {
+        let config = BuiltInConfig::default();
+        let entries = get_builtin_entries(&config);
+
+        let mini_main_window = entries.iter().find(|e| e.id == "builtin-mini-main-window");
+        assert!(
+            mini_main_window.is_some(),
+            "Mini Main Window builtin should exist in the main menu"
+        );
+
+        let mini_main_window = mini_main_window.unwrap();
+        assert_eq!(
+            mini_main_window.feature,
+            BuiltInFeature::UtilityCommand(UtilityCommandType::MiniMainWindow)
+        );
+        assert_eq!(mini_main_window.icon.as_deref(), Some("search"));
+        assert!(mini_main_window.keywords.iter().any(|k| k == "mini"));
+        assert!(mini_main_window.keywords.iter().any(|k| k == "compact"));
+        assert!(mini_main_window.keywords.iter().any(|k| k == "launcher"));
+    }
+
     #[test]
     fn test_get_builtin_entries_includes_stop_all_processes_command() {
         let config = BuiltInConfig::default();
