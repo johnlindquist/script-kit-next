@@ -741,6 +741,61 @@ impl ScriptListApp {
         .detach();
     }
 
+    /// Like `spawn_generate_script_from_current_app_after_hide`, but reuses an
+    /// already-built recipe instead of recapturing live context after hide.
+    ///
+    /// This eliminates prompt drift: the prompt copied in the recipe is
+    /// byte-for-byte the prompt sent to the AI generation path.
+    fn spawn_generate_script_from_recipe_after_hide(
+        &mut self,
+        trace_id: String,
+        recipe: crate::menu_bar::current_app_commands::CurrentAppCommandRecipe,
+        cx: &mut Context<Self>,
+    ) {
+        tracing::info!(
+            category = "AI",
+            event = "ai_recipe_generation_scheduled",
+            source_action = "TurnThisIntoCommand",
+            trace_id = %trace_id,
+            recipe_prompt_bytes = recipe.prompt.len(),
+            recipe_bundle_id = %recipe.prompt_receipt.bundle_id,
+            recipe_included_selected_text = recipe.prompt_receipt.included_selected_text,
+            recipe_included_browser_url = recipe.prompt_receipt.included_browser_url,
+            hide_settle_ms = AI_CAPTURE_HIDE_SETTLE_MS,
+            "Deferring main window hide and scheduling recipe-based script generation (no recapture)"
+        );
+
+        platform::defer_hide_main_window(cx);
+
+        let prompt = recipe.prompt.clone();
+
+        cx.spawn(async move |this, cx| {
+            cx.background_executor()
+                .timer(ai_capture_hide_settle_duration())
+                .await;
+
+            let _ = this.update(cx, |app, cx| {
+                tracing::info!(
+                    trace_id = %trace_id,
+                    recipe_prompt_bytes = prompt.len(),
+                    recipe_bundle_id = %recipe.prompt_receipt.bundle_id,
+                    recipe_included_selected_text = recipe.prompt_receipt.included_selected_text,
+                    recipe_included_browser_url = recipe.prompt_receipt.included_browser_url,
+                    "ai_generate_script_from_recipe.prompt_ready"
+                );
+
+                script_kit_gpui::set_main_window_visible(true);
+                tracing::info!(
+                    trace_id = %trace_id,
+                    "ai_generate_script_from_recipe.showing_window"
+                );
+                crate::platform::show_main_window_without_activation();
+                app.dispatch_ai_script_generation_from_query(prompt, cx);
+            });
+        })
+        .detach();
+    }
+
     fn system_action_feedback_message(
         &self,
         action_type: &builtins::SystemActionType,
@@ -2401,6 +2456,108 @@ impl ScriptListApp {
                             }
                         }
                     }
+                    UtilityCommandType::VerifyCurrentAppRecipe => {
+                        tracing::info!(
+                            trace_id = %dctx.trace_id,
+                            "verify_current_app_recipe.requested"
+                        );
+
+                        let stored_recipe =
+                            match crate::menu_bar::current_app_commands::load_current_app_command_recipe_from_clipboard()
+                            {
+                                Ok(recipe) => recipe,
+                                Err(error) => {
+                                    let message = format!("Verify Current App Recipe failed: {}", error);
+                                    self.show_error_toast(message.clone(), cx);
+                                    return Self::builtin_error(
+                                        dctx,
+                                        crate::action_helpers::ERROR_ACTION_FAILED,
+                                        message,
+                                        "verify_current_app_recipe_clipboard_failed",
+                                    );
+                                }
+                            };
+
+                        match crate::menu_bar::current_app_commands::load_frontmost_menu_snapshot() {
+                            Ok(snapshot) => {
+                                let selected_text = crate::selected_text::get_selected_text()
+                                    .ok()
+                                    .filter(|text| !text.trim().is_empty());
+
+                                let browser_url = crate::platform::get_focused_browser_tab_url()
+                                    .ok()
+                                    .filter(|url| !url.trim().is_empty());
+
+                                let verification =
+                                    crate::menu_bar::current_app_commands::verify_current_app_command_recipe(
+                                        &stored_recipe,
+                                        snapshot,
+                                        selected_text.as_deref(),
+                                        browser_url.as_deref(),
+                                    );
+
+                                match serde_json::to_string_pretty(&verification) {
+                                    Ok(json) => {
+                                        tracing::info!(
+                                            category = "CURRENT_APP_RECIPE_VERIFY",
+                                            trace_id = %dctx.trace_id,
+                                            expected_bundle_id = %verification.expected_bundle_id,
+                                            actual_bundle_id = %verification.actual_bundle_id,
+                                            expected_route = %verification.expected_route,
+                                            actual_route = %verification.actual_route,
+                                            prompt_matches = verification.prompt_matches,
+                                            selected_text_expected = verification.selected_text_expected,
+                                            selected_text_present = verification.selected_text_present,
+                                            browser_url_expected = verification.browser_url_expected,
+                                            browser_url_present = verification.browser_url_present,
+                                            warning_count = verification.warning_count,
+                                            status = %verification.status,
+                                            json_bytes = json.len(),
+                                            "verify_current_app_recipe.completed"
+                                        );
+
+                                        cx.write_to_clipboard(gpui::ClipboardItem::new_string(json));
+                                        self.show_hud(
+                                            crate::menu_bar::current_app_commands::build_current_app_command_verification_hud_message(
+                                                &verification,
+                                            ),
+                                            Some(HUD_MEDIUM_MS),
+                                            cx,
+                                        );
+                                        self.close_and_reset_window(cx);
+
+                                        Self::builtin_success(dctx, "verify_current_app_recipe")
+                                    }
+                                    Err(error) => {
+                                        let message = format!(
+                                            "Failed to serialize current app recipe verification: {}",
+                                            error
+                                        );
+                                        self.show_error_toast(message.clone(), cx);
+                                        Self::builtin_error(
+                                            dctx,
+                                            crate::action_helpers::ERROR_ACTION_FAILED,
+                                            message,
+                                            "verify_current_app_recipe_serialize_failed",
+                                        )
+                                    }
+                                }
+                            }
+                            Err(error) => {
+                                let message = format!(
+                                    "Failed to verify current app recipe: {}. Check Accessibility permission in System Settings → Privacy & Security → Accessibility, then refocus the target app and try again.",
+                                    error
+                                );
+                                self.show_error_toast(message.clone(), cx);
+                                Self::builtin_error(
+                                    dctx,
+                                    crate::action_helpers::ERROR_ACTION_FAILED,
+                                    message,
+                                    "verify_current_app_recipe_capture_failed",
+                                )
+                            }
+                        }
+                    }
                     UtilityCommandType::TurnThisIntoCommand => {
                         let raw_query_owned = query_override
                             .unwrap_or(&self.filter_text)
@@ -2476,9 +2633,9 @@ impl ScriptListApp {
                                                 cx,
                                             );
 
-                                            self.spawn_generate_script_from_current_app_after_hide(
+                                            self.spawn_generate_script_from_recipe_after_hide(
                                                 dctx.trace_id.to_string(),
-                                                Some(recipe.effective_query.clone()),
+                                                recipe.clone(),
                                                 cx,
                                             );
 

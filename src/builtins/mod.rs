@@ -192,6 +192,8 @@ pub enum UtilityCommandType {
     InspectCurrentContext,
     /// Dry-run a free-text request against the frontmost app and copy a JSON routing trace
     TraceCurrentAppIntent,
+    /// Verify a currentAppCommand recipe from the clipboard against live context
+    VerifyCurrentAppRecipe,
 }
 /// Kit Store command types for browsing and managing kits
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1419,6 +1421,28 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             ],
             BuiltInFeature::UtilityCommand(UtilityCommandType::TraceCurrentAppIntent),
             "🧪",
+        ));
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin-verify-current-app-recipe",
+            crate::menu_bar::current_app_commands::VERIFY_CURRENT_APP_RECIPE_LABEL,
+            "Read a currentAppCommand recipe JSON from the clipboard, re-capture the frontmost app, and copy a machine-readable drift report",
+            vec![
+                "verify",
+                "current",
+                "app",
+                "recipe",
+                "command",
+                "json",
+                "validate",
+                "drift",
+                "trace",
+                "clipboard",
+                "agent",
+                "automation",
+            ],
+            BuiltInFeature::UtilityCommand(UtilityCommandType::VerifyCurrentAppRecipe),
+            "🔬",
         ));
 
         // =========================================================================

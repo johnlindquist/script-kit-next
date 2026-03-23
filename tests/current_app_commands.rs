@@ -11,8 +11,9 @@ use script_kit_gpui::config::BuiltInConfig;
 use script_kit_gpui::menu_bar::current_app_commands::{
     build_current_app_command_recipe, build_current_app_intent_trace_receipt,
     build_generate_script_prompt_from_snapshot, normalize_trace_current_app_intent_request,
-    normalize_turn_this_into_a_command_request, resolve_do_in_current_app_intent,
-    suggest_current_app_command_name, DoInCurrentAppAction, FrontmostMenuSnapshot,
+    normalize_turn_this_into_a_command_request, parse_current_app_command_recipe_json,
+    resolve_do_in_current_app_intent, suggest_current_app_command_name,
+    verify_current_app_command_recipe, DoInCurrentAppAction, FrontmostMenuSnapshot,
     CURRENT_APP_COMMAND_RECIPE_SCHEMA_VERSION,
 };
 use script_kit_gpui::menu_bar::{KeyboardShortcut, MenuBarItem, ModifierFlags};
@@ -802,4 +803,241 @@ fn turn_this_into_a_command_recipe_serializes_to_valid_json() {
         "Safari Close Duplicate Tabs"
     );
     assert_eq!(parsed["trace"]["action"], "generate_script");
+}
+
+// ---------------------------------------------------------------------------
+// Verify Current App Recipe — parser
+// ---------------------------------------------------------------------------
+
+#[test]
+fn parse_current_app_command_recipe_json_rejects_empty_input() {
+    let error = parse_current_app_command_recipe_json("").unwrap_err();
+    assert!(error.contains("empty"), "Expected empty error, got: {error}");
+}
+
+#[test]
+fn parse_current_app_command_recipe_json_rejects_invalid_json() {
+    let error = parse_current_app_command_recipe_json("not json at all").unwrap_err();
+    assert!(
+        error.contains("valid JSON"),
+        "Expected JSON parse error, got: {error}"
+    );
+}
+
+#[test]
+fn parse_current_app_command_recipe_json_rejects_wrong_recipe_type() {
+    let input = r#"{"schemaVersion":1,"recipeType":"contextSnapshot"}"#;
+    let error = parse_current_app_command_recipe_json(input).unwrap_err();
+    assert!(
+        error.contains("currentAppCommand"),
+        "Expected recipeType error, got: {error}"
+    );
+}
+
+#[test]
+fn parse_current_app_command_recipe_json_rejects_unsupported_schema_version() {
+    let input = r#"{
+        "schemaVersion":99,
+        "recipeType":"currentAppCommand",
+        "rawQuery":"close duplicate tabs",
+        "effectiveQuery":"close duplicate tabs",
+        "suggestedScriptName":"Safari Close Duplicate Tabs",
+        "trace":{
+            "schema_version":1,
+            "source":"frontmost_menu_bar",
+            "app_name":"Safari",
+            "bundle_id":"com.apple.Safari",
+            "raw_query":"close duplicate tabs",
+            "effective_query":"close duplicate tabs",
+            "normalized_query":"close duplicate tabs",
+            "top_level_menu_count":1,
+            "leaf_entry_count":1,
+            "filtered_entries":0,
+            "exact_matches":0,
+            "action":"generate_script",
+            "selected_entry":null,
+            "candidates":[],
+            "prompt_receipt":null,
+            "prompt_preview":null
+        },
+        "promptReceipt":{
+            "app_name":"Safari",
+            "bundle_id":"com.apple.Safari",
+            "total_menu_items":1,
+            "included_menu_items":1,
+            "included_user_request":true,
+            "included_selected_text":false,
+            "included_browser_url":false
+        },
+        "prompt":"Generate a Script Kit script..."
+    }"#;
+
+    let error = parse_current_app_command_recipe_json(input).unwrap_err();
+    assert!(
+        error.contains("Unsupported recipe schema_version"),
+        "Expected schema version error, got: {error}"
+    );
+}
+
+#[test]
+fn parse_current_app_command_recipe_json_round_trips_valid_recipe() {
+    let recipe = build_current_app_command_recipe(
+        safari_snapshot_with_menus(),
+        Some("Turn This Into a Command close duplicate tabs"),
+        Some("pricing"),
+        Some("https://example.com"),
+    );
+
+    let json = serde_json::to_string_pretty(&recipe).expect("recipe must serialize");
+    let parsed = parse_current_app_command_recipe_json(&json).expect("should parse valid recipe");
+
+    assert_eq!(parsed.schema_version, recipe.schema_version);
+    assert_eq!(parsed.recipe_type, recipe.recipe_type);
+    assert_eq!(parsed.effective_query, recipe.effective_query);
+    assert_eq!(parsed.suggested_script_name, recipe.suggested_script_name);
+    assert_eq!(parsed.prompt, recipe.prompt);
+}
+
+// ---------------------------------------------------------------------------
+// Verify Current App Recipe — verifier
+// ---------------------------------------------------------------------------
+
+#[test]
+fn verify_current_app_command_recipe_reports_match_when_context_identical() {
+    let snapshot = safari_snapshot_with_menus();
+    let recipe = build_current_app_command_recipe(
+        snapshot.clone(),
+        Some("Turn This Into a Command close duplicate tabs"),
+        None,
+        None,
+    );
+
+    let verification =
+        verify_current_app_command_recipe(&recipe, snapshot, None, None);
+
+    assert_eq!(verification.status, "match");
+    assert!(verification.app_name_matches);
+    assert!(verification.bundle_id_matches);
+    assert!(verification.effective_query_matches);
+    assert!(verification.route_matches);
+    assert!(verification.prompt_matches);
+    assert_eq!(verification.warning_count, 0);
+    assert!(verification.warnings.is_empty());
+}
+
+#[test]
+fn verify_current_app_command_recipe_reports_browser_url_drift() {
+    let snapshot = safari_snapshot_with_menus();
+    let recipe = build_current_app_command_recipe(
+        snapshot.clone(),
+        Some("Turn This Into a Command close duplicate tabs"),
+        None,
+        Some("https://example.com"),
+    );
+
+    // Verify with browser URL missing
+    let verification =
+        verify_current_app_command_recipe(&recipe, snapshot, None, None);
+
+    assert_eq!(verification.status, "drift");
+    assert!(verification.browser_url_expected);
+    assert!(!verification.browser_url_present);
+    assert!(!verification.prompt_matches);
+    assert!(verification.warning_count >= 1);
+
+    let warning_text = verification.warnings.join(" ");
+    assert!(
+        warning_text.contains("browser URL"),
+        "Expected browser URL drift warning, got: {:?}",
+        verification.warnings
+    );
+}
+
+#[test]
+fn verify_current_app_command_recipe_reports_app_name_drift() {
+    let safari_snapshot = safari_snapshot_with_menus();
+    let recipe = build_current_app_command_recipe(
+        safari_snapshot,
+        Some("Turn This Into a Command close duplicate tabs"),
+        None,
+        None,
+    );
+
+    // Verify against a different app
+    let different_app = FrontmostMenuSnapshot {
+        app_name: "Finder".into(),
+        bundle_id: "com.apple.finder".into(),
+        items: vec![],
+    };
+
+    let verification =
+        verify_current_app_command_recipe(&recipe, different_app, None, None);
+
+    assert_eq!(verification.status, "drift");
+    assert!(!verification.app_name_matches);
+    assert!(!verification.bundle_id_matches);
+    assert_eq!(verification.expected_app_name, "Safari");
+    assert_eq!(verification.actual_app_name, "Finder");
+    assert!(verification.warning_count >= 2);
+}
+
+#[test]
+fn build_current_app_command_verification_hud_message_format() {
+    use script_kit_gpui::menu_bar::current_app_commands::build_current_app_command_verification_hud_message;
+
+    let snapshot = safari_snapshot_with_menus();
+    let recipe = build_current_app_command_recipe(
+        snapshot.clone(),
+        Some("Turn This Into a Command close duplicate tabs"),
+        None,
+        None,
+    );
+
+    // Match case
+    let verification =
+        verify_current_app_command_recipe(&recipe, snapshot.clone(), None, None);
+    let msg = build_current_app_command_verification_hud_message(&verification);
+    assert!(
+        msg.starts_with("Recipe verified:"),
+        "Expected 'Recipe verified:' prefix, got: {msg}"
+    );
+
+    // Drift case: use a recipe WITH browser URL and verify without it
+    let recipe_with_url = build_current_app_command_recipe(
+        safari_snapshot_with_menus(),
+        Some("Turn This Into a Command close duplicate tabs"),
+        None,
+        Some("https://example.com"),
+    );
+    let verification_drift =
+        verify_current_app_command_recipe(&recipe_with_url, safari_snapshot_with_menus(), None, None);
+    let msg_drift = build_current_app_command_verification_hud_message(&verification_drift);
+    assert!(
+        msg_drift.starts_with("Recipe drift detected:"),
+        "Expected 'Recipe drift detected:' prefix, got: {msg_drift}"
+    );
+}
+
+#[test]
+fn verify_current_app_command_recipe_serializes_to_valid_json() {
+    let snapshot = safari_snapshot_with_menus();
+    let recipe = build_current_app_command_recipe(
+        snapshot.clone(),
+        Some("Turn This Into a Command close duplicate tabs"),
+        None,
+        Some("https://example.com"),
+    );
+
+    let verification =
+        verify_current_app_command_recipe(&recipe, snapshot, None, None);
+
+    let json = serde_json::to_string_pretty(&verification).expect("must serialize");
+    let parsed: serde_json::Value = serde_json::from_str(&json).expect("JSON must be valid");
+
+    assert_eq!(parsed["schemaVersion"], 1);
+    assert_eq!(parsed["verificationType"], "currentAppCommandVerification");
+    assert_eq!(parsed["status"], "drift");
+    assert!(parsed["browserUrlExpected"].as_bool().unwrap_or(false));
+    assert!(!parsed["browserUrlPresent"].as_bool().unwrap_or(true));
+    assert!(parsed["warningCount"].as_u64().unwrap_or(0) >= 1);
 }
