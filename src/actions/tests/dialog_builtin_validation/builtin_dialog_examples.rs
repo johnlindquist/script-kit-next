@@ -3210,8 +3210,8 @@ mod from_dialog_builtin_action_validation_tests_23 {
         // is_script=true, no shortcut, no alias, not suggested
         let script = ScriptInfo::new("test", "/test.ts");
         let actions = get_script_context_actions(&script);
-        // run_script + add_shortcut + add_alias + toggle_favorite + edit_script + view_logs + reveal_in_finder + copy_path + copy_content + copy_deeplink = 10
-        assert_eq!(actions.len(), 10);
+        // run_script + add_shortcut + add_alias + toggle_favorite + edit_script + view_logs + reveal_in_finder + copy_path + copy_content + copy_deeplink + delete_script = 11
+        assert_eq!(actions.len(), 11);
     }
     
     #[test]
@@ -3235,7 +3235,7 @@ mod from_dialog_builtin_action_validation_tests_23 {
         let script = ScriptInfo::with_shortcut("test", "/test.ts", Some("cmd+t".to_string()));
         let actions = get_script_context_actions(&script);
         // Same as full script but shortcut adds one extra (update+remove instead of add = +1)
-        assert_eq!(actions.len(), 11);
+        assert_eq!(actions.len(), 12);
     }
     
     #[test]
@@ -3247,8 +3247,8 @@ mod from_dialog_builtin_action_validation_tests_23 {
             Some("ts".to_string()),
         );
         let actions = get_script_context_actions(&script);
-        // script(10) + 1 extra shortcut + 1 extra alias = 12
-        assert_eq!(actions.len(), 12);
+        // script(11) + 1 extra shortcut + 1 extra alias = 13
+        assert_eq!(actions.len(), 13);
     }
     
     // ============================================================
@@ -7714,7 +7714,7 @@ mod from_dialog_builtin_action_validation_tests_26 {
     fn cat26_30_script_exactly_9_actions() {
         let s = ScriptInfo::new("s", "/s.ts");
         let actions = get_script_context_actions(&s);
-        assert_eq!(actions.len(), 10);
+        assert_eq!(actions.len(), 11);
     }
     
     #[test]

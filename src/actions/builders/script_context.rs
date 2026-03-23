@@ -227,6 +227,17 @@ pub fn get_script_context_actions(script: &ScriptInfo) -> Vec<Action> {
             .with_icon(IconName::Copy)
             .with_section("Share"),
         );
+
+        destructive_actions.push(
+            Action::new(
+                "delete_script",
+                "Delete Script?",
+                Some("Move the selected script to Trash".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_icon(IconName::Trash)
+            .with_section("Destructive"),
+        );
     }
 
     if script.is_scriptlet {

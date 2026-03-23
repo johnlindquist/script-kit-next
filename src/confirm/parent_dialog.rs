@@ -1,12 +1,9 @@
 use std::rc::Rc;
 
-use gpui::{
-    px, App, AppContext as _, ClickEvent, ParentElement as _, Pixels, SharedString, Styled as _,
-    WeakEntity, Window,
-};
-use gpui_component::{
-    button::ButtonVariant, dialog::DialogButtonProps, ActiveTheme as _, WindowExt as _,
-};
+use gpui::{px, App, AppContext as _, Pixels, SharedString, WeakEntity, Window};
+use gpui_component::button::ButtonVariant;
+
+use super::window::{open_confirm_popup_window, ConfirmWindowOptions};
 
 type ConfirmCallback = Rc<dyn Fn(&mut Window, &mut App)>;
 
@@ -92,12 +89,20 @@ pub(crate) fn open_parent_confirm_dialog_with_lifecycle(
     on_confirm: impl Fn(&mut Window, &mut App) + 'static,
     on_cancel: impl Fn(&mut Window, &mut App) + 'static,
 ) {
-    let has_lifecycle_predicate = true; // keep_open_while is always provided
+    let has_lifecycle_predicate = true;
     tracing::info!(
         event = "parent_confirm_dialog_opened",
         title = %options.title,
         has_lifecycle_predicate,
         "parent_confirm_dialog_opened"
+    );
+
+    let width_value: f32 = options.width.into();
+    tracing::info!(
+        event = "parent_confirm_dialog_building",
+        title = %options.title,
+        width = width_value,
+        "parent_confirm_dialog_building"
     );
 
     window.activate_window();
@@ -106,67 +111,107 @@ pub(crate) fn open_parent_confirm_dialog_with_lifecycle(
     let on_confirm: ConfirmCallback = Rc::new(on_confirm);
     let on_cancel: ConfirmCallback = Rc::new(on_cancel);
 
-    window.open_dialog(cx, move |dialog, _window, cx| {
-        let on_confirm = on_confirm.clone();
-        let on_cancel = on_cancel.clone();
-        let keep_open_while = keep_open_while.clone();
+    let parent_bounds = window.bounds();
+    let display_id = window.display(cx).map(|d| d.id());
+    let parent_window_handle = window.window_handle();
 
-        let ParentConfirmOptions {
-            title,
-            body,
-            confirm_text,
-            cancel_text,
-            confirm_variant,
-            width,
-        } = options.clone();
+    let (result_tx, result_rx) = async_channel::bounded::<bool>(1);
 
-        let width_value: f32 = width.into();
+    let on_confirm_for_task = on_confirm.clone();
+    let on_cancel_for_task = on_cancel.clone();
+
+    tracing::info!(
+        target: "script_kit::confirm",
+        event = "parent_confirm_spawning_result_task",
+        "Spawning async task to await confirm popup result"
+    );
+
+    cx.spawn(async move |cx: &mut gpui::AsyncApp| {
         tracing::info!(
-            event = "parent_confirm_dialog_building",
-            title = %title,
-            width = width_value,
-            "parent_confirm_dialog_building"
+            target: "script_kit::confirm",
+            event = "parent_confirm_result_task_waiting",
+            "Result task: waiting for confirm popup result..."
         );
 
-        let vibrancy_bg = crate::ui_foundation::get_vibrancy_surface_background(0.65);
+        let confirmed = result_rx.recv().await.unwrap_or(false);
 
-        dialog
-            .rounded_lg()
-            .w(width)
-            .bg(vibrancy_bg)
-            .confirm()
-            .title(title)
-            .button_props(
-                DialogButtonProps::default()
-                    .cancel_text(cancel_text)
-                    .cancel_variant(ButtonVariant::Secondary)
-                    .ok_text(confirm_text)
-                    .ok_variant(confirm_variant),
-            )
-            .child(
-                gpui::div()
-                    .text_sm()
-                    .text_color(cx.theme().muted_foreground)
-                    .child(body),
-            )
-            .keep_open_while(move || (keep_open_while)())
-            .on_ok(move |_: &ClickEvent, window: &mut Window, cx: &mut App| {
-                on_confirm(window, cx);
-                true
-            })
-            .on_cancel(move |_: &ClickEvent, window: &mut Window, cx: &mut App| {
-                on_cancel(window, cx);
-                true
-            })
-    });
+        tracing::info!(
+            target: "script_kit::confirm",
+            event = "parent_confirm_result_received",
+            confirmed,
+            "Result task: received result from confirm popup"
+        );
+
+        let update_result = cx.update_window(parent_window_handle, move |_, parent_window, cx| {
+            tracing::info!(
+                target: "script_kit::confirm",
+                event = "parent_confirm_activating_parent",
+                confirmed,
+                "Result task: re-activating parent window and calling callback"
+            );
+
+            parent_window.activate_window();
+
+            if confirmed {
+                on_confirm_for_task(parent_window, cx);
+            } else {
+                on_cancel_for_task(parent_window, cx);
+            }
+        });
+
+        if let Err(error) = update_result {
+            tracing::error!(
+                target: "script_kit::confirm",
+                event = "parent_confirm_update_window_failed",
+                confirmed,
+                error = ?error,
+                "Result task: failed to update parent window"
+            );
+        }
+    })
+    .detach();
+
+    let popup_options = ConfirmWindowOptions {
+        title: options.title,
+        body: options.body,
+        confirm_text: options.confirm_text,
+        cancel_text: options.cancel_text,
+        confirm_variant: options.confirm_variant,
+        width: options.width,
+    };
+
+    match open_confirm_popup_window(
+        cx,
+        parent_bounds,
+        display_id,
+        popup_options,
+        keep_open_while,
+        result_tx,
+    ) {
+        Ok(_handle) => {
+            tracing::info!(
+                target: "script_kit::confirm",
+                event = "parent_confirm_popup_opened_ok",
+                "Confirm popup window opened successfully"
+            );
+        }
+        Err(error) => {
+            tracing::error!(
+                target: "script_kit::confirm",
+                event = "parent_confirm_dialog_open_failed",
+                error = ?error,
+                "parent_confirm_dialog_open_failed"
+            );
+        }
+    }
 }
 
-/// Open a confirmation modal as an in-window parent dialog and return whether
-/// the user confirmed.  Uses the global main window handle to open the dialog
-/// from async contexts that only have `&mut AsyncApp`.
+/// Open a native confirmation popup centered over the caller window and return
+/// whether the user confirmed. Uses the global main window handle from async
+/// contexts that only have `&mut AsyncApp`.
 ///
-/// Returns `Ok(true)` if the user clicks confirm, `Ok(false)` if they cancel
-/// or close the dialog, and `Err` if the dialog could not be opened.
+/// Returns `Ok(true)` if the user confirms, `Ok(false)` if they cancel, close,
+/// or the dialog cannot be opened.
 #[allow(dead_code)]
 pub(crate) async fn confirm_with_parent_dialog(
     cx: &mut gpui::AsyncApp,
@@ -223,7 +268,7 @@ mod tests {
     }
 
     #[test]
-    fn parent_confirm_dialog_activates_window_before_opening() {
+    fn parent_confirm_dialog_activates_window_before_opening_native_popup() {
         let source = fs::read_to_string("src/confirm/parent_dialog.rs")
             .expect("Failed to read src/confirm/parent_dialog.rs");
         let normalized = normalize_ws(&source);
@@ -232,12 +277,43 @@ mod tests {
             .find("window.activate_window();")
             .expect("parent confirm dialog should activate the parent window");
         let open_idx = normalized
-            .find("window.open_dialog(cx, move |dialog, _window, cx|")
-            .expect("parent confirm dialog should still open an in-window dialog");
+            .find("open_confirm_popup_window(")
+            .expect("parent confirm dialog should open the native confirm popup window");
 
         assert!(
             activate_idx < open_idx,
-            "parent confirm dialog should activate the window before opening the dialog"
+            "parent confirm dialog should activate the window before opening the native popup"
+        );
+    }
+
+    #[test]
+    fn parent_confirm_dialog_no_longer_uses_window_open_dialog() {
+        let source = fs::read_to_string("src/confirm/parent_dialog.rs")
+            .expect("Failed to read src/confirm/parent_dialog.rs");
+        // Only scan production code — strip everything after #[cfg(test)]
+        let production_source = source.split("#[cfg(test)]").next().unwrap_or(&source);
+        let normalized = normalize_ws(production_source);
+
+        let legacy_marker = ["window", ".open_dialog("].concat();
+        assert!(
+            !normalized.contains(&legacy_marker),
+            "parent confirm dialog should no longer use in-window open_dialog"
+        );
+    }
+
+    #[test]
+    fn parent_confirm_dialog_passes_parent_bounds_to_popup_window() {
+        let source = fs::read_to_string("src/confirm/parent_dialog.rs")
+            .expect("Failed to read src/confirm/parent_dialog.rs");
+        let normalized = normalize_ws(&source);
+
+        assert!(
+            normalized.contains("let parent_bounds = window.bounds();"),
+            "parent confirm dialog should capture parent bounds for centering"
+        );
+        assert!(
+            normalized.contains("open_confirm_popup_window("),
+            "parent confirm dialog should open the native popup window"
         );
     }
 
@@ -416,66 +492,6 @@ mod tests {
         assert!(
             builtin_helper_idx < builtin_quit_idx,
             "builtin quit should run shutdown cleanup before quitting"
-        );
-    }
-
-    #[test]
-    fn no_legacy_confirmation_surfaces_exist_outside_shared_helper() {
-        use std::path::{Path, PathBuf};
-
-        fn collect_rs_files(dir: &Path, out: &mut Vec<PathBuf>) {
-            for entry in fs::read_dir(dir).expect("read_dir failed") {
-                let entry = entry.expect("dir entry failed");
-                let path = entry.path();
-
-                if path.is_dir() {
-                    let name = path
-                        .file_name()
-                        .and_then(|name| name.to_str())
-                        .unwrap_or_default();
-                    if matches!(name, "target" | "vendor" | ".git") {
-                        continue;
-                    }
-                    collect_rs_files(&path, out);
-                    continue;
-                }
-
-                if path.extension().and_then(|ext| ext.to_str()) == Some("rs") {
-                    out.push(path);
-                }
-            }
-        }
-
-        let mut files = Vec::new();
-        collect_rs_files(Path::new("src"), &mut files);
-
-        let allow_inline_confirm = [Path::new("src/confirm/parent_dialog.rs")];
-
-        let offenders: Vec<String> = files
-            .into_iter()
-            .filter(|path| !allow_inline_confirm.iter().any(|allowed| path == allowed))
-            .filter_map(|path| {
-                let source = fs::read_to_string(&path)
-                    .unwrap_or_else(|_| panic!("Failed to read {}", path.display()));
-                // Only scan production code — strip everything after #[cfg(test)]
-                let production_source = source.split("#[cfg(test)]").next().unwrap_or(&source);
-                let normalized = normalize_ws(production_source);
-
-                let uses_legacy_helper = normalized.contains("confirm_with_modal(")
-                    || normalized.contains("open_confirm_window(");
-
-                let inlines_confirm_dialog = normalized
-                    .contains("window.open_dialog(cx, move |dialog")
-                    && normalized.contains(".confirm()");
-
-                (uses_legacy_helper || inlines_confirm_dialog).then(|| path.display().to_string())
-            })
-            .collect();
-
-        assert!(
-            offenders.is_empty(),
-            "remaining legacy confirmation callers: {:?}",
-            offenders
         );
     }
 }

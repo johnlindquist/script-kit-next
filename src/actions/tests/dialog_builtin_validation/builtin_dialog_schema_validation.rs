@@ -19647,16 +19647,16 @@ mod from_dialog_builtin_action_validation_tests_10 {
         fn script_no_shortcut_no_alias_action_count() {
             let script = ScriptInfo::new("test", "/path/test.ts");
             let actions = get_script_context_actions(&script);
-            // run, add_shortcut, add_alias, toggle_favorite, edit, view_logs, reveal, copy_path, copy_content, copy_deeplink = 10
-            assert_eq!(actions.len(), 10);
+            // run, add_shortcut, add_alias, toggle_favorite, edit, view_logs, reveal, copy_path, copy_content, copy_deeplink, delete_script = 11
+            assert_eq!(actions.len(), 11);
         }
     
         #[test]
         fn script_with_shortcut_action_count() {
             let script = ScriptInfo::with_shortcut("test", "/path/test.ts", Some("cmd+t".to_string()));
             let actions = get_script_context_actions(&script);
-            // run, update_shortcut, remove_shortcut, add_alias, toggle_favorite, edit, view_logs, reveal, copy_path, copy_content, copy_deeplink = 11
-            assert_eq!(actions.len(), 11);
+            // run, update_shortcut, remove_shortcut, add_alias, toggle_favorite, edit, view_logs, reveal, copy_path, copy_content, copy_deeplink, delete_script = 12
+            assert_eq!(actions.len(), 12);
         }
     
         #[test]
@@ -19668,8 +19668,8 @@ mod from_dialog_builtin_action_validation_tests_10 {
                 Some("ts".to_string()),
             );
             let actions = get_script_context_actions(&script);
-            // run, update_shortcut, remove_shortcut, update_alias, remove_alias, toggle_favorite, edit, view_logs, reveal, copy_path, copy_content, copy_deeplink = 12
-            assert_eq!(actions.len(), 12);
+            // run, update_shortcut, remove_shortcut, update_alias, remove_alias, toggle_favorite, edit, view_logs, reveal, copy_path, copy_content, copy_deeplink, delete_script = 13
+            assert_eq!(actions.len(), 13);
         }
     
         #[test]

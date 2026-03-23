@@ -269,6 +269,14 @@ impl ScriptListApp {
                     this.handle_filter_input_change(window, cx);
                 }
                 InputEvent::PressEnter { .. } => {
+                    // Block Enter when confirm popup is open — the confirm
+                    // popup's key routing already handled this Enter via
+                    // capture_key_down in render_impl.
+                    if confirm::is_confirm_window_open() {
+                        logging::log("KEY", "Ignoring PressEnter: confirm popup is open");
+                        return;
+                    }
+
                     logging::log(
                         "KEY",
                         &format!(

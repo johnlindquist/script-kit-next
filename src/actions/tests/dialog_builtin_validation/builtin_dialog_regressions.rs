@@ -2016,7 +2016,7 @@ mod from_dialog_builtin_action_validation_tests_33 {
     fn script_context_last_action_is_copy_deeplink_without_suggestion() {
         let script = ScriptInfo::new("test", "/path/test.ts");
         let actions = get_script_context_actions(&script);
-        assert_eq!(actions.last().unwrap().id, "copy_deeplink");
+        assert_eq!(actions.last().unwrap().id, "delete_script");
     }
     
     #[test]
@@ -2031,8 +2031,8 @@ mod from_dialog_builtin_action_validation_tests_33 {
     fn script_context_action_count_no_shortcut_no_alias() {
         let script = ScriptInfo::new("test", "/path/test.ts");
         let actions = get_script_context_actions(&script);
-        // run + add_shortcut + add_alias + toggle_favorite + edit + view_logs + reveal + copy_path + copy_content + copy_deeplink = 10
-        assert_eq!(actions.len(), 10);
+        // run + add_shortcut + add_alias + toggle_favorite + edit + view_logs + reveal + copy_path + copy_content + copy_deeplink + delete_script = 11
+        assert_eq!(actions.len(), 11);
     }
     
     // =====================================================================
@@ -6406,16 +6406,16 @@ mod from_dialog_builtin_action_validation_tests_36 {
     fn script_context_base_count_no_extras() {
         let script = ScriptInfo::new("test", "/path/test.ts");
         let actions = get_script_context_actions(&script);
-        // run + add_shortcut + add_alias + toggle_favorite + edit + view_logs + reveal + copy_path + copy_content + copy_deeplink = 10
-        assert_eq!(actions.len(), 10);
+        // run + add_shortcut + add_alias + toggle_favorite + edit + view_logs + reveal + copy_path + copy_content + copy_deeplink + delete_script = 11
+        assert_eq!(actions.len(), 11);
     }
     
     #[test]
     fn script_context_with_shortcut_adds_one() {
         let script = ScriptInfo::with_shortcut("test", "/path/test.ts", Some("cmd+t".into()));
         let actions = get_script_context_actions(&script);
-        // run + update_shortcut + remove_shortcut + add_alias + toggle_favorite + edit + view_logs + reveal + copy_path + copy_content + copy_deeplink = 11
-        assert_eq!(actions.len(), 11);
+        // run + update_shortcut + remove_shortcut + add_alias + toggle_favorite + edit + view_logs + reveal + copy_path + copy_content + copy_deeplink + delete_script = 12
+        assert_eq!(actions.len(), 12);
     }
     
     #[test]
@@ -6427,8 +6427,8 @@ mod from_dialog_builtin_action_validation_tests_36 {
             Some("ts".into()),
         );
         let actions = get_script_context_actions(&script);
-        // run + update_shortcut + remove_shortcut + update_alias + remove_alias + toggle_favorite + edit + view_logs + reveal + copy_path + copy_content + copy_deeplink = 12
-        assert_eq!(actions.len(), 12);
+        // run + update_shortcut + remove_shortcut + update_alias + remove_alias + toggle_favorite + edit + view_logs + reveal + copy_path + copy_content + copy_deeplink + delete_script = 13
+        assert_eq!(actions.len(), 13);
     }
     
     #[test]
@@ -6436,8 +6436,8 @@ mod from_dialog_builtin_action_validation_tests_36 {
         let script =
             ScriptInfo::new("test", "/path/test.ts").with_frecency(true, Some("/path/test.ts".into()));
         let actions = get_script_context_actions(&script);
-        // 10 + reset_ranking = 11
-        assert_eq!(actions.len(), 11);
+        // 11 + reset_ranking = 12
+        assert_eq!(actions.len(), 12);
         assert!(actions.iter().any(|a| a.id == "reset_ranking"));
     }
     
@@ -12771,10 +12771,10 @@ mod from_dialog_builtin_action_validation_tests_41 {
     
         #[test]
         fn script_context_real_script_count() {
-            // Real script currently includes toggle_favorite in addition to the historical 9 actions.
+            // Real script currently includes toggle_favorite and delete_script in addition to the historical 9 actions.
             let info = ScriptInfo::new("test", "/test.ts");
             let actions = get_script_context_actions(&info);
-            assert_eq!(actions.len(), 10);
+            assert_eq!(actions.len(), 11);
         }
     
         #[test]

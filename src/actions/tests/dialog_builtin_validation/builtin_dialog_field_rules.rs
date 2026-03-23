@@ -9558,14 +9558,15 @@ mod from_dialog_builtin_action_validation_tests_15 {
             let s = ScriptInfo::new("test", "/p");
             let actions = get_script_context_actions(&s);
             // + toggle_favorite was added for script/scriptlet/agent items with path
-            assert_eq!(actions.len(), 10);
+            // + delete_script was added for is_script=true items
+            assert_eq!(actions.len(), 11);
         }
     
         #[test]
         fn cat27_with_shortcut_count() {
             let s = ScriptInfo::with_shortcut("test", "/p", Some("cmd+t".into()));
             let actions = get_script_context_actions(&s);
-            assert_eq!(actions.len(), 11);
+            assert_eq!(actions.len(), 12);
         }
     
         #[test]
@@ -9577,17 +9578,17 @@ mod from_dialog_builtin_action_validation_tests_15 {
                 Some("ts".into()),
             );
             let actions = get_script_context_actions(&s);
-            assert_eq!(actions.len(), 12);
+            assert_eq!(actions.len(), 13);
         }
-    
+
         #[test]
         fn cat27_frecency_adds_one() {
             let s = ScriptInfo::new("test", "/p").with_frecency(true, Some("/f".into()));
             let actions = get_script_context_actions(&s);
-            // 10 + 1 (reset_ranking) = 11
-            assert_eq!(actions.len(), 11);
+            // 11 + 1 (reset_ranking) = 12
+            assert_eq!(actions.len(), 12);
         }
-    
+
         // =========================================================================
         // cat28: has_action=false invariant for all built-ins
         // =========================================================================
@@ -11823,8 +11824,8 @@ mod from_dialog_builtin_action_validation_tests_17 {
             let script = ScriptInfo::new("test", "/path/test.ts");
             let actions = get_script_context_actions(&script);
             // run, add_shortcut, add_alias, edit_script, view_logs, toggle_favorite,
-            // reveal_in_finder, copy_path, copy_content, copy_deeplink = 10
-            assert_eq!(actions.len(), 10);
+            // reveal_in_finder, copy_path, copy_content, copy_deeplink, delete_script = 11
+            assert_eq!(actions.len(), 11);
         }
     
         #[test]
@@ -11832,8 +11833,8 @@ mod from_dialog_builtin_action_validation_tests_17 {
             let script = ScriptInfo::with_shortcut("test", "/path/test.ts", Some("cmd+t".into()));
             let actions = get_script_context_actions(&script);
             // run, update_shortcut, remove_shortcut, add_alias, edit_script, view_logs,
-            // toggle_favorite, reveal_in_finder, copy_path, copy_content, copy_deeplink = 11
-            assert_eq!(actions.len(), 11);
+            // toggle_favorite, reveal_in_finder, copy_path, copy_content, copy_deeplink, delete_script = 12
+            assert_eq!(actions.len(), 12);
         }
     
         #[test]
@@ -11846,8 +11847,8 @@ mod from_dialog_builtin_action_validation_tests_17 {
             );
             let actions = get_script_context_actions(&script);
             // run, update_shortcut, remove_shortcut, update_alias, remove_alias, edit_script,
-            // view_logs, toggle_favorite, reveal_in_finder, copy_path, copy_content, copy_deeplink = 12
-            assert_eq!(actions.len(), 12);
+            // view_logs, toggle_favorite, reveal_in_finder, copy_path, copy_content, copy_deeplink, delete_script = 13
+            assert_eq!(actions.len(), 13);
         }
     
         #[test]
@@ -11872,10 +11873,10 @@ mod from_dialog_builtin_action_validation_tests_17 {
             let script = ScriptInfo::new("test", "/path/test.ts")
                 .with_frecency(true, Some("/path/test.ts".into()));
             let actions = get_script_context_actions(&script);
-            // base 10 + reset_ranking = 11
-            assert_eq!(actions.len(), 11);
+            // base 11 + reset_ranking = 12
+            assert_eq!(actions.len(), 12);
         }
-    
+
         // ================================================================
         // Cat 02: Scriptlet context copy_content action details
         // ================================================================
