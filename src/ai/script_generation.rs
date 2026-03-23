@@ -800,6 +800,35 @@ await div("ready");
     }
 
     #[test]
+    fn ai_script_generation_system_prompt_is_not_accidentally_truncated() {
+        assert!(
+            AI_SCRIPT_GENERATION_SYSTEM_PROMPT.len() > 100,
+            "AI_SCRIPT_GENERATION_SYSTEM_PROMPT looks truncated (len={})",
+            AI_SCRIPT_GENERATION_SYSTEM_PROMPT.len()
+        );
+    }
+
+    #[test]
+    fn ai_script_generation_system_prompt_keeps_typescript_only_contract() {
+        let prompt = AI_SCRIPT_GENERATION_SYSTEM_PROMPT;
+
+        assert!(
+            prompt.contains("production-ready Script Kit TypeScript scripts"),
+            "system prompt must keep the Script Kit TypeScript framing"
+        );
+        assert!(
+            prompt.contains("ONLY TypeScript code"),
+            "system prompt must explicitly forbid extra commentary"
+        );
+        assert!(
+            prompt
+                .to_ascii_lowercase()
+                .contains("typescript source code"),
+            "system prompt must explicitly require TypeScript source output"
+        );
+    }
+
+    #[test]
     fn test_ai_script_generation_system_prompt_uses_modern_sdk_conventions() {
         assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("import \"@scriptkit/sdk\";"));
         assert!(!AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("@johnlindquist/kit"));

@@ -767,6 +767,55 @@ mod tests {
         assert_eq!(receipt.action, "open_command_palette");
     }
 
+    // -----------------------------------------------------------------------
+    // resolve_do_in_current_app_intent: edge-case routing
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn resolve_do_in_current_app_intent_exact_shortcut_keyword_executes_entry() {
+        let snap = FrontmostMenuSnapshot {
+            app_name: "Safari".into(),
+            bundle_id: "com.apple.Safari".into(),
+            items: vec![
+                apple_menu(),
+                menu(
+                    "File",
+                    vec![leaf_with_shortcut("New Tab", "T", vec![1, 0])],
+                    vec![1],
+                ),
+            ],
+        };
+
+        let entries = snap.into_entries();
+        let (action, receipt) = resolve_do_in_current_app_intent(&entries, Some("cmd+t"));
+
+        assert_eq!(action, DoInCurrentAppAction::ExecuteEntry(0));
+        assert_eq!(receipt.filtered_entries, 1);
+        assert_eq!(receipt.exact_matches, 1);
+        assert_eq!(receipt.action, "execute_entry");
+    }
+
+    #[test]
+    fn resolve_do_in_current_app_intent_normalizes_path_punctuation_and_case() {
+        let snap = FrontmostMenuSnapshot {
+            app_name: "Safari".into(),
+            bundle_id: "com.apple.Safari".into(),
+            items: vec![
+                apple_menu(),
+                menu("File", vec![leaf("New Tab", vec![1, 0])], vec![1]),
+            ],
+        };
+
+        let entries = snap.into_entries();
+        let (action, receipt) =
+            resolve_do_in_current_app_intent(&entries, Some("FILE -> new tab"));
+
+        assert_eq!(action, DoInCurrentAppAction::ExecuteEntry(0));
+        assert_eq!(receipt.filtered_entries, 1);
+        assert_eq!(receipt.exact_matches, 1);
+        assert_eq!(receipt.action, "execute_entry");
+    }
+
     #[test]
     fn generate_script_prompt_omits_builtin_label_request() {
         let snap = FrontmostMenuSnapshot {
