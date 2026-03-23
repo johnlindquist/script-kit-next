@@ -229,7 +229,7 @@ const MAX_SELECTED_TEXT_CHARS: usize = 1_500;
 
 /// A machine-readable receipt for a script-generation prompt built from the
 /// frontmost app snapshot.
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct CurrentAppScriptPromptReceipt {
     pub app_name: String,
     pub bundle_id: String,
@@ -376,7 +376,7 @@ pub fn normalize_trace_current_app_intent_request(raw: Option<&str>) -> Option<S
 pub const CURRENT_APP_INTENT_TRACE_SCHEMA_VERSION: u32 = 1;
 
 /// A compact candidate entry included in [`CurrentAppIntentTraceReceipt`].
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct CurrentAppIntentTraceCandidate {
     pub entry_id: String,
     pub name: String,
@@ -385,7 +385,7 @@ pub struct CurrentAppIntentTraceCandidate {
 }
 
 /// A machine-readable dry-run receipt for a free-text current-app request.
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct CurrentAppIntentTraceReceipt {
     pub schema_version: u32,
     pub source: String,
@@ -503,11 +503,11 @@ pub const CURRENT_APP_COMMAND_RECIPE_SCHEMA_VERSION: u32 = 1;
 
 /// A machine-readable recipe that packages current-app routing + prompt state
 /// for later script creation or auditing.
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CurrentAppCommandRecipe {
     pub schema_version: u32,
-    pub recipe_type: &'static str,
+    pub recipe_type: String,
     pub raw_query: String,
     pub effective_query: String,
     pub suggested_script_name: String,
@@ -612,7 +612,7 @@ pub fn build_current_app_command_recipe(
 
     CurrentAppCommandRecipe {
         schema_version: CURRENT_APP_COMMAND_RECIPE_SCHEMA_VERSION,
-        recipe_type: "currentAppCommand",
+        recipe_type: "currentAppCommand".to_string(),
         raw_query: raw_query_string,
         effective_query: effective_query.clone(),
         suggested_script_name: suggest_current_app_command_name(
@@ -622,6 +622,262 @@ pub fn build_current_app_command_recipe(
         trace,
         prompt_receipt,
         prompt,
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Verify Current App Recipe
+// ---------------------------------------------------------------------------
+
+/// The human-readable label used in the main command list.
+pub const VERIFY_CURRENT_APP_RECIPE_LABEL: &str = "Verify Current App Recipe";
+
+/// Schema version for [`CurrentAppCommandRecipeVerification`].
+pub const CURRENT_APP_COMMAND_RECIPE_VERIFICATION_SCHEMA_VERSION: u32 = 1;
+
+/// A machine-readable drift report comparing a stored recipe against live context.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CurrentAppCommandRecipeVerification {
+    pub schema_version: u32,
+    pub verification_type: String,
+    pub status: String,
+    pub expected_app_name: String,
+    pub actual_app_name: String,
+    pub expected_bundle_id: String,
+    pub actual_bundle_id: String,
+    pub expected_effective_query: String,
+    pub actual_effective_query: String,
+    pub expected_route: String,
+    pub actual_route: String,
+    pub app_name_matches: bool,
+    pub bundle_id_matches: bool,
+    pub effective_query_matches: bool,
+    pub route_matches: bool,
+    pub prompt_matches: bool,
+    pub selected_text_expected: bool,
+    pub selected_text_present: bool,
+    pub browser_url_expected: bool,
+    pub browser_url_present: bool,
+    pub warning_count: usize,
+    pub warnings: Vec<String>,
+    pub live_recipe: CurrentAppCommandRecipe,
+}
+
+/// Parse a JSON string into a [`CurrentAppCommandRecipe`], returning
+/// descriptive errors for empty input, invalid JSON, wrong recipe type,
+/// and unsupported schema versions.
+pub fn parse_current_app_command_recipe_json(
+    input: &str,
+) -> Result<CurrentAppCommandRecipe, String> {
+    let trimmed = input.trim();
+
+    if trimmed.is_empty() {
+        return Err(
+            "Clipboard is empty. Run \"Turn This Into a Command\" first, then try again."
+                .to_string(),
+        );
+    }
+
+    let value: serde_json::Value = serde_json::from_str(trimmed)
+        .map_err(|e| format!("Clipboard does not contain valid JSON: {e}"))?;
+
+    let recipe_type = value
+        .get("recipeType")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default();
+
+    if recipe_type != "currentAppCommand" {
+        return Err(format!(
+            "Clipboard JSON has recipeType={recipe_type:?}. Expected \"currentAppCommand\" from \"Turn This Into a Command\"."
+        ));
+    }
+
+    let recipe: CurrentAppCommandRecipe = serde_json::from_value(value)
+        .map_err(|e| format!("Clipboard JSON is not a valid currentAppCommand recipe: {e}"))?;
+
+    if recipe.schema_version != CURRENT_APP_COMMAND_RECIPE_SCHEMA_VERSION {
+        return Err(format!(
+            "Unsupported recipe schema_version {}. Expected {}.",
+            recipe.schema_version, CURRENT_APP_COMMAND_RECIPE_SCHEMA_VERSION
+        ));
+    }
+
+    Ok(recipe)
+}
+
+/// Load a [`CurrentAppCommandRecipe`] from the system clipboard (macOS only).
+#[cfg(target_os = "macos")]
+pub fn load_current_app_command_recipe_from_clipboard() -> Result<CurrentAppCommandRecipe, String> {
+    let output = std::process::Command::new("pbpaste")
+        .output()
+        .map_err(|e| format!("Failed to read clipboard with pbpaste: {e}"))?;
+
+    if !output.status.success() {
+        return Err(format!("pbpaste exited with status {}.", output.status));
+    }
+
+    let clipboard_text = String::from_utf8(output.stdout)
+        .map_err(|e| format!("Clipboard text is not valid UTF-8: {e}"))?;
+
+    parse_current_app_command_recipe_json(&clipboard_text)
+}
+
+/// Stub for non-macOS platforms — always returns an error.
+#[cfg(not(target_os = "macos"))]
+pub fn load_current_app_command_recipe_from_clipboard() -> Result<CurrentAppCommandRecipe, String> {
+    Err("Verify Current App Recipe is only supported on macOS.".to_string())
+}
+
+/// Compare a stored recipe against a live frontmost-app snapshot and optional
+/// context, returning a deterministic drift report.
+pub fn verify_current_app_command_recipe(
+    stored_recipe: &CurrentAppCommandRecipe,
+    snapshot: FrontmostMenuSnapshot,
+    selected_text: Option<&str>,
+    browser_url: Option<&str>,
+) -> CurrentAppCommandRecipeVerification {
+    let replay_query = if stored_recipe.raw_query.trim().is_empty() {
+        stored_recipe.effective_query.as_str()
+    } else {
+        stored_recipe.raw_query.as_str()
+    };
+
+    let live_recipe = build_current_app_command_recipe(
+        snapshot,
+        Some(replay_query),
+        selected_text,
+        browser_url,
+    );
+
+    let app_name_matches =
+        stored_recipe.prompt_receipt.app_name == live_recipe.prompt_receipt.app_name;
+    let bundle_id_matches =
+        stored_recipe.prompt_receipt.bundle_id == live_recipe.prompt_receipt.bundle_id;
+    let effective_query_matches =
+        stored_recipe.effective_query == live_recipe.effective_query;
+    let route_matches = stored_recipe.trace.action == live_recipe.trace.action;
+    let prompt_matches = stored_recipe.prompt == live_recipe.prompt;
+
+    let selected_text_present = selected_text
+        .map(str::trim)
+        .map(|text| !text.is_empty())
+        .unwrap_or(false);
+
+    let browser_url_present = browser_url
+        .map(str::trim)
+        .map(|url| !url.is_empty())
+        .unwrap_or(false);
+
+    let selected_text_expected = stored_recipe.prompt_receipt.included_selected_text;
+    let browser_url_expected = stored_recipe.prompt_receipt.included_browser_url;
+
+    let mut warnings = Vec::new();
+
+    if !app_name_matches {
+        warnings.push(format!(
+            "Recipe expected app {:?}, but the current app is {:?}.",
+            stored_recipe.prompt_receipt.app_name,
+            live_recipe.prompt_receipt.app_name,
+        ));
+    }
+
+    if !bundle_id_matches {
+        warnings.push(format!(
+            "Recipe expected bundle_id {:?}, but the current bundle_id is {:?}.",
+            stored_recipe.prompt_receipt.bundle_id,
+            live_recipe.prompt_receipt.bundle_id,
+        ));
+    }
+
+    if !effective_query_matches {
+        warnings.push(format!(
+            "Recipe effective_query changed from {:?} to {:?}.",
+            stored_recipe.effective_query,
+            live_recipe.effective_query,
+        ));
+    }
+
+    if !route_matches {
+        warnings.push(format!(
+            "Recipe route changed from {:?} to {:?}.",
+            stored_recipe.trace.action,
+            live_recipe.trace.action,
+        ));
+    }
+
+    if selected_text_expected && !selected_text_present {
+        warnings.push(
+            "Recipe expected selected text, but no selected text is available in the current context."
+                .to_string(),
+        );
+    }
+
+    if browser_url_expected && !browser_url_present {
+        warnings.push(
+            "Recipe expected a focused browser URL, but no browser URL is available in the current context."
+                .to_string(),
+        );
+    }
+
+    if !prompt_matches {
+        warnings.push(
+            "The regenerated prompt does not exactly match the stored recipe prompt.".to_string(),
+        );
+    }
+
+    let status = if warnings.is_empty() {
+        "match".to_string()
+    } else {
+        "drift".to_string()
+    };
+
+    CurrentAppCommandRecipeVerification {
+        schema_version: CURRENT_APP_COMMAND_RECIPE_VERIFICATION_SCHEMA_VERSION,
+        verification_type: "currentAppCommandVerification".to_string(),
+        status,
+        expected_app_name: stored_recipe.prompt_receipt.app_name.clone(),
+        actual_app_name: live_recipe.prompt_receipt.app_name.clone(),
+        expected_bundle_id: stored_recipe.prompt_receipt.bundle_id.clone(),
+        actual_bundle_id: live_recipe.prompt_receipt.bundle_id.clone(),
+        expected_effective_query: stored_recipe.effective_query.clone(),
+        actual_effective_query: live_recipe.effective_query.clone(),
+        expected_route: stored_recipe.trace.action.clone(),
+        actual_route: live_recipe.trace.action.clone(),
+        app_name_matches,
+        bundle_id_matches,
+        effective_query_matches,
+        route_matches,
+        prompt_matches,
+        selected_text_expected,
+        selected_text_present,
+        browser_url_expected,
+        browser_url_present,
+        warning_count: warnings.len(),
+        warnings,
+        live_recipe,
+    }
+}
+
+/// Build a human-readable HUD message from a verification result.
+pub fn build_current_app_command_verification_hud_message(
+    verification: &CurrentAppCommandRecipeVerification,
+) -> String {
+    if verification.warning_count == 0 {
+        format!(
+            "Recipe verified: {}",
+            verification.live_recipe.suggested_script_name
+        )
+    } else {
+        format!(
+            "Recipe drift detected: {} warning{}",
+            verification.warning_count,
+            if verification.warning_count == 1 {
+                ""
+            } else {
+                "s"
+            }
+        )
     }
 }
 
