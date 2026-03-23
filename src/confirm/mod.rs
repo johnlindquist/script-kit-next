@@ -1,7 +1,8 @@
 //! Confirm Module
 //!
-//! In-window confirmation dialogs using gpui-component's `Dialog`.
-//! Used by the SDK `confirm()` function to get user confirmation for actions.
+//! Native popup confirmation dialogs rendered in a dedicated GPUI
+//! `WindowKind::PopUp` window so macOS vibrancy blur comes from the NSPanel
+//! itself instead of a translucent in-window overlay.
 //!
 //! # Example Usage (SDK)
 //! ```typescript
@@ -19,6 +20,7 @@
 //! ```
 
 mod parent_dialog;
+mod window;
 
 // Used by include!() code in app_actions/handle_action/scripts.rs — clippy
 // cannot trace usage through include!() and reports a false-positive dead_code
@@ -28,3 +30,8 @@ pub(crate) use parent_dialog::{
     confirm_with_parent_dialog, open_parent_confirm_dialog, open_parent_confirm_dialog_for_entity,
     open_parent_confirm_dialog_with_lifecycle, ParentConfirmOptions,
 };
+
+#[allow(unused_imports)]
+pub(crate) use window::is_confirm_window_open;
+#[allow(unused_imports)]
+pub(crate) use window::route_key_to_confirm_popup;

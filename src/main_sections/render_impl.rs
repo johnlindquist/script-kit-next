@@ -109,6 +109,7 @@ impl Render for ScriptListApp {
                 && !self.is_pinned
                 && !script_kit_gpui::is_within_focus_grace_period()
                 && !actions::is_actions_window_open()
+                && !confirm::is_confirm_window_open()
             {
                 logging::log(
                     "FOCUS",
@@ -119,6 +120,11 @@ impl Render for ScriptListApp {
                 logging::log(
                     "FOCUS",
                     "Main window lost focus but actions popup is open - staying open",
+                );
+            } else if confirm::is_confirm_window_open() {
+                logging::log(
+                    "FOCUS",
+                    "Main window lost focus but confirm popup is open - staying open",
                 );
             } else if script_kit_gpui::is_within_focus_grace_period() {
                 logging::log(
@@ -419,6 +425,15 @@ impl Render for ScriptListApp {
             .id("main-window-root")
             .size_full()
             .relative()
+            // Route keys to confirm popup when it's open (Escape/Enter/Tab).
+            // This must be at the outermost level to intercept before any
+            // view-specific handlers.
+            .capture_key_down(cx.listener(|_this, event: &KeyDownEvent, _window, cx| {
+                let key = event.keystroke.key.as_str();
+                if confirm::route_key_to_confirm_popup(key, cx) {
+                    cx.stop_propagation();
+                }
+            }))
             .child(
                 div()
                     .w_full()

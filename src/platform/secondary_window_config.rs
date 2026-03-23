@@ -135,6 +135,22 @@ pub fn configure_actions_popup_window(_window: *mut std::ffi::c_void, _is_dark: 
     // No-op on non-macOS platforms
 }
 
+/// Configure the confirm popup window with the same vibrancy setup as the
+/// actions popup. Reuses the shared popup vibrancy path so confirm dialogs
+/// get native macOS blur.
+///
+/// # Safety
+/// Same invariants as `configure_actions_popup_window`.
+#[cfg(target_os = "macos")]
+pub unsafe fn configure_confirm_popup_window(window: id, is_dark: bool) {
+    configure_actions_popup_window(window, is_dark);
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn configure_confirm_popup_window(_window: *mut std::ffi::c_void, _is_dark: bool) {
+    // No-op on non-macOS platforms
+}
+
 // ============================================================================
 // Secondary Window Vibrancy Configuration
 // ============================================================================

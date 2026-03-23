@@ -1275,8 +1275,8 @@ fn action_with_icon_and_section_chain() {
 fn script_action_count_without_shortcut_or_alias() {
     let script = ScriptInfo::new("test", "/path/test.ts");
     let actions = get_script_context_actions(&script);
-    // + toggle_favorite = 10
-    assert_eq!(actions.len(), 10);
+    // + toggle_favorite + delete_script = 11
+    assert_eq!(actions.len(), 11);
 }
 
 #[test]
@@ -1289,8 +1289,8 @@ fn script_action_count_with_shortcut_and_alias() {
     );
     let actions = get_script_context_actions(&script);
     // run + update_shortcut + remove_shortcut + update_alias + remove_alias
-    // + edit + view_logs + reveal + copy_path + copy_content + copy_deeplink + toggle_favorite = 12
-    assert_eq!(actions.len(), 12);
+    // + edit + view_logs + reveal + copy_path + copy_content + copy_deeplink + toggle_favorite + delete_script = 13
+    assert_eq!(actions.len(), 13);
 }
 
 #[test]
