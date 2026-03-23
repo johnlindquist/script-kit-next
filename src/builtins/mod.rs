@@ -187,6 +187,8 @@ pub enum UtilityCommandType {
     CurrentAppCommands,
     /// Capture a deterministic JSON snapshot of current desktop context and copy to clipboard
     InspectCurrentContext,
+    /// Dry-run a free-text request against the frontmost app and copy a JSON routing trace
+    TraceCurrentAppIntent,
 }
 /// Kit Store command types for browsing and managing kits
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1365,6 +1367,32 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             ],
             BuiltInFeature::UtilityCommand(UtilityCommandType::InspectCurrentContext),
             "🧭",
+        ));
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin-trace-current-app-intent",
+            "Trace Current App Intent",
+            "Dry-run a current-app request and copy a machine-readable JSON trace showing normalized input, candidate commands, route selection, and script prompt preview without executing anything",
+            vec![
+                "trace",
+                "current",
+                "app",
+                "intent",
+                "dry",
+                "run",
+                "preview",
+                "debug",
+                "diagnostics",
+                "routing",
+                "json",
+                "agent",
+                "automation",
+                "menu",
+                "command",
+                "shortcut",
+            ],
+            BuiltInFeature::UtilityCommand(UtilityCommandType::TraceCurrentAppIntent),
+            "🧪",
         ));
 
         // =========================================================================

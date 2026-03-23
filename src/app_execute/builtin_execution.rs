@@ -2305,6 +2305,102 @@ impl ScriptListApp {
                             }
                         }
                     }
+                    UtilityCommandType::TraceCurrentAppIntent => {
+                        let raw_query_owned = query_override
+                            .unwrap_or(&self.filter_text)
+                            .to_string();
+                        let effective_query =
+                            crate::menu_bar::current_app_commands::normalize_trace_current_app_intent_request(
+                                Some(&raw_query_owned),
+                            )
+                            .unwrap_or_default();
+
+                        tracing::info!(
+                            trace_id = %dctx.trace_id,
+                            raw_query = %raw_query_owned,
+                            effective_query = %effective_query,
+                            "current_app_intent_trace.requested"
+                        );
+
+                        match crate::menu_bar::load_frontmost_menu_snapshot() {
+                            Ok(snapshot) => {
+                                let trace_receipt =
+                                    crate::menu_bar::current_app_commands::build_current_app_intent_trace_receipt(
+                                        snapshot,
+                                        Some(&raw_query_owned),
+                                    );
+
+                                match serde_json::to_string_pretty(&trace_receipt) {
+                                    Ok(json) => {
+                                        tracing::info!(
+                                            category = "CURRENT_APP_TRACE",
+                                            trace_id = %dctx.trace_id,
+                                            app_name = %trace_receipt.app_name,
+                                            bundle_id = %trace_receipt.bundle_id,
+                                            raw_query = %trace_receipt.raw_query,
+                                            effective_query = %trace_receipt.effective_query,
+                                            normalized_query = %trace_receipt.normalized_query,
+                                            action = %trace_receipt.action,
+                                            filtered_entries = trace_receipt.filtered_entries,
+                                            exact_matches = trace_receipt.exact_matches,
+                                            candidate_count = trace_receipt.candidates.len(),
+                                            has_prompt_preview = trace_receipt.prompt_preview.is_some(),
+                                            json_bytes = json.len(),
+                                            "current_app_intent_trace.copied"
+                                        );
+
+                                        cx.write_to_clipboard(gpui::ClipboardItem::new_string(json));
+                                        self.show_hud(
+                                            format!(
+                                                "Copied app intent trace: {} ({} exact / {} filtered)",
+                                                trace_receipt.action,
+                                                trace_receipt.exact_matches,
+                                                trace_receipt.filtered_entries,
+                                            ),
+                                            Some(HUD_MEDIUM_MS),
+                                            cx,
+                                        );
+                                        self.close_and_reset_window(cx);
+                                        Self::builtin_success(dctx, "trace_current_app_intent")
+                                    }
+                                    Err(e) => {
+                                        let message =
+                                            format!("Failed to serialize current app intent trace: {}", e);
+                                        tracing::error!(
+                                            trace_id = %dctx.trace_id,
+                                            error = %e,
+                                            "current_app_intent_trace.serialize_failed"
+                                        );
+                                        self.show_error_toast(message.clone(), cx);
+                                        Self::builtin_error(
+                                            dctx,
+                                            crate::action_helpers::ERROR_ACTION_FAILED,
+                                            message,
+                                            "trace_current_app_intent_serialize_failed",
+                                        )
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                let message = format!(
+                                    "Failed to inspect current app intent: {}. Check Accessibility permission in System Settings \u{2192} Privacy & Security \u{2192} Accessibility, then refocus the target app and try again.",
+                                    e
+                                );
+                                tracing::warn!(
+                                    trace_id = %dctx.trace_id,
+                                    error = %e,
+                                    "current_app_intent_trace.capture_failed"
+                                );
+                                self.show_error_toast(message.clone(), cx);
+                                Self::builtin_error(
+                                    dctx,
+                                    crate::action_helpers::ERROR_ACTION_FAILED,
+                                    message,
+                                    "trace_current_app_intent_capture_failed",
+                                )
+                            }
+                        }
+                    }
                     UtilityCommandType::DoInCurrentApp => {
                         let raw_query_owned = query_override
                             .unwrap_or(&self.filter_text)
