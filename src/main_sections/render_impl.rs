@@ -98,6 +98,20 @@ impl Render for ScriptListApp {
         if !self.was_window_focused && is_window_focused {
             script_kit_gpui::mark_window_shown();
             logging::log("FOCUS", "Main window gained focus - resetting grace timer");
+
+            // Close popups when the main window regains focus (user clicked on it)
+            if confirm::is_confirm_window_open() {
+                logging::log("FOCUS", "Main window regained focus - closing confirm popup");
+                confirm::route_key_to_confirm_popup("escape", cx);
+            }
+            if actions::is_actions_window_open() {
+                logging::log("FOCUS", "Main window regained focus - closing actions popup");
+                actions::close_actions_window(cx);
+                self.show_actions_popup = false;
+                self.actions_dialog = None;
+                self.mark_filter_resync_after_actions_if_needed();
+                self.pop_focus_overlay(cx);
+            }
         }
         if self.was_window_focused && !is_window_focused {
             // Window just lost focus (user clicked another window)
