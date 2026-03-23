@@ -24,6 +24,10 @@ use std::sync::OnceLock;
 use tracing::{debug, warn};
 const RESIZE_MIN_DELTA_PX: f64 = 1.0;
 const WINDOW_RESIZE_ANIMATE: bool = false;
+const MINI_MAIN_WINDOW_MIN_HEIGHT: f32 = 220.0;
+const MINI_MAIN_WINDOW_MAX_HEIGHT: f32 = 420.0;
+const MINI_MAIN_WINDOW_HEADER_HEIGHT: f32 = 56.0;
+const MINI_MAIN_WINDOW_MAX_VISIBLE_ROWS: usize = 8;
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct FrameGeometry {
     x: f64,
@@ -291,6 +295,14 @@ fn height_for_view_with_layout(
         // Views with preview panel - FIXED height, no dynamic resizing
         // DivPrompt also uses standard height to match main window
         ViewType::ScriptList | ViewType::DivPrompt => standard_height,
+        ViewType::MiniMainWindow => {
+            let visible_items = item_count.clamp(4, MINI_MAIN_WINDOW_MAX_VISIBLE_ROWS) as f32;
+            let total_height = MINI_MAIN_WINDOW_HEADER_HEIGHT + (visible_items * LIST_ITEM_HEIGHT);
+            px(total_height.clamp(
+                MINI_MAIN_WINDOW_MIN_HEIGHT,
+                MINI_MAIN_WINDOW_MAX_HEIGHT,
+            ))
+        }
         ViewType::ArgPromptWithChoices => {
             let visible_items = item_count.max(1) as f32;
             let list_height =
@@ -312,6 +324,8 @@ fn initial_window_height_with_layout(layout_config: &LayoutConfig) -> Pixels {
 pub enum ViewType {
     /// Script list view (main launcher) - has preview panel, FIXED height
     ScriptList,
+    /// Script list in compact main-window mode - dynamic height based on item count
+    MiniMainWindow,
     /// Arg prompt with choices - dynamic height based on item count
     ArgPromptWithChoices,
     /// Arg prompt without choices (input only) - compact height
@@ -510,6 +524,28 @@ mod tests {
         assert_eq!(
             height_for_view_with_layout(ViewType::ScriptList, 100, &layout),
             layout::STANDARD_HEIGHT
+        );
+    }
+
+    #[test]
+    fn test_mini_main_window_dynamic_height() {
+        let layout = default_layout();
+
+        assert_eq!(
+            height_for_view_with_layout(ViewType::MiniMainWindow, 0, &layout),
+            px(MINI_MAIN_WINDOW_MIN_HEIGHT)
+        );
+        assert_eq!(
+            height_for_view_with_layout(ViewType::MiniMainWindow, 4, &layout),
+            px(MINI_MAIN_WINDOW_MIN_HEIGHT)
+        );
+        assert_eq!(
+            height_for_view_with_layout(ViewType::MiniMainWindow, 8, &layout),
+            px(MINI_MAIN_WINDOW_HEADER_HEIGHT + (8.0 * LIST_ITEM_HEIGHT))
+        );
+        assert_eq!(
+            height_for_view_with_layout(ViewType::MiniMainWindow, 100, &layout),
+            px(MINI_MAIN_WINDOW_HEADER_HEIGHT + (8.0 * LIST_ITEM_HEIGHT))
         );
     }
 

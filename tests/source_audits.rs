@@ -62,6 +62,9 @@ mod no_popup_confirm_callers;
 #[path = "source_audits/arrow_interceptor_filtered_bounds.rs"]
 mod arrow_interceptor_filtered_bounds;
 
+#[path = "source_audits/mini_main_window.rs"]
+mod mini_main_window;
+
 /// Regression guard: fails if the deleted monolithic `handle_action.rs` file
 /// reappears or if any `.rs` file under `src/` or `tests/` references the old
 /// monolith path. This prevents accidental resurrection of the pre-split handler.

@@ -118,6 +118,7 @@ impl ScriptListApp {
 
         // Reset pin state when window is closed
         self.is_pinned = false;
+        self.main_window_mode = MainWindowMode::Full;
 
         // Close child windows FIRST if open (they are children of main window)
         // Actions window
@@ -388,6 +389,7 @@ impl ScriptListApp {
             self.stop_process_manager_refresh();
             // Return to main menu
             self.current_view = AppView::ScriptList;
+            self.main_window_mode = MainWindowMode::Full;
             // Reset the flag since we're now in main menu
             self.opened_from_main_menu = false;
 

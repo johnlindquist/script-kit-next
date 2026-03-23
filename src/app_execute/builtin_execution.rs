@@ -1268,6 +1268,26 @@ impl ScriptListApp {
         cx.notify();
     }
 
+    fn open_mini_main_window(&mut self, cx: &mut Context<Self>) {
+        self.filter_text.clear();
+        self.computed_filter_text.clear();
+        self.pending_filter_sync = true;
+        self.pending_placeholder = Some("Search scripts, apps, and commands…".to_string());
+        self.current_view = AppView::ScriptList;
+        self.main_window_mode = MainWindowMode::Mini;
+        self.hovered_index = None;
+        self.selected_index = 0;
+        self.opened_from_main_menu = true;
+        self.invalidate_grouped_cache();
+        self.sync_list_state();
+        let (grouped_items, _) = self.get_grouped_results_cached();
+        let item_count = grouped_items.len();
+        resize_to_view_sync(ViewType::MiniMainWindow, item_count);
+        self.pending_focus = Some(FocusTarget::MainFilter);
+        self.focused_input = FocusedInput::MainFilter;
+        cx.notify();
+    }
+
     /// Open a filterable builtin view with an initial filter value.
     ///
     /// Same UX contract as [`open_builtin_filterable_view`] but pre-fills the
@@ -2238,6 +2258,15 @@ impl ScriptListApp {
                 use builtins::UtilityCommandType;
 
                 match cmd_type {
+                    UtilityCommandType::MiniMainWindow => {
+                        tracing::info!(
+                            category = "BUILTIN",
+                            trace_id = %dctx.trace_id,
+                            "Opening Mini Main Window"
+                        );
+                        self.open_mini_main_window(cx);
+                        Self::builtin_success(dctx, "open_mini_main_window")
+                    }
                     UtilityCommandType::ScratchPad => {
                         self.opened_from_main_menu = true;
                         self.open_scratch_pad(cx);

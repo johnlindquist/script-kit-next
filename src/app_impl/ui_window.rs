@@ -46,7 +46,11 @@ impl ScriptListApp {
                 // Get grouped results which includes section headers (cached)
                 let (grouped_items, _) = self.get_grouped_results_cached();
                 let count = grouped_items.len();
-                Some((ViewType::ScriptList, count))
+                let view_type = match self.main_window_mode {
+                    MainWindowMode::Full => ViewType::ScriptList,
+                    MainWindowMode::Mini => ViewType::MiniMainWindow,
+                };
+                Some((view_type, count))
             }
             AppView::ArgPrompt { choices, .. } => {
                 let filtered = self.get_filtered_arg_choices(choices);
