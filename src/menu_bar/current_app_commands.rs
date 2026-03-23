@@ -229,7 +229,7 @@ const MAX_SELECTED_TEXT_CHARS: usize = 1_500;
 
 /// A machine-readable receipt for a script-generation prompt built from the
 /// frontmost app snapshot.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct CurrentAppScriptPromptReceipt {
     pub app_name: String,
     pub bundle_id: String,
@@ -329,6 +329,166 @@ pub fn build_generate_script_prompt_from_snapshot(
     };
 
     (prompt, receipt)
+}
+
+// ---------------------------------------------------------------------------
+// Trace Current App Intent
+// ---------------------------------------------------------------------------
+
+/// The human-readable label used in the main command list.
+pub const TRACE_CURRENT_APP_INTENT_LABEL: &str = "Trace Current App Intent";
+
+/// Returns the effective user request for the trace command.
+///
+/// Behavior:
+/// - empty / whitespace-only -> None
+/// - exact label -> None
+/// - "Trace Current App Intent <request>" -> Some("<request>")
+/// - anything else -> Some(trimmed raw input)
+pub fn normalize_trace_current_app_intent_request(raw: Option<&str>) -> Option<String> {
+    let raw = raw.map(str::trim).filter(|text| !text.is_empty())?;
+    let label = TRACE_CURRENT_APP_INTENT_LABEL;
+    let raw_lower = raw.to_ascii_lowercase();
+    let label_lower = label.to_ascii_lowercase();
+
+    if raw_lower == label_lower {
+        return None;
+    }
+
+    if raw_lower.starts_with(&label_lower) {
+        let rest = raw[label.len()..]
+            .trim_start_matches(|ch: char| {
+                ch.is_ascii_whitespace() || matches!(ch, ':' | '-' | '\u{2014}' | '\u{2013}')
+            })
+            .trim();
+
+        if rest.is_empty() {
+            None
+        } else {
+            Some(rest.to_string())
+        }
+    } else {
+        Some(raw.to_string())
+    }
+}
+
+/// Schema version for [`CurrentAppIntentTraceReceipt`].
+pub const CURRENT_APP_INTENT_TRACE_SCHEMA_VERSION: u32 = 1;
+
+/// A compact candidate entry included in [`CurrentAppIntentTraceReceipt`].
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct CurrentAppIntentTraceCandidate {
+    pub entry_id: String,
+    pub name: String,
+    pub leaf_name: String,
+    pub shortcut: Option<String>,
+}
+
+/// A machine-readable dry-run receipt for a free-text current-app request.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct CurrentAppIntentTraceReceipt {
+    pub schema_version: u32,
+    pub source: String,
+    pub app_name: String,
+    pub bundle_id: String,
+    pub raw_query: String,
+    pub effective_query: String,
+    pub normalized_query: String,
+    pub top_level_menu_count: usize,
+    pub leaf_entry_count: usize,
+    pub filtered_entries: usize,
+    pub exact_matches: usize,
+    pub action: String,
+    pub selected_entry: Option<CurrentAppIntentTraceCandidate>,
+    pub candidates: Vec<CurrentAppIntentTraceCandidate>,
+    pub prompt_receipt: Option<CurrentAppScriptPromptReceipt>,
+    pub prompt_preview: Option<String>,
+}
+
+fn intent_trace_candidate(entry: &BuiltInEntry) -> CurrentAppIntentTraceCandidate {
+    let shortcut = match &entry.feature {
+        crate::builtins::BuiltInFeature::MenuBarAction(info) => info.shortcut.clone(),
+        _ => None,
+    };
+
+    CurrentAppIntentTraceCandidate {
+        entry_id: entry.id.clone(),
+        name: entry.name.clone(),
+        leaf_name: entry.leaf_name().to_string(),
+        shortcut,
+    }
+}
+
+/// Build a deterministic dry-run trace for how a current-app request would resolve.
+///
+/// This function never executes the chosen command. It only reports:
+/// - normalized input
+/// - candidate menu matches
+/// - final router action
+/// - script prompt preview/receipt when the router would fall back to AI generation
+pub fn build_current_app_intent_trace_receipt(
+    snapshot: FrontmostMenuSnapshot,
+    raw_query: Option<&str>,
+) -> CurrentAppIntentTraceReceipt {
+    let raw_query_string = raw_query.unwrap_or_default().to_string();
+    let effective_query =
+        normalize_trace_current_app_intent_request(raw_query).unwrap_or_default();
+
+    let (entries, snapshot_receipt) = snapshot.clone().into_entries_with_receipt();
+    let (action, intent_receipt) =
+        resolve_do_in_current_app_intent(&entries, Some(effective_query.as_str()));
+
+    let filtered: Vec<&BuiltInEntry> = entries
+        .iter()
+        .filter(|entry| {
+            crate::builtins::menu_bar_entry_matches_query(
+                entry,
+                intent_receipt.normalized_query.as_str(),
+            )
+        })
+        .collect();
+
+    let candidates = filtered
+        .iter()
+        .take(8)
+        .map(|entry| intent_trace_candidate(entry))
+        .collect::<Vec<_>>();
+
+    let selected_entry = match &action {
+        DoInCurrentAppAction::ExecuteEntry(idx) => entries.get(*idx).map(intent_trace_candidate),
+        DoInCurrentAppAction::OpenCommandPalette | DoInCurrentAppAction::GenerateScript => None,
+    };
+
+    let (prompt_receipt, prompt_preview) = match &action {
+        DoInCurrentAppAction::GenerateScript => {
+            let request = (!effective_query.is_empty()).then_some(effective_query.as_str());
+            let (prompt, receipt) =
+                build_generate_script_prompt_from_snapshot(snapshot, request, None, None);
+            (Some(receipt), Some(prompt))
+        }
+        DoInCurrentAppAction::OpenCommandPalette | DoInCurrentAppAction::ExecuteEntry(_) => {
+            (None, None)
+        }
+    };
+
+    CurrentAppIntentTraceReceipt {
+        schema_version: CURRENT_APP_INTENT_TRACE_SCHEMA_VERSION,
+        source: snapshot_receipt.source.to_string(),
+        app_name: snapshot_receipt.app_name,
+        bundle_id: snapshot_receipt.bundle_id,
+        raw_query: raw_query_string,
+        effective_query,
+        normalized_query: intent_receipt.normalized_query,
+        top_level_menu_count: snapshot_receipt.top_level_menu_count,
+        leaf_entry_count: snapshot_receipt.leaf_entry_count,
+        filtered_entries: intent_receipt.filtered_entries,
+        exact_matches: intent_receipt.exact_matches,
+        action: intent_receipt.action.to_string(),
+        selected_entry,
+        candidates,
+        prompt_receipt,
+        prompt_preview,
+    }
 }
 
 // ---------------------------------------------------------------------------

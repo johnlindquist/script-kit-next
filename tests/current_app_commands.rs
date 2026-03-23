@@ -9,7 +9,8 @@ use script_kit_gpui::builtins::{
 };
 use script_kit_gpui::config::BuiltInConfig;
 use script_kit_gpui::menu_bar::current_app_commands::{
-    build_generate_script_prompt_from_snapshot, resolve_do_in_current_app_intent,
+    build_current_app_intent_trace_receipt, build_generate_script_prompt_from_snapshot,
+    normalize_trace_current_app_intent_request, resolve_do_in_current_app_intent,
     DoInCurrentAppAction, FrontmostMenuSnapshot,
 };
 use script_kit_gpui::menu_bar::{KeyboardShortcut, MenuBarItem, ModifierFlags};
@@ -55,6 +56,20 @@ fn current_app_commands_builtin_is_registered() {
     assert_eq!(
         entry.feature,
         BuiltInFeature::UtilityCommand(UtilityCommandType::CurrentAppCommands)
+    );
+}
+
+#[test]
+fn trace_current_app_intent_builtin_is_registered() {
+    let entries = builtins::get_builtin_entries(&BuiltInConfig::default());
+    let entry = entries
+        .iter()
+        .find(|e| e.id == "builtin-trace-current-app-intent")
+        .expect("builtin-trace-current-app-intent must be in the registry");
+
+    assert_eq!(
+        entry.feature,
+        BuiltInFeature::UtilityCommand(UtilityCommandType::TraceCurrentAppIntent)
     );
 }
 
@@ -494,4 +509,104 @@ fn do_in_current_app_no_match_bridges_cleanly_into_current_app_script_prompt() {
     assert!(prompt_receipt.included_user_request);
     assert!(prompt_receipt.included_selected_text);
     assert!(prompt_receipt.included_browser_url);
+}
+
+// ---------------------------------------------------------------------------
+// Trace Current App Intent: label normalization
+// ---------------------------------------------------------------------------
+
+#[test]
+fn normalize_trace_current_app_intent_request_strips_builtin_label_prefix() {
+    assert_eq!(
+        normalize_trace_current_app_intent_request(Some("Trace Current App Intent")),
+        None
+    );
+    assert_eq!(
+        normalize_trace_current_app_intent_request(Some(
+            "Trace Current App Intent close duplicate tabs"
+        )),
+        Some("close duplicate tabs".to_string())
+    );
+    assert_eq!(
+        normalize_trace_current_app_intent_request(Some("trace current app intent: cmd+t")),
+        Some("cmd+t".to_string())
+    );
+    assert_eq!(
+        normalize_trace_current_app_intent_request(Some("   ")),
+        None
+    );
+    assert_eq!(normalize_trace_current_app_intent_request(None), None);
+    // Unrelated input is returned as-is
+    assert_eq!(
+        normalize_trace_current_app_intent_request(Some("close duplicate tabs")),
+        Some("close duplicate tabs".to_string())
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Trace Current App Intent: trace receipt builder
+// ---------------------------------------------------------------------------
+
+#[test]
+fn trace_receipt_reports_execute_entry_for_shortcut_keyword() {
+    let receipt = build_current_app_intent_trace_receipt(
+        safari_snapshot_with_menus(),
+        Some("Trace Current App Intent cmd+t"),
+    );
+
+    assert_eq!(receipt.action, "execute_entry");
+    assert_eq!(receipt.filtered_entries, 1);
+    assert_eq!(receipt.exact_matches, 1);
+    assert_eq!(
+        receipt
+            .selected_entry
+            .as_ref()
+            .map(|item| item.leaf_name.as_str()),
+        Some("New Tab")
+    );
+    assert!(receipt.prompt_preview.is_none());
+    assert!(receipt.prompt_receipt.is_none());
+    assert_eq!(receipt.schema_version, 1);
+    assert_eq!(receipt.app_name, "Safari");
+    assert_eq!(receipt.bundle_id, "com.apple.Safari");
+}
+
+#[test]
+fn trace_receipt_reports_generate_script_and_includes_prompt_preview() {
+    let receipt = build_current_app_intent_trace_receipt(
+        safari_snapshot_with_menus(),
+        Some("Trace Current App Intent close duplicate tabs"),
+    );
+
+    assert_eq!(receipt.action, "generate_script");
+    assert_eq!(receipt.filtered_entries, 0);
+    assert_eq!(receipt.exact_matches, 0);
+    assert!(receipt.selected_entry.is_none());
+    assert!(receipt.candidates.is_empty());
+    assert!(receipt
+        .prompt_preview
+        .as_ref()
+        .expect("prompt_preview should be present")
+        .contains("User Request:\nclose duplicate tabs"));
+    assert!(receipt
+        .prompt_receipt
+        .as_ref()
+        .expect("prompt_receipt should be present")
+        .included_user_request);
+}
+
+#[test]
+fn trace_receipt_serializes_to_valid_json() {
+    let receipt = build_current_app_intent_trace_receipt(
+        safari_snapshot_with_menus(),
+        Some("Trace Current App Intent cmd+t"),
+    );
+
+    let json = serde_json::to_string_pretty(&receipt).expect("receipt must serialize");
+    let parsed: serde_json::Value =
+        serde_json::from_str(&json).expect("JSON must be valid");
+
+    assert_eq!(parsed["schema_version"], 1);
+    assert_eq!(parsed["action"], "execute_entry");
+    assert_eq!(parsed["app_name"], "Safari");
 }
