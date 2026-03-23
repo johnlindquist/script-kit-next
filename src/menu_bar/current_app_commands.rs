@@ -882,6 +882,125 @@ pub fn build_current_app_command_verification_hud_message(
 }
 
 // ---------------------------------------------------------------------------
+// Replay Current App Recipe
+// ---------------------------------------------------------------------------
+
+/// The human-readable label used in the main command list.
+pub const REPLAY_CURRENT_APP_RECIPE_LABEL: &str = "Replay Current App Recipe";
+
+/// Schema version for [`ReplayCurrentAppRecipeReceipt`].
+pub const REPLAY_CURRENT_APP_RECIPE_SCHEMA_VERSION: u32 = 1;
+
+/// A machine-readable replay receipt for a current-app recipe.
+///
+/// This receipt is intentionally pure data:
+/// - `verification` says whether the stored recipe still matches live context
+/// - `action` says what replay would do when the recipe is safe to run
+/// - `selected_entry_index` points back into the live `entries` slice owned by the caller
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReplayCurrentAppRecipeReceipt {
+    pub schema_version: u32,
+    pub replay_type: String,
+    pub action: String,
+    pub selected_entry_index: Option<usize>,
+    pub selected_entry: Option<CurrentAppIntentTraceCandidate>,
+    pub verification: CurrentAppCommandRecipeVerification,
+}
+
+/// Build a deterministic replay receipt for a stored current-app recipe.
+///
+/// Behavior:
+/// - if verification reports any drift, action becomes `blocked_by_drift`
+/// - otherwise, re-resolve the live entries using the verified live recipe
+///   and report one of:
+///   - `execute_entry`
+///   - `open_command_palette`
+///   - `generate_script`
+pub fn build_replay_current_app_recipe_receipt(
+    stored_recipe: &CurrentAppCommandRecipe,
+    entries: &[BuiltInEntry],
+    snapshot: FrontmostMenuSnapshot,
+    selected_text: Option<&str>,
+    browser_url: Option<&str>,
+) -> ReplayCurrentAppRecipeReceipt {
+    let verification =
+        verify_current_app_command_recipe(stored_recipe, snapshot, selected_text, browser_url);
+
+    if verification.warning_count > 0 {
+        return ReplayCurrentAppRecipeReceipt {
+            schema_version: REPLAY_CURRENT_APP_RECIPE_SCHEMA_VERSION,
+            replay_type: "currentAppRecipeReplay".to_string(),
+            action: "blocked_by_drift".to_string(),
+            selected_entry_index: None,
+            selected_entry: None,
+            verification,
+        };
+    }
+
+    let (action, _) = resolve_do_in_current_app_intent(
+        entries,
+        Some(verification.live_recipe.effective_query.as_str()),
+    );
+
+    let (action_name, selected_entry_index, selected_entry) = match action {
+        DoInCurrentAppAction::ExecuteEntry(idx) => (
+            "execute_entry".to_string(),
+            Some(idx),
+            entries.get(idx).map(intent_trace_candidate),
+        ),
+        DoInCurrentAppAction::OpenCommandPalette => {
+            ("open_command_palette".to_string(), None, None)
+        }
+        DoInCurrentAppAction::GenerateScript => ("generate_script".to_string(), None, None),
+    };
+
+    ReplayCurrentAppRecipeReceipt {
+        schema_version: REPLAY_CURRENT_APP_RECIPE_SCHEMA_VERSION,
+        replay_type: "currentAppRecipeReplay".to_string(),
+        action: action_name,
+        selected_entry_index,
+        selected_entry,
+        verification,
+    }
+}
+
+/// Build a human-readable status message from a replay receipt.
+pub fn build_replay_current_app_recipe_hud_message(
+    receipt: &ReplayCurrentAppRecipeReceipt,
+) -> String {
+    match receipt.action.as_str() {
+        "blocked_by_drift" => format!(
+            "Recipe drift detected: {} warning{}",
+            receipt.verification.warning_count,
+            if receipt.verification.warning_count == 1 {
+                ""
+            } else {
+                "s"
+            }
+        ),
+        "execute_entry" => receipt
+            .selected_entry
+            .as_ref()
+            .map(|entry| format!("Replayed recipe: {}", entry.leaf_name))
+            .unwrap_or_else(|| "Replayed current app recipe".to_string()),
+        "open_command_palette" => {
+            let filter = receipt.verification.live_recipe.effective_query.trim();
+            if filter.is_empty() {
+                "Opened Current App Commands".to_string()
+            } else {
+                format!("Opened Current App Commands: {}", filter)
+            }
+        }
+        "generate_script" => format!(
+            "Replayed recipe into script: {}",
+            receipt.verification.live_recipe.suggested_script_name
+        ),
+        _ => "Replayed current app recipe".to_string(),
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Platform loader
 // ---------------------------------------------------------------------------
 
@@ -1496,5 +1615,158 @@ mod tests {
         assert!(value.get("suggestedScriptName").is_some());
         assert!(value.get("trace").is_some());
         assert!(value.get("promptReceipt").is_some());
+    }
+
+    // -----------------------------------------------------------------------
+    // Replay Current App Recipe receipt tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn replay_current_app_recipe_receipt_executes_entry_on_exact_match() {
+        let snapshot = FrontmostMenuSnapshot {
+            app_name: "Safari".into(),
+            bundle_id: "com.apple.Safari".into(),
+            items: vec![
+                apple_menu(),
+                menu(
+                    "File",
+                    vec![
+                        leaf_with_shortcut("New Tab", "T", vec![1, 0]),
+                        leaf("Close Window", vec![1, 1]),
+                    ],
+                    vec![1],
+                ),
+            ],
+        };
+
+        let stored_recipe =
+            build_current_app_command_recipe(snapshot.clone(), Some("new tab"), None, None);
+        let entries = snapshot.clone().into_entries();
+
+        let receipt = build_replay_current_app_recipe_receipt(
+            &stored_recipe,
+            &entries,
+            snapshot,
+            None,
+            None,
+        );
+
+        assert_eq!(receipt.verification.status, "match");
+        assert_eq!(receipt.action, "execute_entry");
+        assert_eq!(receipt.selected_entry_index, Some(0));
+        assert_eq!(
+            receipt
+                .selected_entry
+                .as_ref()
+                .map(|entry| entry.leaf_name.as_str()),
+            Some("New Tab")
+        );
+    }
+
+    #[test]
+    fn replay_current_app_recipe_receipt_opens_palette_for_ambiguous_recipe() {
+        let snapshot = FrontmostMenuSnapshot {
+            app_name: "Safari".into(),
+            bundle_id: "com.apple.Safari".into(),
+            items: vec![
+                apple_menu(),
+                menu(
+                    "File",
+                    vec![leaf("New Tab", vec![1, 0]), leaf("New Window", vec![1, 1])],
+                    vec![1],
+                ),
+            ],
+        };
+
+        let stored_recipe =
+            build_current_app_command_recipe(snapshot.clone(), Some("new"), None, None);
+        let entries = snapshot.clone().into_entries();
+
+        let receipt = build_replay_current_app_recipe_receipt(
+            &stored_recipe,
+            &entries,
+            snapshot,
+            None,
+            None,
+        );
+
+        assert_eq!(receipt.verification.status, "match");
+        assert_eq!(receipt.action, "open_command_palette");
+        assert_eq!(receipt.selected_entry_index, None);
+        assert!(receipt.selected_entry.is_none());
+    }
+
+    #[test]
+    fn replay_current_app_recipe_receipt_generates_script_when_no_direct_match_exists() {
+        let snapshot = FrontmostMenuSnapshot {
+            app_name: "Safari".into(),
+            bundle_id: "com.apple.Safari".into(),
+            items: vec![
+                apple_menu(),
+                menu("File", vec![leaf("New Tab", vec![1, 0])], vec![1]),
+            ],
+        };
+
+        let stored_recipe = build_current_app_command_recipe(
+            snapshot.clone(),
+            Some("close duplicate tabs"),
+            None,
+            None,
+        );
+        let entries = snapshot.clone().into_entries();
+
+        let receipt = build_replay_current_app_recipe_receipt(
+            &stored_recipe,
+            &entries,
+            snapshot,
+            None,
+            None,
+        );
+
+        assert_eq!(receipt.verification.status, "match");
+        assert_eq!(receipt.action, "generate_script");
+        assert_eq!(receipt.selected_entry_index, None);
+        assert!(receipt.selected_entry.is_none());
+    }
+
+    #[test]
+    fn replay_current_app_recipe_receipt_blocks_when_drift_detected() {
+        let stored_snapshot = FrontmostMenuSnapshot {
+            app_name: "Safari".into(),
+            bundle_id: "com.apple.Safari".into(),
+            items: vec![
+                apple_menu(),
+                menu("File", vec![leaf("New Tab", vec![1, 0])], vec![1]),
+            ],
+        };
+
+        let live_snapshot = FrontmostMenuSnapshot {
+            app_name: "Finder".into(),
+            bundle_id: "com.apple.finder".into(),
+            items: vec![
+                apple_menu(),
+                menu(
+                    "File",
+                    vec![leaf("New Finder Window", vec![1, 0])],
+                    vec![1],
+                ),
+            ],
+        };
+
+        let stored_recipe =
+            build_current_app_command_recipe(stored_snapshot, Some("new tab"), None, None);
+        let live_entries = live_snapshot.clone().into_entries();
+
+        let receipt = build_replay_current_app_recipe_receipt(
+            &stored_recipe,
+            &live_entries,
+            live_snapshot,
+            None,
+            None,
+        );
+
+        assert_eq!(receipt.verification.status, "drift");
+        assert_eq!(receipt.action, "blocked_by_drift");
+        assert!(receipt.verification.warning_count > 0);
     }
 }
