@@ -233,9 +233,7 @@ fn test_preflight_duplicates_removed_from_assembly_receipt() {
 
 #[test]
 fn test_preflight_snapshot_reports_recommendation_count_and_live_snapshot() {
-    use super::context_recommendations::{
-        ContextRecommendation, ContextRecommendationPriority,
-    };
+    use super::context_recommendations::{ContextRecommendation, ContextRecommendationPriority};
     use crate::ai::context_contract::ContextAttachmentKind;
 
     let receipt = crate::ai::message_parts::PreparedMessageReceipt {
@@ -272,8 +270,14 @@ fn test_preflight_snapshot_reports_recommendation_count_and_live_snapshot() {
     let state = preflight_state_from_analysis(7, receipt, Some(snapshot), recommendations);
     let snap = state.snapshot();
 
-    assert_eq!(snap.recommendation_count, 2, "Should report 2 recommendations");
-    assert!(snap.has_live_snapshot, "Should report live snapshot is present");
+    assert_eq!(
+        snap.recommendation_count, 2,
+        "Should report 2 recommendations"
+    );
+    assert!(
+        snap.has_live_snapshot,
+        "Should report live snapshot is present"
+    );
     assert_eq!(snap.generation, 7);
 }
 
@@ -303,9 +307,7 @@ fn test_preflight_snapshot_without_live_snapshot_reports_false() {
     assert!(!snap.has_live_snapshot, "Should report no live snapshot");
 }
 
-fn ready_preflight_receipt(
-    raw_content: &str,
-) -> crate::ai::message_parts::PreparedMessageReceipt {
+fn ready_preflight_receipt(raw_content: &str) -> crate::ai::message_parts::PreparedMessageReceipt {
     crate::ai::message_parts::PreparedMessageReceipt {
         schema_version: crate::ai::message_parts::AI_MESSAGE_PREPARATION_SCHEMA_VERSION,
         decision: crate::ai::message_parts::PreparedMessageDecision::Ready,
@@ -452,8 +454,7 @@ fn test_preflight_snapshot_without_live_snapshot_suppresses_recommendations() {
 
     assert!(!snap.has_live_snapshot);
     assert_eq!(
-        snap.recommendation_count,
-        0,
+        snap.recommendation_count, 0,
         "Recommendations must not surface when there is no live snapshot backing them"
     );
 

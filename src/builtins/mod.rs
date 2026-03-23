@@ -180,6 +180,9 @@ pub enum UtilityCommandType {
     ProcessManager,
     /// Terminate all actively running Script Kit child processes
     StopAllProcesses,
+    /// Interpret a free-text request against the frontmost app:
+    /// execute a matching menu command or fall back to script generation
+    DoInCurrentApp,
     /// Search and run menu bar commands from the frontmost app
     CurrentAppCommands,
     /// Capture a deterministic JSON snapshot of current desktop context and copy to clipboard
@@ -1302,6 +1305,30 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
+            "builtin-do-in-current-app",
+            crate::menu_bar::current_app_commands::DO_IN_CURRENT_APP_LABEL,
+            "Type things like 'new private window' or 'close duplicate tabs'; Script Kit runs a matching menu command or generates a script when no direct command exists",
+            vec![
+                "do",
+                "current",
+                "app",
+                "run",
+                "action",
+                "menu",
+                "command",
+                "execute",
+                "automation",
+                "automate",
+                "intent",
+                "frontmost",
+                "script",
+                "shortcut",
+            ],
+            BuiltInFeature::UtilityCommand(UtilityCommandType::DoInCurrentApp),
+            "🎯",
+        ));
+
+        entries.push(BuiltInEntry::new_with_icon(
             "builtin-current-app-commands",
             "Current App Commands",
             "Search and run menu bar commands from the frontmost app",
@@ -1485,10 +1512,7 @@ pub struct MenuBarFilterReceipt {
     pub matched_entries: usize,
 }
 
-fn menu_bar_entry_matches_normalized_query(
-    entry: &BuiltInEntry,
-    normalized_query: &str,
-) -> bool {
+fn menu_bar_entry_matches_normalized_query(entry: &BuiltInEntry, normalized_query: &str) -> bool {
     if normalized_query.is_empty() {
         return true;
     }
@@ -1527,9 +1551,7 @@ pub fn filter_menu_bar_entries<'a>(
     let filtered: Vec<(usize, &'a BuiltInEntry)> = entries
         .iter()
         .enumerate()
-        .filter(|(_, entry)| {
-            menu_bar_entry_matches_normalized_query(entry, &normalized_query)
-        })
+        .filter(|(_, entry)| menu_bar_entry_matches_normalized_query(entry, &normalized_query))
         .collect();
 
     let receipt = MenuBarFilterReceipt {
@@ -2425,11 +2447,7 @@ mod tests {
             "menubar-com.apple.Safari-file-new-tab",
             "File → New Tab",
             "Safari  ⌘T",
-            vec![
-                "file".to_string(),
-                "new".to_string(),
-                "tab".to_string(),
-            ],
+            vec!["file".to_string(), "new".to_string(), "tab".to_string()],
             BuiltInFeature::MenuBarAction(MenuBarActionInfo {
                 bundle_id: "com.apple.Safari".into(),
                 menu_path: vec!["File".into(), "New Tab".into()],
@@ -2483,11 +2501,7 @@ mod tests {
             "menubar-com.apple.Safari-file-new-tab",
             "File → New Tab",
             "Safari  ⌘T",
-            vec![
-                "file".to_string(),
-                "new".to_string(),
-                "tab".to_string(),
-            ],
+            vec!["file".to_string(), "new".to_string(), "tab".to_string()],
             BuiltInFeature::MenuBarAction(MenuBarActionInfo {
                 bundle_id: "com.apple.Safari".into(),
                 menu_path: vec!["File".into(), "New Tab".into()],
@@ -2529,10 +2543,7 @@ mod tests {
                     MenuBarItem {
                         title: "New Tab".into(),
                         enabled: true,
-                        shortcut: Some(KeyboardShortcut::new(
-                            "T".into(),
-                            ModifierFlags::COMMAND,
-                        )),
+                        shortcut: Some(KeyboardShortcut::new("T".into(), ModifierFlags::COMMAND)),
                         children: vec![],
                         ax_element_path: vec![1, 0],
                     },
@@ -2549,10 +2560,7 @@ mod tests {
                     MenuBarItem {
                         title: "New Window".into(),
                         enabled: true,
-                        shortcut: Some(KeyboardShortcut::new(
-                            "N".into(),
-                            ModifierFlags::COMMAND,
-                        )),
+                        shortcut: Some(KeyboardShortcut::new("N".into(), ModifierFlags::COMMAND)),
                         children: vec![],
                         ax_element_path: vec![1, 3],
                     },
@@ -2561,8 +2569,7 @@ mod tests {
             },
         ];
 
-        let entries =
-            menu_bar_items_to_entries(&items, "com.apple.Safari", "Safari");
+        let entries = menu_bar_items_to_entries(&items, "com.apple.Safari", "Safari");
 
         // Should have exactly 2 entries (New Tab, New Window) — separator and disabled skipped
         assert_eq!(entries.len(), 2, "expected 2 entries, got: {entries:?}");
@@ -2570,10 +2577,7 @@ mod tests {
         // First entry: File → New Tab
         let new_tab = &entries[0];
         assert_eq!(new_tab.name, "File → New Tab");
-        assert_eq!(
-            new_tab.id,
-            "menubar-com.apple.Safari-file-new-tab"
-        );
+        assert_eq!(new_tab.id, "menubar-com.apple.Safari-file-new-tab");
         assert!(
             new_tab.description.contains("Safari"),
             "description should contain app name"
@@ -2597,10 +2601,7 @@ mod tests {
         // Second entry: File → New Window
         let new_window = &entries[1];
         assert_eq!(new_window.name, "File → New Window");
-        assert_eq!(
-            new_window.id,
-            "menubar-com.apple.Safari-file-new-window"
-        );
+        assert_eq!(new_window.id, "menubar-com.apple.Safari-file-new-window");
     }
 
     #[test]
@@ -2632,8 +2633,7 @@ mod tests {
             },
         ];
 
-        let entries =
-            menu_bar_items_to_entries(&items, "com.apple.Finder", "Finder");
+        let entries = menu_bar_items_to_entries(&items, "com.apple.Finder", "Finder");
 
         assert_eq!(entries.len(), 1);
         // No shortcut → description is just the app name

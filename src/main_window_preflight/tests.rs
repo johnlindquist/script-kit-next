@@ -20,7 +20,10 @@ fn receipt_serializes_with_camel_case_keys() {
     };
 
     let value = serde_json::to_value(&receipt).expect("receipt should serialize");
-    assert!(value.get("filterText").is_some(), "expected camelCase filterText key");
+    assert!(
+        value.get("filterText").is_some(),
+        "expected camelCase filterText key"
+    );
     assert!(
         value.get("selectedIndex").is_some(),
         "expected camelCase selectedIndex key"
@@ -33,8 +36,8 @@ fn receipt_serializes_with_camel_case_keys() {
 
 #[test]
 fn ask_ai_kind_serializes_as_camel_case_enum() {
-    let value = serde_json::to_value(MainWindowPreflightActionKind::AskAi)
-        .expect("enum should serialize");
+    let value =
+        serde_json::to_value(MainWindowPreflightActionKind::AskAi).expect("enum should serialize");
     assert_eq!(value, serde_json::Value::String("askAi".to_string()));
 }
 

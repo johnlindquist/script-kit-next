@@ -61,9 +61,7 @@ pub fn recommend_context_parts(
     let has_browser = snapshot
         .browser
         .as_ref()
-        .map(|browser: &crate::context_snapshot::BrowserContext| {
-            !browser.url.trim().is_empty()
-        })
+        .map(|browser: &crate::context_snapshot::BrowserContext| !browser.url.trim().is_empty())
         .unwrap_or(false);
     let has_window = snapshot.focused_window.is_some();
     let has_current = snapshot.frontmost_app.is_some() || has_browser || has_window;
@@ -153,14 +151,7 @@ pub fn recommend_context_parts(
         && contains_any(
             &text,
             &[
-                "window",
-                "screen",
-                "dialog",
-                "modal",
-                "ui",
-                "app",
-                "toolbar",
-                "menu",
+                "window", "screen", "dialog", "modal", "ui", "app", "toolbar", "menu",
             ],
         );
 
@@ -355,11 +346,8 @@ mod tests {
         let mut snapshot = full_snapshot();
         snapshot.selected_text = None; // Remove selection so it doesn't trigger
 
-        let receipt = recommend_context_parts(
-            "Can you help me understand this right now?",
-            &snapshot,
-            &[],
-        );
+        let receipt =
+            recommend_context_parts("Can you help me understand this right now?", &snapshot, &[]);
 
         assert!(
             receipt
@@ -377,11 +365,8 @@ mod tests {
         let mut snapshot = full_snapshot();
         snapshot.selected_text = None; // Remove selection so wants_selection doesn't block combo
 
-        let receipt = recommend_context_parts(
-            "Summarize the page and app window for me",
-            &snapshot,
-            &[],
-        );
+        let receipt =
+            recommend_context_parts("Summarize the page and app window for me", &snapshot, &[]);
 
         assert!(
             receipt
@@ -395,7 +380,9 @@ mod tests {
     #[test]
     fn recommends_diagnostics_when_snapshot_has_warnings() {
         let mut snapshot = full_snapshot();
-        snapshot.warnings.push("browserUrl: permission denied".to_string());
+        snapshot
+            .warnings
+            .push("browserUrl: permission denied".to_string());
 
         let receipt = recommend_context_parts("Why didn't context work?", &snapshot, &[]);
 
@@ -461,8 +448,7 @@ mod tests {
         let mut snapshot = full_snapshot();
         snapshot.focused_window = None;
 
-        let receipt =
-            recommend_context_parts("Summarize this page for me", &snapshot, &[]);
+        let receipt = recommend_context_parts("Summarize this page for me", &snapshot, &[]);
 
         assert!(
             receipt
@@ -480,11 +466,8 @@ mod tests {
         snapshot.selected_text = None; // No selection to trigger Selection
         snapshot.browser = None; // No browser to trigger Browser
 
-        let receipt = recommend_context_parts(
-            "Can you help me with this right now?",
-            &snapshot,
-            &[],
-        );
+        let receipt =
+            recommend_context_parts("Can you help me with this right now?", &snapshot, &[]);
 
         assert!(
             receipt
@@ -501,11 +484,8 @@ mod tests {
         snapshot.warnings.push("test warning".to_string());
 
         // "full context" + "diagnostics" → should get Full (High) before Diagnostics (Low)
-        let receipt = recommend_context_parts(
-            "Show me the full context and diagnostics",
-            &snapshot,
-            &[],
-        );
+        let receipt =
+            recommend_context_parts("Show me the full context and diagnostics", &snapshot, &[]);
 
         assert!(receipt.recommendations.len() >= 2);
         // High priority should come first

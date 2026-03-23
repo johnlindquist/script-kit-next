@@ -662,6 +662,11 @@ impl ScriptListApp {
         };
         self.focused_input = FocusedInput::None;
         self.pending_focus = Some(FocusTarget::ChatPrompt);
+        tracing::info!(
+            event = "script_generation_chat.view_set",
+            main_window_visible = script_kit_gpui::is_main_window_visible(),
+            "Set current_view to ChatPrompt(script-generation), resizing and notifying"
+        );
         resize_to_view_sync(ViewType::DivPrompt, 0);
         cx.notify();
     }
