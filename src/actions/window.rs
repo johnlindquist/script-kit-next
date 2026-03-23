@@ -17,7 +17,7 @@ use gpui::{
     Point, Render, Size, Subscription, Window, WindowBounds, WindowHandle, WindowKind,
     WindowOptions,
 };
-use gpui_component::Root;
+// Root intentionally NOT used — its opaque bg blocks NSVisualEffectView vibrancy
 use std::sync::{Mutex, OnceLock};
 
 use super::constants::{
@@ -54,7 +54,7 @@ pub(super) fn count_section_headers(actions: &[Action], filtered_indices: &[usiz
 }
 
 /// Global singleton for the actions window handle
-static ACTIONS_WINDOW: OnceLock<Mutex<Option<WindowHandle<Root>>>> = OnceLock::new();
+static ACTIONS_WINDOW: OnceLock<Mutex<Option<WindowHandle<ActionsWindow>>>> = OnceLock::new();
 
 /// Track the position mode of the current actions window for resize behavior
 static ACTIONS_WINDOW_POSITION: OnceLock<Mutex<WindowPosition>> = OnceLock::new();
@@ -721,7 +721,7 @@ pub fn open_actions_window(
     display_id: Option<DisplayId>,
     dialog_entity: Entity<ActionsDialog>,
     position: WindowPosition,
-) -> anyhow::Result<WindowHandle<Root>> {
+) -> anyhow::Result<WindowHandle<ActionsWindow>> {
     // Close any existing actions window first
     close_actions_window(cx);
 
@@ -821,10 +821,8 @@ pub fn open_actions_window(
     // The parent window (AI window, Notes window, etc.) keeps focus and routes
     // keyboard events to us via its own capture_key_down handler.
     // This avoids focus conflicts where both windows try to handle keys.
-    let handle = cx.open_window(window_options, |window, cx| {
-        let actions_window = cx.new(|cx| ActionsWindow::new(dialog_entity, cx));
-        // Wrap in Root for gpui-component theming and vibrancy
-        cx.new(|cx| Root::new(actions_window, window, cx))
+    let handle = cx.open_window(window_options, |_window, cx| {
+        cx.new(|cx| ActionsWindow::new(dialog_entity, cx))
     })?;
 
     // Configure the window as non-movable on macOS
@@ -832,7 +830,7 @@ pub fn open_actions_window(
     // internal state borrowed immediately after open_window returns.
     #[cfg(target_os = "macos")]
     {
-        let configure_result = handle.update(cx, move |_root, window, cx| {
+        let configure_result = handle.update(cx, move |_this, window, cx| {
             window.defer(cx, move |_window, _cx| {
                 use cocoa::appkit::NSApp;
                 use cocoa::base::nil;
@@ -893,7 +891,7 @@ pub fn close_actions_window(cx: &mut App) {
             if let Some(handle) = guard.take() {
                 crate::logging::log("ACTIONS", "Closing actions popup window");
                 // Close the window
-                let close_result = handle.update(cx, |_root, window, _cx| {
+                let close_result = handle.update(cx, |_this, window, _cx| {
                     window.remove_window();
                 });
                 if let Err(error) = close_result {
@@ -940,7 +938,7 @@ pub fn is_actions_window_open() -> bool {
 }
 
 /// Get the actions window handle if it exists
-pub fn get_actions_window_handle() -> Option<WindowHandle<Root>> {
+pub fn get_actions_window_handle() -> Option<WindowHandle<ActionsWindow>> {
     if let Some(window_storage) = ACTIONS_WINDOW.get() {
         if let Ok(guard) = window_storage.lock() {
             return *guard;
@@ -962,7 +960,7 @@ fn get_actions_window_position() -> WindowPosition {
 /// Notify the actions window to re-render (call after updating dialog entity)
 pub fn notify_actions_window(cx: &mut App) {
     if let Some(handle) = get_actions_window_handle() {
-        let notify_result = handle.update(cx, |_root, _window, cx| {
+        let notify_result = handle.update(cx, |_this, _window, cx| {
             cx.notify();
         });
         if let Err(error) = notify_result {
@@ -1143,7 +1141,7 @@ pub fn resize_actions_window(cx: &mut App, dialog_entity: &Entity<ActionsDialog>
 
         let new_height_f32 = compute_popup_height(dialog);
 
-        let update_result = handle.update(cx, |_root, window, cx| {
+        let update_result = handle.update(cx, |_this, window, cx| {
             let current_bounds = window.bounds();
             let current_height_f32: f32 = current_bounds.size.height.into();
             let current_width_f32: f32 = current_bounds.size.width.into();
