@@ -194,6 +194,8 @@ pub enum UtilityCommandType {
     TraceCurrentAppIntent,
     /// Verify a currentAppCommand recipe from the clipboard against live context
     VerifyCurrentAppRecipe,
+    /// Replay a verified currentAppCommand recipe from the clipboard
+    ReplayCurrentAppRecipe,
 }
 /// Kit Store command types for browsing and managing kits
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1443,6 +1445,28 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             ],
             BuiltInFeature::UtilityCommand(UtilityCommandType::VerifyCurrentAppRecipe),
             "🔬",
+        ));
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin-replay-current-app-recipe",
+            crate::menu_bar::current_app_commands::REPLAY_CURRENT_APP_RECIPE_LABEL,
+            "Read a currentAppCommand recipe JSON from the clipboard, verify it against live context, and replay the resolved action only when it still matches",
+            vec![
+                "replay",
+                "run",
+                "current",
+                "app",
+                "recipe",
+                "command",
+                "json",
+                "clipboard",
+                "verify",
+                "execute",
+                "automation",
+                "drift",
+            ],
+            BuiltInFeature::UtilityCommand(UtilityCommandType::ReplayCurrentAppRecipe),
+            "🔁",
         ));
 
         // =========================================================================
