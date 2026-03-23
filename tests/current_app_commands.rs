@@ -9,7 +9,8 @@ use script_kit_gpui::builtins::{
 };
 use script_kit_gpui::config::BuiltInConfig;
 use script_kit_gpui::menu_bar::current_app_commands::{
-    build_generate_script_prompt_from_snapshot, FrontmostMenuSnapshot,
+    build_generate_script_prompt_from_snapshot, resolve_do_in_current_app_intent,
+    DoInCurrentAppAction, FrontmostMenuSnapshot,
 };
 use script_kit_gpui::menu_bar::{KeyboardShortcut, MenuBarItem, ModifierFlags};
 
@@ -443,4 +444,54 @@ fn prompt_shaping_truncates_to_20_menu_items() {
     assert_eq!(receipt.total_menu_items, 30);
     assert_eq!(receipt.included_menu_items, 20);
     assert!(prompt.contains("showing 20 of 30"));
+}
+
+// ---------------------------------------------------------------------------
+// No-match intent → GenerateScript bridge
+// ---------------------------------------------------------------------------
+
+#[test]
+fn do_in_current_app_no_match_bridges_cleanly_into_current_app_script_prompt() {
+    let snap = safari_snapshot_with_menus();
+    let entries = snap.clone().into_entries();
+
+    // Step 1: Router returns GenerateScript for a query that matches no menu entry
+    let (action, receipt) =
+        resolve_do_in_current_app_intent(&entries, Some("close duplicate tabs"));
+
+    assert_eq!(action, DoInCurrentAppAction::GenerateScript);
+    assert_eq!(receipt.filtered_entries, 0);
+    assert_eq!(receipt.exact_matches, 0);
+    assert_eq!(receipt.action, "generate_script");
+
+    // Step 2: The same snapshot feeds the prompt builder with full context
+    let (prompt, prompt_receipt) = build_generate_script_prompt_from_snapshot(
+        safari_snapshot_with_menus(),
+        Some("close duplicate tabs"),
+        Some("pricing"),
+        Some("https://example.com/pricing"),
+    );
+
+    // Prompt includes user request, app metadata, and optional context
+    assert!(
+        prompt.contains("User Request:\nclose duplicate tabs"),
+        "Prompt must include user request"
+    );
+    assert!(
+        prompt.contains("Frontmost App: Safari"),
+        "Prompt must include frontmost app name"
+    );
+    assert!(
+        prompt.contains("Bundle ID: com.apple.Safari"),
+        "Prompt must include bundle ID"
+    );
+    assert!(
+        prompt.contains("Focused Browser URL:\nhttps://example.com/pricing"),
+        "Prompt must include browser URL when provided"
+    );
+
+    // Receipt flags confirm context inclusion
+    assert!(prompt_receipt.included_user_request);
+    assert!(prompt_receipt.included_selected_text);
+    assert!(prompt_receipt.included_browser_url);
 }
