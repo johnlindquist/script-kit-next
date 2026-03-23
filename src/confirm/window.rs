@@ -10,10 +10,10 @@ use std::{
 
 use gpui::{
     div, prelude::*, px, App, Bounds, Context, DisplayId, FocusHandle, Focusable, MouseButton,
-    Pixels, Point, Render, SharedString, Size, Task, Window,
-    WindowBackgroundAppearance, WindowBounds, WindowHandle, WindowKind, WindowOptions,
+    Pixels, Point, Render, SharedString, Size, Task, Window, WindowBackgroundAppearance,
+    WindowBounds, WindowHandle, WindowKind, WindowOptions,
 };
-use gpui_component::{button::ButtonVariant, Root};
+use gpui_component::button::ButtonVariant;
 
 use crate::{
     list_item::FONT_MONO,
@@ -41,7 +41,7 @@ const CONFIRM_RADIUS: f32 = 14.0;
 // confirm popup appears in front of the main window.
 const NS_MODAL_PANEL_WINDOW_LEVEL: i64 = 8;
 
-static CONFIRM_WINDOW: OnceLock<Mutex<Option<WindowHandle<Root>>>> = OnceLock::new();
+static CONFIRM_WINDOW: OnceLock<Mutex<Option<WindowHandle<ConfirmPopupWindow>>>> = OnceLock::new();
 static CONFIRM_RESULT_TX: OnceLock<Mutex<Option<async_channel::Sender<bool>>>> = OnceLock::new();
 static CONFIRM_FOCUSED_BUTTON: OnceLock<Mutex<FocusedButton>> = OnceLock::new();
 
@@ -324,7 +324,7 @@ pub(crate) fn open_confirm_popup_window(
     options: ConfirmWindowOptions,
     keep_open_while: Rc<dyn Fn() -> bool>,
     result_tx: async_channel::Sender<bool>,
-) -> anyhow::Result<WindowHandle<Root>> {
+) -> anyhow::Result<WindowHandle<ConfirmPopupWindow>> {
     tracing::info!(
         target: "script_kit::confirm",
         event = "open_confirm_popup_window",
@@ -381,9 +381,8 @@ pub(crate) fn open_confirm_popup_window(
             display_id,
             ..Default::default()
         },
-        move |window, cx| {
-            let popup = cx.new(|cx| ConfirmPopupWindow::new(request, lifecycle, sender, cx));
-            cx.new(|cx| Root::new(popup, window, cx))
+        move |_window, cx| {
+            cx.new(|cx| ConfirmPopupWindow::new(request, lifecycle, sender, cx))
         },
     )?;
 
@@ -825,7 +824,7 @@ impl Render for ConfirmPopupWindow {
         let muted_color = theme.colors.text.dimmed.to_rgb();
         let border_color = theme.colors.ui.border.with_opacity(0.42);
         let divider_color = theme.colors.ui.border.with_opacity(0.28);
-        let surface_bg = get_vibrancy_surface_background(0.58);
+        let surface_bg = gpui::transparent_black();
 
         // Read focused button from shared state (main window may have toggled it via key routing)
         let current_focused = get_confirm_focused_button();
@@ -851,31 +850,36 @@ impl Render for ConfirmPopupWindow {
         let confirm_focused = current_focused == FocusedButton::Confirm;
         let is_danger = matches!(self.confirm_variant, ButtonVariant::Danger);
 
-        let (confirm_bg, confirm_border, confirm_text_color, confirm_shortcut_bg, confirm_shortcut_text_color) =
-            if is_danger {
-                let base = theme.colors.ui.error;
-                (
-                    base.with_opacity(if confirm_focused { 0.24 } else { 0.14 }),
-                    base.with_opacity(if confirm_focused { 0.92 } else { 0.58 }),
-                    base.to_rgb(),
-                    base.with_opacity(0.14),
-                    base.to_rgb(),
-                )
-            } else {
-                let base = theme.colors.accent.selected;
-                let subtle = theme.colors.accent.selected_subtle;
-                (
-                    if confirm_focused {
-                        base.with_opacity(0.22)
-                    } else {
-                        subtle.with_opacity(0.52)
-                    },
-                    base.with_opacity(if confirm_focused { 0.92 } else { 0.58 }),
-                    title_color,
-                    base.with_opacity(0.14),
-                    base.to_rgb(),
-                )
-            };
+        let (
+            confirm_bg,
+            confirm_border,
+            confirm_text_color,
+            confirm_shortcut_bg,
+            confirm_shortcut_text_color,
+        ) = if is_danger {
+            let base = theme.colors.ui.error;
+            (
+                base.with_opacity(if confirm_focused { 0.24 } else { 0.14 }),
+                base.with_opacity(if confirm_focused { 0.92 } else { 0.58 }),
+                base.to_rgb(),
+                base.with_opacity(0.14),
+                base.to_rgb(),
+            )
+        } else {
+            let base = theme.colors.accent.selected;
+            let subtle = theme.colors.accent.selected_subtle;
+            (
+                if confirm_focused {
+                    base.with_opacity(0.22)
+                } else {
+                    subtle.with_opacity(0.52)
+                },
+                base.with_opacity(if confirm_focused { 0.92 } else { 0.58 }),
+                title_color,
+                base.with_opacity(0.14),
+                base.to_rgb(),
+            )
+        };
 
         let entity = cx.entity();
         let cancel_entity = entity.clone();
