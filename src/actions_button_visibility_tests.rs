@@ -86,4 +86,26 @@ mod tests {
             ask_ai_section
         );
     }
+
+    #[test]
+    fn test_mini_mode_branch_hides_ask_ai_and_skips_preview_footer() {
+        let content = fs::read_to_string("src/render_script_list/mod.rs")
+            .expect("Failed to read src/render_script_list/mod.rs");
+
+        assert!(
+            content.contains("let is_mini = self.main_window_mode == MainWindowMode::Mini;"),
+            "mini mode flag should be computed from main_window_mode"
+        );
+        assert!(
+            content.contains(".when(!is_mini, |d| {"),
+            "Ask AI header hint should be hidden in mini mode"
+        );
+        assert!(
+            content.contains("if is_mini {")
+                && content.contains("// Mini mode: single column, no preview, no footer")
+                && content.contains(".child(\"↵ Run  ·  ⌘K Actions  ·  Tab AI\")")
+                && content.contains("mode=mini"),
+            "mini mode branch should render the single-column layout, compact hint strip, and mini perf log"
+        );
+    }
 }
