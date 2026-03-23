@@ -23,19 +23,32 @@ const AI_SCRIPT_SHELL_EXECUTION_PATTERNS: [(&str, &str); 5] = [
 
 pub(crate) const AI_SCRIPT_GENERATION_SYSTEM_PROMPT: &str = r#"You write production-ready Script Kit TypeScript scripts.
 
-RETURN ONLY ONE THING: TypeScript source code for a single Script Kit script.
+CRITICAL: Your ENTIRE response must be valid TypeScript. No prose, no markdown, no explanations, no preamble, no postamble. The very first character of your response must be "/" (the start of "// Name:"). If you include ANY text that is not valid TypeScript, the script will fail to parse and crash.
 
-* No markdown fences. No explanations. No multiple options.
+WRONG (will crash):
+**Assumed:** You want a script that...
+// Name: My Script
+
+WRONG (will crash):
+Here's a script that does X:
+```typescript
+// Name: My Script
+```
+
+RIGHT (the ONLY acceptable format):
+// Name: My Script
+// Description: Does something useful
+import "@scriptkit/sdk";
 
 NON-NEGOTIABLE OUTPUT FORMAT
 
-1. The first lines are:
-   // Name: <short, clear, user-facing title>
-   // Description: <one-line summary>
-2. Near the top include EXACTLY ONE import (and no others):
+1. The FIRST line must be: // Name: <short, clear, user-facing title>
+2. The SECOND line must be: // Description: <one-line summary>
+3. Near the top include EXACTLY ONE import (and no others):
    import "@scriptkit/sdk";
-3. Use top-level await (no main(), no async IIFE, no servers).
-4. Prefer Script Kit prompts + UI over console.log.
+4. Use top-level await (no main(), no async IIFE, no servers).
+5. Prefer Script Kit prompts + UI over console.log.
+6. NO markdown fences. NO explanations. NO commentary. ONLY TypeScript code.
 
 RUNTIME ASSUMPTIONS
 
@@ -339,7 +352,11 @@ pub(crate) fn prepare_script_from_ai_response(
         anyhow::bail!("AI returned an empty response for script generation (state=empty_response)");
     }
 
-    let slug = slugify_script_name(normalized_prompt);
+    // Prefer the AI's // Name: as the slug source — it's concise and descriptive.
+    // Fall back to the prompt only if the AI didn't include one.
+    let slug_source =
+        extract_name_comment(&extracted).unwrap_or_else(|| normalized_prompt.to_string());
+    let slug = slugify_script_name(&slug_source);
     let finalized = enforce_script_kit_conventions(&extracted, normalized_prompt, &slug);
     Ok((slug, finalized))
 }
@@ -493,7 +510,58 @@ fn extract_script_code(response: &str) -> String {
 
     extract_fenced_code(response, Some(&PREFERRED_LANGUAGES))
         .or_else(|| extract_fenced_code(response, None))
-        .unwrap_or_else(|| response.trim().to_string())
+        .unwrap_or_else(|| strip_leading_prose(response.trim()))
+}
+
+/// Strip leading non-TypeScript prose from an AI response that wasn't fenced.
+/// Looks for the first line that starts with a valid TS/JS construct and drops everything before it.
+fn strip_leading_prose(response: &str) -> String {
+    let lines: Vec<&str> = response.lines().collect();
+
+    // Find the first line that looks like TypeScript/JavaScript code
+    let code_start = lines.iter().position(|line| {
+        let trimmed = line.trim();
+        trimmed.starts_with("//")
+            || trimmed.starts_with("import ")
+            || trimmed.starts_with("import{")
+            || trimmed.starts_with("import\"")
+            || trimmed.starts_with("import'")
+            || trimmed.starts_with("export ")
+            || trimmed.starts_with("const ")
+            || trimmed.starts_with("let ")
+            || trimmed.starts_with("var ")
+            || trimmed.starts_with("async ")
+            || trimmed.starts_with("await ")
+            || trimmed.starts_with("function ")
+            || trimmed.starts_with("type ")
+            || trimmed.starts_with("interface ")
+            || trimmed.starts_with("class ")
+            || trimmed.starts_with("enum ")
+    });
+
+    match code_start {
+        Some(0) => response.to_string(),
+        Some(idx) => {
+            let stripped = lines[idx..].join("\n");
+            tracing::warn!(
+                category = "AI",
+                stripped_lines = idx,
+                first_stripped_line = lines[0],
+                "Stripped leading prose from AI script response"
+            );
+            stripped
+        }
+        None => response.to_string(),
+    }
+}
+
+/// Extract the value from a `// Name: <value>` comment line in the script source.
+fn extract_name_comment(script: &str) -> Option<String> {
+    script
+        .lines()
+        .find_map(|line| line.trim().strip_prefix("// Name:"))
+        .map(|name| name.trim().to_string())
+        .filter(|name| !name.is_empty())
 }
 
 fn slugify_script_name(prompt: &str) -> String {
@@ -761,6 +829,41 @@ await div("ready");
     }
 
     #[test]
+    fn test_prepare_script_from_ai_response_uses_name_comment_for_slug() {
+        let prompt =
+            "Generate a Script Kit script that automates what I am doing in the current app";
+        let response = r#"// Name: cmux Quick Actions
+// Description: Quick action palette for cmux
+import "@scriptkit/sdk";
+
+await arg("Pick an action");
+"#;
+        let (slug, source) = prepare_script_from_ai_response(prompt, response).unwrap();
+        assert_eq!(
+            slug, "cmux-quick-actions",
+            "slug should come from // Name:, not the prompt"
+        );
+        assert!(source.contains("// Name: cmux Quick Actions"));
+    }
+
+    #[test]
+    fn test_extract_name_comment_finds_name_line() {
+        assert_eq!(
+            extract_name_comment("// Name: My Cool Script\nimport \"@scriptkit/sdk\";"),
+            Some("My Cool Script".to_string())
+        );
+        assert_eq!(
+            extract_name_comment("import \"@scriptkit/sdk\";\nawait arg(\"hi\");"),
+            None
+        );
+        assert_eq!(
+            extract_name_comment("// Name: \nimport \"@scriptkit/sdk\";"),
+            None,
+            "empty name should return None"
+        );
+    }
+
+    #[test]
     fn test_prepare_script_from_ai_response_extracts_typescript_fence_when_present() {
         let prompt = "Build script";
         let response = r#"
@@ -772,5 +875,58 @@ await arg("Name?");
         let (_slug, source) = prepare_script_from_ai_response(prompt, response).unwrap();
         assert!(source.contains("await arg(\"Name?\");"));
         assert!(!source.contains("```"));
+    }
+
+    #[test]
+    fn test_strip_leading_prose_removes_markdown_preamble() {
+        let response = r#"**Assumed:** You're using cmux and want a quick-action palette.
+
+**Required permissions:** Accessibility access for Script Kit.
+
+// Name: cmux Quick Actions
+// Description: Quick action palette for cmux
+import "@scriptkit/sdk";
+
+await arg("Pick an action");
+"#;
+        let stripped = strip_leading_prose(response.trim());
+        assert!(
+            stripped.starts_with("// Name:"),
+            "Should start with // Name:, got: {}",
+            &stripped[..stripped.len().min(50)]
+        );
+        assert!(!stripped.contains("**Assumed:**"));
+        assert!(stripped.contains("await arg"));
+    }
+
+    #[test]
+    fn test_strip_leading_prose_preserves_clean_response() {
+        let response = r#"// Name: My Script
+// Description: Does something
+import "@scriptkit/sdk";
+
+await div("hello");
+"#;
+        let stripped = strip_leading_prose(response.trim());
+        assert!(stripped.starts_with("// Name:"));
+        assert!(stripped.contains("await div"));
+    }
+
+    #[test]
+    fn test_extract_script_code_strips_prose_when_no_fence() {
+        let response = r#"Here's a script for you:
+
+// Name: Test
+import "@scriptkit/sdk";
+
+await arg("hello");
+"#;
+        let extracted = extract_script_code(response);
+        assert!(
+            extracted.starts_with("// Name:"),
+            "Should start with code, got: {}",
+            &extracted[..extracted.len().min(50)]
+        );
+        assert!(!extracted.contains("Here's a script"));
     }
 }

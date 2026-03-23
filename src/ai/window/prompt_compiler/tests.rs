@@ -367,7 +367,9 @@ fn outbound_message_ends_with_authored_text_and_preserves_prefix() {
 
     // The prompt prefix must be preserved at the start of the final content
     assert!(
-        preview.final_user_content.starts_with(&preview.prompt_prefix),
+        preview
+            .final_user_content
+            .starts_with(&preview.prompt_prefix),
         "outbound message must start with resolved prompt prefix"
     );
 
@@ -446,7 +448,10 @@ fn partial_failure_preserves_healthy_resolved_content() {
     assert!(preview.failures > 0, "failures must be surfaced");
 
     // But resolved count must also be nonzero
-    assert!(preview.resolved > 0, "healthy resolved count must be nonzero");
+    assert!(
+        preview.resolved > 0,
+        "healthy resolved count must be nonzero"
+    );
 
     // The prompt prefix must contain the healthy content
     assert_eq!(preview.prompt_prefix, healthy_context);
@@ -811,7 +816,10 @@ fn from_receipt_empty_content_yields_zero_tokens() {
 
     let preview = PromptCompilerPreview::from_receipt(&receipt);
 
-    assert_eq!(preview.approx_tokens, 0, "empty content must yield zero tokens");
+    assert_eq!(
+        preview.approx_tokens, 0,
+        "empty content must yield zero tokens"
+    );
     assert_eq!(preview.rows.len(), 0);
 }
 

@@ -101,7 +101,10 @@ fn test_add_to_ai_flow_forwards_file_reference_to_ai_chat_window_when_file_attac
 #[test]
 fn test_ai_builtins_use_already_hidden_helper_after_upstream_hide() {
     let source = read_source("src/app_execute/builtin_execution.rs");
-    let ai_branch = slice_from(&source, "builtins::BuiltInFeature::AiCommand(cmd_type) => {");
+    let ai_branch = slice_from(
+        &source,
+        "builtins::BuiltInFeature::AiCommand(cmd_type) => {",
+    );
 
     assert!(
         ai_branch.contains("open_ai_window_after_already_hidden("),

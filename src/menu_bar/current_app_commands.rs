@@ -84,6 +84,140 @@ pub fn normalize_generate_script_from_current_app_request(raw: Option<&str>) -> 
 }
 
 // ---------------------------------------------------------------------------
+// "Do in Current App" intent router
+// ---------------------------------------------------------------------------
+
+/// The human-readable label used in the main command list.
+pub const DO_IN_CURRENT_APP_LABEL: &str = "Do in Current App";
+
+/// The action selected by the "Do in Current App" intent router.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DoInCurrentAppAction {
+    OpenCommandPalette,
+    ExecuteEntry(usize),
+    GenerateScript,
+}
+
+/// A machine-readable receipt for the "Do in Current App" router.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DoInCurrentAppReceipt {
+    pub normalized_query: String,
+    pub filtered_entries: usize,
+    pub exact_matches: usize,
+    pub action: &'static str,
+}
+
+/// Returns `None` when the raw input is empty, whitespace-only, or matches the
+/// built-in label (case-insensitive). Otherwise returns the trimmed input.
+pub fn normalize_do_in_current_app_request(raw: Option<&str>) -> Option<&str> {
+    let raw = raw.map(str::trim).filter(|text| !text.is_empty())?;
+
+    if raw.eq_ignore_ascii_case(DO_IN_CURRENT_APP_LABEL) {
+        None
+    } else {
+        Some(raw)
+    }
+}
+
+fn normalize_intent_match_text(text: &str) -> String {
+    let mut normalized = String::with_capacity(text.len());
+    let mut last_was_space = false;
+
+    for ch in text.chars() {
+        let ch = if ch == '→' { ' ' } else { ch };
+
+        if ch.is_ascii_alphanumeric() {
+            normalized.push(ch.to_ascii_lowercase());
+            last_was_space = false;
+        } else if !last_was_space {
+            normalized.push(' ');
+            last_was_space = true;
+        }
+    }
+
+    normalized.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+fn entry_exactly_matches_query(entry: &BuiltInEntry, normalized_query: &str) -> bool {
+    if normalized_query.is_empty() {
+        return false;
+    }
+
+    if normalize_intent_match_text(entry.leaf_name()) == normalized_query {
+        return true;
+    }
+
+    if normalize_intent_match_text(&entry.name) == normalized_query {
+        return true;
+    }
+
+    entry
+        .keywords
+        .iter()
+        .any(|keyword| normalize_intent_match_text(keyword) == normalized_query)
+}
+
+/// Resolve a free-text request against the current app's menu entries.
+pub fn resolve_do_in_current_app_intent(
+    entries: &[BuiltInEntry],
+    raw_query: Option<&str>,
+) -> (DoInCurrentAppAction, DoInCurrentAppReceipt) {
+    let normalized_query = normalize_do_in_current_app_request(raw_query)
+        .map(normalize_intent_match_text)
+        .unwrap_or_default();
+
+    if normalized_query.is_empty() {
+        return (
+            DoInCurrentAppAction::OpenCommandPalette,
+            DoInCurrentAppReceipt {
+                normalized_query,
+                filtered_entries: entries.len(),
+                exact_matches: 0,
+                action: "open_command_palette",
+            },
+        );
+    }
+
+    let filtered: Vec<(usize, &BuiltInEntry)> = entries
+        .iter()
+        .enumerate()
+        .filter(|(_, entry)| {
+            crate::builtins::menu_bar_entry_matches_query(entry, &normalized_query)
+        })
+        .collect();
+
+    let exact_matches: Vec<usize> = filtered
+        .iter()
+        .filter(|(_, entry)| entry_exactly_matches_query(entry, &normalized_query))
+        .map(|(idx, _)| *idx)
+        .collect();
+
+    let (action, action_name) = if exact_matches.len() == 1 {
+        (
+            DoInCurrentAppAction::ExecuteEntry(exact_matches[0]),
+            "execute_entry",
+        )
+    } else if filtered.is_empty() {
+        (DoInCurrentAppAction::GenerateScript, "generate_script")
+    } else {
+        (
+            DoInCurrentAppAction::OpenCommandPalette,
+            "open_command_palette",
+        )
+    };
+
+    (
+        action,
+        DoInCurrentAppReceipt {
+            normalized_query,
+            filtered_entries: filtered.len(),
+            exact_matches: exact_matches.len(),
+            action: action_name,
+        },
+    )
+}
+
+// ---------------------------------------------------------------------------
 // Script prompt builder
 // ---------------------------------------------------------------------------
 
@@ -120,17 +254,11 @@ pub fn build_generate_script_prompt_from_snapshot(
 ) -> (String, CurrentAppScriptPromptReceipt) {
     let (entries, snapshot_receipt) = snapshot.into_entries_with_receipt();
 
-    let user_request = user_request
-        .map(str::trim)
-        .filter(|text| !text.is_empty());
+    let user_request = user_request.map(str::trim).filter(|text| !text.is_empty());
 
-    let selected_text = selected_text
-        .map(str::trim)
-        .filter(|text| !text.is_empty());
+    let selected_text = selected_text.map(str::trim).filter(|text| !text.is_empty());
 
-    let browser_url = browser_url
-        .map(str::trim)
-        .filter(|url| !url.is_empty());
+    let browser_url = browser_url.map(str::trim).filter(|url| !url.is_empty());
 
     let menu_lines: Vec<String> = entries
         .iter()
@@ -296,11 +424,7 @@ mod tests {
             bundle_id: "com.test.app".into(),
             items: vec![
                 apple_menu(),
-                menu(
-                    "File",
-                    vec![leaf("New Tab", vec![1, 0])],
-                    vec![1],
-                ),
+                menu("File", vec![leaf("New Tab", vec![1, 0])], vec![1]),
             ],
         };
 
@@ -336,11 +460,7 @@ mod tests {
             bundle_id: "com.test.app".into(),
             items: vec![
                 apple_menu(),
-                menu(
-                    "File",
-                    vec![leaf("New Tab", vec![1, 0])],
-                    vec![1],
-                ),
+                menu("File", vec![leaf("New Tab", vec![1, 0])], vec![1]),
             ],
         };
 
@@ -466,8 +586,7 @@ mod tests {
             items: vec![apple_menu(), menu("File", children, vec![1])],
         };
 
-        let (prompt, receipt) =
-            build_generate_script_prompt_from_snapshot(snap, None, None, None);
+        let (prompt, receipt) = build_generate_script_prompt_from_snapshot(snap, None, None, None);
 
         assert_eq!(receipt.total_menu_items, 25);
         assert_eq!(receipt.included_menu_items, MAX_SCRIPT_PROMPT_MENU_ITEMS);
@@ -489,8 +608,7 @@ mod tests {
             ],
         };
 
-        let (prompt, _receipt) =
-            build_generate_script_prompt_from_snapshot(snap, None, None, None);
+        let (prompt, _receipt) = build_generate_script_prompt_from_snapshot(snap, None, None, None);
 
         // The entry name from menu_bar_items_to_entries includes the path,
         // and the shortcut should be appended in parentheses
@@ -531,6 +649,122 @@ mod tests {
             normalize_generate_script_from_current_app_request(None),
             None
         );
+    }
+
+    // -----------------------------------------------------------------------
+    // normalize_do_in_current_app_request
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn normalize_do_in_current_app_request_drops_builtin_label() {
+        assert_eq!(
+            normalize_do_in_current_app_request(Some(DO_IN_CURRENT_APP_LABEL)),
+            None
+        );
+        assert_eq!(
+            normalize_do_in_current_app_request(Some("  do in current app  ")),
+            None
+        );
+        assert_eq!(
+            normalize_do_in_current_app_request(Some("close duplicate tabs")),
+            Some("close duplicate tabs")
+        );
+        assert_eq!(normalize_do_in_current_app_request(Some("   ")), None);
+        assert_eq!(normalize_do_in_current_app_request(None), None);
+    }
+
+    // -----------------------------------------------------------------------
+    // resolve_do_in_current_app_intent
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn resolve_do_in_current_app_intent_unique_leaf_match_executes_entry() {
+        let snap = FrontmostMenuSnapshot {
+            app_name: "Safari".into(),
+            bundle_id: "com.apple.Safari".into(),
+            items: vec![
+                apple_menu(),
+                menu(
+                    "File",
+                    vec![
+                        leaf_with_shortcut("New Tab", "T", vec![1, 0]),
+                        leaf("Close Window", vec![1, 1]),
+                    ],
+                    vec![1],
+                ),
+            ],
+        };
+
+        let entries = snap.into_entries();
+        let (action, receipt) = resolve_do_in_current_app_intent(&entries, Some("new tab"));
+
+        assert_eq!(action, DoInCurrentAppAction::ExecuteEntry(0));
+        assert_eq!(receipt.filtered_entries, 1);
+        assert_eq!(receipt.exact_matches, 1);
+        assert_eq!(receipt.action, "execute_entry");
+    }
+
+    #[test]
+    fn resolve_do_in_current_app_intent_ambiguous_query_opens_palette() {
+        let snap = FrontmostMenuSnapshot {
+            app_name: "Safari".into(),
+            bundle_id: "com.apple.Safari".into(),
+            items: vec![
+                apple_menu(),
+                menu(
+                    "File",
+                    vec![leaf("New Tab", vec![1, 0]), leaf("New Window", vec![1, 1])],
+                    vec![1],
+                ),
+            ],
+        };
+
+        let entries = snap.into_entries();
+        let (action, receipt) = resolve_do_in_current_app_intent(&entries, Some("new"));
+
+        assert_eq!(action, DoInCurrentAppAction::OpenCommandPalette);
+        assert_eq!(receipt.filtered_entries, 2);
+        assert_eq!(receipt.action, "open_command_palette");
+    }
+
+    #[test]
+    fn resolve_do_in_current_app_intent_no_matches_generates_script() {
+        let snap = FrontmostMenuSnapshot {
+            app_name: "Safari".into(),
+            bundle_id: "com.apple.Safari".into(),
+            items: vec![
+                apple_menu(),
+                menu("File", vec![leaf("New Tab", vec![1, 0])], vec![1]),
+            ],
+        };
+
+        let entries = snap.into_entries();
+        let (action, receipt) =
+            resolve_do_in_current_app_intent(&entries, Some("close duplicate tabs"));
+
+        assert_eq!(action, DoInCurrentAppAction::GenerateScript);
+        assert_eq!(receipt.filtered_entries, 0);
+        assert_eq!(receipt.exact_matches, 0);
+        assert_eq!(receipt.action, "generate_script");
+    }
+
+    #[test]
+    fn resolve_do_in_current_app_intent_empty_query_opens_palette() {
+        let snap = FrontmostMenuSnapshot {
+            app_name: "Safari".into(),
+            bundle_id: "com.apple.Safari".into(),
+            items: vec![
+                apple_menu(),
+                menu("File", vec![leaf("New Tab", vec![1, 0])], vec![1]),
+            ],
+        };
+
+        let entries = snap.into_entries();
+        let (action, receipt) =
+            resolve_do_in_current_app_intent(&entries, Some(DO_IN_CURRENT_APP_LABEL));
+
+        assert_eq!(action, DoInCurrentAppAction::OpenCommandPalette);
+        assert_eq!(receipt.action, "open_command_palette");
     }
 
     #[test]

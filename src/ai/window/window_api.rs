@@ -278,10 +278,7 @@ pub(super) fn get_pending_chat() -> &'static std::sync::Mutex<Option<Vec<Pending
 ///
 /// Returns `Err` if the pending chat lock cannot be acquired or the command
 /// cannot be enqueued (window not open).
-pub fn set_ai_pending_chat(
-    cx: &mut App,
-    messages: Vec<PendingChatMessage>,
-) -> Result<(), String> {
+pub fn set_ai_pending_chat(cx: &mut App, messages: Vec<PendingChatMessage>) -> Result<(), String> {
     let message_count = messages.len();
     let image_count = messages.iter().filter(|m| m.image_base64.is_some()).count();
 
@@ -408,14 +405,11 @@ fn enqueue_ai_window_command(
     };
     let window_is_open = handle.is_some();
 
-    let queued_index = get_pending_commands()
-        .lock()
-        .ok()
-        .and_then(|mut commands| {
-            let queued_index = commands.len();
-            ai_window_queue_command_if_open(&mut commands, window_is_open, ai_command)
-                .then_some(queued_index)
-        });
+    let queued_index = get_pending_commands().lock().ok().and_then(|mut commands| {
+        let queued_index = commands.len();
+        ai_window_queue_command_if_open(&mut commands, window_is_open, ai_command)
+            .then_some(queued_index)
+    });
 
     if queued_index.is_none() {
         tracing::warn!(
@@ -483,11 +477,7 @@ pub fn is_ai_window(window: &gpui::Window) -> bool {
 /// Set the search filter text in the AI window.
 /// Returns an actionable error if the AI window is not ready.
 pub fn set_ai_search(cx: &mut App, query: &str) -> Result<(), String> {
-    enqueue_ai_window_command(
-        cx,
-        "set_search",
-        AiCommand::SetSearch(query.to_string()),
-    )
+    enqueue_ai_window_command(cx, "set_search", AiCommand::SetSearch(query.to_string()))
 }
 
 /// Set the main input text in the AI window and optionally submit.

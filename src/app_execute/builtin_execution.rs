@@ -720,6 +720,11 @@ impl ScriptListApp {
                     );
 
                     script_kit_gpui::set_main_window_visible(true);
+                    tracing::info!(
+                        trace_id = %trace_id,
+                        "ai_generate_script_from_current_app.showing_window"
+                    );
+                    crate::platform::show_main_window_without_activation();
                     app.dispatch_ai_script_generation_from_query(prompt, cx);
                 }
                 Err(error) => {
@@ -1197,6 +1202,30 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
     ) {
         self.filter_text.clear();
+        self.pending_filter_sync = true;
+        self.pending_placeholder = Some(placeholder.to_string());
+        self.current_view = view;
+        self.hovered_index = None;
+        self.opened_from_main_menu = true;
+        resize_to_view_sync(ViewType::ScriptList, 0);
+        self.pending_focus = Some(FocusTarget::MainFilter);
+        self.focused_input = FocusedInput::MainFilter;
+        cx.notify();
+    }
+
+    /// Open a filterable builtin view with an initial filter value.
+    ///
+    /// Same UX contract as [`open_builtin_filterable_view`] but pre-fills the
+    /// filter input instead of clearing it. Used by `DoInCurrentApp` to open
+    /// the command palette with the user's query already typed.
+    fn open_builtin_filterable_view_with_filter(
+        &mut self,
+        view: AppView,
+        filter: &str,
+        placeholder: &str,
+        cx: &mut Context<Self>,
+    ) {
+        self.filter_text = filter.to_string();
         self.pending_filter_sync = true;
         self.pending_placeholder = Some(placeholder.to_string());
         self.current_view = view;
@@ -2272,6 +2301,99 @@ impl ScriptListApp {
                                     crate::action_helpers::ERROR_ACTION_FAILED,
                                     message,
                                     "inspect_current_context_failed",
+                                )
+                            }
+                        }
+                    }
+                    UtilityCommandType::DoInCurrentApp => {
+                        let raw_query_owned = query_override
+                            .unwrap_or(&self.filter_text)
+                            .to_string();
+                        let trimmed_query =
+                            crate::menu_bar::current_app_commands::normalize_do_in_current_app_request(
+                                Some(&raw_query_owned),
+                            )
+                            .unwrap_or_default()
+                            .to_string();
+
+                        tracing::info!(
+                            trace_id = %dctx.trace_id,
+                            query = %trimmed_query,
+                            "do_in_current_app.requested"
+                        );
+
+                        match crate::menu_bar::load_frontmost_menu_snapshot() {
+                            Ok(snapshot) => {
+                                let (entries, snapshot_receipt) = snapshot.into_entries_with_receipt();
+
+                                if entries.is_empty() && trimmed_query.is_empty() {
+                                    let message = format!(
+                                        "No enabled menu bar commands found for {}",
+                                        snapshot_receipt.app_name
+                                    );
+                                    self.show_error_toast(message.clone(), cx);
+                                    Self::builtin_error(
+                                        dctx,
+                                        crate::action_helpers::ERROR_ACTION_FAILED,
+                                        message,
+                                        "do_in_current_app_empty_snapshot",
+                                    )
+                                } else {
+                                    let (action, intent_receipt) =
+                                        crate::menu_bar::current_app_commands::resolve_do_in_current_app_intent(
+                                            &entries,
+                                            Some(&raw_query_owned),
+                                        );
+
+                                    tracing::info!(
+                                        trace_id = %dctx.trace_id,
+                                        app_name = %snapshot_receipt.app_name,
+                                        bundle_id = %snapshot_receipt.bundle_id,
+                                        leaf_entry_count = snapshot_receipt.leaf_entry_count,
+                                        query = %trimmed_query,
+                                        filtered_entries = intent_receipt.filtered_entries,
+                                        exact_matches = intent_receipt.exact_matches,
+                                        resolved_action = intent_receipt.action,
+                                        "do_in_current_app.resolved"
+                                    );
+
+                                    match action {
+                                        crate::menu_bar::current_app_commands::DoInCurrentAppAction::OpenCommandPalette => {
+                                            self.cached_current_app_entries = entries;
+                                            self.open_builtin_filterable_view_with_filter(
+                                                AppView::CurrentAppCommandsView {
+                                                    filter: trimmed_query.clone(),
+                                                    selected_index: 0,
+                                                },
+                                                &trimmed_query,
+                                                &snapshot_receipt.placeholder,
+                                                cx,
+                                            );
+                                            Self::builtin_success(dctx, "do_in_current_app_open_palette")
+                                        }
+                                        crate::menu_bar::current_app_commands::DoInCurrentAppAction::ExecuteEntry(entry_index) => {
+                                            let entry = entries[entry_index].clone();
+                                            self.execute_builtin_inner(&entry, Some(&raw_query_owned), dctx, cx)
+                                        }
+                                        crate::menu_bar::current_app_commands::DoInCurrentAppAction::GenerateScript => {
+                                            self.spawn_generate_script_from_current_app_after_hide(
+                                                dctx.trace_id.to_string(),
+                                                Some(trimmed_query),
+                                                cx,
+                                            );
+                                            Self::builtin_success(dctx, "do_in_current_app_generate_script")
+                                        }
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                let message = format!("Failed to load frontmost app menu bar: {}", e);
+                                self.show_error_toast(message.clone(), cx);
+                                Self::builtin_error(
+                                    dctx,
+                                    crate::action_helpers::ERROR_ACTION_FAILED,
+                                    message,
+                                    "do_in_current_app_capture_failed",
                                 )
                             }
                         }

@@ -1211,11 +1211,11 @@ const ACTIONS_DIALOG_COLOR_ALPHA_MAX: f32 = 255.0;
 const ACTIONS_DIALOG_SEARCH_BORDER_ALPHA_SCALE: f32 = 2.0;
 const ACTIONS_DIALOG_CONTAINER_BORDER_MIN_ALPHA: u8 = 0x80;
 const ACTIONS_DIALOG_OPAQUE_DIALOG_MIN_OPACITY: f32 = 0.95;
-// Inline popups don't get a real NSVisualEffectView blur layer — they're just
-// absolutely-positioned divs on top of other content.  A high opacity floor
-// keeps the popup readable while still allowing a subtle translucency hint that
-// the window-level vibrancy is present behind it.
-const ACTIONS_DIALOG_VIBRANT_INLINE_MIN_OPACITY: f32 = 0.85;
+// The actions dialog renders in its own native NSPanel with a real
+// NSVisualEffectView blur layer.  A low opacity floor lets the system
+// blur show through prominently while still tinting the background
+// enough for text contrast.
+const ACTIONS_DIALOG_VIBRANT_INLINE_MIN_OPACITY: f32 = 0.25;
 
 fn actions_dialog_alpha_u8(opacity: f32) -> u8 {
     (opacity.clamp(0.0, 1.0) * ACTIONS_DIALOG_COLOR_ALPHA_MAX) as u8
@@ -1233,10 +1233,8 @@ fn actions_dialog_container_border_alpha(border_inactive_opacity: f32) -> u8 {
 }
 
 fn actions_dialog_container_background_alpha(dialog_opacity: f32, use_vibrancy: bool) -> u8 {
-    // Inline vibrancy popups need a high-opacity background because they don't
-    // have their own NSVisualEffectView blur layer — the content behind them
-    // would show through as raw transparency rather than blurred.  85% opacity
-    // keeps the popup mostly opaque with a subtle translucency hint.
+    // The actions dialog has its own native NSPanel with NSVisualEffectView,
+    // so a low opacity floor lets the system blur show through prominently.
     // Opaque (non-vibrancy) mode keeps a near-full readability floor.
     let resolved_opacity = if use_vibrancy {
         dialog_opacity.max(ACTIONS_DIALOG_VIBRANT_INLINE_MIN_OPACITY)
@@ -1449,9 +1447,9 @@ mod actions_dialog_opacity_consistency_tests {
     }
 
     #[test]
-    fn test_actions_dialog_container_background_alpha_uses_vibrant_inline_floor() {
-        // 0.15 dialog opacity is clamped up to 0.85 vibrant inline floor → 216
-        assert_eq!(actions_dialog_container_background_alpha(0.15, true), 216);
+    fn test_actions_dialog_container_background_alpha_uses_vibrant_floor() {
+        // 0.15 dialog opacity is clamped up to 0.25 vibrant floor → 63
+        assert_eq!(actions_dialog_container_background_alpha(0.15, true), 63);
     }
 
     #[test]
@@ -1460,14 +1458,14 @@ mod actions_dialog_opacity_consistency_tests {
     }
 
     #[test]
-    fn test_actions_dialog_container_background_alpha_clamps_to_vibrant_floor() {
-        // 0.80 is below the 0.85 vibrant inline floor → clamped to 0.85 → 216
-        assert_eq!(actions_dialog_container_background_alpha(0.80, true), 216);
+    fn test_actions_dialog_container_background_alpha_passes_through_above_floor() {
+        // 0.80 is above the 0.25 vibrant floor → passes through → 204
+        assert_eq!(actions_dialog_container_background_alpha(0.80, true), 204);
     }
 
     #[test]
     fn test_actions_dialog_container_background_alpha_uses_higher_theme_value_above_floor() {
-        // 0.90 is above the 0.85 floor → passes through → 229
+        // 0.90 is above the 0.25 floor → passes through → 229
         assert_eq!(actions_dialog_container_background_alpha(0.90, true), 229);
     }
 

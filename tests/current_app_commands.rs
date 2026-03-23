@@ -18,6 +18,29 @@ use script_kit_gpui::menu_bar::{KeyboardShortcut, MenuBarItem, ModifierFlags};
 // ---------------------------------------------------------------------------
 
 #[test]
+fn do_in_current_app_builtin_is_registered() {
+    let entries = builtins::get_builtin_entries(&BuiltInConfig::default());
+    let entry = entries
+        .iter()
+        .find(|e| e.id == "builtin-do-in-current-app")
+        .expect("builtin-do-in-current-app must be in the registry");
+
+    assert_eq!(
+        entry.feature,
+        BuiltInFeature::UtilityCommand(UtilityCommandType::DoInCurrentApp)
+    );
+
+    // Must appear before builtin-current-app-commands
+    let do_pos = entries.iter().position(|e| e.id == "builtin-do-in-current-app").unwrap();
+    let cmd_pos = entries.iter().position(|e| e.id == "builtin-current-app-commands").unwrap();
+    assert!(
+        do_pos < cmd_pos,
+        "builtin-do-in-current-app (pos {}) must appear before builtin-current-app-commands (pos {})",
+        do_pos, cmd_pos
+    );
+}
+
+#[test]
 fn current_app_commands_builtin_is_registered() {
     let entries = builtins::get_builtin_entries(&BuiltInConfig::default());
     let found = entries
@@ -266,10 +289,12 @@ fn menu_bar_entry_query_matching_supports_multi_term_queries() {
         entry, "cmd+t"
     ));
     assert!(script_kit_gpui::builtins::menu_bar_entry_matches_query(
-        entry, "safari cmd+t"
+        entry,
+        "safari cmd+t"
     ));
     assert!(!script_kit_gpui::builtins::menu_bar_entry_matches_query(
-        entry, "close all"
+        entry,
+        "close all"
     ));
 }
 
@@ -358,12 +383,8 @@ fn prompt_shaping_includes_user_request_selected_text_and_browser_url() {
 
 #[test]
 fn prompt_shaping_includes_menu_shortcut_formatting() {
-    let (prompt, receipt) = build_generate_script_prompt_from_snapshot(
-        safari_snapshot_with_menus(),
-        None,
-        None,
-        None,
-    );
+    let (prompt, receipt) =
+        build_generate_script_prompt_from_snapshot(safari_snapshot_with_menus(), None, None, None);
 
     // Receipt tracks correct menu item count (Apple menu items are skipped)
     assert_eq!(receipt.included_menu_items, 2);

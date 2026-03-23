@@ -20,7 +20,7 @@ use crate::{
     platform,
     theme::get_cached_theme,
     ui_foundation::{
-        get_vibrancy_surface_background, is_key_enter, is_key_escape, is_key_left, is_key_tab,
+        is_key_enter, is_key_escape, is_key_left, is_key_tab,
         HexColorExt,
     },
 };

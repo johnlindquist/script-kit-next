@@ -372,17 +372,16 @@ impl AiApp {
                             &scriptlets,
                         );
 
-                    let recommendations =
-                        super::context_recommendations::recommend_context_parts(
-                            &parsed.cleaned_content,
-                            &live_snapshot_for_worker,
-                            receipt
-                                .assembly
-                                .as_ref()
-                                .map(|assembly| assembly.merged_parts.as_slice())
-                                .unwrap_or(&[]),
-                        )
-                        .recommendations;
+                    let recommendations = super::context_recommendations::recommend_context_parts(
+                        &parsed.cleaned_content,
+                        &live_snapshot_for_worker,
+                        receipt
+                            .assembly
+                            .as_ref()
+                            .map(|assembly| assembly.merged_parts.as_slice())
+                            .unwrap_or(&[]),
+                    )
+                    .recommendations;
 
                     (receipt, recommendations)
                 })

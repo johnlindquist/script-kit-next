@@ -698,8 +698,25 @@ impl ScriptListApp {
                     category = "ERROR",
                     error_message = %error_message,
                     exit_code = ?exit_code,
+                    script_path = %script_path,
                     "Script error received"
                 );
+                if let Some(ref stderr) = stderr_output {
+                    tracing::error!(
+                        category = "ERROR",
+                        script_path = %script_path,
+                        stderr = %stderr,
+                        "Script stderr output"
+                    );
+                }
+                if let Some(ref trace) = stack_trace {
+                    tracing::error!(
+                        category = "ERROR",
+                        script_path = %script_path,
+                        stack_trace = %trace,
+                        "Script stack trace"
+                    );
+                }
 
                 // CRITICAL: Show error via HUD (highly visible floating window)
                 // This ensures the user sees the error even if the main window is hidden/dismissed

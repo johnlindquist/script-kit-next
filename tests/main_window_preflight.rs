@@ -74,8 +74,8 @@ fn app_state_has_cached_preflight_fields() {
 
 #[test]
 fn invalidation_helper_exists() {
-    let source = std::fs::read_to_string("src/app_impl/ui_window.rs")
-        .expect("should read ui_window.rs");
+    let source =
+        std::fs::read_to_string("src/app_impl/ui_window.rs").expect("should read ui_window.rs");
     assert!(
         source.contains("fn invalidate_main_window_preflight"),
         "ui_window.rs should have invalidation helper"
@@ -100,7 +100,9 @@ fn selection_change_triggers_preflight_rebuild() {
 fn filter_change_triggers_preflight_rebuild() {
     let source = std::fs::read_to_string("src/app_impl/filter_input_updates.rs")
         .expect("should read filter_input_updates.rs");
-    let count = source.matches("rebuild_main_window_preflight_if_needed").count();
+    let count = source
+        .matches("rebuild_main_window_preflight_if_needed")
+        .count();
     assert!(
         count >= 2,
         "filter_input_updates.rs should rebuild preflight in both coalesce and immediate paths (found {})",

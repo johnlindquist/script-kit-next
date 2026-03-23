@@ -625,9 +625,7 @@ impl AiApp {
                 div()
                     .text_xs()
                     .text_color(theme.warning)
-                    .child(SharedString::from(format!(
-                        "suppression_reason={reason}"
-                    ))),
+                    .child(SharedString::from(format!("suppression_reason={reason}"))),
             );
         }
 
@@ -689,10 +687,7 @@ impl AiApp {
     fn active_prompt_compiler_receipt(
         &self,
     ) -> Option<&crate::ai::message_parts::PreparedMessageReceipt> {
-        select_prompt_compiler_receipt(
-            &self.context_preflight,
-            &self.last_prepared_message_receipt,
-        )
+        select_prompt_compiler_receipt(&self.context_preflight, &self.last_prepared_message_receipt)
     }
 
     /// Render the prompt compiler pane: a human-readable, keyboard-first
@@ -722,9 +717,7 @@ impl AiApp {
             let final_text: SharedString = preview.final_user_content.clone().into();
 
             let decision_label: SharedString = match preview.decision {
-                crate::ai::window::prompt_compiler::PromptCompilerDecision::Ready => {
-                    "Ready".into()
-                }
+                crate::ai::window::prompt_compiler::PromptCompilerDecision::Ready => "Ready".into(),
                 crate::ai::window::prompt_compiler::PromptCompilerDecision::Partial => {
                     "Partial".into()
                 }
@@ -737,9 +730,7 @@ impl AiApp {
                 crate::ai::window::prompt_compiler::PromptCompilerDecision::Partial => {
                     theme.warning
                 }
-                crate::ai::window::prompt_compiler::PromptCompilerDecision::Blocked => {
-                    theme.danger
-                }
+                crate::ai::window::prompt_compiler::PromptCompilerDecision::Blocked => theme.danger,
             };
 
             let mut pane = div()

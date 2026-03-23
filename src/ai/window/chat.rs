@@ -260,10 +260,7 @@ impl AiApp {
         self.chats.insert(0, chat);
         self.selected_chat_id = Some(chat_id);
         publish_active_chat_id(Some(&chat_id));
-        self.defer_cache_message_images(
-            Self::collect_message_image_payloads(&saved_messages),
-            cx,
-        );
+        self.defer_cache_message_images(Self::collect_message_image_payloads(&saved_messages), cx);
         self.current_messages = saved_messages;
 
         // Force scroll to bottom when initializing with a transferred conversation
@@ -774,9 +771,8 @@ mod tests {
 
     #[test]
     fn test_start_chat_saved_user_content_uses_authored_content_when_blocked() {
-        let receipt = test_start_chat_receipt(
-            crate::ai::message_parts::PreparedMessageDecision::Blocked,
-        );
+        let receipt =
+            test_start_chat_receipt(crate::ai::message_parts::PreparedMessageDecision::Blocked);
 
         let saved = start_chat_saved_user_content(
             &crate::ai::message_parts::PreparedMessageDecision::Blocked,
@@ -789,9 +785,8 @@ mod tests {
 
     #[test]
     fn test_start_chat_saved_user_content_uses_final_user_content_when_partial() {
-        let receipt = test_start_chat_receipt(
-            crate::ai::message_parts::PreparedMessageDecision::Partial,
-        );
+        let receipt =
+            test_start_chat_receipt(crate::ai::message_parts::PreparedMessageDecision::Partial);
 
         let saved = start_chat_saved_user_content(
             &crate::ai::message_parts::PreparedMessageDecision::Partial,
@@ -807,9 +802,8 @@ mod tests {
 
     #[test]
     fn test_start_chat_saved_user_content_uses_final_user_content_when_ready() {
-        let receipt = test_start_chat_receipt(
-            crate::ai::message_parts::PreparedMessageDecision::Ready,
-        );
+        let receipt =
+            test_start_chat_receipt(crate::ai::message_parts::PreparedMessageDecision::Ready);
 
         let saved = start_chat_saved_user_content(
             &crate::ai::message_parts::PreparedMessageDecision::Ready,

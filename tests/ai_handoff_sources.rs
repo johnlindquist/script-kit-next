@@ -44,8 +44,7 @@ fn deferred_ai_handoff_supports_prefill_and_submit_variants() {
     );
 
     assert!(
-        source
-            .contains("ai::set_ai_input_with_image(cx, &text, &image_base64, submit)?;"),
+        source.contains("ai::set_ai_input_with_image(cx, &text, &image_base64, submit)?;"),
         "SetInputWithImage should forward submit and propagate errors"
     );
 }
@@ -154,8 +153,10 @@ fn non_streaming_ai_handoffs_remain_submit_false() {
         slice_from(&builtins, "fn spawn_send_focused_window_to_ai_after_hide(");
     let send_screen_area_helper =
         slice_from(&builtins, "fn spawn_send_screen_area_to_ai_after_hide(");
-    let text_capture_helper =
-        slice_from(&builtins, "fn spawn_capture_text_to_ai_after_already_hidden<");
+    let text_capture_helper = slice_from(
+        &builtins,
+        "fn spawn_capture_text_to_ai_after_already_hidden<",
+    );
 
     assert!(
         clipboard_block.contains("submit: false"),
@@ -258,10 +259,12 @@ fn file_attach_to_ai_uses_deferred_helper() {
 #[test]
 fn capture_helpers_thread_real_dispatch_trace_id() {
     let source = read_source("src/app_execute/builtin_execution.rs");
-    let ai_branch = slice_from(&source, "builtins::BuiltInFeature::AiCommand(cmd_type) => {");
+    let ai_branch = slice_from(
+        &source,
+        "builtins::BuiltInFeature::AiCommand(cmd_type) => {",
+    );
     let send_screen_helper = slice_from(&source, "fn spawn_send_screen_to_ai_after_hide(");
-    let send_window_helper =
-        slice_from(&source, "fn spawn_send_focused_window_to_ai_after_hide(");
+    let send_window_helper = slice_from(&source, "fn spawn_send_focused_window_to_ai_after_hide(");
     let send_screen_area_helper =
         slice_from(&source, "fn spawn_send_screen_area_to_ai_after_hide(");
 
@@ -319,7 +322,9 @@ fn window_api_queue_helpers_return_result_and_log_structured_enqueue_status() {
         "window_api should centralize AI command queueing"
     );
     assert!(
-        source.contains("pub fn set_ai_input(cx: &mut App, text: &str, submit: bool) -> Result<(), String>"),
+        source.contains(
+            "pub fn set_ai_input(cx: &mut App, text: &str, submit: bool) -> Result<(), String>"
+        ),
         "set_ai_input should return Result<(), String>"
     );
     assert!(
@@ -468,15 +473,15 @@ fn continue_in_chat_uses_pending_chat_api_after_open() {
 #[test]
 fn selected_text_and_browser_tab_use_deferred_capture_helpers() {
     let source = read_source("src/app_execute/builtin_execution.rs");
-    let ai_branch = slice_from(&source, "builtins::BuiltInFeature::AiCommand(cmd_type) => {");
+    let ai_branch = slice_from(
+        &source,
+        "builtins::BuiltInFeature::AiCommand(cmd_type) => {",
+    );
     let selected_arm = slice_from(&source, "AiCommandType::SendSelectedTextToAi => {");
     let browser_arm = slice_from(&source, "AiCommandType::SendBrowserTabToAi => {");
-    let capture_helper =
-        slice_from(&source, "fn spawn_capture_text_to_ai_after_already_hidden<");
-    let selected_helper =
-        slice_from(&source, "fn spawn_send_selected_text_to_ai_after_hide(");
-    let browser_helper =
-        slice_from(&source, "fn spawn_send_browser_tab_to_ai_after_hide(");
+    let capture_helper = slice_from(&source, "fn spawn_capture_text_to_ai_after_already_hidden<");
+    let selected_helper = slice_from(&source, "fn spawn_send_selected_text_to_ai_after_hide(");
+    let browser_helper = slice_from(&source, "fn spawn_send_browser_tab_to_ai_after_hide(");
 
     assert!(
         ai_branch.contains("self.spawn_send_selected_text_to_ai_after_hide(&dctx.trace_id, cx);"),

@@ -58,9 +58,8 @@ pub(crate) fn build_main_window_preflight_receipt(
     let mut warnings = Vec::new();
 
     if matches!(&result, crate::scripts::SearchResult::Agent(_)) {
-        warnings.push(
-            "Agent execution is not fully implemented in execute_selected yet.".to_string(),
-        );
+        warnings
+            .push("Agent execution is not fully implemented in execute_selected yet.".to_string());
     }
 
     if app.filter_text.trim().is_empty() {

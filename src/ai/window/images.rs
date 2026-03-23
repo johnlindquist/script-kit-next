@@ -223,9 +223,7 @@ impl AiApp {
     }
 
     /// Extract image payloads with provenance instead of bare Strings.
-    pub(super) fn collect_message_image_payloads(
-        messages: &[Message],
-    ) -> Vec<ImageCacheRequest> {
+    pub(super) fn collect_message_image_payloads(messages: &[Message]) -> Vec<ImageCacheRequest> {
         let mut images = Vec::new();
         for message in messages {
             for (attachment_index, attachment) in message.images.iter().enumerate() {
@@ -240,16 +238,13 @@ impl AiApp {
     }
 
     /// Decode base64 to PNG bytes on a background thread.
-    fn prepare_image_cache_work(
-        request: ImageCacheRequest,
-    ) -> Option<PreparedImageCacheWork> {
+    fn prepare_image_cache_work(request: ImageCacheRequest) -> Option<PreparedImageCacheWork> {
         let started_at = std::time::Instant::now();
         let cache_key = request.cache_key();
         let base64_len = request.base64_len();
 
         use base64::Engine;
-        let png_bytes = match base64::engine::general_purpose::STANDARD
-            .decode(&request.base64_data)
+        let png_bytes = match base64::engine::general_purpose::STANDARD.decode(&request.base64_data)
         {
             Ok(bytes) => bytes,
             Err(error) => {
@@ -310,7 +305,8 @@ impl AiApp {
 
         match crate::list_item::decode_png_to_render_image_with_bgra_conversion(&work.png_bytes) {
             Ok(render_image) => {
-                self.image_cache.insert(work.cache_key.clone(), render_image);
+                self.image_cache
+                    .insert(work.cache_key.clone(), render_image);
                 tracing::info!(
                     category = "AI",
                     event = "ai_image_cache_insert",
@@ -367,11 +363,7 @@ impl AiApp {
         self.defer_cache_requests(requests, cx);
     }
 
-    fn defer_cache_requests(
-        &mut self,
-        requests: Vec<ImageCacheRequest>,
-        cx: &mut Context<Self>,
-    ) {
+    fn defer_cache_requests(&mut self, requests: Vec<ImageCacheRequest>, cx: &mut Context<Self>) {
         use std::collections::HashSet;
 
         let mut queued_keys = HashSet::new();
