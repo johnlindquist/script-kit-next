@@ -603,6 +603,13 @@ pub fn build_current_app_command_recipe(
     let (prompt, prompt_receipt) =
         build_generate_script_prompt_from_snapshot(snapshot, request, selected_text, browser_url);
 
+    // Keep the nested trace aligned with the actual prompt carried by the recipe.
+    // This matters when selected_text/browser_url are present.
+    if trace.action == "generate_script" {
+        trace.prompt_receipt = Some(prompt_receipt.clone());
+        trace.prompt_preview = Some(prompt.clone());
+    }
+
     CurrentAppCommandRecipe {
         schema_version: CURRENT_APP_COMMAND_RECIPE_SCHEMA_VERSION,
         recipe_type: "currentAppCommand",

@@ -9,9 +9,11 @@ use script_kit_gpui::builtins::{
 };
 use script_kit_gpui::config::BuiltInConfig;
 use script_kit_gpui::menu_bar::current_app_commands::{
-    build_current_app_intent_trace_receipt, build_generate_script_prompt_from_snapshot,
-    normalize_trace_current_app_intent_request, resolve_do_in_current_app_intent,
-    DoInCurrentAppAction, FrontmostMenuSnapshot,
+    build_current_app_command_recipe, build_current_app_intent_trace_receipt,
+    build_generate_script_prompt_from_snapshot, normalize_trace_current_app_intent_request,
+    normalize_turn_this_into_a_command_request, resolve_do_in_current_app_intent,
+    suggest_current_app_command_name, DoInCurrentAppAction, FrontmostMenuSnapshot,
+    CURRENT_APP_COMMAND_RECIPE_SCHEMA_VERSION,
 };
 use script_kit_gpui::menu_bar::{KeyboardShortcut, MenuBarItem, ModifierFlags};
 
@@ -609,4 +611,195 @@ fn trace_receipt_serializes_to_valid_json() {
     assert_eq!(parsed["schema_version"], 1);
     assert_eq!(parsed["action"], "execute_entry");
     assert_eq!(parsed["app_name"], "Safari");
+}
+
+// ---------------------------------------------------------------------------
+// Turn This Into a Command — registration & contract
+// ---------------------------------------------------------------------------
+
+#[test]
+fn turn_this_into_a_command_builtin_is_registered() {
+    let entries = builtins::get_builtin_entries(&BuiltInConfig::default());
+    let entry = entries
+        .iter()
+        .find(|e| e.id == "builtin-turn-this-into-a-command")
+        .expect("builtin-turn-this-into-a-command must be in the registry");
+
+    assert_eq!(
+        entry.feature,
+        BuiltInFeature::UtilityCommand(UtilityCommandType::TurnThisIntoCommand)
+    );
+
+    let do_pos = entries
+        .iter()
+        .position(|e| e.id == "builtin-do-in-current-app")
+        .unwrap();
+    let turn_pos = entries
+        .iter()
+        .position(|e| e.id == "builtin-turn-this-into-a-command")
+        .unwrap();
+    let cmd_pos = entries
+        .iter()
+        .position(|e| e.id == "builtin-current-app-commands")
+        .unwrap();
+
+    assert!(
+        do_pos < turn_pos,
+        "Turn This Into a Command should follow Do in Current App"
+    );
+    assert!(
+        turn_pos < cmd_pos,
+        "Turn This Into a Command should appear before Current App Commands"
+    );
+}
+
+#[test]
+fn normalize_turn_this_into_a_command_request_strips_builtin_label_prefix() {
+    assert_eq!(
+        normalize_turn_this_into_a_command_request(Some("Turn This Into a Command")),
+        None
+    );
+    assert_eq!(
+        normalize_turn_this_into_a_command_request(Some(
+            "Turn This Into a Command close duplicate tabs"
+        )),
+        Some("close duplicate tabs".to_string())
+    );
+    assert_eq!(
+        normalize_turn_this_into_a_command_request(Some("turn this into a command: cmd+t")),
+        Some("cmd+t".to_string())
+    );
+    assert_eq!(
+        normalize_turn_this_into_a_command_request(Some(
+            "Turn This Into a Command \u{2014} archive inbox zero"
+        )),
+        Some("archive inbox zero".to_string())
+    );
+    assert_eq!(
+        normalize_turn_this_into_a_command_request(Some("   ")),
+        None
+    );
+    assert_eq!(normalize_turn_this_into_a_command_request(None), None);
+}
+
+#[test]
+fn suggest_current_app_command_name_is_stable_and_human_readable() {
+    assert_eq!(
+        suggest_current_app_command_name("Safari", "close duplicate tabs"),
+        "Safari Close Duplicate Tabs"
+    );
+    assert_eq!(
+        suggest_current_app_command_name("Safari", "cmd+t"),
+        "Safari Cmd T"
+    );
+    assert_eq!(
+        suggest_current_app_command_name("Safari", ""),
+        "Safari Command"
+    );
+}
+
+#[test]
+fn turn_this_into_a_command_recipe_keeps_trace_prompt_in_sync_for_generate_script() {
+    let recipe = build_current_app_command_recipe(
+        safari_snapshot_with_menus(),
+        Some("Turn This Into a Command close duplicate tabs"),
+        Some("pricing"),
+        Some("browser-tab-url"),
+    );
+
+    assert_eq!(
+        recipe.schema_version,
+        CURRENT_APP_COMMAND_RECIPE_SCHEMA_VERSION
+    );
+    assert_eq!(recipe.recipe_type, "currentAppCommand");
+    assert_eq!(
+        recipe.raw_query,
+        "Turn This Into a Command close duplicate tabs"
+    );
+    assert_eq!(recipe.effective_query, "close duplicate tabs");
+    assert_eq!(recipe.suggested_script_name, "Safari Close Duplicate Tabs");
+
+    assert_eq!(recipe.trace.action, "generate_script");
+    assert_eq!(
+        recipe.trace.raw_query,
+        "Turn This Into a Command close duplicate tabs"
+    );
+    assert_eq!(recipe.trace.effective_query, "close duplicate tabs");
+    assert_eq!(
+        recipe.trace.prompt_preview.as_deref(),
+        Some(recipe.prompt.as_str())
+    );
+    assert_eq!(
+        recipe.trace.prompt_receipt,
+        Some(recipe.prompt_receipt.clone())
+    );
+
+    assert!(recipe
+        .prompt
+        .contains("User Request:\nclose duplicate tabs"));
+    assert!(recipe
+        .prompt
+        .contains("Selected Text:\n```text\npricing\n```"));
+    assert!(recipe
+        .prompt
+        .contains("Focused Browser URL:\nbrowser-tab-url"));
+    assert!(recipe.prompt_receipt.included_user_request);
+    assert!(recipe.prompt_receipt.included_selected_text);
+    assert!(recipe.prompt_receipt.included_browser_url);
+}
+
+#[test]
+fn turn_this_into_a_command_recipe_preserves_exact_match_trace_without_overwriting_it() {
+    let recipe = build_current_app_command_recipe(
+        safari_snapshot_with_menus(),
+        Some("Turn This Into a Command new tab"),
+        Some("selection"),
+        Some("browser-tab-url"),
+    );
+
+    assert_eq!(recipe.effective_query, "new tab");
+    assert_eq!(recipe.trace.action, "execute_entry");
+    assert_eq!(
+        recipe
+            .trace
+            .selected_entry
+            .as_ref()
+            .map(|item| item.leaf_name.as_str()),
+        Some("New Tab")
+    );
+    assert!(recipe.trace.prompt_preview.is_none());
+    assert!(recipe.trace.prompt_receipt.is_none());
+
+    assert!(recipe.prompt.contains("User Request:\nnew tab"));
+    assert!(recipe
+        .prompt
+        .contains("Selected Text:\n```text\nselection\n```"));
+    assert!(recipe
+        .prompt
+        .contains("Focused Browser URL:\nbrowser-tab-url"));
+}
+
+#[test]
+fn turn_this_into_a_command_recipe_serializes_to_valid_json() {
+    let recipe = build_current_app_command_recipe(
+        safari_snapshot_with_menus(),
+        Some("Turn This Into a Command close duplicate tabs"),
+        Some("pricing"),
+        Some("browser-tab-url"),
+    );
+
+    let json = serde_json::to_string_pretty(&recipe).expect("recipe must serialize");
+    let parsed: serde_json::Value = serde_json::from_str(&json).expect("JSON must be valid");
+
+    assert_eq!(
+        parsed["schemaVersion"],
+        CURRENT_APP_COMMAND_RECIPE_SCHEMA_VERSION
+    );
+    assert_eq!(parsed["recipeType"], "currentAppCommand");
+    assert_eq!(parsed["effectiveQuery"], "close duplicate tabs");
+    assert_eq!(
+        parsed["suggestedScriptName"],
+        "Safari Close Duplicate Tabs"
+    );
+    assert_eq!(parsed["trace"]["action"], "generate_script");
 }
