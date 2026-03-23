@@ -2432,12 +2432,20 @@ impl ScriptListApp {
 
                             match crate::menu_bar::load_frontmost_menu_snapshot() {
                                 Ok(snapshot) => {
+                                    let selected_text = crate::selected_text::get_selected_text()
+                                        .ok()
+                                        .filter(|text| !text.trim().is_empty());
+
+                                    let browser_url = crate::platform::get_focused_browser_tab_url()
+                                        .ok()
+                                        .filter(|url| !url.trim().is_empty());
+
                                     let recipe =
                                         crate::menu_bar::current_app_commands::build_current_app_command_recipe(
                                             snapshot,
                                             Some(&raw_query_owned),
-                                            None,
-                                            None,
+                                            selected_text.as_deref(),
+                                            browser_url.as_deref(),
                                         );
 
                                     match serde_json::to_string_pretty(&recipe) {
@@ -2451,6 +2459,8 @@ impl ScriptListApp {
                                                 route = %recipe.trace.action,
                                                 suggested_script_name = %recipe.suggested_script_name,
                                                 candidate_count = recipe.trace.candidates.len(),
+                                                included_selected_text = recipe.prompt_receipt.included_selected_text,
+                                                included_browser_url = recipe.prompt_receipt.included_browser_url,
                                                 json_bytes = json.len(),
                                                 "turn_this_into_command.recipe_copied"
                                             );
