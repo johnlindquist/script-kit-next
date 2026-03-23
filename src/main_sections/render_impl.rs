@@ -448,6 +448,23 @@ impl Render for ScriptListApp {
                     cx.stop_propagation();
                 }
             }))
+            // Close popups when the user clicks anywhere on the main window.
+            // This handles the case where the user clicks the main window input
+            // or list while a confirm/actions popup is open.
+            .on_mouse_down(gpui::MouseButton::Left, cx.listener(|this, _, _window, cx| {
+                if confirm::is_confirm_window_open() {
+                    logging::log("FOCUS", "Main window clicked - closing confirm popup");
+                    confirm::route_key_to_confirm_popup("escape", cx);
+                }
+                if actions::is_actions_window_open() {
+                    logging::log("FOCUS", "Main window clicked - closing actions popup");
+                    actions::close_actions_window(cx);
+                    this.show_actions_popup = false;
+                    this.actions_dialog = None;
+                    this.mark_filter_resync_after_actions_if_needed();
+                    this.pop_focus_overlay(cx);
+                }
+            }))
             .child(
                 div()
                     .w_full()
