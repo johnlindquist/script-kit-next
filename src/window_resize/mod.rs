@@ -425,6 +425,17 @@ pub fn defer_resize_to_view(
 pub fn resize_to_view_sync(view_type: ViewType, item_count: usize) {
     let target_height = height_for_view(view_type, item_count);
     let target_width = width_for_view(view_type);
+    if matches!(view_type, ViewType::MiniMainWindow) {
+        let visible_rows = item_count.clamp(4, MINI_MAIN_WINDOW_MAX_VISIBLE_ROWS);
+        debug!(
+            view_type = ?view_type,
+            width_px = target_width.unwrap_or(0.0),
+            height_px = f32::from(target_height),
+            item_count = item_count,
+            visible_row_count = visible_rows,
+            "mini_main_window sizing selected"
+        );
+    }
     if target_width.is_some() {
         resize_first_window_to_size(target_height, target_width);
     } else {

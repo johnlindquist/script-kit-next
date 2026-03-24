@@ -126,6 +126,7 @@ impl AiApp {
     /// Toggle the keyboard shortcuts overlay (Cmd+/).
     pub(super) fn toggle_shortcuts_overlay(&mut self, cx: &mut Context<Self>) {
         self.showing_shortcuts_overlay = !self.showing_shortcuts_overlay;
+        super::telemetry::log_ai_ui("shortcuts_overlay_toggled", self.window_mode, "keyboard");
         cx.notify();
     }
 
@@ -161,11 +162,13 @@ impl AiApp {
         self.window_mode = new_mode;
         super::types::AI_CURRENT_WINDOW_MODE
             .store(new_mode.to_u8(), std::sync::atomic::Ordering::SeqCst);
-        // Dismiss mini overlays and clear stale search so the target mode starts clean.
+        // Dismiss overlays and clear stale search so the target mode starts clean.
         if self.showing_mini_history_overlay {
             self.showing_mini_history_overlay = false;
             self.clear_search_state(window, cx);
         }
+        // Dismiss shortcuts overlay — its content is mode-specific.
+        self.showing_shortcuts_overlay = false;
         window.set_window_title(new_mode.title());
         // Restore saved bounds for target mode, falling back to defaults.
         let target_role = super::window_api::window_role_for_mode(new_mode);

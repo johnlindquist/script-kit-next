@@ -826,6 +826,8 @@ pub(crate) fn clear_sdk_state() {
 pub(super) struct AiShortcutItem {
     pub(super) keys: &'static str,
     pub(super) description: &'static str,
+    /// `None` = shown in both modes, `Some(mode)` = shown only in that mode.
+    pub(super) mode: Option<AiWindowMode>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -837,23 +839,28 @@ pub(super) struct AiShortcutSection {
 pub(super) const AI_SHORTCUTS_NAVIGATION: &[AiShortcutItem] = &[
     AiShortcutItem {
         keys: "\u{2318}J",
-        description: "Recent chats (mini)",
+        description: "Recent chats",
+        mode: Some(AiWindowMode::Mini),
     },
     AiShortcutItem {
         keys: "\u{2318}B",
         description: "Toggle sidebar",
+        mode: Some(AiWindowMode::Full),
     },
     AiShortcutItem {
         keys: "\u{2318}\u{21e7}F",
         description: "Focus search",
+        mode: None,
     },
     AiShortcutItem {
         keys: "\u{2318}[",
         description: "Previous chat",
+        mode: None,
     },
     AiShortcutItem {
         keys: "\u{2318}]",
         description: "Next chat",
+        mode: None,
     },
 ];
 
@@ -861,14 +868,17 @@ pub(super) const AI_SHORTCUTS_CHAT: &[AiShortcutItem] = &[
     AiShortcutItem {
         keys: "\u{2318}N",
         description: "New chat",
+        mode: None,
     },
     AiShortcutItem {
         keys: "\u{2318}\u{21e7}N",
         description: "New chat with preset",
+        mode: None,
     },
     AiShortcutItem {
         keys: "\u{2318}\u{21e7}\u{232B}",
         description: "Delete chat",
+        mode: None,
     },
 ];
 
@@ -876,22 +886,32 @@ pub(super) const AI_SHORTCUTS_INPUT: &[AiShortcutItem] = &[
     AiShortcutItem {
         keys: "Enter",
         description: "Send message",
+        mode: None,
     },
     AiShortcutItem {
         keys: "Shift+Enter",
         description: "Insert newline",
+        mode: None,
     },
     AiShortcutItem {
         keys: "\u{2318}L",
         description: "Focus input",
+        mode: None,
+    },
+    AiShortcutItem {
+        keys: "\u{2318}\u{21e7}A",
+        description: "Attach context",
+        mode: None,
     },
     AiShortcutItem {
         keys: "\u{2191}",
         description: "Edit last message (empty input)",
+        mode: None,
     },
     AiShortcutItem {
         keys: "Esc",
         description: "Stop streaming / close",
+        mode: None,
     },
 ];
 
@@ -899,22 +919,27 @@ pub(super) const AI_SHORTCUTS_ACTIONS: &[AiShortcutItem] = &[
     AiShortcutItem {
         keys: "\u{2318}K",
         description: "Open actions",
+        mode: None,
     },
     AiShortcutItem {
         keys: "\u{21e7}\u{2318}M",
         description: "Toggle mini / full mode",
+        mode: None,
     },
     AiShortcutItem {
         keys: "\u{2318}\u{21e7}C",
         description: "Copy last response",
+        mode: None,
     },
     AiShortcutItem {
         keys: "\u{2318}\u{21e7}E",
         description: "Export chat as markdown",
+        mode: None,
     },
     AiShortcutItem {
         keys: "\u{2318}/",
         description: "Toggle shortcuts overlay",
+        mode: None,
     },
 ];
 
@@ -981,5 +1006,80 @@ mod outbound_display_source_tests {
             ai_window_outbound_display_source("   ", false, true),
             "Context attachment"
         );
+    }
+}
+
+#[cfg(test)]
+mod shortcut_mode_filter_tests {
+    use super::*;
+
+    #[test]
+    fn mini_only_shortcuts_are_excluded_in_full_mode() {
+        for section in AI_SHORTCUT_SECTIONS {
+            for item in section.items {
+                if item.mode == Some(AiWindowMode::Mini) {
+                    // This item should NOT appear in full mode
+                    let visible_in_full = match item.mode {
+                        None => true,
+                        Some(m) => m == AiWindowMode::Full,
+                    };
+                    assert!(
+                        !visible_in_full,
+                        "Mini-only shortcut '{}' should be hidden in full mode",
+                        item.description
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn full_only_shortcuts_are_excluded_in_mini_mode() {
+        for section in AI_SHORTCUT_SECTIONS {
+            for item in section.items {
+                if item.mode == Some(AiWindowMode::Full) {
+                    let visible_in_mini = match item.mode {
+                        None => true,
+                        Some(m) => m == AiWindowMode::Mini,
+                    };
+                    assert!(
+                        !visible_in_mini,
+                        "Full-only shortcut '{}' should be hidden in mini mode",
+                        item.description
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn mode_none_shortcuts_appear_in_both_modes() {
+        let shared_count = AI_SHORTCUT_SECTIONS
+            .iter()
+            .flat_map(|s| s.items)
+            .filter(|item| item.mode.is_none())
+            .count();
+        // There should be more shared shortcuts than mode-specific ones
+        assert!(
+            shared_count > 10,
+            "Expected most shortcuts to be shared (mode: None), found {shared_count}"
+        );
+    }
+
+    #[test]
+    fn cmd_j_is_mini_only_and_cmd_b_is_full_only() {
+        let cmd_j = AI_SHORTCUT_SECTIONS
+            .iter()
+            .flat_map(|s| s.items)
+            .find(|item| item.keys.contains('J'))
+            .expect("Cmd+J shortcut should exist");
+        assert_eq!(cmd_j.mode, Some(AiWindowMode::Mini));
+
+        let cmd_b = AI_SHORTCUT_SECTIONS
+            .iter()
+            .flat_map(|s| s.items)
+            .find(|item| item.description == "Toggle sidebar")
+            .expect("Toggle sidebar shortcut should exist");
+        assert_eq!(cmd_b.mode, Some(AiWindowMode::Full));
     }
 }
