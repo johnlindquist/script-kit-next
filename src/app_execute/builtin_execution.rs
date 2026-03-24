@@ -17,7 +17,11 @@ fn ai_capture_hide_settle_duration() -> std::time::Duration {
 }
 
 fn ai_command_keeps_main_window_visible(cmd_type: &builtins::AiCommandType) -> bool {
-    matches!(cmd_type, builtins::AiCommandType::GenerateScript)
+    match cmd_type {
+        builtins::AiCommandType::GenerateScript => true,
+        builtins::AiCommandType::MiniAi => false,
+        _ => false,
+    }
 }
 
 fn ai_command_uses_hide_then_capture_flow(cmd_type: &builtins::AiCommandType) -> bool {
@@ -1758,6 +1762,92 @@ impl ScriptListApp {
                         Self::builtin_success(dctx, format!("ai_command::{cmd_type:?}"))
                     }
 
+                    AiCommandType::MiniAi => {
+                        let source_action = format!("ai_command::{cmd_type:?}");
+                        let trace_id = dctx.trace_id.to_string();
+
+                        tracing::info!(
+                            category = "AI",
+                            event = "ai_handoff_defer_open_start",
+                            source_action = %source_action,
+                            trace_id = %trace_id,
+                            deferred_action = "open_only",
+                            "Opening mini AI window after main window already hidden"
+                        );
+
+                        cx.spawn(async move |this, cx| {
+                            cx.background_executor()
+                                .timer(std::time::Duration::from_millis(1))
+                                .await;
+
+                            let started_at = std::time::Instant::now();
+
+                            let open_result = cx.update(|cx| {
+                                crate::ai::open_mini_ai_window(cx)
+                                    .map_err(|error| error.to_string())?;
+                                Ok::<(), String>(())
+                            });
+
+                            if open_result.is_ok() {
+                                let ready_now = cx.update(ai::is_ai_window_ready);
+                                if !ready_now {
+                                    cx.background_executor()
+                                        .timer(std::time::Duration::from_millis(16))
+                                        .await;
+                                }
+                            }
+
+                            let handoff_result = open_result.and_then(|()| {
+                                cx.update(|cx| {
+                                    if !ai::is_ai_window_ready(cx) {
+                                        return Err("AI window not ready after open".to_string());
+                                    }
+                                    DeferredAiWindowAction::OpenOnly.apply(cx)
+                                })
+                            });
+
+                            match handoff_result {
+                                Ok(apply_stage) => {
+                                    let _ = this.update(cx, |this, cx| {
+                                        tracing::info!(
+                                            category = "AI",
+                                            event = "ai_handoff_defer_open_success",
+                                            source_action = %source_action,
+                                            trace_id = %trace_id,
+                                            deferred_action = "open_only",
+                                            apply_stage,
+                                            duration_ms = started_at.elapsed().as_millis() as u64,
+                                            "Mini AI handoff completed"
+                                        );
+                                        this.show_hud("AI Chat opened".to_string(), Some(HUD_SHORT_MS), cx);
+                                        cx.notify();
+                                    });
+                                }
+                                Err(error) => {
+                                    let _ = this.update(cx, |this, cx| {
+                                        tracing::error!(
+                                            category = "AI",
+                                            event = "ai_handoff_defer_open_failed",
+                                            source_action = %source_action,
+                                            trace_id = %trace_id,
+                                            deferred_action = "open_only",
+                                            error = %error,
+                                            duration_ms = started_at.elapsed().as_millis() as u64,
+                                            "Failed to open mini AI window after hiding main window"
+                                        );
+                                        this.show_error_toast(
+                                            format!("Failed to send to AI Chat: {}", error),
+                                            cx,
+                                        );
+                                    });
+                                }
+                            }
+                        })
+                        .detach();
+
+                        Self::builtin_success(dctx, format!("ai_command::{cmd_type:?}"))
+                    }
+
                     AiCommandType::ClearConversation => {
                         match ai::clear_all_chats() {
                             Ok(()) => {
@@ -3255,6 +3345,9 @@ mod builtin_execution_ai_feedback_tests {
         assert!(!ai_command_keeps_main_window_visible(
             &AiCommandType::OpenAi
         ));
+        assert!(!ai_command_keeps_main_window_visible(
+            &AiCommandType::MiniAi
+        ));
     }
 
     #[test]
@@ -3294,6 +3387,9 @@ mod builtin_execution_ai_feedback_tests {
         ));
         assert!(ai_command_uses_hide_then_capture_flow(
             &AiCommandType::SendBrowserTabToAi
+        ));
+        assert!(!ai_command_uses_hide_then_capture_flow(
+            &AiCommandType::MiniAi
         ));
     }
 
