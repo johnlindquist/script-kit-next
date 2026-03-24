@@ -112,6 +112,7 @@ pub enum NotesCommandType {
 #[allow(dead_code)]
 pub enum AiCommandType {
     OpenAi,
+    MiniAi,
     NewConversation,
     ClearConversation,
     /// Generate a new Script Kit script from the main prompt text
@@ -882,6 +883,15 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             vec!["open", "ai", "chat", "assistant", "window"],
             BuiltInFeature::AiCommand(AiCommandType::OpenAi),
             "🤖",
+        ));
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin-mini-ai",
+            "Mini AI Chat",
+            "Open a compact AI chat window",
+            vec!["mini", "ai", "chat", "compact", "quick", "assistant", "ask"],
+            BuiltInFeature::AiCommand(AiCommandType::MiniAi),
+            "✨",
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
@@ -2155,6 +2165,22 @@ mod tests {
         assert_eq!(
             open_ai.unwrap().feature,
             BuiltInFeature::AiCommand(AiCommandType::OpenAi)
+        );
+
+        let mini_ai = entries.iter().find(|e| e.id == "builtin-mini-ai");
+        assert!(mini_ai.is_some(), "builtin-mini-ai should exist");
+        let mini_ai = mini_ai.unwrap();
+        assert_eq!(
+            mini_ai.feature,
+            BuiltInFeature::AiCommand(AiCommandType::MiniAi)
+        );
+        assert_eq!(mini_ai.icon.as_deref(), Some("✨"));
+        assert!(
+            mini_ai
+                .keywords
+                .iter()
+                .any(|keyword| keyword.eq_ignore_ascii_case("compact")),
+            "Mini AI command should be discoverable via 'compact'"
         );
 
         let generate_script = entries
