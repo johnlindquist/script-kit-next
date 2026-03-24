@@ -837,7 +837,7 @@ mod tests {
         assert_eq!(f64::from(full.size.width), 900.0);
         assert_eq!(f64::from(full.size.height), 700.0);
         assert_eq!(f64::from(mini.size.width), 720.0);
-        assert_eq!(f64::from(mini.size.height), 560.0);
+        assert_eq!(f64::from(mini.size.height), 440.0);
     }
 
     #[test]

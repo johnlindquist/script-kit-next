@@ -10,6 +10,8 @@ fn mini_shell_exposes_machine_addressable_ids() {
     let root = read("src/ai/window/render_root.rs");
     for id in [
         "ai-titlebar-mini",
+        "ai-mini-expand",
+        "ai-mini-streaming-dot",
         "ai-mini-recent",
         "ai-mini-new",
         "ai-mini-actions",
@@ -787,5 +789,164 @@ fn hide_all_dropdowns_closes_new_chat_command_bar() {
     assert!(
         fn_body.contains("new_chat_command_bar.close(cx)"),
         "hide_all_dropdowns must close new_chat_command_bar"
+    );
+}
+
+#[test]
+fn mini_welcome_is_compact_with_fewer_suggestions() {
+    let source = read("src/ai/window/render_welcome.rs");
+    // Mini mode must limit suggestion count
+    assert!(
+        source.contains("if is_mini { 2 }"),
+        "Mini welcome must show fewer suggestions (2 instead of 4)"
+    );
+    // Mini mode must use tighter spacing
+    assert!(
+        source.contains("if is_mini { S5 }"),
+        "Mini welcome must use tighter gap spacing"
+    );
+    // Mini mode must use a compact heading
+    assert!(
+        source.contains("What can I help with?"),
+        "Mini welcome must use a compact heading"
+    );
+    // Mini mode must push content toward composer (not center vertically)
+    assert!(
+        source.contains("justify_end()"),
+        "Mini welcome must use justify_end to push content near composer"
+    );
+}
+
+#[test]
+fn mini_welcome_shortcuts_match_visible_suggestions() {
+    let keydown = read("src/ai/window/render_keydown.rs");
+    assert!(
+        keydown.contains("let max_visible_suggestions = if self.window_mode.is_mini() { 2 } else { 4 };"),
+        "Welcome shortcuts must cap visible suggestion count in mini mode"
+    );
+    assert!(
+        keydown.contains("idx.filter(|i| *i < max_visible_suggestions)"),
+        "Welcome shortcuts must ignore hidden suggestion slots in mini mode"
+    );
+}
+
+#[test]
+fn mini_content_area_is_flex_column_for_welcome_layout() {
+    let panel = read("src/ai/window/render_main_panel.rs");
+    let mini_fn_start = panel
+        .find("fn render_mini_main_panel")
+        .expect("render_mini_main_panel must exist");
+    let full_fn_start = panel
+        .find("fn render_full_main_panel")
+        .expect("render_full_main_panel must exist");
+    let mini_body = &panel[mini_fn_start..full_fn_start];
+    // The max-width container must be a flex column so welcome's
+    // .flex_1() + .justify_end() can push content toward the composer
+    assert!(
+        mini_body.contains(".flex()\n                        .flex_col()")
+            || mini_body.contains(".flex().flex_col()"),
+        "Mini content wrapper must be a flex column for welcome layout"
+    );
+}
+
+#[test]
+fn mini_header_has_expand_button_and_streaming_indicator() {
+    let root = read("src/ai/window/render_root.rs");
+    // Expand button must exist and trigger toggle_window_mode
+    assert!(
+        root.contains("ai-mini-expand"),
+        "Mini header must have an expand button with id ai-mini-expand"
+    );
+    assert!(
+        root.contains("toggle_window_mode(window, cx)"),
+        "Expand button must call toggle_window_mode"
+    );
+    // Streaming dot indicator
+    assert!(
+        root.contains("ai-mini-streaming-dot"),
+        "Mini header must show a streaming indicator dot"
+    );
+    // History overlay anchored to the right
+    assert!(
+        root.contains(".right(S3)"),
+        "History overlay must be right-anchored (not left)"
+    );
+}
+
+#[test]
+fn mini_ai_is_backed_by_ai_app_not_a_separate_type() {
+    // The architecture must use AiApp + AiWindowMode::Mini, not a forked MiniAiApp.
+    // Scan all AI window source files for any "MiniAiApp" declaration.
+    let files = [
+        "src/ai/window/state.rs",
+        "src/ai/window/types.rs",
+        "src/ai/window/window_api.rs",
+        "src/ai/window/render_root.rs",
+        "src/ai/window/render_main_panel.rs",
+        "src/ai/window/render_keydown.rs",
+        "src/ai/mod.rs",
+        "src/ai/window.rs",
+    ];
+    for path in files {
+        let source = read(path);
+        assert!(
+            !source.contains("MiniAiApp"),
+            "{path} must NOT define or reference a separate MiniAiApp type"
+        );
+    }
+
+    // Verify AiWindowMode::Mini is defined on the existing AiApp
+    let types = read("src/ai/window/types.rs");
+    assert!(
+        types.contains("Mini,") || types.contains("Mini\n"),
+        "AiWindowMode must have a Mini variant"
+    );
+    let state = read("src/ai/window/state.rs");
+    assert!(
+        state.contains("window_mode: AiWindowMode"),
+        "AiApp must carry window_mode: AiWindowMode field"
+    );
+}
+
+#[test]
+fn mini_history_overlay_reuses_sidebar_body() {
+    // The mini history overlay must reuse render_sidebar_body() from the
+    // full sidebar, not duplicate the chat list rendering.
+    let sidebar = read("src/ai/window/render_sidebar.rs");
+    assert!(
+        sidebar.contains("fn render_sidebar_body("),
+        "render_sidebar.rs must define render_sidebar_body"
+    );
+    assert!(
+        sidebar.contains("Used by both the full sidebar and the mini history overlay"),
+        "render_sidebar_body must document its dual-use role"
+    );
+
+    // render_root.rs must call render_sidebar_body for the overlay
+    let root = read("src/ai/window/render_root.rs");
+    assert!(
+        root.contains("self.render_sidebar_body(cx)"),
+        "render_root.rs must call render_sidebar_body for the mini history overlay"
+    );
+}
+
+#[test]
+fn mini_mode_hides_docked_sidebar_in_root() {
+    // In mini mode, the root layout must NOT render the docked sidebar.
+    // The full sidebar is only shown in the else branch of a window_mode.is_mini() check.
+    let root = read("src/ai/window/render_root.rs");
+
+    let sidebar_render = root
+        .find(".child(self.render_sidebar(cx))")
+        .expect("Full sidebar render must exist in render_root.rs");
+    // The is_mini guard may be up to ~500 chars before the sidebar call (covers the
+    // entire conditional block). The mini branch renders main_panel only; the else
+    // branch adds the sidebar.
+    let search_start = sidebar_render.saturating_sub(700);
+    let preceding = &root[search_start..sidebar_render];
+    assert!(
+        preceding.contains("self.window_mode.is_mini()"),
+        "Docked sidebar must be inside a window_mode.is_mini() conditional \
+         (mini branch omits sidebar, else branch includes it)"
     );
 }
