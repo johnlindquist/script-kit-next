@@ -11,6 +11,9 @@ pub(super) enum InputMode {
 
 /// The main AI chat application view
 pub struct AiApp {
+    /// Current presentation mode for the AI window.
+    pub(super) window_mode: AiWindowMode,
+
     /// All chats (cached from storage)
     pub(super) chats: Vec<Chat>,
 
@@ -44,6 +47,9 @@ pub struct AiApp {
 
     /// Whether the sidebar is collapsed
     pub(super) sidebar_collapsed: bool,
+
+    /// Whether the mini-mode history overlay is visible.
+    pub(super) showing_mini_history_overlay: bool,
 
     /// Provider registry with available AI providers
     pub(super) provider_registry: ProviderRegistry,
