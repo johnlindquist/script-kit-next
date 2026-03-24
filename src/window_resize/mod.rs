@@ -28,6 +28,10 @@ const MINI_MAIN_WINDOW_MIN_HEIGHT: f32 = 220.0;
 const MINI_MAIN_WINDOW_MAX_HEIGHT: f32 = 420.0;
 const MINI_MAIN_WINDOW_HEADER_HEIGHT: f32 = 56.0;
 const MINI_MAIN_WINDOW_MAX_VISIBLE_ROWS: usize = 8;
+/// Width for mini main window (compact launcher)
+const MINI_MAIN_WINDOW_WIDTH: f32 = 480.0;
+/// Width for full main window (standard launcher)
+const FULL_MAIN_WINDOW_WIDTH: f32 = 750.0;
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct FrameGeometry {
     x: f64,
@@ -134,14 +138,32 @@ fn calculate_resized_frame(
     visible_bounds: Option<FrameGeometry>,
     backing_scale: Option<f64>,
 ) -> FrameGeometry {
+    calculate_resized_frame_with_width(
+        current_frame,
+        target_height,
+        None,
+        visible_bounds,
+        backing_scale,
+    )
+}
+fn calculate_resized_frame_with_width(
+    current_frame: FrameGeometry,
+    target_height: f64,
+    target_width: Option<f64>,
+    visible_bounds: Option<FrameGeometry>,
+    backing_scale: Option<f64>,
+) -> FrameGeometry {
     let height_delta = target_height - current_frame.height;
     let new_origin_y = current_frame.y - height_delta;
-    let mut resized = FrameGeometry::new(
-        current_frame.x,
-        new_origin_y,
-        current_frame.width,
-        target_height,
-    );
+    let new_width = target_width.unwrap_or(current_frame.width);
+    // Center horizontally when width changes
+    let new_origin_x = if target_width.is_some() {
+        let width_delta = new_width - current_frame.width;
+        current_frame.x - (width_delta / 2.0)
+    } else {
+        current_frame.x
+    };
+    let mut resized = FrameGeometry::new(new_origin_x, new_origin_y, new_width, target_height);
 
     if let Some(backing_scale) = sanitize_backing_scale(backing_scale) {
         resized = normalize_frame_to_backing_scale(resized, backing_scale);
@@ -334,6 +356,7 @@ pub enum ViewType {
     /// Terminal prompt - full height
     TermPrompt,
 }
+
 /// Get the target height for a specific view type
 ///
 /// # Arguments
@@ -345,6 +368,18 @@ pub enum ViewType {
 pub fn height_for_view(view_type: ViewType, item_count: usize) -> Pixels {
     let layout_config = runtime_layout_config();
     height_for_view_with_layout(view_type, item_count, &layout_config)
+}
+/// Get the target width for a specific view type, if it differs from current.
+///
+/// Returns `Some(width)` when the view needs a specific width (e.g. mini mode),
+/// or `None` when the current width should be preserved.
+pub fn width_for_view(view_type: ViewType) -> Option<f32> {
+    match view_type {
+        ViewType::MiniMainWindow => Some(MINI_MAIN_WINDOW_WIDTH),
+        // When leaving mini mode, restore full width
+        ViewType::ScriptList => Some(FULL_MAIN_WINDOW_WIDTH),
+        _ => None,
+    }
 }
 /// Calculate the initial window height for app startup
 pub fn initial_window_height() -> Pixels {
@@ -369,7 +404,8 @@ pub fn defer_resize_to_view(
     cx: &mut gpui::App,
 ) {
     let target_height = height_for_view(view_type, item_count);
-    crate::window_ops::queue_resize(f32::from(target_height), window, cx);
+    let target_width = width_for_view(view_type);
+    crate::window_ops::queue_resize_with_width(f32::from(target_height), target_width, window, cx);
 }
 /// Resize window synchronously based on view type.
 ///
@@ -388,7 +424,12 @@ pub fn defer_resize_to_view(
 /// ```
 pub fn resize_to_view_sync(view_type: ViewType, item_count: usize) {
     let target_height = height_for_view(view_type, item_count);
-    resize_first_window_to_height(target_height);
+    let target_width = width_for_view(view_type);
+    if target_width.is_some() {
+        resize_first_window_to_size(target_height, target_width);
+    } else {
+        resize_first_window_to_height(target_height);
+    }
 }
 /// Force reset the debounce timer (kept for API compatibility)
 pub fn reset_resize_debounce() {
@@ -493,6 +534,83 @@ pub fn resize_first_window_to_height(_target_height: Pixels) {
 #[cfg(not(target_os = "macos"))]
 pub fn get_first_window_height() -> Option<Pixels> {
     None
+}
+/// Resize the main window to a new height and optionally a new width, keeping the top edge fixed.
+/// When width changes, the window is re-centered horizontally around its midpoint.
+#[cfg(target_os = "macos")]
+pub fn resize_first_window_to_size(target_height: Pixels, target_width: Option<f32>) {
+    let height_f64: f64 = f32::from(target_height) as f64;
+    let width_f64: Option<f64> = target_width.map(|w| w as f64);
+
+    let window = match window_manager::get_main_window() {
+        Some(w) => w,
+        None => {
+            warn!("Main window not registered in WindowManager, cannot resize");
+            return;
+        }
+    };
+
+    // SAFETY: NSWindow frame/setFrame are standard AppKit APIs called on the main thread.
+    // The window pointer is validated as non-nil by get_main_window().
+    unsafe {
+        let current_frame: NSRect = msg_send![window, frame];
+        let current_height = current_frame.size.height;
+        let current_width = current_frame.size.width;
+
+        let height_changed = should_apply_resize(current_height, height_f64);
+        let width_changed = width_f64
+            .map(|w| (current_width - w).abs() >= RESIZE_MIN_DELTA_PX)
+            .unwrap_or(false);
+
+        if !height_changed && !width_changed {
+            return;
+        }
+
+        let correlation_id = format!("resize:{}", uuid::Uuid::new_v4());
+
+        debug!(
+            from_height = current_height,
+            to_height = height_f64,
+            from_width = current_width,
+            to_width = ?width_f64,
+            correlation_id = %correlation_id,
+            "Resizing window (height+width)"
+        );
+
+        let current_geometry = FrameGeometry::from_ns_rect(current_frame);
+        let screen_geometry = screen_geometry_for_window_frame(window, current_geometry);
+        let new_frame = calculate_resized_frame_with_width(
+            current_geometry,
+            height_f64,
+            width_f64,
+            screen_geometry.map(|g| g.visible_bounds),
+            screen_geometry.map(|g| g.backing_scale),
+        )
+        .to_ns_rect();
+
+        // SAFETY: setFrame:display:animate: is a standard NSWindow method.
+        let _: () = msg_send![
+            window,
+            setFrame:new_frame
+            display:true
+            animate:WINDOW_RESIZE_ANIMATE
+        ];
+
+        logging::log(
+            "RESIZE",
+            &format!(
+                "[RESIZE_SIZE_END] correlation_id={} height={:.0} width={:.0}",
+                correlation_id,
+                height_f64,
+                width_f64.unwrap_or(current_width)
+            ),
+        );
+    }
+}
+/// Non-macOS stub for resize_first_window_to_size
+#[cfg(not(target_os = "macos"))]
+pub fn resize_first_window_to_size(_target_height: Pixels, _target_width: Option<f32>) {
+    logging::log("RESIZE", "Window resize is only supported on macOS");
 }
 
 // --- merged from part_001.rs ---
@@ -709,5 +827,60 @@ mod tests {
             !flag,
             "Window resize must stay instant with animation disabled"
         );
+    }
+
+    #[test]
+    fn test_width_for_view_mini_main_window() {
+        assert_eq!(
+            width_for_view(ViewType::MiniMainWindow),
+            Some(MINI_MAIN_WINDOW_WIDTH)
+        );
+    }
+
+    #[test]
+    fn test_width_for_view_script_list_restores_full() {
+        assert_eq!(
+            width_for_view(ViewType::ScriptList),
+            Some(FULL_MAIN_WINDOW_WIDTH)
+        );
+    }
+
+    #[test]
+    fn test_width_for_view_other_types_none() {
+        assert_eq!(width_for_view(ViewType::ArgPromptWithChoices), None);
+        assert_eq!(width_for_view(ViewType::ArgPromptNoChoices), None);
+        assert_eq!(width_for_view(ViewType::DivPrompt), None);
+        assert_eq!(width_for_view(ViewType::EditorPrompt), None);
+        assert_eq!(width_for_view(ViewType::TermPrompt), None);
+    }
+
+    #[test]
+    fn test_mini_main_window_width_constant() {
+        assert_eq!(MINI_MAIN_WINDOW_WIDTH, 480.0);
+        assert_eq!(FULL_MAIN_WINDOW_WIDTH, 750.0);
+    }
+
+    #[test]
+    fn test_calculate_resized_frame_with_width_centers_horizontally() {
+        let current = FrameGeometry::new(100.0, 200.0, 750.0, 500.0);
+        let resized = calculate_resized_frame_with_width(current, 400.0, Some(480.0), None, None);
+
+        // Width should be 480
+        assert!((resized.width - 480.0).abs() < 0.001);
+        // Height should be 400
+        assert!((resized.height - 400.0).abs() < 0.001);
+        // X should be centered: 100 - (480 - 750) / 2 = 100 + 135 = 235
+        assert!((resized.x - 235.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_calculate_resized_frame_with_width_none_preserves_width() {
+        let current = FrameGeometry::new(100.0, 200.0, 750.0, 500.0);
+        let resized = calculate_resized_frame_with_width(current, 400.0, None, None, None);
+
+        // Width should be preserved
+        assert!((resized.width - 750.0).abs() < 0.001);
+        // X should be preserved
+        assert!((resized.x - 100.0).abs() < 0.001);
     }
 }

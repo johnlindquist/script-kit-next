@@ -210,8 +210,8 @@ use tray::{TrayManager, TrayMenuAction};
 use ui_foundation::get_vibrancy_background;
 use warning_banner::{WarningBanner, WarningBannerColors};
 use window_resize::{
-    defer_resize_to_view, height_for_view, initial_window_height, reset_resize_debounce,
-    resize_first_window_to_height, resize_to_view_sync, ViewType,
+    defer_resize_to_view, initial_window_height, reset_resize_debounce, resize_to_view_sync,
+    ViewType,
 };
 
 use components::{

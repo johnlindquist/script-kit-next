@@ -61,6 +61,36 @@ fn open_mini_main_window_sets_mini_mode_contract() {
 }
 
 #[test]
+fn width_for_view_returns_mini_width_for_mini_main_window() {
+    let content = read("src/window_resize/mod.rs");
+    assert!(
+        content.contains("ViewType::MiniMainWindow => Some(MINI_MAIN_WINDOW_WIDTH)"),
+        "width_for_view must return MINI_MAIN_WINDOW_WIDTH for MiniMainWindow"
+    );
+    assert!(
+        content.contains("ViewType::ScriptList => Some(FULL_MAIN_WINDOW_WIDTH)"),
+        "width_for_view must return FULL_MAIN_WINDOW_WIDTH for ScriptList (restore full width)"
+    );
+}
+
+#[test]
+fn resize_to_view_sync_uses_width_aware_path() {
+    let content = read("src/window_resize/mod.rs");
+    let fn_start = content
+        .find("pub fn resize_to_view_sync(")
+        .expect("Expected resize_to_view_sync function");
+    let body = &content[fn_start..content.len().min(fn_start + 400)];
+    assert!(
+        body.contains("width_for_view(view_type)"),
+        "resize_to_view_sync must call width_for_view"
+    );
+    assert!(
+        body.contains("resize_first_window_to_size(target_height, target_width)"),
+        "resize_to_view_sync must call resize_first_window_to_size when width is Some"
+    );
+}
+
+#[test]
 fn lifecycle_resets_restore_full_main_window_mode_on_close_and_go_back() {
     let lifecycle = read("src/app_impl/lifecycle_reset.rs");
     let close_start = lifecycle
@@ -83,5 +113,25 @@ fn lifecycle_resets_restore_full_main_window_mode_on_close_and_go_back() {
     assert!(
         go_back_body.contains("self.main_window_mode = MainWindowMode::Full;"),
         "go_back_or_close must restore MainWindowMode::Full when returning to ScriptList"
+    );
+}
+
+#[test]
+fn simulate_key_escape_delegates_to_go_back_when_opened_from_main_menu() {
+    // The SimulateKey escape handler in ScriptList must check opened_from_main_menu
+    // and delegate to go_back_or_close. Without this, ESC from mini main window
+    // via stdin protocol would hide the window instead of restoring full mode.
+    let source = read("src/main_entry/app_run_setup.rs");
+    let escape_start = source
+        .find("SimulateKey: Escape - clear filter, go back, or hide")
+        .expect("SimulateKey escape handler must exist in app_run_setup.rs");
+    let escape_body = &source[escape_start..source.len().min(escape_start + 800)];
+    assert!(
+        escape_body.contains("view.opened_from_main_menu"),
+        "SimulateKey escape must check opened_from_main_menu before hiding"
+    );
+    assert!(
+        escape_body.contains("view.go_back_or_close(window, ctx)"),
+        "SimulateKey escape must delegate to go_back_or_close when opened_from_main_menu"
     );
 }

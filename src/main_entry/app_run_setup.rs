@@ -1677,9 +1677,14 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                                     view.execute_selected(ctx);
                                                 }
                                                 "escape" => {
-                                                    logging::log("STDIN", "SimulateKey: Escape - clear filter or hide");
+                                                    logging::log("STDIN", "SimulateKey: Escape - clear filter, go back, or hide");
                                                     if !view.filter_text.is_empty() {
                                                         view.clear_filter(window, ctx);
+                                                    } else if view.opened_from_main_menu {
+                                                        // Mini main window or other opened-from-menu view:
+                                                        // delegate to go_back_or_close which restores Full
+                                                        // mode and resizes the window back to full width.
+                                                        view.go_back_or_close(window, ctx);
                                                     } else {
                                                         // Save window position for the current display BEFORE hiding
                                                         if let Some((x, y, width, height)) = platform::get_main_window_bounds() {
