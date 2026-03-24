@@ -163,16 +163,33 @@ impl AiApp {
             wb,
         );
         self.window_mode = new_mode;
+        super::types::AI_CURRENT_WINDOW_MODE
+            .store(new_mode.to_u8(), std::sync::atomic::Ordering::SeqCst);
         self.showing_mini_history_overlay = false;
         window.set_window_title(new_mode.title());
         // Restore saved bounds for target mode, falling back to defaults.
-        // NOTE: gpui::Window only exposes resize() — no set_position API.
-        // Position is restored on window creation; live mode switch restores size only.
         let target_role = super::window_api::window_role_for_mode(new_mode);
         let saved = crate::window_state::load_window_bounds(target_role);
+        let mut restored_position = false;
         if let Some(persisted) = saved {
-            let bounds = persisted.to_gpui().get_bounds();
-            window.resize(bounds.size);
+            // Try to restore full position+size via platform layer (setFrame:).
+            // Falls back to resize-only if the raw window handle is unavailable.
+            if let Ok(handle) = raw_window_handle::HasWindowHandle::window_handle(window) {
+                if let raw_window_handle::RawWindowHandle::AppKit(appkit) = handle.as_raw() {
+                    crate::platform::move_window_by_view(
+                        appkit.ns_view,
+                        persisted.x,
+                        persisted.y,
+                        persisted.width,
+                        persisted.height,
+                    );
+                    restored_position = true;
+                }
+            }
+            if !restored_position {
+                let bounds = persisted.to_gpui().get_bounds();
+                window.resize(bounds.size);
+            }
         } else {
             window.resize(gpui::size(
                 px(new_mode.default_width()),
@@ -185,6 +202,7 @@ impl AiApp {
             target: "ai",
             window_mode = ?new_mode,
             restored_saved_bounds = saved.is_some(),
+            restored_position,
             "AI window mode switched"
         );
         cx.notify();

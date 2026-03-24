@@ -115,6 +115,56 @@ pub fn move_first_window_to_bounds(bounds: &Bounds<Pixels>) {
 }
 
 // ============================================================================
+// Reposition Arbitrary Window by NSView
+// ============================================================================
+
+/// Move a window identified by its raw NSView pointer to the given bounds.
+///
+/// `x`, `y`, `width`, `height` use top-left origin coordinates (y-down), matching
+/// `PersistedWindowBounds`. Coordinate flip to macOS bottom-left origin is applied
+/// internally.
+///
+/// This is used by the AI window mode toggle to restore full position+size when
+/// GPUI's `Window::resize()` only supports size changes.
+#[cfg(target_os = "macos")]
+pub fn move_window_by_view(ns_view: std::ptr::NonNull<std::ffi::c_void>, x: f64, y: f64, width: f64, height: f64) {
+    if require_main_thread("move_window_by_view") {
+        return;
+    }
+
+    let primary_screen_height = match primary_screen_height() {
+        Some(h) => h,
+        None => {
+            tracing::warn!(target: "platform", "Cannot determine primary screen height for move_window_by_view");
+            return;
+        }
+    };
+
+    // SAFETY: Main thread verified. The NSView pointer comes from raw_window_handle
+    // which guarantees it is valid for the lifetime of the window. We obtain the
+    // parent NSWindow via the standard -[NSView window] message, nil-check it, and
+    // then call setFrame:display:animate: which is a standard NSWindow method.
+    unsafe {
+        let view = ns_view.as_ptr() as *mut objc::runtime::Object;
+        let ns_window: *mut objc::runtime::Object = msg_send![view, window];
+        if ns_window.is_null() {
+            tracing::warn!(target: "platform", "NSView has no parent NSWindow in move_window_by_view");
+            return;
+        }
+
+        // Convert from top-left origin (y down) to bottom-left origin (y up)
+        let flipped_y = primary_screen_height - y - height;
+        let new_frame = NSRect::new(NSPoint::new(x, flipped_y), NSSize::new(width, height));
+        let _: () = msg_send![ns_window, setFrame:new_frame display:true animate:false];
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn move_window_by_view(_ns_view: std::ptr::NonNull<std::ffi::c_void>, _x: f64, _y: f64, _width: f64, _height: f64) {
+    // No-op on non-macOS platforms
+}
+
+// ============================================================================
 // Window Positioning (Eye-line)
 // ============================================================================
 

@@ -388,6 +388,8 @@ impl AiApp {
                         super::window_api::window_role_for_mode(self.window_mode),
                         wb,
                     );
+                    // Clear global handle + state so reopen works correctly
+                    super::window_api::cleanup_ai_window_globals();
                     window.remove_window();
                 }
                 _ => {}
@@ -497,6 +499,8 @@ impl AiApp {
                 window_mode = ?self.window_mode,
                 "Mini window closed via Escape"
             );
+            // Clear global handle + state so reopen works correctly
+            super::window_api::cleanup_ai_window_globals();
             window.remove_window();
             cx.stop_propagation();
         }

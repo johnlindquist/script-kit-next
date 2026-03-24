@@ -191,6 +191,11 @@ impl AiApp {
         let initial_msg_count = current_messages.len();
         let initial_sidebar_item_count = build_sidebar_rows_for_chats(&chats).len();
 
+        // Mirror the window mode in the global atomic so close_ai_window() can
+        // determine the correct WindowRole without accessing the entity.
+        super::types::AI_CURRENT_WINDOW_MODE
+            .store(window_mode.to_u8(), std::sync::atomic::Ordering::SeqCst);
+
         Self {
             window_mode,
             chats,

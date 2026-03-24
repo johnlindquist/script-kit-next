@@ -624,6 +624,28 @@ pub(super) static AI_WINDOW: std::sync::OnceLock<
 pub(super) static AI_FOCUS_REQUESTED: std::sync::atomic::AtomicBool =
     std::sync::atomic::AtomicBool::new(false);
 
+/// Global mirror of the current AiWindowMode, updated by set_window_mode()
+/// and read by close_ai_window() to determine the correct WindowRole for
+/// bounds persistence. This avoids relying on window title string comparison.
+/// 0 = Full, 1 = Mini.
+pub(super) static AI_CURRENT_WINDOW_MODE: std::sync::atomic::AtomicU8 =
+    std::sync::atomic::AtomicU8::new(0);
+
+impl AiWindowMode {
+    pub(super) fn to_u8(self) -> u8 {
+        match self {
+            Self::Full => 0,
+            Self::Mini => 1,
+        }
+    }
+    pub(super) fn from_u8(v: u8) -> Self {
+        match v {
+            1 => Self::Mini,
+            _ => Self::Full,
+        }
+    }
+}
+
 /// Pending commands for the AI window (for testing via stdin).
 /// These are processed in AiApp::render() to avoid needing a global entity reference.
 pub(super) static AI_PENDING_COMMANDS: std::sync::OnceLock<std::sync::Mutex<Vec<AiCommand>>> =
