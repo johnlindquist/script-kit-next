@@ -148,6 +148,8 @@ impl AiApp {
                         .mx_auto()
                         .w_full()
                         .h_full()
+                        .flex()
+                        .flex_col()
                         .child(if has_messages {
                             self.render_messages(cx).into_any_element()
                         } else {
@@ -167,8 +169,9 @@ impl AiApp {
                     .border_t_1()
                     .border_color(cx.theme().border.opacity(OPACITY_DISABLED))
                     .px(MSG_PX)
-                    .py(S2)
-                    .gap(S2)
+                    .pt(S1)
+                    .pb(S2)
+                    .gap(S1)
                     .on_drop(cx.listener(|this, paths: &ExternalPaths, _window, cx| {
                         this.handle_file_drop(paths, cx);
                     }))

@@ -210,7 +210,7 @@ mod ai_window_mode_tests {
     #[test]
     fn mini_layout_contract_uses_expected_dimensions() {
         assert_eq!(MINI_WINDOW_DEFAULT_W, 720.0);
-        assert_eq!(MINI_WINDOW_DEFAULT_H, 560.0);
+        assert_eq!(MINI_WINDOW_DEFAULT_H, 440.0);
         assert_eq!(MINI_TITLEBAR_H, px(44.));
         assert_eq!(MINI_CONTENT_MAX_W, px(760.));
         assert_eq!(MINI_HISTORY_OVERLAY_W, px(320.));
@@ -243,7 +243,7 @@ pub(super) const TITLEBAR_LEFT_PADDING: Pixels = px(64.);
 
 // -- Mini window layout --
 pub(super) const MINI_WINDOW_DEFAULT_W: f32 = 720.0;
-pub(super) const MINI_WINDOW_DEFAULT_H: f32 = 560.0;
+pub(super) const MINI_WINDOW_DEFAULT_H: f32 = 440.0;
 pub(super) const MINI_TITLEBAR_H: Pixels = px(44.);
 pub(super) const MINI_CONTENT_MAX_W: Pixels = px(760.);
 pub(super) const MINI_HISTORY_OVERLAY_TOP: Pixels = px(48.);

@@ -48,47 +48,59 @@ impl AiApp {
         let suggestion_bg = cx.theme().muted.opacity(OPACITY_CARD_BG);
         let suggestion_hover_bg = cx.theme().muted.opacity(OPACITY_SUGGESTION_HOVER);
 
-        let suggestions = script_kit_welcome_suggestions();
+        let all_suggestions = script_kit_welcome_suggestions();
+        let is_mini = self.window_mode.is_mini();
+        // Mini mode: show only first 2 suggestions to keep the compact feel
+        let suggestion_count = if is_mini { 2 } else { 4 };
 
         div()
             .flex()
             .flex_col()
             .items_center()
-            .justify_center()
+            // Mini: push content toward composer; Full: center in panel
+            .when(is_mini, |el| el.justify_end().pb(S7))
+            .when(!is_mini, |el| el.justify_center())
             .flex_1()
-            .gap(S7)
-            .px(S6)
+            .gap(if is_mini { S5 } else { S7 })
+            .px(if is_mini { S4 } else { S6 })
             .child(
                 div()
                     .flex()
                     .flex_col()
                     .items_center()
-                    .gap(S2)
+                    .gap(if is_mini { S1 } else { S2 })
                     .child(
                         div()
-                            .text_xl()
+                            .when(is_mini, |el| el.text_base())
+                            .when(!is_mini, |el| el.text_xl())
                             .font_weight(gpui::FontWeight::BOLD)
                             .text_color(cx.theme().foreground)
-                            .child("Ask Anything"),
+                            .child(if is_mini {
+                                "What can I help with?"
+                            } else {
+                                "Ask Anything"
+                            }),
                     )
-                    .child({
-                        let subtitle: SharedString = self
-                            .selected_model
-                            .as_ref()
-                            .map(|m| {
-                                format!(
-                                    "Start a conversation with {} or try a suggestion below",
-                                    m.display_name
-                                )
-                            })
-                            .unwrap_or_else(|| {
-                                "Start a conversation or try a suggestion below".to_string()
-                            })
-                            .into();
-                        div()
-                            .text_sm()
-                            .text_color(cx.theme().muted_foreground.opacity(OPACITY_STRONG))
-                            .child(subtitle)
+                    .when(!is_mini, |el| {
+                        el.child({
+                            let subtitle: SharedString = self
+                                .selected_model
+                                .as_ref()
+                                .map(|m| {
+                                    format!(
+                                        "Start a conversation with {} or try a suggestion below",
+                                        m.display_name
+                                    )
+                                })
+                                .unwrap_or_else(|| {
+                                    "Start a conversation or try a suggestion below".to_string()
+                                })
+                                .into();
+                            div()
+                                .text_sm()
+                                .text_color(cx.theme().muted_foreground.opacity(OPACITY_STRONG))
+                                .child(subtitle)
+                        })
                     }),
             )
             // Suggestion cards
@@ -99,7 +111,7 @@ impl AiApp {
                     .gap(S1)
                     .w_full()
                     .max_w(SUGGESTION_MAX_W)
-                    .children(suggestions.into_iter().enumerate().map(
+                    .children(all_suggestions.into_iter().take(suggestion_count).enumerate().map(
                         |(i, (title, desc, icon))| {
                             let prompt_text = SharedString::from(format!("{} {}", title, desc));
                             let title_s: SharedString = title.into();

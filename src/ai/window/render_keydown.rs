@@ -229,6 +229,7 @@ impl AiApp {
             && !self.is_streaming
             && !self.available_models.is_empty()
         {
+            let max_visible_suggestions = if self.window_mode.is_mini() { 2 } else { 4 };
             let idx = match key {
                 "1" => Some(0),
                 "2" => Some(1),
@@ -236,7 +237,7 @@ impl AiApp {
                 "4" => Some(3),
                 _ => None,
             };
-            if let Some(i) = idx {
+            if let Some(i) = idx.filter(|i| *i < max_visible_suggestions) {
                 let (title, desc) = WELCOME_SUGGESTIONS[i];
                 let prompt = format!("{} {}", title, desc);
                 info!(

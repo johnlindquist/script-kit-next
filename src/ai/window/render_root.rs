@@ -84,7 +84,7 @@ impl AiApp {
                     .id("ai-mini-history-overlay")
                     .absolute()
                     .top(MINI_HISTORY_OVERLAY_TOP)
-                    .left(S3)
+                    .right(S3)
                     .w(MINI_HISTORY_OVERLAY_W)
                     .max_h(MINI_HISTORY_OVERLAY_MAX_H)
                     .bg(cx.theme().background)
@@ -336,6 +336,7 @@ impl Render for AiApp {
                 let muted_fg = cx.theme().muted_foreground;
                 let label_color = muted_fg.opacity(OPACITY_SELECTED);
                 let has_messages = !self.current_messages.is_empty() || self.is_streaming;
+                let is_streaming = self.is_streaming;
                 div()
                     .id("ai-titlebar-mini")
                     .w_full()
@@ -348,7 +349,7 @@ impl Render for AiApp {
                     .justify_between()
                     .border_b_1()
                     .border_color(cx.theme().border)
-                    // Left: title + clickable model name
+                    // Left: title + streaming dot + clickable model name
                     .child(
                         div()
                             .flex()
@@ -370,6 +371,17 @@ impl Render for AiApp {
                                         "AI".to_string()
                                     }),
                             )
+                            // Streaming indicator dot
+                            .when(is_streaming, |el| {
+                                el.child(
+                                    div()
+                                        .id("ai-mini-streaming-dot")
+                                        .size(px(6.))
+                                        .rounded_full()
+                                        .bg(cx.theme().accent)
+                                        .flex_shrink_0(),
+                                )
+                            })
                             .child(
                                 div()
                                     .id("ai-mini-model-name")
@@ -391,12 +403,50 @@ impl Render for AiApp {
                                     .child(mini_model_display_name),
                             ),
                     )
-                    // Right: Recent (⌘J), New (⌘N), Actions (⌘K)
+                    // Right: Expand (⌘⇧M), Recent (⌘J), New (⌘N), Actions (⌘K)
                     .child(
                         div()
                             .flex()
                             .items_center()
                             .gap(S1)
+                            // Expand to full mode button
+                            .child(
+                                div()
+                                    .id("ai-mini-expand")
+                                    .px(S2)
+                                    .py(S1)
+                                    .rounded(R_SM)
+                                    .cursor_pointer()
+                                    .flex()
+                                    .items_center()
+                                    .gap(SP_2)
+                                    .text_xs()
+                                    .text_color(label_color)
+                                    .hover(|el| {
+                                        el.bg(cx.theme().muted.opacity(OPACITY_HOVER))
+                                            .text_color(cx.theme().foreground)
+                                    })
+                                    .tooltip(|window, cx| {
+                                        Tooltip::new("Expand to full window")
+                                            .key_binding(
+                                                gpui::Keystroke::parse("cmd-shift-m")
+                                                    .ok()
+                                                    .map(Kbd::new),
+                                            )
+                                            .build(window, cx)
+                                    })
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        this.toggle_window_mode(window, cx);
+                                    }))
+                                    .child("Expand"),
+                            )
+                            // Separator
+                            .child(
+                                div()
+                                    .w(px(1.))
+                                    .h(px(14.))
+                                    .bg(cx.theme().border),
+                            )
                             // Recent button
                             .child(
                                 div()
