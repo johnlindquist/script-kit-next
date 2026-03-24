@@ -34,7 +34,7 @@ impl Render for NotesApp {
         let show_actions =
             self.show_actions_panel && self.actions_panel.is_some() && !self.command_bar.is_open();
 
-        let vibrancy_bg = crate::ui_foundation::get_window_vibrancy_background();
+        let vibrancy_bg = crate::ui_foundation::get_vibrancy_background(&crate::theme::get_cached_theme());
 
         div()
             .id("notes-window-root")
@@ -42,18 +42,20 @@ impl Render for NotesApp {
             .flex_col()
             .size_full()
             .relative()
-            .bg(vibrancy_bg)
+            .when_some(vibrancy_bg, |d, bg| d.bg(bg))
             .text_color(cx.theme().foreground)
             .track_focus(&self.focus_handle)
             .when(mouse_cursor_hidden, |d| d.cursor(CursorStyle::None))
-            .on_mouse_down(
-                gpui::MouseButton::Left,
+            .on_any_mouse_down(
                 cx.listener(|this, _, window, cx| {
                     if this.command_bar.is_open() {
                         this.close_actions_panel(window, cx);
                     }
                     if this.note_switcher.is_open() {
                         this.close_browse_panel(window, cx);
+                    }
+                    if confirm::is_confirm_window_open() {
+                        confirm::route_key_to_confirm_popup("escape", cx);
                     }
                 }),
             )

@@ -213,8 +213,8 @@ impl Render for AiApp {
         // NOTE: Shadow disabled for vibrancy - shadows on transparent elements cause gray fill.
         // The vibrancy effect requires no shadow on transparent elements.
 
-        // Get vibrancy background - tints the blur effect with theme color.
-        let vibrancy_bg = crate::ui_foundation::get_window_vibrancy_background();
+        // Get vibrancy background - None when vibrancy enabled (let native blur show through).
+        let vibrancy_bg = crate::ui_foundation::get_vibrancy_background(&crate::theme::get_cached_theme());
 
         // Capture mouse_cursor_hidden for use in div builder.
         let mouse_cursor_hidden = self.mouse_cursor_hidden;
@@ -233,8 +233,8 @@ impl Render for AiApp {
             .flex()
             .flex_col()
             .size_full()
-            // Apply vibrancy background like POC does - Root no longer provides this
-            .bg(vibrancy_bg)
+            // Apply background only when vibrancy is disabled (same as main window)
+            .when_some(vibrancy_bg, |d, bg| d.bg(bg))
             // NOTE: No shadow - shadows on transparent elements cause gray fill with vibrancy
             .text_color(cx.theme().foreground)
             .track_focus(&self.focus_handle)
@@ -243,6 +243,15 @@ impl Render for AiApp {
             // Show cursor when mouse moves
             .on_mouse_move(cx.listener(|this, _: &MouseMoveEvent, _window, cx| {
                 this.show_mouse_cursor(cx);
+            }))
+            // Close popups when clicking on the AI window surface
+            .on_any_mouse_down(cx.listener(|this, _, _window, cx| {
+                if this.command_bar.is_open() {
+                    this.hide_command_bar(cx);
+                }
+                if crate::confirm::is_confirm_window_open() {
+                    crate::confirm::route_key_to_confirm_popup("escape", cx);
+                }
             }))
             // CRITICAL: Use capture_key_down to intercept keys BEFORE Input component handles them.
             .capture_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {

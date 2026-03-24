@@ -35,6 +35,7 @@ use crate::actions::{
     get_note_switcher_actions, get_notes_command_bar_actions, CommandBar, CommandBarConfig,
     NoteSwitcherNoteInfo, NotesInfo,
 };
+use crate::confirm;
 use crate::theme;
 
 // Keep legacy types for backwards compatibility during transition

@@ -449,9 +449,8 @@ impl Render for ScriptListApp {
                 }
             }))
             // Close popups when the user clicks anywhere on the main window.
-            // This handles the case where the user clicks the main window input
-            // or list while a confirm/actions popup is open.
-            .on_mouse_down(gpui::MouseButton::Left, cx.listener(|this, _, _window, cx| {
+            // Uses on_any_mouse_down to handle left, right, and middle clicks.
+            .on_any_mouse_down(cx.listener(|this, _, _window, cx| {
                 if confirm::is_confirm_window_open() {
                     logging::log("FOCUS", "Main window clicked - closing confirm popup");
                     confirm::route_key_to_confirm_popup("escape", cx);
