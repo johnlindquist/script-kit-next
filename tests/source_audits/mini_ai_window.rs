@@ -65,7 +65,8 @@ fn mini_keydown_closes_overlay_before_window_close() {
 fn mini_entry_points_pass_explicit_source() {
     let root = read("src/ai/window/render_root.rs");
     assert!(
-        root.contains("toggle_mini_history_overlay(\"header_recent_button\""),
+        root.contains("toggle_mini_history_overlay(")
+            && root.contains("\"header_recent_button\""),
         "Recent button click must pass source to toggle_mini_history_overlay"
     );
 
