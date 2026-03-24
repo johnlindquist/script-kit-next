@@ -454,6 +454,8 @@ impl AiApp {
     pub(super) fn hide_all_dropdowns(&mut self, cx: &mut Context<Self>) {
         // Close command bar vibrancy window if open
         self.command_bar.close_app(cx);
+        // Close new-chat command bar (Raycast-style Cmd+N dropdown)
+        self.new_chat_command_bar.close(cx);
         self.showing_presets_dropdown = false;
         self.showing_new_chat_dropdown = false;
         self.new_chat_dropdown_filter.clear();
