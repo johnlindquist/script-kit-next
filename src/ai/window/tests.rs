@@ -2577,15 +2577,16 @@ fn test_mini_history_overlay_focuses_search_on_open() {
     );
 }
 
-/// Mode toggle (via command bar) must save current bounds before switching,
+/// Mode toggle must save current bounds before switching,
 /// ensuring the user's custom window size is preserved per mode.
+/// The canonical implementation lives in toggle_window_mode (interactions.rs).
 #[test]
 fn test_mode_toggle_saves_bounds_before_switch() {
-    let source = include_str!("command_bar.rs");
-    let toggle_section = source
-        .find("\"toggle_window_mode\"")
-        .expect("toggle_window_mode action must exist in command_bar.rs");
-    let after = &source[toggle_section..];
+    let source = include_str!("interactions.rs");
+    let toggle_fn = source
+        .find("fn toggle_window_mode")
+        .expect("toggle_window_mode must exist in interactions.rs");
+    let after = &source[toggle_fn..];
     let save_pos = after
         .find("save_window_from_gpui")
         .expect("Must save bounds before mode switch");
@@ -2595,6 +2596,17 @@ fn test_mode_toggle_saves_bounds_before_switch() {
     assert!(
         save_pos < mode_assign,
         "Bounds must be saved (byte +{save_pos}) before mode assignment (byte +{mode_assign})"
+    );
+
+    // Command bar must delegate to toggle_window_mode
+    let cmd_source = include_str!("command_bar.rs");
+    let cmd_section = cmd_source
+        .find("\"toggle_window_mode\"")
+        .expect("toggle_window_mode action must exist in command_bar.rs");
+    let after_cmd = &cmd_source[cmd_section..];
+    assert!(
+        after_cmd.contains("toggle_window_mode(window, cx)"),
+        "Command bar must delegate to toggle_window_mode method"
     );
 }
 
@@ -2615,5 +2627,24 @@ fn test_set_window_mode_command_saves_bounds() {
     assert!(
         save_pos < mode_assign,
         "Bounds must be saved before mode assignment in SetWindowMode handler"
+    );
+}
+
+/// Simulated key input must support Cmd+Shift+M so stdin automation and tests
+/// can trigger the same mode toggle path as real keyboard events.
+#[test]
+fn test_simulated_key_supports_mode_toggle_shortcut() {
+    let source = include_str!("command_bar.rs");
+    let handler_section = source
+        .find("fn handle_simulated_key")
+        .expect("handle_simulated_key must exist in command_bar.rs");
+    let after = &source[handler_section..];
+    assert!(
+        after.contains("modifiers.contains(&KeyModifier::Shift) && key_lower == \"m\""),
+        "Simulated key handler must recognize Cmd+Shift+M"
+    );
+    assert!(
+        after.contains("self.toggle_window_mode(window, cx);"),
+        "Simulated key handler must delegate Cmd+Shift+M to toggle_window_mode"
     );
 }

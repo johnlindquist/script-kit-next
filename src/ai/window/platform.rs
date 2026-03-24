@@ -1,5 +1,11 @@
 use super::*;
 
+/// Returns true if the given window title belongs to any AI window variant.
+#[cfg(target_os = "macos")]
+fn is_ai_window_title(title: &str) -> bool {
+    title == AiWindowMode::Full.title() || title == AiWindowMode::Mini.title()
+}
+
 #[cfg(target_os = "macos")]
 pub(super) fn configure_ai_window_vibrancy() {
     use crate::logging;
@@ -19,7 +25,7 @@ pub(super) fn configure_ai_window_vibrancy() {
                 if !title_cstr.is_null() {
                     let title_str = CStr::from_ptr(title_cstr).to_string_lossy();
 
-                    if title_str == "Script Kit AI" {
+                    if is_ai_window_title(&title_str) {
                         // Found the AI window - configure vibrancy
                         // Disable dragging by window background to prevent titlebar interference
                         // with mouse clicks on content (e.g., setup card buttons)
@@ -97,7 +103,7 @@ fn configure_ai_as_floating_panel() {
                 if !title_cstr.is_null() {
                     let title_str = CStr::from_ptr(title_cstr).to_string_lossy();
 
-                    if title_str == "Script Kit AI" {
+                    if is_ai_window_title(&title_str) {
                         // Found the AI window - configure it
 
                         // NSFloatingWindowLevel = 3
