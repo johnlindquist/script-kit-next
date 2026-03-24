@@ -308,6 +308,10 @@ pub(crate) struct AiMiniDebugSnapshot {
     pub sidebar_collapsed: bool,
     pub show_context_inspector: bool,
     pub show_context_drawer: bool,
+    pub search_query: String,
+    pub shortcuts_overlay_visible: bool,
+    pub editing_message_present: bool,
+    pub renaming_chat_present: bool,
 }
 
 impl AiApp {
@@ -334,6 +338,10 @@ impl AiApp {
             sidebar_collapsed: self.sidebar_collapsed,
             show_context_inspector: self.show_context_inspector,
             show_context_drawer: self.show_context_drawer,
+            search_query: self.search_query.clone(),
+            shortcuts_overlay_visible: self.showing_shortcuts_overlay,
+            editing_message_present: self.editing_message_id.is_some(),
+            renaming_chat_present: self.renaming_chat_id.is_some(),
         }
     }
 }

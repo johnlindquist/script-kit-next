@@ -65,8 +65,7 @@ fn mini_keydown_closes_overlay_before_window_close() {
 fn mini_entry_points_pass_explicit_source() {
     let root = read("src/ai/window/render_root.rs");
     assert!(
-        root.contains("toggle_mini_history_overlay(")
-            && root.contains("\"header_recent_button\""),
+        root.contains("toggle_mini_history_overlay(") && root.contains("\"header_recent_button\""),
         "Recent button click must pass source to toggle_mini_history_overlay"
     );
 
@@ -363,7 +362,7 @@ fn close_paths_clear_global_handle() {
     let cmd_w_start = keydown
         .find("// Cmd+W closes the AI window")
         .expect("Cmd+W close comment must exist");
-    let cmd_w_section = &keydown[cmd_w_start..(cmd_w_start + 600).min(keydown.len())];
+    let cmd_w_section = &keydown[cmd_w_start..(cmd_w_start + 800).min(keydown.len())];
     assert!(
         cmd_w_section.contains("cleanup_ai_window_globals()"),
         "Cmd+W handler must call cleanup_ai_window_globals before remove_window"
@@ -392,6 +391,49 @@ fn close_paths_clear_global_handle() {
     assert!(
         close_fn_section.contains("cleanup_ai_window_globals()"),
         "close_ai_window must delegate to cleanup_ai_window_globals"
+    );
+}
+
+#[test]
+fn both_close_paths_log_lifecycle_telemetry() {
+    // Both Cmd+W and Esc-mini close paths must log ai_window_close via
+    // telemetry::log_ai_lifecycle so that close events are always observable.
+    let keydown = read("src/ai/window/render_keydown.rs");
+
+    // Cmd+W handler must log lifecycle
+    let cmd_w_start = keydown
+        .find("// Cmd+W closes the AI window")
+        .expect("Cmd+W close comment must exist");
+    let cmd_w_section = &keydown[cmd_w_start..(cmd_w_start + 600).min(keydown.len())];
+    assert!(
+        cmd_w_section.contains("log_ai_lifecycle("),
+        "Cmd+W handler must call log_ai_lifecycle before closing"
+    );
+    assert!(
+        cmd_w_section.contains("\"ai_window_close\""),
+        "Cmd+W handler must log the ai_window_close event"
+    );
+    assert!(
+        cmd_w_section.contains("\"cmd_w\""),
+        "Cmd+W handler must tag source as cmd_w"
+    );
+
+    // Esc-mini handler must log lifecycle
+    let esc_close_start = keydown
+        .find("// Mini mode: final Esc closes the window")
+        .expect("final mini Esc close comment must exist");
+    let esc_section = &keydown[esc_close_start..(esc_close_start + 600).min(keydown.len())];
+    assert!(
+        esc_section.contains("log_ai_lifecycle("),
+        "Esc-mini handler must call log_ai_lifecycle before closing"
+    );
+    assert!(
+        esc_section.contains("\"ai_window_close\""),
+        "Esc-mini handler must log the ai_window_close event"
+    );
+    assert!(
+        esc_section.contains("\"escape_key\""),
+        "Esc-mini handler must tag source as escape_key"
     );
 }
 
@@ -537,6 +579,10 @@ fn debug_snapshot_is_serializable_and_complete() {
         "current_message_count",
         "show_context_inspector",
         "show_context_drawer",
+        "search_query",
+        "shortcuts_overlay_visible",
+        "editing_message_present",
+        "renaming_chat_present",
     ] {
         assert!(
             state.contains(&format!("{field}:")),
@@ -605,4 +651,74 @@ fn new_conversation_clears_mini_overlay() {
         select_chat_body.contains("showing_mini_history_overlay = false"),
         "select_chat must clear mini history overlay"
     );
+}
+
+#[test]
+fn escape_chain_guards_every_intermediate_state_before_final_close() {
+    // The Escape key handler must dismiss intermediate states in priority order
+    // before reaching the final mini-close. Each guard must appear earlier in
+    // the source than the final close to prevent skipping states.
+    let keydown = read("src/ai/window/render_keydown.rs");
+    let final_close = keydown
+        .find("// Mini mode: final Esc closes the window")
+        .expect("final mini Esc close must exist");
+
+    let guards = [
+        ("showing_mini_history_overlay", "mini history overlay"),
+        ("showing_shortcuts_overlay", "shortcuts overlay"),
+        ("search_query.is_empty()", "search query clear"),
+        ("editing_message_id.is_some()", "edit cancel"),
+        ("renaming_chat_id.is_some()", "rename cancel"),
+        ("self.is_streaming", "stop streaming"),
+        ("showing_api_key_input", "api key input"),
+        ("command_bar.is_open()", "dropdown close"),
+    ];
+
+    for (pattern, label) in guards {
+        let guard_pos = keydown
+            .find(pattern)
+            .unwrap_or_else(|| panic!("Escape guard for {label} must exist"));
+        assert!(
+            guard_pos < final_close,
+            "Escape guard for {label} must come BEFORE final mini close"
+        );
+    }
+}
+
+#[test]
+fn snapshot_exposes_interaction_state_fields() {
+    // The debug snapshot must include fields that allow agentic tests to
+    // verify interaction state without reaching into AiApp internals.
+    let state = read("src/ai/window/state.rs");
+    let snapshot_start = state
+        .find("pub(crate) struct AiMiniDebugSnapshot")
+        .expect("AiMiniDebugSnapshot must exist");
+    let builder_start = state
+        .find("fn debug_snapshot(&self)")
+        .expect("debug_snapshot builder must exist");
+    let snapshot_def = &state[snapshot_start..builder_start];
+    let builder_body = &state[builder_start..(builder_start + 1500).min(state.len())];
+
+    // Each interaction field must appear in both the struct and the builder
+    for (field, source_expr) in [
+        ("search_query", "self.search_query.clone()"),
+        (
+            "shortcuts_overlay_visible",
+            "self.showing_shortcuts_overlay",
+        ),
+        (
+            "editing_message_present",
+            "self.editing_message_id.is_some()",
+        ),
+        ("renaming_chat_present", "self.renaming_chat_id.is_some()"),
+    ] {
+        assert!(
+            snapshot_def.contains(field),
+            "AiMiniDebugSnapshot must declare {field}"
+        );
+        assert!(
+            builder_body.contains(source_expr),
+            "debug_snapshot() must populate {field} from {source_expr}"
+        );
+    }
 }

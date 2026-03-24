@@ -386,11 +386,18 @@ impl AiApp {
                 }
                 // Cmd+W closes the AI window (standard macOS pattern)
                 "w" => {
+                    cx.stop_propagation();
                     // Save bounds before closing
                     let wb = window.window_bounds();
                     crate::window_state::save_window_from_gpui(
                         super::window_api::window_role_for_mode(self.window_mode),
                         wb,
+                    );
+                    super::telemetry::log_ai_lifecycle(
+                        "ai_window_close",
+                        self.window_mode,
+                        "cmd_w",
+                        "closing",
                     );
                     // Clear global handle + state so reopen works correctly
                     super::window_api::cleanup_ai_window_globals();
