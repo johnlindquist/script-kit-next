@@ -48,6 +48,10 @@ impl AiApp {
             self.focus_search(window, cx);
             "mini_history_overlay_toggled"
         } else {
+            // Clear stale search so next open starts fresh (Raycast pattern)
+            self.clear_search_state(window, cx);
+            // Return focus to the composer input after dismissing the overlay
+            self.focus_input(window, cx);
             "mini_history_overlay_dismissed"
         };
         tracing::info!(
@@ -72,8 +76,10 @@ impl AiApp {
             .size_full()
             .on_mouse_down(
                 gpui::MouseButton::Left,
-                cx.listener(|this, _, _window, cx| {
+                cx.listener(|this, _, window, cx| {
                     this.showing_mini_history_overlay = false;
+                    this.clear_search_state(window, cx);
+                    this.focus_input(window, cx);
                     tracing::info!(
                         target: "ai",
                         category = "AI_UI",
@@ -155,34 +161,7 @@ impl AiApp {
 
             match cmd {
                 AiCommand::SetWindowMode(window_mode) => {
-                    // Save current bounds under the old role before switching
-                    let wb = window.window_bounds();
-                    crate::window_state::save_window_from_gpui(
-                        super::window_api::window_role_for_mode(self.window_mode),
-                        wb,
-                    );
-                    self.window_mode = window_mode;
-                    self.showing_mini_history_overlay = false;
-                    window.set_window_title(window_mode.title());
-                    // Restore saved bounds for target mode, falling back to defaults
-                    let target_role = super::window_api::window_role_for_mode(window_mode);
-                    let saved = crate::window_state::load_window_bounds(target_role);
-                    if let Some(persisted) = saved {
-                        let bounds = persisted.to_gpui().get_bounds();
-                        window.resize(bounds.size);
-                    } else {
-                        window.resize(size(
-                            px(window_mode.default_width()),
-                            px(window_mode.default_height()),
-                        ));
-                    }
-                    cx.notify();
-                    tracing::info!(
-                        target: "ai",
-                        window_mode = ?window_mode,
-                        restored_saved_bounds = saved.is_some(),
-                        "AI window mode set"
-                    );
+                    self.set_window_mode(window_mode, window, cx);
                 }
                 AiCommand::SetSearch(query) => {
                     self.search_state.update(cx, |state, cx| {
@@ -367,6 +346,7 @@ impl Render for AiApp {
             .child(if self.window_mode.is_mini() {
                 let muted_fg = cx.theme().muted_foreground;
                 let label_color = muted_fg.opacity(OPACITY_SELECTED);
+                let has_messages = !self.current_messages.is_empty() || self.is_streaming;
                 div()
                     .id("ai-titlebar-mini")
                     .w_full()
@@ -379,18 +359,27 @@ impl Render for AiApp {
                     .justify_between()
                     .border_b_1()
                     .border_color(cx.theme().border)
-                    // Left: "AI" title + clickable model name
+                    // Left: title + clickable model name
                     .child(
                         div()
                             .flex()
                             .items_center()
                             .gap(S2)
                             .min_w_0()
+                            .overflow_hidden()
                             .child(
                                 div()
+                                    .id("ai-mini-title-label")
                                     .text_sm()
                                     .font_weight(gpui::FontWeight::SEMIBOLD)
-                                    .child("AI"),
+                                    .overflow_hidden()
+                                    .text_ellipsis()
+                                    .flex_shrink_0()
+                                    .child(if has_messages {
+                                        title_text.clone()
+                                    } else {
+                                        "AI".to_string()
+                                    }),
                             )
                             .child(
                                 div()

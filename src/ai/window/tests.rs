@@ -2577,16 +2577,16 @@ fn test_mini_history_overlay_focuses_search_on_open() {
     );
 }
 
-/// Mode toggle must save current bounds before switching,
+/// The canonical set_window_mode helper must save bounds before switching,
 /// ensuring the user's custom window size is preserved per mode.
-/// The canonical implementation lives in toggle_window_mode (interactions.rs).
+/// toggle_window_mode and SetWindowMode both delegate to it.
 #[test]
-fn test_mode_toggle_saves_bounds_before_switch() {
+fn test_set_window_mode_saves_bounds_before_switch() {
     let source = include_str!("interactions.rs");
-    let toggle_fn = source
-        .find("fn toggle_window_mode")
-        .expect("toggle_window_mode must exist in interactions.rs");
-    let after = &source[toggle_fn..];
+    let set_fn = source
+        .find("fn set_window_mode")
+        .expect("set_window_mode must exist in interactions.rs");
+    let after = &source[set_fn..];
     let save_pos = after
         .find("save_window_from_gpui")
         .expect("Must save bounds before mode switch");
@@ -2596,6 +2596,17 @@ fn test_mode_toggle_saves_bounds_before_switch() {
     assert!(
         save_pos < mode_assign,
         "Bounds must be saved (byte +{save_pos}) before mode assignment (byte +{mode_assign})"
+    );
+
+    // toggle_window_mode must delegate to set_window_mode
+    let toggle_fn = source
+        .find("fn toggle_window_mode")
+        .expect("toggle_window_mode must exist");
+    let toggle_end = (toggle_fn + 500).min(source.len());
+    let toggle_body = &source[toggle_fn..toggle_end];
+    assert!(
+        toggle_body.contains("self.set_window_mode("),
+        "toggle_window_mode must delegate to set_window_mode"
     );
 
     // Command bar must delegate to toggle_window_mode
@@ -2610,23 +2621,18 @@ fn test_mode_toggle_saves_bounds_before_switch() {
     );
 }
 
-/// SetWindowMode command (via stdin) must also save bounds before switching.
+/// SetWindowMode command (via stdin) must delegate to set_window_mode helper.
 #[test]
-fn test_set_window_mode_command_saves_bounds() {
+fn test_set_window_mode_command_delegates() {
     let source = include_str!("render_root.rs");
     let cmd_section = source
         .find("AiCommand::SetWindowMode")
         .expect("SetWindowMode command handler must exist in render_root.rs");
-    let after = &source[cmd_section..];
-    let save_pos = after
-        .find("save_window_from_gpui")
-        .expect("Must save bounds in SetWindowMode handler");
-    let mode_assign = after
-        .find("self.window_mode = window_mode")
-        .expect("Must assign window_mode");
+    let handler_end = (cmd_section + 200).min(source.len());
+    let handler_body = &source[cmd_section..handler_end];
     assert!(
-        save_pos < mode_assign,
-        "Bounds must be saved before mode assignment in SetWindowMode handler"
+        handler_body.contains("self.set_window_mode("),
+        "SetWindowMode command handler must delegate to set_window_mode"
     );
 }
 

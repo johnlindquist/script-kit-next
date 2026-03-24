@@ -192,3 +192,152 @@ fn builtin_execution_routes_mini_ai_to_deferred_handoff() {
         "builtin_execution.rs must call open_mini_ai_window"
     );
 }
+
+#[test]
+fn mini_overlay_dismiss_restores_focus_and_clears_search() {
+    // All three dismiss paths must call focus_input AND clear_search_state:
+    // 1. Toggle dismiss (toggle_mini_history_overlay when closing)
+    let root = read("src/ai/window/render_root.rs");
+    let dismiss_marker = "\"mini_history_overlay_dismissed\"";
+    let toggle_fn_start = root
+        .find("fn toggle_mini_history_overlay")
+        .expect("toggle_mini_history_overlay must exist");
+    let toggle_section = &root[toggle_fn_start..toggle_fn_start + 800];
+    assert!(
+        toggle_section.contains("focus_input(window, cx)"),
+        "toggle_mini_history_overlay dismiss path must call focus_input"
+    );
+    assert!(
+        toggle_section.contains("clear_search_state(window, cx)"),
+        "toggle_mini_history_overlay dismiss path must clear search"
+    );
+
+    // 2. Backdrop click dismiss
+    let backdrop_start = root
+        .find("ai-mini-history-backdrop")
+        .expect("backdrop element must exist");
+    let backdrop_section = &root[backdrop_start..backdrop_start + 600];
+    assert!(
+        backdrop_section.contains("focus_input(window, cx)"),
+        "Backdrop click dismiss must call focus_input"
+    );
+    assert!(
+        backdrop_section.contains("clear_search_state(window, cx)"),
+        "Backdrop click dismiss must clear search"
+    );
+
+    // 3. Escape key dismiss
+    let keydown = read("src/ai/window/render_keydown.rs");
+    let escape_overlay = keydown
+        .find(dismiss_marker)
+        .expect("Escape overlay dismiss must log the dismiss event");
+    let escape_start = escape_overlay.saturating_sub(200);
+    let escape_section = &keydown[escape_start..escape_overlay + 100];
+    assert!(
+        escape_section.contains("focus_input(window, cx)"),
+        "Escape overlay dismiss must call focus_input"
+    );
+    assert!(
+        escape_section.contains("clear_search_state(window, cx)"),
+        "Escape overlay dismiss must clear search"
+    );
+}
+
+#[test]
+fn mode_switch_focuses_input_after_switch() {
+    // The canonical set_window_mode helper must focus input
+    let interactions = read("src/ai/window/interactions.rs");
+    let set_fn = interactions
+        .find("fn set_window_mode")
+        .expect("set_window_mode must exist");
+    let fn_end = (set_fn + 2000).min(interactions.len());
+    let fn_body = &interactions[set_fn..fn_end];
+    assert!(
+        fn_body.contains("focus_input(window, cx)"),
+        "set_window_mode must focus input after switching modes"
+    );
+
+    // toggle_window_mode must delegate to set_window_mode (not duplicate logic)
+    let toggle_fn = interactions
+        .find("fn toggle_window_mode")
+        .expect("toggle_window_mode must exist");
+    let toggle_end = (toggle_fn + 500).min(interactions.len());
+    let toggle_body = &interactions[toggle_fn..toggle_end];
+    assert!(
+        toggle_body.contains("self.set_window_mode("),
+        "toggle_window_mode must delegate to set_window_mode"
+    );
+
+    // SetWindowMode command handler must delegate to set_window_mode (not duplicate logic)
+    let root = read("src/ai/window/render_root.rs");
+    let set_mode = root
+        .find("AiCommand::SetWindowMode(window_mode)")
+        .expect("SetWindowMode command handler must exist");
+    let handler_end = (set_mode + 200).min(root.len());
+    let handler_body = &root[set_mode..handler_end];
+    assert!(
+        handler_body.contains("self.set_window_mode("),
+        "SetWindowMode command handler must delegate to set_window_mode"
+    );
+}
+
+#[test]
+fn mini_cmd_shift_f_opens_history_overlay() {
+    let keydown = read("src/ai/window/render_keydown.rs");
+    let f_section_start = keydown
+        .find("\"f\" => {")
+        .expect("Cmd+F handler must exist in render_keydown.rs");
+    let f_section = &keydown[f_section_start..(f_section_start + 600).min(keydown.len())];
+    assert!(
+        f_section.contains("self.window_mode.is_mini()"),
+        "Cmd+Shift+F handler must check for mini mode"
+    );
+    assert!(
+        f_section.contains("toggle_mini_history_overlay"),
+        "Cmd+Shift+F in mini mode must open the history overlay"
+    );
+}
+
+#[test]
+fn mini_sidebar_shortcuts_are_guarded() {
+    let keydown = read("src/ai/window/render_keydown.rs");
+    // Cmd+\ and Cmd+B should check for mini mode before toggling sidebar
+    let backslash_start = keydown
+        .find("\"\\\\\" | \"backslash\"")
+        .expect("Cmd+\\ handler must exist");
+    let backslash_section =
+        &keydown[backslash_start..(backslash_start + 200).min(keydown.len())];
+    assert!(
+        backslash_section.contains("!self.window_mode.is_mini()"),
+        "Cmd+\\ must guard against mini mode before toggling sidebar"
+    );
+
+    let b_start = keydown
+        .find("// Cmd+B also toggles sidebar")
+        .expect("Cmd+B comment must exist");
+    let b_section = &keydown[b_start..(b_start + 200).min(keydown.len())];
+    assert!(
+        b_section.contains("!self.window_mode.is_mini()"),
+        "Cmd+B must guard against mini mode before toggling sidebar"
+    );
+}
+
+#[test]
+fn mini_header_shows_chat_title() {
+    let root = read("src/ai/window/render_root.rs");
+    // Mini titlebar should show chat title when there are messages
+    assert!(
+        root.contains("ai-mini-title-label"),
+        "render_root.rs must have a mini title label element"
+    );
+    // Should conditionally show title_text vs "AI"
+    let mini_titlebar_start = root
+        .find("ai-titlebar-mini")
+        .expect("mini titlebar must exist");
+    let titlebar_section =
+        &root[mini_titlebar_start..(mini_titlebar_start + 2000).min(root.len())];
+    assert!(
+        titlebar_section.contains("title_text"),
+        "Mini titlebar should display chat title when messages exist"
+    );
+}

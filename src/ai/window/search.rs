@@ -93,6 +93,23 @@ impl AiApp {
     /// Delays the DB query so rapid keystrokes don't fire a query per character.
     pub(crate) const SEARCH_DEBOUNCE_MS: u64 = 150;
 
+    /// Reset search state and input so the next overlay open starts fresh.
+    pub(super) fn clear_search_state(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.search_query.is_empty() {
+            return;
+        }
+        self.search_query.clear();
+        self.search_generation += 1;
+        self.search_debounce_task = None;
+        self.search_snippets.clear();
+        self.search_matched_title.clear();
+        self.chats = crate::ai::storage::get_all_chats().unwrap_or_default();
+        self.search_state.update(cx, |state, cx| {
+            state.set_value("", window, cx);
+        });
+        cx.notify();
+    }
+
     /// Handle search query changes - filters chats asynchronously as user types.
     ///
     /// Uses a 150ms debounce: each keystroke cancels the previous timer and starts
