@@ -344,6 +344,7 @@ pub fn get_ai_command_bar_actions() -> Vec<Action> {
             Some("Switches between compact and full AI window".to_string()),
             ActionCategory::ScriptContext,
         )
+        .with_shortcut("\u{21e7}\u{2318}M")
         .with_icon(IconName::Settings)
         .with_section("Settings"),
     ]);

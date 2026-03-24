@@ -12070,8 +12070,8 @@ mod from_dialog_builtin_action_validation_tests_17 {
         fn cat05_actions_with_shortcuts_count() {
             let actions = get_ai_command_bar_actions();
             let with_shortcuts = actions.iter().filter(|a| a.shortcut.is_some()).count();
-            // branch_from_last and change_model lack shortcuts => 13 - 2 = 11
-            assert_eq!(with_shortcuts, 11);
+            // branch_from_last and change_model lack shortcuts => 14 - 2 = 12
+            assert_eq!(with_shortcuts, 12);
         }
     
         // ================================================================

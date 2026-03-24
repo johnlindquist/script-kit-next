@@ -792,6 +792,10 @@ pub(super) struct AiShortcutSection {
 
 pub(super) const AI_SHORTCUTS_NAVIGATION: &[AiShortcutItem] = &[
     AiShortcutItem {
+        keys: "\u{2318}J",
+        description: "Recent chats (mini)",
+    },
+    AiShortcutItem {
         keys: "\u{2318}B",
         description: "Toggle sidebar",
     },
@@ -851,6 +855,10 @@ pub(super) const AI_SHORTCUTS_ACTIONS: &[AiShortcutItem] = &[
     AiShortcutItem {
         keys: "\u{2318}K",
         description: "Open actions",
+    },
+    AiShortcutItem {
+        keys: "\u{21e7}\u{2318}M",
+        description: "Toggle mini / full mode",
     },
     AiShortcutItem {
         keys: "\u{2318}\u{21e7}C",

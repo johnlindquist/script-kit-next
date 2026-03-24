@@ -282,39 +282,7 @@ impl AiApp {
                 self.export_chat_to_clipboard(cx);
             }
             "toggle_window_mode" => {
-                let new_mode = if self.window_mode.is_mini() {
-                    super::types::AiWindowMode::Full
-                } else {
-                    super::types::AiWindowMode::Mini
-                };
-                // Save current bounds under the old role before switching
-                let wb = window.window_bounds();
-                crate::window_state::save_window_from_gpui(
-                    super::window_api::window_role_for_mode(self.window_mode),
-                    wb,
-                );
-                self.window_mode = new_mode;
-                self.showing_mini_history_overlay = false;
-                window.set_window_title(new_mode.title());
-                // Restore saved bounds for target mode, falling back to defaults
-                let target_role = super::window_api::window_role_for_mode(new_mode);
-                let saved = crate::window_state::load_window_bounds(target_role);
-                if let Some(persisted) = saved {
-                    let bounds = persisted.to_gpui().get_bounds();
-                    window.resize(bounds.size);
-                } else {
-                    window.resize(gpui::size(
-                        px(new_mode.default_width()),
-                        px(new_mode.default_height()),
-                    ));
-                }
-                tracing::info!(
-                    target: "ai",
-                    window_mode = ?new_mode,
-                    restored_saved_bounds = saved.is_some(),
-                    "AI window mode toggled via command bar"
-                );
-                cx.notify();
+                self.toggle_window_mode(window, cx);
             }
             _ => {
                 tracing::warn!(action = action_id, "Unknown action");
@@ -351,6 +319,13 @@ impl AiApp {
         if has_cmd && key_lower == "j" && self.window_mode.is_mini() {
             tracing::debug!(target: "ai", "SimulateKey: Cmd+J - toggling mini history overlay");
             self.toggle_mini_history_overlay(window, cx);
+            return;
+        }
+
+        // Handle Cmd+Shift+M to toggle between mini and full window modes
+        if has_cmd && modifiers.contains(&KeyModifier::Shift) && key_lower == "m" {
+            tracing::debug!(target: "ai", "SimulateKey: Cmd+Shift+M - toggling window mode");
+            self.toggle_window_mode(window, cx);
             return;
         }
 

@@ -308,6 +308,11 @@ impl AiApp {
                     }
                 }
                 k if is_key_enter(k) => self.submit_message(window, cx),
+                // Cmd+Shift+M toggles between Mini and Full mode
+                "m" if modifiers.shift => {
+                    self.toggle_window_mode(window, cx);
+                    cx.stop_propagation();
+                }
                 // Cmd+\ to toggle sidebar (like Raycast)
                 "\\" | "backslash" => self.toggle_sidebar(cx),
                 // Cmd+B also toggles sidebar (common convention)

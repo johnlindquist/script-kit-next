@@ -129,6 +129,47 @@ impl AiApp {
         cx.notify();
     }
 
+    /// Toggle between Mini and Full AI window modes (Cmd+Shift+M).
+    pub(super) fn toggle_window_mode(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let new_mode = if self.window_mode.is_mini() {
+            super::types::AiWindowMode::Full
+        } else {
+            super::types::AiWindowMode::Mini
+        };
+        // Save current bounds under the old role before switching
+        let wb = window.window_bounds();
+        crate::window_state::save_window_from_gpui(
+            super::window_api::window_role_for_mode(self.window_mode),
+            wb,
+        );
+        self.window_mode = new_mode;
+        self.showing_mini_history_overlay = false;
+        window.set_window_title(new_mode.title());
+        // Restore saved bounds for target mode, falling back to defaults
+        let target_role = super::window_api::window_role_for_mode(new_mode);
+        let saved = crate::window_state::load_window_bounds(target_role);
+        if let Some(persisted) = saved {
+            let bounds = persisted.to_gpui().get_bounds();
+            window.resize(bounds.size);
+        } else {
+            window.resize(gpui::size(
+                px(new_mode.default_width()),
+                px(new_mode.default_height()),
+            ));
+        }
+        tracing::info!(
+            target: "ai",
+            window_mode = ?new_mode,
+            restored_saved_bounds = saved.is_some(),
+            "AI window mode toggled"
+        );
+        cx.notify();
+    }
+
     /// Export the current chat as markdown to the clipboard (Cmd+Shift+E).
     pub(super) fn export_chat_to_clipboard(&mut self, cx: &mut Context<Self>) {
         let chat = match self.get_selected_chat() {
