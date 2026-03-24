@@ -1247,17 +1247,46 @@ impl Window {
         platform_window.on_resize(Box::new({
             let mut cx = cx.to_async();
             move |_, _| {
-                handle
+                // Try to update immediately. If the AppCell is already borrowed
+                // (e.g., we're inside a deferred effect or event handler that
+                // triggered a programmatic NSWindow resize), schedule the
+                // bounds_changed call for the next event-loop tick via the
+                // foreground executor so it runs once the borrow is released.
+                if handle
                     .update(&mut cx, |_, window, cx| window.bounds_changed(cx))
-                    .log_err();
+                    .is_err()
+                {
+                    let mut retry_cx = cx.clone();
+                    cx.foreground_executor()
+                        .spawn(async move {
+                            handle
+                                .update(&mut retry_cx, |_, window, cx| {
+                                    window.bounds_changed(cx)
+                                })
+                                .log_err();
+                        })
+                        .detach();
+                }
             }
         }));
         platform_window.on_moved(Box::new({
             let mut cx = cx.to_async();
             move || {
-                handle
+                if handle
                     .update(&mut cx, |_, window, cx| window.bounds_changed(cx))
-                    .log_err();
+                    .is_err()
+                {
+                    let mut retry_cx = cx.clone();
+                    cx.foreground_executor()
+                        .spawn(async move {
+                            handle
+                                .update(&mut retry_cx, |_, window, cx| {
+                                    window.bounds_changed(cx)
+                                })
+                                .log_err();
+                        })
+                        .detach();
+                }
             }
         }));
         platform_window.on_appearance_changed(Box::new({
@@ -1886,7 +1915,13 @@ impl Window {
         })
     }
 
-    fn bounds_changed(&mut self, cx: &mut App) {
+    /// Notify the window that its bounds have changed externally.
+    ///
+    /// Re-reads content size and scale factor from the platform window,
+    /// marks the window dirty, and notifies bounds observers. Call this
+    /// after programmatically resizing the native window outside of GPUI's
+    /// own `resize()` API (e.g., via direct `setFrame:display:animate:`).
+    pub fn bounds_changed(&mut self, cx: &mut App) {
         self.scale_factor = self.platform_window.scale_factor();
         self.viewport_size = self.platform_window.content_size();
         self.display_id = self.platform_window.display().map(|display| display.id());

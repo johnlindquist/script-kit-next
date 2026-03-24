@@ -194,8 +194,16 @@ fn schedule_flush(window: &mut Window, cx: &mut gpui::App) {
     if !FLUSH_SCHEDULED.swap(true, Ordering::SeqCst) {
         logging::log("WINDOW_OPS", "Scheduling flush via Window::defer");
 
-        window.defer(cx, |_window, _cx| {
+        window.defer(cx, |window, cx| {
             flush_pending_ops();
+            // Sync GPUI's internal viewport_size with the actual native window
+            // content size. The direct NSWindow setFrame:display:animate: call
+            // in flush_pending_ops triggers setFrameSize: on the NSView, which
+            // fires the resize_callback — but that callback uses try_borrow_mut()
+            // on the AppCell, which fails here because Window::defer already holds
+            // the borrow. Calling bounds_changed() directly ensures GPUI picks up
+            // the new size and re-layouts correctly.
+            window.bounds_changed(cx);
         });
     }
 }
