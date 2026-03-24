@@ -13,6 +13,10 @@ pub(super) fn is_context_palette_shortcut(key: &str, modifiers: &gpui::Modifiers
     modifiers.platform && modifiers.shift && !modifiers.alt && !modifiers.control && key == "a"
 }
 
+pub(super) fn is_mini_history_shortcut(key: &str, modifiers: &gpui::Modifiers) -> bool {
+    modifiers.platform && !modifiers.shift && !modifiers.alt && !modifiers.control && key == "j"
+}
+
 impl AiApp {
     pub(super) fn handle_root_key_down(
         &mut self,
@@ -247,6 +251,11 @@ impl AiApp {
         // platform modifier = Cmd on macOS, Ctrl on Windows/Linux
         if modifiers.platform {
             match key {
+                k if self.window_mode.is_mini() && is_mini_history_shortcut(k, modifiers) => {
+                    self.toggle_mini_history_overlay(cx);
+                    cx.stop_propagation();
+                    return;
+                }
                 k if is_context_inspector_shortcut(k, modifiers) => {
                     self.toggle_context_inspector(cx);
                     cx.stop_propagation();
@@ -359,6 +368,13 @@ impl AiApp {
             }
         }
 
+        if is_key_escape(key) && self.window_mode.is_mini() && self.showing_mini_history_overlay {
+            self.showing_mini_history_overlay = false;
+            cx.notify();
+            cx.stop_propagation();
+            return;
+        }
+
         // Escape closes shortcuts overlay
         if is_key_escape(key) && self.showing_shortcuts_overlay {
             self.showing_shortcuts_overlay = false;
@@ -429,5 +445,44 @@ impl AiApp {
         if is_key_escape(key) && (self.command_bar.is_open() || self.showing_presets_dropdown) {
             self.hide_all_dropdowns(cx);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_mini_history_shortcut;
+
+    #[test]
+    fn test_mini_history_shortcut_requires_cmd_j_only() {
+        let enabled = is_mini_history_shortcut(
+            "j",
+            &gpui::Modifiers {
+                platform: true,
+                ..Default::default()
+            },
+        );
+        assert!(enabled, "Cmd+J should toggle mini history");
+
+        let wrong_key = is_mini_history_shortcut(
+            "k",
+            &gpui::Modifiers {
+                platform: true,
+                ..Default::default()
+            },
+        );
+        assert!(!wrong_key, "Cmd+K must not match the mini history shortcut");
+
+        let extra_shift = is_mini_history_shortcut(
+            "j",
+            &gpui::Modifiers {
+                platform: true,
+                shift: true,
+                ..Default::default()
+            },
+        );
+        assert!(
+            !extra_shift,
+            "Cmd+Shift+J must not match the dedicated mini history shortcut"
+        );
     }
 }

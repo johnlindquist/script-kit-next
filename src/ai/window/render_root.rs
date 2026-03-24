@@ -1,5 +1,6 @@
 use super::*;
-use crate::theme::opacity::OPACITY_SELECTED;
+use crate::theme::opacity::{OPACITY_DANGER_BG, OPACITY_HOVER, OPACITY_SELECTED};
+use gpui::AnyElement;
 
 impl AiApp {
     /// Add a file attachment by enqueuing a `FilePath` context part with dedup.
@@ -34,6 +35,162 @@ impl AiApp {
 
         self.pending_context_parts.push(part);
         self.notify_context_parts_changed(cx);
+    }
+
+    pub(super) fn toggle_mini_history_overlay(&mut self, cx: &mut Context<Self>) {
+        self.showing_mini_history_overlay = !self.showing_mini_history_overlay;
+        cx.notify();
+    }
+
+    fn render_mini_history_list(&mut self, cx: &mut Context<Self>) -> AnyElement {
+        let selected_id = self.selected_chat_id;
+        let sidebar_rows = build_sidebar_rows_for_chats(&self.chats);
+        self.sync_sidebar_list_item_count(sidebar_rows.len());
+        let sidebar_entity = cx.entity();
+        let sidebar_list = list(self.sidebar_list_state.clone(), move |ix, _window, cx| {
+            let row = sidebar_rows.get(ix).copied();
+            sidebar_entity.update(cx, |this, cx| match row {
+                Some(SidebarRow::Header { group, is_first }) => this
+                    .render_sidebar_group_header(group, is_first, cx)
+                    .into_any_element(),
+                Some(SidebarRow::Chat { chat_id }) => this
+                    .chats
+                    .iter()
+                    .find(|chat| chat.id == chat_id)
+                    .map(|chat| {
+                        this.render_chat_item(chat, selected_id, cx)
+                            .into_any_element()
+                    })
+                    .unwrap_or_else(|| div().into_any_element()),
+                None => div().into_any_element(),
+            })
+        })
+        .with_sizing_behavior(ListSizingBehavior::Infer)
+        .size_full()
+        .px(SIDEBAR_INSET_X)
+        .pb(S2);
+
+        if self.chats.is_empty() && !self.search_query.is_empty() {
+            div()
+                .flex()
+                .flex_col()
+                .items_center()
+                .justify_center()
+                .size_full()
+                .py_8()
+                .gap(S2)
+                .child(
+                    svg()
+                        .external_path(LocalIconName::MagnifyingGlass.external_path())
+                        .size(px(24.))
+                        .text_color(cx.theme().muted_foreground.opacity(OPACITY_HOVER)),
+                )
+                .child(
+                    div()
+                        .text_sm()
+                        .text_color(cx.theme().muted_foreground.opacity(OPACITY_SELECTED))
+                        .child("No chats found"),
+                )
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(cx.theme().muted_foreground.opacity(OPACITY_HOVER))
+                        .child(format!("No results for \"{}\"", self.search_query)),
+                )
+                .child(
+                    div()
+                        .mt(S2)
+                        .text_xs()
+                        .text_color(cx.theme().muted_foreground.opacity(OPACITY_HOVER))
+                        .child("Press Esc to clear search"),
+                )
+                .into_any_element()
+        } else if self.chats.is_empty() && self.search_query.is_empty() {
+            div()
+                .flex()
+                .flex_col()
+                .items_center()
+                .justify_center()
+                .size_full()
+                .py_8()
+                .gap_3()
+                .child(
+                    svg()
+                        .external_path(LocalIconName::MessageCircle.external_path())
+                        .size(px(28.))
+                        .text_color(cx.theme().muted_foreground.opacity(OPACITY_DANGER_BG)),
+                )
+                .child(
+                    div()
+                        .text_sm()
+                        .text_color(cx.theme().muted_foreground.opacity(OPACITY_SELECTED))
+                        .child("No conversations yet"),
+                )
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(S1)
+                        .child(
+                            div()
+                                .px(S2)
+                                .py(S1)
+                                .rounded(R_SM)
+                                .bg(cx.theme().muted.opacity(OPACITY_HOVER))
+                                .text_xs()
+                                .text_color(cx.theme().muted_foreground.opacity(OPACITY_SELECTED))
+                                .child("\u{2318}N"),
+                        )
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(cx.theme().muted_foreground.opacity(OPACITY_HOVER))
+                                .child("to start a new chat"),
+                        ),
+                )
+                .into_any_element()
+        } else {
+            div()
+                .relative()
+                .size_full()
+                .child(sidebar_list)
+                .vertical_scrollbar(&self.sidebar_list_state)
+                .into_any_element()
+        }
+    }
+
+    fn render_mini_history_overlay(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+        div()
+            .id("ai-mini-history-overlay")
+            .absolute()
+            .top(px(48.))
+            .left(S3)
+            .w(px(320.))
+            .max_h(px(420.))
+            .bg(cx.theme().background)
+            .border_1()
+            .border_color(cx.theme().border)
+            .rounded(R_LG)
+            .overflow_hidden()
+            .flex()
+            .flex_col()
+            .child(
+                div()
+                    .px(S3)
+                    .py(S2)
+                    .border_b_1()
+                    .border_color(cx.theme().border)
+                    .text_xs()
+                    .font_weight(gpui::FontWeight::MEDIUM)
+                    .text_color(cx.theme().muted_foreground.opacity(OPACITY_SELECTED))
+                    .child("Recent Chats"),
+            )
+            .child(
+                div()
+                    .flex_1()
+                    .min_h_0()
+                    .child(self.render_mini_history_list(cx)),
+            )
     }
 
     pub(super) fn process_render_focus_requests(
@@ -243,6 +400,11 @@ impl Render for AiApp {
         } else {
             "AI Chat".to_string()
         };
+        let mini_model_display_name = self
+            .selected_model
+            .as_ref()
+            .map(|model| model.display_name.clone())
+            .unwrap_or_else(|| "Select Model".to_string());
 
         div()
             .relative() // Keep relative positioning for overlay dropdowns
@@ -273,7 +435,115 @@ impl Render for AiApp {
             .capture_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
                 this.handle_root_key_down(event, window, cx);
             }))
-            .child(
+            .child(if self.window_mode.is_mini() {
+                div()
+                    .id("ai-titlebar-mini")
+                    .w_full()
+                    .h(px(44.))
+                    .pl(TITLEBAR_LEFT_PADDING)
+                    .pr(S3)
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .justify_between()
+                    .border_b_1()
+                    .border_color(cx.theme().border)
+                    .child(
+                        div()
+                            .flex()
+                            .items_baseline()
+                            .gap(S2)
+                            .min_w_0()
+                            .child(
+                                div()
+                                    .text_sm()
+                                    .font_weight(gpui::FontWeight::SEMIBOLD)
+                                    .child("AI"),
+                            )
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(
+                                        cx.theme().muted_foreground.opacity(OPACITY_SELECTED),
+                                    )
+                                    .overflow_hidden()
+                                    .text_ellipsis()
+                                    .child(mini_model_display_name),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap(S1)
+                            .child(
+                                div()
+                                    .id("ai-mini-recent")
+                                    .px(S2)
+                                    .py(S1)
+                                    .rounded(R_SM)
+                                    .cursor_pointer()
+                                    .text_xs()
+                                    .text_color(if self.showing_mini_history_overlay {
+                                        cx.theme().foreground
+                                    } else {
+                                        cx.theme().muted_foreground.opacity(OPACITY_SELECTED)
+                                    })
+                                    .when(self.showing_mini_history_overlay, |el| {
+                                        el.bg(cx.theme().muted.opacity(OPACITY_HOVER))
+                                    })
+                                    .hover(|el| {
+                                        el.bg(cx.theme().muted.opacity(OPACITY_HOVER))
+                                            .text_color(cx.theme().foreground)
+                                    })
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        this.toggle_mini_history_overlay(cx);
+                                    }))
+                                    .child("Recent"),
+                            )
+                            .child(
+                                div()
+                                    .id("ai-mini-new")
+                                    .px(S2)
+                                    .py(S1)
+                                    .rounded(R_SM)
+                                    .cursor_pointer()
+                                    .text_xs()
+                                    .text_color(
+                                        cx.theme().muted_foreground.opacity(OPACITY_SELECTED),
+                                    )
+                                    .hover(|el| {
+                                        el.bg(cx.theme().muted.opacity(OPACITY_HOVER))
+                                            .text_color(cx.theme().foreground)
+                                    })
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        this.show_new_chat_command_bar(window, cx);
+                                    }))
+                                    .child("New"),
+                            )
+                            .child(
+                                div()
+                                    .id("ai-mini-actions")
+                                    .px(S2)
+                                    .py(S1)
+                                    .rounded(R_SM)
+                                    .cursor_pointer()
+                                    .text_xs()
+                                    .text_color(
+                                        cx.theme().muted_foreground.opacity(OPACITY_SELECTED),
+                                    )
+                                    .hover(|el| {
+                                        el.bg(cx.theme().muted.opacity(OPACITY_HOVER))
+                                            .text_color(cx.theme().foreground)
+                                    })
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        this.show_command_bar(window, cx);
+                                    }))
+                                    .child("Actions"),
+                            ),
+                    )
+                    .into_any_element()
+            } else {
                 div()
                     .id("ai-titlebar")
                     .w_full()
@@ -311,9 +581,20 @@ impl Render for AiApp {
                                     .child(title_text),
                             ),
                     )
-                    .child(div().w(TITLEBAR_TRAFFIC_LIGHT_ZONE_W)),
-            )
-            .child(
+                    .child(div().w(TITLEBAR_TRAFFIC_LIGHT_ZONE_W))
+                    .into_any_element()
+            })
+            .child(if self.window_mode.is_mini() {
+                div()
+                    .w_full()
+                    .flex_1()
+                    .min_h_0()
+                    .flex()
+                    .flex_row()
+                    .overflow_hidden()
+                    .child(self.render_main_panel(cx))
+                    .into_any_element()
+            } else {
                 div()
                     .w_full()
                     .flex_1()
@@ -322,7 +603,12 @@ impl Render for AiApp {
                     .flex_row()
                     .overflow_hidden()
                     .child(self.render_sidebar(cx))
-                    .child(self.render_main_panel(cx)),
+                    .child(self.render_main_panel(cx))
+                    .into_any_element()
+            })
+            .when(
+                self.window_mode.is_mini() && self.showing_mini_history_overlay,
+                |el| el.child(self.render_mini_history_overlay(cx)),
             )
             // Overlay dropdowns (only one at a time)
             .when(self.showing_presets_dropdown, |el| {
