@@ -2494,3 +2494,126 @@ fn test_window_role_for_mode_maps_correctly() {
     assert_eq!(full_role, WindowRole::Ai);
     assert_eq!(mini_role, WindowRole::AiMini);
 }
+
+// ---------------------------------------------------------------------------
+// Mini AI Window — Source-audit regression tests
+// These verify the mini interaction contract at the source level so refactors
+// don't silently break the Esc chain, Cmd+N routing, or overlay focus.
+// ---------------------------------------------------------------------------
+
+/// The Esc chain in render_keydown must close the mini history overlay
+/// BEFORE the final mini-close handler. If the overlay handler appears after
+/// the close handler, pressing Esc with the overlay open would close the
+/// entire window instead of just dismissing the overlay.
+#[test]
+fn test_mini_esc_overlay_precedes_close_in_source() {
+    let source = include_str!("render_keydown.rs");
+    let overlay_pos = source
+        .find("showing_mini_history_overlay")
+        .expect("mini history overlay Esc handler must exist in render_keydown.rs");
+    let close_pos = source
+        .find("mini_esc_close_window")
+        .expect("mini Esc close handler must exist in render_keydown.rs");
+    assert!(
+        overlay_pos < close_pos,
+        "Mini history overlay Esc handler (byte {overlay_pos}) must appear \
+         before the mini close handler (byte {close_pos}) in render_keydown.rs"
+    );
+}
+
+/// Cmd+N in mini mode must route to `show_new_chat_command_bar` (model/preset
+/// picker) rather than `new_conversation` (blank chat). This source audit
+/// ensures the mini branch exists in the "n" match arm.
+#[test]
+fn test_mini_cmd_n_routes_to_new_chat_command_bar() {
+    let source = include_str!("render_keydown.rs");
+    let n_arm = source
+        .find("\"n\" => {")
+        .expect("Cmd+N handler must exist in render_keydown.rs");
+    let after_n = &source[n_arm..];
+    let mini_branch = after_n
+        .find("window_mode.is_mini()")
+        .expect("Mini mode branch must exist in Cmd+N handler");
+    let new_chat_bar = after_n
+        .find("show_new_chat_command_bar")
+        .expect("show_new_chat_command_bar must be called in Cmd+N handler");
+    assert!(
+        mini_branch < new_chat_bar,
+        "Mini mode check must precede show_new_chat_command_bar call"
+    );
+}
+
+/// The mini header's "New" button must call `show_new_chat_command_bar`
+/// (not `new_conversation`) for consistency with Cmd+N.
+#[test]
+fn test_mini_header_new_button_uses_command_bar() {
+    let source = include_str!("render_root.rs");
+    let mini_new = source
+        .find("ai-mini-new")
+        .expect("Mini header New button must have id 'ai-mini-new'");
+    // Scope to the New button region — bounded by the next button element
+    let after = &source[mini_new..];
+    let region_end = after.find("ai-mini-actions").unwrap_or(after.len());
+    let new_button_region = &after[..region_end];
+    assert!(
+        new_button_region.contains("show_new_chat_command_bar"),
+        "Mini New button must call show_new_chat_command_bar, not new_conversation"
+    );
+}
+
+/// The mini history overlay toggle must call `focus_search` when opening,
+/// so typing immediately filters chats without an extra click.
+#[test]
+fn test_mini_history_overlay_focuses_search_on_open() {
+    let source = include_str!("render_root.rs");
+    let toggle_fn = source
+        .find("fn toggle_mini_history_overlay")
+        .expect("toggle_mini_history_overlay must exist in render_root.rs");
+    // Search from the function definition to the next function boundary
+    let after = &source[toggle_fn..];
+    assert!(
+        after.contains("focus_search"),
+        "toggle_mini_history_overlay must call focus_search when opening"
+    );
+}
+
+/// Mode toggle (via command bar) must save current bounds before switching,
+/// ensuring the user's custom window size is preserved per mode.
+#[test]
+fn test_mode_toggle_saves_bounds_before_switch() {
+    let source = include_str!("command_bar.rs");
+    let toggle_section = source
+        .find("\"toggle_window_mode\"")
+        .expect("toggle_window_mode action must exist in command_bar.rs");
+    let after = &source[toggle_section..];
+    let save_pos = after
+        .find("save_window_from_gpui")
+        .expect("Must save bounds before mode switch");
+    let mode_assign = after
+        .find("self.window_mode = new_mode")
+        .expect("Must assign new mode");
+    assert!(
+        save_pos < mode_assign,
+        "Bounds must be saved (byte +{save_pos}) before mode assignment (byte +{mode_assign})"
+    );
+}
+
+/// SetWindowMode command (via stdin) must also save bounds before switching.
+#[test]
+fn test_set_window_mode_command_saves_bounds() {
+    let source = include_str!("render_root.rs");
+    let cmd_section = source
+        .find("AiCommand::SetWindowMode")
+        .expect("SetWindowMode command handler must exist in render_root.rs");
+    let after = &source[cmd_section..];
+    let save_pos = after
+        .find("save_window_from_gpui")
+        .expect("Must save bounds in SetWindowMode handler");
+    let mode_assign = after
+        .find("self.window_mode = window_mode")
+        .expect("Must assign window_mode");
+    assert!(
+        save_pos < mode_assign,
+        "Bounds must be saved before mode assignment in SetWindowMode handler"
+    );
+}

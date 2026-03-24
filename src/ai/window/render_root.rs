@@ -36,8 +36,16 @@ impl AiApp {
         self.notify_context_parts_changed(cx);
     }
 
-    pub(super) fn toggle_mini_history_overlay(&mut self, cx: &mut Context<Self>) {
+    pub(super) fn toggle_mini_history_overlay(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         self.showing_mini_history_overlay = !self.showing_mini_history_overlay;
+        if self.showing_mini_history_overlay {
+            // Focus the search input so typing immediately filters chats
+            self.focus_search(window, cx);
+        }
         cx.notify();
     }
 
@@ -127,17 +135,32 @@ impl AiApp {
 
             match cmd {
                 AiCommand::SetWindowMode(window_mode) => {
+                    // Save current bounds under the old role before switching
+                    let wb = window.window_bounds();
+                    crate::window_state::save_window_from_gpui(
+                        super::window_api::window_role_for_mode(self.window_mode),
+                        wb,
+                    );
                     self.window_mode = window_mode;
                     self.showing_mini_history_overlay = false;
                     window.set_window_title(window_mode.title());
-                    window.resize(size(
-                        px(window_mode.default_width()),
-                        px(window_mode.default_height()),
-                    ));
+                    // Restore saved bounds for target mode, falling back to defaults
+                    let target_role = super::window_api::window_role_for_mode(window_mode);
+                    let saved = crate::window_state::load_window_bounds(target_role);
+                    if let Some(persisted) = saved {
+                        let bounds = persisted.to_gpui().get_bounds();
+                        window.resize(bounds.size);
+                    } else {
+                        window.resize(size(
+                            px(window_mode.default_width()),
+                            px(window_mode.default_height()),
+                        ));
+                    }
                     cx.notify();
                     tracing::info!(
                         target: "ai",
                         window_mode = ?window_mode,
+                        restored_saved_bounds = saved.is_some(),
                         "AI window mode set"
                     );
                 }
@@ -358,9 +381,7 @@ impl Render for AiApp {
                                     .overflow_hidden()
                                     .text_ellipsis()
                                     .cursor_pointer()
-                                    .hover(|el| {
-                                        el.text_color(cx.theme().foreground)
-                                    })
+                                    .hover(|el| el.text_color(cx.theme().foreground))
                                     .tooltip(|window, cx| {
                                         Tooltip::new("Switch model").build(window, cx)
                                     })
@@ -410,8 +431,8 @@ impl Render for AiApp {
                                             )
                                             .build(window, cx)
                                     })
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        this.toggle_mini_history_overlay(cx);
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        this.toggle_mini_history_overlay(window, cx);
                                     }))
                                     .child("Recent"),
                             )
@@ -440,7 +461,7 @@ impl Render for AiApp {
                                             .build(window, cx)
                                     })
                                     .on_click(cx.listener(|this, _, window, cx| {
-                                        this.new_conversation(window, cx);
+                                        this.show_new_chat_command_bar(window, cx);
                                     }))
                                     .child("New"),
                             )

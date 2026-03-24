@@ -252,7 +252,7 @@ impl AiApp {
         if modifiers.platform {
             match key {
                 k if self.window_mode.is_mini() && is_mini_history_shortcut(k, modifiers) => {
-                    self.toggle_mini_history_overlay(cx);
+                    self.toggle_mini_history_overlay(window, cx);
                     cx.stop_propagation();
                     return;
                 }
@@ -287,6 +287,10 @@ impl AiApp {
                         // Cmd+Shift+N opens presets dropdown
                         self.hide_all_dropdowns(cx);
                         self.show_presets_dropdown(window, cx);
+                    } else if self.window_mode.is_mini() {
+                        // Mini mode: open the new-chat command bar for model/preset selection
+                        self.hide_all_dropdowns(cx);
+                        self.show_new_chat_command_bar(window, cx);
                     } else {
                         self.new_conversation(window, cx);
                     }
@@ -444,6 +448,20 @@ impl AiApp {
         // Escape closes any open dropdown
         if is_key_escape(key) && (self.command_bar.is_open() || self.showing_presets_dropdown) {
             self.hide_all_dropdowns(cx);
+            cx.stop_propagation();
+            return;
+        }
+
+        // Mini mode: final Esc closes the window (mirroring Cmd+W behavior)
+        if is_key_escape(key) && self.window_mode.is_mini() {
+            let wb = window.window_bounds();
+            crate::window_state::save_window_from_gpui(
+                super::window_api::window_role_for_mode(self.window_mode),
+                wb,
+            );
+            info!(window_mode = ?self.window_mode, "mini_esc_close_window");
+            window.remove_window();
+            cx.stop_propagation();
         }
     }
 }
