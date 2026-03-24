@@ -447,55 +447,6 @@ pub fn get_main_position_for_mouse_display(
     None
 }
 // ============================================================================
-// Per-Display Position Storage (AI Window)
-// ============================================================================
-
-/// Save AI window position for a specific display.
-pub fn save_ai_position_for_display(display: &DisplayBounds, bounds: PersistedWindowBounds) {
-    let key = display_key(display);
-    let mut state = load_state_file().unwrap_or_default();
-    state.version = 3;
-    state.ai_per_display.insert(key.clone(), bounds);
-    state.ai = Some(bounds);
-    save_state_file(&state);
-    logging::log(
-        "WINDOW_STATE",
-        &format!("Saved AI position for display {}", key),
-    );
-}
-/// Get the best AI window position for the mouse display.
-pub fn get_ai_position_for_mouse_display(
-    mouse_x: f64,
-    mouse_y: f64,
-    displays: &[DisplayBounds],
-) -> Option<(PersistedWindowBounds, DisplayBounds)> {
-    let display = find_display_containing_point(mouse_x, mouse_y, displays)?;
-    let key = display_key(display);
-    let state = load_state_file()?;
-
-    if let Some(saved) = state.ai_per_display.get(&key) {
-        logging::log(
-            "WINDOW_STATE",
-            &format!("Restoring AI per-display position for {}", key),
-        );
-        return Some((*saved, display.clone()));
-    }
-
-    if let Some(legacy) = state.ai {
-        if let Some(legacy_display) = find_best_display_for_bounds(&legacy, displays) {
-            if display_key(legacy_display) == key {
-                return Some((legacy, display.clone()));
-            }
-        }
-    }
-
-    logging::log(
-        "WINDOW_STATE",
-        &format!("No saved AI position for display {}", key),
-    );
-    None
-}
-
 // ============================================================================
 // Visibility Validation
 // ============================================================================

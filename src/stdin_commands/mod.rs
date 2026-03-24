@@ -458,6 +458,14 @@ pub enum ExternalCommand {
         #[serde(default, rename = "requestId")]
         request_id: Option<ExternalCommandRequestId>,
     },
+    /// Query the AI window state as a machine-readable JSON snapshot.
+    ///
+    /// Returns structural metadata (mode, overlay visibility, counts) via structured
+    /// tracing at info level. Never exposes conversation content or PII.
+    GetAiWindowState {
+        #[serde(default, rename = "requestId")]
+        request_id: Option<ExternalCommandRequestId>,
+    },
     /// Execute a fallback action (e.g., Search Google, Copy to Clipboard)
     /// This is triggered when a fallback item is selected from the UI
     ExecuteFallback {
@@ -483,6 +491,7 @@ impl ExternalCommand {
             | Self::CaptureWindow { request_id, .. }
             | Self::SetAiSearch { request_id, .. }
             | Self::SetAiInput { request_id, .. }
+            | Self::GetAiWindowState { request_id, .. }
             | Self::ShowGrid { request_id, .. }
             | Self::ShowShortcutRecorder { request_id, .. }
             | Self::ExecuteFallback { request_id, .. } => {
@@ -510,6 +519,7 @@ impl ExternalCommand {
             Self::CaptureWindow { .. } => "captureWindow",
             Self::SetAiSearch { .. } => "setAiSearch",
             Self::SetAiInput { .. } => "setAiInput",
+            Self::GetAiWindowState { .. } => "getAiWindowState",
             Self::ShowGrid { .. } => "showGrid",
             Self::HideGrid => "hideGrid",
             Self::ShowShortcutRecorder { .. } => "showShortcutRecorder",
@@ -942,6 +952,26 @@ mod tests {
         let json = r#"{"type": "openMiniAiWithMockData"}"#;
         let cmd: ExternalCommand = serde_json::from_str(json)?;
         assert!(matches!(cmd, ExternalCommand::OpenMiniAiWithMockData));
+        Ok(())
+    }
+
+    #[test]
+    fn test_external_command_get_ai_window_state_deserialization() -> anyhow::Result<()> {
+        let json = r#"{"type": "getAiWindowState"}"#;
+        let cmd: ExternalCommand = serde_json::from_str(json)?;
+        assert!(matches!(
+            cmd,
+            ExternalCommand::GetAiWindowState { request_id: None }
+        ));
+        assert_eq!(cmd.command_type(), "getAiWindowState");
+        Ok(())
+    }
+
+    #[test]
+    fn test_external_command_get_ai_window_state_with_request_id() -> anyhow::Result<()> {
+        let json = r#"{"type": "getAiWindowState", "requestId": "req-42"}"#;
+        let cmd: ExternalCommand = serde_json::from_str(json)?;
+        assert_eq!(cmd.request_id(), Some("req-42"));
         Ok(())
     }
 

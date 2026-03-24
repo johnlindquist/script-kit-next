@@ -23,22 +23,6 @@ fn centered_ai_window_bounds_on_cursor_display(mode: AiWindowMode) -> gpui::Boun
     ))
 }
 
-fn ai_window_reference_legacy_per_display_apis() {
-    // Transitional no-op references keep legacy AI per-display helpers linked
-    // until a dedicated cleanup removes them from window_state.
-    let _ = crate::window_state::save_ai_position_for_display
-        as fn(&crate::windows::DisplayBounds, crate::window_state::PersistedWindowBounds);
-    let _ = crate::window_state::get_ai_position_for_mouse_display
-        as fn(
-            f64,
-            f64,
-            &[crate::windows::DisplayBounds],
-        ) -> Option<(
-            crate::window_state::PersistedWindowBounds,
-            crate::windows::DisplayBounds,
-        )>;
-}
-
 fn resolve_new_ai_window_bounds(
     saved_bounds: Option<crate::window_state::PersistedWindowBounds>,
     displays: &[crate::windows::DisplayBounds],
@@ -96,7 +80,6 @@ fn open_ai_window_with_mode_from(
     }
 
     super::telemetry::log_ai_lifecycle("ai_window_open_requested", mode, source, "start");
-    ai_window_reference_legacy_per_display_apis();
 
     // Ensure gpui-component theme is initialized before opening window
     ensure_theme_initialized(cx);
@@ -555,6 +538,34 @@ pub fn is_ai_window(window: &gpui::Window) -> bool {
         }
     }
     false
+}
+
+/// Read the current AI window state as a machine-readable snapshot.
+///
+/// Returns `None` if the AI window is not open or the entity has been dropped.
+/// The snapshot contains structural metadata (mode, overlay visibility, counts)
+/// but never conversation content or PII.
+pub fn get_ai_window_state(cx: &mut App) -> Option<super::state::AiMiniDebugSnapshot> {
+    let handle = {
+        let slot = AI_WINDOW.get_or_init(|| std::sync::Mutex::new(None));
+        slot.lock().ok().and_then(|g| *g)
+    };
+    let weak = AI_APP_WEAK
+        .get_or_init(|| std::sync::Mutex::new(None))
+        .lock()
+        .ok()
+        .and_then(|g| g.clone());
+
+    let handle = handle?;
+    let weak = weak?;
+
+    handle
+        .update(cx, |_root, _window, cx| {
+            weak.upgrade()
+                .map(|entity| entity.read(cx).debug_snapshot().redact_for_external_use())
+        })
+        .ok()
+        .flatten()
 }
 
 /// Set the search filter text in the AI window.

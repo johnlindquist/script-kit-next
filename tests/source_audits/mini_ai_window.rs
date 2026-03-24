@@ -555,7 +555,7 @@ fn builtin_handoff_uses_source_traced_entry_point() {
 fn debug_snapshot_is_serializable_and_complete() {
     let state = read("src/ai/window/state.rs");
     assert!(
-        state.contains("pub(crate) struct AiMiniDebugSnapshot"),
+        state.contains("pub struct AiMiniDebugSnapshot"),
         "state.rs must define AiMiniDebugSnapshot"
     );
     assert!(
@@ -711,7 +711,7 @@ fn snapshot_exposes_interaction_state_fields() {
     // verify interaction state without reaching into AiApp internals.
     let state = read("src/ai/window/state.rs");
     let snapshot_start = state
-        .find("pub(crate) struct AiMiniDebugSnapshot")
+        .find("pub struct AiMiniDebugSnapshot")
         .expect("AiMiniDebugSnapshot must exist");
     let builder_start = state
         .find("fn debug_snapshot(&self)")
@@ -1112,5 +1112,184 @@ fn pending_chat_lock_failure_emits_structured_error() {
     assert!(
         after.contains("reason = \"lock_poisoned\""),
         "error event must include a stable reason field"
+    );
+}
+
+// === Esc-chain ordering audit ===
+
+/// The Esc-chain in render_keydown.rs must dismiss overlays in the correct
+/// priority order. Each layer must appear *before* the next one so that
+/// higher-priority dismissals are checked first.
+#[test]
+fn esc_chain_layers_are_ordered_correctly() {
+    let source = read("src/ai/window/render_keydown.rs");
+
+    // These are the Esc guards in priority order (highest first).
+    // Each must appear before the next in the source.
+    let layers = [
+        // Layer 1: Mini history overlay
+        "is_key_escape(key) && self.window_mode.is_mini() && self.showing_mini_history_overlay",
+        // Layer 2: Shortcuts overlay
+        "is_key_escape(key) && self.showing_shortcuts_overlay",
+        // Layer 3: Active search
+        "is_key_escape(key) && !self.search_query.is_empty()",
+        // Layer 4: Editing message
+        "is_key_escape(key) && self.editing_message_id.is_some()",
+        // Layer 5: Renaming chat
+        "is_key_escape(key) && self.renaming_chat_id.is_some()",
+        // Layer 6: Streaming
+        "is_key_escape(key) && self.is_streaming",
+        // Layer 7: API key input
+        "is_key_escape(key) && self.showing_api_key_input",
+    ];
+
+    let mut prev_pos = 0;
+    let mut prev_label = "";
+    for &layer in &layers {
+        let pos = source.find(layer).unwrap_or_else(|| {
+            panic!("Esc-chain missing guard: {layer}");
+        });
+        assert!(
+            pos > prev_pos || prev_label.is_empty(),
+            "Esc-chain order violation: '{layer}' must come after '{prev_label}'"
+        );
+        prev_pos = pos;
+        prev_label = layer;
+    }
+}
+
+/// Each Esc-chain layer must emit a structured state snapshot via `log_ai_state`
+/// so agents can verify transitions without screenshots.
+#[test]
+fn esc_chain_layers_emit_state_snapshots() {
+    let source = read("src/ai/window/render_keydown.rs");
+    let expected_events = [
+        "esc_dismiss_history_overlay",
+        "esc_dismiss_shortcuts_overlay",
+        "esc_clear_search",
+        "esc_cancel_editing",
+        "esc_cancel_rename",
+        "esc_stop_streaming",
+        "esc_dismiss_api_key_input",
+        "esc_close_mini_window",
+    ];
+    for event in expected_events {
+        assert!(
+            source.contains(event),
+            "render_keydown.rs missing Esc telemetry event: {event}"
+        );
+    }
+}
+
+// === getAiWindowState command wiring audit ===
+
+/// The getAiWindowState external command must be defined and wired in all stdin dispatch sites.
+#[test]
+fn get_ai_window_state_command_wired_in_all_dispatch_sites() {
+    let stdin_mod = read("src/stdin_commands/mod.rs");
+    assert!(
+        stdin_mod.contains("GetAiWindowState"),
+        "stdin_commands/mod.rs must define GetAiWindowState variant"
+    );
+    assert!(
+        stdin_mod.contains("\"getAiWindowState\""),
+        "stdin_commands/mod.rs must map GetAiWindowState to command type string"
+    );
+
+    // All 3 dispatch sites must handle the command
+    for path in [
+        "src/main_entry/runtime_stdin.rs",
+        "src/main_entry/runtime_stdin_match_tail.rs",
+        "src/main_entry/app_run_setup.rs",
+    ] {
+        let source = read(path);
+        assert!(
+            source.contains("ExternalCommand::GetAiWindowState"),
+            "{path} must handle ExternalCommand::GetAiWindowState"
+        );
+        assert!(
+            source.contains("ai_window_state_result"),
+            "{path} must emit ai_window_state_result event"
+        );
+    }
+}
+
+/// The get_ai_window_state public function must exist in window_api.rs
+/// and be exported through the module facade.
+#[test]
+fn get_ai_window_state_is_exported() {
+    let api = read("src/ai/window/window_api.rs");
+    assert!(
+        api.contains("pub fn get_ai_window_state("),
+        "window_api.rs must export get_ai_window_state"
+    );
+
+    let window_mod = read("src/ai/window.rs");
+    assert!(
+        window_mod.contains("get_ai_window_state"),
+        "window.rs must re-export get_ai_window_state"
+    );
+
+    let ai_mod = read("src/ai/mod.rs");
+    assert!(
+        ai_mod.contains("get_ai_window_state"),
+        "ai/mod.rs must re-export get_ai_window_state"
+    );
+}
+
+#[test]
+fn get_ai_window_state_redacts_search_text_before_external_use() {
+    let api = read("src/ai/window/window_api.rs");
+    assert!(
+        api.contains("redact_for_external_use()"),
+        "get_ai_window_state must redact user-entered search text before export"
+    );
+
+    let state = read("src/ai/window/state.rs");
+    assert!(
+        state.contains("fn redact_for_external_use"),
+        "AiMiniDebugSnapshot must provide an external redaction helper"
+    );
+}
+
+// === AiMiniDebugSnapshot contract audit ===
+
+/// AiMiniDebugSnapshot must derive both Serialize and Deserialize for roundtrip.
+#[test]
+fn debug_snapshot_derives_serde_roundtrip() {
+    let source = read("src/ai/window/state.rs");
+    let struct_pos = source
+        .find("struct AiMiniDebugSnapshot")
+        .expect("AiMiniDebugSnapshot must exist");
+    let before = &source[..struct_pos];
+    assert!(
+        before.contains("serde::Serialize") && before.contains("serde::Deserialize"),
+        "AiMiniDebugSnapshot must derive both Serialize and Deserialize"
+    );
+    assert!(
+        before.contains("rename_all = \"camelCase\""),
+        "AiMiniDebugSnapshot must use camelCase serde renaming for wire compatibility"
+    );
+}
+
+/// AiMiniDebugSnapshot must be pub (not pub(crate)) for integration test access.
+#[test]
+fn debug_snapshot_is_public() {
+    let source = read("src/ai/window/state.rs");
+    assert!(
+        source.contains("pub struct AiMiniDebugSnapshot"),
+        "AiMiniDebugSnapshot must be pub for cross-crate test access"
+    );
+}
+
+// === Legacy bridge removal audit ===
+
+/// The legacy per-display AI window bridge must be removed.
+#[test]
+fn legacy_per_display_bridge_removed() {
+    let source = read("src/ai/window/window_api.rs");
+    assert!(
+        !source.contains("ai_window_reference_legacy_per_display_apis"),
+        "Legacy bridge function must be removed from window_api.rs"
     );
 }

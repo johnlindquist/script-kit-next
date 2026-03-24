@@ -195,6 +195,34 @@
                                     }
                                 }
                             }
+                            ExternalCommand::GetAiWindowState { ref request_id } => {
+                                let request_id = request_id.as_ref().map(|id| id.as_str());
+                                match ai::get_ai_window_state(ctx) {
+                                    Some(snapshot) => {
+                                        let json = serde_json::to_string(&snapshot).unwrap_or_default();
+                                        tracing::info!(
+                                            category = "STDIN",
+                                            event = "ai_window_state_result",
+                                            command = "getAiWindowState",
+                                            request_id = ?request_id,
+                                            ok = true,
+                                            state = %json,
+                                            "AI window state snapshot"
+                                        );
+                                    }
+                                    None => {
+                                        tracing::info!(
+                                            category = "STDIN",
+                                            event = "ai_window_state_result",
+                                            command = "getAiWindowState",
+                                            request_id = ?request_id,
+                                            ok = false,
+                                            error_code = "ai_window_not_open",
+                                            "AI window not open or entity dropped"
+                                        );
+                                    }
+                                }
+                            }
                             ExternalCommand::ShowGrid { grid_size, show_bounds, show_box_model, show_alignment_guides, show_dimensions, ref depth } => {
                                 logging::log("STDIN", &format!(
                                     "ShowGrid: size={}, bounds={}, box_model={}, guides={}, dimensions={}, depth={:?}",
