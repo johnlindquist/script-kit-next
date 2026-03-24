@@ -229,7 +229,11 @@ impl AiApp {
             && !self.is_streaming
             && !self.available_models.is_empty()
         {
-            let max_visible_suggestions = if self.window_mode.is_mini() { 2 } else { 4 };
+            let max_visible_suggestions = if self.window_mode.is_mini() {
+                super::types::MINI_SUGGESTION_COUNT
+            } else {
+                super::types::FULL_SUGGESTION_COUNT
+            };
             let idx = match key {
                 "1" => Some(0),
                 "2" => Some(1),
@@ -238,7 +242,10 @@ impl AiApp {
                 _ => None,
             };
             if let Some(i) = idx.filter(|i| *i < max_visible_suggestions) {
-                let (title, desc) = WELCOME_SUGGESTIONS[i];
+                let suggestions = super::render_welcome::script_kit_welcome_suggestions();
+                let Some((title, desc, _icon)) = suggestions.get(i) else {
+                    return;
+                };
                 let prompt = format!("{} {}", title, desc);
                 info!(
                     shortcut = i + 1,
@@ -424,6 +431,11 @@ impl AiApp {
                 self.window_mode,
                 "escape_key",
             );
+            super::telemetry::log_ai_state(
+                "esc_dismiss_history_overlay",
+                "escape_key",
+                &self.debug_snapshot(),
+            );
             cx.notify();
             cx.stop_propagation();
             return;
@@ -432,6 +444,11 @@ impl AiApp {
         // Escape closes shortcuts overlay
         if is_key_escape(key) && self.showing_shortcuts_overlay {
             self.showing_shortcuts_overlay = false;
+            super::telemetry::log_ai_state(
+                "esc_dismiss_shortcuts_overlay",
+                "escape_key",
+                &self.debug_snapshot(),
+            );
             cx.notify();
             cx.stop_propagation();
             return;
@@ -454,6 +471,11 @@ impl AiApp {
             });
             // Return focus to chat input
             self.focus_input(window, cx);
+            super::telemetry::log_ai_state(
+                "esc_clear_search",
+                "escape_key",
+                &self.debug_snapshot(),
+            );
             cx.notify();
             cx.stop_propagation();
             return;
@@ -470,6 +492,11 @@ impl AiApp {
         if is_key_escape(key) && self.editing_message_id.is_some() {
             self.editing_message_id = None;
             self.clear_composer(window, cx);
+            super::telemetry::log_ai_state(
+                "esc_cancel_editing",
+                "escape_key",
+                &self.debug_snapshot(),
+            );
             cx.stop_propagation();
             return;
         }
@@ -477,6 +504,11 @@ impl AiApp {
         // Escape cancels rename
         if is_key_escape(key) && self.renaming_chat_id.is_some() {
             self.cancel_rename(cx);
+            super::telemetry::log_ai_state(
+                "esc_cancel_rename",
+                "escape_key",
+                &self.debug_snapshot(),
+            );
             cx.stop_propagation();
             return;
         }
@@ -484,6 +516,11 @@ impl AiApp {
         // Escape stops streaming if active
         if is_key_escape(key) && self.is_streaming {
             self.stop_streaming(cx);
+            super::telemetry::log_ai_state(
+                "esc_stop_streaming",
+                "escape_key",
+                &self.debug_snapshot(),
+            );
             cx.stop_propagation();
             return;
         }
@@ -491,6 +528,11 @@ impl AiApp {
         // Escape closes API key input (back to setup card)
         if is_key_escape(key) && self.showing_api_key_input {
             self.hide_api_key_input(window, cx);
+            super::telemetry::log_ai_state(
+                "esc_dismiss_api_key_input",
+                "escape_key",
+                &self.debug_snapshot(),
+            );
             cx.stop_propagation();
             return;
         }
@@ -503,12 +545,22 @@ impl AiApp {
                 || self.showing_presets_dropdown)
         {
             self.hide_all_dropdowns(cx);
+            super::telemetry::log_ai_state(
+                "esc_dismiss_dropdown",
+                "escape_key",
+                &self.debug_snapshot(),
+            );
             cx.stop_propagation();
             return;
         }
 
         // Mini mode: final Esc closes the window (mirroring Cmd+W behavior)
         if is_key_escape(key) && self.window_mode.is_mini() {
+            super::telemetry::log_ai_state(
+                "esc_close_mini_window",
+                "escape_key",
+                &self.debug_snapshot(),
+            );
             let wb = window.window_bounds();
             crate::window_state::save_window_from_gpui(
                 super::window_api::window_role_for_mode(self.window_mode),

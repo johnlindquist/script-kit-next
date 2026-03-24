@@ -383,9 +383,13 @@ pub enum ExternalCommand {
     OpenNotes,
     /// Open the AI Chat window (for testing)
     OpenAi,
+    /// Open the Mini AI Chat window (for testing)
+    OpenMiniAi,
     /// Open the AI Chat window with mock data (for visual testing)
     /// This inserts sample conversations to test the UI layout
     OpenAiWithMockData,
+    /// Open the Mini AI Chat window with mock data (for visual testing)
+    OpenMiniAiWithMockData,
     /// Show the AI command bar (Cmd+K menu) for testing the refactored ActionsDialog
     ShowAiCommandBar,
     /// Simulate a key press in the AI window (for testing command bar navigation)
@@ -498,7 +502,9 @@ impl ExternalCommand {
             Self::SimulateKey { .. } => "simulateKey",
             Self::OpenNotes => "openNotes",
             Self::OpenAi => "openAi",
+            Self::OpenMiniAi => "openMiniAi",
             Self::OpenAiWithMockData => "openAiWithMockData",
+            Self::OpenMiniAiWithMockData => "openMiniAiWithMockData",
             Self::ShowAiCommandBar => "showAiCommandBar",
             Self::SimulateAiKey { .. } => "simulateAiKey",
             Self::CaptureWindow { .. } => "captureWindow",
@@ -916,10 +922,26 @@ mod tests {
     }
 
     #[test]
+    fn test_external_command_open_mini_ai_deserialization() -> anyhow::Result<()> {
+        let json = r#"{"type": "openMiniAi"}"#;
+        let cmd: ExternalCommand = serde_json::from_str(json)?;
+        assert!(matches!(cmd, ExternalCommand::OpenMiniAi));
+        Ok(())
+    }
+
+    #[test]
     fn test_external_command_open_ai_with_mock_data_deserialization() -> anyhow::Result<()> {
         let json = r#"{"type": "openAiWithMockData"}"#;
         let cmd: ExternalCommand = serde_json::from_str(json)?;
         assert!(matches!(cmd, ExternalCommand::OpenAiWithMockData));
+        Ok(())
+    }
+
+    #[test]
+    fn test_external_command_open_mini_ai_with_mock_data_deserialization() -> anyhow::Result<()> {
+        let json = r#"{"type": "openMiniAiWithMockData"}"#;
+        let cmd: ExternalCommand = serde_json::from_str(json)?;
+        assert!(matches!(cmd, ExternalCommand::OpenMiniAiWithMockData));
         Ok(())
     }
 

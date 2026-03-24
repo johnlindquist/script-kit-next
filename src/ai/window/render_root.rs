@@ -151,6 +151,11 @@ impl AiApp {
             match cmd {
                 AiCommand::SetWindowMode(window_mode) => {
                     self.set_window_mode(window_mode, window, cx);
+                    super::telemetry::log_ai_state(
+                        "set_window_mode",
+                        "command",
+                        &self.debug_snapshot(),
+                    );
                 }
                 AiCommand::SetSearch(query) => {
                     self.search_state.update(cx, |state, cx| {
@@ -441,12 +446,7 @@ impl Render for AiApp {
                                     .child("Expand"),
                             )
                             // Separator
-                            .child(
-                                div()
-                                    .w(px(1.))
-                                    .h(px(14.))
-                                    .bg(cx.theme().border),
-                            )
+                            .child(div().w(px(1.)).h(px(14.)).bg(cx.theme().border))
                             // Recent button
                             .child(
                                 div()

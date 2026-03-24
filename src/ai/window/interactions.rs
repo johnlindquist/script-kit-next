@@ -161,7 +161,11 @@ impl AiApp {
         self.window_mode = new_mode;
         super::types::AI_CURRENT_WINDOW_MODE
             .store(new_mode.to_u8(), std::sync::atomic::Ordering::SeqCst);
-        self.showing_mini_history_overlay = false;
+        // Dismiss mini overlays and clear stale search so the target mode starts clean.
+        if self.showing_mini_history_overlay {
+            self.showing_mini_history_overlay = false;
+            self.clear_search_state(window, cx);
+        }
         window.set_window_title(new_mode.title());
         // Restore saved bounds for target mode, falling back to defaults.
         let target_role = super::window_api::window_role_for_mode(new_mode);
@@ -203,6 +207,14 @@ impl AiApp {
             } else {
                 "default_bounds"
             },
+        );
+        // SAFETY: debug_snapshot() contains only structural metadata (booleans,
+        // counts, mode strings, UUIDs). search_query is redacted to length-only
+        // in log_ai_state. No conversation content or PII reaches telemetry.
+        super::telemetry::log_ai_state(
+            "window_mode_switched",
+            "set_window_mode",
+            &self.debug_snapshot(),
         );
         cx.notify();
     }

@@ -125,14 +125,8 @@ pub(super) fn compute_collapse_decision(char_count: usize) -> CollapseDecision {
     }
 }
 
-/// Welcome screen suggestion card definitions.
-/// Shared between render_welcome (UI) and render_keydown (Cmd+1-4 shortcuts).
-pub(super) const WELCOME_SUGGESTIONS: [(&str, &str); 4] = [
-    ("Write a script", "to monitor my clipboard for changes"),
-    ("Create a menu bar shortcut", "that opens my project folder"),
-    ("Help me build", "a quick search for my bookmarks"),
-    ("Generate a scriptlet", "that reformats selected text"),
-];
+// Welcome suggestions are defined in render_welcome.rs via script_kit_welcome_suggestions().
+// Both the rendered cards and Cmd+1-4 keyboard shortcuts use that single source.
 
 #[cfg(test)]
 mod message_spacing_tests {
@@ -215,7 +209,7 @@ mod ai_window_mode_tests {
         assert_eq!(MINI_CONTENT_MAX_W, px(760.));
         assert_eq!(MINI_HISTORY_OVERLAY_W, px(320.));
         assert_eq!(MINI_HISTORY_OVERLAY_MAX_H, px(420.));
-        assert_eq!(MINI_HISTORY_OVERLAY_TOP, px(48.));
+        assert_eq!(MINI_HISTORY_OVERLAY_TOP, MINI_TITLEBAR_H);
         assert_eq!(MINI_BTN_SIZE, px(28.));
     }
 
@@ -246,10 +240,16 @@ pub(super) const MINI_WINDOW_DEFAULT_W: f32 = 720.0;
 pub(super) const MINI_WINDOW_DEFAULT_H: f32 = 440.0;
 pub(super) const MINI_TITLEBAR_H: Pixels = px(44.);
 pub(super) const MINI_CONTENT_MAX_W: Pixels = px(760.);
-pub(super) const MINI_HISTORY_OVERLAY_TOP: Pixels = px(48.);
+/// Position the history overlay flush with the bottom of the mini titlebar.
+/// Must track MINI_TITLEBAR_H so there's no click-through gap.
+pub(super) const MINI_HISTORY_OVERLAY_TOP: Pixels = MINI_TITLEBAR_H;
 pub(super) const MINI_HISTORY_OVERLAY_W: Pixels = px(320.);
 pub(super) const MINI_HISTORY_OVERLAY_MAX_H: Pixels = px(420.);
 pub(super) const MINI_BTN_SIZE: Pixels = px(28.);
+/// Number of welcome suggestions shown in mini mode (fewer to fit compact height).
+pub(super) const MINI_SUGGESTION_COUNT: usize = 2;
+/// Number of welcome suggestions shown in full mode.
+pub(super) const FULL_SUGGESTION_COUNT: usize = 4;
 
 // -- Overlay layout --
 pub(super) const ATTACHMENTS_PICKER_BOTTOM_INSET: Pixels = px(80.);

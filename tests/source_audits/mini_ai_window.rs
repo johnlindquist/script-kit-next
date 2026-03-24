@@ -573,10 +573,16 @@ fn debug_snapshot_is_serializable_and_complete() {
         "history_overlay_visible",
         "command_bar_open",
         "new_chat_menu_open",
+        "presets_dropdown_open",
+        "api_key_input_visible",
+        "context_picker_open",
         "selected_model",
+        "selected_chat_id",
         "pending_context_parts",
         "has_pending_image",
         "is_streaming",
+        "streaming_error_present",
+        "pending_delete_chat_present",
         "chat_count",
         "current_message_count",
         "show_context_inspector",
@@ -604,9 +610,11 @@ fn window_api_has_no_logging_log_calls() {
 }
 
 #[test]
-fn mini_context_contract_keeps_context_surfaces_reachable() {
-    // Mini mode must still render context bar, recommendations, picker, chips,
-    // and pending image preview. Inspector/drawer are full-mode-only.
+fn mini_context_contract_keeps_essential_surfaces_reachable() {
+    // Mini mode must render context bar, picker, chips, and image preview.
+    // Context recommendations are hidden in mini (too much vertical space
+    // in a 440px window — users can still attach via Cmd+Shift+A).
+    // Inspector/drawer are full-mode-only.
     let panel = read("src/ai/window/render_main_panel.rs");
     let mini_fn_start = panel
         .find("fn render_mini_main_panel")
@@ -616,9 +624,9 @@ fn mini_context_contract_keeps_context_surfaces_reachable() {
         .expect("render_full_main_panel must exist");
     let mini_body = &panel[mini_fn_start..full_fn_start];
 
+    // Surfaces that MUST be in mini mode
     for surface in [
         "render_context_bar",
-        "render_context_recommendations",
         "render_context_picker",
         "render_pending_context_chips",
         "render_pending_image_preview",
@@ -628,6 +636,12 @@ fn mini_context_contract_keeps_context_surfaces_reachable() {
             "Mini main panel must render {surface}"
         );
     }
+
+    // Surfaces that must NOT be in mini mode (they consume too much vertical space)
+    assert!(
+        !mini_body.contains("render_context_recommendations"),
+        "Mini main panel must NOT render context recommendations (hidden to save space)"
+    );
 }
 
 #[test]
@@ -703,7 +717,7 @@ fn snapshot_exposes_interaction_state_fields() {
         .find("fn debug_snapshot(&self)")
         .expect("debug_snapshot builder must exist");
     let snapshot_def = &state[snapshot_start..builder_start];
-    let builder_body = &state[builder_start..(builder_start + 1500).min(state.len())];
+    let builder_body = &state[builder_start..(builder_start + 2000).min(state.len())];
 
     // Each interaction field must appear in both the struct and the builder
     for (field, source_expr) in [
@@ -717,6 +731,14 @@ fn snapshot_exposes_interaction_state_fields() {
             "self.editing_message_id.is_some()",
         ),
         ("renaming_chat_present", "self.renaming_chat_id.is_some()"),
+        ("presets_dropdown_open", "self.showing_presets_dropdown"),
+        ("api_key_input_visible", "self.showing_api_key_input"),
+        ("context_picker_open", "self.is_context_picker_open()"),
+        ("streaming_error_present", "self.streaming_error.is_some()"),
+        (
+            "pending_delete_chat_present",
+            "self.pending_delete_chat_id.is_some()",
+        ),
     ] {
         assert!(
             snapshot_def.contains(field),
@@ -797,8 +819,8 @@ fn mini_welcome_is_compact_with_fewer_suggestions() {
     let source = read("src/ai/window/render_welcome.rs");
     // Mini mode must limit suggestion count
     assert!(
-        source.contains("if is_mini { 2 }"),
-        "Mini welcome must show fewer suggestions (2 instead of 4)"
+        source.contains("MINI_SUGGESTION_COUNT"),
+        "Mini welcome must use MINI_SUGGESTION_COUNT constant for suggestion limit"
     );
     // Mini mode must use tighter spacing
     assert!(
@@ -821,12 +843,22 @@ fn mini_welcome_is_compact_with_fewer_suggestions() {
 fn mini_welcome_shortcuts_match_visible_suggestions() {
     let keydown = read("src/ai/window/render_keydown.rs");
     assert!(
-        keydown.contains("let max_visible_suggestions = if self.window_mode.is_mini() { 2 } else { 4 };"),
-        "Welcome shortcuts must cap visible suggestion count in mini mode"
+        keydown.contains("MINI_SUGGESTION_COUNT") && keydown.contains("FULL_SUGGESTION_COUNT"),
+        "Welcome shortcuts must use named constants for suggestion count in both modes"
     );
     assert!(
         keydown.contains("idx.filter(|i| *i < max_visible_suggestions)"),
         "Welcome shortcuts must ignore hidden suggestion slots in mini mode"
+    );
+    // Keyboard shortcuts must use the same data source as the rendered cards
+    assert!(
+        keydown.contains("script_kit_welcome_suggestions()"),
+        "Keyboard shortcuts must use script_kit_welcome_suggestions() from render_welcome — not a duplicate constant"
+    );
+    // The old WELCOME_SUGGESTIONS constant must NOT be referenced
+    assert!(
+        !keydown.contains("WELCOME_SUGGESTIONS"),
+        "render_keydown must NOT reference the removed WELCOME_SUGGESTIONS constant"
     );
 }
 
@@ -948,5 +980,137 @@ fn mini_mode_hides_docked_sidebar_in_root() {
         preceding.contains("self.window_mode.is_mini()"),
         "Docked sidebar must be inside a window_mode.is_mini() conditional \
          (mini branch omits sidebar, else branch includes it)"
+    );
+}
+
+#[test]
+fn mini_ai_has_stdin_protocol_commands() {
+    // openMiniAi and openMiniAiWithMockData must exist as stdin commands
+    // for DX/testing — opens the mini AI window via the JSON protocol.
+    let stdin = read("src/stdin_commands/mod.rs");
+    assert!(
+        stdin.contains("OpenMiniAi"),
+        "stdin_commands must define OpenMiniAi variant"
+    );
+    assert!(
+        stdin.contains("OpenMiniAiWithMockData"),
+        "stdin_commands must define OpenMiniAiWithMockData variant"
+    );
+    assert!(
+        stdin.contains("\"openMiniAi\""),
+        "OpenMiniAi must serialize as \"openMiniAi\""
+    );
+    assert!(
+        stdin.contains("\"openMiniAiWithMockData\""),
+        "OpenMiniAiWithMockData must serialize as \"openMiniAiWithMockData\""
+    );
+
+    // All three dispatch sites must handle both commands
+    for dispatch_file in [
+        "src/main_entry/runtime_stdin.rs",
+        "src/main_entry/runtime_stdin_match_tail.rs",
+        "src/main_entry/app_run_setup.rs",
+    ] {
+        let source = read(dispatch_file);
+        assert!(
+            source.contains("ExternalCommand::OpenMiniAi"),
+            "{dispatch_file} must dispatch ExternalCommand::OpenMiniAi"
+        );
+        assert!(
+            source.contains("ExternalCommand::OpenMiniAiWithMockData"),
+            "{dispatch_file} must dispatch ExternalCommand::OpenMiniAiWithMockData"
+        );
+        assert!(
+            source.contains("open_mini_ai_window"),
+            "{dispatch_file} must call open_mini_ai_window"
+        );
+    }
+}
+
+#[test]
+fn esc_chain_emits_log_ai_state_at_each_dismissal() {
+    // Every Escape dismissal branch in render_keydown must call log_ai_state
+    // so the Esc-chain is machine-verifiable from logs alone.
+    let keydown = read("src/ai/window/render_keydown.rs");
+
+    // Each Esc event name must appear (proves the telemetry call exists)
+    for event_name in [
+        "esc_dismiss_history_overlay",
+        "esc_dismiss_shortcuts_overlay",
+        "esc_clear_search",
+        "esc_cancel_editing",
+        "esc_cancel_rename",
+        "esc_stop_streaming",
+        "esc_dismiss_api_key_input",
+        "esc_dismiss_dropdown",
+        "esc_close_mini_window",
+    ] {
+        assert!(
+            keydown.contains(event_name),
+            "render_keydown must emit log_ai_state(\"{event_name}\", ...) on Esc"
+        );
+    }
+
+    // The helper itself must be called (not just the event string)
+    assert!(
+        keydown.contains("telemetry::log_ai_state("),
+        "render_keydown must call telemetry::log_ai_state()"
+    );
+}
+
+#[test]
+fn telemetry_log_ai_state_helper_exists() {
+    let telemetry = read("src/ai/window/telemetry.rs");
+    assert!(
+        telemetry.contains("pub(super) fn log_ai_state("),
+        "telemetry.rs must define log_ai_state helper"
+    );
+    assert!(
+        telemetry.contains("AiMiniDebugSnapshot"),
+        "log_ai_state must accept AiMiniDebugSnapshot"
+    );
+    assert!(
+        telemetry.contains("category = \"AI_STATE\""),
+        "log_ai_state must use AI_STATE category"
+    );
+}
+
+/// `set_window_mode` must clear search state when the history overlay was open,
+/// so switching from mini (with search typed) to full doesn't leak stale queries.
+#[test]
+fn mode_switch_clears_search_when_overlay_was_open() {
+    let source = read("src/ai/window/interactions.rs");
+    let set_fn = source
+        .find("fn set_window_mode")
+        .expect("set_window_mode must exist");
+    let after = &source[set_fn..];
+    // Must clear search state when overlay was showing
+    assert!(
+        after.contains("clear_search_state"),
+        "set_window_mode must call clear_search_state when overlay was open"
+    );
+    // Must emit state telemetry after mode switch
+    assert!(
+        after.contains("log_ai_state"),
+        "set_window_mode must emit log_ai_state after switching"
+    );
+}
+
+/// `set_ai_pending_chat` must emit a structured error event on lock failure
+/// so agents can detect and report the failure programmatically.
+#[test]
+fn pending_chat_lock_failure_emits_structured_error() {
+    let source = read("src/ai/window/window_api.rs");
+    let fn_pos = source
+        .find("fn set_ai_pending_chat")
+        .expect("set_ai_pending_chat must exist");
+    let after = &source[fn_pos..];
+    assert!(
+        after.contains("ai_pending_chat_failed"),
+        "set_ai_pending_chat must log ai_pending_chat_failed on lock failure"
+    );
+    assert!(
+        after.contains("reason = \"lock_poisoned\""),
+        "error event must include a stable reason field"
     );
 }

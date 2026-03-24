@@ -175,11 +175,10 @@ impl AiApp {
                     .on_drop(cx.listener(|this, paths: &ExternalPaths, _window, cx| {
                         this.handle_file_drop(paths, cx);
                     }))
-                    // Context bar (pre/post submit)
+                    // Context bar (pre/post submit) — compact feedback, always shown
                     .when(show_bar, |d| d.child(self.render_context_bar(cx)))
-                    .when(self.context_preflight.has_surfaced_recommendations(), |d| {
-                        d.child(self.render_context_recommendations(cx))
-                    })
+                    // Context recommendations hidden in mini — too much vertical space
+                    // for a 440px window. Users can still attach via Cmd+Shift+A.
                     .when(is_editing, |d| d.child(self.render_editing_indicator(cx)))
                     .when(self.is_context_picker_open(), |d| {
                         d.child(self.render_context_picker(cx))
@@ -188,7 +187,12 @@ impl AiApp {
                         d.child(self.render_pending_context_chips(cx))
                     })
                     .when(has_pending_image, |d| {
-                        d.child(self.render_pending_image_preview(cx))
+                        d.child(
+                            div()
+                                .max_h(px(120.))
+                                .overflow_hidden()
+                                .child(self.render_pending_image_preview(cx)),
+                        )
                     })
                     // Composer row: input + inline submit/stop button
                     .child(

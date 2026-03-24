@@ -313,7 +313,13 @@ pub fn set_ai_pending_chat(cx: &mut App, messages: Vec<PendingChatMessage>) -> R
     if let Ok(mut pending) = get_pending_chat().lock() {
         *pending = Some(messages);
     } else {
-        return Err("Failed to acquire pending chat lock".to_string());
+        tracing::error!(
+            category = "AI",
+            event = "ai_pending_chat_failed",
+            reason = "lock_poisoned",
+            "Pending chat lock poisoned — cannot stash messages"
+        );
+        return Err("pending chat lock poisoned".to_string());
     }
 
     enqueue_ai_window_command(
