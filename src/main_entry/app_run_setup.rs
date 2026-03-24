@@ -2047,7 +2047,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                     "STDIN",
                                     &format!("Simulating AI key: '{}' with modifiers: {:?}", key, modifiers),
                                 );
-                                ai::simulate_ai_key(&key, modifiers);
+                                ai::simulate_ai_key(ctx, &key, modifiers);
                             }
                             ExternalCommand::CaptureWindow { title, path, .. } => {
                                 logging::log("STDIN", &format!("Capturing window with title '{}' to '{}'", title, path));

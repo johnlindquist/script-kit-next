@@ -468,13 +468,94 @@ impl AiApp {
             return;
         }
 
-        // Default key handling (when no overlays are open)
-        match key_lower.as_str() {
-            k if is_key_escape(k) => {}
-            _ => {
-                tracing::debug!(target: "ai", key = %key_lower, "SimulateKey: Unhandled key in AI window");
+        // Esc chain — mirrors handle_root_key_down guard sequence so SimulateKey
+        // produces the same single-step-at-a-time behavior as a real keypress.
+        if is_key_escape(&key_lower) {
+            // 1. Mini history overlay
+            if self.window_mode.is_mini() && self.showing_mini_history_overlay {
+                self.showing_mini_history_overlay = false;
+                self.clear_search_state(window, cx);
+                self.focus_input(window, cx);
+                super::telemetry::log_ai_ui(
+                    "mini_history_overlay_dismissed",
+                    self.window_mode,
+                    "simulated_escape",
+                );
+                tracing::info!(target: "ai", "SimulateKey: Escape - dismissed mini history overlay");
+                cx.notify();
+                return;
             }
+            // 2. Shortcuts overlay
+            if self.showing_shortcuts_overlay {
+                self.showing_shortcuts_overlay = false;
+                tracing::info!(target: "ai", "SimulateKey: Escape - dismissed shortcuts overlay");
+                cx.notify();
+                return;
+            }
+            // 3. Active search
+            if !self.search_query.is_empty() {
+                self.search_query.clear();
+                self.search_generation += 1;
+                self.search_snippets.clear();
+                self.search_matched_title.clear();
+                self.chats = crate::ai::storage::get_all_chats().unwrap_or_default();
+                self.search_state.update(cx, |state, cx| {
+                    state.set_value("", window, cx);
+                });
+                self.focus_input(window, cx);
+                tracing::info!(target: "ai", "SimulateKey: Escape - cleared search");
+                cx.notify();
+                return;
+            }
+            // 4. Editing mode
+            if self.editing_message_id.is_some() {
+                self.editing_message_id = None;
+                self.clear_composer(window, cx);
+                tracing::info!(target: "ai", "SimulateKey: Escape - cancelled edit");
+                return;
+            }
+            // 5. Rename
+            if self.renaming_chat_id.is_some() {
+                self.cancel_rename(cx);
+                tracing::info!(target: "ai", "SimulateKey: Escape - cancelled rename");
+                return;
+            }
+            // 6. Streaming
+            if self.is_streaming {
+                self.stop_streaming(cx);
+                tracing::info!(target: "ai", "SimulateKey: Escape - stopped streaming");
+                return;
+            }
+            // 7. New chat command bar
+            if self.new_chat_command_bar.is_open() {
+                self.hide_new_chat_command_bar(cx);
+                tracing::info!(target: "ai", "SimulateKey: Escape - closed new chat command bar");
+                return;
+            }
+            // 8. Final mini close
+            if self.window_mode.is_mini() {
+                let wb = window.window_bounds();
+                crate::window_state::save_window_from_gpui(
+                    super::window_api::window_role_for_mode(self.window_mode),
+                    wb,
+                );
+                super::telemetry::log_ai_lifecycle(
+                    "ai_window_close",
+                    self.window_mode,
+                    "simulated_escape",
+                    "closing",
+                );
+                super::window_api::cleanup_ai_window_globals();
+                window.remove_window();
+                tracing::info!(target: "ai", "SimulateKey: Escape - closed mini window");
+                return;
+            }
+            // Full mode: Esc with nothing to dismiss is a no-op
+            tracing::debug!(target: "ai", "SimulateKey: Escape - nothing to dismiss");
+            return;
         }
+
+        tracing::debug!(target: "ai", key = %key_lower, "SimulateKey: Unhandled key in AI window");
     }
 
     /// Copy the last AI response to clipboard

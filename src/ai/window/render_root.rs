@@ -346,7 +346,7 @@ impl Render for AiApp {
                     .id("ai-titlebar-mini")
                     .w_full()
                     .h(MINI_TITLEBAR_H)
-                    .pl(TITLEBAR_LEFT_PADDING)
+                    .pl(MINI_TITLEBAR_LEFT_PADDING)
                     .pr(S3)
                     .flex()
                     .flex_row()
@@ -589,7 +589,44 @@ impl Render for AiApp {
                                     .child(title_text),
                             ),
                     )
-                    .child(div().w(TITLEBAR_TRAFFIC_LIGHT_ZONE_W))
+                    .child(
+                        div()
+                            .w(TITLEBAR_TRAFFIC_LIGHT_ZONE_W)
+                            .h_full()
+                            .flex()
+                            .items_center()
+                            .justify_end()
+                            .pr(S3)
+                            .child(
+                                div()
+                                    .id("ai-full-compact-btn")
+                                    .px(S2)
+                                    .py(S1)
+                                    .rounded(R_SM)
+                                    .cursor_pointer()
+                                    .text_xs()
+                                    .text_color(
+                                        cx.theme().muted_foreground.opacity(OPACITY_SELECTED),
+                                    )
+                                    .hover(|el| {
+                                        el.bg(cx.theme().muted.opacity(OPACITY_HOVER))
+                                            .text_color(cx.theme().foreground)
+                                    })
+                                    .tooltip(|window, cx| {
+                                        Tooltip::new("Switch to compact mode")
+                                            .key_binding(
+                                                gpui::Keystroke::parse("cmd-shift-m")
+                                                    .ok()
+                                                    .map(Kbd::new),
+                                            )
+                                            .build(window, cx)
+                                    })
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        this.toggle_window_mode(window, cx);
+                                    }))
+                                    .child("Compact"),
+                            ),
+                    )
                     .into_any_element()
             })
             .child(if self.window_mode.is_mini() {
