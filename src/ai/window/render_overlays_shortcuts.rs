@@ -41,6 +41,8 @@ impl AiApp {
         let fg = cx.theme().foreground;
         let muted = cx.theme().muted_foreground;
         let accent = cx.theme().accent;
+        let current_mode = self.window_mode;
+        let is_mini = current_mode.is_mini();
 
         div()
             .id("shortcuts-overlay")
@@ -60,8 +62,9 @@ impl AiApp {
             .child(
                 div()
                     .id("shortcuts-panel")
-                    .w(px(420.))
-                    .max_h(px(520.))
+                    // Compact sizing in mini mode to fit the 720×440 window
+                    .w(if is_mini { px(380.) } else { px(420.) })
+                    .max_h(if is_mini { px(360.) } else { px(520.) })
                     .rounded(R_LG)
                     .bg(panel_bg)
                     .border_1()
@@ -83,10 +86,26 @@ impl AiApp {
                             .justify_between()
                             .child(
                                 div()
-                                    .text_base()
-                                    .font_weight(gpui::FontWeight::SEMIBOLD)
-                                    .text_color(fg)
-                                    .child("Keyboard Shortcuts"),
+                                    .flex()
+                                    .items_center()
+                                    .gap(S2)
+                                    .child(
+                                        div()
+                                            .text_base()
+                                            .font_weight(gpui::FontWeight::SEMIBOLD)
+                                            .text_color(fg)
+                                            .child("Keyboard Shortcuts"),
+                                    )
+                                    .child(
+                                        div()
+                                            .px(S1)
+                                            .py(px(1.))
+                                            .rounded(R_SM)
+                                            .bg(accent.opacity(OPACITY_DISABLED))
+                                            .text_xs()
+                                            .text_color(accent)
+                                            .child(if is_mini { "Mini" } else { "Full" }),
+                                    ),
                             )
                             .child(
                                 div()
@@ -106,43 +125,65 @@ impl AiApp {
                         ShortcutCategory::ALL
                             .into_iter()
                             .zip(AI_SHORTCUT_SECTIONS.iter())
-                            .map(|(category, section)| {
-                                div()
-                                    .flex()
-                                    .flex_col()
-                                    .gap(S1)
-                                    .child(
-                                        div()
-                                            .pt(S1)
-                                            .pb(S1)
-                                            .text_xs()
-                                            .font_weight(gpui::FontWeight::SEMIBOLD)
-                                            .text_color(accent.opacity(OPACITY_SELECTED))
-                                            .child(category.label()),
-                                    )
-                                    .children(section.items.iter().map(|item| {
-                                        let key_s: SharedString = item.keys.into();
-                                        let desc_s: SharedString = item.description.into();
-                                        div()
-                                            .flex()
-                                            .items_center()
-                                            .justify_between()
-                                            .py(S1)
-                                            .gap(S3)
-                                            .child(div().text_sm().text_color(fg).child(desc_s))
-                                            .child(
-                                                div()
-                                                    .px(S2)
-                                                    .py(S1)
-                                                    .rounded(R_SM)
-                                                    .border_1()
-                                                    .border_color(border.opacity(OPACITY_DISABLED))
-                                                    .bg(cx.theme().muted.opacity(OPACITY_HOVER))
-                                                    .text_xs()
-                                                    .text_color(muted)
-                                                    .child(key_s),
-                                            )
-                                    }))
+                            .filter_map(|(category, section)| {
+                                // Filter items to those relevant for the current mode
+                                let visible_items: Vec<_> = section
+                                    .items
+                                    .iter()
+                                    .filter(|item| match item.mode {
+                                        None => true, // shown in both modes
+                                        Some(m) => m == current_mode,
+                                    })
+                                    .collect();
+                                // Skip empty sections entirely
+                                if visible_items.is_empty() {
+                                    return None;
+                                }
+                                Some(
+                                    div()
+                                        .flex()
+                                        .flex_col()
+                                        .gap(S1)
+                                        .child(
+                                            div()
+                                                .pt(S1)
+                                                .pb(S1)
+                                                .text_xs()
+                                                .font_weight(gpui::FontWeight::SEMIBOLD)
+                                                .text_color(accent.opacity(OPACITY_SELECTED))
+                                                .child(category.label()),
+                                        )
+                                        .children(visible_items.into_iter().map(|item| {
+                                            let key_s: SharedString = item.keys.into();
+                                            let desc_s: SharedString = item.description.into();
+                                            div()
+                                                .flex()
+                                                .items_center()
+                                                .justify_between()
+                                                .py(S1)
+                                                .gap(S3)
+                                                .child(
+                                                    div().text_sm().text_color(fg).child(desc_s),
+                                                )
+                                                .child(
+                                                    div()
+                                                        .px(S2)
+                                                        .py(S1)
+                                                        .rounded(R_SM)
+                                                        .border_1()
+                                                        .border_color(
+                                                            border.opacity(OPACITY_DISABLED),
+                                                        )
+                                                        .bg(cx
+                                                            .theme()
+                                                            .muted
+                                                            .opacity(OPACITY_HOVER))
+                                                        .text_xs()
+                                                        .text_color(muted)
+                                                        .child(key_s),
+                                                )
+                                        })),
+                                )
                             }),
                     ),
             )

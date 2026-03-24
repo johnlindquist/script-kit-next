@@ -79,7 +79,7 @@ fn resize_to_view_sync_uses_width_aware_path() {
     let fn_start = content
         .find("pub fn resize_to_view_sync(")
         .expect("Expected resize_to_view_sync function");
-    let body = &content[fn_start..content.len().min(fn_start + 400)];
+    let body = &content[fn_start..content.len().min(fn_start + 900)];
     assert!(
         body.contains("width_for_view(view_type)"),
         "resize_to_view_sync must call width_for_view"
@@ -87,6 +87,10 @@ fn resize_to_view_sync_uses_width_aware_path() {
     assert!(
         body.contains("resize_first_window_to_size(target_height, target_width)"),
         "resize_to_view_sync must call resize_first_window_to_size when width is Some"
+    );
+    assert!(
+        body.contains("mini_main_window sizing selected"),
+        "resize_to_view_sync must emit a structured sizing trace for MiniMainWindow"
     );
 }
 
