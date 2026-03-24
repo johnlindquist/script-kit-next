@@ -49,7 +49,7 @@ pub(super) fn log_ai_state(
         category = "AI_STATE",
         event,
         source,
-        window_mode = snapshot.window_mode,
+        window_mode = %snapshot.window_mode,
         history_overlay_visible = snapshot.history_overlay_visible,
         command_bar_open = snapshot.command_bar_open,
         new_chat_menu_open = snapshot.new_chat_menu_open,
@@ -86,7 +86,7 @@ mod tests {
     #[test]
     fn log_ai_state_does_not_panic_with_default_snapshot() {
         let snapshot = super::super::state::AiMiniDebugSnapshot {
-            window_mode: "mini",
+            window_mode: "mini".to_string(),
             history_overlay_visible: false,
             command_bar_open: false,
             new_chat_menu_open: false,

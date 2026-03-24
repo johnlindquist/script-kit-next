@@ -300,9 +300,10 @@ pub struct AiApp {
 /// The telemetry helper `log_ai_state` redacts `search_query` to length-only
 /// so no user input text reaches the telemetry sink. It never captures
 /// conversation content, API keys, or other PII.
-#[derive(Debug, Clone, serde::Serialize, PartialEq, Eq)]
-pub(crate) struct AiMiniDebugSnapshot {
-    pub window_mode: &'static str,
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct AiMiniDebugSnapshot {
+    pub window_mode: String,
     pub history_overlay_visible: bool,
     pub command_bar_open: bool,
     pub new_chat_menu_open: bool,
@@ -335,9 +336,9 @@ impl AiApp {
     pub(crate) fn debug_snapshot(&self) -> AiMiniDebugSnapshot {
         AiMiniDebugSnapshot {
             window_mode: if self.window_mode.is_mini() {
-                "mini"
+                "mini".to_string()
             } else {
-                "full"
+                "full".to_string()
             },
             history_overlay_visible: self.showing_mini_history_overlay,
             command_bar_open: self.command_bar.is_open(),
@@ -365,12 +366,93 @@ impl AiApp {
     }
 }
 
+impl AiMiniDebugSnapshot {
+    /// Remove user-entered text before exposing the snapshot outside the UI layer.
+    pub(crate) fn redact_for_external_use(mut self) -> Self {
+        self.search_query.clear();
+        self
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::InputMode;
+    use super::{AiMiniDebugSnapshot, InputMode};
 
     #[test]
     fn test_ai_window_input_mode_defaults_to_mouse() {
         assert_eq!(InputMode::default(), InputMode::Mouse);
+    }
+
+    #[test]
+    fn debug_snapshot_serde_roundtrip_uses_camel_case() {
+        let snapshot = AiMiniDebugSnapshot {
+            window_mode: "mini".to_string(),
+            history_overlay_visible: true,
+            command_bar_open: false,
+            new_chat_menu_open: false,
+            presets_dropdown_open: false,
+            api_key_input_visible: false,
+            context_picker_open: false,
+            selected_model: Some("Claude 3.7 Sonnet".to_string()),
+            selected_chat_id: Some("abc-123".to_string()),
+            pending_context_parts: 2,
+            has_pending_image: false,
+            is_streaming: true,
+            streaming_error_present: false,
+            pending_delete_chat_present: false,
+            chat_count: 5,
+            current_message_count: 12,
+            sidebar_collapsed: false,
+            show_context_inspector: false,
+            show_context_drawer: false,
+            search_query: String::new(),
+            shortcuts_overlay_visible: false,
+            editing_message_present: false,
+            renaming_chat_present: false,
+        };
+
+        let json = serde_json::to_string(&snapshot).expect("serialize");
+        // Verify camelCase field names in output
+        assert!(json.contains("\"windowMode\""), "must use camelCase: windowMode");
+        assert!(json.contains("\"historyOverlayVisible\""), "must use camelCase: historyOverlayVisible");
+        assert!(json.contains("\"isStreaming\""), "must use camelCase: isStreaming");
+        assert!(json.contains("\"selectedModel\""), "must use camelCase: selectedModel");
+
+        // Roundtrip
+        let deserialized: AiMiniDebugSnapshot =
+            serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(snapshot, deserialized);
+    }
+
+    #[test]
+    fn debug_snapshot_redacts_search_query_for_external_use() {
+        let snapshot = AiMiniDebugSnapshot {
+            window_mode: "mini".to_string(),
+            history_overlay_visible: true,
+            command_bar_open: false,
+            new_chat_menu_open: false,
+            presets_dropdown_open: false,
+            api_key_input_visible: false,
+            context_picker_open: false,
+            selected_model: None,
+            selected_chat_id: None,
+            pending_context_parts: 0,
+            has_pending_image: false,
+            is_streaming: false,
+            streaming_error_present: false,
+            pending_delete_chat_present: false,
+            chat_count: 0,
+            current_message_count: 0,
+            sidebar_collapsed: false,
+            show_context_inspector: false,
+            show_context_drawer: false,
+            search_query: "sensitive search".to_string(),
+            shortcuts_overlay_visible: false,
+            editing_message_present: false,
+            renaming_chat_present: false,
+        };
+
+        let redacted = snapshot.redact_for_external_use();
+        assert!(redacted.search_query.is_empty());
     }
 }
