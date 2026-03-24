@@ -46,6 +46,9 @@ use crate::window_resize;
 /// Pending resize height (if Some, a resize is pending)
 static PENDING_RESIZE: Mutex<Option<f32>> = Mutex::new(None);
 
+/// Pending resize width (if Some, a width change is also pending)
+static PENDING_WIDTH: Mutex<Option<f32>> = Mutex::new(None);
+
 /// Pending move bounds (if Some, a move is pending)
 static PENDING_BOUNDS: Mutex<Option<Bounds<Pixels>>> = Mutex::new(None);
 
@@ -75,6 +78,9 @@ static FLUSH_SCHEDULED: AtomicBool = AtomicBool::new(false);
 pub fn queue_resize(target_height: f32, window: &mut Window, cx: &mut gpui::App) {
     // Store the pending height (overwrites any previous pending value)
     *PENDING_RESIZE.lock().unwrap_or_else(|e| e.into_inner()) = Some(target_height);
+    // Clear any stale width from prior queue_resize_with_width calls —
+    // this is a height-only resize.
+    *PENDING_WIDTH.lock().unwrap_or_else(|e| e.into_inner()) = None;
 
     logging::log(
         "WINDOW_OPS",
@@ -82,6 +88,31 @@ pub fn queue_resize(target_height: f32, window: &mut Window, cx: &mut gpui::App)
     );
 
     // Schedule flush if not already scheduled
+    schedule_flush(window, cx);
+}
+
+/// Queue a window resize with optional width change at the end of the current effect cycle.
+///
+/// Like `queue_resize`, but also accepts an optional target width.
+/// When `target_width` is `Some`, the window will be resized to both the new height and width.
+pub fn queue_resize_with_width(
+    target_height: f32,
+    target_width: Option<f32>,
+    window: &mut Window,
+    cx: &mut gpui::App,
+) {
+    *PENDING_RESIZE.lock().unwrap_or_else(|e| e.into_inner()) = Some(target_height);
+    // Always assign — None explicitly clears any stale width from prior calls.
+    *PENDING_WIDTH.lock().unwrap_or_else(|e| e.into_inner()) = target_width;
+
+    logging::log(
+        "WINDOW_OPS",
+        &format!(
+            "Queued resize to height: {:.0}px, width: {:?}",
+            target_height, target_width
+        ),
+    );
+
     schedule_flush(window, cx);
 }
 
@@ -145,6 +176,7 @@ pub fn has_pending_ops() -> bool {
 #[allow(dead_code)]
 pub fn clear_pending_ops() {
     *PENDING_RESIZE.lock().unwrap_or_else(|e| e.into_inner()) = None;
+    *PENDING_WIDTH.lock().unwrap_or_else(|e| e.into_inner()) = None;
     *PENDING_BOUNDS.lock().unwrap_or_else(|e| e.into_inner()) = None;
     FLUSH_SCHEDULED.store(false, Ordering::SeqCst);
     logging::log("WINDOW_OPS", "Cleared all pending operations");
@@ -175,17 +207,37 @@ fn flush_pending_ops() {
     // Reset the scheduled flag FIRST (allows new operations to schedule a new flush)
     FLUSH_SCHEDULED.store(false, Ordering::SeqCst);
 
-    // Execute pending resize if any
-    if let Some(height) = PENDING_RESIZE
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .take()
-    {
-        logging::log(
-            "WINDOW_OPS",
-            &format!("Flushing resize to height: {:.0}px", height),
-        );
-        window_resize::resize_first_window_to_height(gpui::px(height));
+    // Execute pending resize if any.
+    // Take height and width atomically under both locks to prevent
+    // a concurrent queue call from splitting the pair.
+    let (pending_height, pending_width) = {
+        let height = PENDING_RESIZE
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .take();
+        let width = PENDING_WIDTH
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .take();
+        (height, width)
+    };
+    if let Some(height) = pending_height {
+        if let Some(w) = pending_width {
+            logging::log(
+                "WINDOW_OPS",
+                &format!(
+                    "Flushing resize to height: {:.0}px, width: {:.0}px",
+                    height, w
+                ),
+            );
+            window_resize::resize_first_window_to_size(gpui::px(height), Some(w));
+        } else {
+            logging::log(
+                "WINDOW_OPS",
+                &format!("Flushing resize to height: {:.0}px", height),
+            );
+            window_resize::resize_first_window_to_height(gpui::px(height));
+        }
     }
 
     // Execute pending move if any

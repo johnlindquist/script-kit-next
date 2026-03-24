@@ -256,8 +256,7 @@ impl ScriptListApp {
     /// Prefer `update_window_size_deferred` when you have window/cx access.
     pub(crate) fn update_window_size(&mut self) {
         if let Some((view_type, item_count)) = self.calculate_window_size_params() {
-            let target_height = height_for_view(view_type, item_count);
-            resize_first_window_to_height(target_height);
+            crate::window_resize::resize_to_view_sync(view_type, item_count);
         }
     }
 
