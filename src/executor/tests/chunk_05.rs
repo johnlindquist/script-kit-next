@@ -258,22 +258,7 @@ fn test_run_scriptlet_with_conditionals() {
     );
 }
 
-// This test actually opens Finder to /tmp, so it's a system test
-#[cfg(all(unix, feature = "system-tests"))]
-#[test]
-fn test_run_scriptlet_open() {
-    // Just test that open doesn't error on a valid path
-    // We can't really verify it opens, but we can test the function runs
-    let scriptlet = Scriptlet::new(
-        "Open Test".to_string(),
-        "open".to_string(),
-        "/tmp".to_string(),
-    );
-
-    let result = run_scriptlet(&scriptlet, ScriptletExecOptions::default());
-    // This should succeed on macOS/Linux with /tmp
-    assert!(result.is_ok(), "Expected success, got: {:?}", result);
-}
+// REMOVED: test_run_scriptlet_open — opens Finder on the actual system
 
 #[test]
 fn test_scriptlet_exec_options_default() {

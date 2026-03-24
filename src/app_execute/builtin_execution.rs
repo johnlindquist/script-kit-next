@@ -696,7 +696,8 @@ impl ScriptListApp {
                 }
             };
 
-            let _ = this.update(cx, |app, cx| match snapshot_result {
+            // Build prompt outside entity borrow so we can show window safely.
+            let prompt_or_error = match snapshot_result {
                 Ok(snapshot) => {
                     let user_request =
                         crate::menu_bar::current_app_commands::normalize_generate_script_from_current_app_request(
@@ -723,24 +724,39 @@ impl ScriptListApp {
                         "ai_generate_script_from_current_app.prompt_ready"
                     );
 
+                    Ok(prompt)
+                }
+                Err(error) => Err(error),
+            };
+
+            match prompt_or_error {
+                Ok(prompt) => {
+                    // Platform calls — trigger macOS delegate callbacks.
+                    // Safe here: no AppCell borrow is active.
                     script_kit_gpui::set_main_window_visible(true);
                     tracing::info!(
                         trace_id = %trace_id,
                         "ai_generate_script_from_current_app.showing_window"
                     );
                     crate::platform::show_main_window_without_activation();
-                    app.dispatch_ai_script_generation_from_query(prompt, cx);
+
+                    // GPUI state changes inside entity borrow.
+                    let _ = this.update(cx, |app, cx| {
+                        app.dispatch_ai_script_generation_from_query(prompt, cx);
+                    });
                 }
                 Err(error) => {
-                    let message = format!("Failed to capture current app context: {}", error);
-                    app.show_error_toast(message.clone(), cx);
-                    tracing::error!(
-                        trace_id = %trace_id,
-                        error = %error,
-                        "ai_generate_script_from_current_app.capture_failed"
-                    );
+                    let _ = this.update(cx, |app, cx| {
+                        let message = format!("Failed to capture current app context: {}", error);
+                        app.show_error_toast(message.clone(), cx);
+                        tracing::error!(
+                            trace_id = %trace_id,
+                            error = %error,
+                            "ai_generate_script_from_current_app.capture_failed"
+                        );
+                    });
                 }
-            });
+            }
         })
         .detach();
     }
@@ -778,22 +794,26 @@ impl ScriptListApp {
                 .timer(ai_capture_hide_settle_duration())
                 .await;
 
-            let _ = this.update(cx, |app, cx| {
-                tracing::info!(
-                    trace_id = %trace_id,
-                    recipe_prompt_bytes = prompt.len(),
-                    recipe_bundle_id = %recipe.prompt_receipt.bundle_id,
-                    recipe_included_selected_text = recipe.prompt_receipt.included_selected_text,
-                    recipe_included_browser_url = recipe.prompt_receipt.included_browser_url,
-                    "ai_generate_script_from_recipe.prompt_ready"
-                );
+            tracing::info!(
+                trace_id = %trace_id,
+                recipe_prompt_bytes = prompt.len(),
+                recipe_bundle_id = %recipe.prompt_receipt.bundle_id,
+                recipe_included_selected_text = recipe.prompt_receipt.included_selected_text,
+                recipe_included_browser_url = recipe.prompt_receipt.included_browser_url,
+                "ai_generate_script_from_recipe.prompt_ready"
+            );
 
-                script_kit_gpui::set_main_window_visible(true);
-                tracing::info!(
-                    trace_id = %trace_id,
-                    "ai_generate_script_from_recipe.showing_window"
-                );
-                crate::platform::show_main_window_without_activation();
+            // Platform calls — trigger macOS delegate callbacks.
+            // Safe here: no AppCell borrow is active.
+            script_kit_gpui::set_main_window_visible(true);
+            tracing::info!(
+                trace_id = %trace_id,
+                "ai_generate_script_from_recipe.showing_window"
+            );
+            crate::platform::show_main_window_without_activation();
+
+            // GPUI state changes inside entity borrow.
+            let _ = this.update(cx, |app, cx| {
                 app.dispatch_ai_script_generation_from_query(prompt, cx);
             });
         })
@@ -1304,6 +1324,12 @@ impl ScriptListApp {
         placeholder: &str,
         cx: &mut Context<Self>,
     ) {
+        tracing::info!(
+            view = ?view,
+            filter = %filter,
+            placeholder = %placeholder,
+            "open_builtin_filterable_view_with_filter — setting current_view and filter"
+        );
         self.filter_text = filter.to_string();
         self.pending_filter_sync = true;
         self.pending_placeholder = Some(placeholder.to_string());
@@ -2990,6 +3016,13 @@ impl ScriptListApp {
                         let raw_query_owned = query_override
                             .unwrap_or(&self.filter_text)
                             .to_string();
+                        tracing::info!(
+                            trace_id = %dctx.trace_id,
+                            raw_query = %raw_query_owned,
+                            filter_text = %self.filter_text,
+                            query_override = ?query_override,
+                            "do_in_current_app.execution_entry — raw inputs"
+                        );
                         let trimmed_query =
                             crate::menu_bar::current_app_commands::normalize_do_in_current_app_request(
                                 Some(&raw_query_owned),
@@ -3040,6 +3073,13 @@ impl ScriptListApp {
 
                                     match action {
                                         crate::menu_bar::current_app_commands::DoInCurrentAppAction::OpenCommandPalette => {
+                                            tracing::info!(
+                                                trace_id = %dctx.trace_id,
+                                                cached_entries = entries.len(),
+                                                filter = %trimmed_query,
+                                                placeholder = %snapshot_receipt.placeholder,
+                                                "do_in_current_app.action → OpenCommandPalette — switching to CurrentAppCommandsView"
+                                            );
                                             self.cached_current_app_entries = entries;
                                             self.open_builtin_filterable_view_with_filter(
                                                 AppView::CurrentAppCommandsView {
@@ -3053,10 +3093,21 @@ impl ScriptListApp {
                                             Self::builtin_success(dctx, "do_in_current_app_open_palette")
                                         }
                                         crate::menu_bar::current_app_commands::DoInCurrentAppAction::ExecuteEntry(entry_index) => {
+                                            tracing::info!(
+                                                trace_id = %dctx.trace_id,
+                                                entry_index = entry_index,
+                                                entry_name = %entries[entry_index].name,
+                                                "do_in_current_app.action → ExecuteEntry — running menu command directly"
+                                            );
                                             let entry = entries[entry_index].clone();
                                             self.execute_builtin_inner(&entry, Some(&raw_query_owned), dctx, cx)
                                         }
                                         crate::menu_bar::current_app_commands::DoInCurrentAppAction::GenerateScript => {
+                                            tracing::info!(
+                                                trace_id = %dctx.trace_id,
+                                                trimmed_query = %trimmed_query,
+                                                "do_in_current_app.action → GenerateScript — no menu match, falling back to AI"
+                                            );
                                             self.spawn_generate_script_from_current_app_after_hide(
                                                 dctx.trace_id.to_string(),
                                                 Some(trimmed_query),

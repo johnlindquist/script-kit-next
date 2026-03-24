@@ -64,6 +64,7 @@ fn parse_mentions(raw: &str) -> (String, Vec<AiContextPart>) {
 
 #[test]
 fn explicit_context_surfaces_share_one_contract_end_to_end() {
+    script_kit_gpui::context_snapshot::enable_deterministic_context_capture();
     // Step 1: Parse mentions from raw composer input
     let raw = "@context\n@browser\n\nPlease summarize what matters.";
     let (cleaned, mention_parts) = parse_mentions(raw);

@@ -1,6 +1,5 @@
 use super::*;
-use crate::theme::opacity::{OPACITY_DANGER_BG, OPACITY_HOVER, OPACITY_SELECTED};
-use gpui::AnyElement;
+use crate::theme::opacity::{OPACITY_HOVER, OPACITY_SELECTED};
 
 impl AiApp {
     /// Add a file attachment by enqueuing a `FilePath` context part with dedup.
@@ -42,154 +41,42 @@ impl AiApp {
         cx.notify();
     }
 
-    fn render_mini_history_list(&mut self, cx: &mut Context<Self>) -> AnyElement {
-        let selected_id = self.selected_chat_id;
-        let sidebar_rows = build_sidebar_rows_for_chats(&self.chats);
-        self.sync_sidebar_list_item_count(sidebar_rows.len());
-        let sidebar_entity = cx.entity();
-        let sidebar_list = list(self.sidebar_list_state.clone(), move |ix, _window, cx| {
-            let row = sidebar_rows.get(ix).copied();
-            sidebar_entity.update(cx, |this, cx| match row {
-                Some(SidebarRow::Header { group, is_first }) => this
-                    .render_sidebar_group_header(group, is_first, cx)
-                    .into_any_element(),
-                Some(SidebarRow::Chat { chat_id }) => this
-                    .chats
-                    .iter()
-                    .find(|chat| chat.id == chat_id)
-                    .map(|chat| {
-                        this.render_chat_item(chat, selected_id, cx)
-                            .into_any_element()
-                    })
-                    .unwrap_or_else(|| div().into_any_element()),
-                None => div().into_any_element(),
-            })
-        })
-        .with_sizing_behavior(ListSizingBehavior::Infer)
-        .size_full()
-        .px(SIDEBAR_INSET_X)
-        .pb(S2);
-
-        if self.chats.is_empty() && !self.search_query.is_empty() {
-            div()
-                .flex()
-                .flex_col()
-                .items_center()
-                .justify_center()
-                .size_full()
-                .py_8()
-                .gap(S2)
-                .child(
-                    svg()
-                        .external_path(LocalIconName::MagnifyingGlass.external_path())
-                        .size(px(24.))
-                        .text_color(cx.theme().muted_foreground.opacity(OPACITY_HOVER)),
-                )
-                .child(
-                    div()
-                        .text_sm()
-                        .text_color(cx.theme().muted_foreground.opacity(OPACITY_SELECTED))
-                        .child("No chats found"),
-                )
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(cx.theme().muted_foreground.opacity(OPACITY_HOVER))
-                        .child(format!("No results for \"{}\"", self.search_query)),
-                )
-                .child(
-                    div()
-                        .mt(S2)
-                        .text_xs()
-                        .text_color(cx.theme().muted_foreground.opacity(OPACITY_HOVER))
-                        .child("Press Esc to clear search"),
-                )
-                .into_any_element()
-        } else if self.chats.is_empty() && self.search_query.is_empty() {
-            div()
-                .flex()
-                .flex_col()
-                .items_center()
-                .justify_center()
-                .size_full()
-                .py_8()
-                .gap_3()
-                .child(
-                    svg()
-                        .external_path(LocalIconName::MessageCircle.external_path())
-                        .size(px(28.))
-                        .text_color(cx.theme().muted_foreground.opacity(OPACITY_DANGER_BG)),
-                )
-                .child(
-                    div()
-                        .text_sm()
-                        .text_color(cx.theme().muted_foreground.opacity(OPACITY_SELECTED))
-                        .child("No conversations yet"),
-                )
-                .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap(S1)
-                        .child(
-                            div()
-                                .px(S2)
-                                .py(S1)
-                                .rounded(R_SM)
-                                .bg(cx.theme().muted.opacity(OPACITY_HOVER))
-                                .text_xs()
-                                .text_color(cx.theme().muted_foreground.opacity(OPACITY_SELECTED))
-                                .child("\u{2318}N"),
-                        )
-                        .child(
-                            div()
-                                .text_xs()
-                                .text_color(cx.theme().muted_foreground.opacity(OPACITY_HOVER))
-                                .child("to start a new chat"),
-                        ),
-                )
-                .into_any_element()
-        } else {
-            div()
-                .relative()
-                .size_full()
-                .child(sidebar_list)
-                .vertical_scrollbar(&self.sidebar_list_state)
-                .into_any_element()
-        }
-    }
-
     fn render_mini_history_overlay(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+        // Transparent backdrop catches clicks outside the overlay to dismiss it.
         div()
-            .id("ai-mini-history-overlay")
+            .id("ai-mini-history-backdrop")
             .absolute()
-            .top(px(48.))
-            .left(S3)
-            .w(px(320.))
-            .max_h(px(420.))
-            .bg(cx.theme().background)
-            .border_1()
-            .border_color(cx.theme().border)
-            .rounded(R_LG)
-            .overflow_hidden()
-            .flex()
-            .flex_col()
-            .child(
-                div()
-                    .px(S3)
-                    .py(S2)
-                    .border_b_1()
-                    .border_color(cx.theme().border)
-                    .text_xs()
-                    .font_weight(gpui::FontWeight::MEDIUM)
-                    .text_color(cx.theme().muted_foreground.opacity(OPACITY_SELECTED))
-                    .child("Recent Chats"),
+            .top_0()
+            .left_0()
+            .size_full()
+            .on_mouse_down(
+                gpui::MouseButton::Left,
+                cx.listener(|this, _, _, cx| {
+                    this.showing_mini_history_overlay = false;
+                    cx.notify();
+                }),
             )
             .child(
                 div()
-                    .flex_1()
-                    .min_h_0()
-                    .child(self.render_mini_history_list(cx)),
+                    .id("ai-mini-history-overlay")
+                    .absolute()
+                    .top(px(48.))
+                    .left(S3)
+                    .w(px(320.))
+                    .max_h(px(420.))
+                    .bg(cx.theme().background)
+                    .border_1()
+                    .border_color(cx.theme().border)
+                    .rounded(R_LG)
+                    .shadow_lg()
+                    .overflow_hidden()
+                    .flex()
+                    .flex_col()
+                    // Stop propagation so clicks inside the overlay don't dismiss it
+                    .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| {
+                        cx.stop_propagation();
+                    })
+                    .child(self.render_sidebar_body(cx)),
             )
     }
 
@@ -436,6 +323,8 @@ impl Render for AiApp {
                 this.handle_root_key_down(event, window, cx);
             }))
             .child(if self.window_mode.is_mini() {
+                let muted_fg = cx.theme().muted_foreground;
+                let label_color = muted_fg.opacity(OPACITY_SELECTED);
                 div()
                     .id("ai-titlebar-mini")
                     .w_full()
@@ -448,10 +337,11 @@ impl Render for AiApp {
                     .justify_between()
                     .border_b_1()
                     .border_color(cx.theme().border)
+                    // Left: "AI" title + clickable model name
                     .child(
                         div()
                             .flex()
-                            .items_baseline()
+                            .items_center()
                             .gap(S2)
                             .min_w_0()
                             .child(
@@ -462,20 +352,34 @@ impl Render for AiApp {
                             )
                             .child(
                                 div()
+                                    .id("ai-mini-model-name")
                                     .text_xs()
-                                    .text_color(
-                                        cx.theme().muted_foreground.opacity(OPACITY_SELECTED),
-                                    )
+                                    .text_color(label_color)
                                     .overflow_hidden()
                                     .text_ellipsis()
+                                    .cursor_pointer()
+                                    .hover(|el| {
+                                        el.text_color(cx.theme().foreground)
+                                    })
+                                    .tooltip(|window, cx| {
+                                        Tooltip::new("Switch model").build(window, cx)
+                                    })
+                                    .on_mouse_down(
+                                        gpui::MouseButton::Left,
+                                        cx.listener(|this, _, window, cx| {
+                                            this.show_command_bar(window, cx);
+                                        }),
+                                    )
                                     .child(mini_model_display_name),
                             ),
                     )
+                    // Right: Recent (⌘J), New (⌘N), Actions (⌘K)
                     .child(
                         div()
                             .flex()
                             .items_center()
                             .gap(S1)
+                            // Recent button
                             .child(
                                 div()
                                     .id("ai-mini-recent")
@@ -483,11 +387,14 @@ impl Render for AiApp {
                                     .py(S1)
                                     .rounded(R_SM)
                                     .cursor_pointer()
+                                    .flex()
+                                    .items_center()
+                                    .gap(SP_2)
                                     .text_xs()
                                     .text_color(if self.showing_mini_history_overlay {
                                         cx.theme().foreground
                                     } else {
-                                        cx.theme().muted_foreground.opacity(OPACITY_SELECTED)
+                                        label_color
                                     })
                                     .when(self.showing_mini_history_overlay, |el| {
                                         el.bg(cx.theme().muted.opacity(OPACITY_HOVER))
@@ -496,11 +403,19 @@ impl Render for AiApp {
                                         el.bg(cx.theme().muted.opacity(OPACITY_HOVER))
                                             .text_color(cx.theme().foreground)
                                     })
+                                    .tooltip(|window, cx| {
+                                        Tooltip::new("Recent chats")
+                                            .key_binding(
+                                                gpui::Keystroke::parse("cmd-j").ok().map(Kbd::new),
+                                            )
+                                            .build(window, cx)
+                                    })
                                     .on_click(cx.listener(|this, _, _, cx| {
                                         this.toggle_mini_history_overlay(cx);
                                     }))
                                     .child("Recent"),
                             )
+                            // New chat button
                             .child(
                                 div()
                                     .id("ai-mini-new")
@@ -508,19 +423,28 @@ impl Render for AiApp {
                                     .py(S1)
                                     .rounded(R_SM)
                                     .cursor_pointer()
+                                    .flex()
+                                    .items_center()
+                                    .gap(SP_2)
                                     .text_xs()
-                                    .text_color(
-                                        cx.theme().muted_foreground.opacity(OPACITY_SELECTED),
-                                    )
+                                    .text_color(label_color)
                                     .hover(|el| {
                                         el.bg(cx.theme().muted.opacity(OPACITY_HOVER))
                                             .text_color(cx.theme().foreground)
                                     })
+                                    .tooltip(|window, cx| {
+                                        Tooltip::new("New chat")
+                                            .key_binding(
+                                                gpui::Keystroke::parse("cmd-n").ok().map(Kbd::new),
+                                            )
+                                            .build(window, cx)
+                                    })
                                     .on_click(cx.listener(|this, _, window, cx| {
-                                        this.show_new_chat_command_bar(window, cx);
+                                        this.new_conversation(window, cx);
                                     }))
                                     .child("New"),
                             )
+                            // Actions button
                             .child(
                                 div()
                                     .id("ai-mini-actions")
@@ -528,13 +452,21 @@ impl Render for AiApp {
                                     .py(S1)
                                     .rounded(R_SM)
                                     .cursor_pointer()
+                                    .flex()
+                                    .items_center()
+                                    .gap(SP_2)
                                     .text_xs()
-                                    .text_color(
-                                        cx.theme().muted_foreground.opacity(OPACITY_SELECTED),
-                                    )
+                                    .text_color(label_color)
                                     .hover(|el| {
                                         el.bg(cx.theme().muted.opacity(OPACITY_HOVER))
                                             .text_color(cx.theme().foreground)
+                                    })
+                                    .tooltip(|window, cx| {
+                                        Tooltip::new("Actions")
+                                            .key_binding(
+                                                gpui::Keystroke::parse("cmd-k").ok().map(Kbd::new),
+                                            )
+                                            .build(window, cx)
                                     })
                                     .on_click(cx.listener(|this, _, window, cx| {
                                         this.show_command_bar(window, cx);

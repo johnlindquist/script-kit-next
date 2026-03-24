@@ -278,6 +278,29 @@ impl AiApp {
             "inspect_context" => {
                 self.toggle_context_inspector(cx);
             }
+            "export_markdown" => {
+                self.export_chat_to_clipboard(cx);
+            }
+            "toggle_window_mode" => {
+                let new_mode = if self.window_mode.is_mini() {
+                    super::types::AiWindowMode::Full
+                } else {
+                    super::types::AiWindowMode::Mini
+                };
+                self.window_mode = new_mode;
+                self.showing_mini_history_overlay = false;
+                window.set_window_title(new_mode.title());
+                window.resize(gpui::size(
+                    px(new_mode.default_width()),
+                    px(new_mode.default_height()),
+                ));
+                tracing::info!(
+                    target: "ai",
+                    window_mode = ?new_mode,
+                    "AI window mode toggled via command bar"
+                );
+                cx.notify();
+            }
             _ => {
                 tracing::warn!(action = action_id, "Unknown action");
             }
@@ -306,6 +329,20 @@ impl AiApp {
                 self.hide_all_dropdowns(cx);
                 self.show_command_bar(window, cx);
             }
+            return;
+        }
+
+        // Handle Cmd+J to toggle mini history overlay
+        if has_cmd && key_lower == "j" && self.window_mode.is_mini() {
+            tracing::debug!(target: "ai", "SimulateKey: Cmd+J - toggling mini history overlay");
+            self.toggle_mini_history_overlay(cx);
+            return;
+        }
+
+        // Handle Cmd+N for new chat
+        if has_cmd && key_lower == "n" {
+            tracing::debug!(target: "ai", "SimulateKey: Cmd+N - new conversation");
+            self.new_conversation(window, cx);
             return;
         }
 

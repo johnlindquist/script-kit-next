@@ -393,11 +393,5 @@ mod system_tests {
         println!("Injected text");
     }
 
-    #[test]
-    fn test_empty_paste() {
-        // Pasting empty text should succeed
-        let injector = TextInjector::new();
-        let result = injector.paste_text("");
-        assert!(result.is_ok());
-    }
+    // REMOVED: test_empty_paste — calls paste_text which simulates real Cmd+V
 }

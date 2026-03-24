@@ -359,7 +359,7 @@ impl AiApp {
                     // Save bounds before closing
                     let wb = window.window_bounds();
                     crate::window_state::save_window_from_gpui(
-                        crate::window_state::WindowRole::Ai,
+                        super::window_api::window_role_for_mode(self.window_mode),
                         wb,
                     );
                     window.remove_window();

@@ -1010,7 +1010,8 @@ fn test_ai_command_bar_has_expected_ids() {
     assert!(ids.contains(&"chat:toggle_shortcuts_help"));
     assert!(ids.contains(&"chat:capture_screen_area"));
     assert!(ids.contains(&"chat:inspect_context"));
-    assert_eq!(ids.len(), 22);
+    assert!(ids.contains(&"chat:toggle_window_mode"));
+    assert_eq!(ids.len(), 23);
 }
 
 // =========================================================================

@@ -577,7 +577,7 @@ mod from_dialog_builtin_action_validation_tests_11 {
     #[test]
     fn cat13_ai_command_bar_has_12_actions() {
         let actions = get_ai_command_bar_actions();
-        assert_eq!(actions.len(), 22);
+        assert_eq!(actions.len(), 23);
     }
 
     #[test]
@@ -2232,12 +2232,12 @@ mod from_dialog_builtin_action_validation_tests_12 {
                 .iter()
                 .filter(|a| a.section.as_deref() == Some("Settings"))
                 .count();
-            assert_eq!(count, 1, "Settings section should have 1 action");
+            assert_eq!(count, 2, "Settings section should have 2 actions");
         }
     
         #[test]
         fn cat06_ai_total_12_actions() {
-            assert_eq!(get_ai_command_bar_actions().len(), 22);
+            assert_eq!(get_ai_command_bar_actions().len(), 23);
         }
 
 
@@ -6021,7 +6021,7 @@ mod from_dialog_builtin_action_validation_tests_14 {
                 .iter()
                 .filter(|a| a.section.as_deref() == Some("Settings"))
                 .collect();
-            assert_eq!(section_actions.len(), 1);
+            assert_eq!(section_actions.len(), 2);
         }
     
         #[test]
@@ -8474,7 +8474,7 @@ mod from_dialog_builtin_action_validation_tests_15 {
                 .filter(|a| a.section.as_deref() == Some("Settings"))
                 .map(|a| a.id.as_str())
                 .collect();
-            assert_eq!(settings_ids, vec!["chat:change_model"]);
+            assert_eq!(settings_ids, vec!["chat:change_model", "chat:toggle_window_mode"]);
         }
     
         // =========================================================================
@@ -9403,7 +9403,7 @@ mod from_dialog_builtin_action_validation_tests_15 {
     
         #[test]
         fn cat24_ai_total_13() {
-            assert_eq!(get_ai_command_bar_actions().len(), 22);
+            assert_eq!(get_ai_command_bar_actions().len(), 23);
         }
     
         #[test]
@@ -15052,13 +15052,13 @@ mod from_dialog_builtin_action_validation_tests_18 {
                 .iter()
                 .filter(|a| a.section.as_ref() == Some(&"Settings".to_string()))
                 .count();
-            assert_eq!(count, 1);
+            assert_eq!(count, 2);
         }
     
         #[test]
         fn cat27_total_ai_actions_is_12() {
             let actions = get_ai_command_bar_actions();
-            assert_eq!(actions.len(), 22);
+            assert_eq!(actions.len(), 23);
         }
     
         // =========================================================================
@@ -16070,7 +16070,7 @@ mod from_dialog_builtin_action_validation_tests_19 {
                 .map(|a| a.id.as_str())
                 .collect();
             assert_eq!(help_ids, vec!["chat:toggle_shortcuts_help"]);
-            assert_eq!(settings_ids, vec!["chat:change_model"]);
+            assert_eq!(settings_ids, vec!["chat:change_model", "chat:toggle_window_mode"]);
         }
     
         // =========================================================================

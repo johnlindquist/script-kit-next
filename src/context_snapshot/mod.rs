@@ -10,7 +10,9 @@ mod inspection;
 mod types;
 
 #[allow(unused_imports)] // Used via lib crate; binary only needs capture_context_snapshot_json
-pub use capture::{capture_context_snapshot, capture_context_snapshot_json};
+pub use capture::{
+    capture_context_snapshot, capture_context_snapshot_json, enable_deterministic_context_capture,
+};
 #[allow(unused_imports)] // Public API surface for lib consumers and MCP
 pub use inspection::{
     build_inspection_hud_message, build_inspection_receipt, ContextSnapshotInspectionReceipt,

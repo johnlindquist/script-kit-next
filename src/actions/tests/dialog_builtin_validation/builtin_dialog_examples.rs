@@ -247,7 +247,7 @@ mod from_dialog_builtin_action_validation_tests_21 {
     #[test]
     fn batch21_ai_command_bar_total_12_actions() {
         let actions = get_ai_command_bar_actions();
-        assert_eq!(actions.len(), 22);
+        assert_eq!(actions.len(), 23);
     }
     
     #[test]
@@ -2311,7 +2311,7 @@ mod from_dialog_builtin_action_validation_tests_22 {
     #[test]
     fn batch22_ai_command_bar_total_is_12() {
         let actions = get_ai_command_bar_actions();
-        assert_eq!(actions.len(), 22);
+        assert_eq!(actions.len(), 23);
     }
     
     #[test]
@@ -5467,7 +5467,7 @@ mod from_dialog_builtin_action_validation_tests_24 {
     #[test]
     fn batch24_ai_command_bar_total_12() {
         let actions = get_ai_command_bar_actions();
-        assert_eq!(actions.len(), 22);
+        assert_eq!(actions.len(), 23);
     }
     
     #[test]
@@ -8798,7 +8798,7 @@ mod from_dialog_builtin_action_validation_tests_27 {
     #[test]
     fn cat27_22_ai_total_is_12() {
         let actions = get_ai_command_bar_actions();
-        assert_eq!(actions.len(), 22);
+        assert_eq!(actions.len(), 23);
     }
     
     // ─────────────────────────────────────────────
@@ -12429,7 +12429,7 @@ mod from_dialog_builtin_action_validation_tests_30 {
     #[test]
     fn batch30_ai_bar_12_actions() {
         let actions = get_ai_command_bar_actions();
-        assert_eq!(actions.len(), 22);
+        assert_eq!(actions.len(), 23);
     }
 
     #[test]
@@ -12438,7 +12438,7 @@ mod from_dialog_builtin_action_validation_tests_30 {
         let mut ids: Vec<&str> = actions.iter().map(|a| a.id.as_str()).collect();
         ids.sort();
         ids.dedup();
-        assert_eq!(ids.len(), 22, "All 22 AI bar action IDs must be unique");
+        assert_eq!(ids.len(), 23, "All 23 AI bar action IDs must be unique");
     }
     
     #[test]

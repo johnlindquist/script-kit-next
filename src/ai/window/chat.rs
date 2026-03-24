@@ -320,6 +320,7 @@ impl AiApp {
         self.last_context_receipt = None;
         self.show_context_inspector = false;
         self.show_context_drawer = false;
+        self.showing_mini_history_overlay = false;
 
         let chat_id = self.create_chat(window, cx);
 
@@ -450,6 +451,7 @@ impl AiApp {
         publish_streaming_state(AiStreamingSnapshot::default());
 
         // Reset UX state for new chat
+        self.showing_mini_history_overlay = false;
         self.editing_message_id = None;
         if let Some(message) = provider_error_message {
             self.clear_streaming_state_with_error(message, cx);

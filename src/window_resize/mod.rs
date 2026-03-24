@@ -298,10 +298,7 @@ fn height_for_view_with_layout(
         ViewType::MiniMainWindow => {
             let visible_items = item_count.clamp(4, MINI_MAIN_WINDOW_MAX_VISIBLE_ROWS) as f32;
             let total_height = MINI_MAIN_WINDOW_HEADER_HEIGHT + (visible_items * LIST_ITEM_HEIGHT);
-            px(total_height.clamp(
-                MINI_MAIN_WINDOW_MIN_HEIGHT,
-                MINI_MAIN_WINDOW_MAX_HEIGHT,
-            ))
+            px(total_height.clamp(MINI_MAIN_WINDOW_MIN_HEIGHT, MINI_MAIN_WINDOW_MAX_HEIGHT))
         }
         ViewType::ArgPromptWithChoices => {
             let visible_items = item_count.max(1) as f32;

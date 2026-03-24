@@ -69,14 +69,9 @@ impl AiApp {
         }
     }
 
-    /// Render the chats sidebar with date groupings
-    pub(super) fn render_sidebar(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
-        // If sidebar is collapsed, completely hide it (Raycast-style)
-        // The toggle button is absolutely positioned in the main container
-        if self.sidebar_collapsed {
-            return div().w(px(0.)).h_full().into_any_element();
-        }
-
+    /// Reusable sidebar body: search + chat list with empty states.
+    /// Used by both the full sidebar and the mini history overlay.
+    pub(super) fn render_sidebar_body(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         let selected_id = self.selected_chat_id;
         let sidebar_rows = build_sidebar_rows_for_chats(&self.chats);
         self.sync_sidebar_list_item_count(sidebar_rows.len());
@@ -104,17 +99,12 @@ impl AiApp {
         .px(SIDEBAR_INSET_X)
         .pb(S2);
 
-        // Build a custom sidebar with date groupings using divs
-        // This gives us more control over the layout than SidebarGroup
         div()
             .flex()
             .flex_col()
-            .w(SIDEBAR_W)
+            .w_full()
             .h_full()
-            // NO .bg() - let vibrancy show through from root
-            .border_r_1()
-            .border_color(cx.theme().sidebar_border)
-            // Header with new chat button and search
+            // Search header
             .child(
                 div()
                     .flex()
@@ -123,76 +113,6 @@ impl AiApp {
                     .px(SIDEBAR_INSET_X)
                     .pb(S2)
                     .gap(S2)
-                    // New chat button row with preset dropdown option
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .justify_end()
-                            .w_full()
-                            .gap_1()
-                            // New chat button with structured tooltip and key binding
-                            .child(
-                                div()
-                                    .id("new-chat-tooltip-trigger")
-                                    .flex()
-                                    .items_center()
-                                    .gap(S1)
-                                    .hover(|el| el)
-                                    .tooltip(|window, cx| {
-                                        Tooltip::new("New chat")
-                                            .key_binding(
-                                                gpui::Keystroke::parse("cmd-n").ok().map(Kbd::new),
-                                            )
-                                            .build(window, cx)
-                                    })
-                                    .child(
-                                        Button::new("new-chat")
-                                            .ghost()
-                                            .xsmall()
-                                            .icon(IconName::Plus)
-                                            .on_click(cx.listener(|this, _, window, cx| {
-                                                this.new_conversation(window, cx);
-                                            })),
-                                    ),
-                            )
-                            // Presets dropdown trigger - use svg directly for better tooltip control
-                            .child(
-                                div()
-                                    .id("presets-trigger")
-                                    .flex()
-                                    .items_center()
-                                    .justify_center()
-                                    .size(SP_9)
-                                    .rounded(R_SM)
-                                    .cursor_pointer()
-                                    .hover(|el| {
-                                        el.bg(cx.theme().sidebar_accent.opacity(OPACITY_SELECTED))
-                                    })
-                                    .tooltip(|window, cx| {
-                                        Tooltip::new("New chat with preset")
-                                            .key_binding(
-                                                gpui::Keystroke::parse("cmd-shift-n")
-                                                    .ok()
-                                                    .map(Kbd::new),
-                                            )
-                                            .build(window, cx)
-                                    })
-                                    .on_click(cx.listener(|this, _, window, cx| {
-                                        if this.showing_presets_dropdown {
-                                            this.hide_presets_dropdown(cx);
-                                        } else {
-                                            this.hide_all_dropdowns(cx);
-                                            this.show_presets_dropdown(window, cx);
-                                        }
-                                    }))
-                                    .child(
-                                        Icon::new(IconName::ChevronDown).size(ICON_XS).text_color(
-                                            cx.theme().sidebar_foreground.opacity(OPACITY_STRONG),
-                                        ),
-                                    ),
-                            ),
-                    )
                     .child(
                         div()
                             .flex()
@@ -200,7 +120,6 @@ impl AiApp {
                             .gap(S2)
                             .child(div().flex_1().child(self.render_search(cx))),
                     )
-                    // Search result count (shown when there's an active search query with results)
                     .when(
                         !self.search_query.is_empty() && !self.chats.is_empty(),
                         |d| {
@@ -221,19 +140,14 @@ impl AiApp {
                         },
                     ),
             )
-            // Scrollable chat list with date groups
-            // Note: overflow_y_scrollbar() wraps the element in a Scrollable container
-            // min_h_0() is critical for flex containers - without it, the element won't shrink
-            // below its content size and scrolling won't work properly
+            // Scrollable chat list
             .child(
                 div()
-                    .flex()
-                    .flex_col()
+                    .relative()
                     .flex_1()
-                    .min_h_0() // Critical: allows flex child to shrink and enable scrolling
+                    .min_h_0()
                     .overflow_hidden()
                     .child(if self.chats.is_empty() && !self.search_query.is_empty() {
-                        // Empty state when search has no results
                         div()
                             .flex()
                             .flex_col()
@@ -271,7 +185,6 @@ impl AiApp {
                             )
                             .into_any_element()
                     } else if self.chats.is_empty() && self.search_query.is_empty() {
-                        // Empty state when no chats exist at all
                         div()
                             .flex()
                             .flex_col()
@@ -336,6 +249,94 @@ impl AiApp {
                             .into_any_element()
                     }),
             )
+    }
+
+    /// Render the chats sidebar with date groupings
+    pub(super) fn render_sidebar(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+        // If sidebar is collapsed, completely hide it (Raycast-style)
+        if self.sidebar_collapsed {
+            return div().w(px(0.)).h_full().into_any_element();
+        }
+
+        div()
+            .flex()
+            .flex_col()
+            .w(SIDEBAR_W)
+            .h_full()
+            // NO .bg() - let vibrancy show through from root
+            .border_r_1()
+            .border_color(cx.theme().sidebar_border)
+            // New chat + presets header (only in full sidebar, not overlay)
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .justify_end()
+                    .w_full()
+                    .px(SIDEBAR_INSET_X)
+                    .gap_1()
+                    .child(
+                        div()
+                            .id("new-chat-tooltip-trigger")
+                            .flex()
+                            .items_center()
+                            .gap(S1)
+                            .hover(|el| el)
+                            .tooltip(|window, cx| {
+                                Tooltip::new("New chat")
+                                    .key_binding(
+                                        gpui::Keystroke::parse("cmd-n").ok().map(Kbd::new),
+                                    )
+                                    .build(window, cx)
+                            })
+                            .child(
+                                Button::new("new-chat")
+                                    .ghost()
+                                    .xsmall()
+                                    .icon(IconName::Plus)
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        this.new_conversation(window, cx);
+                                    })),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .id("presets-trigger")
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .size(SP_9)
+                            .rounded(R_SM)
+                            .cursor_pointer()
+                            .hover(|el| {
+                                el.bg(cx.theme().sidebar_accent.opacity(OPACITY_SELECTED))
+                            })
+                            .tooltip(|window, cx| {
+                                Tooltip::new("New chat with preset")
+                                    .key_binding(
+                                        gpui::Keystroke::parse("cmd-shift-n")
+                                            .ok()
+                                            .map(Kbd::new),
+                                    )
+                                    .build(window, cx)
+                            })
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                if this.showing_presets_dropdown {
+                                    this.hide_presets_dropdown(cx);
+                                } else {
+                                    this.hide_all_dropdowns(cx);
+                                    this.show_presets_dropdown(window, cx);
+                                }
+                            }))
+                            .child(
+                                Icon::new(IconName::ChevronDown).size(ICON_XS).text_color(
+                                    cx.theme().sidebar_foreground.opacity(OPACITY_STRONG),
+                                ),
+                            ),
+                    ),
+            )
+            // Shared sidebar body (search + chat list)
+            .child(self.render_sidebar_body(cx))
             .into_any_element()
     }
 }

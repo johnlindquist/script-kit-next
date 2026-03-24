@@ -6,6 +6,7 @@ use crate::ai::message_parts::{
 
 #[test]
 fn explicit_context_surfaces_share_one_contract_end_to_end() {
+    crate::context_snapshot::enable_deterministic_context_capture();
     // Step 1: Parse @mentions through the production parser (which delegates
     // to the canonical context_contract module).
     let parsed = parse_context_mentions("@context\n@browser\n\nPlease summarize what matters.");

@@ -9,6 +9,12 @@ use script_kit_gpui::ai::message_parts::{
 };
 use std::sync::Arc;
 
+/// Enable deterministic context capture so `kit://context` resolution
+/// does not trigger real Cmd+C keystrokes.
+fn init() {
+    script_kit_gpui::context_snapshot::enable_deterministic_context_capture();
+}
+
 // ---------- Serde contract tests ----------
 
 #[test]
@@ -47,6 +53,7 @@ fn context_part_file_path_serde_tagged() {
 
 #[test]
 fn context_part_resolution_resource_uri_returns_deterministic_block() {
+    init();
     let scripts: Vec<Arc<script_kit_gpui::scripts::Script>> = Vec::new();
     let scriptlets: Vec<Arc<script_kit_gpui::scripts::Scriptlet>> = Vec::new();
 
@@ -214,6 +221,7 @@ fn context_part_resolution_empty_parts_returns_empty() {
 
 #[test]
 fn context_part_resolution_mixed_resource_and_file() {
+    init();
     let dir = tempfile::tempdir().expect("create temp dir");
     let file_path = dir.path().join("code.rs");
     std::fs::write(&file_path, "let x = 42;").expect("write");

@@ -610,29 +610,8 @@ fn trigger_sdk_action_returns_channel_disconnected_when_receiver_dropped() {
 
 // Tests for pbcopy (macOS only)
 
-#[cfg(all(target_os = "macos", feature = "system-tests"))]
-#[test]
-fn test_pbcopy_basic() {
-    use script_kit_gpui::action_helpers::pbcopy;
-    let result = pbcopy("test clipboard content");
-    assert!(result.is_ok());
-}
-
-#[cfg(all(target_os = "macos", feature = "system-tests"))]
-#[test]
-fn test_pbcopy_empty_string() {
-    use script_kit_gpui::action_helpers::pbcopy;
-    let result = pbcopy("");
-    assert!(result.is_ok());
-}
-
-#[cfg(all(target_os = "macos", feature = "system-tests"))]
-#[test]
-fn test_pbcopy_unicode() {
-    use script_kit_gpui::action_helpers::pbcopy;
-    let result = pbcopy("Hello 🌍 世界");
-    assert!(result.is_ok());
-}
+// REMOVED: test_pbcopy_basic, test_pbcopy_empty_string, test_pbcopy_unicode
+// — write to system clipboard via pbcopy, interferes with user workflow
 
 // ============================================================================
 // Error code and Cancelled variant tests

@@ -1244,6 +1244,7 @@ mod tests {
 
     #[test]
     fn context_resource_preserves_query_uri() {
+        crate::context_snapshot::enable_deterministic_context_capture();
         let content =
             read_resource("kit://context?profile=minimal", &[], &[], None).expect("should resolve");
         assert_eq!(content.uri, "kit://context?profile=minimal");

@@ -5,101 +5,10 @@
 use super::{handle_selected_text_message, SelectedTextHandleResult};
 use crate::protocol::Message;
 
-#[cfg(feature = "system-tests")]
-#[test]
-fn test_handle_get_selected_text_returns_handled() {
-    let msg = Message::get_selected_text("req-001".to_string());
-    let result = handle_selected_text_message(&msg);
-
-    match result {
-        SelectedTextHandleResult::Handled(response) => {
-            // Response should be Submit message (for SDK compatibility)
-            match response {
-                Message::Submit { id, .. } => {
-                    assert_eq!(id, "req-001");
-                }
-                _ => panic!("Expected Submit response, got {:?}", response),
-            }
-        }
-        SelectedTextHandleResult::NotHandled => {
-            panic!("Expected message to be handled");
-        }
-    }
-}
-
-#[cfg(feature = "system-tests")]
-#[test]
-fn test_handle_set_selected_text_returns_handled() {
-    let msg = Message::set_selected_text_msg("test text".to_string(), "req-002".to_string());
-    let result = handle_selected_text_message(&msg);
-
-    match result {
-        SelectedTextHandleResult::Handled(response) => {
-            // Response should be Submit message (for SDK compatibility)
-            match response {
-                Message::Submit { id, .. } => {
-                    assert_eq!(id, "req-002");
-                }
-                _ => panic!("Expected Submit response, got {:?}", response),
-            }
-        }
-        SelectedTextHandleResult::NotHandled => {
-            panic!("Expected message to be handled");
-        }
-    }
-}
-
-#[cfg(feature = "system-tests")]
-#[test]
-fn test_handle_check_accessibility_returns_handled() {
-    let msg = Message::check_accessibility("req-003".to_string());
-    let result = handle_selected_text_message(&msg);
-
-    match result {
-        SelectedTextHandleResult::Handled(response) => {
-            // Response should be Submit message with "true" or "false" value
-            match response {
-                Message::Submit { id, value } => {
-                    assert_eq!(id, "req-003");
-                    // value should be "true" or "false"
-                    assert!(
-                        value == Some("true".to_string()) || value == Some("false".to_string())
-                    );
-                }
-                _ => panic!("Expected Submit response, got {:?}", response),
-            }
-        }
-        SelectedTextHandleResult::NotHandled => {
-            panic!("Expected message to be handled");
-        }
-    }
-}
-
-#[cfg(feature = "system-tests")]
-#[test]
-fn test_handle_request_accessibility_returns_handled() {
-    let msg = Message::request_accessibility("req-004".to_string());
-    let result = handle_selected_text_message(&msg);
-
-    match result {
-        SelectedTextHandleResult::Handled(response) => {
-            // Response should be Submit message with "true" or "false" value
-            match response {
-                Message::Submit { id, value } => {
-                    assert_eq!(id, "req-004");
-                    // value should be "true" or "false"
-                    assert!(
-                        value == Some("true".to_string()) || value == Some("false".to_string())
-                    );
-                }
-                _ => panic!("Expected Submit response, got {:?}", response),
-            }
-        }
-        SelectedTextHandleResult::NotHandled => {
-            panic!("Expected message to be handled");
-        }
-    }
-}
+// REMOVED: test_handle_get_selected_text_returns_handled — triggers real Cmd+C
+// REMOVED: test_handle_set_selected_text_returns_handled — triggers real Cmd+V
+// REMOVED: test_handle_check_accessibility_returns_handled — OS side effects
+// REMOVED: test_handle_request_accessibility_returns_handled — OS side effects
 
 #[test]
 fn test_unrelated_message_returns_not_handled() {

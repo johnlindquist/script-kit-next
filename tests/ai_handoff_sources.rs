@@ -521,3 +521,78 @@ fn selected_text_and_browser_tab_use_deferred_capture_helpers() {
         "browser tab helper must own the browser URL capture call"
     );
 }
+
+// ---------------------------------------------------------------------------
+// Mini AI — render_main_panel branches on window_mode
+// ---------------------------------------------------------------------------
+
+#[test]
+fn render_main_panel_branches_on_window_mode() {
+    let source = read_source("src/ai/window/render_main_panel.rs");
+    assert!(
+        source.contains("match self.window_mode"),
+        "render_main_panel must dispatch on window_mode"
+    );
+    assert!(
+        source.contains("render_full_main_panel"),
+        "render_main_panel must have a full branch"
+    );
+    assert!(
+        source.contains("render_mini_main_panel"),
+        "render_main_panel must have a mini branch"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Mini AI — overlay reuses sidebar_body
+// ---------------------------------------------------------------------------
+
+#[test]
+fn mini_overlay_reuses_sidebar_body() {
+    let source = read_source("src/ai/window/render_root.rs");
+    assert!(
+        source.contains("render_sidebar_body(cx)"),
+        "mini history overlay must reuse sidebar_body"
+    );
+}
+
+#[test]
+fn sidebar_exposes_render_sidebar_body() {
+    let source = read_source("src/ai/window/render_sidebar.rs");
+    assert!(
+        source.contains("fn render_sidebar_body("),
+        "render_sidebar.rs must define render_sidebar_body"
+    );
+    assert!(
+        source.contains("fn render_sidebar("),
+        "render_sidebar.rs must still define render_sidebar"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Mini AI — bounds persistence uses mode-aware role
+// ---------------------------------------------------------------------------
+
+#[test]
+fn ai_bounds_persistence_is_mode_aware() {
+    let interactions = read_source("src/ai/window/interactions.rs");
+    assert!(
+        interactions.contains("window_role_for_mode(self.window_mode)"),
+        "maybe_persist_bounds must use mode-aware WindowRole"
+    );
+
+    let keydown = read_source("src/ai/window/render_keydown.rs");
+    assert!(
+        keydown.contains("window_role_for_mode(self.window_mode)"),
+        "Cmd+W close handler must use mode-aware WindowRole"
+    );
+}
+
+#[test]
+fn window_role_has_ai_mini_variant() {
+    let source = read_source("src/window_state/mod.rs");
+    assert!(
+        source.contains("AiMini"),
+        "WindowRole must have an AiMini variant for separate bounds"
+    );
+}

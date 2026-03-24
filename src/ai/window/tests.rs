@@ -1736,6 +1736,7 @@ fn context_preview_ui_stale_index_returns_none() {
 /// and a receipt that records the duplicate provenance outcome.
 #[test]
 fn composer_receipt_pending_chip_plus_identical_mention_deduplicates() {
+    crate::context_snapshot::enable_deterministic_context_capture();
     use crate::ai::context_contract::ContextAttachmentKind;
     use crate::ai::message_parts::{
         prepare_user_message_from_sources_with_receipt, ContextAssemblyOrigin,
@@ -1953,6 +1954,7 @@ fn composer_receipt_empty_message_with_valid_parts_is_sendable() {
 /// healthy file-path parts.
 #[test]
 fn composer_receipt_diagnostics_does_not_block_healthy_parts() {
+    crate::context_snapshot::enable_deterministic_context_capture();
     use crate::ai::context_contract::ContextAttachmentKind;
     use crate::ai::message_parts::{prepare_user_message_with_receipt, AiContextPart};
 
@@ -2301,6 +2303,7 @@ fn test_send_button_enabled_by_context_parts_alone() {
 /// End-to-end: picker selection → pending part → preflight receipt → valid content.
 #[test]
 fn test_palette_to_preflight_to_send_end_to_end() {
+    crate::context_snapshot::enable_deterministic_context_capture();
     use crate::ai::context_contract::ContextAttachmentKind;
     use crate::ai::message_parts::{prepare_user_message_with_receipt, PreparedMessageDecision};
     use crate::ai::window::context_picker::{build_picker_items, types::ContextPickerItemKind};
@@ -2366,6 +2369,7 @@ fn test_palette_to_preflight_to_send_end_to_end() {
 /// Duplicate attachment via palette + mention deduplicates correctly.
 #[test]
 fn test_palette_plus_mention_deduplication() {
+    crate::context_snapshot::enable_deterministic_context_capture();
     use crate::ai::context_contract::ContextAttachmentKind;
     use crate::ai::context_mentions::parse_context_mentions;
     use crate::ai::message_parts::{
@@ -2405,6 +2409,7 @@ fn test_palette_plus_mention_deduplication() {
 /// Mixed valid and invalid context parts yield Partial, not silent loss.
 #[test]
 fn test_mixed_valid_invalid_parts_yield_partial() {
+    crate::context_snapshot::enable_deterministic_context_capture();
     use crate::ai::context_contract::ContextAttachmentKind;
     use crate::ai::message_parts::{
         prepare_user_message_with_receipt, AiContextPart, PreparedMessageDecision,
@@ -2438,4 +2443,54 @@ fn test_mixed_valid_invalid_parts_yield_partial() {
         receipt.final_user_content.contains("kit://context"),
         "valid part content should be present"
     );
+}
+
+// ---------------------------------------------------------------------------
+// Mini mode tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_mini_mode_reports_as_mini() {
+    assert!(AiWindowMode::Mini.is_mini());
+    assert!(!AiWindowMode::Full.is_mini());
+}
+
+#[test]
+fn test_mini_mode_defaults_to_full() {
+    assert_eq!(AiWindowMode::default(), AiWindowMode::Full);
+    assert!(!AiWindowMode::default().is_mini());
+}
+
+#[test]
+fn test_mini_mode_dimensions_differ_from_full() {
+    let full = AiWindowMode::Full;
+    let mini = AiWindowMode::Mini;
+    assert!(
+        mini.default_width() < full.default_width(),
+        "Mini should be narrower than Full"
+    );
+    assert!(
+        mini.default_height() < full.default_height(),
+        "Mini should be shorter than Full"
+    );
+}
+
+#[test]
+fn test_mini_mode_has_distinct_title() {
+    assert_ne!(
+        AiWindowMode::Full.title(),
+        AiWindowMode::Mini.title(),
+        "Mini and Full should have different window titles"
+    );
+}
+
+#[test]
+fn test_window_role_for_mode_maps_correctly() {
+    use crate::window_state::WindowRole;
+
+    let full_role = super::window_api::window_role_for_mode(AiWindowMode::Full);
+    let mini_role = super::window_api::window_role_for_mode(AiWindowMode::Mini);
+
+    assert_eq!(full_role, WindowRole::Ai);
+    assert_eq!(mini_role, WindowRole::AiMini);
 }
