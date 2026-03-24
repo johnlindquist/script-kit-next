@@ -206,6 +206,7 @@ impl ScriptListApp {
 
         // Reset view
         self.current_view = AppView::ScriptList;
+        self.main_window_mode = MainWindowMode::Full;
 
         // CRITICAL: Reset focused_input to MainFilter so the cursor appears
         // This was a bug where focused_input could remain as ArgPrompt/None after

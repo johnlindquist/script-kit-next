@@ -1,5 +1,12 @@
 //! Integration tests for the context_snapshot module and kit://context MCP resource.
 
+/// Enable deterministic context capture for all tests in this file.
+/// Without this, `read_resource("kit://context", ...)` triggers real Cmd+C
+/// keystrokes via the `get-selected-text` crate's clipboard fallback.
+fn init() {
+    script_kit_gpui::context_snapshot::enable_deterministic_context_capture();
+}
+
 #[test]
 fn context_resource_is_listed() {
     let resources = script_kit_gpui::mcp_resources::get_resource_definitions();
@@ -11,6 +18,7 @@ fn context_resource_is_listed() {
 
 #[test]
 fn context_resource_returns_valid_json_with_schema_version() {
+    init();
     let scripts: Vec<std::sync::Arc<script_kit_gpui::scripts::Script>> = Vec::new();
     let scriptlets: Vec<std::sync::Arc<script_kit_gpui::scripts::Scriptlet>> = Vec::new();
 
@@ -58,6 +66,7 @@ fn context_option_profiles_are_stable() {
 
 #[test]
 fn context_resource_is_available() {
+    init();
     let scripts: Vec<std::sync::Arc<script_kit_gpui::scripts::Script>> = Vec::new();
     let scriptlets: Vec<std::sync::Arc<script_kit_gpui::scripts::Scriptlet>> = Vec::new();
 
@@ -94,6 +103,7 @@ fn context_resource_is_available() {
 
 #[test]
 fn minimal_profile_omits_selected_text_and_menu_bar_from_json() {
+    init();
     let scripts: Vec<std::sync::Arc<script_kit_gpui::scripts::Script>> = Vec::new();
     let scriptlets: Vec<std::sync::Arc<script_kit_gpui::scripts::Scriptlet>> = Vec::new();
 

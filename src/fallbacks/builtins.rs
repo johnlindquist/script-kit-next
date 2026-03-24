@@ -267,6 +267,19 @@ pub fn get_builtin_fallbacks() -> Vec<BuiltinFallback> {
             enabled: true,
             priority: 0,
         },
+        // Do in Current App - match menu commands or generate scripts for the frontmost app
+        BuiltinFallback {
+            id: "builtin-do-in-current-app",
+            name: "Do in Current App",
+            description: "Run a matching menu command or generate a script for the frontmost app",
+            icon: "target",
+            action: FallbackAction::ExecuteBuiltin {
+                builtin_id: "builtin-do-in-current-app".to_string(),
+            },
+            condition: FallbackCondition::Always,
+            enabled: true,
+            priority: 1,
+        },
         // Search Files - high priority, always available
         BuiltinFallback {
             id: "search-files",
@@ -402,7 +415,7 @@ mod tests {
     #[test]
     fn test_get_builtin_fallbacks_count() {
         let fallbacks = get_builtin_fallbacks();
-        assert_eq!(fallbacks.len(), 11, "Should have 11 built-in fallbacks");
+        assert_eq!(fallbacks.len(), 12, "Should have 12 built-in fallbacks");
     }
 
     #[test]
@@ -448,6 +461,7 @@ mod tests {
         // Should include all "Always" fallbacks
         let ids: Vec<&str> = fallbacks.iter().map(|f| f.id).collect();
         assert!(ids.contains(&"builtin-generate-script-with-ai"));
+        assert!(ids.contains(&"builtin-do-in-current-app"));
         assert!(ids.contains(&"search-files"));
         assert!(ids.contains(&"run-in-terminal"));
         assert!(ids.contains(&"add-to-notes"));
@@ -742,5 +756,55 @@ mod tests {
 
         assert_eq!(first.id, "builtin-generate-script-with-ai");
         assert_eq!(first.priority, 0);
+    }
+
+    #[test]
+    fn test_do_in_current_app_fallback_is_registered() {
+        let fallbacks = get_builtin_fallbacks();
+        let entry = fallbacks
+            .iter()
+            .find(|f| f.id == "builtin-do-in-current-app")
+            .expect("builtin-do-in-current-app fallback should exist");
+
+        assert_eq!(entry.name, "Do in Current App");
+        assert_eq!(entry.priority, 1);
+        assert!(entry.enabled);
+        assert_eq!(entry.condition, FallbackCondition::Always);
+    }
+
+    #[test]
+    fn test_do_in_current_app_fallback_passes_input_to_builtin() {
+        let fallbacks = get_builtin_fallbacks();
+        let entry = fallbacks
+            .iter()
+            .find(|f| f.id == "builtin-do-in-current-app")
+            .expect("fallback should exist");
+
+        let result = entry.execute("new private window").unwrap();
+        match result {
+            FallbackResult::ExecuteBuiltin { builtin_id } => {
+                assert_eq!(builtin_id, "builtin-do-in-current-app");
+            }
+            _ => panic!("Expected ExecuteBuiltin result"),
+        }
+    }
+
+    #[test]
+    fn test_do_in_current_app_fallback_priority_after_generate_script() {
+        let fallbacks = get_applicable_fallbacks("close duplicate tabs");
+
+        let gen_pos = fallbacks
+            .iter()
+            .position(|f| f.id == "builtin-generate-script-with-ai");
+        let do_pos = fallbacks
+            .iter()
+            .position(|f| f.id == "builtin-do-in-current-app");
+
+        assert!(gen_pos.is_some());
+        assert!(do_pos.is_some());
+        assert!(
+            gen_pos.unwrap() < do_pos.unwrap(),
+            "generate-script (priority 0) should come before do-in-current-app (priority 1)"
+        );
     }
 }

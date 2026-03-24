@@ -9,6 +9,13 @@ fn ensure_theme_initialized(cx: &mut App) {
 
 static OPENING: AtomicBool = AtomicBool::new(false);
 
+pub(super) fn window_role_for_mode(mode: AiWindowMode) -> crate::window_state::WindowRole {
+    match mode {
+        AiWindowMode::Full => crate::window_state::WindowRole::Ai,
+        AiWindowMode::Mini => crate::window_state::WindowRole::AiMini,
+    }
+}
+
 fn centered_ai_window_bounds_on_cursor_display(mode: AiWindowMode) -> gpui::Bounds<gpui::Pixels> {
     crate::platform::calculate_centered_bounds_on_mouse_display(size(
         px(mode.default_width()),
@@ -155,7 +162,7 @@ fn open_ai_window_with_mode(mode: AiWindowMode, cx: &mut App) -> Result<()> {
     // Restore one global AI window position. If that position is now off-screen
     // (for example, a display was disconnected), center on the cursor display.
     let displays = crate::platform::get_macos_displays();
-    let saved_bounds = crate::window_state::load_window_bounds(crate::window_state::WindowRole::Ai);
+    let saved_bounds = crate::window_state::load_window_bounds(window_role_for_mode(mode));
     if let Some(saved) = saved_bounds {
         if crate::window_state::is_bounds_visible(&saved, &displays) {
             logging::log("AI", "Restoring AI window from global saved bounds");
@@ -354,9 +361,13 @@ pub fn close_ai_window(cx: &mut App) {
 
     if let Some(handle) = handle {
         let _ = handle.update(cx, |_, window, _| {
-            // Save one global AI window position before closing.
             let wb = window.window_bounds();
-            crate::window_state::save_window_from_gpui(crate::window_state::WindowRole::Ai, wb);
+            let role = if window.window_title() == AiWindowMode::Mini.title() {
+                crate::window_state::WindowRole::AiMini
+            } else {
+                crate::window_state::WindowRole::Ai
+            };
+            crate::window_state::save_window_from_gpui(role, wb);
             window.remove_window();
         });
     }

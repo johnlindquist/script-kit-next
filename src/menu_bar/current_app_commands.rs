@@ -110,11 +110,14 @@ pub struct DoInCurrentAppReceipt {
 /// Returns `None` when the raw input is empty, whitespace-only, or matches the
 /// built-in label (case-insensitive). Otherwise returns the trimmed input.
 pub fn normalize_do_in_current_app_request(raw: Option<&str>) -> Option<&str> {
+    tracing::info!(raw_input = ?raw, "do_in_current_app.normalize_request.entry");
     let raw = raw.map(str::trim).filter(|text| !text.is_empty())?;
 
     if raw.eq_ignore_ascii_case(DO_IN_CURRENT_APP_LABEL) {
+        tracing::info!(raw = %raw, "do_in_current_app.normalize_request → None (matches label, treated as empty)");
         None
     } else {
+        tracing::info!(raw = %raw, "do_in_current_app.normalize_request → Some (real query)");
         Some(raw)
     }
 }
@@ -167,6 +170,10 @@ pub fn resolve_do_in_current_app_intent(
         .unwrap_or_default();
 
     if normalized_query.is_empty() {
+        tracing::info!(
+            total_entries = entries.len(),
+            "do_in_current_app.resolve → OpenCommandPalette (empty query, showing all entries)"
+        );
         return (
             DoInCurrentAppAction::OpenCommandPalette,
             DoInCurrentAppReceipt {
@@ -192,14 +199,33 @@ pub fn resolve_do_in_current_app_intent(
         .map(|(idx, _)| *idx)
         .collect();
 
+    tracing::info!(
+        normalized_query = %normalized_query,
+        total_entries = entries.len(),
+        filtered_count = filtered.len(),
+        exact_match_count = exact_matches.len(),
+        "do_in_current_app.resolve.match_results"
+    );
+
     let (action, action_name) = if exact_matches.len() == 1 {
+        tracing::info!(
+            entry_index = exact_matches[0],
+            entry_name = %entries[exact_matches[0]].name,
+            "do_in_current_app.resolve → ExecuteEntry (single exact match)"
+        );
         (
             DoInCurrentAppAction::ExecuteEntry(exact_matches[0]),
             "execute_entry",
         )
     } else if filtered.is_empty() {
+        tracing::info!("do_in_current_app.resolve → GenerateScript (no menu matches)");
         (DoInCurrentAppAction::GenerateScript, "generate_script")
     } else {
+        tracing::info!(
+            filtered_count = filtered.len(),
+            exact_match_count = exact_matches.len(),
+            "do_in_current_app.resolve → OpenCommandPalette (multiple matches, no single exact)"
+        );
         (
             DoInCurrentAppAction::OpenCommandPalette,
             "open_command_palette",
@@ -431,8 +457,7 @@ pub fn build_current_app_intent_trace_receipt(
     raw_query: Option<&str>,
 ) -> CurrentAppIntentTraceReceipt {
     let raw_query_string = raw_query.unwrap_or_default().to_string();
-    let effective_query =
-        normalize_trace_current_app_intent_request(raw_query).unwrap_or_default();
+    let effective_query = normalize_trace_current_app_intent_request(raw_query).unwrap_or_default();
 
     let (entries, snapshot_receipt) = snapshot.clone().into_entries_with_receipt();
     let (action, intent_receipt) =
@@ -592,8 +617,7 @@ pub fn build_current_app_command_recipe(
     browser_url: Option<&str>,
 ) -> CurrentAppCommandRecipe {
     let raw_query_string = raw_query.unwrap_or_default().to_string();
-    let effective_query =
-        normalize_turn_this_into_a_command_request(raw_query).unwrap_or_default();
+    let effective_query = normalize_turn_this_into_a_command_request(raw_query).unwrap_or_default();
 
     let request = (!effective_query.is_empty()).then_some(effective_query.as_str());
 
@@ -743,19 +767,14 @@ pub fn verify_current_app_command_recipe(
         stored_recipe.raw_query.as_str()
     };
 
-    let live_recipe = build_current_app_command_recipe(
-        snapshot,
-        Some(replay_query),
-        selected_text,
-        browser_url,
-    );
+    let live_recipe =
+        build_current_app_command_recipe(snapshot, Some(replay_query), selected_text, browser_url);
 
     let app_name_matches =
         stored_recipe.prompt_receipt.app_name == live_recipe.prompt_receipt.app_name;
     let bundle_id_matches =
         stored_recipe.prompt_receipt.bundle_id == live_recipe.prompt_receipt.bundle_id;
-    let effective_query_matches =
-        stored_recipe.effective_query == live_recipe.effective_query;
+    let effective_query_matches = stored_recipe.effective_query == live_recipe.effective_query;
     let route_matches = stored_recipe.trace.action == live_recipe.trace.action;
     let prompt_matches = stored_recipe.prompt == live_recipe.prompt;
 
@@ -777,32 +796,28 @@ pub fn verify_current_app_command_recipe(
     if !app_name_matches {
         warnings.push(format!(
             "Recipe expected app {:?}, but the current app is {:?}.",
-            stored_recipe.prompt_receipt.app_name,
-            live_recipe.prompt_receipt.app_name,
+            stored_recipe.prompt_receipt.app_name, live_recipe.prompt_receipt.app_name,
         ));
     }
 
     if !bundle_id_matches {
         warnings.push(format!(
             "Recipe expected bundle_id {:?}, but the current bundle_id is {:?}.",
-            stored_recipe.prompt_receipt.bundle_id,
-            live_recipe.prompt_receipt.bundle_id,
+            stored_recipe.prompt_receipt.bundle_id, live_recipe.prompt_receipt.bundle_id,
         ));
     }
 
     if !effective_query_matches {
         warnings.push(format!(
             "Recipe effective_query changed from {:?} to {:?}.",
-            stored_recipe.effective_query,
-            live_recipe.effective_query,
+            stored_recipe.effective_query, live_recipe.effective_query,
         ));
     }
 
     if !route_matches {
         warnings.push(format!(
             "Recipe route changed from {:?} to {:?}.",
-            stored_recipe.trace.action,
-            live_recipe.trace.action,
+            stored_recipe.trace.action, live_recipe.trace.action,
         ));
     }
 
@@ -1476,8 +1491,7 @@ mod tests {
         };
 
         let entries = snap.into_entries();
-        let (action, receipt) =
-            resolve_do_in_current_app_intent(&entries, Some("FILE -> new tab"));
+        let (action, receipt) = resolve_do_in_current_app_intent(&entries, Some("FILE -> new tab"));
 
         assert_eq!(action, DoInCurrentAppAction::ExecuteEntry(0));
         assert_eq!(receipt.filtered_entries, 1);
@@ -1526,9 +1540,7 @@ mod tests {
         );
 
         assert_eq!(
-            normalize_turn_this_into_a_command_request(Some(
-                "Turn This Into a Command: new tab"
-            )),
+            normalize_turn_this_into_a_command_request(Some("Turn This Into a Command: new tab")),
             Some("new tab".to_string())
         );
     }
@@ -1568,7 +1580,10 @@ mod tests {
             None,
         );
 
-        assert_eq!(recipe.schema_version, CURRENT_APP_COMMAND_RECIPE_SCHEMA_VERSION);
+        assert_eq!(
+            recipe.schema_version,
+            CURRENT_APP_COMMAND_RECIPE_SCHEMA_VERSION
+        );
         assert_eq!(recipe.recipe_type, "currentAppCommand");
         assert_eq!(
             recipe.raw_query,
@@ -1582,7 +1597,9 @@ mod tests {
         assert_eq!(recipe.trace.effective_query, "close duplicate tabs");
         assert_eq!(recipe.suggested_script_name, "Safari Close Duplicate Tabs");
         assert_eq!(recipe.trace.action, "generate_script");
-        assert!(recipe.prompt.contains("User Request:\nclose duplicate tabs"));
+        assert!(recipe
+            .prompt
+            .contains("User Request:\nclose duplicate tabs"));
         assert_eq!(recipe.prompt_receipt.app_name, "Safari");
         assert_eq!(recipe.prompt_receipt.bundle_id, "com.apple.Safari");
     }
@@ -1643,13 +1660,8 @@ mod tests {
             build_current_app_command_recipe(snapshot.clone(), Some("new tab"), None, None);
         let entries = snapshot.clone().into_entries();
 
-        let receipt = build_replay_current_app_recipe_receipt(
-            &stored_recipe,
-            &entries,
-            snapshot,
-            None,
-            None,
-        );
+        let receipt =
+            build_replay_current_app_recipe_receipt(&stored_recipe, &entries, snapshot, None, None);
 
         assert_eq!(receipt.verification.status, "match");
         assert_eq!(receipt.action, "execute_entry");
@@ -1682,13 +1694,8 @@ mod tests {
             build_current_app_command_recipe(snapshot.clone(), Some("new"), None, None);
         let entries = snapshot.clone().into_entries();
 
-        let receipt = build_replay_current_app_recipe_receipt(
-            &stored_recipe,
-            &entries,
-            snapshot,
-            None,
-            None,
-        );
+        let receipt =
+            build_replay_current_app_recipe_receipt(&stored_recipe, &entries, snapshot, None, None);
 
         assert_eq!(receipt.verification.status, "match");
         assert_eq!(receipt.action, "open_command_palette");
@@ -1715,13 +1722,8 @@ mod tests {
         );
         let entries = snapshot.clone().into_entries();
 
-        let receipt = build_replay_current_app_recipe_receipt(
-            &stored_recipe,
-            &entries,
-            snapshot,
-            None,
-            None,
-        );
+        let receipt =
+            build_replay_current_app_recipe_receipt(&stored_recipe, &entries, snapshot, None, None);
 
         assert_eq!(receipt.verification.status, "match");
         assert_eq!(receipt.action, "generate_script");
@@ -1745,11 +1747,7 @@ mod tests {
             bundle_id: "com.apple.finder".into(),
             items: vec![
                 apple_menu(),
-                menu(
-                    "File",
-                    vec![leaf("New Finder Window", vec![1, 0])],
-                    vec![1],
-                ),
+                menu("File", vec![leaf("New Finder Window", vec![1, 0])], vec![1]),
             ],
         };
 

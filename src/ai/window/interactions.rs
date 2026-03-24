@@ -564,7 +564,10 @@ impl AiApp {
         // Save bounds
         self.last_persisted_bounds = Some(wb);
         self.last_bounds_save = std::time::Instant::now();
-        crate::window_state::save_window_from_gpui(crate::window_state::WindowRole::Ai, wb);
+        crate::window_state::save_window_from_gpui(
+            super::window_api::window_role_for_mode(self.window_mode),
+            wb,
+        );
     }
 
     pub(super) fn sync_chat_derived_state_from_current_messages(&mut self, chat_id: ChatId) {

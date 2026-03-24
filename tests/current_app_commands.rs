@@ -36,8 +36,14 @@ fn do_in_current_app_builtin_is_registered() {
     );
 
     // Must appear before builtin-current-app-commands
-    let do_pos = entries.iter().position(|e| e.id == "builtin-do-in-current-app").unwrap();
-    let cmd_pos = entries.iter().position(|e| e.id == "builtin-current-app-commands").unwrap();
+    let do_pos = entries
+        .iter()
+        .position(|e| e.id == "builtin-do-in-current-app")
+        .unwrap();
+    let cmd_pos = entries
+        .iter()
+        .position(|e| e.id == "builtin-current-app-commands")
+        .unwrap();
     assert!(
         do_pos < cmd_pos,
         "builtin-do-in-current-app (pos {}) must appear before builtin-current-app-commands (pos {})",
@@ -591,11 +597,13 @@ fn trace_receipt_reports_generate_script_and_includes_prompt_preview() {
         .as_ref()
         .expect("prompt_preview should be present")
         .contains("User Request:\nclose duplicate tabs"));
-    assert!(receipt
-        .prompt_receipt
-        .as_ref()
-        .expect("prompt_receipt should be present")
-        .included_user_request);
+    assert!(
+        receipt
+            .prompt_receipt
+            .as_ref()
+            .expect("prompt_receipt should be present")
+            .included_user_request
+    );
 }
 
 #[test]
@@ -606,8 +614,7 @@ fn trace_receipt_serializes_to_valid_json() {
     );
 
     let json = serde_json::to_string_pretty(&receipt).expect("receipt must serialize");
-    let parsed: serde_json::Value =
-        serde_json::from_str(&json).expect("JSON must be valid");
+    let parsed: serde_json::Value = serde_json::from_str(&json).expect("JSON must be valid");
 
     assert_eq!(parsed["schema_version"], 1);
     assert_eq!(parsed["action"], "execute_entry");
@@ -798,10 +805,7 @@ fn turn_this_into_a_command_recipe_serializes_to_valid_json() {
     );
     assert_eq!(parsed["recipeType"], "currentAppCommand");
     assert_eq!(parsed["effectiveQuery"], "close duplicate tabs");
-    assert_eq!(
-        parsed["suggestedScriptName"],
-        "Safari Close Duplicate Tabs"
-    );
+    assert_eq!(parsed["suggestedScriptName"], "Safari Close Duplicate Tabs");
     assert_eq!(parsed["trace"]["action"], "generate_script");
 }
 
@@ -812,7 +816,10 @@ fn turn_this_into_a_command_recipe_serializes_to_valid_json() {
 #[test]
 fn parse_current_app_command_recipe_json_rejects_empty_input() {
     let error = parse_current_app_command_recipe_json("").unwrap_err();
-    assert!(error.contains("empty"), "Expected empty error, got: {error}");
+    assert!(
+        error.contains("empty"),
+        "Expected empty error, got: {error}"
+    );
 }
 
 #[test]
@@ -912,8 +919,7 @@ fn verify_current_app_command_recipe_reports_match_when_context_identical() {
         None,
     );
 
-    let verification =
-        verify_current_app_command_recipe(&recipe, snapshot, None, None);
+    let verification = verify_current_app_command_recipe(&recipe, snapshot, None, None);
 
     assert_eq!(verification.status, "match");
     assert!(verification.app_name_matches);
@@ -936,8 +942,7 @@ fn verify_current_app_command_recipe_reports_browser_url_drift() {
     );
 
     // Verify with browser URL missing
-    let verification =
-        verify_current_app_command_recipe(&recipe, snapshot, None, None);
+    let verification = verify_current_app_command_recipe(&recipe, snapshot, None, None);
 
     assert_eq!(verification.status, "drift");
     assert!(verification.browser_url_expected);
@@ -970,8 +975,7 @@ fn verify_current_app_command_recipe_reports_app_name_drift() {
         items: vec![],
     };
 
-    let verification =
-        verify_current_app_command_recipe(&recipe, different_app, None, None);
+    let verification = verify_current_app_command_recipe(&recipe, different_app, None, None);
 
     assert_eq!(verification.status, "drift");
     assert!(!verification.app_name_matches);
@@ -994,8 +998,7 @@ fn build_current_app_command_verification_hud_message_format() {
     );
 
     // Match case
-    let verification =
-        verify_current_app_command_recipe(&recipe, snapshot.clone(), None, None);
+    let verification = verify_current_app_command_recipe(&recipe, snapshot.clone(), None, None);
     let msg = build_current_app_command_verification_hud_message(&verification);
     assert!(
         msg.starts_with("Recipe verified:"),
@@ -1009,8 +1012,12 @@ fn build_current_app_command_verification_hud_message_format() {
         None,
         Some("https://example.com"),
     );
-    let verification_drift =
-        verify_current_app_command_recipe(&recipe_with_url, safari_snapshot_with_menus(), None, None);
+    let verification_drift = verify_current_app_command_recipe(
+        &recipe_with_url,
+        safari_snapshot_with_menus(),
+        None,
+        None,
+    );
     let msg_drift = build_current_app_command_verification_hud_message(&verification_drift);
     assert!(
         msg_drift.starts_with("Recipe drift detected:"),
@@ -1028,8 +1035,7 @@ fn verify_current_app_command_recipe_serializes_to_valid_json() {
         Some("https://example.com"),
     );
 
-    let verification =
-        verify_current_app_command_recipe(&recipe, snapshot, None, None);
+    let verification = verify_current_app_command_recipe(&recipe, snapshot, None, None);
 
     let json = serde_json::to_string_pretty(&verification).expect("must serialize");
     let parsed: serde_json::Value = serde_json::from_str(&json).expect("JSON must be valid");

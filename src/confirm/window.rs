@@ -19,10 +19,7 @@ use crate::{
     list_item::FONT_MONO,
     platform,
     theme::get_cached_theme,
-    ui_foundation::{
-        is_key_enter, is_key_escape, is_key_left, is_key_tab,
-        HexColorExt,
-    },
+    ui_foundation::{is_key_enter, is_key_escape, is_key_left, is_key_tab, HexColorExt},
 };
 
 const CONFIRM_PADDING_X: f32 = 20.0;
@@ -381,9 +378,7 @@ pub(crate) fn open_confirm_popup_window(
             display_id,
             ..Default::default()
         },
-        move |_window, cx| {
-            cx.new(|cx| ConfirmPopupWindow::new(request, lifecycle, sender, cx))
-        },
+        move |_window, cx| cx.new(|cx| ConfirmPopupWindow::new(request, lifecycle, sender, cx)),
     )?;
 
     tracing::info!(

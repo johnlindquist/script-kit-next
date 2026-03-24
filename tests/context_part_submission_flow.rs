@@ -11,6 +11,12 @@ use script_kit_gpui::ai::message_parts::{
     AI_MESSAGE_PREPARATION_SCHEMA_VERSION,
 };
 
+/// Enable deterministic context capture so `kit://context` resolution
+/// does not trigger real Cmd+C keystrokes.
+fn init() {
+    script_kit_gpui::context_snapshot::enable_deterministic_context_capture();
+}
+
 /// When one file resolves and another is missing, the receipt must report
 /// partial failure while preserving the successful prefix.
 #[test]
@@ -210,6 +216,7 @@ fn receipt_serde_omits_empty_failures() {
 /// in the prepared `final_user_content`.
 #[test]
 fn e2e_submit_resource_uri_produces_context_source_block() {
+    init();
     let parts = vec![AiContextPart::ResourceUri {
         uri: "kit://context?profile=minimal".to_string(),
         label: "Current Context".to_string(),
@@ -417,6 +424,7 @@ fn e2e_submit_all_failures_blocked_state_surfaced_explicitly() {
 /// contains all fields needed to reconstruct what was sent, failed, and pending.
 #[test]
 fn e2e_submit_receipt_is_machine_verifiable() {
+    init();
     let dir = tempfile::tempdir().expect("create temp dir");
     let file = dir.path().join("data.rs");
     std::fs::write(&file, "struct Data;").expect("write");
@@ -495,6 +503,7 @@ fn e2e_submit_no_parts_no_message_is_ready_empty() {
 /// block order and all blocks are present.
 #[test]
 fn e2e_submit_full_success_preserves_all_blocks_in_order() {
+    init();
     let dir = tempfile::tempdir().expect("create temp dir");
     let file_a = dir.path().join("first.rs");
     let file_b = dir.path().join("second.rs");

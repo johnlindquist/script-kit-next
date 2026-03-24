@@ -1,5 +1,21 @@
 use super::types::*;
 use anyhow::Context;
+use std::sync::atomic::{AtomicBool, Ordering};
+
+/// When set to `true`, `capture_context_snapshot` uses a default empty seed
+/// instead of calling live OS providers. This prevents real keystrokes
+/// (e.g. Cmd+C from the `get-selected-text` clipboard fallback) during tests.
+static DETERMINISTIC_CONTEXT: AtomicBool = AtomicBool::new(false);
+
+/// Enable deterministic (no-op) context capture for the rest of this process.
+///
+/// Call this from integration tests that resolve `kit://context` URIs but do
+/// not need live OS data. Without this, resolution triggers real Cmd+C
+/// keystrokes via the `get-selected-text` crate's clipboard fallback.
+#[allow(dead_code)] // Public API surface for integration tests
+pub fn enable_deterministic_context_capture() {
+    DETERMINISTIC_CONTEXT.store(true, Ordering::SeqCst);
+}
 
 #[cfg(target_os = "macos")]
 fn summarize_menu_item(item: &crate::menu_bar::MenuBarItem) -> MenuBarItemSummary {
@@ -188,12 +204,17 @@ fn capture_focused_window_live() -> Result<Option<FocusedWindowContext>, String>
 /// Individual providers that fail produce a warning string rather than
 /// failing the entire snapshot — callers always get partial results.
 pub fn capture_context_snapshot(options: &CaptureContextOptions) -> AiContextSnapshot {
-    let seed = CaptureContextSeed {
-        selected_text: capture_selected_text_live(),
-        frontmost_app: capture_frontmost_app_live(),
-        menu_bar_items: capture_menu_bar_live(),
-        browser: capture_browser_live(),
-        focused_window: capture_focused_window_live(),
+    let seed = if DETERMINISTIC_CONTEXT.load(Ordering::SeqCst) {
+        tracing::info!("context_snapshot: using deterministic seed (test mode)");
+        CaptureContextSeed::default()
+    } else {
+        CaptureContextSeed {
+            selected_text: capture_selected_text_live(),
+            frontmost_app: capture_frontmost_app_live(),
+            menu_bar_items: capture_menu_bar_live(),
+            browser: capture_browser_live(),
+            focused_window: capture_focused_window_live(),
+        }
     };
 
     let snapshot = capture_context_snapshot_from_seed(options, seed);

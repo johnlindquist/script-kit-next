@@ -111,6 +111,170 @@ fn select_prompt_compiler_receipt<'a>(
 
 impl AiApp {
     pub(super) fn render_main_panel(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        match self.window_mode {
+            AiWindowMode::Full => self.render_full_main_panel(cx).into_any_element(),
+            AiWindowMode::Mini => self.render_mini_main_panel(cx).into_any_element(),
+        }
+    }
+
+    /// Mini mode: centered messages + compact composer, no word count chrome.
+    /// Model picker lives in the header — composer is just input + submit.
+    fn render_mini_main_panel(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let has_pending_image = self.pending_image.is_some();
+        let has_pending_context_parts = !self.pending_context_parts.is_empty();
+        let is_editing = self.editing_message_id.is_some();
+        let input_value = self.input_state.read(cx).value().to_string();
+        let input_is_empty =
+            !ai_main_panel_can_submit(&input_value, has_pending_image, has_pending_context_parts);
+        let entity = cx.entity();
+        let show_bar = should_show_context_bar(&self.context_preflight, &self.last_context_receipt);
+        let has_messages = !self.current_messages.is_empty() || self.is_streaming;
+
+        div()
+            .id("ai-main-panel-mini")
+            .flex_1()
+            .flex()
+            .flex_col()
+            .h_full()
+            .overflow_hidden()
+            .on_drop(cx.listener(|this, paths: &ExternalPaths, _window, cx| {
+                this.handle_file_drop(paths, cx);
+            }))
+            // Content area — centered, max-width constrained
+            .child(
+                div()
+                    .flex_1()
+                    .min_h_0()
+                    .overflow_hidden()
+                    .child(
+                        div()
+                            .max_w(px(760.))
+                            .mx_auto()
+                            .w_full()
+                            .h_full()
+                            .child(if has_messages {
+                                self.render_messages(cx).into_any_element()
+                            } else {
+                                self.render_welcome(cx).into_any_element()
+                            }),
+                    ),
+            )
+            // Compact composer — centered, max-width constrained
+            .child(
+                div()
+                    .max_w(px(760.))
+                    .mx_auto()
+                    .w_full()
+                    .id("ai-mini-input-area")
+                    .flex()
+                    .flex_col()
+                    .border_t_1()
+                    .border_color(cx.theme().border.opacity(OPACITY_DISABLED))
+                    .px(MSG_PX)
+                    .py(S2)
+                    .gap(S2)
+                    .on_drop(cx.listener(|this, paths: &ExternalPaths, _window, cx| {
+                        this.handle_file_drop(paths, cx);
+                    }))
+                    // Context bar (pre/post submit)
+                    .when(show_bar, |d| d.child(self.render_context_bar(cx)))
+                    .when(self.context_preflight.has_surfaced_recommendations(), |d| {
+                        d.child(self.render_context_recommendations(cx))
+                    })
+                    .when(is_editing, |d| d.child(self.render_editing_indicator(cx)))
+                    .when(self.is_context_picker_open(), |d| {
+                        d.child(self.render_context_picker(cx))
+                    })
+                    .when(has_pending_context_parts, |d| {
+                        d.child(self.render_pending_context_chips(cx))
+                    })
+                    .when(has_pending_image, |d| {
+                        d.child(self.render_pending_image_preview(cx))
+                    })
+                    // Composer row: input + inline submit/stop button
+                    .child(
+                        div()
+                            .id("ai-mini-composer")
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .w_full()
+                            .min_h(COMPOSER_H)
+                            .px(S3)
+                            .py(S2)
+                            .gap(S2)
+                            .rounded(R_LG)
+                            .border_1()
+                            .border_color(cx.theme().border.opacity(OPACITY_SELECTED))
+                            .bg(cx.theme().muted.opacity(OPACITY_DISABLED))
+                            .child(self.render_input_with_cursor(cx))
+                            // Inline submit/stop at right edge of composer
+                            .child(if self.is_streaming {
+                                let stop_entity = entity.clone();
+                                div()
+                                    .id("ai-mini-stop-btn")
+                                    .flex_shrink_0()
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .size(px(28.))
+                                    .rounded(R_SM)
+                                    .cursor_pointer()
+                                    .bg(cx.theme().danger.opacity(OPACITY_HOVER))
+                                    .hover(|el| el.bg(cx.theme().danger.opacity(OPACITY_SELECTED)))
+                                    .on_mouse_down(
+                                        gpui::MouseButton::Left,
+                                        move |_, _window, cx| {
+                                            stop_entity.update(cx, |this, cx| {
+                                                this.stop_streaming(cx);
+                                            });
+                                        },
+                                    )
+                                    .child(
+                                        svg()
+                                            .external_path(LocalIconName::Close.external_path())
+                                            .size(ICON_SM)
+                                            .text_color(cx.theme().foreground),
+                                    )
+                                    .into_any_element()
+                            } else if !input_is_empty {
+                                let submit_entity = entity.clone();
+                                div()
+                                    .id("ai-mini-submit-btn")
+                                    .flex_shrink_0()
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .size(px(28.))
+                                    .rounded(R_SM)
+                                    .cursor_pointer()
+                                    .bg(cx.theme().primary.opacity(OPACITY_SELECTED))
+                                    .hover(|el| el.bg(cx.theme().primary))
+                                    .on_mouse_down(
+                                        gpui::MouseButton::Left,
+                                        move |_, window, cx| {
+                                            submit_entity.update(cx, |this, cx| {
+                                                this.submit_message(window, cx);
+                                            });
+                                        },
+                                    )
+                                    .child(
+                                        svg()
+                                            .external_path(LocalIconName::ArrowUp.external_path())
+                                            .size(ICON_SM)
+                                            .text_color(cx.theme().primary_foreground),
+                                    )
+                                    .into_any_element()
+                            } else {
+                                // Empty placeholder — same size to prevent layout shift
+                                div().size(px(28.)).flex_shrink_0().into_any_element()
+                            }),
+                    ),
+            )
+    }
+
+    /// Full mode: the original main panel with all chrome.
+    fn render_full_main_panel(&self, cx: &mut Context<Self>) -> impl IntoElement {
         // Build input area at bottom:
         // Row 1: single composer surface containing the input text field
         // Row 2: model picker + word count on left, submit/actions on right

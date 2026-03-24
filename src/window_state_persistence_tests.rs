@@ -148,6 +148,7 @@ mod tests {
                 notes_per_display: std::collections::HashMap::new(),
                 ai: None,
                 ai_per_display: std::collections::HashMap::new(),
+                ai_mini: None,
             };
             assert!(save_state_file(&state));
             let loaded = load_state_file().expect("Should load saved state");

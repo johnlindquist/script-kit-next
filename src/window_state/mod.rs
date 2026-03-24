@@ -55,6 +55,7 @@ pub enum WindowRole {
     Main,
     Notes,
     Ai,
+    AiMini,
 }
 impl WindowRole {
     /// Get a lowercase string key for persistence/file paths
@@ -63,6 +64,7 @@ impl WindowRole {
             WindowRole::Main => "main",
             WindowRole::Notes => "notes",
             WindowRole::Ai => "ai",
+            WindowRole::AiMini => "ai_mini",
         }
     }
 
@@ -72,6 +74,7 @@ impl WindowRole {
             WindowRole::Main => "Main",
             WindowRole::Notes => "Notes",
             WindowRole::Ai => "AI",
+            WindowRole::AiMini => "AI Mini",
         }
     }
 }
@@ -167,6 +170,9 @@ pub struct WindowStateFile {
     /// AI window positions stored per display
     #[serde(default)]
     pub ai_per_display: HashMap<String, PersistedWindowBounds>,
+    /// Mini AI window position (separate from full AI)
+    #[serde(default)]
+    pub ai_mini: Option<PersistedWindowBounds>,
 }
 fn default_version() -> u32 {
     3 // Version 3 adds per-display support for AI and Notes windows
@@ -252,6 +258,7 @@ pub fn load_window_bounds(role: WindowRole) -> Option<PersistedWindowBounds> {
         WindowRole::Main => state.main,
         WindowRole::Notes => state.notes,
         WindowRole::Ai => state.ai,
+        WindowRole::AiMini => state.ai_mini,
     }
 }
 /// Save bounds for a specific window role.
@@ -272,6 +279,7 @@ pub fn save_window_bounds(role: WindowRole, bounds: PersistedWindowBounds) {
         WindowRole::Main => state.main = Some(bounds),
         WindowRole::Notes => state.notes = Some(bounds),
         WindowRole::Ai => state.ai = Some(bounds),
+        WindowRole::AiMini => state.ai_mini = Some(bounds),
     }
     save_state_file(&state);
     logging::log(

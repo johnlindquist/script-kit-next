@@ -727,11 +727,32 @@ pub struct TypeTag {
 }
 /// Width of the left accent bar for selected items
 pub const ACCENT_BAR_WIDTH: f32 = 3.0;
+
+/// Collapse newlines (and surrounding whitespace) into a single space
+/// so that list item text always renders on one line.
+fn sanitize_newlines(s: String) -> String {
+    if s.contains('\n') || s.contains('\r') {
+        s.replace("\r\n", " ").replace(['\r', '\n'], " ")
+    } else {
+        s
+    }
+}
+
 impl ListItem {
     /// Create a new list item with the given name and pre-computed colors
     pub fn new(name: impl Into<SharedString>, colors: ListItemColors) -> Self {
+        let name_str: SharedString = name.into();
+        // Collapse newlines to spaces so text stays on a single line in the list
+        let name_sanitized: SharedString = if name_str.contains('\n') || name_str.contains('\r') {
+            name_str
+                .replace("\r\n", " ")
+                .replace(['\r', '\n'], " ")
+                .into()
+        } else {
+            name_str
+        };
         Self {
-            name: name.into(),
+            name: name_sanitized,
             description: None,
             shortcut: None,
             icon: None,
@@ -793,13 +814,15 @@ impl ListItem {
 
     /// Set the description text (shown below the name)
     pub fn description(mut self, d: impl Into<String>) -> Self {
-        self.description = Some(d.into());
+        let s: String = d.into();
+        // Collapse newlines to spaces so description stays on a single line
+        self.description = Some(sanitize_newlines(s));
         self
     }
 
     /// Set an optional description (convenience for Option<String>)
     pub fn description_opt(mut self, d: Option<String>) -> Self {
-        self.description = d;
+        self.description = d.map(sanitize_newlines);
         self
     }
 
@@ -1371,6 +1394,7 @@ impl RenderOnce for ListItem {
         let mut container = div()
             .w_full()
             .h(px(LIST_ITEM_HEIGHT))
+            .overflow_hidden()
             .pr(px(ITEM_CONTAINER_PADDING_R))
             .flex()
             .flex_row()

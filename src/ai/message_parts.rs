@@ -1010,6 +1010,7 @@ mod tests {
 
     #[test]
     fn prepare_user_message_from_sources_with_receipt_attaches_assembly_receipt() {
+        crate::context_snapshot::enable_deterministic_context_capture();
         let prepared = prepare_user_message_from_sources_with_receipt(
             "ship it",
             &[AiContextPart::ResourceUri {

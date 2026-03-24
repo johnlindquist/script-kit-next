@@ -419,7 +419,7 @@ mod from_dialog_builtin_action_validation_tests {
     
     #[test]
     fn ai_command_bar_action_count_is_exactly_twelve() {
-        assert_eq!(get_ai_command_bar_actions().len(), 22);
+        assert_eq!(get_ai_command_bar_actions().len(), 23);
     }
     
     // =========================================================================
@@ -3810,7 +3810,7 @@ mod from_dialog_builtin_action_validation_tests_3 {
             .iter()
             .filter(|a| a.section.as_deref() == Some("Settings"))
             .count();
-        assert_eq!(settings_count, 1, "Settings section should have 1 action");
+        assert_eq!(settings_count, 2, "Settings section should have 2 actions");
     }
     
     // =========================================================================
@@ -5619,8 +5619,8 @@ mod from_dialog_builtin_action_validation_tests_3 {
     fn ai_command_bar_has_exactly_13_actions() {
         let count = get_ai_command_bar_actions().len();
         assert_eq!(
-            count, 22,
-            "AI command bar should have exactly 22 actions, got {}",
+            count, 23,
+            "AI command bar should have exactly 23 actions, got {}",
             count
         );
     }
@@ -8449,13 +8449,13 @@ mod from_dialog_builtin_action_validation_tests_5 {
                 .iter()
                 .filter(|a| a.section.as_deref() == Some("Settings"))
                 .count();
-            assert_eq!(settings_count, 1);
+            assert_eq!(settings_count, 2);
         }
     
         #[test]
         fn ai_command_bar_total_is_12() {
             let actions = get_ai_command_bar_actions();
-            assert_eq!(actions.len(), 22);
+            assert_eq!(actions.len(), 23);
         }
     
         #[test]
@@ -11908,7 +11908,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
         #[test]
         fn ai_command_bar_has_exactly_12_actions() {
             let actions = get_ai_command_bar_actions();
-            assert_eq!(actions.len(), 22);
+            assert_eq!(actions.len(), 23);
         }
 
         #[test]
@@ -11957,8 +11957,9 @@ mod from_dialog_builtin_action_validation_tests_6 {
                 .iter()
                 .filter(|a| a.section.as_deref() == Some("Settings"))
                 .collect();
-            assert_eq!(settings_actions.len(), 1);
+            assert_eq!(settings_actions.len(), 2);
             assert_eq!(settings_actions[0].id, "chat:change_model");
+            assert_eq!(settings_actions[1].id, "chat:toggle_window_mode");
         }
     
         #[test]
@@ -13550,7 +13551,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
         #[test]
         fn ai_command_bar_exactly_12_actions() {
             let actions = get_ai_command_bar_actions();
-            assert_eq!(actions.len(), 22);
+            assert_eq!(actions.len(), 23);
         }
     
         #[test]
@@ -17618,7 +17619,7 @@ mod from_dialog_builtin_action_validation_tests_9 {
         #[test]
         fn ai_command_bar_has_exactly_12_actions() {
             let actions = get_ai_command_bar_actions();
-            assert_eq!(actions.len(), 22, "AI command bar should have 22 actions");
+            assert_eq!(actions.len(), 23, "AI command bar should have 23 actions");
         }
     
         #[test]

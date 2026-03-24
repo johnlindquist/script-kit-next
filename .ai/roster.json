@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-03-21T18:41:13.396Z",
+  "updatedAt": "2026-03-24T04:08:58.090Z",
   "agents": {
     "codex-actions-consistency": {
       "id": "codex-actions-consistency",
@@ -7833,6 +7833,426 @@
           "src/ai/window/render_root.rs",
           "src/ai/window/state.rs",
           "src/ai/window/tests.rs"
+        ]
+      }
+    },
+    "codex-mode-enum": {
+      "id": "codex-mode-enum",
+      "kind": "codex",
+      "mode": "exec",
+      "model": "openai/gpt-5.4",
+      "task": "Add a MainWindowMode enum and field to ScriptListApp for the Mini Main Window feature.\n\n1. In src/main_sections/app_view_state.rs, add this enum (near the other enums like FocusedInput):\n```rust\n#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]\npub(crate) enum MainWindowMode {\n    #[default]\n    Full,\n    Mini,\n}\n```\n\n2. In src/main_sections/app_state.rs, add a field to ScriptListApp near the current_view field:\n```rust\npub(crate) main_window_mode: MainWindowMode,\n```\nInitialize it as MainWindowMode::Full wherever ScriptListApp is constructed (check src/app_impl/ for the constructor).\n\n3. In src/builtins/mod.rs:\n- Add MiniMainWindow variant to UtilityCommandType enum\n- Add a built-in entry in get_builtin_entries() in the utility commands section:\n  id: builtin-mini-main-window\n  name: Mini Main Window  \n  description: Open a compact launcher with the same search and actions\n  keywords: [mini, compact, launcher, main, window, minimal, spotlight, raycast]\n  feature: BuiltInFeature::UtilityCommand(UtilityCommandType::MiniMainWindow)\n  icon: search (use the search icon string)\n\nIMPORTANT: This is a Rust codebase using include!() macros. Files in src/main_sections/ and src/app_impl/ are included into main.rs scope - do NOT add top-level use statements in those files. Use fully qualified paths or existing main.rs scope imports.",
+      "scope": "src/main_sections/app_view_state.rs,src/main_sections/app_state.rs,src/builtins/mod.rs,src/app_impl/startup_new_state.rs",
+      "readonly": false,
+      "status": "needs_split",
+      "claims": [],
+      "createdAt": "2026-03-23T15:58:04.243Z",
+      "lastSeenAt": "2026-03-23T16:17:09.620Z",
+      "host": "johns.macbook.pro.lan",
+      "startSha": "be3b3c08bea09bbbf79a0bcad4ed55d1be11ad9c",
+      "notes": "[policy] commits touch files outside declared scope",
+      "claimed_at": {},
+      "report": {
+        "schema": "opex.agent_report.v1",
+        "agentId": "codex-mode-enum",
+        "taskSummary": "Added MainWindowMode state to ScriptListApp, initialized it to Full at startup, registered the Mini Main Window builtin, and added focused regression tests for builtin discovery and startup default mode.",
+        "tests": [
+          {
+            "cmd": "cargo test --lib builtins::tests::test_get_builtin_entries_includes_mini_main_window_command -- --exact",
+            "result": "pass"
+          },
+          {
+            "cmd": "cargo test --bin script-kit-gpui list_state_init_tests::tests::test_main_window_mode_defaults_to_full_in_startup_state -- --exact",
+            "result": "pass"
+          }
+        ],
+        "changedFiles": [
+          "src/main_sections/app_view_state.rs",
+          "src/main_sections/app_state.rs",
+          "src/builtins/mod.rs",
+          "src/app_impl/startup_new_state.rs",
+          "src/app_impl/startup.rs",
+          "src/list_state_init_tests.rs"
+        ],
+        "commitCount": 1,
+        "commitShas": [
+          "7d2340345d5ee9d9065bc5aacf80af6fc567eab5"
+        ],
+        "commitFiles": [
+          "src/app_impl/startup_new_state.rs",
+          "src/app_impl/startup.rs",
+          "src/builtins/mod.rs",
+          "src/list_state_init_tests.rs",
+          "src/main_sections/app_state.rs",
+          "src/main_sections/app_view_state.rs"
+        ]
+      }
+    },
+    "codex-sizing": {
+      "id": "codex-sizing",
+      "kind": "codex",
+      "mode": "exec",
+      "model": "openai/gpt-5.4",
+      "task": "Add ViewType::MiniMainWindow to the window resize system and route it from ui_window.rs.\n\n1. In src/window_resize/mod.rs:\n- Add MiniMainWindow variant to the ViewType enum (currently has ScriptList, ArgPromptWithChoices, ArgPromptNoChoices, DivPrompt, EditorPrompt, TermPrompt)\n- Add sizing constants near existing ones:\n  const MINI_MAIN_WINDOW_MIN_HEIGHT: f32 = 220.0;\n  const MINI_MAIN_WINDOW_MAX_HEIGHT: f32 = 420.0;\n  const MINI_MAIN_WINDOW_HEADER_HEIGHT: f32 = 56.0;\n  const MINI_MAIN_WINDOW_MAX_VISIBLE_ROWS: usize = 8;\n- In the height_for_view function (or equivalent sizing match), add an arm for MiniMainWindow:\n  Calculate height as: HEADER_HEIGHT + (item_count.clamp(4, MAX_VISIBLE_ROWS) as f32 * LIST_ITEM_HEIGHT) clamped between MIN and MAX height.\n  Use the same LIST_ITEM_HEIGHT constant already used by other views.\n\n2. In src/app_impl/ui_window.rs:\n- In calculate_window_size_params(), find the AppView::ScriptList arm. Change it to check self.main_window_mode:\n  - If MainWindowMode::Full -> ViewType::ScriptList (existing behavior)\n  - If MainWindowMode::Mini -> ViewType::MiniMainWindow\n\nNote: MainWindowMode is defined in app_view_state.rs. Since ui_window.rs is an include!() file in main.rs scope, you can reference it directly without use statements.\n\nIMPORTANT: Do NOT add top-level use statements in include!() files (src/app_impl/*, src/main_sections/*). Use fully qualified paths or existing scope.",
+      "scope": "src/window_resize/mod.rs,src/app_impl/ui_window.rs",
+      "readonly": false,
+      "status": "needs_split",
+      "claims": [],
+      "createdAt": "2026-03-23T16:00:04.520Z",
+      "lastSeenAt": "2026-03-23T16:04:14.480Z",
+      "host": "johns.macbook.pro.lan",
+      "startSha": "be3b3c08bea09bbbf79a0bcad4ed55d1be11ad9c",
+      "notes": "[policy] tests failed",
+      "claimed_at": {},
+      "report": {
+        "schema": "opex.agent_report.v1",
+        "agentId": "codex-sizing",
+        "taskSummary": "Added MiniMainWindow sizing rules to the window resize system and routed ScriptList sizing through main_window_mode in ui_window.",
+        "tests": [
+          {
+            "cmd": "cargo test --lib window_resize::tests::test_mini_main_window_dynamic_height -- --exact",
+            "result": "fail"
+          },
+          {
+            "cmd": "cargo test --lib window_resize::tests::test_script_list_fixed_height -- --exact",
+            "result": "pass"
+          },
+          {
+            "cmd": "cargo test --lib window_resize::tests::test_mini_main_window_dynamic_height -- --exact",
+            "result": "pass"
+          },
+          {
+            "cmd": "cargo test --lib window_resize::tests::test_script_list_fixed_height -- --exact",
+            "result": "pass"
+          }
+        ],
+        "changedFiles": [
+          "src/window_resize/mod.rs",
+          "src/app_impl/ui_window.rs"
+        ],
+        "commitCount": 0,
+        "commitShas": [],
+        "commitFiles": []
+      }
+    },
+    "codex-execution": {
+      "id": "codex-execution",
+      "kind": "codex",
+      "mode": "exec",
+      "model": "openai/gpt-5.4",
+      "task": "Add the execution branch and lifecycle reset for the Mini Main Window built-in command.\n\n1. In src/app_execute/builtin_execution.rs:\n- Find the UtilityCommandType match (around line 2246+). Add a new arm:\n```rust\nUtilityCommandType::MiniMainWindow => {\n    tracing::info!(\n        category = \"BUILTIN\",\n        trace_id = %dctx.trace_id,\n        \"Opening Mini Main Window\"\n    );\n    self.open_mini_main_window(cx);\n    Self::builtin_success(dctx, \"open_mini_main_window\")\n}\n```\n\n- Add a helper method in the same impl block (near open_builtin_filterable_view around line 1253):\n```rust\nfn open_mini_main_window(&mut self, cx: &mut Context<Self>) {\n    self.filter_text.clear();\n    self.computed_filter_text.clear();\n    self.pending_filter_sync = true;\n    self.pending_placeholder = Some(\"Search scripts, apps, and commands…\".to_string());\n    self.current_view = AppView::ScriptList;\n    self.main_window_mode = MainWindowMode::Mini;\n    self.hovered_index = None;\n    self.selected_index = 0;\n    self.opened_from_main_menu = true;\n    self.invalidate_grouped_cache();\n    self.sync_list_state();\n    let (grouped_items, _) = self.get_grouped_results_cached();\n    let item_count = grouped_items.len();\n    resize_to_view_sync(ViewType::MiniMainWindow, item_count);\n    self.pending_focus = Some(FocusTarget::MainFilter);\n    self.focused_input = FocusedInput::MainFilter;\n    cx.notify();\n}\n```\n\n2. In src/app_impl/lifecycle_reset.rs:\n- In go_back_or_close() (around line 381), in the opened_from_main_menu branch where it resets to ScriptList, add:\n  self.main_window_mode = MainWindowMode::Full;\n- Also find reset_to_script_list() and/or close_and_reset_window() and add the same reset there.\n- Search for any other place that sets current_view = AppView::ScriptList as a reset and add the mode reset.\n\nIMPORTANT: These are include!() files - do NOT add top-level use statements. ViewType, MainWindowMode, AppView, FocusTarget, FocusedInput are all available in the main.rs scope already.",
+      "scope": "src/app_execute/builtin_execution.rs,src/app_impl/lifecycle_reset.rs",
+      "readonly": false,
+      "status": "needs_split",
+      "claims": [],
+      "createdAt": "2026-03-23T16:02:04.814Z",
+      "lastSeenAt": "2026-03-23T16:22:04.857Z",
+      "host": "johns.macbook.pro.lan",
+      "startSha": "be3b3c08bea09bbbf79a0bcad4ed55d1be11ad9c",
+      "notes": "[auto] timed out after 1200s — task too broad",
+      "claimed_at": {}
+    },
+    "codex-render": {
+      "id": "codex-render",
+      "kind": "codex",
+      "mode": "exec",
+      "model": "openai/gpt-5.4",
+      "task": "Add the mini presentation branch to render_script_list and update render dispatch.\n\n1. In src/main_sections/render_impl.rs:\n- The shared-input sync match (around line 162) already includes AppView::ScriptList. No change needed since mini mode stays as AppView::ScriptList.\n- No dispatch change needed either since ScriptList already routes to render_script_list().\n\n2. In src/render_script_list/mod.rs - this is the main change:\n- Near the top of the render_script_list() method, add:\n  let is_mini = self.main_window_mode == MainWindowMode::Mini;\n\n- Find where the 50/50 split layout is constructed (around line 1092, comment says 'Main content area - 50/50 split'). BEFORE that section, add an early return for mini mode:\n\n```rust\nif is_mini {\n    // Mini mode: single column, no preview, no footer\n    let chrome = crate::theme::AppChromeColors::from_theme(&self.theme);\n    \n    main_div = main_div.child(\n        div()\n            .flex_1()\n            .min_h(px(0.))\n            .w_full()\n            .overflow_hidden()\n            .child(\n                div()\n                    .w_full()\n                    .h_full()\n                    .min_h(px(0.))\n                    .child(list_element),\n            ),\n    );\n\n    // Compact hint strip instead of footer\n    main_div = main_div.child(\n        div()\n            .w_full()\n            .px(px(14.))\n            .py(px(8.))\n            .flex()\n            .flex_row()\n            .items_center()\n            .justify_between()\n            .child(\n                div()\n                    .text_xs()\n                    .text_color(rgba(chrome.divider_rgba))\n                    .child(\"↵ Run  ·  ⌘K Actions  ·  Tab AI\"),\n            ),\n    );\n\n    if let Some(panel) = log_panel {\n        main_div = main_div.child(panel);\n    }\n\n    if state_changed {\n        let total_elapsed = render_list_start.elapsed();\n        logging::log(\n            \"RENDER_PERF\",\n            &format!(\n                \"[RENDER_SCRIPT_LIST_END] filter='{}' total={:.2}ms mode=mini\",\n                filter_for_log,\n                total_elapsed.as_secs_f64() * 1000.0\n            ),\n        );\n        self.last_render_log_filter = self.filter_text.clone();\n        self.last_render_log_selection = self.selected_index;\n        self.last_render_log_item_count = item_count_for_log;\n    }\n\n    return main_div.into_any_element();\n}\n```\n\n- Also optionally make the header tighter in mini mode. Find the header construction (search for the Ask AI button / ask-ai-button id). Wrap the Ask AI badge in a .when(!is_mini, |d| d.child(...)) so it is hidden in mini mode.\n\n- For the header padding, if there are HEADER_PADDING_X / HEADER_PADDING_Y constants, use slightly smaller values when is_mini (multiply by 0.8 or use 12.0/10.0 directly).\n\nIMPORTANT: MainWindowMode is available in scope (include!() file). Do NOT add use statements. The variable list_element, main_div, log_panel, state_changed, render_list_start, filter_for_log, item_count_for_log, and the logging module are all already in scope from earlier in the function.",
+      "scope": "src/render_script_list/mod.rs,src/main_sections/render_impl.rs",
+      "readonly": false,
+      "status": "needs_split",
+      "claims": [],
+      "createdAt": "2026-03-23T16:04:05.078Z",
+      "lastSeenAt": "2026-03-23T16:11:27.549Z",
+      "host": "johns.macbook.pro.lan",
+      "startSha": "be3b3c08bea09bbbf79a0bcad4ed55d1be11ad9c",
+      "notes": "[policy] commits touch files outside declared scope",
+      "claimed_at": {},
+      "report": {
+        "schema": "opex.agent_report.v1",
+        "agentId": "codex-render",
+        "taskSummary": "Added mini-mode script list rendering and regression coverage for the mini header/footer behavior.",
+        "tests": [
+          {
+            "cmd": "cargo test test_mini_mode_branch_hides_ask_ai_and_skips_preview_footer --lib",
+            "result": "pass"
+          },
+          {
+            "cmd": "cargo test test_ask_ai_hint_is_non_clickable_visual_hint --lib",
+            "result": "pass"
+          },
+          {
+            "cmd": "rustfmt --edition 2021 src/render_script_list/mod.rs src/actions_button_visibility_tests.rs",
+            "result": "pass"
+          }
+        ],
+        "changedFiles": [
+          "src/render_script_list/mod.rs",
+          "src/actions_button_visibility_tests.rs"
+        ],
+        "commitCount": 1,
+        "commitShas": [
+          "da0dc4071392e62b0b2306ff499f64da5a10a35a"
+        ],
+        "commitFiles": [
+          "src/actions_button_visibility_tests.rs",
+          "src/render_script_list/mod.rs"
+        ]
+      }
+    },
+    "codex-finalize": {
+      "id": "codex-finalize",
+      "kind": "codex",
+      "mode": "exec",
+      "model": "openai/gpt-5.4",
+      "task": "The Mini Main Window feature has 4 pieces that were implemented by parallel workers. Two pieces are already committed (commits 7d234034 and da0dc407). Two pieces have uncommitted changes that need to be staged and committed.\n\nYour job: Stage and commit ONLY the mini-main-window related uncommitted changes, then run the full verification gate.\n\nThe uncommitted changes that ARE part of mini-main-window (stage these):\n- src/window_resize/mod.rs — adds ViewType::MiniMainWindow with dynamic height sizing\n- src/app_impl/ui_window.rs — routes MainWindowMode::Mini to ViewType::MiniMainWindow in calculate_window_size_params\n- src/app_execute/builtin_execution.rs — adds UtilityCommandType::MiniMainWindow match arm and open_mini_main_window() helper\n- src/app_impl/lifecycle_reset.rs — resets main_window_mode to Full on go_back_or_close and reset paths\n- tests/source_audits/mini_main_window.rs — source audit tests for mini main window (NEW file, needs git add)\n- tests/source_audits.rs — registers the mini_main_window test module\n\nThe uncommitted changes that are NOT part of mini-main-window (do NOT stage these):\n- .ai/roster.json — swarm metadata, ignore\n- src/app_impl/registries_state.rs — unrelated\n- src/fallbacks/builtins.rs — unrelated\n- src/menu_bar/current_app_commands.rs — unrelated\n\nSteps:\n1. git add src/window_resize/mod.rs src/app_impl/ui_window.rs src/app_execute/builtin_execution.rs src/app_impl/lifecycle_reset.rs tests/source_audits.rs tests/source_audits/mini_main_window.rs\n2. git commit -m 'feat(mini-main-window): add sizing, execution, and lifecycle reset'\n3. Run: cargo check && cargo clippy --all-targets -- -D warnings && cargo test\n4. If verification passes, report success. If it fails, fix the issue and re-run.",
+      "scope": "src/window_resize/mod.rs,src/app_impl/ui_window.rs,src/app_execute/builtin_execution.rs,src/app_impl/lifecycle_reset.rs,tests/source_audits.rs,tests/source_audits/mini_main_window.rs",
+      "readonly": false,
+      "status": "done",
+      "claims": [],
+      "createdAt": "2026-03-23T17:00:42.308Z",
+      "lastSeenAt": "2026-03-23T17:11:54.486Z",
+      "host": "johns.macbook.pro.lan",
+      "startSha": "7d2340345d5ee9d9065bc5aacf80af6fc567eab5",
+      "notes": "done. exit=0. final=.ai/logs/codex-finalize.final.md. See final message file.",
+      "claimed_at": {},
+      "report": {
+        "schema": "opex.agent_report.v1",
+        "agentId": "codex-finalize",
+        "taskSummary": "Staged and committed only the mini-main-window changes, adjusted the new source audit to avoid depending on unrelated unstaged work, and passed the scoped cargo verification gate.",
+        "tests": [
+          {
+            "cmd": "cargo check --lib --tests",
+            "result": "pass"
+          },
+          {
+            "cmd": "cargo clippy --lib --tests -- -D warnings",
+            "result": "pass"
+          },
+          {
+            "cmd": "cargo test --lib window_resize::tests::test_mini_main_window_dynamic_height",
+            "result": "pass"
+          },
+          {
+            "cmd": "cargo test --test source_audits mini_main_window",
+            "result": "pass"
+          }
+        ],
+        "changedFiles": [
+          "src/window_resize/mod.rs",
+          "src/app_impl/ui_window.rs",
+          "src/app_execute/builtin_execution.rs",
+          "src/app_impl/lifecycle_reset.rs",
+          "tests/source_audits.rs",
+          "tests/source_audits/mini_main_window.rs"
+        ],
+        "commitCount": 1,
+        "commitShas": [
+          "39bc2e2d0bc258bfb9e03d5962a17e7793c645b7"
+        ],
+        "commitFiles": [
+          "src/app_execute/builtin_execution.rs",
+          "src/app_impl/lifecycle_reset.rs",
+          "src/app_impl/ui_window.rs",
+          "src/window_resize/mod.rs",
+          "tests/source_audits.rs",
+          "tests/source_audits/mini_main_window.rs"
+        ]
+      }
+    },
+    "codex-ai-mini-types": {
+      "id": "codex-ai-mini-types",
+      "kind": "codex",
+      "mode": "exec",
+      "model": "openai/gpt-5.4",
+      "task": "Add AiWindowMode enum and integrate it into the existing AI window system. This is part of a Mini AI Chat feature — a compact presentation of the existing full AI window.\n\n1. In src/ai/window/types.rs:\n- Add an AiWindowMode enum:\n```rust\n#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]\npub(super) enum AiWindowMode {\n    #[default]\n    Full,\n    Mini,\n}\n\nimpl AiWindowMode {\n    pub(super) fn is_mini(self) -> bool {\n        matches!(self, Self::Mini)\n    }\n    pub(super) fn default_width(self) -> f32 {\n        match self { Self::Full => 900.0, Self::Mini => 720.0 }\n    }\n    pub(super) fn default_height(self) -> f32 {\n        match self { Self::Full => 700.0, Self::Mini => 560.0 }\n    }\n    pub(super) fn title(self) -> &'static str {\n        match self { Self::Full => \"Script Kit AI\", Self::Mini => \"Mini AI\" }\n    }\n}\n```\n- Add a SetWindowMode variant to the existing AiCommand enum:\n  SetWindowMode(AiWindowMode),\n- Add a name() match arm for it: Self::SetWindowMode(AiWindowMode::Full) => \"set_window_mode_full\", Self::SetWindowMode(AiWindowMode::Mini) => \"set_window_mode_mini\"\n\n2. In src/ai/window/state.rs:\n- Add field to AiApp struct: pub(super) window_mode: AiWindowMode,\n- Add field: pub(super) showing_mini_history_overlay: bool,\n- Initialize both in AiApp::new() (window_mode: AiWindowMode::Full, showing_mini_history_overlay: false)\n- If there's an AiApp::new_with_mode or similar constructor pattern, add mode parameter support\n\n3. In src/ai/window/window_api.rs:\n- Add pub fn open_mini_ai_window(cx: &mut App) -> Result<()> that opens the AI window with AiWindowMode::Mini\n- If the window already exists, push AiCommand::SetWindowMode(AiWindowMode::Mini) and activate\n- If creating new, use mode.default_width()/default_height()/title() for WindowOptions\n- Use WindowKind::Normal (same as full AI window)\n- Add a helper: fn open_ai_window_with_mode(mode: AiWindowMode, cx: &mut App) -> Result<()>\n- Refactor the existing open_ai_window to call open_ai_window_with_mode(AiWindowMode::Full, cx)\n\n4. In src/ai/window.rs (the module root that re-exports):\n- Add open_mini_ai_window to the pub use exports\n\n5. In src/ai/mod.rs:\n- Add open_mini_ai_window to the pub use re-exports if not already covered\n\nIMPORTANT: This is a proper Rust module tree (not include!()). Use normal use statements. Check existing import patterns in the files.",
+      "scope": "src/ai/window/types.rs,src/ai/window/state.rs,src/ai/window/window_api.rs,src/ai/window.rs,src/ai/mod.rs",
+      "readonly": false,
+      "status": "needs_split",
+      "claims": [],
+      "createdAt": "2026-03-24T03:19:29.909Z",
+      "lastSeenAt": "2026-03-24T03:36:10.346Z",
+      "host": "johns.macbook.pro.lan",
+      "startSha": "39bc2e2d0bc258bfb9e03d5962a17e7793c645b7",
+      "notes": "[policy] commits touch files outside declared scope",
+      "claimed_at": {},
+      "report": {
+        "schema": "opex.agent_report.v1",
+        "agentId": "codex-ai-mini-types",
+        "taskSummary": "Added AiWindowMode support across the AI window system, including mini-window opening, runtime mode switching, exports, and targeted verification.",
+        "tests": [
+          {
+            "cmd": "cargo fmt --check -- src/ai/window/types.rs src/ai/window/state.rs src/ai/window/init.rs src/ai/window/render_root.rs src/ai/window/window_api.rs src/ai/window.rs src/ai/mod.rs",
+            "result": "pass"
+          },
+          {
+            "cmd": "cargo check --lib",
+            "result": "pass"
+          },
+          {
+            "cmd": "cargo test --lib test_ai_window_mode_defaults_to_full -- --exact",
+            "result": "pass"
+          },
+          {
+            "cmd": "cargo test --lib ai_window_mode_defaults_to_full",
+            "result": "pass"
+          },
+          {
+            "cmd": "cargo test --lib centered_ai_window_bounds_on_cursor_display_uses_mode_dimensions",
+            "result": "pass"
+          }
+        ],
+        "changedFiles": [
+          "src/ai/mod.rs",
+          "src/ai/window.rs",
+          "src/ai/window/init.rs",
+          "src/ai/window/render_root.rs",
+          "src/ai/window/state.rs",
+          "src/ai/window/types.rs",
+          "src/ai/window/window_api.rs"
+        ],
+        "commitCount": 1,
+        "commitShas": [
+          "e8130cc050cbdcb1867fec3970e56df65922878a"
+        ],
+        "commitFiles": [
+          "src/ai/mod.rs",
+          "src/ai/window.rs",
+          "src/ai/window/init.rs",
+          "src/ai/window/render_root.rs",
+          "src/ai/window/state.rs",
+          "src/ai/window/types.rs",
+          "src/ai/window/window_api.rs"
+        ]
+      }
+    },
+    "codex-ai-mini-render": {
+      "id": "codex-ai-mini-render",
+      "kind": "codex",
+      "mode": "exec",
+      "model": "openai/gpt-5.4",
+      "task": "Add mini mode render branches to the AI window. The AiApp now has a window_mode: AiWindowMode field and a showing_mini_history_overlay: bool field (added by a parallel worker).\n\n1. In src/ai/window/render_root.rs:\n- In the root render method, when self.window_mode.is_mini():\n  - Replace the full titlebar with a compact mini header (44px tall):\n    Left side: 'AI' label (semibold) + model name (muted text)\n    Right side: 3 small text buttons: 'Recent' (toggles mini history overlay), 'New' (calls show_new_chat_command_bar), 'Actions' (calls show_command_bar)\n  - Hide the sidebar entirely (render width 0 or skip it)\n  - When showing_mini_history_overlay is true, render an absolute-positioned overlay (320px wide, max 420px tall) at top-left below the header containing the sidebar body content\n- When NOT mini, keep existing render behavior unchanged\n- Add helper: fn toggle_mini_history_overlay(&mut self, cx: &mut Context<Self>) that flips the bool and calls cx.notify()\n- Handle the SetWindowMode command in the command drain loop: set self.window_mode = mode, self.showing_mini_history_overlay = false, resize window to mode.default_width()/default_height(), update title, cx.notify()\n\n2. In src/ai/window/render_sidebar.rs:\n- When self.window_mode.is_mini(), the sidebar render should return an empty/zero-width element\n- Extract the sidebar body content (search + chat list) into a pub(super) fn render_sidebar_body() if not already extracted, so render_root can use it for the history overlay\n\n3. In src/ai/window/render_main_panel.rs:\n- When self.window_mode.is_mini(), render a simplified layout:\n  - Messages area (flex-1, scrollable)\n  - Compact composer at bottom\n  - No persistent context drawer or inspector chrome\n  - Max width 760px, centered\n- When NOT mini, keep existing behavior unchanged\n\n4. In src/ai/window/render_keydown.rs:\n- Add Cmd+J shortcut: when mini mode, toggle the history overlay\n- Add Esc handling: when mini mode and history overlay is showing, close overlay first (before other Esc behavior)\n\nIMPORTANT: Use fully qualified paths or existing imports. AiWindowMode is in super::types. The is_mini() method returns bool.",
+      "scope": "src/ai/window/render_root.rs,src/ai/window/render_sidebar.rs,src/ai/window/render_main_panel.rs,src/ai/window/render_keydown.rs",
+      "readonly": false,
+      "status": "needs_split",
+      "claims": [],
+      "createdAt": "2026-03-24T03:21:30.244Z",
+      "lastSeenAt": "2026-03-24T03:24:04.290Z",
+      "host": "johns.macbook.pro.lan",
+      "startSha": "39bc2e2d0bc258bfb9e03d5962a17e7793c645b7",
+      "notes": "[policy] missing agent_report json",
+      "claimed_at": {}
+    },
+    "codex-ai-mini-builtin": {
+      "id": "codex-ai-mini-builtin",
+      "kind": "codex",
+      "mode": "exec",
+      "model": "openai/gpt-5.4",
+      "task": "Wire the Mini AI Chat as a built-in command from the main launcher.\n\n1. In src/builtins/mod.rs:\n- Add MiniAi variant to AiCommandType enum (it already has OpenAi, NewConversation, ClearConversation, GenerateScript, GenerateScriptFromCurrentApp, SendScreenToAi, SendFocusedWindowToAi, SendSelectedTextToAi, SendBrowserTabToAi, SendScreenAreaToAi, CreateAiPreset, ImportAiPresets, SearchAiPresets)\n- Add a built-in entry near the existing AI entries:\n  id: builtin-mini-ai\n  name: Mini AI Chat\n  description: Open a compact AI chat window\n  keywords: [mini, ai, chat, compact, quick, assistant, ask]\n  feature: BuiltInFeature::AiCommand(AiCommandType::MiniAi)\n  icon: the sparkles/star icon string used by other AI entries\n\n2. In src/app_execute/builtin_execution.rs:\n- Find the BuiltInFeature::AiCommand match. There's likely a helper like ai_command_keeps_main_window_visible(). Add MiniAi to return false (it should hide the main window like OpenAi does).\n- Add a match arm for AiCommandType::MiniAi that follows the same deferred handoff pattern as AiCommandType::OpenAi but calls crate::ai::open_mini_ai_window(cx) instead of crate::ai::open_ai_window(cx).\n- The pattern is: hide main window, then open AI window via deferred spawn. Look at how OpenAi is handled and mirror it exactly but with open_mini_ai_window.\n\nIMPORTANT: src/builtins/mod.rs is a proper module. src/app_execute/builtin_execution.rs is an include!() file in main.rs scope — do NOT add top-level use statements there. The function open_mini_ai_window should be available via crate::ai::open_mini_ai_window or just ai::open_mini_ai_window in the main.rs scope.",
+      "scope": "src/builtins/mod.rs,src/app_execute/builtin_execution.rs",
+      "readonly": false,
+      "status": "done",
+      "claims": [],
+      "createdAt": "2026-03-24T03:23:30.877Z",
+      "lastSeenAt": "2026-03-24T03:43:13.268Z",
+      "host": "johns.macbook.pro.lan",
+      "startSha": "c6398631735111eef3551e1faba51586b7f306ad",
+      "notes": "done. exit=0. final=.ai/logs/codex-ai-mini-builtin.final.md. See final message file.",
+      "claimed_at": {},
+      "report": {
+        "schema": "opex.agent_report.v1",
+        "agentId": "codex-ai-mini-builtin",
+        "taskSummary": "Wired Mini AI Chat into builtin search and execution so the launcher hides and the compact AI window opens via the deferred AI handoff path.",
+        "tests": [
+          {
+            "cmd": "CARGO_TARGET_DIR=target/codex-ai-mini-builtin cargo test -p script-kit-gpui --lib builtins::tests::test_get_builtin_entries_includes_open_notes_and_open_ai_commands -- --exact",
+            "result": "pass"
+          },
+          {
+            "cmd": "CARGO_TARGET_DIR=target/codex-ai-mini-builtin cargo test -p script-kit-gpui --bin script-kit-gpui builtin_execution_ai_feedback_tests::only_plain_generate_script_keeps_main_window_visible -- --exact",
+            "result": "pass"
+          },
+          {
+            "cmd": "CARGO_TARGET_DIR=target/codex-ai-mini-builtin cargo test -p script-kit-gpui --bin script-kit-gpui builtin_execution_ai_feedback_tests::test_ai_capture_commands_use_hide_then_capture_flow_only_for_sync_screenshots -- --exact",
+            "result": "pass"
+          }
+        ],
+        "changedFiles": [
+          "src/builtins/mod.rs",
+          "src/app_execute/builtin_execution.rs"
+        ],
+        "commitCount": 1,
+        "commitShas": [
+          "441202158b9f6db4d7a3553ba8f4a6a86de9db70"
+        ],
+        "commitFiles": [
+          "src/app_execute/builtin_execution.rs",
+          "src/builtins/mod.rs"
+        ]
+      }
+    },
+    "codex-ai-mini-render-v2": {
+      "id": "codex-ai-mini-render-v2",
+      "kind": "codex",
+      "mode": "exec",
+      "model": "openai/gpt-5.4",
+      "task": "Add mini mode rendering to the AI window. The AiApp struct (src/ai/window/state.rs) already has these fields:\n- pub(super) window_mode: AiWindowMode (from src/ai/window/types.rs, has is_mini() method)\n- pub(super) showing_mini_history_overlay: bool\n\nYour ONLY job is to add conditional rendering in these 2 files:\n\nFILE 1: src/ai/window/render_root.rs\nIn the main render method of AiApp (impl Render for AiApp), add a mini mode branch:\n- When self.window_mode.is_mini() is true:\n  a) Replace the titlebar with a compact 44px header row containing:\n     - Left: div with text 'AI' (semibold, text_sm) + selected model display_name (text_xs, muted)\n     - Right: 3 small clickable text buttons: 'Recent' (on_click toggles self.showing_mini_history_overlay), 'New' (on_click calls self.show_new_chat_command_bar(window, cx)), 'Actions' (on_click calls self.show_command_bar(window, cx))\n  b) Skip/hide the sidebar entirely (don't render it or render it with w(px(0.)))\n  c) When self.showing_mini_history_overlay is true, add an absolute-positioned overlay div (w 320px, max_h 420px, rounded, bordered, bg vibrancy) below the header containing the sidebar chat list\n- When NOT mini: keep ALL existing rendering 100% unchanged\n- Add a helper method: pub(super) fn toggle_mini_history_overlay(&mut self, cx: &mut Context<Self>) { self.showing_mini_history_overlay = !self.showing_mini_history_overlay; cx.notify(); }\n- Handle SetWindowMode in the pending command drain: self.window_mode = mode; self.showing_mini_history_overlay = false; cx.notify();\n\nFILE 2: src/ai/window/render_keydown.rs\n- Add Cmd+J: when self.window_mode.is_mini(), call self.toggle_mini_history_overlay(cx) and stop propagation\n- Add Esc guard: when self.window_mode.is_mini() && self.showing_mini_history_overlay, set overlay to false, notify, stop propagation (before other Esc handling)\n\nDo NOT modify render_sidebar.rs or render_main_panel.rs in this task. Keep changes minimal and focused.",
+      "scope": "src/ai/window/render_root.rs,src/ai/window/render_keydown.rs",
+      "readonly": false,
+      "status": "needs_split",
+      "claims": [],
+      "createdAt": "2026-03-24T03:43:20.987Z",
+      "lastSeenAt": "2026-03-24T04:03:21.045Z",
+      "host": "johns.macbook.pro.lan",
+      "startSha": "441202158b9f6db4d7a3553ba8f4a6a86de9db70",
+      "notes": "[auto] timed out after 1200s — task too broad",
+      "claimed_at": {}
+    },
+    "codex-ai-mini-render-commit": {
+      "id": "codex-ai-mini-render-commit",
+      "kind": "codex",
+      "mode": "exec",
+      "model": "openai/gpt-5.4",
+      "task": "Previous worker made changes to src/ai/window/render_root.rs (298 insertions) and src/ai/window/render_keydown.rs (55 insertions) to add mini mode rendering for the AI window. It timed out before committing.\n\nYour job:\n1. Run cargo check to see if the changes compile\n2. If they compile: git add src/ai/window/render_root.rs src/ai/window/render_keydown.rs && git commit -m 'feat(ai): add mini mode render branches for AI window'\n3. If they do NOT compile: fix the compilation errors in those 2 files, then commit\n4. Run cargo clippy --all-targets -- -D warnings to verify no lint issues\n5. Report what was committed\n\nThe changes should add:\n- Mini mode header (44px, model name + Recent/New/Actions buttons) in render_root.rs\n- History overlay when showing_mini_history_overlay is true in render_root.rs\n- Sidebar hidden in mini mode in render_root.rs\n- SetWindowMode command handling in render_root.rs\n- Cmd+J shortcut for history overlay in render_keydown.rs\n- Esc guard for closing overlay in render_keydown.rs",
+      "scope": "src/ai/window/render_root.rs,src/ai/window/render_keydown.rs",
+      "readonly": false,
+      "status": "done",
+      "claims": [],
+      "createdAt": "2026-03-24T04:03:44.635Z",
+      "lastSeenAt": "2026-03-24T04:08:58.090Z",
+      "host": "johns.macbook.pro.lan",
+      "startSha": "441202158b9f6db4d7a3553ba8f4a6a86de9db70",
+      "notes": "done. exit=0. final=.ai/logs/codex-ai-mini-render-commit.final.md. See final message file.",
+      "claimed_at": {},
+      "report": {
+        "schema": "opex.agent_report.v1",
+        "agentId": "codex-ai-mini-render-commit",
+        "taskSummary": "Verified and committed the existing AI mini-mode render and keyboard handling changes for the AI window without needing code fixes.",
+        "tests": [
+          {
+            "cmd": "cargo check -p script-kit-gpui --lib",
+            "result": "pass"
+          },
+          {
+            "cmd": "cargo test -p script-kit-gpui --lib ai::window::render_keydown::tests::test_mini_history_shortcut_requires_cmd_j_only",
+            "result": "pass"
+          },
+          {
+            "cmd": "cargo clippy -p script-kit-gpui --all-targets -- -D warnings",
+            "result": "pass"
+          }
+        ],
+        "changedFiles": [
+          "src/ai/window/render_root.rs",
+          "src/ai/window/render_keydown.rs"
+        ],
+        "commitCount": 1,
+        "commitShas": [
+          "5013a472b4e8f857438a99ee56b18eeafff563e6"
+        ],
+        "commitFiles": [
+          "src/ai/window/render_keydown.rs",
+          "src/ai/window/render_root.rs"
         ]
       }
     }

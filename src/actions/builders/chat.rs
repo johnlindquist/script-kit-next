@@ -338,6 +338,14 @@ pub fn get_ai_command_bar_actions() -> Vec<Action> {
         )
         .with_icon(IconName::Settings)
         .with_section("Settings"),
+        Action::new(
+            "chat:toggle_window_mode",
+            "Toggle Mini / Full Mode",
+            Some("Switches between compact and full AI window".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_icon(IconName::Settings)
+        .with_section("Settings"),
     ]);
 
     actions

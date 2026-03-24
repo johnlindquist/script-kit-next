@@ -681,7 +681,7 @@ fn ai_command_bar_settings_section_has_one_action() {
         .iter()
         .filter(|a| a.section.as_deref() == Some("Settings"))
         .count();
-    assert_eq!(settings_count, 1);
+    assert_eq!(settings_count, 2);
 }
 
 // ============================================================================
