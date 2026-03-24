@@ -239,6 +239,14 @@ fn open_ai_window_with_mode_from(
     // Focus the input field immediately after window creation
     // Use the local entity reference (not stored globally to avoid leaks)
     if let Some(ai_app) = ai_app_holder.lock().ok().and_then(|mut h| h.take()) {
+        // Store a weak reference for re-render notification from enqueue_ai_window_command.
+        // WeakEntity does NOT prevent the entity from being dropped (no memory leak).
+        {
+            let slot = AI_APP_WEAK.get_or_init(|| std::sync::Mutex::new(None));
+            if let Ok(mut g) = slot.lock() {
+                *g = Some(ai_app.downgrade());
+            }
+        }
         let _ = handle.update(cx, |_root, window, cx| {
             ai_app.update(cx, |app, cx| {
                 app.focus_input(window, cx);
@@ -374,6 +382,13 @@ pub(super) fn cleanup_ai_window_globals() {
     if let Ok(mut guard) = slot.lock() {
         *guard = None;
     }
+    // Clear the weak AiApp reference
+    {
+        let slot = AI_APP_WEAK.get_or_init(|| std::sync::Mutex::new(None));
+        if let Ok(mut guard) = slot.lock() {
+            *guard = None;
+        }
+    }
     // Clear the focus request flag (no longer needed after window closes)
     AI_FOCUS_REQUESTED.store(false, Ordering::SeqCst);
     // Reset window mode to Full (default for next open)
@@ -479,11 +494,25 @@ fn enqueue_ai_window_command(
     }
 
     if let Some(handle) = handle {
-        if handle
-            .update(cx, |_root, _window, cx| {
-                cx.notify();
-            })
-            .is_err()
+        // Notify the AiApp entity directly so its render() runs and processes
+        // the queued command. The weak entity avoids the memory leak that the
+        // old global `AI_APP_ENTITY` caused.
+        let weak = AI_APP_WEAK
+            .get_or_init(|| std::sync::Mutex::new(None))
+            .lock()
+            .ok()
+            .and_then(|g| g.clone());
+        let update_result = handle
+            .update(cx, |_root, window, cx| {
+                if let Some(weak) = weak {
+                    if let Some(entity) = weak.upgrade() {
+                        entity.update(cx, |_app, cx| cx.notify());
+                    }
+                }
+                // Also refresh the window to ensure a paint cycle runs
+                window.refresh();
+            });
+        if update_result.is_err()
         {
             if let Some(queued_index) = queued_index {
                 if let Ok(mut commands) = get_pending_commands().lock() {
@@ -693,20 +722,72 @@ pub fn show_ai_command_bar(cx: &mut App) {
 ///
 /// This is triggered by the stdin command `{"type":"simulateAiKey","key":"up","modifiers":["cmd"]}`.
 /// Used for testing keyboard navigation in the AI window, especially the command bar.
-pub fn simulate_ai_key(key: &str, modifiers: Vec<KeyModifier>) {
-    // Check if AI window is open
-    if !is_ai_window_open() {
+///
+/// Unlike other commands that queue for render-loop processing, simulate key
+/// is dispatched directly via the `WeakEntity<AiApp>` to guarantee immediate
+/// execution regardless of window render scheduling.
+pub fn simulate_ai_key(cx: &mut App, key: &str, modifiers: Vec<KeyModifier>) {
+    let handle = {
+        let slot = AI_WINDOW.get_or_init(|| std::sync::Mutex::new(None));
+        slot.lock().ok().and_then(|g| *g)
+    };
+    let weak = AI_APP_WEAK
+        .get_or_init(|| std::sync::Mutex::new(None))
+        .lock()
+        .ok()
+        .and_then(|g| g.clone());
+
+    let Some(handle) = handle else {
         tracing::warn!(target: "ai", key, "Cannot simulate key - AI window not open");
         return;
-    }
+    };
 
-    // Queue the command
-    push_ai_command(AiCommand::SimulateKey {
-        key: key.to_string(),
-        modifiers,
+    let key_owned = key.to_string();
+    let modifiers_owned = modifiers.clone();
+    let fallback_to_queue = |cx: &mut App, reason: &'static str| {
+        tracing::warn!(
+            target: "ai",
+            key = %key_owned,
+            reason,
+            "Falling back to queued simulate key dispatch"
+        );
+        let _ = enqueue_ai_window_command(
+            cx,
+            "simulate_key",
+            AiCommand::SimulateKey {
+                key: key_owned.clone(),
+                modifiers: modifiers_owned.clone(),
+            },
+        );
+    };
+
+    let Some(weak) = weak else {
+        fallback_to_queue(cx, "weak_ref_missing");
+        return;
+    };
+
+    let mut dispatched = false;
+    let result = handle.update(cx, |_root, window, cx| {
+        if let Some(entity) = weak.upgrade() {
+            entity.update(cx, |app, cx| {
+                app.handle_simulated_key(&key_owned, &modifiers, window, cx);
+                tracing::info!(
+                    target: "ai",
+                    key = %key_owned,
+                    "simulate_ai_key_dispatched"
+                );
+            });
+            dispatched = true;
+        } else {
+            tracing::warn!(target: "ai", key = %key_owned, "AiApp entity already dropped");
+        }
     });
-
-    tracing::info!(target: "ai", key, event = "simulate_ai_key_queued", "Queued SimulateKey");
+    if result.is_err() {
+        tracing::warn!(target: "ai", key, "AI window handle invalid for simulate key");
+        fallback_to_queue(cx, "window_handle_invalid");
+    } else if !dispatched {
+        fallback_to_queue(cx, "entity_dropped");
+    }
 }
 
 /// Apply a preset by ID in the AI window.

@@ -239,6 +239,9 @@ pub(super) const TITLEBAR_LEFT_PADDING: Pixels = px(64.);
 pub(super) const MINI_WINDOW_DEFAULT_W: f32 = 720.0;
 pub(super) const MINI_WINDOW_DEFAULT_H: f32 = 440.0;
 pub(super) const MINI_TITLEBAR_H: Pixels = px(44.);
+/// Left padding for mini titlebar — clears macOS traffic lights without the
+/// extra sidebar-toggle gap that the full titlebar uses (64px → 72px).
+pub(super) const MINI_TITLEBAR_LEFT_PADDING: Pixels = px(72.);
 pub(super) const MINI_CONTENT_MAX_W: Pixels = px(760.);
 /// Position the history overlay flush with the bottom of the mini titlebar.
 /// Must track MINI_TITLEBAR_H so there's no click-through gap.
@@ -616,6 +619,14 @@ pub(super) fn generate_mock_response(user_message: &str) -> String {
 /// Global handle to the AI window
 pub(super) static AI_WINDOW: std::sync::OnceLock<
     std::sync::Mutex<Option<gpui::WindowHandle<Root>>>,
+> = std::sync::OnceLock::new();
+
+/// Weak reference to the AiApp entity for triggering re-renders from external
+/// command paths. Unlike the old `AI_APP_ENTITY`, this is a `WeakEntity` which
+/// does NOT prevent the entity from being dropped. Cleared in
+/// `cleanup_ai_window_globals`.
+pub(super) static AI_APP_WEAK: std::sync::OnceLock<
+    std::sync::Mutex<Option<gpui::WeakEntity<super::state::AiApp>>>,
 > = std::sync::OnceLock::new();
 
 /// Global flag to request input focus in the AI window.
