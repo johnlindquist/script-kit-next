@@ -162,9 +162,7 @@ impl AiApp {
                                                 .justify_between()
                                                 .py(S1)
                                                 .gap(S3)
-                                                .child(
-                                                    div().text_sm().text_color(fg).child(desc_s),
-                                                )
+                                                .child(div().text_sm().text_color(fg).child(desc_s))
                                                 .child(
                                                     div()
                                                         .px(S2)
@@ -174,10 +172,7 @@ impl AiApp {
                                                         .border_color(
                                                             border.opacity(OPACITY_DISABLED),
                                                         )
-                                                        .bg(cx
-                                                            .theme()
-                                                            .muted
-                                                            .opacity(OPACITY_HOVER))
+                                                        .bg(cx.theme().muted.opacity(OPACITY_HOVER))
                                                         .text_xs()
                                                         .text_color(muted)
                                                         .child(key_s),

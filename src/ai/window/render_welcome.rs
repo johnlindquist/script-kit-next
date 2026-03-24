@@ -194,14 +194,18 @@ impl AiApp {
                                                     .child(desc_s),
                                             ),
                                     )
+                                    // Keyboard shortcut badge — more visible in mini mode
                                     .child(
                                         div()
                                             .text_xs()
+                                            .px(SP_3)
+                                            .py(SP_1)
+                                            .rounded(px(4.))
+                                            .bg(cx.theme().muted.opacity(OPACITY_CARD_BG))
                                             .text_color(
-                                                cx.theme()
-                                                    .muted_foreground
-                                                    .opacity(OPACITY_TEXT_MUTED),
+                                                cx.theme().muted_foreground.opacity(OPACITY_STRONG),
                                             )
+                                            .flex_shrink_0()
                                             .child(SharedString::from(format!(
                                                 "\u{2318}{}",
                                                 i + 1
