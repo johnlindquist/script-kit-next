@@ -280,6 +280,7 @@ impl AiApp {
                         self.hide_all_dropdowns(cx);
                         self.show_command_bar("shortcut_cmd_k", window, cx);
                     }
+                    cx.stop_propagation();
                 }
                 // Cmd+N for new chat (with Shift for presets)
                 "n" => {
@@ -294,16 +295,24 @@ impl AiApp {
                     } else {
                         self.new_conversation(window, cx);
                     }
+                    cx.stop_propagation();
                 }
-                // Cmd+Shift+F to focus search (expand sidebar if collapsed)
+                // Cmd+Shift+F to focus search
                 "f" => {
                     if modifiers.shift {
-                        // Expand sidebar if collapsed before focusing search
-                        if self.sidebar_collapsed {
-                            self.sidebar_collapsed = false;
+                        if self.window_mode.is_mini() {
+                            // Mini mode: open history overlay (search lives there)
+                            if !self.showing_mini_history_overlay {
+                                self.toggle_mini_history_overlay("shortcut_cmd_shift_f", window, cx);
+                            }
+                        } else {
+                            // Full mode: expand sidebar if collapsed, focus search
+                            if self.sidebar_collapsed {
+                                self.sidebar_collapsed = false;
+                            }
+                            self.hide_all_dropdowns(cx);
+                            self.focus_search(window, cx);
                         }
-                        self.hide_all_dropdowns(cx);
-                        self.focus_search(window, cx);
                         cx.stop_propagation();
                     }
                 }
@@ -313,10 +322,18 @@ impl AiApp {
                     self.toggle_window_mode(window, cx);
                     cx.stop_propagation();
                 }
-                // Cmd+\ to toggle sidebar (like Raycast)
-                "\\" | "backslash" => self.toggle_sidebar(cx),
-                // Cmd+B also toggles sidebar (common convention)
-                "b" => self.toggle_sidebar(cx),
+                // Cmd+\ to toggle sidebar (like Raycast) — no-op in mini mode
+                "\\" | "backslash" => {
+                    if !self.window_mode.is_mini() {
+                        self.toggle_sidebar(cx);
+                    }
+                }
+                // Cmd+B also toggles sidebar (common convention) — no-op in mini mode
+                "b" => {
+                    if !self.window_mode.is_mini() {
+                        self.toggle_sidebar(cx);
+                    }
+                }
                 // Cmd+V for paste - check for images first
                 "v" => {
                     // Try to paste an image; if not found, let normal text paste happen
@@ -379,6 +396,8 @@ impl AiApp {
 
         if is_key_escape(key) && self.window_mode.is_mini() && self.showing_mini_history_overlay {
             self.showing_mini_history_overlay = false;
+            self.clear_search_state(window, cx);
+            self.focus_input(window, cx);
             tracing::info!(
                 target: "ai",
                 category = "AI_UI",

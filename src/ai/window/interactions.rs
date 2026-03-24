@@ -140,6 +140,22 @@ impl AiApp {
         } else {
             super::types::AiWindowMode::Mini
         };
+        self.set_window_mode(new_mode, window, cx);
+    }
+
+    /// Switch to the given window mode, saving/restoring bounds and focusing input.
+    ///
+    /// This is the single canonical path for mode changes — both `toggle_window_mode`
+    /// and the `AiCommand::SetWindowMode` handler delegate here.
+    pub(super) fn set_window_mode(
+        &mut self,
+        new_mode: super::types::AiWindowMode,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.window_mode == new_mode {
+            return;
+        }
         // Save current bounds under the old role before switching
         let wb = window.window_bounds();
         crate::window_state::save_window_from_gpui(
@@ -149,7 +165,9 @@ impl AiApp {
         self.window_mode = new_mode;
         self.showing_mini_history_overlay = false;
         window.set_window_title(new_mode.title());
-        // Restore saved bounds for target mode, falling back to defaults
+        // Restore saved bounds for target mode, falling back to defaults.
+        // NOTE: gpui::Window only exposes resize() — no set_position API.
+        // Position is restored on window creation; live mode switch restores size only.
         let target_role = super::window_api::window_role_for_mode(new_mode);
         let saved = crate::window_state::load_window_bounds(target_role);
         if let Some(persisted) = saved {
@@ -161,11 +179,13 @@ impl AiApp {
                 px(new_mode.default_height()),
             ));
         }
+        // Focus the input so the user can immediately type after switching
+        self.focus_input(window, cx);
         tracing::info!(
             target: "ai",
             window_mode = ?new_mode,
             restored_saved_bounds = saved.is_some(),
-            "AI window mode toggled"
+            "AI window mode switched"
         );
         cx.notify();
     }
