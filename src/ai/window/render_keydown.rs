@@ -212,9 +212,12 @@ impl AiApp {
                     return;
                 }
                 _ => {
-                    // Let printable characters fall through to the search input
+                    // Let printable characters propagate to the search Input component.
+                    // No cx.stop_propagation() so GPUI capture phase forwards to child.
                 }
             }
+            // Don't fall through to Cmd+J/K/N shortcuts when new chat bar is open
+            return;
         }
 
         // Cmd+1-4: submit welcome suggestion cards (only when welcome screen is visible)
@@ -289,9 +292,13 @@ impl AiApp {
                         self.hide_all_dropdowns(cx);
                         self.show_presets_dropdown(window, cx);
                     } else if self.window_mode.is_mini() {
-                        // Mini mode: open the new-chat command bar for model/preset selection
-                        self.hide_all_dropdowns(cx);
-                        self.show_new_chat_command_bar("shortcut_cmd_n", window, cx);
+                        // Mini mode: toggle the new-chat command bar for model/preset selection
+                        if self.new_chat_command_bar.is_open() {
+                            self.hide_new_chat_command_bar(cx);
+                        } else {
+                            self.hide_all_dropdowns(cx);
+                            self.show_new_chat_command_bar("shortcut_cmd_n", window, cx);
+                        }
                     } else {
                         self.new_conversation(window, cx);
                     }
@@ -487,8 +494,13 @@ impl AiApp {
             return;
         }
 
-        // Escape closes any open dropdown
-        if is_key_escape(key) && (self.command_bar.is_open() || self.showing_presets_dropdown) {
+        // Escape closes any open dropdown (defense-in-depth — early handlers above
+        // catch each dropdown individually, but this guard ensures none slip through)
+        if is_key_escape(key)
+            && (self.command_bar.is_open()
+                || self.new_chat_command_bar.is_open()
+                || self.showing_presets_dropdown)
+        {
             self.hide_all_dropdowns(cx);
             cx.stop_propagation();
             return;

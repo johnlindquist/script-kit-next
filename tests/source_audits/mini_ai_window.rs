@@ -671,7 +671,11 @@ fn escape_chain_guards_every_intermediate_state_before_final_close() {
         ("renaming_chat_id.is_some()", "rename cancel"),
         ("self.is_streaming", "stop streaming"),
         ("showing_api_key_input", "api key input"),
-        ("command_bar.is_open()", "dropdown close"),
+        ("command_bar.is_open()", "command bar close"),
+        (
+            "new_chat_command_bar.is_open()",
+            "new chat command bar close",
+        ),
     ];
 
     for (pattern, label) in guards {
@@ -721,4 +725,67 @@ fn snapshot_exposes_interaction_state_fields() {
             "debug_snapshot() must populate {field} from {source_expr}"
         );
     }
+}
+
+#[test]
+fn new_chat_command_bar_blocks_shortcut_fallthrough() {
+    // When new_chat_command_bar is open, the handler must `return` after the
+    // match block to prevent Cmd+J/K/N shortcuts from leaking through.
+    // We verify that a bare `return;` exists between the bar's open-guard and
+    // the next top-level `if` (the welcome suggestions block), proving the
+    // handler exits before any Cmd shortcut can fire.
+    let keydown = read("src/ai/window/render_keydown.rs");
+    let bar_block_start = keydown
+        .find("if self.new_chat_command_bar.is_open() {")
+        .expect("new_chat_command_bar.is_open() guard must exist");
+    // Scan from the bar guard to the next top-level block (welcome suggestions)
+    let next_block = keydown[bar_block_start..]
+        .find("// Cmd+1-4:")
+        .expect("welcome suggestions block must follow the new_chat_command_bar block");
+    let bar_block_section = &keydown[bar_block_start..bar_block_start + next_block];
+    assert!(
+        bar_block_section.contains("return;"),
+        "new_chat_command_bar block must have a return guard to prevent shortcut leakage"
+    );
+}
+
+#[test]
+fn cmd_n_toggles_new_chat_command_bar_in_mini() {
+    // Cmd+N in mini mode must toggle (close if open, open if closed) the
+    // new_chat_command_bar, not always open it.
+    // Scan from the mini-mode branch to the next top-level `else` (full-mode new_conversation).
+    let keydown = read("src/ai/window/render_keydown.rs");
+    let cmd_n_start = keydown
+        .find("} else if self.window_mode.is_mini() {")
+        .expect("Mini mode Cmd+N branch must exist");
+    let branch_end = keydown[cmd_n_start..]
+        .find("self.new_conversation(window, cx)")
+        .expect("full-mode new_conversation call must follow mini branch");
+    let cmd_n_section = &keydown[cmd_n_start..cmd_n_start + branch_end];
+    assert!(
+        cmd_n_section.contains("if self.new_chat_command_bar.is_open()"),
+        "Cmd+N in mini mode must check if new_chat_command_bar is already open"
+    );
+    assert!(
+        cmd_n_section.contains("hide_new_chat_command_bar"),
+        "Cmd+N in mini mode must close the bar when it's already open"
+    );
+}
+
+#[test]
+fn hide_all_dropdowns_closes_new_chat_command_bar() {
+    // Verify that hide_all_dropdowns explicitly closes the new_chat_command_bar.
+    // Scan from the function signature to the next `pub` function boundary.
+    let dropdowns = read("src/ai/window/dropdowns.rs");
+    let hide_fn_start = dropdowns
+        .find("fn hide_all_dropdowns")
+        .expect("hide_all_dropdowns must exist");
+    let fn_body_end = dropdowns[hide_fn_start..]
+        .find("cx.notify()")
+        .expect("hide_all_dropdowns must call cx.notify()");
+    let fn_body = &dropdowns[hide_fn_start..hide_fn_start + fn_body_end];
+    assert!(
+        fn_body.contains("new_chat_command_bar.close(cx)"),
+        "hide_all_dropdowns must close new_chat_command_bar"
+    );
 }
