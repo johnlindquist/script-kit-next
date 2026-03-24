@@ -75,14 +75,14 @@ impl AiWindowMode {
     pub(super) fn default_width(self) -> f32 {
         match self {
             Self::Full => 900.0,
-            Self::Mini => 720.0,
+            Self::Mini => MINI_WINDOW_DEFAULT_W,
         }
     }
 
     pub(super) fn default_height(self) -> f32 {
         match self {
             Self::Full => 700.0,
-            Self::Mini => 560.0,
+            Self::Mini => MINI_WINDOW_DEFAULT_H,
         }
     }
 
@@ -202,9 +202,21 @@ mod ai_window_mode_tests {
         assert_eq!(AiWindowMode::Full.default_height(), 700.0);
         assert_eq!(AiWindowMode::Full.title(), "Script Kit AI");
 
-        assert_eq!(AiWindowMode::Mini.default_width(), 720.0);
-        assert_eq!(AiWindowMode::Mini.default_height(), 560.0);
+        assert_eq!(AiWindowMode::Mini.default_width(), MINI_WINDOW_DEFAULT_W);
+        assert_eq!(AiWindowMode::Mini.default_height(), MINI_WINDOW_DEFAULT_H);
         assert_eq!(AiWindowMode::Mini.title(), "Mini AI");
+    }
+
+    #[test]
+    fn mini_layout_contract_uses_expected_dimensions() {
+        assert_eq!(MINI_WINDOW_DEFAULT_W, 720.0);
+        assert_eq!(MINI_WINDOW_DEFAULT_H, 560.0);
+        assert_eq!(MINI_TITLEBAR_H, px(44.));
+        assert_eq!(MINI_CONTENT_MAX_W, px(760.));
+        assert_eq!(MINI_HISTORY_OVERLAY_W, px(320.));
+        assert_eq!(MINI_HISTORY_OVERLAY_MAX_H, px(420.));
+        assert_eq!(MINI_HISTORY_OVERLAY_TOP, px(48.));
+        assert_eq!(MINI_BTN_SIZE, px(28.));
     }
 
     #[test]
@@ -228,6 +240,16 @@ pub(super) const IMG_PENDING_THUMB_RADIUS: Pixels = SP_2; // 4px
 // -- Titlebar layout --
 pub(super) const TITLEBAR_TRAFFIC_LIGHT_ZONE_W: Pixels = px(80.);
 pub(super) const TITLEBAR_LEFT_PADDING: Pixels = px(64.);
+
+// -- Mini window layout --
+pub(super) const MINI_WINDOW_DEFAULT_W: f32 = 720.0;
+pub(super) const MINI_WINDOW_DEFAULT_H: f32 = 560.0;
+pub(super) const MINI_TITLEBAR_H: Pixels = px(44.);
+pub(super) const MINI_CONTENT_MAX_W: Pixels = px(760.);
+pub(super) const MINI_HISTORY_OVERLAY_TOP: Pixels = px(48.);
+pub(super) const MINI_HISTORY_OVERLAY_W: Pixels = px(320.);
+pub(super) const MINI_HISTORY_OVERLAY_MAX_H: Pixels = px(420.);
+pub(super) const MINI_BTN_SIZE: Pixels = px(28.);
 
 // -- Overlay layout --
 pub(super) const ATTACHMENTS_PICKER_BOTTOM_INSET: Pixels = px(80.);
