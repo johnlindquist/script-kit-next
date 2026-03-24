@@ -43,26 +43,17 @@ impl AiApp {
         cx: &mut Context<Self>,
     ) {
         self.showing_mini_history_overlay = !self.showing_mini_history_overlay;
-        let event = if self.showing_mini_history_overlay {
+        if self.showing_mini_history_overlay {
             // Focus the search input so typing immediately filters chats
             self.focus_search(window, cx);
-            "mini_history_overlay_toggled"
+            super::telemetry::log_ai_ui("mini_history_overlay_toggled", self.window_mode, source);
         } else {
             // Clear stale search so next open starts fresh (Raycast pattern)
             self.clear_search_state(window, cx);
             // Return focus to the composer input after dismissing the overlay
             self.focus_input(window, cx);
-            "mini_history_overlay_dismissed"
-        };
-        tracing::info!(
-            target: "ai",
-            category = "AI_UI",
-            event,
-            window_mode = ?self.window_mode,
-            source,
-            visible = self.showing_mini_history_overlay,
-            "Mini history overlay state changed"
-        );
+            super::telemetry::log_ai_ui("mini_history_overlay_dismissed", self.window_mode, source);
+        }
         cx.notify();
     }
 
@@ -80,12 +71,10 @@ impl AiApp {
                     this.showing_mini_history_overlay = false;
                     this.clear_search_state(window, cx);
                     this.focus_input(window, cx);
-                    tracing::info!(
-                        target: "ai",
-                        category = "AI_UI",
-                        event = "mini_history_overlay_dismissed",
-                        source = "backdrop_click",
-                        "Mini history overlay dismissed via backdrop"
+                    super::telemetry::log_ai_ui(
+                        "mini_history_overlay_dismissed",
+                        this.window_mode,
+                        "backdrop_click",
                     );
                     cx.notify();
                 }),
@@ -440,7 +429,11 @@ impl Render for AiApp {
                                             .build(window, cx)
                                     })
                                     .on_click(cx.listener(|this, _, window, cx| {
-                                        this.toggle_mini_history_overlay("header_recent_button", window, cx);
+                                        this.toggle_mini_history_overlay(
+                                            "header_recent_button",
+                                            window,
+                                            cx,
+                                        );
                                     }))
                                     .child("Recent"),
                             )
@@ -469,7 +462,11 @@ impl Render for AiApp {
                                             .build(window, cx)
                                     })
                                     .on_click(cx.listener(|this, _, window, cx| {
-                                        this.show_new_chat_command_bar("header_new_button", window, cx);
+                                        this.show_new_chat_command_bar(
+                                            "header_new_button",
+                                            window,
+                                            cx,
+                                        );
                                     }))
                                     .child("New"),
                             )

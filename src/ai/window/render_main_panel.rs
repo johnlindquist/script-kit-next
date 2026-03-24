@@ -142,22 +142,18 @@ impl AiApp {
             }))
             // Content area — centered, max-width constrained
             .child(
-                div()
-                    .flex_1()
-                    .min_h_0()
-                    .overflow_hidden()
-                    .child(
-                        div()
-                            .max_w(MINI_CONTENT_MAX_W)
-                            .mx_auto()
-                            .w_full()
-                            .h_full()
-                            .child(if has_messages {
-                                self.render_messages(cx).into_any_element()
-                            } else {
-                                self.render_welcome(cx).into_any_element()
-                            }),
-                    ),
+                div().flex_1().min_h_0().overflow_hidden().child(
+                    div()
+                        .max_w(MINI_CONTENT_MAX_W)
+                        .mx_auto()
+                        .w_full()
+                        .h_full()
+                        .child(if has_messages {
+                            self.render_messages(cx).into_any_element()
+                        } else {
+                            self.render_welcome(cx).into_any_element()
+                        }),
+                ),
             )
             // Compact composer — centered, max-width constrained
             .child(
@@ -226,13 +222,10 @@ impl AiApp {
                                         gpui::MouseButton::Left,
                                         move |_, _window, cx| {
                                             stop_entity.update(cx, |this, cx| {
-                                                tracing::info!(
-                                                    target: "ai",
-                                                    category = "AI_UI",
-                                                    event = "mini_stop_click",
-                                                    window_mode = ?this.window_mode,
-                                                    source = "mini_stop_button",
-                                                    "Mini stop clicked"
+                                                super::telemetry::log_ai_ui(
+                                                    "mini_stop_click",
+                                                    this.window_mode,
+                                                    "mini_stop_button",
                                                 );
                                                 this.stop_streaming(cx);
                                             });
@@ -258,26 +251,16 @@ impl AiApp {
                                     .cursor_pointer()
                                     .bg(cx.theme().primary.opacity(OPACITY_SELECTED))
                                     .hover(|el| el.bg(cx.theme().primary))
-                                    .on_mouse_down(
-                                        gpui::MouseButton::Left,
-                                        move |_, window, cx| {
-                                            submit_entity.update(cx, |this, cx| {
-                                                let input_len = this.input_state.read(cx).value().len();
-                                                tracing::info!(
-                                                    target: "ai",
-                                                    category = "AI_UI",
-                                                    event = "mini_submit_click",
-                                                    window_mode = ?this.window_mode,
-                                                    source = "mini_submit_button",
-                                                    input_len,
-                                                    pending_context_parts = this.pending_context_parts.len(),
-                                                    has_pending_image = this.pending_image.is_some(),
-                                                    "Mini submit clicked"
-                                                );
-                                                this.submit_message(window, cx);
-                                            });
-                                        },
-                                    )
+                                    .on_mouse_down(gpui::MouseButton::Left, move |_, window, cx| {
+                                        submit_entity.update(cx, |this, cx| {
+                                            super::telemetry::log_ai_ui(
+                                                "mini_submit_click",
+                                                this.window_mode,
+                                                "mini_submit_button",
+                                            );
+                                            this.submit_message(window, cx);
+                                        });
+                                    })
                                     .child(
                                         svg()
                                             .external_path(LocalIconName::ArrowUp.external_path())
@@ -416,7 +399,11 @@ impl AiApp {
                                     .shortcut("⌘K")
                                     .on_click(Box::new(move |_, window, cx| {
                                         actions_entity.update(cx, |this, cx| {
-                                            this.show_command_bar("full_panel_actions_button", window, cx);
+                                            this.show_command_bar(
+                                                "full_panel_actions_button",
+                                                window,
+                                                cx,
+                                            );
                                         });
                                     }))
                             })

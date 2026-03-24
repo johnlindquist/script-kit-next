@@ -76,8 +76,9 @@ pub use self::storage::{
 pub use self::window::{
     add_ai_attachment, apply_ai_preset, close_ai_window, is_ai_window, is_ai_window_open,
     is_ai_window_ready, open_ai_window, open_ai_window_with_chat, open_mini_ai_window,
-    reload_ai_presets, set_ai_input, set_ai_input_with_image, set_ai_pending_chat, set_ai_search,
-    show_ai_command_bar, simulate_ai_key, start_ai_chat, PendingChatMessage,
+    open_mini_ai_window_from, reload_ai_presets, set_ai_input, set_ai_input_with_image,
+    set_ai_pending_chat, set_ai_search, show_ai_command_bar, simulate_ai_key, start_ai_chat,
+    PendingChatMessage,
 };
 
 // Re-export context-composer types for integration tests

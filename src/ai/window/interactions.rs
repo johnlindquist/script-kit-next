@@ -130,11 +130,7 @@ impl AiApp {
     }
 
     /// Toggle between Mini and Full AI window modes (Cmd+Shift+M).
-    pub(super) fn toggle_window_mode(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    pub(super) fn toggle_window_mode(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let new_mode = if self.window_mode.is_mini() {
             super::types::AiWindowMode::Full
         } else {
@@ -198,12 +194,15 @@ impl AiApp {
         }
         // Focus the input so the user can immediately type after switching
         self.focus_input(window, cx);
-        tracing::info!(
-            target: "ai",
-            window_mode = ?new_mode,
-            restored_saved_bounds = saved.is_some(),
-            restored_position,
-            "AI window mode switched"
+        super::telemetry::log_ai_lifecycle(
+            "ai_window_mode_applied",
+            new_mode,
+            "set_window_mode",
+            if saved.is_some() {
+                "restored"
+            } else {
+                "default_bounds"
+            },
         );
         cx.notify();
     }

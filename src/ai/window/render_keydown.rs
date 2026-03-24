@@ -303,7 +303,11 @@ impl AiApp {
                         if self.window_mode.is_mini() {
                             // Mini mode: open history overlay (search lives there)
                             if !self.showing_mini_history_overlay {
-                                self.toggle_mini_history_overlay("shortcut_cmd_shift_f", window, cx);
+                                self.toggle_mini_history_overlay(
+                                    "shortcut_cmd_shift_f",
+                                    window,
+                                    cx,
+                                );
                             }
                         } else {
                             // Full mode: expand sidebar if collapsed, focus search
@@ -400,12 +404,10 @@ impl AiApp {
             self.showing_mini_history_overlay = false;
             self.clear_search_state(window, cx);
             self.focus_input(window, cx);
-            tracing::info!(
-                target: "ai",
-                category = "AI_UI",
-                event = "mini_history_overlay_dismissed",
-                source = "escape_key",
-                "Mini history overlay dismissed via Escape"
+            super::telemetry::log_ai_ui(
+                "mini_history_overlay_dismissed",
+                self.window_mode,
+                "escape_key",
             );
             cx.notify();
             cx.stop_propagation();
@@ -492,12 +494,11 @@ impl AiApp {
                 super::window_api::window_role_for_mode(self.window_mode),
                 wb,
             );
-            tracing::info!(
-                target: "ai",
-                category = "AI_UI",
-                event = "mini_escape_close",
-                window_mode = ?self.window_mode,
-                "Mini window closed via Escape"
+            super::telemetry::log_ai_lifecycle(
+                "ai_window_close",
+                self.window_mode,
+                "escape_key",
+                "closing",
             );
             // Clear global handle + state so reopen works correctly
             super::window_api::cleanup_ai_window_globals();
