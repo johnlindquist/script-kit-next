@@ -2,6 +2,14 @@ use super::*;
 
 impl AiApp {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
+        Self::new_with_mode(AiWindowMode::Full, window, cx)
+    }
+
+    pub fn new_with_mode(
+        window_mode: AiWindowMode,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
         // Initialize storage
         if let Err(e) = storage::init_ai_db() {
             tracing::error!(error = %e, "Failed to initialize AI database");
@@ -184,6 +192,7 @@ impl AiApp {
         let initial_sidebar_item_count = build_sidebar_rows_for_chats(&chats).len();
 
         Self {
+            window_mode,
             chats,
             selected_chat_id,
             message_previews,
@@ -195,6 +204,7 @@ impl AiApp {
             search_snippets: std::collections::HashMap::new(),
             search_matched_title: std::collections::HashMap::new(),
             sidebar_collapsed: false,
+            showing_mini_history_overlay: false,
             provider_registry,
             available_models,
             selected_model,

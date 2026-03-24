@@ -7,14 +7,12 @@ fn ensure_theme_initialized(cx: &mut App) {
     info!("AI window theme synchronized with Script Kit");
 }
 
-const AI_WINDOW_DEFAULT_WIDTH: f32 = 900.0;
-const AI_WINDOW_DEFAULT_HEIGHT: f32 = 700.0;
 static OPENING: AtomicBool = AtomicBool::new(false);
 
-fn centered_ai_window_bounds_on_cursor_display() -> gpui::Bounds<gpui::Pixels> {
+fn centered_ai_window_bounds_on_cursor_display(mode: AiWindowMode) -> gpui::Bounds<gpui::Pixels> {
     crate::platform::calculate_centered_bounds_on_mouse_display(size(
-        px(AI_WINDOW_DEFAULT_WIDTH),
-        px(AI_WINDOW_DEFAULT_HEIGHT),
+        px(mode.default_width()),
+        px(mode.default_height()),
     ))
 }
 
@@ -56,6 +54,14 @@ fn resolve_new_ai_window_bounds(
 /// - Does NOT affect other windows (main window, notes window)
 /// - Does NOT hide the app when closed
 pub fn open_ai_window(cx: &mut App) -> Result<()> {
+    open_ai_window_with_mode(AiWindowMode::Full, cx)
+}
+
+pub fn open_mini_ai_window(cx: &mut App) -> Result<()> {
+    open_ai_window_with_mode(AiWindowMode::Mini, cx)
+}
+
+fn open_ai_window_with_mode(mode: AiWindowMode, cx: &mut App) -> Result<()> {
     use crate::logging;
 
     if OPENING.swap(true, Ordering::SeqCst) {
@@ -85,9 +91,12 @@ pub fn open_ai_window(cx: &mut App) -> Result<()> {
     if let Some(handle) = existing_handle {
         // Window exists - check if it's valid (lock is released)
         let window_valid = handle
-            .update(cx, |_root, window, _cx| {
+            .update(cx, |_root, window, cx| {
+                push_ai_command(AiCommand::SetWindowMode(mode));
+                window.set_window_title(mode.title());
                 // Window is valid - bring it to front and focus it
                 window.activate_window();
+                cx.notify();
             })
             .is_ok();
 
@@ -165,13 +174,13 @@ pub fn open_ai_window(cx: &mut App) -> Result<()> {
     let bounds = resolve_new_ai_window_bounds(
         saved_bounds,
         &displays,
-        centered_ai_window_bounds_on_cursor_display(),
+        centered_ai_window_bounds_on_cursor_display(mode),
     );
 
     let window_options = WindowOptions {
         window_bounds: Some(WindowBounds::Windowed(bounds)),
         titlebar: Some(gpui::TitlebarOptions {
-            title: Some("Script Kit AI".into()),
+            title: Some(mode.title().into()),
             appears_transparent: true,
             ..Default::default()
         }),
@@ -191,7 +200,7 @@ pub fn open_ai_window(cx: &mut App) -> Result<()> {
     let ai_app_holder_clone = ai_app_holder.clone();
 
     let handle = match cx.open_window(window_options, |window, cx| {
-        let view = cx.new(|cx| AiApp::new(window, cx));
+        let view = cx.new(|cx| AiApp::new_with_mode(mode, window, cx));
         // Store the AiApp entity temporarily for immediate focus after window creation
         *ai_app_holder_clone
             .lock()
@@ -784,6 +793,17 @@ mod tests {
         let actual = resolve_new_ai_window_bounds(None, &displays, fallback);
 
         assert_bounds_eq(actual, fallback);
+    }
+
+    #[test]
+    fn test_centered_ai_window_bounds_on_cursor_display_uses_mode_dimensions() {
+        let full = centered_ai_window_bounds_on_cursor_display(AiWindowMode::Full);
+        let mini = centered_ai_window_bounds_on_cursor_display(AiWindowMode::Mini);
+
+        assert_eq!(f64::from(full.size.width), 900.0);
+        assert_eq!(f64::from(full.size.height), 700.0);
+        assert_eq!(f64::from(mini.size.width), 720.0);
+        assert_eq!(f64::from(mini.size.height), 560.0);
     }
 
     #[test]

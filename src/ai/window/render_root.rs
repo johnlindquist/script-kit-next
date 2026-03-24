@@ -82,6 +82,21 @@ impl AiApp {
             );
 
             match cmd {
+                AiCommand::SetWindowMode(window_mode) => {
+                    self.window_mode = window_mode;
+                    self.showing_mini_history_overlay = false;
+                    window.set_window_title(window_mode.title());
+                    window.resize(size(
+                        px(window_mode.default_width()),
+                        px(window_mode.default_height()),
+                    ));
+                    cx.notify();
+                    tracing::info!(
+                        target: "ai",
+                        window_mode = ?window_mode,
+                        "AI window mode set"
+                    );
+                }
                 AiCommand::SetSearch(query) => {
                     self.search_state.update(cx, |state, cx| {
                         state.set_value(query.clone(), window, cx);
@@ -214,7 +229,8 @@ impl Render for AiApp {
         // The vibrancy effect requires no shadow on transparent elements.
 
         // Get vibrancy background - None when vibrancy enabled (let native blur show through).
-        let vibrancy_bg = crate::ui_foundation::get_vibrancy_background(&crate::theme::get_cached_theme());
+        let vibrancy_bg =
+            crate::ui_foundation::get_vibrancy_background(&crate::theme::get_cached_theme());
 
         // Capture mouse_cursor_hidden for use in div builder.
         let mouse_cursor_hidden = self.mouse_cursor_hidden;

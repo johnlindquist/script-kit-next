@@ -60,6 +60,40 @@ pub(super) const MSG_PY: Pixels = S2;
 pub(super) const MSG_GAP: Pixels = S6;
 pub(super) const MSG_GAP_CONTINUATION: Pixels = S2;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(super) enum AiWindowMode {
+    #[default]
+    Full,
+    Mini,
+}
+
+impl AiWindowMode {
+    pub(super) fn is_mini(self) -> bool {
+        matches!(self, Self::Mini)
+    }
+
+    pub(super) fn default_width(self) -> f32 {
+        match self {
+            Self::Full => 900.0,
+            Self::Mini => 720.0,
+        }
+    }
+
+    pub(super) fn default_height(self) -> f32 {
+        match self {
+            Self::Full => 700.0,
+            Self::Mini => 560.0,
+        }
+    }
+
+    pub(super) fn title(self) -> &'static str {
+        match self {
+            Self::Full => "Script Kit AI",
+            Self::Mini => "Mini AI",
+        }
+    }
+}
+
 /// Auto-collapse messages longer than this many characters.
 /// Used by both the collapse decision logic and the toggle-button visibility gate.
 pub(super) const MSG_COLLAPSE_CHAR_THRESHOLD: usize = 800;
@@ -148,6 +182,41 @@ mod layout_token_tests {
         assert_eq!(SETUP_FEEDBACK_MAX_W, px(340.));
         assert_eq!(SETUP_API_KEY_MAX_W, px(400.));
         assert_eq!(SIDEBAR_SEARCH_ICON_SIZE, px(10.));
+    }
+}
+
+#[cfg(test)]
+mod ai_window_mode_tests {
+    use super::*;
+
+    #[test]
+    fn test_ai_window_mode_defaults_to_full() {
+        assert_eq!(AiWindowMode::default(), AiWindowMode::Full);
+        assert!(!AiWindowMode::Full.is_mini());
+        assert!(AiWindowMode::Mini.is_mini());
+    }
+
+    #[test]
+    fn test_ai_window_mode_uses_expected_titles_and_dimensions() {
+        assert_eq!(AiWindowMode::Full.default_width(), 900.0);
+        assert_eq!(AiWindowMode::Full.default_height(), 700.0);
+        assert_eq!(AiWindowMode::Full.title(), "Script Kit AI");
+
+        assert_eq!(AiWindowMode::Mini.default_width(), 720.0);
+        assert_eq!(AiWindowMode::Mini.default_height(), 560.0);
+        assert_eq!(AiWindowMode::Mini.title(), "Mini AI");
+    }
+
+    #[test]
+    fn test_ai_window_mode_command_names_match_variants() {
+        assert_eq!(
+            AiCommand::SetWindowMode(AiWindowMode::Full).name(),
+            "set_window_mode_full"
+        );
+        assert_eq!(
+            AiCommand::SetWindowMode(AiWindowMode::Mini).name(),
+            "set_window_mode_mini"
+        );
     }
 }
 
@@ -548,6 +617,7 @@ pub(crate) struct StartChatResolvedMetadata {
 #[derive(Clone)]
 #[allow(clippy::enum_variant_names)]
 pub(super) enum AiCommand {
+    SetWindowMode(AiWindowMode),
     SetSearch(String),
     SetInput {
         text: String,
@@ -597,6 +667,8 @@ pub(super) enum AiCommand {
 impl AiCommand {
     pub(super) fn name(&self) -> &'static str {
         match self {
+            Self::SetWindowMode(AiWindowMode::Full) => "set_window_mode_full",
+            Self::SetWindowMode(AiWindowMode::Mini) => "set_window_mode_mini",
             Self::SetSearch(_) => "set_search",
             Self::SetInput { submit: true, .. } => "set_input_submit",
             Self::SetInput { submit: false, .. } => "set_input",
