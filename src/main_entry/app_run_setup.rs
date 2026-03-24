@@ -2008,6 +2008,12 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                     logging::log("STDIN", &format!("Failed to open AI window: {}", e));
                                 }
                             }
+                            ExternalCommand::OpenMiniAi => {
+                                logging::log("STDIN", "Opening mini AI window via stdin command");
+                                if let Err(e) = ai::open_mini_ai_window(ctx) {
+                                    logging::log("STDIN", &format!("Failed to open mini AI window: {}", e));
+                                }
+                            }
                             ExternalCommand::OpenAiWithMockData => {
                                 logging::log("STDIN", "Opening AI window with mock data via stdin command");
                                 // First insert mock data
@@ -2019,6 +2025,17 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                 // Then open the window
                                 if let Err(e) = ai::open_ai_window(ctx) {
                                     logging::log("STDIN", &format!("Failed to open AI window: {}", e));
+                                }
+                            }
+                            ExternalCommand::OpenMiniAiWithMockData => {
+                                logging::log("STDIN", "Opening mini AI window with mock data via stdin command");
+                                if let Err(e) = ai::insert_mock_data() {
+                                    logging::log("STDIN", &format!("Failed to insert mock data: {}", e));
+                                } else {
+                                    logging::log("STDIN", "Mock data inserted successfully");
+                                }
+                                if let Err(e) = ai::open_mini_ai_window(ctx) {
+                                    logging::log("STDIN", &format!("Failed to open mini AI window: {}", e));
                                 }
                             }
                             ExternalCommand::ShowAiCommandBar => {

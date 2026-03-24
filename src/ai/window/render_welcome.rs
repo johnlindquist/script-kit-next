@@ -13,7 +13,9 @@ const SUGGESTION_MAX_W: Pixels = px(540.);
 
 /// Script Kit-specific welcome suggestions shown on the AI chat welcome screen.
 /// Each tuple: (title, description, icon).
-fn script_kit_welcome_suggestions() -> [(&'static str, &'static str, LocalIconName); 4] {
+/// Single source of truth — used by both the rendered cards (render_welcome)
+/// and the keyboard shortcuts (Cmd+1-4 in render_keydown).
+pub(super) fn script_kit_welcome_suggestions() -> [(&'static str, &'static str, LocalIconName); 4] {
     [
         (
             "Monitor clipboard",
@@ -50,8 +52,12 @@ impl AiApp {
 
         let all_suggestions = script_kit_welcome_suggestions();
         let is_mini = self.window_mode.is_mini();
-        // Mini mode: show only first 2 suggestions to keep the compact feel
-        let suggestion_count = if is_mini { 2 } else { 4 };
+        // Mini mode: show only first N suggestions to keep the compact feel
+        let suggestion_count = if is_mini {
+            MINI_SUGGESTION_COUNT
+        } else {
+            FULL_SUGGESTION_COUNT
+        };
 
         div()
             .flex()
@@ -111,85 +117,98 @@ impl AiApp {
                     .gap(S1)
                     .w_full()
                     .max_w(SUGGESTION_MAX_W)
-                    .children(all_suggestions.into_iter().take(suggestion_count).enumerate().map(
-                        |(i, (title, desc, icon))| {
-                            let prompt_text = SharedString::from(format!("{} {}", title, desc));
-                            let title_s: SharedString = title.into();
-                            let desc_s: SharedString = desc.into();
-                            div()
-                                .id(SharedString::from(format!("suggestion-{}", i)))
-                                .flex()
-                                .items_center()
-                                .gap(S3)
-                                .pl(S3)
-                                .pr(S4)
-                                .py(S3)
-                                .rounded(R_LG)
-                                .cursor_pointer()
-                                .hover(move |s| s.bg(suggestion_hover_bg))
-                                .on_click(cx.listener(move |this, _, window, cx| {
-                                    info!(
-                                        suggestion_text = %prompt_text,
-                                        "Welcome suggestion card clicked — auto-submitting"
-                                    );
-                                    this.set_composer_value(prompt_text.to_string(), window, cx);
-                                    this.submit_message(window, cx);
-                                }))
-                                // Icon container — fixed size for consistent alignment
-                                .child(
-                                    div()
-                                        .flex()
-                                        .items_center()
-                                        .justify_center()
-                                        .size(SUGGESTION_ICON_CONTAINER)
-                                        .rounded(R_SM)
-                                        .bg(suggestion_bg)
-                                        .flex_shrink_0()
-                                        .child(
-                                            svg()
-                                                .external_path(icon.external_path())
-                                                .size(SUGGESTION_ICON_SIZE)
-                                                .text_color(
-                                                    cx.theme()
-                                                        .accent
-                                                        .opacity(OPACITY_ACCENT_MEDIUM),
-                                                ),
-                                        ),
-                                )
-                                .child(
-                                    div()
-                                        .flex()
-                                        .flex_col()
-                                        .flex_1()
-                                        .gap(SP_1)
-                                        .child(
-                                            div()
-                                                .text_sm()
-                                                .font_weight(gpui::FontWeight::MEDIUM)
-                                                .text_color(cx.theme().foreground)
-                                                .child(title_s),
-                                        )
-                                        .child(
-                                            div()
-                                                .text_xs()
-                                                .text_color(
-                                                    cx.theme()
-                                                        .muted_foreground
-                                                        .opacity(OPACITY_ACCENT_MEDIUM),
-                                                )
-                                                .child(desc_s),
-                                        ),
-                                )
-                                .child(
-                                    div()
-                                        .text_xs()
-                                        .text_color(
-                                            cx.theme().muted_foreground.opacity(OPACITY_TEXT_MUTED),
-                                        )
-                                        .child(SharedString::from(format!("\u{2318}{}", i + 1))),
-                                )
-                        },
-                    )),
+                    .children(
+                        all_suggestions
+                            .into_iter()
+                            .take(suggestion_count)
+                            .enumerate()
+                            .map(|(i, (title, desc, icon))| {
+                                let prompt_text = SharedString::from(format!("{} {}", title, desc));
+                                let title_s: SharedString = title.into();
+                                let desc_s: SharedString = desc.into();
+                                div()
+                                    .id(SharedString::from(format!("suggestion-{}", i)))
+                                    .flex()
+                                    .items_center()
+                                    .gap(S3)
+                                    .pl(S3)
+                                    .pr(S4)
+                                    .py(S3)
+                                    .rounded(R_LG)
+                                    .cursor_pointer()
+                                    .hover(move |s| s.bg(suggestion_hover_bg))
+                                    .on_click(cx.listener(move |this, _, window, cx| {
+                                        info!(
+                                            suggestion_text = %prompt_text,
+                                            "Welcome suggestion card clicked — auto-submitting"
+                                        );
+                                        this.set_composer_value(
+                                            prompt_text.to_string(),
+                                            window,
+                                            cx,
+                                        );
+                                        this.submit_message(window, cx);
+                                    }))
+                                    // Icon container — fixed size for consistent alignment
+                                    .child(
+                                        div()
+                                            .flex()
+                                            .items_center()
+                                            .justify_center()
+                                            .size(SUGGESTION_ICON_CONTAINER)
+                                            .rounded(R_SM)
+                                            .bg(suggestion_bg)
+                                            .flex_shrink_0()
+                                            .child(
+                                                svg()
+                                                    .external_path(icon.external_path())
+                                                    .size(SUGGESTION_ICON_SIZE)
+                                                    .text_color(
+                                                        cx.theme()
+                                                            .accent
+                                                            .opacity(OPACITY_ACCENT_MEDIUM),
+                                                    ),
+                                            ),
+                                    )
+                                    .child(
+                                        div()
+                                            .flex()
+                                            .flex_col()
+                                            .flex_1()
+                                            .gap(SP_1)
+                                            .child(
+                                                div()
+                                                    .text_sm()
+                                                    .font_weight(gpui::FontWeight::MEDIUM)
+                                                    .text_color(cx.theme().foreground)
+                                                    .child(title_s),
+                                            )
+                                            .child(
+                                                div()
+                                                    .text_xs()
+                                                    .text_color(
+                                                        cx.theme()
+                                                            .muted_foreground
+                                                            .opacity(OPACITY_ACCENT_MEDIUM),
+                                                    )
+                                                    .child(desc_s),
+                                            ),
+                                    )
+                                    .child(
+                                        div()
+                                            .text_xs()
+                                            .text_color(
+                                                cx.theme()
+                                                    .muted_foreground
+                                                    .opacity(OPACITY_TEXT_MUTED),
+                                            )
+                                            .child(SharedString::from(format!(
+                                                "\u{2318}{}",
+                                                i + 1
+                                            ))),
+                                    )
+                            }),
+                    ),
             )
             .into_any_element()
     }
@@ -216,5 +235,44 @@ mod tests {
             combined.contains("menu bar"),
             "suggestions must reference menu bar"
         );
+    }
+
+    /// Mini mode only exposes the first MINI_SUGGESTION_COUNT suggestions.
+    /// Verify that the array has enough entries and that the mini slice is a strict prefix.
+    #[test]
+    fn test_mini_only_exposes_first_two_suggestions() {
+        let all = script_kit_welcome_suggestions();
+        let mini_count = super::MINI_SUGGESTION_COUNT;
+        assert!(
+            all.len() >= mini_count,
+            "need at least {mini_count} suggestions for mini mode"
+        );
+        // Mini shows a prefix — first mini_count entries must be non-empty
+        for (title, desc, _icon) in all.iter().take(mini_count) {
+            assert!(!title.is_empty(), "mini suggestion title must be non-empty");
+            assert!(!desc.is_empty(), "mini suggestion desc must be non-empty");
+        }
+        // Full mode shows more
+        assert!(
+            all.len() > mini_count,
+            "full mode should show more suggestions than mini"
+        );
+    }
+
+    /// Each suggestion must produce a non-empty prompt when formatted.
+    #[test]
+    fn test_welcome_suggestions_produce_non_empty_prompts() {
+        for (title, desc, _icon) in script_kit_welcome_suggestions() {
+            let prompt = format!("{} {}", title, desc);
+            assert!(
+                !prompt.trim().is_empty(),
+                "suggestion must produce non-empty prompt"
+            );
+            assert!(
+                prompt.len() > 10,
+                "suggestion prompt should be descriptive, got: {}",
+                prompt
+            );
+        }
     }
 }

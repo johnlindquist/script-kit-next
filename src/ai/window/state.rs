@@ -292,17 +292,30 @@ pub struct AiApp {
 /// Machine-readable snapshot of AI window state for agentic tests and debugging.
 ///
 /// Serializable to JSON — callers can assert individual fields without
-/// reaching into `AiApp` internals.
+/// reaching into `AiApp` internals. Every dismissible overlay and modal
+/// is represented so the full Esc-chain can be verified deterministically.
+///
+/// **Privacy:** This struct contains structural metadata (booleans, counts,
+/// mode strings, UUIDs) plus `search_query` (user-typed sidebar filter text).
+/// The telemetry helper `log_ai_state` redacts `search_query` to length-only
+/// so no user input text reaches the telemetry sink. It never captures
+/// conversation content, API keys, or other PII.
 #[derive(Debug, Clone, serde::Serialize, PartialEq, Eq)]
 pub(crate) struct AiMiniDebugSnapshot {
     pub window_mode: &'static str,
     pub history_overlay_visible: bool,
     pub command_bar_open: bool,
     pub new_chat_menu_open: bool,
+    pub presets_dropdown_open: bool,
+    pub api_key_input_visible: bool,
+    pub context_picker_open: bool,
     pub selected_model: Option<String>,
+    pub selected_chat_id: Option<String>,
     pub pending_context_parts: usize,
     pub has_pending_image: bool,
     pub is_streaming: bool,
+    pub streaming_error_present: bool,
+    pub pending_delete_chat_present: bool,
     pub chat_count: usize,
     pub current_message_count: usize,
     pub sidebar_collapsed: bool,
@@ -329,10 +342,16 @@ impl AiApp {
             history_overlay_visible: self.showing_mini_history_overlay,
             command_bar_open: self.command_bar.is_open(),
             new_chat_menu_open: self.new_chat_command_bar.is_open(),
+            presets_dropdown_open: self.showing_presets_dropdown,
+            api_key_input_visible: self.showing_api_key_input,
+            context_picker_open: self.is_context_picker_open(),
             selected_model: self.selected_model.as_ref().map(|m| m.display_name.clone()),
+            selected_chat_id: self.selected_chat_id.map(|id| id.to_string()),
             pending_context_parts: self.pending_context_parts.len(),
             has_pending_image: self.pending_image.is_some(),
             is_streaming: self.is_streaming,
+            streaming_error_present: self.streaming_error.is_some(),
+            pending_delete_chat_present: self.pending_delete_chat_id.is_some(),
             chat_count: self.chats.len(),
             current_message_count: self.current_messages.len(),
             sidebar_collapsed: self.sidebar_collapsed,
