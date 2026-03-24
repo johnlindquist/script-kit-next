@@ -2512,7 +2512,7 @@ fn test_mini_esc_overlay_precedes_close_in_source() {
         .find("showing_mini_history_overlay")
         .expect("mini history overlay Esc handler must exist in render_keydown.rs");
     let close_pos = source
-        .find("mini_esc_close_window")
+        .find("mini_escape_close")
         .expect("mini Esc close handler must exist in render_keydown.rs");
     assert!(
         overlay_pos < close_pos,

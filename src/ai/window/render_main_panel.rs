@@ -148,7 +148,7 @@ impl AiApp {
                     .overflow_hidden()
                     .child(
                         div()
-                            .max_w(px(760.))
+                            .max_w(MINI_CONTENT_MAX_W)
                             .mx_auto()
                             .w_full()
                             .h_full()
@@ -162,7 +162,7 @@ impl AiApp {
             // Compact composer — centered, max-width constrained
             .child(
                 div()
-                    .max_w(px(760.))
+                    .max_w(MINI_CONTENT_MAX_W)
                     .mx_auto()
                     .w_full()
                     .id("ai-mini-input-area")
@@ -217,7 +217,7 @@ impl AiApp {
                                     .flex()
                                     .items_center()
                                     .justify_center()
-                                    .size(px(28.))
+                                    .size(MINI_BTN_SIZE)
                                     .rounded(R_SM)
                                     .cursor_pointer()
                                     .bg(cx.theme().danger.opacity(OPACITY_HOVER))
@@ -226,6 +226,14 @@ impl AiApp {
                                         gpui::MouseButton::Left,
                                         move |_, _window, cx| {
                                             stop_entity.update(cx, |this, cx| {
+                                                tracing::info!(
+                                                    target: "ai",
+                                                    category = "AI_UI",
+                                                    event = "mini_stop_click",
+                                                    window_mode = ?this.window_mode,
+                                                    source = "mini_stop_button",
+                                                    "Mini stop clicked"
+                                                );
                                                 this.stop_streaming(cx);
                                             });
                                         },
@@ -245,7 +253,7 @@ impl AiApp {
                                     .flex()
                                     .items_center()
                                     .justify_center()
-                                    .size(px(28.))
+                                    .size(MINI_BTN_SIZE)
                                     .rounded(R_SM)
                                     .cursor_pointer()
                                     .bg(cx.theme().primary.opacity(OPACITY_SELECTED))
@@ -254,6 +262,18 @@ impl AiApp {
                                         gpui::MouseButton::Left,
                                         move |_, window, cx| {
                                             submit_entity.update(cx, |this, cx| {
+                                                let input_len = this.input_state.read(cx).value().len();
+                                                tracing::info!(
+                                                    target: "ai",
+                                                    category = "AI_UI",
+                                                    event = "mini_submit_click",
+                                                    window_mode = ?this.window_mode,
+                                                    source = "mini_submit_button",
+                                                    input_len,
+                                                    pending_context_parts = this.pending_context_parts.len(),
+                                                    has_pending_image = this.pending_image.is_some(),
+                                                    "Mini submit clicked"
+                                                );
                                                 this.submit_message(window, cx);
                                             });
                                         },
@@ -267,7 +287,7 @@ impl AiApp {
                                     .into_any_element()
                             } else {
                                 // Empty placeholder — same size to prevent layout shift
-                                div().size(px(28.)).flex_shrink_0().into_any_element()
+                                div().size(MINI_BTN_SIZE).flex_shrink_0().into_any_element()
                             }),
                     ),
             )
@@ -396,7 +416,7 @@ impl AiApp {
                                     .shortcut("⌘K")
                                     .on_click(Box::new(move |_, window, cx| {
                                         actions_entity.update(cx, |this, cx| {
-                                            this.show_command_bar(window, cx);
+                                            this.show_command_bar("full_panel_actions_button", window, cx);
                                         });
                                     }))
                             })

@@ -5,8 +5,15 @@ use crate::ui_foundation::{
 };
 
 impl AiApp {
-    pub(super) fn show_command_bar(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        tracing::info!(target: "ai", "show_command_bar: opening actions menu");
+    pub(super) fn show_command_bar(&mut self, source: &'static str, window: &mut Window, cx: &mut Context<Self>) {
+        tracing::info!(
+            target: "ai",
+            category = "AI_UI",
+            event = "command_bar_open",
+            window_mode = ?self.window_mode,
+            source,
+            "Command bar opened"
+        );
         // Open the command bar (CommandBar handles window creation internally)
         self.command_bar.open(window, cx);
 
@@ -34,7 +41,13 @@ impl AiApp {
 
     /// Hide the command bar (closes the vibrancy window) and refocus the input
     pub(super) fn hide_command_bar(&mut self, cx: &mut Context<Self>) {
-        tracing::info!(target: "ai", "hide_command_bar: closing and restoring focus");
+        tracing::info!(
+            target: "ai",
+            category = "AI_UI",
+            event = "command_bar_close",
+            window_mode = ?self.window_mode,
+            "Command bar closed"
+        );
         self.command_bar.close(cx);
         // Refocus the chat input after closing the command bar
         self.request_focus(cx);
@@ -82,19 +95,21 @@ impl AiApp {
     /// Toggle the new chat command bar dropdown
     pub(super) fn toggle_new_chat_command_bar(
         &mut self,
+        source: &'static str,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         if self.new_chat_command_bar.is_open() {
             self.hide_new_chat_command_bar(cx);
         } else {
-            self.show_new_chat_command_bar(window, cx);
+            self.show_new_chat_command_bar(source, window, cx);
         }
     }
 
     /// Show the new chat command bar with dynamically built actions
     pub(super) fn show_new_chat_command_bar(
         &mut self,
+        source: &'static str,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -154,6 +169,18 @@ impl AiApp {
         // Build actions and update the command bar
         let actions = get_new_chat_actions(&last_used, &presets, &models);
         self.new_chat_command_bar.set_actions(actions, cx);
+
+        tracing::info!(
+            target: "ai",
+            category = "AI_UI",
+            event = "new_chat_menu_open",
+            window_mode = ?self.window_mode,
+            source,
+            last_used_count = last_used.len(),
+            preset_count = presets.len(),
+            model_count = models.len(),
+            "New chat menu opened"
+        );
 
         // Open at top-right position (below titlebar)
         self.new_chat_command_bar
@@ -218,6 +245,18 @@ impl AiApp {
                     }
                 }
             }
+        } else {
+            tracing::warn!(
+                target: "ai",
+                category = "AI_UI",
+                event = "new_chat_action_unresolved",
+                window_mode = ?self.window_mode,
+                action_id,
+                last_used_count = self.last_used_settings.len(),
+                preset_count = self.presets.len(),
+                model_count = self.available_models.len(),
+                "New chat action could not be resolved"
+            );
         }
     }
 
@@ -310,7 +349,7 @@ impl AiApp {
                 self.hide_command_bar(cx);
             } else {
                 self.hide_all_dropdowns(cx);
-                self.show_command_bar(window, cx);
+                self.show_command_bar("simulated_cmd_k", window, cx);
             }
             return;
         }
@@ -318,7 +357,7 @@ impl AiApp {
         // Handle Cmd+J to toggle mini history overlay
         if has_cmd && key_lower == "j" && self.window_mode.is_mini() {
             tracing::debug!(target: "ai", "SimulateKey: Cmd+J - toggling mini history overlay");
-            self.toggle_mini_history_overlay(window, cx);
+            self.toggle_mini_history_overlay("simulated_cmd_j", window, cx);
             return;
         }
 

@@ -38,14 +38,27 @@ impl AiApp {
 
     pub(super) fn toggle_mini_history_overlay(
         &mut self,
+        source: &'static str,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         self.showing_mini_history_overlay = !self.showing_mini_history_overlay;
-        if self.showing_mini_history_overlay {
+        let event = if self.showing_mini_history_overlay {
             // Focus the search input so typing immediately filters chats
             self.focus_search(window, cx);
-        }
+            "mini_history_overlay_toggled"
+        } else {
+            "mini_history_overlay_dismissed"
+        };
+        tracing::info!(
+            target: "ai",
+            category = "AI_UI",
+            event,
+            window_mode = ?self.window_mode,
+            source,
+            visible = self.showing_mini_history_overlay,
+            "Mini history overlay state changed"
+        );
         cx.notify();
     }
 
@@ -59,8 +72,15 @@ impl AiApp {
             .size_full()
             .on_mouse_down(
                 gpui::MouseButton::Left,
-                cx.listener(|this, _, _, cx| {
+                cx.listener(|this, _, _window, cx| {
                     this.showing_mini_history_overlay = false;
+                    tracing::info!(
+                        target: "ai",
+                        category = "AI_UI",
+                        event = "mini_history_overlay_dismissed",
+                        source = "backdrop_click",
+                        "Mini history overlay dismissed via backdrop"
+                    );
                     cx.notify();
                 }),
             )
@@ -68,10 +88,10 @@ impl AiApp {
                 div()
                     .id("ai-mini-history-overlay")
                     .absolute()
-                    .top(px(48.))
+                    .top(MINI_HISTORY_OVERLAY_TOP)
                     .left(S3)
-                    .w(px(320.))
-                    .max_h(px(420.))
+                    .w(MINI_HISTORY_OVERLAY_W)
+                    .max_h(MINI_HISTORY_OVERLAY_MAX_H)
                     .bg(cx.theme().background)
                     .border_1()
                     .border_color(cx.theme().border)
@@ -211,8 +231,7 @@ impl AiApp {
                     self.initialize_with_pending_chat(window, cx);
                 }
                 AiCommand::ShowCommandBar => {
-                    self.show_command_bar(window, cx);
-                    tracing::info!(target: "ai", "Command bar shown via stdin command");
+                    self.show_command_bar("stdin_command", window, cx);
                 }
                 AiCommand::ApplyPreset { preset_id } => {
                     if let Some(idx) = self.presets.iter().position(|p| p.id == preset_id) {
@@ -351,7 +370,7 @@ impl Render for AiApp {
                 div()
                     .id("ai-titlebar-mini")
                     .w_full()
-                    .h(px(44.))
+                    .h(MINI_TITLEBAR_H)
                     .pl(TITLEBAR_LEFT_PADDING)
                     .pr(S3)
                     .flex()
@@ -388,7 +407,7 @@ impl Render for AiApp {
                                     .on_mouse_down(
                                         gpui::MouseButton::Left,
                                         cx.listener(|this, _, window, cx| {
-                                            this.show_command_bar(window, cx);
+                                            this.show_command_bar("header_model_click", window, cx);
                                         }),
                                     )
                                     .child(mini_model_display_name),
@@ -432,7 +451,7 @@ impl Render for AiApp {
                                             .build(window, cx)
                                     })
                                     .on_click(cx.listener(|this, _, window, cx| {
-                                        this.toggle_mini_history_overlay(window, cx);
+                                        this.toggle_mini_history_overlay("header_recent_button", window, cx);
                                     }))
                                     .child("Recent"),
                             )
@@ -461,7 +480,7 @@ impl Render for AiApp {
                                             .build(window, cx)
                                     })
                                     .on_click(cx.listener(|this, _, window, cx| {
-                                        this.show_new_chat_command_bar(window, cx);
+                                        this.show_new_chat_command_bar("header_new_button", window, cx);
                                     }))
                                     .child("New"),
                             )
@@ -490,7 +509,7 @@ impl Render for AiApp {
                                             .build(window, cx)
                                     })
                                     .on_click(cx.listener(|this, _, window, cx| {
-                                        this.show_command_bar(window, cx);
+                                        this.show_command_bar("header_actions_button", window, cx);
                                     }))
                                     .child("Actions"),
                             ),

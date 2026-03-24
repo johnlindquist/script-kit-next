@@ -252,7 +252,7 @@ impl AiApp {
         if modifiers.platform {
             match key {
                 k if self.window_mode.is_mini() && is_mini_history_shortcut(k, modifiers) => {
-                    self.toggle_mini_history_overlay(window, cx);
+                    self.toggle_mini_history_overlay("shortcut_cmd_j", window, cx);
                     cx.stop_propagation();
                     return;
                 }
@@ -278,7 +278,7 @@ impl AiApp {
                         self.hide_command_bar(cx);
                     } else {
                         self.hide_all_dropdowns(cx);
-                        self.show_command_bar(window, cx);
+                        self.show_command_bar("shortcut_cmd_k", window, cx);
                     }
                 }
                 // Cmd+N for new chat (with Shift for presets)
@@ -290,7 +290,7 @@ impl AiApp {
                     } else if self.window_mode.is_mini() {
                         // Mini mode: open the new-chat command bar for model/preset selection
                         self.hide_all_dropdowns(cx);
-                        self.show_new_chat_command_bar(window, cx);
+                        self.show_new_chat_command_bar("shortcut_cmd_n", window, cx);
                     } else {
                         self.new_conversation(window, cx);
                     }
@@ -379,6 +379,13 @@ impl AiApp {
 
         if is_key_escape(key) && self.window_mode.is_mini() && self.showing_mini_history_overlay {
             self.showing_mini_history_overlay = false;
+            tracing::info!(
+                target: "ai",
+                category = "AI_UI",
+                event = "mini_history_overlay_dismissed",
+                source = "escape_key",
+                "Mini history overlay dismissed via Escape"
+            );
             cx.notify();
             cx.stop_propagation();
             return;
@@ -464,7 +471,13 @@ impl AiApp {
                 super::window_api::window_role_for_mode(self.window_mode),
                 wb,
             );
-            info!(window_mode = ?self.window_mode, "mini_esc_close_window");
+            tracing::info!(
+                target: "ai",
+                category = "AI_UI",
+                event = "mini_escape_close",
+                window_mode = ?self.window_mode,
+                "Mini window closed via Escape"
+            );
             window.remove_window();
             cx.stop_propagation();
         }
