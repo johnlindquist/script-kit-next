@@ -349,6 +349,33 @@ pub fn open_ai_window_with_chat(cx: &mut App, messages: Vec<PendingChatMessage>)
     Ok(())
 }
 
+/// Clear all AI window global state (handle, focus flag, mode, SDK state).
+///
+/// Call this from any close path — both `close_ai_window()` (external) and
+/// the Cmd+W / Esc handlers inside `handle_root_key_down()` (internal).
+/// Without this cleanup, `is_ai_window_open()` returns true for a dead handle
+/// and subsequent `open_mini_ai_window()` calls try to bring a removed window
+/// to front instead of creating a new one.
+pub(super) fn cleanup_ai_window_globals() {
+    // Take the handle out of the global slot (clears it for future open calls)
+    let slot = AI_WINDOW.get_or_init(|| std::sync::Mutex::new(None));
+    if let Ok(mut guard) = slot.lock() {
+        *guard = None;
+    }
+    // Clear the focus request flag (no longer needed after window closes)
+    AI_FOCUS_REQUESTED.store(false, Ordering::SeqCst);
+    // Reset window mode to Full (default for next open)
+    super::types::AI_CURRENT_WINDOW_MODE.store(0, std::sync::atomic::Ordering::SeqCst);
+    // Clear SDK-visible state so handlers report correct state
+    clear_sdk_state();
+    tracing::info!(
+        target: "ai",
+        category = "AI",
+        event = "ai_window_globals_cleaned",
+        "AI window global state cleared"
+    );
+}
+
 /// Close the AI window
 pub fn close_ai_window(cx: &mut App) {
     // SAFETY: Release lock BEFORE calling handle.update() to prevent deadlock
@@ -362,21 +389,18 @@ pub fn close_ai_window(cx: &mut App) {
     if let Some(handle) = handle {
         let _ = handle.update(cx, |_, window, _| {
             let wb = window.window_bounds();
-            let role = if window.window_title() == AiWindowMode::Mini.title() {
-                crate::window_state::WindowRole::AiMini
-            } else {
-                crate::window_state::WindowRole::Ai
-            };
+            // Derive role from the global atomic mirror, not from window title string.
+            let mode = AiWindowMode::from_u8(
+                super::types::AI_CURRENT_WINDOW_MODE.load(std::sync::atomic::Ordering::SeqCst),
+            );
+            let role = window_role_for_mode(mode);
             crate::window_state::save_window_from_gpui(role, wb);
             window.remove_window();
         });
     }
 
-    // Clear the focus request flag (no longer needed after window closes)
-    AI_FOCUS_REQUESTED.store(false, std::sync::atomic::Ordering::SeqCst);
-
-    // Clear SDK-visible state so handlers report correct state
-    clear_sdk_state();
+    // Cleanup globals (handle already taken above, but this clears the rest)
+    cleanup_ai_window_globals();
 }
 
 /// Check if the AI window is currently open

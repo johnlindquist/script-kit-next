@@ -6587,6 +6587,7 @@ dependencies = [
  "parking_lot",
  "portable-pty",
  "pulldown-cmark",
+ "raw-window-handle",
  "rayon",
  "regex",
  "resvg",

@@ -250,7 +250,7 @@ fn mode_switch_focuses_input_after_switch() {
     let set_fn = interactions
         .find("fn set_window_mode")
         .expect("set_window_mode must exist");
-    let fn_end = (set_fn + 2000).min(interactions.len());
+    let fn_end = (set_fn + 3000).min(interactions.len());
     let fn_body = &interactions[set_fn..fn_end];
     assert!(
         fn_body.contains("focus_input(window, cx)"),
@@ -339,5 +339,154 @@ fn mini_header_shows_chat_title() {
     assert!(
         titlebar_section.contains("title_text"),
         "Mini titlebar should display chat title when messages exist"
+    );
+}
+
+#[test]
+fn close_paths_clear_global_handle() {
+    // Both Cmd+W and Esc-mini close paths must call cleanup_ai_window_globals()
+    // to prevent stale AI_WINDOW handles from breaking reopen.
+    let keydown = read("src/ai/window/render_keydown.rs");
+
+    // Cmd+W handler
+    let cmd_w_start = keydown
+        .find("// Cmd+W closes the AI window")
+        .expect("Cmd+W close comment must exist");
+    let cmd_w_section = &keydown[cmd_w_start..(cmd_w_start + 600).min(keydown.len())];
+    assert!(
+        cmd_w_section.contains("cleanup_ai_window_globals()"),
+        "Cmd+W handler must call cleanup_ai_window_globals before remove_window"
+    );
+
+    // Esc-mini handler
+    let esc_mini_start = keydown
+        .find("mini_escape_close")
+        .expect("mini_escape_close event must exist");
+    let esc_mini_section = &keydown[esc_mini_start..(esc_mini_start + 400).min(keydown.len())];
+    assert!(
+        esc_mini_section.contains("cleanup_ai_window_globals()"),
+        "Esc-mini handler must call cleanup_ai_window_globals before remove_window"
+    );
+
+    // close_ai_window() must also call cleanup
+    let api = read("src/ai/window/window_api.rs");
+    assert!(
+        api.contains("fn cleanup_ai_window_globals()"),
+        "cleanup_ai_window_globals helper must exist in window_api.rs"
+    );
+    let close_fn_start = api
+        .find("pub fn close_ai_window")
+        .expect("close_ai_window must exist");
+    let close_fn_section = &api[close_fn_start..(close_fn_start + 1500).min(api.len())];
+    assert!(
+        close_fn_section.contains("cleanup_ai_window_globals()"),
+        "close_ai_window must delegate to cleanup_ai_window_globals"
+    );
+}
+
+#[test]
+fn close_path_uses_atomic_mode_not_title_string() {
+    // close_ai_window must derive role from AI_CURRENT_WINDOW_MODE atomic,
+    // not from window title strings. This ensures persistence correctness
+    // even if the title is changed or localized.
+    let api = read("src/ai/window/window_api.rs");
+    let close_fn_start = api
+        .find("pub fn close_ai_window")
+        .expect("close_ai_window must exist");
+    let close_fn_section = &api[close_fn_start..(close_fn_start + 1000).min(api.len())];
+    assert!(
+        close_fn_section.contains("AI_CURRENT_WINDOW_MODE"),
+        "close_ai_window must read mode from AI_CURRENT_WINDOW_MODE atomic"
+    );
+    assert!(
+        !close_fn_section.contains("window_title()"),
+        "close_ai_window must NOT use window_title() to determine mode"
+    );
+}
+
+#[test]
+fn maybe_persist_bounds_uses_state_derived_mode() {
+    // Render-frame bounds persistence must use self.window_mode via
+    // window_role_for_mode, not title strings or hardcoded roles.
+    let interactions = read("src/ai/window/interactions.rs");
+    let persist_fn_start = interactions
+        .find("fn maybe_persist_bounds")
+        .expect("maybe_persist_bounds must exist");
+    let fn_end = (persist_fn_start + 1000).min(interactions.len());
+    let fn_body = &interactions[persist_fn_start..fn_end];
+    assert!(
+        fn_body.contains("window_role_for_mode(self.window_mode)"),
+        "maybe_persist_bounds must derive role from self.window_mode"
+    );
+}
+
+#[test]
+fn mode_toggle_restores_full_bounds_via_platform_layer() {
+    // set_window_mode must attempt full position+size restore via
+    // move_window_by_view, not just resize. This is critical for
+    // mini↔full transitions to restore the correct window position.
+    let interactions = read("src/ai/window/interactions.rs");
+    let set_fn = interactions
+        .find("fn set_window_mode")
+        .expect("set_window_mode must exist");
+    let fn_end = (set_fn + 3000).min(interactions.len());
+    let fn_body = &interactions[set_fn..fn_end];
+    assert!(
+        fn_body.contains("move_window_by_view"),
+        "set_window_mode must use move_window_by_view for full bounds restore"
+    );
+    assert!(
+        fn_body.contains("window_handle"),
+        "set_window_mode must access raw window handle for position restore"
+    );
+}
+
+#[test]
+fn mini_main_panel_excludes_full_mode_chrome() {
+    // The mini main panel must NOT contain inspector or drawer chrome.
+    // These are full-mode-only features behind Cmd+K in mini mode.
+    let panel = read("src/ai/window/render_main_panel.rs");
+    let mini_fn_start = panel
+        .find("fn render_mini_main_panel")
+        .expect("render_mini_main_panel must exist");
+    let full_fn_start = panel
+        .find("fn render_full_main_panel")
+        .expect("render_full_main_panel must exist");
+    // Mini function body is between its declaration and the full panel declaration
+    let mini_body = &panel[mini_fn_start..full_fn_start];
+    assert!(
+        !mini_body.contains("render_model_picker"),
+        "Mini panel must not render inline model picker (it's in the header)"
+    );
+    assert!(
+        !mini_body.contains("word_count"),
+        "Mini panel must not show word count chrome"
+    );
+}
+
+#[test]
+fn new_conversation_clears_mini_overlay() {
+    // new_conversation and select_chat must both clear the mini history
+    // overlay to prevent stale overlay state after navigation.
+    let chat = read("src/ai/window/chat.rs");
+
+    let new_conv_start = chat
+        .find("fn new_conversation")
+        .expect("new_conversation must exist");
+    let new_conv_end = (new_conv_start + 2000).min(chat.len());
+    let new_conv_body = &chat[new_conv_start..new_conv_end];
+    assert!(
+        new_conv_body.contains("showing_mini_history_overlay = false"),
+        "new_conversation must clear mini history overlay"
+    );
+
+    let select_chat_start = chat
+        .find("fn select_chat")
+        .expect("select_chat must exist");
+    let select_chat_end = (select_chat_start + 4000).min(chat.len());
+    let select_chat_body = &chat[select_chat_start..select_chat_end];
+    assert!(
+        select_chat_body.contains("showing_mini_history_overlay = false"),
+        "select_chat must clear mini history overlay"
     );
 }
