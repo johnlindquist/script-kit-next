@@ -373,18 +373,32 @@ impl Render for AiApp {
                                     .child(if has_messages {
                                         title_text.clone()
                                     } else {
-                                        "AI".to_string()
+                                        "New Chat".to_string()
                                     }),
                             )
-                            // Streaming indicator dot
+                            // Streaming indicator dot — pulsing 8px accent dot
                             .when(is_streaming, |el| {
+                                let accent = cx.theme().accent;
+                                let pulse_duration =
+                                    std::time::Duration::from_millis(ANIM_CYCLE_MS);
                                 el.child(
                                     div()
                                         .id("ai-mini-streaming-dot")
-                                        .size(px(6.))
+                                        .size(px(8.))
                                         .rounded_full()
-                                        .bg(cx.theme().accent)
-                                        .flex_shrink_0(),
+                                        .bg(accent)
+                                        .flex_shrink_0()
+                                        .with_animation(
+                                            "mini-streaming-dot-pulse",
+                                            Animation::new(pulse_duration).repeat(),
+                                            move |el, delta| {
+                                                let sine =
+                                                    (delta * std::f32::consts::PI * 2.0).sin();
+                                                let opacity =
+                                                    CURSOR_OPACITY_BASE + CURSOR_OPACITY_AMP * sine;
+                                                el.bg(accent.opacity(opacity))
+                                            },
+                                        ),
                                 )
                             })
                             .child(
@@ -408,64 +422,29 @@ impl Render for AiApp {
                                     .child(mini_model_display_name),
                             ),
                     )
-                    // Right: Expand (⌘⇧M), Recent (⌘J), New (⌘N), Actions (⌘K)
+                    // Right: icon buttons — Recent (⌘J), New (⌘N), Actions (⌘K) | Expand (⌘⇧M)
                     .child(
                         div()
                             .flex()
                             .items_center()
-                            .gap(S1)
-                            // Expand to full mode button
-                            .child(
-                                div()
-                                    .id("ai-mini-expand")
-                                    .px(S2)
-                                    .py(S1)
-                                    .rounded(R_SM)
-                                    .cursor_pointer()
-                                    .flex()
-                                    .items_center()
-                                    .gap(SP_2)
-                                    .text_xs()
-                                    .text_color(label_color)
-                                    .hover(|el| {
-                                        el.bg(cx.theme().muted.opacity(OPACITY_HOVER))
-                                            .text_color(cx.theme().foreground)
-                                    })
-                                    .tooltip(|window, cx| {
-                                        Tooltip::new("Expand to full window")
-                                            .key_binding(
-                                                gpui::Keystroke::parse("cmd-shift-m")
-                                                    .ok()
-                                                    .map(Kbd::new),
-                                            )
-                                            .build(window, cx)
-                                    })
-                                    .on_click(cx.listener(|this, _, window, cx| {
-                                        this.toggle_window_mode(window, cx);
-                                    }))
-                                    .child("Expand"),
-                            )
-                            // Separator
-                            .child(div().w(px(1.)).h(px(14.)).bg(cx.theme().border))
-                            // Recent button
+                            .gap(SP_2)
+                            // Recent — chat history icon button
                             .child(
                                 div()
                                     .id("ai-mini-recent")
-                                    .px(S2)
-                                    .py(S1)
+                                    .size(MINI_BTN_SIZE)
                                     .rounded(R_SM)
                                     .cursor_pointer()
                                     .flex()
                                     .items_center()
-                                    .gap(SP_2)
-                                    .text_xs()
+                                    .justify_center()
                                     .text_color(if self.showing_mini_history_overlay {
                                         cx.theme().foreground
                                     } else {
                                         label_color
                                     })
                                     .when(self.showing_mini_history_overlay, |el| {
-                                        el.bg(cx.theme().muted.opacity(OPACITY_HOVER))
+                                        el.bg(cx.theme().muted.opacity(OPACITY_SELECTED))
                                     })
                                     .hover(|el| {
                                         el.bg(cx.theme().muted.opacity(OPACITY_HOVER))
@@ -485,20 +464,24 @@ impl Render for AiApp {
                                             cx,
                                         );
                                     }))
-                                    .child("Recent"),
+                                    .child(
+                                        svg()
+                                            .external_path(
+                                                LocalIconName::MessageCircle.external_path(),
+                                            )
+                                            .size(ICON_SM),
+                                    ),
                             )
-                            // New chat button
+                            // New — plus icon button
                             .child(
                                 div()
                                     .id("ai-mini-new")
-                                    .px(S2)
-                                    .py(S1)
+                                    .size(MINI_BTN_SIZE)
                                     .rounded(R_SM)
                                     .cursor_pointer()
                                     .flex()
                                     .items_center()
-                                    .gap(SP_2)
-                                    .text_xs()
+                                    .justify_center()
                                     .text_color(label_color)
                                     .hover(|el| {
                                         el.bg(cx.theme().muted.opacity(OPACITY_HOVER))
@@ -518,20 +501,22 @@ impl Render for AiApp {
                                             cx,
                                         );
                                     }))
-                                    .child("New"),
+                                    .child(
+                                        svg()
+                                            .external_path(LocalIconName::Plus.external_path())
+                                            .size(ICON_SM),
+                                    ),
                             )
-                            // Actions button
+                            // Actions — bolt icon button
                             .child(
                                 div()
                                     .id("ai-mini-actions")
-                                    .px(S2)
-                                    .py(S1)
+                                    .size(MINI_BTN_SIZE)
                                     .rounded(R_SM)
                                     .cursor_pointer()
                                     .flex()
                                     .items_center()
-                                    .gap(SP_2)
-                                    .text_xs()
+                                    .justify_center()
                                     .text_color(label_color)
                                     .hover(|el| {
                                         el.bg(cx.theme().muted.opacity(OPACITY_HOVER))
@@ -547,7 +532,50 @@ impl Render for AiApp {
                                     .on_click(cx.listener(|this, _, window, cx| {
                                         this.show_command_bar("header_actions_button", window, cx);
                                     }))
-                                    .child("Actions"),
+                                    .child(
+                                        svg()
+                                            .external_path(
+                                                LocalIconName::BoltFilled.external_path(),
+                                            )
+                                            .size(ICON_SM),
+                                    ),
+                            )
+                            // Separator
+                            .child(
+                                div()
+                                    .w(px(1.))
+                                    .h(px(12.))
+                                    .bg(cx.theme().border.opacity(0.5)),
+                            )
+                            // Expand — text button (stands out as the mode-switch action)
+                            .child(
+                                div()
+                                    .id("ai-mini-expand")
+                                    .px(S2)
+                                    .py(SP_2)
+                                    .rounded(R_SM)
+                                    .cursor_pointer()
+                                    .flex()
+                                    .items_center()
+                                    .text_xs()
+                                    .text_color(label_color)
+                                    .hover(|el| {
+                                        el.bg(cx.theme().muted.opacity(OPACITY_HOVER))
+                                            .text_color(cx.theme().foreground)
+                                    })
+                                    .tooltip(|window, cx| {
+                                        Tooltip::new("Expand to full window")
+                                            .key_binding(
+                                                gpui::Keystroke::parse("cmd-shift-m")
+                                                    .ok()
+                                                    .map(Kbd::new),
+                                            )
+                                            .build(window, cx)
+                                    })
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        this.toggle_window_mode(window, cx);
+                                    }))
+                                    .child("Expand"),
                             ),
                     )
                     .into_any_element()

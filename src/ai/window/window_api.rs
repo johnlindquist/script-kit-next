@@ -502,18 +502,16 @@ fn enqueue_ai_window_command(
             .lock()
             .ok()
             .and_then(|g| g.clone());
-        let update_result = handle
-            .update(cx, |_root, window, cx| {
-                if let Some(weak) = weak {
-                    if let Some(entity) = weak.upgrade() {
-                        entity.update(cx, |_app, cx| cx.notify());
-                    }
+        let update_result = handle.update(cx, |_root, window, cx| {
+            if let Some(weak) = weak {
+                if let Some(entity) = weak.upgrade() {
+                    entity.update(cx, |_app, cx| cx.notify());
                 }
-                // Also refresh the window to ensure a paint cycle runs
-                window.refresh();
-            });
-        if update_result.is_err()
-        {
+            }
+            // Also refresh the window to ensure a paint cycle runs
+            window.refresh();
+        });
+        if update_result.is_err() {
             if let Some(queued_index) = queued_index {
                 if let Ok(mut commands) = get_pending_commands().lock() {
                     if queued_index < commands.len() {
