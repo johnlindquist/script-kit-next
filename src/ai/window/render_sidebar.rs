@@ -141,114 +141,99 @@ impl AiApp {
                     ),
             )
             // Scrollable chat list
-            .child(
-                div()
-                    .relative()
-                    .flex_1()
-                    .min_h_0()
-                    .overflow_hidden()
-                    .child(if self.chats.is_empty() && !self.search_query.is_empty() {
-                        div()
-                            .flex()
-                            .flex_col()
-                            .items_center()
-                            .justify_center()
-                            .flex_1()
-                            .py_8()
-                            .gap(S2)
-                            .child(
-                                svg()
-                                    .external_path(LocalIconName::MagnifyingGlass.external_path())
-                                    .size(px(24.))
-                                    .text_color(cx.theme().muted_foreground.opacity(OPACITY_HOVER)),
-                            )
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .text_color(
-                                        cx.theme().muted_foreground.opacity(OPACITY_SELECTED),
-                                    )
-                                    .child("No chats found"),
-                            )
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .text_color(cx.theme().muted_foreground.opacity(OPACITY_HOVER))
-                                    .child(format!("No results for \"{}\"", self.search_query)),
-                            )
-                            .child(
-                                div()
-                                    .mt(S2)
-                                    .text_xs()
-                                    .text_color(cx.theme().muted_foreground.opacity(OPACITY_HOVER))
-                                    .child("Press Esc to clear search"),
-                            )
-                            .into_any_element()
-                    } else if self.chats.is_empty() && self.search_query.is_empty() {
-                        div()
-                            .flex()
-                            .flex_col()
-                            .items_center()
-                            .justify_center()
-                            .flex_1()
-                            .py_8()
-                            .gap_3()
-                            .child(
-                                svg()
-                                    .external_path(LocalIconName::MessageCircle.external_path())
-                                    .size(px(28.))
-                                    .text_color(
-                                        cx.theme().muted_foreground.opacity(OPACITY_DANGER_BG),
-                                    ),
-                            )
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .text_color(
-                                        cx.theme().muted_foreground.opacity(OPACITY_SELECTED),
-                                    )
-                                    .child("No conversations yet"),
-                            )
-                            .child(
-                                div()
-                                    .flex()
-                                    .items_center()
-                                    .gap(S1)
-                                    .child(
-                                        div()
-                                            .px(S2)
-                                            .py(S1)
-                                            .rounded(R_SM)
-                                            .bg(cx.theme().muted.opacity(OPACITY_DISABLED))
-                                            .text_xs()
-                                            .text_color(
-                                                cx.theme()
-                                                    .muted_foreground
-                                                    .opacity(OPACITY_SELECTED),
-                                            )
-                                            .child("\u{2318}N"),
-                                    )
-                                    .child(
-                                        div()
-                                            .text_xs()
-                                            .text_color(
-                                                cx.theme()
-                                                    .muted_foreground
-                                                    .opacity(OPACITY_DISABLED),
-                                            )
-                                            .child("to start a new chat"),
-                                    ),
-                            )
-                            .into_any_element()
-                    } else {
-                        div()
-                            .relative()
-                            .size_full()
-                            .child(sidebar_list)
-                            .vertical_scrollbar(&self.sidebar_list_state)
-                            .into_any_element()
-                    }),
-            )
+            .child(div().relative().flex_1().min_h_0().overflow_hidden().child(
+                if self.chats.is_empty() && !self.search_query.is_empty() {
+                    div()
+                        .flex()
+                        .flex_col()
+                        .items_center()
+                        .justify_center()
+                        .flex_1()
+                        .py_8()
+                        .gap(S2)
+                        .child(
+                            svg()
+                                .external_path(LocalIconName::MagnifyingGlass.external_path())
+                                .size(px(24.))
+                                .text_color(cx.theme().muted_foreground.opacity(OPACITY_HOVER)),
+                        )
+                        .child(
+                            div()
+                                .text_sm()
+                                .text_color(cx.theme().muted_foreground.opacity(OPACITY_SELECTED))
+                                .child("No chats found"),
+                        )
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(cx.theme().muted_foreground.opacity(OPACITY_HOVER))
+                                .child(format!("No results for \"{}\"", self.search_query)),
+                        )
+                        .child(
+                            div()
+                                .mt(S2)
+                                .text_xs()
+                                .text_color(cx.theme().muted_foreground.opacity(OPACITY_HOVER))
+                                .child("Press Esc to clear search"),
+                        )
+                        .into_any_element()
+                } else if self.chats.is_empty() && self.search_query.is_empty() {
+                    div()
+                        .flex()
+                        .flex_col()
+                        .items_center()
+                        .justify_center()
+                        .flex_1()
+                        .py_8()
+                        .gap_3()
+                        .child(
+                            svg()
+                                .external_path(LocalIconName::MessageCircle.external_path())
+                                .size(px(28.))
+                                .text_color(cx.theme().muted_foreground.opacity(OPACITY_DANGER_BG)),
+                        )
+                        .child(
+                            div()
+                                .text_sm()
+                                .text_color(cx.theme().muted_foreground.opacity(OPACITY_SELECTED))
+                                .child("No conversations yet"),
+                        )
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap(S1)
+                                .child(
+                                    div()
+                                        .px(S2)
+                                        .py(S1)
+                                        .rounded(R_SM)
+                                        .bg(cx.theme().muted.opacity(OPACITY_DISABLED))
+                                        .text_xs()
+                                        .text_color(
+                                            cx.theme().muted_foreground.opacity(OPACITY_SELECTED),
+                                        )
+                                        .child("\u{2318}N"),
+                                )
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(
+                                            cx.theme().muted_foreground.opacity(OPACITY_DISABLED),
+                                        )
+                                        .child("to start a new chat"),
+                                ),
+                        )
+                        .into_any_element()
+                } else {
+                    div()
+                        .relative()
+                        .size_full()
+                        .child(sidebar_list)
+                        .vertical_scrollbar(&self.sidebar_list_state)
+                        .into_any_element()
+                },
+            ))
     }
 
     /// Render the chats sidebar with date groupings
@@ -284,9 +269,7 @@ impl AiApp {
                             .hover(|el| el)
                             .tooltip(|window, cx| {
                                 Tooltip::new("New chat")
-                                    .key_binding(
-                                        gpui::Keystroke::parse("cmd-n").ok().map(Kbd::new),
-                                    )
+                                    .key_binding(gpui::Keystroke::parse("cmd-n").ok().map(Kbd::new))
                                     .build(window, cx)
                             })
                             .child(
@@ -308,15 +291,11 @@ impl AiApp {
                             .size(SP_9)
                             .rounded(R_SM)
                             .cursor_pointer()
-                            .hover(|el| {
-                                el.bg(cx.theme().sidebar_accent.opacity(OPACITY_SELECTED))
-                            })
+                            .hover(|el| el.bg(cx.theme().sidebar_accent.opacity(OPACITY_SELECTED)))
                             .tooltip(|window, cx| {
                                 Tooltip::new("New chat with preset")
                                     .key_binding(
-                                        gpui::Keystroke::parse("cmd-shift-n")
-                                            .ok()
-                                            .map(Kbd::new),
+                                        gpui::Keystroke::parse("cmd-shift-n").ok().map(Kbd::new),
                                     )
                                     .build(window, cx)
                             })

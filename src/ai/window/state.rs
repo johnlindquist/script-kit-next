@@ -289,6 +289,55 @@ pub struct AiApp {
     pub(super) context_preflight: super::context_preflight::ContextPreflightState,
 }
 
+/// Machine-readable snapshot of AI window state for agentic tests and debugging.
+///
+/// Serializable to JSON — callers can assert individual fields without
+/// reaching into `AiApp` internals.
+#[derive(Debug, Clone, serde::Serialize, PartialEq, Eq)]
+pub(crate) struct AiMiniDebugSnapshot {
+    pub window_mode: &'static str,
+    pub history_overlay_visible: bool,
+    pub command_bar_open: bool,
+    pub new_chat_menu_open: bool,
+    pub selected_model: Option<String>,
+    pub pending_context_parts: usize,
+    pub has_pending_image: bool,
+    pub is_streaming: bool,
+    pub chat_count: usize,
+    pub current_message_count: usize,
+    pub sidebar_collapsed: bool,
+    pub show_context_inspector: bool,
+    pub show_context_drawer: bool,
+}
+
+impl AiApp {
+    /// Build a serializable debug snapshot of the current AI window state.
+    ///
+    /// Used by agentic tests and future automation to assert state without
+    /// reaching into struct internals.
+    pub(crate) fn debug_snapshot(&self) -> AiMiniDebugSnapshot {
+        AiMiniDebugSnapshot {
+            window_mode: if self.window_mode.is_mini() {
+                "mini"
+            } else {
+                "full"
+            },
+            history_overlay_visible: self.showing_mini_history_overlay,
+            command_bar_open: self.command_bar.is_open(),
+            new_chat_menu_open: self.new_chat_command_bar.is_open(),
+            selected_model: self.selected_model.as_ref().map(|m| m.display_name.clone()),
+            pending_context_parts: self.pending_context_parts.len(),
+            has_pending_image: self.pending_image.is_some(),
+            is_streaming: self.is_streaming,
+            chat_count: self.chats.len(),
+            current_message_count: self.current_messages.len(),
+            sidebar_collapsed: self.sidebar_collapsed,
+            show_context_inspector: self.show_context_inspector,
+            show_context_drawer: self.show_context_drawer,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::InputMode;

@@ -68,20 +68,34 @@ pub fn open_mini_ai_window(cx: &mut App) -> Result<()> {
     open_ai_window_with_mode(AiWindowMode::Mini, cx)
 }
 
-fn open_ai_window_with_mode(mode: AiWindowMode, cx: &mut App) -> Result<()> {
-    use crate::logging;
+/// Open the mini AI window with a caller-source tag for tracing the handoff.
+///
+/// Use this from builtin execution and other programmatic entry points so the
+/// open→mode→focus arc is machine-verifiable end-to-end.
+pub fn open_mini_ai_window_from(source: &'static str, cx: &mut App) -> Result<()> {
+    open_ai_window_with_mode_from(AiWindowMode::Mini, source, cx)
+}
 
+fn open_ai_window_with_mode(mode: AiWindowMode, cx: &mut App) -> Result<()> {
+    open_ai_window_with_mode_from(mode, "direct", cx)
+}
+
+fn open_ai_window_with_mode_from(
+    mode: AiWindowMode,
+    source: &'static str,
+    cx: &mut App,
+) -> Result<()> {
     if OPENING.swap(true, Ordering::SeqCst) {
-        tracing::info!(
-            category = "AI",
-            event = "ai_window_open",
-            status = "already_opening",
-            "AI window open already in progress"
+        super::telemetry::log_ai_lifecycle(
+            "ai_window_open_requested",
+            mode,
+            source,
+            "already_opening",
         );
         return Ok(());
     }
 
-    logging::log("AI", "open_ai_window called - checking state");
+    super::telemetry::log_ai_lifecycle("ai_window_open_requested", mode, source, "start");
     ai_window_reference_legacy_per_display_apis();
 
     // Ensure gpui-component theme is initialized before opening window
@@ -108,11 +122,11 @@ fn open_ai_window_with_mode(mode: AiWindowMode, cx: &mut App) -> Result<()> {
             .is_ok();
 
         if window_valid {
-            tracing::info!(
-                category = "AI",
-                event = "ai_window_open",
-                status = "existing_window_activated",
-                "AI window exists - bringing to front and focusing"
+            super::telemetry::log_ai_lifecycle(
+                "ai_window_open_existing",
+                mode,
+                source,
+                "activated",
             );
 
             // Ensure regular app mode (in case it was switched back to accessory)
@@ -136,7 +150,7 @@ fn open_ai_window_with_mode(mode: AiWindowMode, cx: &mut App) -> Result<()> {
         }
 
         // Window handle was invalid, clear it
-        logging::log("AI", "AI window handle was invalid - creating new");
+        super::telemetry::log_ai_lifecycle("ai_window_handle_invalid", mode, source, "clearing");
         let slot = AI_WINDOW.get_or_init(|| std::sync::Mutex::new(None));
         if let Ok(mut g) = slot.lock() {
             *g = None;
@@ -144,12 +158,7 @@ fn open_ai_window_with_mode(mode: AiWindowMode, cx: &mut App) -> Result<()> {
     }
 
     // Create new window
-    tracing::info!(
-        category = "AI",
-        event = "ai_window_open",
-        status = "create_new_begin",
-        "Creating new AI window"
-    );
+    super::telemetry::log_ai_lifecycle("ai_window_create", mode, source, "begin");
 
     // Load theme to determine window background appearance (vibrancy)
     let theme = crate::theme::get_cached_theme();
@@ -163,19 +172,19 @@ fn open_ai_window_with_mode(mode: AiWindowMode, cx: &mut App) -> Result<()> {
     // (for example, a display was disconnected), center on the cursor display.
     let displays = crate::platform::get_macos_displays();
     let saved_bounds = crate::window_state::load_window_bounds(window_role_for_mode(mode));
-    if let Some(saved) = saved_bounds {
-        if crate::window_state::is_bounds_visible(&saved, &displays) {
-            logging::log("AI", "Restoring AI window from global saved bounds");
-        } else {
-            logging::log(
-                "AI",
-                "Saved AI window bounds are off-screen; centering on cursor display",
-            );
-        }
-    } else {
-        logging::log(
-            "AI",
-            "No saved AI window bounds; centering on cursor display",
+    {
+        let bounds_status = match saved_bounds {
+            Some(ref saved) if crate::window_state::is_bounds_visible(saved, &displays) => {
+                "restored"
+            }
+            Some(_) => "offscreen_fallback",
+            None => "no_saved_bounds",
+        };
+        tracing::debug!(
+            target: "ai",
+            bounds_status,
+            window_mode = ?mode,
+            "ai_window_bounds_resolve"
         );
     }
     let bounds = resolve_new_ai_window_bounds(
@@ -260,12 +269,7 @@ fn open_ai_window_with_mode(mode: AiWindowMode, cx: &mut App) -> Result<()> {
     // (crate::theme::service::ensure_theme_service) which is started once at app init.
     // This eliminates per-window theme watcher tasks and their potential for leaks.
 
-    tracing::info!(
-        category = "AI",
-        event = "ai_window_open",
-        status = "create_new_success",
-        "AI window created"
-    );
+    super::telemetry::log_ai_lifecycle("ai_window_create", mode, source, "success");
 
     Ok(())
 }
@@ -329,14 +333,12 @@ pub fn set_ai_pending_chat(cx: &mut App, messages: Vec<PendingChatMessage>) -> R
 /// Use this for "Continue in Chat" functionality to transfer a conversation
 /// from the chat prompt to the AI window.
 pub fn open_ai_window_with_chat(cx: &mut App, messages: Vec<PendingChatMessage>) -> Result<()> {
-    use crate::logging;
-
-    logging::log(
-        "AI",
-        &format!(
-            "open_ai_window_with_chat called with {} messages",
-            messages.len()
-        ),
+    tracing::info!(
+        target: "ai",
+        category = "AI",
+        event = "ai_window_open_with_chat",
+        message_count = messages.len(),
+        "Opening AI window with pending chat"
     );
 
     // Open or bring the window to front
@@ -357,6 +359,10 @@ pub fn open_ai_window_with_chat(cx: &mut App, messages: Vec<PendingChatMessage>)
 /// and subsequent `open_mini_ai_window()` calls try to bring a removed window
 /// to front instead of creating a new one.
 pub(super) fn cleanup_ai_window_globals() {
+    // Snapshot mode before clearing so the log reflects the actual mode at close time.
+    let closing_mode = AiWindowMode::from_u8(
+        super::types::AI_CURRENT_WINDOW_MODE.load(std::sync::atomic::Ordering::SeqCst),
+    );
     // Take the handle out of the global slot (clears it for future open calls)
     let slot = AI_WINDOW.get_or_init(|| std::sync::Mutex::new(None));
     if let Ok(mut guard) = slot.lock() {
@@ -368,11 +374,11 @@ pub(super) fn cleanup_ai_window_globals() {
     super::types::AI_CURRENT_WINDOW_MODE.store(0, std::sync::atomic::Ordering::SeqCst);
     // Clear SDK-visible state so handlers report correct state
     clear_sdk_state();
-    tracing::info!(
-        target: "ai",
-        category = "AI",
-        event = "ai_window_globals_cleaned",
-        "AI window global state cleared"
+    super::telemetry::log_ai_lifecycle(
+        "ai_window_globals_cleaned",
+        closing_mode,
+        "cleanup",
+        "done",
     );
 }
 
@@ -646,18 +652,19 @@ pub fn add_ai_attachment(cx: &mut App, path: &str) -> Result<(), String> {
 /// This is triggered by the stdin command `{"type":"showAiCommandBar"}`.
 /// Opens the AI window if not already open, then shows the command bar overlay.
 pub fn show_ai_command_bar(cx: &mut App) {
-    use crate::logging;
-
     // First ensure the AI window is open
     if !is_ai_window_open() {
         if let Err(e) = open_ai_window(cx) {
-            logging::log("AI", &format!("Failed to open AI window: {}", e));
+            tracing::warn!(
+                target: "ai",
+                error = %e,
+                "Failed to open AI window for command bar"
+            );
             return;
         }
     }
 
     // Queue the command and notify the window to process it in render()
-    // This avoids the need for direct entity access which caused memory leaks.
     push_ai_command(AiCommand::ShowCommandBar);
 
     // Notify the window to process the command
@@ -670,9 +677,9 @@ pub fn show_ai_command_bar(cx: &mut App) {
         let _ = handle.update(cx, |_root, _window, cx| {
             cx.notify();
         });
-        logging::log("AI", "Showing AI command bar");
+        tracing::info!(target: "ai", event = "show_ai_command_bar", "Command bar shown");
     } else {
-        logging::log("AI", "Cannot show command bar - AI window handle not found");
+        tracing::warn!(target: "ai", event = "show_ai_command_bar", status = "no_handle", "AI window handle not found");
     }
 }
 
@@ -681,11 +688,9 @@ pub fn show_ai_command_bar(cx: &mut App) {
 /// This is triggered by the stdin command `{"type":"simulateAiKey","key":"up","modifiers":["cmd"]}`.
 /// Used for testing keyboard navigation in the AI window, especially the command bar.
 pub fn simulate_ai_key(key: &str, modifiers: Vec<KeyModifier>) {
-    use crate::logging;
-
     // Check if AI window is open
     if !is_ai_window_open() {
-        logging::log("AI", "Cannot simulate key - AI window not open");
+        tracing::warn!(target: "ai", key, "Cannot simulate key - AI window not open");
         return;
     }
 
@@ -695,15 +700,7 @@ pub fn simulate_ai_key(key: &str, modifiers: Vec<KeyModifier>) {
         modifiers,
     });
 
-    // The command is queued and will be processed in the next render cycle
-    // We don't have `cx` here so can't notify, but that's okay since rendering happens continuously
-    logging::log(
-        "AI",
-        &format!(
-            "Queued SimulateKey: key='{}' - will process on next render",
-            key
-        ),
-    );
+    tracing::info!(target: "ai", key, event = "simulate_ai_key_queued", "Queued SimulateKey");
 }
 
 /// Apply a preset by ID in the AI window.
@@ -711,11 +708,13 @@ pub fn simulate_ai_key(key: &str, modifiers: Vec<KeyModifier>) {
 /// Opens the AI window if needed, then creates a new chat with the preset's
 /// system prompt and preferred model.
 pub fn apply_ai_preset(cx: &mut App, preset_id: &str) {
-    use crate::logging;
-
     if !is_ai_window_open() {
         if let Err(e) = open_ai_window(cx) {
-            logging::log("AI", &format!("Failed to open AI window: {}", e));
+            tracing::warn!(
+                target: "ai",
+                error = %e,
+                "Failed to open AI window for preset"
+            );
             return;
         }
     }

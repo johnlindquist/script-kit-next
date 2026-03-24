@@ -95,11 +95,23 @@ fn mini_entry_points_pass_explicit_source() {
 }
 
 #[test]
-fn mini_ui_logs_use_structured_ai_ui_category() {
+fn mini_ui_logs_use_telemetry_helpers() {
+    // All mini UI events now route through the telemetry helper module.
+    let telemetry = read("src/ai/window/telemetry.rs");
+    assert!(
+        telemetry.contains("category = \"AI_UI\""),
+        "telemetry.rs must define the AI_UI category"
+    );
+    assert!(
+        telemetry.contains("category = \"AI\""),
+        "telemetry.rs must define the AI lifecycle category"
+    );
+
+    // Render paths pass event names to the telemetry helpers
     let root = read("src/ai/window/render_root.rs");
     assert!(
-        root.contains("category = \"AI_UI\""),
-        "render_root.rs must use structured AI_UI category"
+        root.contains("telemetry::log_ai_ui("),
+        "render_root.rs must call log_ai_ui helper"
     );
     assert!(
         root.contains("\"mini_history_overlay_toggled\""),
@@ -134,17 +146,17 @@ fn mini_ui_logs_use_structured_ai_ui_category() {
 
     let keydown = read("src/ai/window/render_keydown.rs");
     assert!(
-        keydown.contains("event = \"mini_escape_close\""),
-        "render_keydown.rs must log mini_escape_close event"
+        keydown.contains("telemetry::log_ai_lifecycle("),
+        "render_keydown.rs must call log_ai_lifecycle for window close events"
     );
 
     let panel = read("src/ai/window/render_main_panel.rs");
     assert!(
-        panel.contains("event = \"mini_submit_click\""),
+        panel.contains("\"mini_submit_click\""),
         "render_main_panel.rs must log mini_submit_click event"
     );
     assert!(
-        panel.contains("event = \"mini_stop_click\""),
+        panel.contains("\"mini_stop_click\""),
         "render_main_panel.rs must log mini_stop_click event"
     );
 }
@@ -202,7 +214,7 @@ fn mini_overlay_dismiss_restores_focus_and_clears_search() {
     let toggle_fn_start = root
         .find("fn toggle_mini_history_overlay")
         .expect("toggle_mini_history_overlay must exist");
-    let toggle_section = &root[toggle_fn_start..toggle_fn_start + 800];
+    let toggle_section = &root[toggle_fn_start..toggle_fn_start + 1200];
     assert!(
         toggle_section.contains("focus_input(window, cx)"),
         "toggle_mini_history_overlay dismiss path must call focus_input"
@@ -305,8 +317,7 @@ fn mini_sidebar_shortcuts_are_guarded() {
     let backslash_start = keydown
         .find("\"\\\\\" | \"backslash\"")
         .expect("Cmd+\\ handler must exist");
-    let backslash_section =
-        &keydown[backslash_start..(backslash_start + 200).min(keydown.len())];
+    let backslash_section = &keydown[backslash_start..(backslash_start + 200).min(keydown.len())];
     assert!(
         backslash_section.contains("!self.window_mode.is_mini()"),
         "Cmd+\\ must guard against mini mode before toggling sidebar"
@@ -334,8 +345,7 @@ fn mini_header_shows_chat_title() {
     let mini_titlebar_start = root
         .find("ai-titlebar-mini")
         .expect("mini titlebar must exist");
-    let titlebar_section =
-        &root[mini_titlebar_start..(mini_titlebar_start + 2000).min(root.len())];
+    let titlebar_section = &root[mini_titlebar_start..(mini_titlebar_start + 2000).min(root.len())];
     assert!(
         titlebar_section.contains("title_text"),
         "Mini titlebar should display chat title when messages exist"
@@ -360,8 +370,8 @@ fn close_paths_clear_global_handle() {
 
     // Esc-mini handler
     let esc_mini_start = keydown
-        .find("mini_escape_close")
-        .expect("mini_escape_close event must exist");
+        .find("ai_window_close")
+        .expect("ai_window_close lifecycle event must exist");
     let esc_mini_section = &keydown[esc_mini_start..(esc_mini_start + 400).min(keydown.len())];
     assert!(
         esc_mini_section.contains("cleanup_ai_window_globals()"),
@@ -465,6 +475,113 @@ fn mini_main_panel_excludes_full_mode_chrome() {
 }
 
 #[test]
+fn telemetry_module_provides_both_event_helpers() {
+    let telemetry = read("src/ai/window/telemetry.rs");
+    assert!(
+        telemetry.contains("pub(super) fn log_ai_lifecycle("),
+        "telemetry.rs must export log_ai_lifecycle helper"
+    );
+    assert!(
+        telemetry.contains("pub(super) fn log_ai_ui("),
+        "telemetry.rs must export log_ai_ui helper"
+    );
+}
+
+#[test]
+fn builtin_handoff_uses_source_traced_entry_point() {
+    let api = read("src/ai/window/window_api.rs");
+    assert!(
+        api.contains("pub fn open_mini_ai_window_from("),
+        "window_api.rs must export open_mini_ai_window_from for source tracing"
+    );
+    assert!(
+        api.contains("fn open_ai_window_with_mode_from("),
+        "window_api.rs must have the internal source-traced open path"
+    );
+
+    let execution = read("src/app_execute/builtin_execution.rs");
+    assert!(
+        execution.contains("open_mini_ai_window_from(\"builtin_mini_ai\""),
+        "builtin execution must call open_mini_ai_window_from with 'builtin_mini_ai' source"
+    );
+}
+
+#[test]
+fn debug_snapshot_is_serializable_and_complete() {
+    let state = read("src/ai/window/state.rs");
+    assert!(
+        state.contains("pub(crate) struct AiMiniDebugSnapshot"),
+        "state.rs must define AiMiniDebugSnapshot"
+    );
+    assert!(
+        state.contains("serde::Serialize"),
+        "AiMiniDebugSnapshot must derive Serialize"
+    );
+    assert!(
+        state.contains("fn debug_snapshot(&self) -> AiMiniDebugSnapshot"),
+        "AiApp must implement debug_snapshot()"
+    );
+
+    // All critical state fields should be in the snapshot
+    for field in [
+        "window_mode",
+        "history_overlay_visible",
+        "command_bar_open",
+        "new_chat_menu_open",
+        "selected_model",
+        "pending_context_parts",
+        "has_pending_image",
+        "is_streaming",
+        "chat_count",
+        "current_message_count",
+        "show_context_inspector",
+        "show_context_drawer",
+    ] {
+        assert!(
+            state.contains(&format!("{field}:")),
+            "AiMiniDebugSnapshot must include {field} field"
+        );
+    }
+}
+
+#[test]
+fn window_api_has_no_logging_log_calls() {
+    // All freeform logging::log calls should be replaced with structured tracing
+    let api = read("src/ai/window/window_api.rs");
+    assert!(
+        !api.contains("logging::log("),
+        "window_api.rs should use structured tracing, not logging::log()"
+    );
+}
+
+#[test]
+fn mini_context_contract_keeps_context_surfaces_reachable() {
+    // Mini mode must still render context bar, recommendations, picker, chips,
+    // and pending image preview. Inspector/drawer are full-mode-only.
+    let panel = read("src/ai/window/render_main_panel.rs");
+    let mini_fn_start = panel
+        .find("fn render_mini_main_panel")
+        .expect("render_mini_main_panel must exist");
+    let full_fn_start = panel
+        .find("fn render_full_main_panel")
+        .expect("render_full_main_panel must exist");
+    let mini_body = &panel[mini_fn_start..full_fn_start];
+
+    for surface in [
+        "render_context_bar",
+        "render_context_recommendations",
+        "render_context_picker",
+        "render_pending_context_chips",
+        "render_pending_image_preview",
+    ] {
+        assert!(
+            mini_body.contains(surface),
+            "Mini main panel must render {surface}"
+        );
+    }
+}
+
+#[test]
 fn new_conversation_clears_mini_overlay() {
     // new_conversation and select_chat must both clear the mini history
     // overlay to prevent stale overlay state after navigation.
@@ -480,9 +597,7 @@ fn new_conversation_clears_mini_overlay() {
         "new_conversation must clear mini history overlay"
     );
 
-    let select_chat_start = chat
-        .find("fn select_chat")
-        .expect("select_chat must exist");
+    let select_chat_start = chat.find("fn select_chat").expect("select_chat must exist");
     let select_chat_end = (select_chat_start + 4000).min(chat.len());
     let select_chat_body = &chat[select_chat_start..select_chat_end];
     assert!(

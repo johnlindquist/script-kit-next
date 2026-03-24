@@ -5,7 +5,12 @@ use crate::ui_foundation::{
 };
 
 impl AiApp {
-    pub(super) fn show_command_bar(&mut self, source: &'static str, window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn show_command_bar(
+        &mut self,
+        source: &'static str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         tracing::info!(
             target: "ai",
             category = "AI_UI",

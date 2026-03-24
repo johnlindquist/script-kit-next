@@ -1809,7 +1809,7 @@ impl ScriptListApp {
                             let started_at = std::time::Instant::now();
 
                             let open_result = cx.update(|cx| {
-                                crate::ai::open_mini_ai_window(cx)
+                                crate::ai::open_mini_ai_window_from("builtin_mini_ai", cx)
                                     .map_err(|error| error.to_string())?;
                                 Ok::<(), String>(())
                             });
