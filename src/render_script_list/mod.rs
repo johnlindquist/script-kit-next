@@ -1009,7 +1009,7 @@ impl ScriptListApp {
                     .flex()
                     .flex_row()
                     .items_center()
-                    .justify_between()
+                    .justify_end()
                     // Subtle top border to separate hint strip from list
                     .border_t(px(crate::window_resize::mini_layout::DIVIDER_HEIGHT))
                     .border_color(rgba(chrome.divider_rgba))
