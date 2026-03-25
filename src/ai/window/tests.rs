@@ -2534,7 +2534,7 @@ fn test_mini_cmd_n_routes_to_new_conversation() {
     let after_n = &source[n_arm..];
     // Bound the Cmd+N region by the next shortcut comment
     let f_arm_offset = after_n
-        .find("// Cmd+Shift+F to focus search")
+        .find("// Cmd+Shift+F handled above modal guards (preempt block)")
         .expect("Cmd+Shift+F comment must bound Cmd+N handler");
     let n_region = &after_n[..f_arm_offset];
 
@@ -2675,28 +2675,32 @@ fn test_simulated_key_supports_mode_toggle_shortcut() {
     );
 }
 
-/// Cmd+Shift+F in mini mode must call `show_mini_history_overlay` idempotently,
-/// so search is always focused even when the overlay is already open.
+/// Cmd+Shift+F must preempt all modal guards and call `show_mini_history_overlay`
+/// idempotently, so search is always focused even when a popup is open.
 #[test]
 fn test_mini_cmd_shift_f_uses_show_helper_in_source() {
     let source = include_str!("render_keydown.rs");
-    let f_arm = source
-        .find("\"f\" => {")
-        .expect("Cmd+Shift+F handler must exist in render_keydown.rs");
-    let after_f = &source[f_arm..];
-    // Bound the region by the next shortcut
-    let m_arm_offset = after_f
-        .find("// Cmd+Shift+M toggles between Mini and Full mode")
-        .expect("Cmd+Shift+M comment must bound Cmd+Shift+F handler");
-    let f_region = &after_f[..m_arm_offset];
-
+    // Cmd+Shift+F is now an early preempt handler before modal guards
+    let preempt_pos = source
+        .find("modifiers.platform && modifiers.shift && key == \"f\"")
+        .expect("Cmd+Shift+F preempt handler must exist in render_keydown.rs");
+    let command_bar_guard = source
+        .find("if self.command_bar.is_open()")
+        .expect("command_bar modal guard must exist");
     assert!(
-        f_region.contains("self.show_mini_history_overlay(")
-            && f_region.contains("\"shortcut_cmd_shift_f\""),
+        preempt_pos < command_bar_guard,
+        "Cmd+Shift+F preempt must precede command_bar modal guard"
+    );
+
+    // Verify the preempt region calls the right helpers
+    let preempt_region = &source[preempt_pos..command_bar_guard];
+    assert!(
+        preempt_region.contains("self.show_mini_history_overlay(")
+            && preempt_region.contains("\"shortcut_cmd_shift_f\""),
         "Mini Cmd+Shift+F must call show_mini_history_overlay with shortcut_cmd_shift_f source"
     );
     assert!(
-        !f_region.contains("if !self.showing_mini_history_overlay"),
+        !preempt_region.contains("if !self.showing_mini_history_overlay"),
         "Mini Cmd+Shift+F must stay idempotent when overlay is already visible"
     );
 }
@@ -2720,12 +2724,12 @@ fn test_mini_history_overlay_key_guard_precedes_edit_last_message() {
 
     let guard_region = &source[overlay_guard..edit_last];
     assert!(
-        guard_region.contains("self.navigate_chat(1, window, cx);"),
-        "Up must navigate the visible chat list"
+        guard_region.contains("self.navigate_chat_preserving_mini_overlay(1, window, cx);"),
+        "Up must navigate the visible chat list without closing the overlay"
     );
     assert!(
-        guard_region.contains("self.navigate_chat(-1, window, cx);"),
-        "Down must navigate the visible chat list"
+        guard_region.contains("self.navigate_chat_preserving_mini_overlay(-1, window, cx);"),
+        "Down must navigate the visible chat list without closing the overlay"
     );
     assert!(
         guard_region.contains("self.dismiss_mini_history_overlay(\"enter_key\", window, cx);"),
@@ -2906,7 +2910,7 @@ fn test_cmd_n_emits_canonical_ai_ui_event() {
         .expect("Cmd+N handler must exist in render_keydown.rs");
     let after_n = &source[n_arm..];
     let f_arm_offset = after_n
-        .find("// Cmd+Shift+F to focus search")
+        .find("// Cmd+Shift+F handled above modal guards (preempt block)")
         .expect("Cmd+Shift+F comment must bound Cmd+N handler");
     let n_region = &after_n[..f_arm_offset];
 
@@ -2924,14 +2928,13 @@ fn test_cmd_n_emits_canonical_ai_ui_event() {
 #[test]
 fn test_cmd_shift_f_emits_canonical_ai_ui_event() {
     let source = include_str!("render_keydown.rs");
-    let f_arm = source
-        .find("\"f\" => {")
-        .expect("Cmd+Shift+F handler must exist in render_keydown.rs");
-    let after_f = &source[f_arm..];
-    let m_arm_offset = after_f
-        .find("// Cmd+Shift+M toggles between Mini and Full mode")
-        .expect("Cmd+Shift+M comment must bound Cmd+Shift+F handler");
-    let f_region = &after_f[..m_arm_offset];
+    let preempt_pos = source
+        .find("modifiers.platform && modifiers.shift && key == \"f\"")
+        .expect("Cmd+Shift+F preempt handler must exist in render_keydown.rs");
+    let command_bar_guard = source
+        .find("if self.command_bar.is_open()")
+        .expect("command_bar modal guard must exist");
+    let f_region = &source[preempt_pos..command_bar_guard];
 
     assert!(
         f_region.contains("emit_ai_ui_event"),
@@ -3018,6 +3021,40 @@ fn test_command_lifecycle_emits_canonical_events() {
     assert!(
         after.contains("duration_ms"),
         "Finish event must include duration_ms metadata"
+    );
+}
+
+/// Simulated key handler must use `navigate_chat_preserving_mini_overlay`
+/// for Up/Down when the mini history overlay is visible, matching the real
+/// key path so overlay navigation never accidentally dismisses the overlay.
+#[test]
+fn test_simulated_key_overlay_arrow_uses_preserving_navigation() {
+    let source = include_str!("command_bar.rs");
+    let handler = source
+        .find("fn handle_simulated_key")
+        .expect("handle_simulated_key must exist in command_bar.rs");
+    let after = &source[handler..];
+
+    // Locate the mini history overlay navigation block
+    let overlay_guard = after
+        .find("self.window_mode.is_mini() && self.showing_mini_history_overlay")
+        .expect("Simulated key handler must guard on mini overlay visibility");
+    let overlay_region_end = after[overlay_guard..]
+        .find("// Handle setup mode navigation")
+        .unwrap_or(after.len() - overlay_guard);
+    let overlay_region = &after[overlay_guard..overlay_guard + overlay_region_end];
+
+    assert!(
+        overlay_region.contains("navigate_chat_preserving_mini_overlay(1,"),
+        "Simulated Up in overlay must call navigate_chat_preserving_mini_overlay(1, ...)"
+    );
+    assert!(
+        overlay_region.contains("navigate_chat_preserving_mini_overlay(-1,"),
+        "Simulated Down in overlay must call navigate_chat_preserving_mini_overlay(-1, ...)"
+    );
+    assert!(
+        overlay_region.contains("dismiss_mini_history_overlay("),
+        "Simulated Enter/Esc in overlay must call dismiss_mini_history_overlay"
     );
 }
 
