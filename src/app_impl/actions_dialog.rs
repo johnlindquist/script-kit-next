@@ -25,13 +25,26 @@ impl ScriptListApp {
             is_key_backspace, is_key_down, is_key_enter, is_key_escape, is_key_up, printable_char,
         };
 
+        // Cmd+K toggles the popup closed through the shared close path
+        if modifiers.platform
+            && !modifiers.shift
+            && !modifiers.control
+            && !modifiers.alt
+            && key.eq_ignore_ascii_case("k")
+        {
+            self.close_actions_popup(host, window, cx);
+            return ActionsRoute::Handled;
+        }
+
         if is_key_up(key) {
             dialog.update(cx, |d, cx| d.move_up(cx));
+            crate::actions::notify_actions_window(cx);
             return ActionsRoute::Handled;
         }
 
         if is_key_down(key) {
             dialog.update(cx, |d, cx| d.move_down(cx));
+            crate::actions::notify_actions_window(cx);
             return ActionsRoute::Handled;
         }
 
@@ -448,5 +461,84 @@ mod close_actions_popup_regression_tests {
                 expected
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod actions_dialog_wiring_regression_tests {
+    use std::fs;
+
+    #[test]
+    fn render_script_list_routes_popup_keys_before_generic_cmd_shortcuts() {
+        let source = fs::read_to_string("src/render_script_list/mod.rs")
+            .expect("Failed to read src/render_script_list/mod.rs");
+
+        let route_pos = source
+            .find("this.route_key_to_actions_dialog(")
+            .expect("render_script_list must use the shared actions router");
+        let cmd_pos = source
+            .find("if has_cmd")
+            .expect("render_script_list cmd shortcut block not found");
+
+        assert!(
+            route_pos < cmd_pos,
+            "render_script_list must route popup keys before generic Cmd shortcuts"
+        );
+    }
+
+    #[test]
+    fn route_key_to_actions_dialog_notifies_after_arrow_navigation() {
+        let source = fs::read_to_string("src/app_impl/actions_dialog.rs")
+            .expect("Failed to read src/app_impl/actions_dialog.rs");
+
+        let route_start = source
+            .find("pub(crate) fn route_key_to_actions_dialog")
+            .expect("route_key_to_actions_dialog not found");
+        let route_fn = &source[route_start..];
+
+        let up_start = route_fn
+            .find("if is_key_up(key)")
+            .expect("up branch missing");
+        let down_start = route_fn
+            .find("if is_key_down(key)")
+            .expect("down branch missing");
+        let jump_start = route_fn
+            .find("let is_home = key.eq_ignore_ascii_case(\"home\")")
+            .expect("jump-key section missing");
+
+        assert!(
+            route_fn[up_start..down_start]
+                .contains("crate::actions::notify_actions_window(cx);"),
+            "up branch must notify the actions window"
+        );
+        assert!(
+            route_fn[down_start..jump_start]
+                .contains("crate::actions::notify_actions_window(cx);"),
+            "down branch must notify the actions window"
+        );
+    }
+
+    #[test]
+    fn route_key_to_actions_dialog_handles_cmd_k_close() {
+        let source = fs::read_to_string("src/app_impl/actions_dialog.rs")
+            .expect("Failed to read src/app_impl/actions_dialog.rs");
+
+        assert!(
+            source.contains("key.eq_ignore_ascii_case(\"k\")")
+                && source.contains("self.close_actions_popup(host, window, cx);"),
+            "shared actions router should close the popup on Cmd+K"
+        );
+    }
+
+    #[test]
+    fn render_script_list_has_no_duplicate_popup_handler() {
+        let source = fs::read_to_string("src/render_script_list/mod.rs")
+            .expect("Failed to read src/render_script_list/mod.rs");
+
+        // The old inline popup handler used this pattern - it should be gone
+        assert!(
+            !source.contains("if this.show_actions_popup {"),
+            "render_script_list must not contain a duplicate inline popup key handler"
+        );
     }
 }

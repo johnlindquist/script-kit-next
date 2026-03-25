@@ -336,12 +336,6 @@ impl Render for AiApp {
         } else {
             "AI Chat".to_string()
         };
-        let mini_model_display_name = self
-            .selected_model
-            .as_ref()
-            .map(|model| model.display_name.clone())
-            .unwrap_or_else(|| "Select Model".to_string());
-
         div()
             .relative() // Keep relative positioning for overlay dropdowns
             .flex()
@@ -435,59 +429,9 @@ impl Render for AiApp {
                                         ),
                                 )
                             })
-                            .child(if self.available_models.is_empty() {
-                                // No models — show "Setup Required" fallback matching full mode
-                                let show_copied = self.is_showing_copied_feedback();
-                                div()
-                                    .id("ai-mini-model-setup")
-                                    .text_xs()
-                                    .text_color(cx.theme().warning)
-                                    .overflow_hidden()
-                                    .text_ellipsis()
-                                    .cursor_pointer()
-                                    .hover(|el| el.text_color(cx.theme().foreground))
-                                    .tooltip(|window, cx| {
-                                        Tooltip::new("Copy setup command to clipboard")
-                                            .build(window, cx)
-                                    })
-                                    .on_mouse_down(
-                                        gpui::MouseButton::Left,
-                                        cx.listener(|this, _, window, cx| {
-                                            this.copy_setup_command(cx);
-                                            window.activate_window();
-                                        }),
-                                    )
-                                    .child(if show_copied {
-                                        "Copied!"
-                                    } else {
-                                        "Setup Required"
-                                    })
-                                    .into_any_element()
-                            } else {
-                                div()
-                                    .id("ai-mini-model-name")
-                                    .text_xs()
-                                    .text_color(label_color)
-                                    .overflow_hidden()
-                                    .text_ellipsis()
-                                    .cursor_pointer()
-                                    .hover(|el| el.text_color(cx.theme().foreground))
-                                    .tooltip(|window, cx| {
-                                        Tooltip::new("Switch model").build(window, cx)
-                                    })
-                                    .on_mouse_down(
-                                        gpui::MouseButton::Left,
-                                        cx.listener(|this, _, window, cx| {
-                                            this.show_command_bar(
-                                                "header_model_click",
-                                                window,
-                                                cx,
-                                            );
-                                        }),
-                                    )
-                                    .child(mini_model_display_name)
-                                    .into_any_element()
-                            }),
+                            // Compact model chip — uses Button component for parity
+                            // with full mode's render_model_picker pattern.
+                            .child(self.render_mini_model_chip(cx)),
                     )
                     // Right: icon buttons — Recent (⌘J), New (⌘N), Actions (⌘K) | Expand (⌘⇧M)
                     .child(
@@ -555,10 +499,7 @@ impl Render for AiApp {
                                             .text_color(cx.theme().foreground)
                                     })
                                     .tooltip(|window, cx| {
-                                        Tooltip::new("New chat")
-                                            .key_binding(
-                                                gpui::Keystroke::parse("cmd-n").ok().map(Kbd::new),
-                                            )
+                                        Tooltip::new("New chat options")
                                             .build(window, cx)
                                     })
                                     .on_click(cx.listener(|this, _, window, cx| {

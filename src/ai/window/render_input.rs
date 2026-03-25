@@ -81,6 +81,67 @@ impl AiApp {
             .into_any_element()
     }
 
+    /// Render a compact model chip for the mini titlebar.
+    /// Matches full mode's button + fallback pattern but opens command bar
+    /// (model/preset picker) instead of cycling.
+    pub(super) fn render_mini_model_chip(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let button_colors =
+            crate::components::ButtonColors::from_theme(&crate::theme::get_cached_theme());
+        let entity = cx.entity();
+
+        if self.available_models.is_empty() {
+            let show_copied = self.is_showing_copied_feedback();
+            let setup_entity = entity.clone();
+            return crate::components::Button::new(
+                if show_copied {
+                    "Copied!"
+                } else {
+                    "Setup Required"
+                },
+                button_colors,
+            )
+            .id("ai-mini-model-setup")
+            .variant(crate::components::ButtonVariant::Ghost)
+            .on_click(Box::new(move |_, window, cx| {
+                setup_entity.update(cx, |this, cx| {
+                    this.copy_setup_command(cx);
+                    window.activate_window();
+                });
+            }))
+            .into_any_element();
+        }
+
+        // Compact label: model name + provider, same as full mode
+        let model_label: SharedString = self
+            .selected_model
+            .as_ref()
+            .map(|m| {
+                let provider_name = self
+                    .provider_registry
+                    .get_provider(&m.provider)
+                    .map(|p| p.display_name().to_string());
+                if let Some(ref name) = provider_name {
+                    if !name.is_empty() {
+                        return format!("{} · {}", m.display_name, name);
+                    }
+                }
+                m.display_name.clone()
+            })
+            .unwrap_or_else(|| "Select Model".to_string())
+            .into();
+
+        let click_entity = entity.clone();
+        crate::components::Button::new(model_label, button_colors)
+            .id("ai-mini-model-chip")
+            .variant(crate::components::ButtonVariant::Ghost)
+            .on_click(Box::new(move |_, window, cx| {
+                click_entity.update(cx, |this, cx| {
+                    this.show_command_bar("header_model_click", window, cx);
+                });
+            }))
+            .into_any_element()
+    }
+
     /// Cycle to the next model in the list
     pub(super) fn cycle_model(&mut self, cx: &mut Context<Self>) {
         if self.available_models.is_empty() {

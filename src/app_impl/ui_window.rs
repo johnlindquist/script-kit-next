@@ -3,7 +3,9 @@ use super::*;
 /// Build a content-aware `MiniMainWindowSizing` from grouped items.
 ///
 /// Walks the grouped items list, counting selectable items and section headers
-/// visible in the first page (up to `MINI_MAIN_WINDOW_MAX_VISIBLE_ROWS` selectable items).
+/// visible in the first page.  Uses the header-aware row cap so that section
+/// headers explicitly reduce the available selectable-row capacity instead of
+/// silently pushing the window height into the max-clamp.
 fn mini_main_window_sizing_from_grouped_items(
     grouped_items: &[GroupedListItem],
 ) -> crate::window_resize::MiniMainWindowSizing {
@@ -11,7 +13,12 @@ fn mini_main_window_sizing_from_grouped_items(
     let mut visible_section_headers = 0usize;
 
     for item in grouped_items {
-        if selectable_items >= crate::window_resize::MINI_MAIN_WINDOW_MAX_VISIBLE_ROWS {
+        let selectable_cap =
+            crate::window_resize::capped_mini_main_window_selectable_rows(
+                visible_section_headers,
+            );
+
+        if selectable_items >= selectable_cap {
             break;
         }
 
