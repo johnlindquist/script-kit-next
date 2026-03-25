@@ -402,6 +402,18 @@ impl AiApp {
         // Handle Cmd+N for new chat
         if has_cmd && key_lower == "n" {
             tracing::debug!(target: "ai", "SimulateKey: Cmd+N - new conversation");
+            super::observability::emit_ai_ui_event(
+                &super::observability::AiUiEvent {
+                    kind: super::types::AiUiEventKind::ShortcutDecision,
+                    action: "new_conversation",
+                    source: "handle_simulated_key",
+                    window_mode: self.window_mode,
+                    selected_chat_id: self.selected_chat_id.as_ref(),
+                    overlay_visible: self.showing_mini_history_overlay,
+                    search_active: !self.search_query.is_empty(),
+                },
+                None,
+            );
             self.new_conversation(window, cx);
             return;
         }

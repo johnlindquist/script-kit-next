@@ -11,13 +11,21 @@ fn scrollbar_fade_opacity(progress: f32) -> crate::transitions::Opacity {
 }
 
 impl ScriptListApp {
-    fn scroll_to_selected_if_needed(&mut self, _reason: &str) {
+    fn scroll_to_selected_if_needed(&mut self, reason: &str) {
         let target = self.selected_index;
 
         // Check if we've already scrolled to this index
         if self.last_scrolled_index == Some(target) {
+            tracing::trace!(
+                target: "SCROLL_STATE",
+                reason,
+                target,
+                "skip scroll reveal; target already revealed"
+            );
             return;
         }
+
+        let before_top = self.main_list_state.logical_scroll_top().item_ix;
 
         // Use perf guard for scroll timing
         let _scroll_perf = crate::perf::ScrollPerfGuard::new();
@@ -26,6 +34,17 @@ impl ScriptListApp {
         // This scrolls the actual list() component used in render_script_list
         self.main_list_state.scroll_to_reveal_item(target);
         self.last_scrolled_index = Some(target);
+
+        let after_top = self.main_list_state.logical_scroll_top().item_ix;
+
+        tracing::debug!(
+            target: "SCROLL_STATE",
+            reason,
+            target,
+            before_top,
+            after_top,
+            "revealed selected item"
+        );
     }
 
     /// Trigger scroll activity - shows the scrollbar and schedules fade-out
@@ -259,6 +278,14 @@ impl ScriptListApp {
         // row while preserving the same count, so the selected item can end up
         // offscreen even when item_count is unchanged.
         self.last_scrolled_index = None;
+
+        tracing::debug!(
+            target: "SCROLL_STATE",
+            old_list_count,
+            item_count,
+            selected_index = self.selected_index,
+            "synced list state"
+        );
 
         if self.selected_index < item_count {
             self.main_list_state

@@ -164,7 +164,11 @@ pub struct AiApp {
     pub(super) presets_selected_index: usize,
 
     // === New Chat Dropdown State (Raycast-style) ===
+    // DEPRECATED: `showing_new_chat_dropdown` and related fields are superseded
+    // by `show_canonical_new_chat_surface` / `show_new_chat_command_bar`.
+    // Retained for backwards compatibility; do not use in new code.
     /// Whether the new chat dropdown is visible (header dropdown)
+    /// DEPRECATED: prefer `show_canonical_new_chat_surface`
     pub(super) showing_new_chat_dropdown: bool,
 
     /// Filter text for new chat dropdown search

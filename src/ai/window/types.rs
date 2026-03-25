@@ -999,6 +999,50 @@ pub(super) const AI_SHORTCUT_SECTIONS: &[AiShortcutSection] = &[
     },
 ];
 
+// -- Observability event kinds --
+
+/// Machine-readable event category for AI window observability.
+///
+/// Used by `emit_ai_ui_event()` so agents and log parsers can filter by
+/// event *kind* with a single JSON key.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum AiUiEventKind {
+    ShortcutDecision,
+    OverlayTransition,
+    CommandLifecycle,
+    FocusRequest,
+    ContextMutation,
+    ChatLifecycle,
+    Error,
+}
+
+// -- Structured user-facing error codes --
+
+/// Deterministic error codes for actionable AI window failures.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(clippy::enum_variant_names)] // All variants intentionally share "Failed" suffix for clarity
+pub(super) enum AiErrorCode {
+    CreateChatFailed,
+    SaveSystemMessageFailed,
+    RenameChatFailed,
+    DeleteMessagesFailed,
+}
+
+/// A user-facing error with a machine-readable code, human message, and
+/// suggested recovery action.
+#[derive(Debug, Clone)]
+pub(super) struct AiUserFacingError {
+    pub(super) code: AiErrorCode,
+    pub(super) message: String,
+    pub(super) suggested_action: &'static str,
+}
+
+impl AiUserFacingError {
+    pub(super) fn to_display_string(&self) -> String {
+        format!("{} Try: {}", self.message, self.suggested_action)
+    }
+}
+
 // NOTE: AI_APP_ENTITY was removed to prevent memory leaks.
 // The entity was being kept alive by this global reference and by theme watcher tasks,
 // causing the AiApp to never be dropped even after the window closed.

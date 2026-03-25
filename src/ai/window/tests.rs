@@ -2548,7 +2548,7 @@ fn test_mini_cmd_n_routes_to_new_conversation() {
     );
 }
 
-/// The mini header's "New" button opens the new-chat command bar
+/// The mini header's "New" button opens the new-chat surface
 /// (model/preset picker), providing a different path than Cmd+N.
 #[test]
 fn test_mini_header_new_button_uses_command_bar() {
@@ -2561,8 +2561,8 @@ fn test_mini_header_new_button_uses_command_bar() {
     let region_end = after.find("ai-mini-actions").unwrap_or(after.len());
     let new_button_region = &after[..region_end];
     assert!(
-        new_button_region.contains("show_new_chat_command_bar"),
-        "Mini New button must call show_new_chat_command_bar"
+        new_button_region.contains("show_canonical_new_chat_surface"),
+        "Mini New button must call show_canonical_new_chat_surface"
     );
 }
 
@@ -2764,7 +2764,7 @@ fn test_simulated_cmd_n_routes_to_new_conversation() {
     let cmd_n = after
         .find("if has_cmd && key_lower == \"n\"")
         .expect("Simulated Cmd+N handler must exist");
-    let region = &after[cmd_n..(cmd_n + 240).min(after.len())];
+    let region = &after[cmd_n..(cmd_n + 800).min(after.len())];
 
     assert!(
         region.contains("self.new_conversation(window, cx);"),
@@ -2776,7 +2776,7 @@ fn test_simulated_cmd_n_routes_to_new_conversation() {
     );
 }
 
-/// The mini header "New" button opens the new-chat command bar (options
+/// The mini header "New" button opens the canonical new-chat surface (options
 /// launcher) — deliberately different from `Cmd+N` which creates a blank
 /// conversation. The tooltip must clarify this distinction.
 #[test]
@@ -2790,8 +2790,8 @@ fn test_mini_header_new_button_is_options_launcher() {
     let region = &after[..region_end];
 
     assert!(
-        region.contains("show_new_chat_command_bar("),
-        "Mini header New button should open the new-chat command bar"
+        region.contains("show_canonical_new_chat_surface("),
+        "Mini header New button should call show_canonical_new_chat_surface"
     );
     assert!(
         region.contains("New chat options"),
@@ -2892,5 +2892,152 @@ fn test_mini_titlebar_uses_model_chip() {
     assert!(
         !region.contains("ai-mini-model-name"),
         "Mini titlebar should not have inline plain-text model selector"
+    );
+}
+
+// -- Canonical observability event source audits --
+
+/// Cmd+N in the real key handler must emit the canonical `ai_ui_event` marker.
+#[test]
+fn test_cmd_n_emits_canonical_ai_ui_event() {
+    let source = include_str!("render_keydown.rs");
+    let n_arm = source
+        .find("\"n\" => {")
+        .expect("Cmd+N handler must exist in render_keydown.rs");
+    let after_n = &source[n_arm..];
+    let f_arm_offset = after_n
+        .find("// Cmd+Shift+F to focus search")
+        .expect("Cmd+Shift+F comment must bound Cmd+N handler");
+    let n_region = &after_n[..f_arm_offset];
+
+    assert!(
+        n_region.contains("emit_ai_ui_event"),
+        "Cmd+N handler must emit canonical ai_ui_event"
+    );
+    assert!(
+        n_region.contains("ShortcutDecision"),
+        "Cmd+N event must use ShortcutDecision kind"
+    );
+}
+
+/// Cmd+Shift+F in the real key handler must emit the canonical `ai_ui_event` marker.
+#[test]
+fn test_cmd_shift_f_emits_canonical_ai_ui_event() {
+    let source = include_str!("render_keydown.rs");
+    let f_arm = source
+        .find("\"f\" => {")
+        .expect("Cmd+Shift+F handler must exist in render_keydown.rs");
+    let after_f = &source[f_arm..];
+    let m_arm_offset = after_f
+        .find("// Cmd+Shift+M toggles between Mini and Full mode")
+        .expect("Cmd+Shift+M comment must bound Cmd+Shift+F handler");
+    let f_region = &after_f[..m_arm_offset];
+
+    assert!(
+        f_region.contains("emit_ai_ui_event"),
+        "Cmd+Shift+F handler must emit canonical ai_ui_event"
+    );
+    assert!(
+        f_region.contains("ShortcutDecision"),
+        "Cmd+Shift+F event must use ShortcutDecision kind"
+    );
+}
+
+/// Simulated Cmd+N must emit the canonical `ai_ui_event` marker.
+#[test]
+fn test_simulated_cmd_n_emits_canonical_ai_ui_event() {
+    let source = include_str!("command_bar.rs");
+    let handler = source
+        .find("fn handle_simulated_key")
+        .expect("handle_simulated_key must exist in command_bar.rs");
+    let after = &source[handler..];
+    let cmd_n = after
+        .find("if has_cmd && key_lower == \"n\"")
+        .expect("Simulated Cmd+N handler must exist");
+    let region = &after[cmd_n..(cmd_n + 500).min(after.len())];
+
+    assert!(
+        region.contains("emit_ai_ui_event"),
+        "Simulated Cmd+N must emit canonical ai_ui_event"
+    );
+}
+
+/// Overlay helpers must emit the canonical `ai_ui_event` marker with
+/// `OverlayTransition` kind for show and dismiss paths.
+#[test]
+fn test_overlay_helpers_emit_canonical_ai_ui_event() {
+    let source = include_str!("render_root.rs");
+    assert!(
+        source.contains("emit_ai_ui_event"),
+        "render_root.rs must call emit_ai_ui_event"
+    );
+
+    let show_fn = source
+        .find("fn show_mini_history_overlay")
+        .expect("show_mini_history_overlay must exist");
+    let dismiss_fn = source
+        .find("fn dismiss_mini_history_overlay")
+        .expect("dismiss_mini_history_overlay must exist");
+
+    let show_region = &source[show_fn..dismiss_fn];
+    assert!(
+        show_region.contains("OverlayTransition"),
+        "show_mini_history_overlay must emit OverlayTransition event"
+    );
+
+    let dismiss_end = (dismiss_fn + 1200).min(source.len());
+    let dismiss_region = &source[dismiss_fn..dismiss_end];
+    assert!(
+        dismiss_region.contains("OverlayTransition"),
+        "dismiss_mini_history_overlay must emit OverlayTransition event"
+    );
+}
+
+/// `process_render_pending_commands` must emit canonical command lifecycle
+/// events with start and finish markers including duration metadata.
+#[test]
+fn test_command_lifecycle_emits_canonical_events() {
+    let source = include_str!("render_root.rs");
+    let cmd_fn = source
+        .find("fn process_render_pending_commands")
+        .expect("process_render_pending_commands must exist");
+    let after = &source[cmd_fn..];
+
+    assert!(
+        after.contains("CommandLifecycle"),
+        "Command processing must emit CommandLifecycle events"
+    );
+    assert!(
+        after.contains("process_render_pending_commands:start"),
+        "Must emit start marker"
+    );
+    assert!(
+        after.contains("process_render_pending_commands:finish"),
+        "Must emit finish marker"
+    );
+    assert!(
+        after.contains("duration_ms"),
+        "Finish event must include duration_ms metadata"
+    );
+}
+
+/// `show_canonical_new_chat_surface` must exist in dropdowns.rs and delegate
+/// to `show_new_chat_command_bar`.
+#[test]
+fn test_canonical_new_chat_surface_exists_and_delegates() {
+    let source = include_str!("dropdowns.rs");
+    let canon = source
+        .find("fn show_canonical_new_chat_surface")
+        .expect("show_canonical_new_chat_surface must exist in dropdowns.rs");
+    let region_end = (canon + 500).min(source.len());
+    let region = &source[canon..region_end];
+
+    assert!(
+        region.contains("hide_all_dropdowns"),
+        "Canonical surface must hide all dropdowns first"
+    );
+    assert!(
+        region.contains("show_new_chat_command_bar"),
+        "Canonical surface must delegate to show_new_chat_command_bar"
     );
 }
