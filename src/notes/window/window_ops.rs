@@ -2,8 +2,6 @@ use super::*;
 use crate::theme::get_cached_theme;
 
 #[cfg(target_os = "macos")]
-const NS_FLOATING_WINDOW_LEVEL: i64 = 3;
-#[cfg(target_os = "macos")]
 const NS_WINDOW_COLLECTION_BEHAVIOR_CAN_JOIN_ALL_SPACES: u64 = 1 << 0;
 #[cfg(target_os = "macos")]
 const NS_WINDOW_COLLECTION_BEHAVIOR_MOVE_TO_ACTIVE_SPACE: u64 = 1 << 1;
@@ -373,7 +371,7 @@ pub fn is_notes_window(window: &gpui::Window) -> bool {
 /// Configure the Notes window as a floating panel (always on top).
 ///
 /// This sets:
-/// - NSFloatingWindowLevel (3) - floats above normal windows
+/// - Preserve the GPUI-assigned PopUp window level (101)
 /// - NSWindowCollectionBehaviorMoveToActiveSpace - moves to current space when shown
 /// - Disabled window restoration - prevents macOS position caching
 #[cfg(target_os = "macos")]
@@ -398,9 +396,7 @@ fn configure_notes_as_floating_panel() {
                     if title_str == "Notes" {
                         // Found the Notes window - configure it
 
-                        // Use i64 (NSInteger) for proper ABI compatibility on 64-bit macOS
-                        let floating_level: i64 = NS_FLOATING_WINDOW_LEVEL;
-                        let _: () = msg_send![window, setLevel:floating_level];
+                        // Keep the GPUI-assigned PopUp window level (101).
 
                         // Get current collection behavior to preserve existing flags
                         let current: u64 = msg_send![window, collectionBehavior];

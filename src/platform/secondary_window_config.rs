@@ -96,9 +96,9 @@ unsafe fn configure_window_vibrancy_common(
 #[cfg(target_os = "macos")]
 pub unsafe fn configure_actions_popup_window(window: id, is_dark: bool) {
     if window.is_null() {
-        logging::log(
-            "ACTIONS",
-            "WARNING: Cannot configure null window as actions popup",
+        tracing::warn!(
+            event = "actions_popup_configure.null_window",
+            "Cannot configure null window as actions popup"
         );
         return;
     }
@@ -107,8 +107,9 @@ pub unsafe fn configure_actions_popup_window(window: id, is_dark: bool) {
     let _: () = msg_send![window, setMovable: false];
     let _: () = msg_send![window, setMovableByWindowBackground: false];
 
-    // Match main window level (NSFloatingWindowLevel = 3)
-    let _: () = msg_send![window, setLevel: NS_FLOATING_WINDOW_LEVEL];
+    // Keep the level GPUI assigned (WindowKind::PopUp → NSPopUpMenuWindowLevel = 101).
+    // Do NOT call setLevel here — any override downgrades the popup below the
+    // main window which is also at 101. See CLAUDE.md "Window Level Rules".
 
     // NOTE: We intentionally do NOT set setHidesOnDeactivate:true here.
     // The main window is a non-activating panel (WindowKind::PopUp), so the app
@@ -128,6 +129,11 @@ pub unsafe fn configure_actions_popup_window(window: id, is_dark: bool) {
     let _: () = msg_send![window, setFrameAutosaveName: empty_string];
 
     configure_window_vibrancy_common(window, "ACTIONS", "Actions popup", is_dark);
+
+    // SAFETY: `window` is a valid, non-null NSWindow pointer (checked at function entry).
+    // orderFrontRegardless brings the popup visually above the main panel without
+    // activating the app — same pattern as show_main_window_without_activation.
+    let _: () = msg_send![window, orderFrontRegardless];
 }
 
 #[cfg(not(target_os = "macos"))]

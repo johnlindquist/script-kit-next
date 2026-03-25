@@ -324,8 +324,8 @@ pub fn ensure_move_to_active_space() {
 /// Configure the main window as a floating macOS panel.
 ///
 /// This function configures the main window (via WindowManager) with:
-/// - Floating window level (NSFloatingWindowLevel = 3) - appears above normal windows
-/// - MoveToActiveSpace collection behavior - moves to current space when shown
+/// - Preserved GPUI-assigned window level for PopUp windows
+/// - MoveToActiveSpace collection behavior when compatible with existing flags
 /// - Disabled window restoration - prevents macOS from remembering window position
 /// - Empty frame autosave name - prevents position caching
 ///
@@ -365,10 +365,7 @@ pub fn configure_as_floating_panel() {
             }
         };
 
-        // NSFloatingWindowLevel = 3
-        // This makes the window float above normal windows
-        // Use i64 (NSInteger) for proper ABI compatibility on 64-bit macOS
-        let _: () = msg_send![window, setLevel:NS_FLOATING_WINDOW_LEVEL];
+        // Do not override level - GPUI owns the native PopUp window level.
 
         // Get current collection behavior to preserve existing flags set by GPUI/AppKit
         let current: u64 = msg_send![window, collectionBehavior];
