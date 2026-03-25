@@ -617,6 +617,17 @@ impl ScriptListApp {
                   event: &gpui::KeyDownEvent,
                   window: &mut Window,
                   cx: &mut Context<Self>| {
+                if event.keystroke.modifiers.platform {
+                    tracing::debug!(
+                        event = "script_list.key_down",
+                        key = %event.keystroke.key,
+                        cmd = true,
+                        shift = event.keystroke.modifiers.shift,
+                        mini_mode = (this.main_window_mode == MainWindowMode::Mini),
+                        "script_list key_down: cmd+{}",
+                        event.keystroke.key,
+                    );
+                }
                 // Hide cursor while typing - automatically shows when mouse moves
                 this.hide_mouse_cursor(cx);
 
@@ -697,7 +708,16 @@ impl ScriptListApp {
                         }
                         "k" => {
                             // Cmd+K - Toggle actions menu
-                            if this.has_actions() {
+                            let has = this.has_actions();
+                            tracing::debug!(
+                                event = "cmd_k.pressed",
+                                has_actions = has,
+                                selected_index = this.selected_index,
+                                mini_mode = (this.main_window_mode == MainWindowMode::Mini),
+                                "Cmd+K pressed, has_actions={}",
+                                has,
+                            );
+                            if has {
                                 logging::log("KEY", "Shortcut Cmd+K -> toggle_actions");
                                 this.toggle_actions(cx, window);
                             }

@@ -15,6 +15,14 @@ impl ScriptListApp {
             _ => None,
         };
 
+        tracing::trace!(
+            event = "get_focused_script_info",
+            selected_index = self.selected_index,
+            grouped_items_len = grouped_items.len(),
+            result_idx = ?result_idx,
+            "get_focused_script_info",
+        );
+
         if let Some(idx) = result_idx {
             if let Some(result) = flat_results.get(idx) {
                 // Compute frecency path for each result type (same logic as app_impl.rs)

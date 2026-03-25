@@ -32,7 +32,7 @@ fn open_mini_main_window_sets_mini_mode_contract() {
     let fn_start = content
         .find("fn open_mini_main_window(&mut self, cx: &mut Context<Self>) {")
         .expect("Expected open_mini_main_window helper");
-    let body = &content[fn_start..content.len().min(fn_start + 1200)];
+    let body = &content[fn_start..content.len().min(fn_start + 1800)];
 
     for expected in [
         "self.filter_text.clear();",
@@ -48,6 +48,8 @@ fn open_mini_main_window_sets_mini_mode_contract() {
         "self.sync_list_state();",
         "let (grouped_items, _) = self.get_grouped_results_cached();",
         "let item_count = grouped_items.len();",
+        // Skip section headers so selected_index points to a real item
+        "self.selected_index = first_selectable;",
         "resize_to_view_sync(ViewType::MiniMainWindow, item_count);",
         "self.pending_focus = Some(FocusTarget::MainFilter);",
         "self.focused_input = FocusedInput::MainFilter;",

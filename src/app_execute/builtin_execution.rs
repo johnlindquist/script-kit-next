@@ -1306,6 +1306,23 @@ impl ScriptListApp {
         self.sync_list_state();
         let (grouped_items, _) = self.get_grouped_results_cached();
         let item_count = grouped_items.len();
+        // Skip section headers — select first actual item so cmd+k works immediately
+        let first_selectable = crate::list_item::GroupedListState::from_items(&grouped_items)
+            .first_selectable;
+        self.selected_index = first_selectable;
+        tracing::info!(
+            event = "open_mini_main_window",
+            item_count = item_count,
+            selected_index = self.selected_index,
+            first_selectable = first_selectable,
+            grouped_cache_key = %self.grouped_cache_key,
+            computed_filter = %self.computed_filter_text,
+            filter_text = %self.filter_text,
+            pending_filter_sync = self.pending_filter_sync,
+            "open_mini_main_window: items={}, selected={}",
+            item_count,
+            self.selected_index,
+        );
         resize_to_view_sync(ViewType::MiniMainWindow, item_count);
         self.pending_focus = Some(FocusTarget::MainFilter);
         self.focused_input = FocusedInput::MainFilter;
