@@ -2864,10 +2864,14 @@ fn test_mini_model_chip_uses_button_component() {
         after.contains("ButtonVariant::Ghost"),
         "Mini model chip must use Ghost variant"
     );
-    // Cycles model on click (matches full mode's render_model_picker)
+    // Cycles model on click via shared instrumented helper
     assert!(
-        after.contains("cycle_model("),
-        "Mini model chip must cycle model on click (not open generic command bar)"
+        after.contains("cycle_model_from_source(\"mini_model_chip_click\""),
+        "Mini model chip must use the shared instrumented cycle helper"
+    );
+    assert!(
+        !after.contains("show_command_bar("),
+        "Mini model chip must not open the generic command bar"
     );
     // Has setup-required fallback
     assert!(
@@ -3076,5 +3080,57 @@ fn test_canonical_new_chat_surface_exists_and_delegates() {
     assert!(
         region.contains("show_new_chat_command_bar"),
         "Canonical surface must delegate to show_new_chat_command_bar"
+    );
+}
+
+/// Model cycling must be centralized in `cycle_model_from_source` with
+/// structured observability and distinct source strings for full vs mini.
+#[test]
+fn test_model_picker_cycle_path_emits_structured_event() {
+    let source = include_str!("render_input.rs");
+
+    assert!(
+        source.contains("fn cycle_model_from_source("),
+        "Model cycling must be centralized in cycle_model_from_source"
+    );
+    assert!(
+        source.contains("emit_ai_ui_event("),
+        "Model cycling must emit a structured observability event"
+    );
+    assert!(
+        source.contains("\"full_model_picker_click\""),
+        "Full model picker must include a concrete event source"
+    );
+    assert!(
+        source.contains("\"mini_model_chip_click\""),
+        "Mini model chip must include a concrete event source"
+    );
+}
+
+/// Mini model chip must use the shared instrumented cycle helper,
+/// not duplicate logic or open the generic command bar.
+#[test]
+fn test_mini_model_chip_uses_shared_instrumented_cycle_helper() {
+    let source = include_str!("render_input.rs");
+    let after = source
+        .split("pub(super) fn render_mini_model_chip")
+        .nth(1)
+        .expect("render_mini_model_chip should exist");
+
+    assert!(
+        after.contains("Button::new("),
+        "Mini model chip must use the Button component"
+    );
+    assert!(
+        after.contains("ButtonVariant::Ghost"),
+        "Mini model chip must use Ghost variant"
+    );
+    assert!(
+        after.contains("cycle_model_from_source(\"mini_model_chip_click\""),
+        "Mini model chip must use the shared instrumented cycle helper"
+    );
+    assert!(
+        !after.contains("show_command_bar("),
+        "Mini model chip must not open the generic command bar"
     );
 }

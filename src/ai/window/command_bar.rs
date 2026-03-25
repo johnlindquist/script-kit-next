@@ -693,3 +693,39 @@ impl AiApp {
         }
     }
 }
+
+#[cfg(test)]
+mod mini_history_overlay_key_routing_tests {
+    use std::fs;
+
+    #[test]
+    fn overlay_up_and_down_route_through_preserving_navigation() {
+        let source = fs::read_to_string("src/ai/window/command_bar.rs")
+            .expect("Failed to read src/ai/window/command_bar.rs");
+
+        let overlay_start = source
+            .find("if self.window_mode.is_mini() && self.showing_mini_history_overlay {")
+            .expect("mini history overlay key routing block not found");
+        let overlay_block = &source[overlay_start..];
+
+        let up_branch_start = overlay_block
+            .find("k if is_key_up(k) => {")
+            .expect("up branch missing");
+        let down_branch_start = overlay_block
+            .find("k if is_key_down(k) => {")
+            .expect("down branch missing");
+        let enter_branch_start = overlay_block
+            .find("k if is_key_enter(k) => {")
+            .expect("enter branch missing");
+
+        let up_call_pos = overlay_block[up_branch_start..down_branch_start]
+            .find("self.navigate_chat_preserving_mini_overlay(1, window, cx);")
+            .expect("up branch must call preserving navigation");
+        let down_call_pos = overlay_block[down_branch_start..enter_branch_start]
+            .find("self.navigate_chat_preserving_mini_overlay(-1, window, cx);")
+            .expect("down branch must call preserving navigation");
+
+        assert!(up_call_pos < (down_branch_start - up_branch_start));
+        assert!(down_call_pos < (enter_branch_start - down_branch_start));
+    }
+}

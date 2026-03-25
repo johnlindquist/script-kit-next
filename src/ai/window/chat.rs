@@ -909,3 +909,70 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+mod mini_history_overlay_select_regression_tests {
+    use std::fs;
+
+    #[test]
+    fn select_chat_routes_through_internal_helper_with_dismiss_true() {
+        let source =
+            fs::read_to_string("src/ai/window/chat.rs").expect("Failed to read src/ai/window/chat.rs");
+
+        let select_start = source
+            .find("pub(super) fn select_chat(")
+            .expect("select_chat function not found");
+        let preserve_start = source
+            .find("pub(super) fn select_chat_preserving_overlay(")
+            .expect("select_chat_preserving_overlay function not found");
+        let select_fn = &source[select_start..preserve_start];
+
+        assert!(
+            select_fn.contains("self.select_chat_internal(id, true, window, cx);"),
+            "select_chat must dismiss the mini history overlay via select_chat_internal(..., true, ...)"
+        );
+    }
+
+    #[test]
+    fn preserving_select_routes_through_internal_helper_with_dismiss_false() {
+        let source =
+            fs::read_to_string("src/ai/window/chat.rs").expect("Failed to read src/ai/window/chat.rs");
+
+        let preserve_start = source
+            .find("pub(super) fn select_chat_preserving_overlay(")
+            .expect("select_chat_preserving_overlay function not found");
+        let internal_start = source
+            .find("fn select_chat_internal(")
+            .expect("select_chat_internal function not found");
+        let preserve_fn = &source[preserve_start..internal_start];
+
+        assert!(
+            preserve_fn.contains("self.select_chat_internal(id, false, window, cx);"),
+            "select_chat_preserving_overlay must keep the mini history overlay open via select_chat_internal(..., false, ...)"
+        );
+    }
+
+    #[test]
+    fn internal_select_only_clears_overlay_inside_the_guard() {
+        let source =
+            fs::read_to_string("src/ai/window/chat.rs").expect("Failed to read src/ai/window/chat.rs");
+
+        let internal_start = source
+            .find("fn select_chat_internal(")
+            .expect("select_chat_internal function not found");
+        let internal_fn = &source[internal_start..];
+
+        let guard_pos = internal_fn
+            .find("if dismiss_mini_overlay {")
+            .expect("select_chat_internal must guard overlay dismissal");
+        let clear_pos = internal_fn[guard_pos..]
+            .find("self.showing_mini_history_overlay = false;")
+            .map(|offset| guard_pos + offset)
+            .expect("select_chat_internal must clear the overlay inside the guard");
+
+        assert!(
+            guard_pos < clear_pos,
+            "overlay dismissal must remain gated by dismiss_mini_overlay"
+        );
+    }
+}
