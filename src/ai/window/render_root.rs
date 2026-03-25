@@ -173,7 +173,7 @@ impl AiApp {
                     .on_mouse_down(gpui::MouseButton::Left, |_, _, cx| {
                         cx.stop_propagation();
                     })
-                    .child(self.render_sidebar_body(cx)),
+                    .child(self.render_mini_history_panel(cx)),
             )
     }
 

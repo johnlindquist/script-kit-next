@@ -788,7 +788,10 @@ pub fn resize_first_window_to_size(_target_height: Pixels, _target_width: Option
 
 // --- merged from part_001.rs ---
 #[cfg(test)]
-mod tests {
+mod tests;
+
+#[cfg(test)]
+mod resize_tests {
     use super::*;
     use gpui::px;
 
