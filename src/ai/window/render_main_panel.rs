@@ -191,7 +191,7 @@ impl AiApp {
                     .when(has_pending_image, |d| {
                         d.child(
                             div()
-                                .max_h(px(120.))
+                                .max_h(IMG_THUMBNAIL_SIZE)
                                 .overflow_hidden()
                                 .child(self.render_pending_image_preview(cx)),
                         )

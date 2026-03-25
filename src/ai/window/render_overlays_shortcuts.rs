@@ -101,7 +101,7 @@ impl AiApp {
                                     .child(
                                         div()
                                             .px(S1)
-                                            .py(px(1.))
+                                            .py(HAIRLINE)
                                             .rounded(R_SM)
                                             .bg(accent.opacity(OPACITY_DISABLED))
                                             .text_xs()
@@ -121,7 +121,7 @@ impl AiApp {
                             ),
                     )
                     // Divider
-                    .child(div().w_full().h(px(1.)).bg(border))
+                    .child(div().w_full().h(HAIRLINE).bg(border))
                     // Grouped shortcut sections
                     .children(
                         ShortcutCategory::ALL

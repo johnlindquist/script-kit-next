@@ -200,7 +200,7 @@ impl AiApp {
                                             .text_xs()
                                             .px(SP_3)
                                             .py(SP_1)
-                                            .rounded(px(4.))
+                                            .rounded(SP_2)
                                             .bg(cx.theme().muted.opacity(OPACITY_CARD_BG))
                                             .text_color(
                                                 cx.theme().muted_foreground.opacity(OPACITY_STRONG),
