@@ -46,12 +46,13 @@ fn mini_main_panel_exposes_compact_composer_ids() {
 #[test]
 fn mini_keydown_closes_overlay_before_window_close() {
     let source = read("src/ai/window/render_keydown.rs");
+    // The mini history overlay key guard intercepts Up/Down/Enter/Esc before other handlers
     let overlay_guard =
-        "if is_key_escape(key) && self.window_mode.is_mini() && self.showing_mini_history_overlay";
+        "if self.window_mode.is_mini() && self.showing_mini_history_overlay";
     let final_close = "if is_key_escape(key) && self.window_mode.is_mini() {";
     assert!(
         source.contains(overlay_guard),
-        "render_keydown.rs missing overlay-dismiss guard"
+        "render_keydown.rs missing overlay key routing guard"
     );
     assert!(
         source.contains(final_close),
@@ -59,7 +60,7 @@ fn mini_keydown_closes_overlay_before_window_close() {
     );
     assert!(
         source.find(overlay_guard) < source.find(final_close),
-        "Overlay dismiss must come BEFORE final window close in keydown handler"
+        "Overlay key routing must come BEFORE final window close in keydown handler"
     );
 }
 
@@ -81,8 +82,8 @@ fn mini_entry_points_pass_explicit_source() {
         "Cmd+K shortcut must pass source to show_command_bar"
     );
     assert!(
-        keydown.contains("show_new_chat_command_bar(\"shortcut_cmd_n\""),
-        "Cmd+N shortcut must pass source to show_new_chat_command_bar"
+        keydown.contains("self.new_conversation(window, cx)"),
+        "Cmd+N shortcut must call new_conversation"
     );
 
     let cmd_bar = read("src/ai/window/command_bar.rs");
@@ -209,51 +210,49 @@ fn builtin_execution_routes_mini_ai_to_deferred_handoff() {
 
 #[test]
 fn mini_overlay_dismiss_restores_focus_and_clears_search() {
-    // All three dismiss paths must call focus_input AND clear_search_state:
-    // 1. Toggle dismiss (toggle_mini_history_overlay when closing)
+    // The canonical dismiss_mini_history_overlay helper must call focus_input AND
+    // clear_search_state. All dismiss paths (toggle, backdrop, Esc) delegate to it.
     let root = read("src/ai/window/render_root.rs");
-    let dismiss_marker = "\"mini_history_overlay_dismissed\"";
+
+    // 1. dismiss_mini_history_overlay must contain both calls
+    let dismiss_fn_start = root
+        .find("fn dismiss_mini_history_overlay")
+        .expect("dismiss_mini_history_overlay must exist");
+    let dismiss_section = &root[dismiss_fn_start..(dismiss_fn_start + 800).min(root.len())];
+    assert!(
+        dismiss_section.contains("focus_input(window, cx)"),
+        "dismiss_mini_history_overlay must call focus_input"
+    );
+    assert!(
+        dismiss_section.contains("clear_search_state(window, cx)"),
+        "dismiss_mini_history_overlay must clear search"
+    );
+
+    // 2. Toggle delegates to dismiss helper
     let toggle_fn_start = root
         .find("fn toggle_mini_history_overlay")
         .expect("toggle_mini_history_overlay must exist");
-    let toggle_section = &root[toggle_fn_start..toggle_fn_start + 1200];
+    let toggle_section = &root[toggle_fn_start..(toggle_fn_start + 600).min(root.len())];
     assert!(
-        toggle_section.contains("focus_input(window, cx)"),
-        "toggle_mini_history_overlay dismiss path must call focus_input"
-    );
-    assert!(
-        toggle_section.contains("clear_search_state(window, cx)"),
-        "toggle_mini_history_overlay dismiss path must clear search"
+        toggle_section.contains("self.dismiss_mini_history_overlay(source, window, cx)"),
+        "toggle must delegate to dismiss_mini_history_overlay"
     );
 
-    // 2. Backdrop click dismiss
+    // 3. Backdrop click delegates to dismiss helper
     let backdrop_start = root
         .find("ai-mini-history-backdrop")
         .expect("backdrop element must exist");
-    let backdrop_section = &root[backdrop_start..backdrop_start + 600];
+    let backdrop_section = &root[backdrop_start..(backdrop_start + 600).min(root.len())];
     assert!(
-        backdrop_section.contains("focus_input(window, cx)"),
-        "Backdrop click dismiss must call focus_input"
-    );
-    assert!(
-        backdrop_section.contains("clear_search_state(window, cx)"),
-        "Backdrop click dismiss must clear search"
+        backdrop_section.contains("dismiss_mini_history_overlay(\"backdrop_click\""),
+        "Backdrop click must call dismiss_mini_history_overlay"
     );
 
-    // 3. Escape key dismiss
+    // 4. Escape key delegates to dismiss helper
     let keydown = read("src/ai/window/render_keydown.rs");
-    let escape_overlay = keydown
-        .find(dismiss_marker)
-        .expect("Escape overlay dismiss must log the dismiss event");
-    let escape_start = escape_overlay.saturating_sub(200);
-    let escape_section = &keydown[escape_start..escape_overlay + 100];
     assert!(
-        escape_section.contains("focus_input(window, cx)"),
-        "Escape overlay dismiss must call focus_input"
-    );
-    assert!(
-        escape_section.contains("clear_search_state(window, cx)"),
-        "Escape overlay dismiss must clear search"
+        keydown.contains("dismiss_mini_history_overlay(\"escape_key\""),
+        "Escape key must call dismiss_mini_history_overlay"
     );
 }
 
@@ -307,8 +306,8 @@ fn mini_cmd_shift_f_opens_history_overlay() {
         "Cmd+Shift+F handler must check for mini mode"
     );
     assert!(
-        f_section.contains("toggle_mini_history_overlay"),
-        "Cmd+Shift+F in mini mode must open the history overlay"
+        f_section.contains("show_mini_history_overlay"),
+        "Cmd+Shift+F in mini mode must idempotently open the history overlay"
     );
 }
 
@@ -637,10 +636,10 @@ fn mini_context_contract_keeps_essential_surfaces_reachable() {
         );
     }
 
-    // Surfaces that must NOT be in mini mode (they consume too much vertical space)
+    // Context recommendations are now shown in mini mode (parity with full mode)
     assert!(
-        !mini_body.contains("render_context_recommendations"),
-        "Mini main panel must NOT render context recommendations (hidden to save space)"
+        mini_body.contains("render_context_recommendations"),
+        "Mini main panel must render context recommendations (parity with full mode)"
     );
 }
 
@@ -774,25 +773,24 @@ fn new_chat_command_bar_blocks_shortcut_fallthrough() {
 }
 
 #[test]
-fn cmd_n_toggles_new_chat_command_bar_in_mini() {
-    // Cmd+N in mini mode must toggle (close if open, open if closed) the
-    // new_chat_command_bar, not always open it.
-    // Scan from the mini-mode branch to the next top-level `else` (full-mode new_conversation).
+fn cmd_n_calls_new_conversation_in_all_modes() {
+    // Cmd+N must call new_conversation in both mini and full mode (unified behavior).
+    // There should be no mini-specific branching for Cmd+N.
     let keydown = read("src/ai/window/render_keydown.rs");
-    let cmd_n_start = keydown
-        .find("} else if self.window_mode.is_mini() {")
-        .expect("Mini mode Cmd+N branch must exist");
-    let branch_end = keydown[cmd_n_start..]
-        .find("self.new_conversation(window, cx)")
-        .expect("full-mode new_conversation call must follow mini branch");
-    let cmd_n_section = &keydown[cmd_n_start..cmd_n_start + branch_end];
+    let n_arm = keydown
+        .find("\"n\" => {")
+        .expect("Cmd+N handler must exist in render_keydown.rs");
+    let f_arm = keydown[n_arm..]
+        .find("// Cmd+Shift+F to focus search")
+        .expect("Cmd+Shift+F comment must bound Cmd+N handler");
+    let n_section = &keydown[n_arm..n_arm + f_arm];
     assert!(
-        cmd_n_section.contains("if self.new_chat_command_bar.is_open()"),
-        "Cmd+N in mini mode must check if new_chat_command_bar is already open"
+        n_section.contains("self.new_conversation(window, cx)"),
+        "Cmd+N must call new_conversation"
     );
     assert!(
-        cmd_n_section.contains("hide_new_chat_command_bar"),
-        "Cmd+N in mini mode must close the bar when it's already open"
+        !n_section.contains("show_new_chat_command_bar"),
+        "Cmd+N must not branch to show_new_chat_command_bar"
     );
 }
 
@@ -1127,8 +1125,8 @@ fn esc_chain_layers_are_ordered_correctly() {
     // These are the Esc guards in priority order (highest first).
     // Each must appear before the next in the source.
     let layers = [
-        // Layer 1: Mini history overlay
-        "is_key_escape(key) && self.window_mode.is_mini() && self.showing_mini_history_overlay",
+        // Layer 1: Mini history overlay (broader key guard, not just Esc)
+        "if self.window_mode.is_mini() && self.showing_mini_history_overlay",
         // Layer 2: Shortcuts overlay
         "is_key_escape(key) && self.showing_shortcuts_overlay",
         // Layer 3: Active search

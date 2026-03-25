@@ -253,16 +253,16 @@ impl ScriptListApp {
         let old_list_count = self.main_list_state.item_count();
         if old_list_count != item_count {
             self.main_list_state.splice(0..old_list_count, item_count);
-            // Invalidate scroll tracking since list structure changed
-            self.last_scrolled_index = None;
-            // Restore scroll to selected item to prevent viewport jumping to top.
-            // splice(0..old, new) resets GPUI's logical_scroll_top to item 0.
-            // Callers that want to reset scroll (filter changes, view resets)
-            // will override by calling scroll_to_reveal_item(0) afterward.
-            if self.selected_index < item_count {
-                self.main_list_state
-                    .scroll_to_reveal_item(self.selected_index);
-            }
+        }
+
+        // Always invalidate reveal cache: filtering can replace every visible
+        // row while preserving the same count, so the selected item can end up
+        // offscreen even when item_count is unchanged.
+        self.last_scrolled_index = None;
+
+        if self.selected_index < item_count {
+            self.main_list_state
+                .scroll_to_reveal_item(self.selected_index);
         }
     }
 

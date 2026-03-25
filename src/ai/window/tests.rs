@@ -2511,8 +2511,10 @@ fn test_mini_esc_overlay_precedes_close_in_source() {
     let overlay_pos = source
         .find("showing_mini_history_overlay")
         .expect("mini history overlay Esc handler must exist in render_keydown.rs");
+    // Find the Esc-driven close (final mini Esc), not the Cmd+W close.
+    // The Esc close is the one that calls `esc_close_mini_window`.
     let close_pos = source
-        .find("ai_window_close")
+        .find("esc_close_mini_window")
         .expect("mini Esc close handler must exist in render_keydown.rs");
     assert!(
         overlay_pos < close_pos,
@@ -2521,30 +2523,33 @@ fn test_mini_esc_overlay_precedes_close_in_source() {
     );
 }
 
-/// Cmd+N in mini mode must route to `show_new_chat_command_bar` (model/preset
-/// picker) rather than `new_conversation` (blank chat). This source audit
-/// ensures the mini branch exists in the "n" match arm.
+/// Cmd+N in mini mode must route to `new_conversation` (same as full mode).
+/// The Cmd+N handler must not branch on mini mode for a different behavior.
 #[test]
-fn test_mini_cmd_n_routes_to_new_chat_command_bar() {
+fn test_mini_cmd_n_routes_to_new_conversation() {
     let source = include_str!("render_keydown.rs");
     let n_arm = source
         .find("\"n\" => {")
         .expect("Cmd+N handler must exist in render_keydown.rs");
     let after_n = &source[n_arm..];
-    let mini_branch = after_n
-        .find("window_mode.is_mini()")
-        .expect("Mini mode branch must exist in Cmd+N handler");
-    let new_chat_bar = after_n
-        .find("show_new_chat_command_bar")
-        .expect("show_new_chat_command_bar must be called in Cmd+N handler");
+    // Bound the Cmd+N region by the next shortcut comment
+    let f_arm_offset = after_n
+        .find("// Cmd+Shift+F to focus search")
+        .expect("Cmd+Shift+F comment must bound Cmd+N handler");
+    let n_region = &after_n[..f_arm_offset];
+
     assert!(
-        mini_branch < new_chat_bar,
-        "Mini mode check must precede show_new_chat_command_bar call"
+        n_region.contains("self.new_conversation(window, cx);"),
+        "Cmd+N must call new_conversation(window, cx)"
+    );
+    assert!(
+        !n_region.contains("show_new_chat_command_bar"),
+        "Cmd+N must not open show_new_chat_command_bar"
     );
 }
 
-/// The mini header's "New" button must call `show_new_chat_command_bar`
-/// (not `new_conversation`) for consistency with Cmd+N.
+/// The mini header's "New" button opens the new-chat command bar
+/// (model/preset picker), providing a different path than Cmd+N.
 #[test]
 fn test_mini_header_new_button_uses_command_bar() {
     let source = include_str!("render_root.rs");
@@ -2557,23 +2562,38 @@ fn test_mini_header_new_button_uses_command_bar() {
     let new_button_region = &after[..region_end];
     assert!(
         new_button_region.contains("show_new_chat_command_bar"),
-        "Mini New button must call show_new_chat_command_bar, not new_conversation"
+        "Mini New button must call show_new_chat_command_bar"
     );
 }
 
-/// The mini history overlay toggle must call `focus_search` when opening,
+/// The mini history overlay show helper must call `focus_search` idempotently,
 /// so typing immediately filters chats without an extra click.
 #[test]
 fn test_mini_history_overlay_focuses_search_on_open() {
     let source = include_str!("render_root.rs");
+
+    // show_mini_history_overlay must call focus_search (idempotent open)
+    let show_fn = source
+        .find("fn show_mini_history_overlay")
+        .expect("show_mini_history_overlay must exist in render_root.rs");
+    let after_show = &source[show_fn..];
+    assert!(
+        after_show.contains("self.focus_search(window, cx);"),
+        "show_mini_history_overlay must call focus_search when opening"
+    );
+
+    // toggle delegates to show/dismiss helpers
     let toggle_fn = source
         .find("fn toggle_mini_history_overlay")
         .expect("toggle_mini_history_overlay must exist in render_root.rs");
-    // Search from the function definition to the next function boundary
-    let after = &source[toggle_fn..];
+    let after_toggle = &source[toggle_fn..];
     assert!(
-        after.contains("focus_search"),
-        "toggle_mini_history_overlay must call focus_search when opening"
+        after_toggle.contains("self.show_mini_history_overlay(source, window, cx);"),
+        "toggle must delegate to show_mini_history_overlay"
+    );
+    assert!(
+        after_toggle.contains("self.dismiss_mini_history_overlay(source, window, cx);"),
+        "toggle must delegate to dismiss_mini_history_overlay"
     );
 }
 
@@ -2646,11 +2666,90 @@ fn test_simulated_key_supports_mode_toggle_shortcut() {
         .expect("handle_simulated_key must exist in command_bar.rs");
     let after = &source[handler_section..];
     assert!(
-        after.contains("modifiers.contains(&KeyModifier::Shift) && key_lower == \"m\""),
-        "Simulated key handler must recognize Cmd+Shift+M"
+        after.contains("has_cmd && has_shift"),
+        "Simulated key handler must check for Cmd+Shift"
     );
     assert!(
         after.contains("self.toggle_window_mode(window, cx);"),
         "Simulated key handler must delegate Cmd+Shift+M to toggle_window_mode"
+    );
+}
+
+/// Cmd+Shift+F in mini mode must call `show_mini_history_overlay` idempotently,
+/// so search is always focused even when the overlay is already open.
+#[test]
+fn test_mini_cmd_shift_f_uses_show_helper_in_source() {
+    let source = include_str!("render_keydown.rs");
+    let f_arm = source
+        .find("\"f\" => {")
+        .expect("Cmd+Shift+F handler must exist in render_keydown.rs");
+    let after_f = &source[f_arm..];
+    // Bound the region by the next shortcut
+    let m_arm_offset = after_f
+        .find("// Cmd+Shift+M toggles between Mini and Full mode")
+        .expect("Cmd+Shift+M comment must bound Cmd+Shift+F handler");
+    let f_region = &after_f[..m_arm_offset];
+
+    assert!(
+        f_region.contains("self.show_mini_history_overlay(")
+            && f_region.contains("\"shortcut_cmd_shift_f\""),
+        "Mini Cmd+Shift+F must call show_mini_history_overlay with shortcut_cmd_shift_f source"
+    );
+    assert!(
+        !f_region.contains("if !self.showing_mini_history_overlay"),
+        "Mini Cmd+Shift+F must stay idempotent when overlay is already visible"
+    );
+}
+
+/// When the mini history overlay is visible, Up/Down/Enter/Esc must be
+/// intercepted before the generic `edit_last_user_message` handler.
+#[test]
+fn test_mini_history_overlay_key_guard_precedes_edit_last_message() {
+    let source = include_str!("render_keydown.rs");
+    let overlay_guard = source
+        .find("if self.window_mode.is_mini() && self.showing_mini_history_overlay")
+        .expect("Mini history overlay key guard must exist in render_keydown.rs");
+    let edit_last = source
+        .find("self.edit_last_user_message(window, cx);")
+        .expect("edit_last_user_message handler must exist in render_keydown.rs");
+
+    assert!(
+        overlay_guard < edit_last,
+        "Mini history overlay key guard must precede edit_last_user_message handler"
+    );
+
+    let guard_region = &source[overlay_guard..edit_last];
+    assert!(
+        guard_region.contains("self.navigate_chat(1, window, cx);"),
+        "Up must navigate the visible chat list"
+    );
+    assert!(
+        guard_region.contains("self.navigate_chat(-1, window, cx);"),
+        "Down must navigate the visible chat list"
+    );
+    assert!(
+        guard_region.contains("self.dismiss_mini_history_overlay(\"enter_key\", window, cx);"),
+        "Enter must dismiss the mini history overlay after selection"
+    );
+}
+
+/// Simulated key handler must support Cmd+Shift+F for mini search focus.
+#[test]
+fn test_simulated_key_supports_mini_search_focus_shortcut() {
+    let source = include_str!("command_bar.rs");
+    let handler_section = source
+        .find("fn handle_simulated_key")
+        .expect("handle_simulated_key must exist in command_bar.rs");
+    let after = &source[handler_section..];
+
+    assert!(
+        after.contains("has_cmd && has_shift"),
+        "Simulated key handler must check for Cmd+Shift"
+    );
+    assert!(
+        after.contains(
+            "self.show_mini_history_overlay(\"simulated_cmd_shift_f\", window, cx);"
+        ),
+        "Simulated Cmd+Shift+F must use show_mini_history_overlay in mini mode"
     );
 }

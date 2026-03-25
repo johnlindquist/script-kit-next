@@ -27,7 +27,86 @@ const WINDOW_RESIZE_ANIMATE: bool = false;
 const MINI_MAIN_WINDOW_MIN_HEIGHT: f32 = 220.0;
 const MINI_MAIN_WINDOW_MAX_HEIGHT: f32 = 420.0;
 const MINI_MAIN_WINDOW_HEADER_HEIGHT: f32 = 56.0;
-const MINI_MAIN_WINDOW_MAX_VISIBLE_ROWS: usize = 8;
+const MINI_MAIN_WINDOW_HINT_STRIP_HEIGHT: f32 = 30.0;
+const MINI_MAIN_WINDOW_DIVIDER_HEIGHT: f32 = 1.0;
+const MINI_MAIN_WINDOW_SECTION_HEADER_HEIGHT: f32 = 32.0;
+pub(crate) const MINI_MAIN_WINDOW_MAX_VISIBLE_ROWS: usize = 8;
+
+/// Shared layout constants for the mini main window render branch.
+/// Both resize logic and render code consume these so the geometry contract stays in sync.
+/// Constants are consumed from the binary target via `include!()` render code.
+#[allow(dead_code)]
+pub(crate) mod mini_layout {
+    /// Horizontal padding for the mini header area.
+    pub const HEADER_PADDING_X: f32 = 12.0;
+    /// Vertical padding for the mini header area.
+    pub const HEADER_PADDING_Y: f32 = 10.0;
+    /// Horizontal padding for the mini hint strip footer.
+    pub const HINT_STRIP_PADDING_X: f32 = 14.0;
+    /// Vertical padding for the mini hint strip footer.
+    pub const HINT_STRIP_PADDING_Y: f32 = 8.0;
+}
+/// Content-aware sizing input for the mini main window.
+///
+/// Instead of passing a flat `item_count` (which conflates section headers with
+/// selectable items), callers build this struct so the height formula can account
+/// for the different row heights of headers vs items.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) struct MiniMainWindowSizing {
+    /// Number of selectable items visible in the first page (capped at MAX_VISIBLE_ROWS).
+    pub selectable_items: usize,
+    /// Number of section headers visible in the first page.
+    pub visible_section_headers: usize,
+    /// True when the grouped items list is completely empty.
+    pub is_empty: bool,
+}
+
+/// Calculate the target height for the mini main window given content-aware sizing.
+///
+/// Formula: header + divider + hint_strip + list_content, clamped to [MIN, MAX].
+/// List content = selectable_items * LIST_ITEM_HEIGHT + visible_section_headers * SECTION_HEADER_HEIGHT.
+pub(crate) fn height_for_mini_main_window(sizing: MiniMainWindowSizing) -> Pixels {
+    let list_height = if sizing.is_empty {
+        0.0
+    } else {
+        (sizing.selectable_items as f32 * LIST_ITEM_HEIGHT)
+            + (sizing.visible_section_headers as f32 * MINI_MAIN_WINDOW_SECTION_HEADER_HEIGHT)
+    };
+
+    let total_height = MINI_MAIN_WINDOW_HEADER_HEIGHT
+        + MINI_MAIN_WINDOW_DIVIDER_HEIGHT
+        + MINI_MAIN_WINDOW_HINT_STRIP_HEIGHT
+        + list_height;
+
+    px(total_height.clamp(
+        MINI_MAIN_WINDOW_MIN_HEIGHT,
+        MINI_MAIN_WINDOW_MAX_HEIGHT,
+    ))
+}
+
+/// Defer a mini main window resize to the end of the current effect cycle.
+#[allow(dead_code)] // Called from include!()-ed code in app_impl/ui_window.rs
+pub(crate) fn defer_resize_to_mini_main_window(
+    sizing: MiniMainWindowSizing,
+    window: &mut gpui::Window,
+    cx: &mut gpui::App,
+) {
+    let target_height = height_for_mini_main_window(sizing);
+    crate::window_ops::queue_resize_with_width(
+        f32::from(target_height),
+        Some(MINI_MAIN_WINDOW_WIDTH),
+        window,
+        cx,
+    );
+}
+
+/// Resize the mini main window synchronously.
+#[allow(dead_code)] // Called from include!()-ed code in app_impl/ui_window.rs
+pub(crate) fn resize_to_mini_main_window_sync(sizing: MiniMainWindowSizing) {
+    let target_height = height_for_mini_main_window(sizing);
+    resize_first_window_to_size(target_height, Some(MINI_MAIN_WINDOW_WIDTH));
+}
+
 /// Width for mini main window (compact launcher)
 const MINI_MAIN_WINDOW_WIDTH: f32 = 480.0;
 /// Width for full main window (standard launcher)
@@ -318,9 +397,14 @@ fn height_for_view_with_layout(
         // DivPrompt also uses standard height to match main window
         ViewType::ScriptList | ViewType::DivPrompt => standard_height,
         ViewType::MiniMainWindow => {
-            let visible_items = item_count.clamp(4, MINI_MAIN_WINDOW_MAX_VISIBLE_ROWS) as f32;
-            let total_height = MINI_MAIN_WINDOW_HEADER_HEIGHT + (visible_items * LIST_ITEM_HEIGHT);
-            px(total_height.clamp(MINI_MAIN_WINDOW_MIN_HEIGHT, MINI_MAIN_WINDOW_MAX_HEIGHT))
+            // Flat item_count fallback: assumes all items are selectable (no section headers).
+            // Prefer height_for_mini_main_window(MiniMainWindowSizing) for content-aware sizing.
+            let visible_items = item_count.min(MINI_MAIN_WINDOW_MAX_VISIBLE_ROWS);
+            height_for_mini_main_window(MiniMainWindowSizing {
+                selectable_items: visible_items,
+                visible_section_headers: 0,
+                is_empty: item_count == 0,
+            })
         }
         ViewType::ArgPromptWithChoices => {
             let visible_items = item_count.max(1) as f32;
@@ -656,22 +740,59 @@ mod tests {
     #[test]
     fn test_mini_main_window_dynamic_height() {
         let layout = default_layout();
-
+        // Content-aware formula: header(56) + divider(1) + hint_strip(30) + list_content
+        // 0 items: empty → clamped to MIN_HEIGHT (220)
         assert_eq!(
             height_for_view_with_layout(ViewType::MiniMainWindow, 0, &layout),
             px(MINI_MAIN_WINDOW_MIN_HEIGHT)
         );
+        // 4 items: 56 + 1 + 30 + 4*40 = 247
         assert_eq!(
             height_for_view_with_layout(ViewType::MiniMainWindow, 4, &layout),
-            px(MINI_MAIN_WINDOW_MIN_HEIGHT)
+            px(247.0)
         );
+        // 8 items: 56 + 1 + 30 + 8*40 = 407
         assert_eq!(
             height_for_view_with_layout(ViewType::MiniMainWindow, 8, &layout),
-            px(MINI_MAIN_WINDOW_HEADER_HEIGHT + (8.0 * LIST_ITEM_HEIGHT))
+            px(407.0)
         );
+        // 100 items: capped at 8 visible → same as 8 items = 407
         assert_eq!(
             height_for_view_with_layout(ViewType::MiniMainWindow, 100, &layout),
-            px(MINI_MAIN_WINDOW_HEADER_HEIGHT + (8.0 * LIST_ITEM_HEIGHT))
+            px(407.0)
+        );
+    }
+
+    #[test]
+    fn test_mini_height_content_aware_with_section_headers() {
+        // 3 items, no headers: 56 + 1 + 30 + 3*40 = 207 → clamped to MIN 220
+        assert_eq!(
+            f32::from(height_for_mini_main_window(MiniMainWindowSizing {
+                selectable_items: 3,
+                visible_section_headers: 0,
+                is_empty: false,
+            })),
+            MINI_MAIN_WINDOW_MIN_HEIGHT
+        );
+
+        // 6 items + 1 section header: 56 + 1 + 30 + 6*40 + 1*32 = 359
+        assert_eq!(
+            f32::from(height_for_mini_main_window(MiniMainWindowSizing {
+                selectable_items: 6,
+                visible_section_headers: 1,
+                is_empty: false,
+            })),
+            359.0
+        );
+
+        // 8 items + 2 section headers: 56 + 1 + 30 + 8*40 + 2*32 = 471 → clamped to MAX 420
+        assert_eq!(
+            f32::from(height_for_mini_main_window(MiniMainWindowSizing {
+                selectable_items: 8,
+                visible_section_headers: 2,
+                is_empty: false,
+            })),
+            MINI_MAIN_WINDOW_MAX_HEIGHT
         );
     }
 

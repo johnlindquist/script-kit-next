@@ -36,25 +36,67 @@ impl AiApp {
         self.notify_context_parts_changed(cx);
     }
 
+    /// Show the mini history overlay idempotently.
+    /// When already visible, re-focuses search without toggling closed.
+    pub(super) fn show_mini_history_overlay(
+        &mut self,
+        source: &'static str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let was_closed = !self.showing_mini_history_overlay;
+        self.showing_mini_history_overlay = true;
+        // Always (re-)focus search so Cmd+Shift+F is idempotent
+        self.focus_search(window, cx);
+
+        if was_closed {
+            tracing::info!(
+                target: "ai",
+                source = source,
+                "mini_history_overlay_shown"
+            );
+            super::telemetry::log_ai_ui("mini_history_overlay_toggled", self.window_mode, source);
+            cx.notify();
+        }
+    }
+
+    /// Dismiss the mini history overlay. No-op when already hidden.
+    pub(super) fn dismiss_mini_history_overlay(
+        &mut self,
+        source: &'static str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if !self.showing_mini_history_overlay {
+            return;
+        }
+
+        self.showing_mini_history_overlay = false;
+        // Clear stale search so next open starts fresh (Raycast pattern)
+        self.clear_search_state(window, cx);
+        // Return focus to the composer input after dismissing the overlay
+        self.focus_input(window, cx);
+        tracing::info!(
+            target: "ai",
+            source = source,
+            "mini_history_overlay_dismissed"
+        );
+        super::telemetry::log_ai_ui("mini_history_overlay_dismissed", self.window_mode, source);
+        cx.notify();
+    }
+
+    /// Toggle the mini history overlay — delegates to show/dismiss helpers.
     pub(super) fn toggle_mini_history_overlay(
         &mut self,
         source: &'static str,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.showing_mini_history_overlay = !self.showing_mini_history_overlay;
         if self.showing_mini_history_overlay {
-            // Focus the search input so typing immediately filters chats
-            self.focus_search(window, cx);
-            super::telemetry::log_ai_ui("mini_history_overlay_toggled", self.window_mode, source);
+            self.dismiss_mini_history_overlay(source, window, cx);
         } else {
-            // Clear stale search so next open starts fresh (Raycast pattern)
-            self.clear_search_state(window, cx);
-            // Return focus to the composer input after dismissing the overlay
-            self.focus_input(window, cx);
-            super::telemetry::log_ai_ui("mini_history_overlay_dismissed", self.window_mode, source);
+            self.show_mini_history_overlay(source, window, cx);
         }
-        cx.notify();
     }
 
     fn render_mini_history_overlay(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -68,15 +110,7 @@ impl AiApp {
             .on_mouse_down(
                 gpui::MouseButton::Left,
                 cx.listener(|this, _, window, cx| {
-                    this.showing_mini_history_overlay = false;
-                    this.clear_search_state(window, cx);
-                    this.focus_input(window, cx);
-                    super::telemetry::log_ai_ui(
-                        "mini_history_overlay_dismissed",
-                        this.window_mode,
-                        "backdrop_click",
-                    );
-                    cx.notify();
+                    this.dismiss_mini_history_overlay("backdrop_click", window, cx);
                 }),
             )
             .child(
@@ -384,7 +418,7 @@ impl Render for AiApp {
                                 el.child(
                                     div()
                                         .id("ai-mini-streaming-dot")
-                                        .size(px(8.))
+                                        .size(S2)
                                         .rounded_full()
                                         .bg(accent)
                                         .flex_shrink_0()
@@ -401,7 +435,35 @@ impl Render for AiApp {
                                         ),
                                 )
                             })
-                            .child(
+                            .child(if self.available_models.is_empty() {
+                                // No models — show "Setup Required" fallback matching full mode
+                                let show_copied = self.is_showing_copied_feedback();
+                                div()
+                                    .id("ai-mini-model-setup")
+                                    .text_xs()
+                                    .text_color(cx.theme().warning)
+                                    .overflow_hidden()
+                                    .text_ellipsis()
+                                    .cursor_pointer()
+                                    .hover(|el| el.text_color(cx.theme().foreground))
+                                    .tooltip(|window, cx| {
+                                        Tooltip::new("Copy setup command to clipboard")
+                                            .build(window, cx)
+                                    })
+                                    .on_mouse_down(
+                                        gpui::MouseButton::Left,
+                                        cx.listener(|this, _, window, cx| {
+                                            this.copy_setup_command(cx);
+                                            window.activate_window();
+                                        }),
+                                    )
+                                    .child(if show_copied {
+                                        "Copied!"
+                                    } else {
+                                        "Setup Required"
+                                    })
+                                    .into_any_element()
+                            } else {
                                 div()
                                     .id("ai-mini-model-name")
                                     .text_xs()
@@ -416,11 +478,16 @@ impl Render for AiApp {
                                     .on_mouse_down(
                                         gpui::MouseButton::Left,
                                         cx.listener(|this, _, window, cx| {
-                                            this.show_command_bar("header_model_click", window, cx);
+                                            this.show_command_bar(
+                                                "header_model_click",
+                                                window,
+                                                cx,
+                                            );
                                         }),
                                     )
-                                    .child(mini_model_display_name),
-                            ),
+                                    .child(mini_model_display_name)
+                                    .into_any_element()
+                            }),
                     )
                     // Right: icon buttons — Recent (⌘J), New (⌘N), Actions (⌘K) | Expand (⌘⇧M)
                     .child(
@@ -540,12 +607,12 @@ impl Render for AiApp {
                                             .size(ICON_SM),
                                     ),
                             )
-                            // Separator
+                            // Separator — 1px × SP_6 vertical divider
                             .child(
                                 div()
                                     .w(px(1.))
-                                    .h(px(12.))
-                                    .bg(cx.theme().border.opacity(0.5)),
+                                    .h(SP_6)
+                                    .bg(cx.theme().border.opacity(OPACITY_SELECTED)),
                             )
                             // Expand — text button (stands out as the mode-switch action)
                             .child(

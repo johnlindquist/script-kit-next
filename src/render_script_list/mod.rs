@@ -991,7 +991,7 @@ impl ScriptListApp {
                 // Use shared header constants for default design, design tokens for others
                 let header_padding_x = if is_default_design {
                     if is_mini {
-                        12.0
+                        crate::window_resize::mini_layout::HEADER_PADDING_X
                     } else {
                         HEADER_PADDING_X
                     }
@@ -1000,7 +1000,7 @@ impl ScriptListApp {
                 };
                 let header_padding_y = if is_default_design {
                     if is_mini {
-                        10.0
+                        crate::window_resize::mini_layout::HEADER_PADDING_Y
                     } else {
                         HEADER_PADDING_Y
                     }
@@ -1101,8 +1101,6 @@ impl ScriptListApp {
 
         if is_mini {
             // Mini mode: single column, no preview, no footer
-            let chrome = crate::theme::AppChromeColors::from_theme(&self.theme);
-
             main_div = main_div.child(
                 div()
                     .flex_1()
@@ -1113,11 +1111,12 @@ impl ScriptListApp {
             );
 
             // Compact hint strip instead of footer
+            let hint_text_color = self.theme.colors.text.dimmed;
             main_div = main_div.child(
                 div()
                     .w_full()
-                    .px(px(14.))
-                    .py(px(8.))
+                    .px(px(crate::window_resize::mini_layout::HINT_STRIP_PADDING_X))
+                    .py(px(crate::window_resize::mini_layout::HINT_STRIP_PADDING_Y))
                     .flex()
                     .flex_row()
                     .items_center()
@@ -1125,7 +1124,7 @@ impl ScriptListApp {
                     .child(
                         div()
                             .text_xs()
-                            .text_color(rgba(chrome.divider_rgba))
+                            .text_color(rgb(hint_text_color))
                             .child("↵ Run  ·  ⌘K Actions  ·  Tab AI"),
                     ),
             );

@@ -299,14 +299,6 @@ impl AiApp {
                         // Cmd+Shift+N opens presets dropdown
                         self.hide_all_dropdowns(cx);
                         self.show_presets_dropdown(window, cx);
-                    } else if self.window_mode.is_mini() {
-                        // Mini mode: toggle the new-chat command bar for model/preset selection
-                        if self.new_chat_command_bar.is_open() {
-                            self.hide_new_chat_command_bar(cx);
-                        } else {
-                            self.hide_all_dropdowns(cx);
-                            self.show_new_chat_command_bar("shortcut_cmd_n", window, cx);
-                        }
                     } else {
                         self.new_conversation(window, cx);
                     }
@@ -316,14 +308,13 @@ impl AiApp {
                 "f" => {
                     if modifiers.shift {
                         if self.window_mode.is_mini() {
-                            // Mini mode: open history overlay (search lives there)
-                            if !self.showing_mini_history_overlay {
-                                self.toggle_mini_history_overlay(
-                                    "shortcut_cmd_shift_f",
-                                    window,
-                                    cx,
-                                );
-                            }
+                            // Mini mode: idempotently open history overlay and focus search
+                            self.hide_all_dropdowns(cx);
+                            self.show_mini_history_overlay(
+                                "shortcut_cmd_shift_f",
+                                window,
+                                cx,
+                            );
                         } else {
                             // Full mode: expand sidebar if collapsed, focus search
                             if self.sidebar_collapsed {
@@ -422,23 +413,39 @@ impl AiApp {
             }
         }
 
-        if is_key_escape(key) && self.window_mode.is_mini() && self.showing_mini_history_overlay {
-            self.showing_mini_history_overlay = false;
-            self.clear_search_state(window, cx);
-            self.focus_input(window, cx);
-            super::telemetry::log_ai_ui(
-                "mini_history_overlay_dismissed",
-                self.window_mode,
-                "escape_key",
-            );
-            super::telemetry::log_ai_state(
-                "esc_dismiss_history_overlay",
-                "escape_key",
-                &self.debug_snapshot(),
-            );
-            cx.notify();
-            cx.stop_propagation();
-            return;
+        // Mini history overlay key routing: Up/Down navigate, Enter selects, Esc dismisses.
+        // This guard must precede the generic edit_last_user_message path below.
+        if self.window_mode.is_mini() && self.showing_mini_history_overlay {
+            match key {
+                // navigate_chat(1) moves toward newer / visually up
+                k if is_key_up(k) => {
+                    self.navigate_chat(1, window, cx);
+                    cx.stop_propagation();
+                    return;
+                }
+                // navigate_chat(-1) moves toward older / visually down
+                k if is_key_down(k) => {
+                    self.navigate_chat(-1, window, cx);
+                    cx.stop_propagation();
+                    return;
+                }
+                k if is_key_enter(k) => {
+                    self.dismiss_mini_history_overlay("enter_key", window, cx);
+                    cx.stop_propagation();
+                    return;
+                }
+                k if is_key_escape(k) => {
+                    self.dismiss_mini_history_overlay("escape_key", window, cx);
+                    super::telemetry::log_ai_state(
+                        "esc_dismiss_history_overlay",
+                        "escape_key",
+                        &self.debug_snapshot(),
+                    );
+                    cx.stop_propagation();
+                    return;
+                }
+                _ => {}
+            }
         }
 
         // Escape closes shortcuts overlay

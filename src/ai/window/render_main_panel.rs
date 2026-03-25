@@ -177,8 +177,10 @@ impl AiApp {
                     }))
                     // Context bar (pre/post submit) — compact feedback, always shown
                     .when(show_bar, |d| d.child(self.render_context_bar(cx)))
-                    // Context recommendations hidden in mini — too much vertical space
-                    // for a 440px window. Users can still attach via Cmd+Shift+A.
+                    // Context recommendations — same preflight-backed strip as full mode
+                    .when(self.context_preflight.has_surfaced_recommendations(), |d| {
+                        d.child(self.render_context_recommendations(cx))
+                    })
                     .when(is_editing, |d| d.child(self.render_editing_indicator(cx)))
                     .when(self.is_context_picker_open(), |d| {
                         d.child(self.render_context_picker(cx))
@@ -276,8 +278,27 @@ impl AiApp {
                                     )
                                     .into_any_element()
                             } else {
-                                // Empty placeholder — same size to prevent layout shift
-                                div().size(MINI_BTN_SIZE).flex_shrink_0().into_any_element()
+                                // Disabled send affordance — visually present but non-interactive
+                                div()
+                                    .id("ai-mini-submit-btn-disabled")
+                                    .flex_shrink_0()
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .size(MINI_BTN_SIZE)
+                                    .rounded_full()
+                                    .bg(cx.theme().muted.opacity(OPACITY_DISABLED))
+                                    .child(
+                                        svg()
+                                            .external_path(LocalIconName::ArrowUp.external_path())
+                                            .size(ICON_SM)
+                                            .text_color(
+                                                cx.theme()
+                                                    .muted_foreground
+                                                    .opacity(OPACITY_DISABLED),
+                                            ),
+                                    )
+                                    .into_any_element()
                             }),
                     ),
             )

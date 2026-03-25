@@ -1,5 +1,37 @@
 use super::*;
 
+/// Build a content-aware `MiniMainWindowSizing` from grouped items.
+///
+/// Walks the grouped items list, counting selectable items and section headers
+/// visible in the first page (up to `MINI_MAIN_WINDOW_MAX_VISIBLE_ROWS` selectable items).
+fn mini_main_window_sizing_from_grouped_items(
+    grouped_items: &[GroupedListItem],
+) -> crate::window_resize::MiniMainWindowSizing {
+    let mut selectable_items = 0usize;
+    let mut visible_section_headers = 0usize;
+
+    for item in grouped_items {
+        if selectable_items >= crate::window_resize::MINI_MAIN_WINDOW_MAX_VISIBLE_ROWS {
+            break;
+        }
+
+        match item {
+            GroupedListItem::SectionHeader(..) => {
+                visible_section_headers += 1;
+            }
+            GroupedListItem::Item(_) => {
+                selectable_items += 1;
+            }
+        }
+    }
+
+    crate::window_resize::MiniMainWindowSizing {
+        selectable_items,
+        visible_section_headers,
+        is_empty: grouped_items.is_empty(),
+    }
+}
+
 impl ScriptListApp {
     pub(crate) fn toggle_logs(&mut self, cx: &mut Context<Self>) {
         self.show_logs = !self.show_logs;
@@ -242,6 +274,16 @@ impl ScriptListApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        // Content-aware mini mode sizing bypasses the flat (ViewType, item_count) path.
+        if matches!(self.current_view, AppView::ScriptList)
+            && self.main_window_mode == MainWindowMode::Mini
+        {
+            let (grouped_items, _) = self.get_grouped_results_cached();
+            let sizing = mini_main_window_sizing_from_grouped_items(&grouped_items);
+            crate::window_resize::defer_resize_to_mini_main_window(sizing, window, &mut *cx);
+            return;
+        }
+
         if let Some((view_type, item_count)) = self.calculate_window_size_params() {
             crate::window_resize::defer_resize_to_view(view_type, item_count, window, &mut *cx);
         }
@@ -255,6 +297,16 @@ impl ScriptListApp {
     ///
     /// Prefer `update_window_size_deferred` when you have window/cx access.
     pub(crate) fn update_window_size(&mut self) {
+        // Content-aware mini mode sizing bypasses the flat (ViewType, item_count) path.
+        if matches!(self.current_view, AppView::ScriptList)
+            && self.main_window_mode == MainWindowMode::Mini
+        {
+            let (grouped_items, _) = self.get_grouped_results_cached();
+            let sizing = mini_main_window_sizing_from_grouped_items(&grouped_items);
+            crate::window_resize::resize_to_mini_main_window_sync(sizing);
+            return;
+        }
+
         if let Some((view_type, item_count)) = self.calculate_window_size_params() {
             crate::window_resize::resize_to_view_sync(view_type, item_count);
         }
