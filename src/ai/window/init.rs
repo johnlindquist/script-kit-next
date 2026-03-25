@@ -1,5 +1,18 @@
 use super::*;
 
+#[derive(Debug)]
+struct SidebarMessageMetadata {
+    previews: std::collections::HashMap<ChatId, String>,
+    counts: std::collections::HashMap<ChatId, usize>,
+}
+
+#[derive(Debug)]
+struct SelectedChatInitData {
+    chat_id: ChatId,
+    messages: Vec<Message>,
+    image_requests: Vec<super::images::ImageCacheRequest>,
+}
+
 impl AiApp {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         Self::new_with_mode(AiWindowMode::Full, window, cx)
@@ -18,25 +31,8 @@ impl AiApp {
         // Load chats from storage
         let chats = storage::get_all_chats().unwrap_or_default();
         let selected_chat_id = chats.first().map(|c| c.id);
-
-        // Load message previews and counts for each chat
-        let mut message_previews = std::collections::HashMap::new();
-        let mut message_counts = std::collections::HashMap::new();
-        for chat in &chats {
-            if let Ok(messages) = storage::get_chat_messages(&chat.id) {
-                message_counts.insert(chat.id, messages.len());
-                if let Some(last_msg) = messages.last() {
-                    // Truncate preview to ~60 chars
-                    let preview: String = last_msg.content.chars().take(60).collect();
-                    let preview = if preview.len() < last_msg.content.len() {
-                        format!("{}...", preview.trim())
-                    } else {
-                        preview
-                    };
-                    message_previews.insert(chat.id, preview);
-                }
-            }
-        }
+        let message_previews = std::collections::HashMap::new();
+        let message_counts = std::collections::HashMap::new();
 
         // Initialize provider registry from environment with config
         let config = crate::config::load_config();
@@ -137,32 +133,9 @@ impl AiApp {
             }
         });
 
-        // Load messages for the selected chat
-        let current_messages = selected_chat_id
-            .and_then(|id| storage::get_chat_messages(&id).ok())
-            .unwrap_or_default();
-
-        // Pre-cache any image attachments from loaded messages
-        let mut image_cache = std::collections::HashMap::new();
-        for msg in &current_messages {
-            for attachment in &msg.images {
-                let cache_key = Self::image_cache_key(&attachment.data);
-                if let std::collections::hash_map::Entry::Vacant(e) = image_cache.entry(cache_key) {
-                    use base64::Engine;
-                    if let Ok(bytes) =
-                        base64::engine::general_purpose::STANDARD.decode(&attachment.data)
-                    {
-                        if let Ok(render_image) =
-                            crate::list_item::decode_png_to_render_image_with_bgra_conversion(
-                                &bytes,
-                            )
-                        {
-                            e.insert(render_image);
-                        }
-                    }
-                }
-            }
-        }
+        let current_messages = Vec::new();
+        let image_cache = std::collections::HashMap::new();
+        let app_weak = cx.entity().downgrade();
 
         // Publish initial active chat ID for SDK handlers
         publish_active_chat_id(selected_chat_id.as_ref());
@@ -175,7 +148,7 @@ impl AiApp {
         // Compute last used settings before moving chats and available_models
         let last_used_settings = Self::compute_last_used_settings(&chats, &available_models);
 
-        let initial_msg_count = current_messages.len();
+        let initial_msg_count = 0;
         let initial_sidebar_item_count = build_sidebar_rows_for_chats(&chats).len();
 
         // Mirror the window mode in the global atomic so close_ai_window() can
@@ -183,7 +156,7 @@ impl AiApp {
         super::types::AI_CURRENT_WINDOW_MODE
             .store(window_mode.to_u8(), std::sync::atomic::Ordering::SeqCst);
 
-        Self {
+        let app = Self {
             window_mode,
             chats,
             selected_chat_id,
@@ -287,9 +260,203 @@ impl AiApp {
             show_context_inspector: false,
             show_context_drawer: false,
             context_preflight: super::context_preflight::ContextPreflightState::default(),
-        }
+        };
+
+        let sidebar_chat_ids: Vec<ChatId> = app.chats.iter().map(|chat| chat.id).collect();
+        Self::spawn_sidebar_metadata_init(app_weak.clone(), sidebar_chat_ids, cx);
+        Self::spawn_selected_chat_init(app_weak, selected_chat_id, cx);
+
+        app
     }
 
     /// Debounce interval for bounds persistence (in milliseconds)
     pub(super) const BOUNDS_DEBOUNCE_MS: u64 = 250;
+
+    fn truncate_sidebar_preview(content: &str) -> String {
+        let preview: String = content.chars().take(60).collect();
+        if preview.len() < content.len() {
+            format!("{}...", preview.trim())
+        } else {
+            preview
+        }
+    }
+
+    fn load_sidebar_message_metadata(chat_ids: &[ChatId]) -> SidebarMessageMetadata {
+        let mut previews = std::collections::HashMap::new();
+        let mut counts = std::collections::HashMap::new();
+
+        for chat_id in chat_ids {
+            match storage::get_chat_messages(chat_id) {
+                Ok(messages) => {
+                    counts.insert(*chat_id, messages.len());
+                    if let Some(last_message) = messages.last() {
+                        previews.insert(
+                            *chat_id,
+                            Self::truncate_sidebar_preview(&last_message.content),
+                        );
+                    }
+                }
+                Err(error) => {
+                    tracing::warn!(
+                        chat_id = %chat_id,
+                        error = %error,
+                        "Failed to load sidebar message metadata during AI init"
+                    );
+                }
+            }
+        }
+
+        SidebarMessageMetadata { previews, counts }
+    }
+
+    fn load_selected_chat_init_data(chat_id: ChatId) -> Option<SelectedChatInitData> {
+        match storage::get_chat_messages(&chat_id) {
+            Ok(messages) => {
+                let image_requests = Self::collect_message_image_payloads(&messages);
+                Some(SelectedChatInitData {
+                    chat_id,
+                    messages,
+                    image_requests,
+                })
+            }
+            Err(error) => {
+                tracing::warn!(
+                    chat_id = %chat_id,
+                    error = %error,
+                    "Failed to load selected chat messages during AI init"
+                );
+                None
+            }
+        }
+    }
+
+    fn spawn_sidebar_metadata_init(
+        app_weak: gpui::WeakEntity<Self>,
+        chat_ids: Vec<ChatId>,
+        cx: &mut Context<Self>,
+    ) {
+        if chat_ids.is_empty() {
+            return;
+        }
+
+        tracing::info!(
+            chat_count = chat_ids.len(),
+            "Scheduling deferred sidebar metadata load during AI init"
+        );
+
+        cx.spawn(async move |_this, cx| {
+            let metadata = cx
+                .background_executor()
+                .spawn(async move { Self::load_sidebar_message_metadata(&chat_ids) })
+                .await;
+            let SidebarMessageMetadata { previews, counts } = metadata;
+
+            cx.update(|cx| {
+                if let Some(app) = app_weak.upgrade() {
+                    app.update(cx, |this, cx| {
+                        tracing::info!(
+                            preview_count = previews.len(),
+                            count_entries = counts.len(),
+                            "Applying deferred sidebar metadata during AI init"
+                        );
+
+                        this.message_previews.extend(previews);
+                        this.message_counts.extend(counts);
+                        cx.notify();
+                    });
+                }
+            });
+        })
+        .detach();
+    }
+
+    fn spawn_selected_chat_init(
+        app_weak: gpui::WeakEntity<Self>,
+        selected_chat_id: Option<ChatId>,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(chat_id) = selected_chat_id else {
+            return;
+        };
+
+        tracing::info!(
+            chat_id = %chat_id,
+            "Scheduling deferred selected chat load during AI init"
+        );
+
+        cx.spawn(async move |_this, cx| {
+            let init_data = cx
+                .background_executor()
+                .spawn(async move { Self::load_selected_chat_init_data(chat_id) })
+                .await;
+
+            cx.update(|cx| {
+                if let Some(app) = app_weak.upgrade() {
+                    app.update(cx, |this, cx| {
+                        let Some(SelectedChatInitData {
+                            chat_id,
+                            messages,
+                            image_requests,
+                        }) = init_data
+                        else {
+                            return;
+                        };
+
+                        if this.selected_chat_id != Some(chat_id) {
+                            tracing::debug!(
+                                selected_chat_id = ?this.selected_chat_id,
+                                loaded_chat_id = %chat_id,
+                                "Discarding stale selected chat init data"
+                            );
+                            return;
+                        }
+
+                        if !this.current_messages.is_empty() {
+                            tracing::debug!(
+                                selected_chat_id = %chat_id,
+                                existing_message_count = this.current_messages.len(),
+                                "Skipping deferred selected chat init because messages are already loaded"
+                            );
+                            return;
+                        }
+
+                        tracing::info!(
+                            selected_chat_id = %chat_id,
+                            message_count = messages.len(),
+                            image_request_count = image_requests.len(),
+                            "Applying deferred selected chat load during AI init"
+                        );
+
+                        this.current_messages = messages;
+                        this.sync_messages_list_and_scroll_to_bottom();
+                        if !image_requests.is_empty() {
+                            this.defer_cache_message_images(image_requests, cx);
+                        }
+                        cx.notify();
+                    });
+                }
+            });
+        })
+        .detach();
+    }
+}
+
+#[cfg(test)]
+mod init_tests {
+    use super::*;
+
+    #[test]
+    fn test_truncate_sidebar_preview_adds_ellipsis_only_when_content_exceeds_limit() {
+        let short = "short sidebar preview";
+        assert_eq!(AiApp::truncate_sidebar_preview(short), short);
+
+        let long = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+        let truncated = AiApp::truncate_sidebar_preview(long);
+        assert_eq!(
+            truncated,
+            "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ01234567..."
+        );
+        assert!(truncated.ends_with("..."));
+        assert_eq!(truncated.chars().count(), 63);
+    }
 }
