@@ -1,9 +1,10 @@
 //! Source-contract test: mini main window sizing must use header-aware row cap.
 //!
-//! This test reads `src/app_impl/ui_window.rs` at the source level and asserts
-//! that `mini_main_window_sizing_from_grouped_items` delegates to
-//! `capped_mini_main_window_selectable_rows` and tracks both
-//! `visible_section_headers` and `selectable_items`.
+//! The canonical implementation lives in `src/window_resize/mod.rs` and is
+//! delegated-to from `src/app_impl/ui_window.rs`.  This test verifies:
+//! 1. The `window_resize` implementation uses `capped_mini_main_window_selectable_rows`
+//!    and tracks both `visible_section_headers` and `selectable_items`.
+//! 2. The `ui_window` wrapper delegates to the canonical implementation.
 //!
 //! Run: `cargo test --test mini_sizing_contract`
 
@@ -26,11 +27,12 @@ fn section_between<'a>(source: &'a str, start: &str, end: &str) -> &'a str {
 
 #[test]
 fn mini_sizing_helper_uses_header_aware_row_cap() {
-    let source = read("src/app_impl/ui_window.rs");
+    // The canonical implementation now lives in window_resize/mod.rs.
+    let source = read("src/window_resize/mod.rs");
     let helper = section_between(
         &source,
         "fn mini_main_window_sizing_from_grouped_items",
-        "impl ScriptListApp",
+        "pub(crate) struct MiniMainWindowSizing",
     );
 
     assert!(
@@ -47,5 +49,20 @@ fn mini_sizing_helper_uses_header_aware_row_cap() {
     assert!(
         helper.contains("selectable_items"),
         "mini_main_window_sizing_from_grouped_items must track selectable_items"
+    );
+}
+
+#[test]
+fn ui_window_wrapper_delegates_to_canonical_implementation() {
+    let source = read("src/app_impl/ui_window.rs");
+    let helper = section_between(
+        &source,
+        "fn mini_main_window_sizing_from_grouped_items",
+        "impl ScriptListApp",
+    );
+
+    assert!(
+        helper.contains("crate::window_resize::mini_main_window_sizing_from_grouped_items"),
+        "ui_window wrapper must delegate to crate::window_resize::mini_main_window_sizing_from_grouped_items"
     );
 }
