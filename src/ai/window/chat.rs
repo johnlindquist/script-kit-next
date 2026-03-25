@@ -223,25 +223,23 @@ impl AiApp {
             chat.set_title(&title);
         }
 
-        // Save chat to storage
-        if let Err(e) = storage::create_chat(&chat) {
-            tracing::error!(error = %e, "Failed to create chat for transferred conversation");
-            return;
-        }
-
-        // Save all messages to storage and build the current_messages list
-        let mut saved_messages = Vec::new();
+        // Build all messages up front so chat + history can be saved atomically.
+        let mut saved_messages = Vec::with_capacity(messages.len());
         for msg in messages {
             let mut message = Message::new(chat_id, msg.role, msg.content);
             // Attach image if present (transferred from inline ChatPrompt)
             if let Some(image_data) = msg.image_base64 {
                 message.images.push(ImageAttachment::png(image_data));
             }
-            if let Err(e) = storage::save_message(&message) {
-                tracing::error!(error = %e, "Failed to save message in transferred conversation");
-                continue;
-            }
             saved_messages.push(message);
+        }
+
+        if let Err(e) = storage::create_chat_with_messages_bulk(&chat, &saved_messages) {
+            tracing::error!(
+                error = %e,
+                "Failed to create chat for transferred conversation"
+            );
+            return;
         }
 
         // Update message preview and count with the last message
