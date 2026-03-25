@@ -283,6 +283,7 @@ mod model_cycle_plan_tests {
     #[test]
     fn returns_none_when_no_models_exist() {
         assert_eq!(plan_model_cycle(None, 0), None);
+        assert_eq!(plan_model_cycle(Some(0), 0), None);
     }
 
     #[test]
