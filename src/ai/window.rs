@@ -58,6 +58,7 @@ pub(crate) mod context_recommendations;
 mod dropdowns;
 mod images;
 mod init;
+mod observability;
 mod interactions;
 mod platform;
 pub(crate) mod prompt_compiler;

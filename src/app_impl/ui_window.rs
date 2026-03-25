@@ -287,6 +287,12 @@ impl ScriptListApp {
         {
             let (grouped_items, _) = self.get_grouped_results_cached();
             let sizing = mini_main_window_sizing_from_grouped_items(&grouped_items);
+            let target_height = crate::window_resize::height_for_mini_main_window(sizing);
+            crate::window_resize::log_mini_window_sizing(
+                crate::window_resize::MiniResizeReason::FilterChanged,
+                sizing,
+                f32::from(target_height),
+            );
             crate::window_resize::defer_resize_to_mini_main_window(sizing, window, &mut *cx);
             return;
         }
@@ -310,6 +316,12 @@ impl ScriptListApp {
         {
             let (grouped_items, _) = self.get_grouped_results_cached();
             let sizing = mini_main_window_sizing_from_grouped_items(&grouped_items);
+            let target_height = crate::window_resize::height_for_mini_main_window(sizing);
+            crate::window_resize::log_mini_window_sizing(
+                crate::window_resize::MiniResizeReason::GroupedResultsChanged,
+                sizing,
+                f32::from(target_height),
+            );
             crate::window_resize::resize_to_mini_main_window_sync(sizing);
             return;
         }

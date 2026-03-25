@@ -53,6 +53,53 @@ pub(super) fn count_section_headers(actions: &[Action], filtered_indices: &[usiz
     count
 }
 
+/// Structured lifecycle events for the actions popup.
+///
+/// Every significant state transition emits one of these via
+/// [`emit_actions_popup_event`] under the `ACTIONS_POPUP` tracing target,
+/// giving agentic callers a machine-readable contract for open/route/resize/close.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)] // Variants used from include!()-ed code in app_impl/
+pub(crate) enum ActionsPopupEvent {
+    /// Toggle or explicit open was requested.
+    OpenRequested,
+    /// Window was successfully created and stored.
+    OpenSucceeded,
+    /// Window creation failed (see tracing error for details).
+    OpenFailed,
+    /// A keyboard event was routed through the popup.
+    RoutedKey,
+    /// The popup window was resized after filter/content change.
+    Resized,
+    /// The popup was closed (via Cmd+K, Escape, blur, etc.).
+    Closed,
+}
+
+/// Emit a structured receipt for an actions popup lifecycle event.
+///
+/// All fields are optional so callers only supply what is relevant to their
+/// transition.  The receipt is emitted at `info` level under
+/// `target: "ACTIONS_POPUP"` so log consumers can filter deterministically.
+pub(crate) fn emit_actions_popup_event(
+    event: ActionsPopupEvent,
+    host: Option<&str>,
+    position: Option<WindowPosition>,
+    num_actions: Option<usize>,
+    section_headers: Option<usize>,
+    height_px: Option<f32>,
+) {
+    tracing::info!(
+        target: "ACTIONS_POPUP",
+        ?event,
+        host,
+        position = ?position,
+        num_actions,
+        section_headers,
+        height_px,
+        "actions popup receipt"
+    );
+}
+
 /// Global singleton for the actions window handle
 static ACTIONS_WINDOW: OnceLock<Mutex<Option<WindowHandle<ActionsWindow>>>> = OnceLock::new();
 
@@ -822,7 +869,7 @@ pub fn open_actions_window(
     // keyboard events to us via its own capture_key_down handler.
     // This avoids focus conflicts where both windows try to handle keys.
     let handle = cx.open_window(window_options, |_window, cx| {
-        cx.new(|cx| ActionsWindow::new(dialog_entity, cx))
+        cx.new(|cx| ActionsWindow::new(dialog_entity.clone(), cx))
     })?;
 
     // Configure the window as non-movable on macOS
@@ -881,6 +928,22 @@ pub fn open_actions_window(
 
     crate::logging::log("ACTIONS", "Actions popup window opened with vibrancy");
 
+    // Structured receipt for agentic verification
+    let dialog_ref = dialog_entity.read(cx);
+    let section_header_count = if dialog_ref.config.section_style == SectionStyle::Headers {
+        count_section_headers(&dialog_ref.actions, &dialog_ref.filtered_actions)
+    } else {
+        0
+    };
+    emit_actions_popup_event(
+        ActionsPopupEvent::OpenSucceeded,
+        None,
+        Some(position),
+        Some(dialog_ref.filtered_actions.len()),
+        Some(section_header_count),
+        Some(dynamic_height),
+    );
+
     Ok(handle)
 }
 
@@ -890,6 +953,14 @@ pub fn close_actions_window(cx: &mut App) {
         if let Ok(mut guard) = window_storage.lock() {
             if let Some(handle) = guard.take() {
                 crate::logging::log("ACTIONS", "Closing actions popup window");
+                emit_actions_popup_event(
+                    ActionsPopupEvent::Closed,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                );
                 // Close the window
                 let close_result = handle.update(cx, |_this, window, _cx| {
                     window.remove_window();
@@ -1115,6 +1186,22 @@ pub fn resize_actions_window_direct(
             "resize_actions_window_direct complete: {} items, height={:.0}",
             num_actions, new_height_f32
         ),
+    );
+
+    // Structured receipt for resize
+    let dialog_for_receipt = dialog_entity.read(cx);
+    let section_header_count = if dialog_for_receipt.config.section_style == SectionStyle::Headers {
+        count_section_headers(&dialog_for_receipt.actions, &dialog_for_receipt.filtered_actions)
+    } else {
+        0
+    };
+    emit_actions_popup_event(
+        ActionsPopupEvent::Resized,
+        None,
+        Some(get_actions_window_position()),
+        Some(num_actions),
+        Some(section_header_count),
+        Some(new_height_f32),
     );
 }
 

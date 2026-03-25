@@ -173,6 +173,14 @@ impl ScriptListApp {
                 }
                 Err(e) => {
                     tracing::error!(error = %e, "{}", failed_prefix);
+                    crate::actions::emit_actions_popup_event(
+                        crate::actions::ActionsPopupEvent::OpenFailed,
+                        None,
+                        None,
+                        None,
+                        None,
+                        None,
+                    );
                     // Roll back popup state and show Toast on failure
                     let _ = this.update(cx, |app, cx| {
                         app.show_actions_popup = false;
@@ -191,6 +199,18 @@ impl ScriptListApp {
             });
         })
         .detach();
+    }
+
+    /// Resolve the actions popup window position based on the current window mode.
+    ///
+    /// Mini mode uses `TopCenter` to keep the popup integrated within the compact
+    /// 480px launcher panel.  Full mode uses the default `BottomRight` above the
+    /// footer, matching the existing Raycast-style layout.
+    fn main_list_actions_window_position(&self) -> crate::actions::WindowPosition {
+        match self.main_window_mode {
+            MainWindowMode::Mini => crate::actions::WindowPosition::TopCenter,
+            MainWindowMode::Full => crate::actions::WindowPosition::BottomRight,
+        }
     }
 
     fn begin_actions_popup_window_open(&mut self, cx: &mut Context<Self>, window: &mut Window) {
@@ -216,6 +236,17 @@ impl ScriptListApp {
             if !self.has_actions() {
                 return;
             }
+
+            let position = self.main_list_actions_window_position();
+            crate::actions::emit_actions_popup_event(
+                crate::actions::ActionsPopupEvent::OpenRequested,
+                Some("MainList"),
+                Some(position),
+                None,
+                None,
+                None,
+            );
+
             self.resync_filter_input_after_actions_if_needed(window, cx);
             // Open actions as a separate window with vibrancy blur
             self.begin_actions_popup_window_open(cx, window);
@@ -285,7 +316,7 @@ impl ScriptListApp {
                 main_bounds,
                 display_id,
                 dialog,
-                crate::actions::WindowPosition::BottomRight,
+                position,
                 "Actions popup window opened",
                 "Failed to open actions window",
             );

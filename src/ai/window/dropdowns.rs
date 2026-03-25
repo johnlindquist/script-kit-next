@@ -69,9 +69,28 @@ impl AiApp {
         }
     }
 
+    /// Canonical entry point for showing the new-chat picker surface.
+    ///
+    /// All UI affordances (header button, command bar action, future shortcuts)
+    /// should call this instead of reaching for individual dropdown/command-bar
+    /// helpers directly. Currently delegates to `show_new_chat_command_bar`.
+    pub(super) fn show_canonical_new_chat_surface(
+        &mut self,
+        source: &'static str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.hide_all_dropdowns(cx);
+        self.show_new_chat_command_bar(source, window, cx);
+    }
+
     // === New Chat Dropdown Methods (Raycast-style) ===
+    // DEPRECATED: The old `showing_new_chat_dropdown` surface is superseded by
+    // `show_canonical_new_chat_surface` / `show_new_chat_command_bar`. These
+    // helpers remain for backwards compatibility but should not be used by new code.
 
     /// Show the new chat dropdown (Raycast-style with search, last used, presets, models)
+    /// DEPRECATED: prefer `show_canonical_new_chat_surface`
     pub(super) fn show_new_chat_dropdown(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.hide_all_dropdowns(cx);
         self.new_chat_dropdown_filter.clear();

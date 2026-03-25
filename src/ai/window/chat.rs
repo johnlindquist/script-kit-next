@@ -328,6 +328,35 @@ impl AiApp {
         chat_id
     }
 
+    /// Record a structured, user-facing error with a machine-readable code.
+    ///
+    /// Writes an `ai_user_error` log line, sets `streaming_error` so the UI
+    /// surfaces the message, and notifies the view.
+    pub(super) fn set_user_error(
+        &mut self,
+        code: super::types::AiErrorCode,
+        message: impl Into<String>,
+        suggested_action: &'static str,
+        cx: &mut Context<Self>,
+    ) {
+        let err = super::types::AiUserFacingError {
+            code,
+            message: message.into(),
+            suggested_action,
+        };
+
+        tracing::error!(
+            target: "ai",
+            code = ?err.code,
+            suggested_action = err.suggested_action,
+            message = %err.message,
+            "ai_user_error"
+        );
+
+        self.streaming_error = Some(err.to_display_string());
+        cx.notify();
+    }
+
     /// Create a new chat
     pub(super) fn create_chat(
         &mut self,
@@ -352,7 +381,12 @@ impl AiApp {
 
         // Save to storage
         if let Err(e) = storage::create_chat(&chat) {
-            tracing::error!(error = %e, "Failed to create chat");
+            self.set_user_error(
+                super::types::AiErrorCode::CreateChatFailed,
+                format!("Could not create a new conversation: {e}"),
+                "retry Cmd+N or inspect storage/log output",
+                cx,
+            );
             return None;
         }
 

@@ -68,6 +68,12 @@ mod mini_main_window;
 #[path = "source_audits/mini_ai_window.rs"]
 mod mini_ai_window;
 
+#[path = "source_audits/scroll_reveal.rs"]
+mod scroll_reveal;
+
+#[path = "source_audits/actions_popup_contract.rs"]
+mod actions_popup_contract;
+
 /// Regression guard: fails if the deleted monolithic `handle_action.rs` file
 /// reappears or if any `.rs` file under `src/` or `tests/` references the old
 /// monolith path. This prevents accidental resurrection of the pre-split handler.

@@ -64,6 +64,18 @@ impl AiApp {
                 "mini_history_overlay_shown"
             );
             super::telemetry::log_ai_ui("mini_history_overlay_toggled", self.window_mode, source);
+            super::observability::emit_ai_ui_event(
+                &super::observability::AiUiEvent {
+                    kind: AiUiEventKind::OverlayTransition,
+                    action: "show_mini_history_overlay",
+                    source,
+                    window_mode: self.window_mode,
+                    selected_chat_id: self.selected_chat_id.as_ref(),
+                    overlay_visible: true,
+                    search_active: !self.search_query.is_empty(),
+                },
+                None,
+            );
             cx.notify();
         }
     }
@@ -98,6 +110,18 @@ impl AiApp {
             "mini_history_overlay_dismissed"
         );
         super::telemetry::log_ai_ui("mini_history_overlay_dismissed", self.window_mode, source);
+        super::observability::emit_ai_ui_event(
+            &super::observability::AiUiEvent {
+                kind: AiUiEventKind::OverlayTransition,
+                action: "dismiss_mini_history_overlay",
+                source,
+                window_mode: self.window_mode,
+                selected_chat_id: self.selected_chat_id.as_ref(),
+                overlay_visible: false,
+                search_active: !self.search_query.is_empty(),
+            },
+            None,
+        );
         cx.notify();
     }
 
@@ -196,6 +220,18 @@ impl AiApp {
                 event = "ai_command_apply_start",
                 command = command_name,
                 "Applying AI command"
+            );
+            super::observability::emit_ai_ui_event(
+                &super::observability::AiUiEvent {
+                    kind: AiUiEventKind::CommandLifecycle,
+                    action: command_name,
+                    source: "process_render_pending_commands:start",
+                    window_mode: self.window_mode,
+                    selected_chat_id: self.selected_chat_id.as_ref(),
+                    overlay_visible: self.showing_mini_history_overlay,
+                    search_active: !self.search_query.is_empty(),
+                },
+                None,
             );
 
             match cmd {
@@ -312,12 +348,25 @@ impl AiApp {
                 }
             }
 
+            let elapsed_ms = started_at.elapsed().as_millis() as u64;
             tracing::info!(
                 category = "AI",
                 event = "ai_command_apply_finish",
                 command = command_name,
-                duration_ms = started_at.elapsed().as_millis() as u64,
+                duration_ms = elapsed_ms,
                 "Applied AI command"
+            );
+            super::observability::emit_ai_ui_event(
+                &super::observability::AiUiEvent {
+                    kind: AiUiEventKind::CommandLifecycle,
+                    action: command_name,
+                    source: "process_render_pending_commands:finish",
+                    window_mode: self.window_mode,
+                    selected_chat_id: self.selected_chat_id.as_ref(),
+                    overlay_visible: self.showing_mini_history_overlay,
+                    search_active: !self.search_query.is_empty(),
+                },
+                Some(serde_json::json!({ "duration_ms": elapsed_ms })),
             );
         }
     }
@@ -518,7 +567,7 @@ impl Render for AiApp {
                                         Tooltip::new("New chat options").build(window, cx)
                                     })
                                     .on_click(cx.listener(|this, _, window, cx| {
-                                        this.show_new_chat_command_bar(
+                                        this.show_canonical_new_chat_surface(
                                             "header_new_button",
                                             window,
                                             cx,

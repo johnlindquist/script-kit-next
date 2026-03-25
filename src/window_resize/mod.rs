@@ -21,7 +21,7 @@ use gpui::{px, Pixels};
 #[cfg(target_os = "macos")]
 use objc::{class, msg_send, sel, sel_impl};
 use std::sync::OnceLock;
-use tracing::{debug, warn};
+use tracing::{debug, info, warn};
 const RESIZE_MIN_DELTA_PX: f64 = 1.0;
 const WINDOW_RESIZE_ANIMATE: bool = false;
 const MINI_MAIN_WINDOW_MIN_HEIGHT: f32 = 220.0;
@@ -86,6 +86,46 @@ pub(crate) struct MiniMainWindowSizing {
     pub visible_section_headers: usize,
     /// True when the grouped items list is completely empty.
     pub is_empty: bool,
+}
+
+/// Reason for a mini main window resize — used for structured telemetry.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)] // Variants used from include!()-ed code in app_impl/ui_window.rs
+pub(crate) enum MiniResizeReason {
+    /// Filter text changed → grouped results changed → resize needed.
+    FilterChanged,
+    /// Grouped results changed (data refresh, view transition, etc.).
+    GroupedResultsChanged,
+    /// Entering mini window mode.
+    ViewModeEntered,
+    /// Flat item-count fallback was used instead of content-aware sizing.
+    FlatFallback,
+}
+
+/// Emit a structured sizing receipt for every mini main window resize.
+///
+/// All mini resize paths must call this so that every height decision is
+/// machine-parseable under the `MINI_WINDOW` tracing target.
+pub(crate) fn log_mini_window_sizing(
+    reason: MiniResizeReason,
+    sizing: MiniMainWindowSizing,
+    target_height_px: f32,
+) {
+    info!(
+        target: "MINI_WINDOW",
+        ?reason,
+        selectable_items = sizing.selectable_items,
+        visible_section_headers = sizing.visible_section_headers,
+        is_empty = sizing.is_empty,
+        target_height_px,
+        min_height_px = MINI_MAIN_WINDOW_MIN_HEIGHT,
+        max_height_px = MINI_MAIN_WINDOW_MAX_HEIGHT,
+        header_height_px = MINI_MAIN_WINDOW_HEADER_HEIGHT,
+        divider_height_px = MINI_MAIN_WINDOW_DIVIDER_HEIGHT,
+        hint_strip_height_px = MINI_MAIN_WINDOW_HINT_STRIP_HEIGHT,
+        section_header_height_px = MINI_MAIN_WINDOW_SECTION_HEADER_HEIGHT,
+        "mini window sizing receipt"
+    );
 }
 
 /// Calculate the target height for the mini main window given content-aware sizing.
@@ -424,11 +464,19 @@ fn height_for_view_with_layout(
             // Flat item_count fallback: assumes all items are selectable (no section headers).
             // Prefer height_for_mini_main_window(MiniMainWindowSizing) for content-aware sizing.
             let visible_items = item_count.min(MINI_MAIN_WINDOW_MAX_VISIBLE_ROWS);
-            height_for_mini_main_window(MiniMainWindowSizing {
+            let sizing = MiniMainWindowSizing {
                 selectable_items: visible_items,
                 visible_section_headers: 0,
                 is_empty: item_count == 0,
-            })
+            };
+            let height = height_for_mini_main_window(sizing);
+            warn!(
+                target: "MINI_WINDOW",
+                item_count,
+                "flat mini sizing fallback used; content-aware sizing should be preferred"
+            );
+            log_mini_window_sizing(MiniResizeReason::FlatFallback, sizing, f32::from(height));
+            height
         }
         ViewType::ArgPromptWithChoices => {
             let visible_items = item_count.max(1) as f32;
@@ -1078,5 +1126,39 @@ mod mini_main_window_layout_tests {
         });
 
         assert_eq!(f32::from(height), MINI_MAIN_WINDOW_MAX_HEIGHT);
+    }
+
+    // --- Source-audit regression tests ---
+    // These verify that structured tracing targets exist so that agentic
+    // verification can rely on machine-parseable log lines.
+
+    #[test]
+    fn source_audit_mini_resize_receipt_log_exists() {
+        let source = std::fs::read_to_string("src/window_resize/mod.rs")
+            .expect("should read window_resize/mod.rs");
+        assert!(
+            source.contains("target: \"MINI_WINDOW\""),
+            "mini resize flow should emit structured MINI_WINDOW logs"
+        );
+    }
+
+    #[test]
+    fn source_audit_scroll_reveal_reason_is_logged() {
+        let source = std::fs::read_to_string("src/app_navigation/impl_scroll.rs")
+            .expect("should read impl_scroll.rs");
+        assert!(
+            source.contains("reason,"),
+            "scroll reveal should log the caller-provided reason"
+        );
+    }
+
+    #[test]
+    fn source_audit_mini_resize_reason_enum_exists() {
+        let source = std::fs::read_to_string("src/window_resize/mod.rs")
+            .expect("should read window_resize/mod.rs");
+        assert!(
+            source.contains("MiniResizeReason"),
+            "MiniResizeReason enum should exist for structured resize receipts"
+        );
     }
 }

@@ -268,7 +268,7 @@ impl AiApp {
             showing_presets_dropdown: false,
             presets: AiPreset::load_all_presets(),
             presets_selected_index: 0,
-            // New chat dropdown state (Raycast-style)
+            // New chat dropdown state (Raycast-style) — DEPRECATED: see show_canonical_new_chat_surface
             showing_new_chat_dropdown: false,
             new_chat_dropdown_filter: String::new(),
             new_chat_dropdown_input,

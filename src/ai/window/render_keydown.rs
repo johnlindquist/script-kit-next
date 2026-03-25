@@ -310,6 +310,18 @@ impl AiApp {
                             self.showing_mini_history_overlay,
                             !self.search_query.is_empty(),
                         );
+                        super::observability::emit_ai_ui_event(
+                            &super::observability::AiUiEvent {
+                                kind: AiUiEventKind::ShortcutDecision,
+                                action: "new_conversation",
+                                source: "handle_root_key_down",
+                                window_mode: self.window_mode,
+                                selected_chat_id: self.selected_chat_id.as_ref(),
+                                overlay_visible: self.showing_mini_history_overlay,
+                                search_active: !self.search_query.is_empty(),
+                            },
+                            None,
+                        );
                         self.new_conversation(window, cx);
                     }
                     cx.stop_propagation();
@@ -330,6 +342,22 @@ impl AiApp {
                             true,
                             self.showing_mini_history_overlay,
                             !self.search_query.is_empty(),
+                        );
+                        super::observability::emit_ai_ui_event(
+                            &super::observability::AiUiEvent {
+                                kind: AiUiEventKind::ShortcutDecision,
+                                action: if self.window_mode.is_mini() {
+                                    "mini_show_overlay"
+                                } else {
+                                    "full_focus_search"
+                                },
+                                source: "handle_root_key_down",
+                                window_mode: self.window_mode,
+                                selected_chat_id: self.selected_chat_id.as_ref(),
+                                overlay_visible: self.showing_mini_history_overlay,
+                                search_active: !self.search_query.is_empty(),
+                            },
+                            None,
                         );
                         if self.window_mode.is_mini() {
                             // Mini mode: idempotently open history overlay and focus search

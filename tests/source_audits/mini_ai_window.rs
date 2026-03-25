@@ -304,7 +304,7 @@ fn mini_cmd_shift_f_opens_history_overlay() {
     let f_section_start = keydown
         .find("\"f\" => {")
         .expect("Cmd+F handler must exist in render_keydown.rs");
-    let f_section = &keydown[f_section_start..(f_section_start + 900).min(keydown.len())];
+    let f_section = &keydown[f_section_start..(f_section_start + 2000).min(keydown.len())];
     assert!(
         f_section.contains("self.window_mode.is_mini()"),
         "Cmd+Shift+F handler must check for mini mode"
