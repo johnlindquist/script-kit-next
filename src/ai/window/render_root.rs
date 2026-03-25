@@ -551,7 +551,7 @@ impl Render for AiApp {
                             // Separator — 1px × SP_6 vertical divider
                             .child(
                                 div()
-                                    .w(px(1.))
+                                    .w(HAIRLINE)
                                     .h(SP_6)
                                     .bg(cx.theme().border.opacity(OPACITY_SELECTED)),
                             )

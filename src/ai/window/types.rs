@@ -23,6 +23,9 @@ pub(super) const S7: Pixels = px(32.);
 pub(super) const S8: Pixels = px(40.);
 pub(super) const S9: Pixels = px(48.);
 
+// -- Hairline (1px borders / dividers) --
+pub(super) const HAIRLINE: Pixels = px(1.);
+
 // -- Border radii --
 pub(super) const R_SM: Pixels = px(8.);
 pub(super) const R_MD: Pixels = px(10.);
@@ -176,6 +179,7 @@ mod layout_token_tests {
         assert_eq!(SETUP_FEEDBACK_MAX_W, px(340.));
         assert_eq!(SETUP_API_KEY_MAX_W, px(400.));
         assert_eq!(SIDEBAR_SEARCH_ICON_SIZE, px(10.));
+        assert_eq!(HAIRLINE, px(1.));
     }
 }
 
