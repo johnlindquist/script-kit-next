@@ -959,14 +959,7 @@ pub fn close_actions_window(cx: &mut App) {
         if let Ok(mut guard) = window_storage.lock() {
             if let Some(handle) = guard.take() {
                 crate::logging::log("ACTIONS", "Closing actions popup window");
-                emit_actions_popup_event(
-                    ActionsPopupEvent::Closed,
-                    None,
-                    None,
-                    None,
-                    None,
-                    None,
-                );
+                emit_actions_popup_event(ActionsPopupEvent::Closed, None, None, None, None, None);
                 // Close the window
                 let close_result = handle.update(cx, |_this, window, _cx| {
                     window.remove_window();
@@ -1197,7 +1190,10 @@ pub fn resize_actions_window_direct(
     // Structured receipt for resize
     let dialog_for_receipt = dialog_entity.read(cx);
     let section_header_count = if dialog_for_receipt.config.section_style == SectionStyle::Headers {
-        count_section_headers(&dialog_for_receipt.actions, &dialog_for_receipt.filtered_actions)
+        count_section_headers(
+            &dialog_for_receipt.actions,
+            &dialog_for_receipt.filtered_actions,
+        )
     } else {
         0
     };

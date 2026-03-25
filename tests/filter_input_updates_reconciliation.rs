@@ -73,9 +73,8 @@ fn queue_filter_compute_uses_shared_helper() {
     let source = read_source();
     let section = slice_from(&source, "pub(crate) fn queue_filter_compute", 2600);
     assert!(
-        section.contains(
-            "app.reconcile_script_list_after_filter_change(\"filter_coalesced\", cx);"
-        ),
+        section
+            .contains("app.reconcile_script_list_after_filter_change(\"filter_coalesced\", cx);"),
         "queue_filter_compute must delegate to reconcile_script_list_after_filter_change"
     );
 }

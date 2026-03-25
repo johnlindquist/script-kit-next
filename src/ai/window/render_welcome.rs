@@ -100,8 +100,7 @@ impl AiApp {
                             .map(|(i, (title, _desc, icon))| {
                                 let prompt_text = SharedString::from(format!(
                                     "{} {}",
-                                    title,
-                                    all_suggestions[i].1
+                                    title, all_suggestions[i].1
                                 ));
                                 let title_s: SharedString = title.into();
                                 div()
@@ -166,9 +165,7 @@ impl AiApp {
                                             .rounded(SP_2)
                                             .bg(cx.theme().muted.opacity(OPACITY_CARD_BG))
                                             .text_color(
-                                                cx.theme()
-                                                    .muted_foreground
-                                                    .opacity(OPACITY_STRONG),
+                                                cx.theme().muted_foreground.opacity(OPACITY_STRONG),
                                             )
                                             .flex_shrink_0()
                                             .child(SharedString::from(format!(

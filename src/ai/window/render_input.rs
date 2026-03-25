@@ -24,7 +24,10 @@ fn plan_model_cycle(current_index: Option<usize>, available_len: usize) -> Optio
         None => (0, false),
     };
 
-    Some(ModelCyclePlan { next_index, wrapped })
+    Some(ModelCyclePlan {
+        next_index,
+        wrapped,
+    })
 }
 
 impl AiApp {
@@ -71,11 +74,7 @@ impl AiApp {
     /// route through this single function so the off-by-one bug for
     /// `selected_model == None` is fixed once, and every cycle emits a
     /// machine-readable event payload.
-    pub(super) fn cycle_model_from_source(
-        &mut self,
-        source: &'static str,
-        cx: &mut Context<Self>,
-    ) {
+    pub(super) fn cycle_model_from_source(&mut self, source: &'static str, cx: &mut Context<Self>) {
         let had_selected_model = self.selected_model.is_some();
         let current_index = self
             .selected_model

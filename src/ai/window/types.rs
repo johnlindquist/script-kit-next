@@ -394,7 +394,6 @@ pub(super) struct LastUsedSetting {
     pub(super) provider_display_name: String,
 }
 
-
 impl AiPreset {
     /// Get default presets
     pub(super) fn default_presets() -> Vec<AiPreset> {
