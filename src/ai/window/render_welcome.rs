@@ -41,6 +41,151 @@ pub(super) fn script_kit_welcome_suggestions() -> [(&'static str, &'static str, 
 }
 
 impl AiApp {
+    /// Compact welcome surface designed specifically for the mini window.
+    ///
+    /// Unlike the shared `render_welcome` which branches on `is_mini`, this
+    /// renderer is purpose-built for the 720×440 mini panel: tighter spacing,
+    /// single-line suggestion rows, smaller icons, and no subtitle. The layout
+    /// pushes content toward the composer so the panel feels dense and ready.
+    pub(super) fn render_mini_welcome(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        if self.available_models.is_empty() {
+            info!(
+                category = "mini_welcome",
+                event = "setup_card_shown",
+                "Mini welcome: no models configured, showing setup card"
+            );
+            return self.render_setup_card(cx).into_any_element();
+        }
+
+        let suggestion_hover_bg = cx.theme().muted.opacity(OPACITY_SUGGESTION_HOVER);
+        let all_suggestions = script_kit_welcome_suggestions();
+
+        info!(
+            category = "mini_welcome",
+            event = "render",
+            suggestion_count = MINI_SUGGESTION_COUNT,
+            "Mini welcome surface rendered"
+        );
+
+        div()
+            .flex()
+            .flex_col()
+            .items_center()
+            .justify_end()
+            .pb(S4)
+            .flex_1()
+            .gap(S3)
+            .px(S4)
+            // Heading — compact, no subtitle
+            .child(
+                div()
+                    .text_sm()
+                    .font_weight(gpui::FontWeight::MEDIUM)
+                    .text_color(cx.theme().muted_foreground.opacity(OPACITY_TEXT_MUTED))
+                    .child("Try a suggestion"),
+            )
+            // Suggestion rows — single-line, compact
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap(SP_2)
+                    .w_full()
+                    .max_w(MINI_WELCOME_MAX_W)
+                    .children(
+                        all_suggestions
+                            .into_iter()
+                            .take(MINI_SUGGESTION_COUNT)
+                            .enumerate()
+                            .map(|(i, (title, _desc, icon))| {
+                                let prompt_text = SharedString::from(format!(
+                                    "{} {}",
+                                    title,
+                                    all_suggestions[i].1
+                                ));
+                                let title_s: SharedString = title.into();
+                                div()
+                                    .id(SharedString::from(format!("mini-suggestion-{}", i)))
+                                    .flex()
+                                    .items_center()
+                                    .gap(S2)
+                                    .px(S2)
+                                    .py(SP_3)
+                                    .rounded(R_SM)
+                                    .cursor_pointer()
+                                    .hover(move |s| s.bg(suggestion_hover_bg))
+                                    .on_click(cx.listener(move |this, _, window, cx| {
+                                        info!(
+                                            category = "mini_welcome",
+                                            event = "suggestion_clicked",
+                                            suggestion_index = i,
+                                            suggestion_text = %prompt_text,
+                                            "Mini welcome suggestion clicked"
+                                        );
+                                        this.set_composer_value(
+                                            prompt_text.to_string(),
+                                            window,
+                                            cx,
+                                        );
+                                        this.submit_message(window, cx);
+                                    }))
+                                    // Compact icon
+                                    .child(
+                                        div()
+                                            .flex()
+                                            .items_center()
+                                            .justify_center()
+                                            .size(MINI_WELCOME_ICON_CONTAINER)
+                                            .rounded(SP_3)
+                                            .flex_shrink_0()
+                                            .child(
+                                                svg()
+                                                    .external_path(icon.external_path())
+                                                    .size(MINI_WELCOME_ICON_SIZE)
+                                                    .text_color(
+                                                        cx.theme()
+                                                            .accent
+                                                            .opacity(OPACITY_ACCENT_MEDIUM),
+                                                    ),
+                                            ),
+                                    )
+                                    // Title only — no description in mini
+                                    .child(
+                                        div()
+                                            .text_sm()
+                                            .flex_1()
+                                            .text_color(cx.theme().foreground)
+                                            .child(title_s),
+                                    )
+                                    // Keyboard shortcut badge
+                                    .child(
+                                        div()
+                                            .text_xs()
+                                            .px(SP_2)
+                                            .py(SP_1)
+                                            .rounded(SP_2)
+                                            .bg(cx.theme().muted.opacity(OPACITY_CARD_BG))
+                                            .text_color(
+                                                cx.theme()
+                                                    .muted_foreground
+                                                    .opacity(OPACITY_STRONG),
+                                            )
+                                            .flex_shrink_0()
+                                            .child(SharedString::from(format!(
+                                                "\u{2318}{}",
+                                                i + 1
+                                            ))),
+                                    )
+                            }),
+                    ),
+            )
+            .into_any_element()
+    }
+
+    /// Full-mode welcome surface with centered layout, subtitle, and all suggestion cards.
+    ///
+    /// Mini mode uses `render_mini_welcome()` instead — this method is only
+    /// called from the full panel path.
     pub(super) fn render_welcome(&self, cx: &mut Context<Self>) -> impl IntoElement {
         // Show setup card if no providers are configured
         if self.available_models.is_empty() {
@@ -51,62 +196,46 @@ impl AiApp {
         let suggestion_hover_bg = cx.theme().muted.opacity(OPACITY_SUGGESTION_HOVER);
 
         let all_suggestions = script_kit_welcome_suggestions();
-        let is_mini = self.window_mode.is_mini();
-        // Mini mode: show only first N suggestions to keep the compact feel
-        let suggestion_count = if is_mini {
-            MINI_SUGGESTION_COUNT
-        } else {
-            FULL_SUGGESTION_COUNT
-        };
 
         div()
             .flex()
             .flex_col()
             .items_center()
-            // Mini: push content toward composer; Full: center in panel
-            .when(is_mini, |el| el.justify_end().pb(S7))
-            .when(!is_mini, |el| el.justify_center())
+            .justify_center()
             .flex_1()
-            .gap(if is_mini { S5 } else { S7 })
-            .px(if is_mini { S4 } else { S6 })
+            .gap(S7)
+            .px(S6)
             .child(
                 div()
                     .flex()
                     .flex_col()
                     .items_center()
-                    .gap(if is_mini { S1 } else { S2 })
+                    .gap(S2)
                     .child(
                         div()
-                            .when(is_mini, |el| el.text_base())
-                            .when(!is_mini, |el| el.text_xl())
+                            .text_xl()
                             .font_weight(gpui::FontWeight::BOLD)
                             .text_color(cx.theme().foreground)
-                            .child(if is_mini {
-                                "What can I help with?"
-                            } else {
-                                "Ask Anything"
-                            }),
+                            .child("Ask Anything"),
                     )
-                    .when(!is_mini, |el| {
-                        el.child({
-                            let subtitle: SharedString = self
-                                .selected_model
-                                .as_ref()
-                                .map(|m| {
-                                    format!(
-                                        "Start a conversation with {} or try a suggestion below",
-                                        m.display_name
-                                    )
-                                })
-                                .unwrap_or_else(|| {
-                                    "Start a conversation or try a suggestion below".to_string()
-                                })
-                                .into();
-                            div()
-                                .text_sm()
-                                .text_color(cx.theme().muted_foreground.opacity(OPACITY_STRONG))
-                                .child(subtitle)
-                        })
+                    .child({
+                        let subtitle: SharedString = self
+                            .selected_model
+                            .as_ref()
+                            .map(|m| {
+                                format!(
+                                    "Start a conversation with {} or try a suggestion below",
+                                    m.display_name
+                                )
+                            })
+                            .unwrap_or_else(|| {
+                                "Start a conversation or try a suggestion below".to_string()
+                            })
+                            .into();
+                        div()
+                            .text_sm()
+                            .text_color(cx.theme().muted_foreground.opacity(OPACITY_STRONG))
+                            .child(subtitle)
                     }),
             )
             // Suggestion cards
@@ -120,7 +249,7 @@ impl AiApp {
                     .children(
                         all_suggestions
                             .into_iter()
-                            .take(suggestion_count)
+                            .take(FULL_SUGGESTION_COUNT)
                             .enumerate()
                             .map(|(i, (title, desc, icon))| {
                                 let prompt_text = SharedString::from(format!("{} {}", title, desc));

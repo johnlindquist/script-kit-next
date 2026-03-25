@@ -153,7 +153,7 @@ impl AiApp {
                         .child(if has_messages {
                             self.render_messages(cx).into_any_element()
                         } else {
-                            self.render_welcome(cx).into_any_element()
+                            self.render_mini_welcome(cx).into_any_element()
                         }),
                 ),
             )

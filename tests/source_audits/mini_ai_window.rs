@@ -819,25 +819,31 @@ fn hide_all_dropdowns_closes_new_chat_command_bar() {
 #[test]
 fn mini_welcome_is_compact_with_fewer_suggestions() {
     let source = read("src/ai/window/render_welcome.rs");
-    // Mini mode must limit suggestion count
+    // Mini mode must have a dedicated renderer
+    assert!(
+        source.contains("fn render_mini_welcome("),
+        "Mini welcome must have a dedicated render_mini_welcome method"
+    );
+    // Mini renderer must limit suggestion count
     assert!(
         source.contains("MINI_SUGGESTION_COUNT"),
         "Mini welcome must use MINI_SUGGESTION_COUNT constant for suggestion limit"
     );
-    // Mini mode must use tighter spacing
+    // Mini renderer must use compact heading (not the full-mode "Ask Anything")
     assert!(
-        source.contains("if is_mini { S5 }"),
-        "Mini welcome must use tighter gap spacing"
-    );
-    // Mini mode must use a compact heading
-    assert!(
-        source.contains("What can I help with?"),
+        source.contains("Try a suggestion"),
         "Mini welcome must use a compact heading"
     );
-    // Mini mode must push content toward composer (not center vertically)
+    // Mini renderer must push content toward composer (not center vertically)
     assert!(
         source.contains("justify_end()"),
         "Mini welcome must use justify_end to push content near composer"
+    );
+    // Mini panel must dispatch to the dedicated mini renderer
+    let panel = read("src/ai/window/render_main_panel.rs");
+    assert!(
+        panel.contains("render_mini_welcome("),
+        "Mini panel must call render_mini_welcome instead of render_welcome"
     );
 }
 
@@ -943,24 +949,45 @@ fn mini_ai_is_backed_by_ai_app_not_a_separate_type() {
 }
 
 #[test]
-fn mini_history_overlay_reuses_sidebar_body() {
-    // The mini history overlay must reuse render_sidebar_body() from the
-    // full sidebar, not duplicate the chat list rendering.
+fn mini_history_overlay_uses_dedicated_panel() {
+    // The mini history overlay must use a dedicated panel wrapper that
+    // composes the shared chat list body with mini-specific chrome.
     let sidebar = read("src/ai/window/render_sidebar.rs");
     assert!(
+        sidebar.contains("fn render_chat_list_body("),
+        "render_sidebar.rs must define render_chat_list_body"
+    );
+    assert!(
+        sidebar.contains("fn render_mini_history_panel("),
+        "render_sidebar.rs must define render_mini_history_panel"
+    );
+    assert!(
         sidebar.contains("fn render_sidebar_body("),
-        "render_sidebar.rs must define render_sidebar_body"
+        "render_sidebar.rs must still define render_sidebar_body for the full sidebar"
     );
     assert!(
         sidebar.contains("Used by both the full sidebar and the mini history overlay"),
         "render_sidebar_body must document its dual-use role"
     );
 
-    // render_root.rs must call render_sidebar_body for the overlay
+    // render_mini_history_panel must compose the shared chat list body
+    let panel_section = &sidebar[sidebar
+        .find("fn render_mini_history_panel(")
+        .expect("render_mini_history_panel must exist")..];
+    assert!(
+        panel_section.contains("render_chat_list_body(cx)"),
+        "render_mini_history_panel must compose render_chat_list_body"
+    );
+    assert!(
+        panel_section.contains("ai-mini-history-header"),
+        "render_mini_history_panel must have a compact header"
+    );
+
+    // render_root.rs must call render_mini_history_panel for the overlay
     let root = read("src/ai/window/render_root.rs");
     assert!(
-        root.contains("self.render_sidebar_body(cx)"),
-        "render_root.rs must call render_sidebar_body for the mini history overlay"
+        root.contains("self.render_mini_history_panel(cx)"),
+        "render_root.rs must call render_mini_history_panel for the mini history overlay"
     );
 }
 
@@ -1293,5 +1320,270 @@ fn legacy_per_display_bridge_removed() {
     assert!(
         !source.contains("ai_window_reference_legacy_per_display_apis"),
         "Legacy bridge function must be removed from window_api.rs"
+    );
+}
+
+// === Mini welcome compact layout audit ===
+
+/// The mini welcome renderer must use dedicated mini layout constants,
+/// not the full-mode suggestion constants.
+#[test]
+fn mini_welcome_uses_dedicated_layout_constants() {
+    let source = read("src/ai/window/render_welcome.rs");
+    let mini_fn_start = source
+        .find("fn render_mini_welcome(")
+        .expect("render_mini_welcome must exist");
+    // Find the next fn boundary to scope assertions
+    let next_fn = source[mini_fn_start + 10..]
+        .find("\n    pub(super) fn ")
+        .unwrap_or(source.len() - mini_fn_start - 10);
+    let mini_body = &source[mini_fn_start..mini_fn_start + 10 + next_fn];
+
+    assert!(
+        mini_body.contains("MINI_WELCOME_MAX_W"),
+        "Mini welcome must use MINI_WELCOME_MAX_W for suggestion list width"
+    );
+    assert!(
+        mini_body.contains("MINI_WELCOME_ICON_CONTAINER"),
+        "Mini welcome must use MINI_WELCOME_ICON_CONTAINER for icon hit area"
+    );
+    assert!(
+        mini_body.contains("MINI_WELCOME_ICON_SIZE"),
+        "Mini welcome must use MINI_WELCOME_ICON_SIZE for icon dimensions"
+    );
+    // Must NOT reference the full-mode constants
+    assert!(
+        !mini_body.contains("SUGGESTION_ICON_CONTAINER"),
+        "Mini welcome must NOT use full-mode SUGGESTION_ICON_CONTAINER"
+    );
+    assert!(
+        !mini_body.contains("SUGGESTION_MAX_W"),
+        "Mini welcome must NOT use full-mode SUGGESTION_MAX_W"
+    );
+}
+
+/// The mini welcome renderer must emit structured observability logs.
+#[test]
+fn mini_welcome_emits_structured_logs() {
+    let source = read("src/ai/window/render_welcome.rs");
+    let mini_fn_start = source
+        .find("fn render_mini_welcome(")
+        .expect("render_mini_welcome must exist");
+    let next_fn = source[mini_fn_start + 10..]
+        .find("\n    pub(super) fn ")
+        .unwrap_or(source.len() - mini_fn_start - 10);
+    let mini_body = &source[mini_fn_start..mini_fn_start + 10 + next_fn];
+
+    assert!(
+        mini_body.contains("category = \"mini_welcome\""),
+        "Mini welcome must log with category = mini_welcome"
+    );
+    assert!(
+        mini_body.contains("event = \"render\""),
+        "Mini welcome must emit a render event"
+    );
+    assert!(
+        mini_body.contains("event = \"suggestion_clicked\""),
+        "Mini welcome must emit suggestion_clicked event on click"
+    );
+    assert!(
+        mini_body.contains("event = \"setup_card_shown\""),
+        "Mini welcome must emit setup_card_shown when no models configured"
+    );
+}
+
+// === Mini composer disabled send button audit ===
+
+/// When input is empty in mini mode, a disabled send affordance must be shown
+/// instead of a blank spacer. The element must have a distinct ID.
+#[test]
+fn mini_composer_has_disabled_send_affordance() {
+    let panel = read("src/ai/window/render_main_panel.rs");
+    let mini_fn_start = panel
+        .find("fn render_mini_main_panel")
+        .expect("render_mini_main_panel must exist");
+    let full_fn_start = panel
+        .find("fn render_full_main_panel")
+        .expect("render_full_main_panel must exist");
+    let mini_body = &panel[mini_fn_start..full_fn_start];
+
+    assert!(
+        mini_body.contains("ai-mini-submit-btn-disabled"),
+        "Mini composer must show a disabled send button (ai-mini-submit-btn-disabled) when input is empty"
+    );
+    // The disabled affordance must still show the arrow icon
+    assert!(
+        mini_body.contains("ArrowUp"),
+        "Disabled send button must show the ArrowUp icon for visual consistency"
+    );
+    // Must use MINI_BTN_SIZE for consistent sizing
+    let disabled_section_start = mini_body
+        .find("ai-mini-submit-btn-disabled")
+        .expect("disabled send button must exist");
+    let disabled_section = &mini_body[disabled_section_start..];
+    assert!(
+        disabled_section.contains("MINI_BTN_SIZE"),
+        "Disabled send button must use MINI_BTN_SIZE constant"
+    );
+}
+
+// === Mini history panel header audit ===
+
+/// The mini history panel must expose machine-addressable element IDs
+/// for the header, new-chat button, and close button.
+#[test]
+fn mini_history_panel_exposes_header_element_ids() {
+    let sidebar = read("src/ai/window/render_sidebar.rs");
+    let panel_start = sidebar
+        .find("fn render_mini_history_panel(")
+        .expect("render_mini_history_panel must exist");
+    let panel_body = &sidebar[panel_start..];
+
+    for id in [
+        "ai-mini-history-header",
+        "ai-mini-history-new",
+        "ai-mini-history-close",
+    ] {
+        assert!(
+            panel_body.contains(id),
+            "render_mini_history_panel missing expected element ID: {id}"
+        );
+    }
+}
+
+/// The mini history panel header must use named layout constants.
+#[test]
+fn mini_history_panel_uses_named_constants() {
+    let sidebar = read("src/ai/window/render_sidebar.rs");
+    let panel_start = sidebar
+        .find("fn render_mini_history_panel(")
+        .expect("render_mini_history_panel must exist");
+    let panel_body = &sidebar[panel_start..];
+
+    assert!(
+        panel_body.contains("MINI_HISTORY_HEADER_H"),
+        "Mini history panel header must use MINI_HISTORY_HEADER_H constant"
+    );
+    assert!(
+        panel_body.contains("MINI_BTN_SIZE"),
+        "Mini history panel buttons must use MINI_BTN_SIZE constant"
+    );
+}
+
+/// The mini history panel must emit structured observability logs.
+#[test]
+fn mini_history_panel_emits_structured_logs() {
+    let sidebar = read("src/ai/window/render_sidebar.rs");
+    let panel_start = sidebar
+        .find("fn render_mini_history_panel(")
+        .expect("render_mini_history_panel must exist");
+    let panel_body = &sidebar[panel_start..];
+
+    assert!(
+        panel_body.contains("category = \"mini_history_panel\""),
+        "Mini history panel must log with category = mini_history_panel"
+    );
+    assert!(
+        panel_body.contains("event = \"render\""),
+        "Mini history panel must emit a render event"
+    );
+    assert!(
+        panel_body.contains("chat_count"),
+        "Mini history panel log must include chat_count"
+    );
+    assert!(
+        panel_body.contains("search_active"),
+        "Mini history panel log must include search_active"
+    );
+}
+
+// === Mini overlay height overflow prevention ===
+
+/// MINI_HISTORY_OVERLAY_MAX_H must be at most MINI_WINDOW_DEFAULT_H - 44
+/// (the titlebar height in raw pixels) to prevent the overlay from
+/// overflowing the mini window bounds.
+#[test]
+fn mini_overlay_max_height_does_not_overflow_window() {
+    let types = read("src/ai/window/types.rs");
+
+    // Extract the raw pixel values from the constants.
+    // MINI_HISTORY_OVERLAY_MAX_H and MINI_TITLEBAR_H use px(), but
+    // MINI_WINDOW_DEFAULT_H is a bare f32 (not wrapped in px()).
+    let parse_px = |line: &str| -> f32 {
+        line.split("px(")
+            .nth(1)
+            .and_then(|s| s.split(')').next())
+            .and_then(|s| s.trim_end_matches('.').parse().ok())
+            .unwrap_or_else(|| panic!("Could not parse px() value from: {line}"))
+    };
+    let parse_f32 = |line: &str| -> f32 {
+        line.split('=')
+            .nth(1)
+            .and_then(|s| {
+                s.trim()
+                    .trim_end_matches(';')
+                    .trim()
+                    .parse::<f32>()
+                    .ok()
+            })
+            .unwrap_or_else(|| panic!("Could not parse f32 value from: {line}"))
+    };
+
+    let overlay_h_line = types
+        .lines()
+        .find(|l| l.contains("MINI_HISTORY_OVERLAY_MAX_H") && l.contains("px("))
+        .expect("MINI_HISTORY_OVERLAY_MAX_H must be defined with px()");
+    let titlebar_h_line = types
+        .lines()
+        .find(|l| l.contains("MINI_TITLEBAR_H") && l.contains("px(") && l.contains("const"))
+        .expect("MINI_TITLEBAR_H must be defined with px()");
+    let window_h_line = types
+        .lines()
+        .find(|l| l.contains("MINI_WINDOW_DEFAULT_H") && l.contains("const"))
+        .expect("MINI_WINDOW_DEFAULT_H must be defined");
+
+    let overlay_h = parse_px(overlay_h_line);
+    let titlebar_h = parse_px(titlebar_h_line);
+    let window_h = parse_f32(window_h_line);
+
+    let max_content_h = window_h - titlebar_h;
+    assert!(
+        overlay_h <= max_content_h,
+        "MINI_HISTORY_OVERLAY_MAX_H ({overlay_h}) must be <= \
+         MINI_WINDOW_DEFAULT_H - MINI_TITLEBAR_H ({max_content_h}) to prevent overflow"
+    );
+}
+
+// === Mini history panel new-chat and close behavior ===
+
+/// The new-chat button in the mini history panel must call new_conversation.
+/// The close button must call dismiss_mini_history_overlay.
+#[test]
+fn mini_history_panel_buttons_delegate_correctly() {
+    let sidebar = read("src/ai/window/render_sidebar.rs");
+    let panel_start = sidebar
+        .find("fn render_mini_history_panel(")
+        .expect("render_mini_history_panel must exist");
+    let panel_body = &sidebar[panel_start..];
+
+    // New chat button delegates to new_conversation
+    let new_btn_start = panel_body
+        .find("ai-mini-history-new")
+        .expect("new-chat button must exist");
+    let new_btn_section = &panel_body[new_btn_start..(new_btn_start + 1500).min(panel_body.len())];
+    assert!(
+        new_btn_section.contains("new_conversation(window, cx)"),
+        "Mini history new-chat button must call new_conversation"
+    );
+
+    // Close button delegates to dismiss_mini_history_overlay
+    let close_btn_start = panel_body
+        .find("ai-mini-history-close")
+        .expect("close button must exist");
+    let close_btn_section =
+        &panel_body[close_btn_start..(close_btn_start + 1500).min(panel_body.len())];
+    assert!(
+        close_btn_section.contains("dismiss_mini_history_overlay("),
+        "Mini history close button must call dismiss_mini_history_overlay"
     );
 }

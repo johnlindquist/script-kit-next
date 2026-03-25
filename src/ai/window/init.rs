@@ -87,10 +87,6 @@ impl AiApp {
                 .masked(true)
         });
 
-        // New chat dropdown search input
-        let new_chat_dropdown_input =
-            cx.new(|cx| InputState::new(window, cx).placeholder("New chat with..."));
-
         let focus_handle = cx.focus_handle();
 
         // Subscribe to input changes and Enter key
@@ -127,15 +123,6 @@ impl AiApp {
                 if matches!(ev, InputEvent::PressEnter { .. }) {
                     this.submit_api_key(window, cx);
                 }
-            }
-        });
-
-        // Subscribe to new chat dropdown input changes
-        let new_chat_dropdown_sub = cx.subscribe_in(&new_chat_dropdown_input, window, {
-            move |this, _, ev: &InputEvent, window, cx| match ev {
-                InputEvent::Change => this.on_new_chat_dropdown_filter_change(cx),
-                InputEvent::PressEnter { .. } => this.select_from_new_chat_dropdown(window, cx),
-                _ => {}
             }
         });
 
@@ -214,13 +201,7 @@ impl AiApp {
             available_models,
             selected_model,
             focus_handle,
-            _subscriptions: vec![
-                input_sub,
-                search_sub,
-                api_key_sub,
-                new_chat_dropdown_sub,
-                rename_sub,
-            ],
+            _subscriptions: vec![input_sub, search_sub, api_key_sub, rename_sub],
             // Streaming state
             is_streaming: false,
             streaming_content: String::new(),
@@ -268,12 +249,6 @@ impl AiApp {
             showing_presets_dropdown: false,
             presets: AiPreset::load_all_presets(),
             presets_selected_index: 0,
-            // New chat dropdown state (Raycast-style) — DEPRECATED: see show_canonical_new_chat_surface
-            showing_new_chat_dropdown: false,
-            new_chat_dropdown_filter: String::new(),
-            new_chat_dropdown_input,
-            new_chat_dropdown_section: 0,
-            new_chat_dropdown_index: 0,
             last_used_settings,
             // Context picker state
             context_picker: None,

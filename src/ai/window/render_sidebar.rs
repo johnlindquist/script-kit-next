@@ -69,9 +69,9 @@ impl AiApp {
         }
     }
 
-    /// Reusable sidebar body: search + chat list with empty states.
-    /// Used by both the full sidebar and the mini history overlay.
-    pub(super) fn render_sidebar_body(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+    /// Reusable search + chat list content. Shared by the full sidebar and
+    /// the mini history panel — both compose this into their own chrome.
+    pub(super) fn render_chat_list_body(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         let selected_id = self.selected_chat_id;
         let sidebar_rows = build_sidebar_rows_for_chats(&self.chats);
         self.sync_sidebar_list_item_count(sidebar_rows.len());
@@ -234,6 +234,128 @@ impl AiApp {
                         .into_any_element()
                 },
             ))
+    }
+
+    /// Full sidebar body: delegates to the shared chat list body.
+    /// Used by both the full sidebar and the mini history overlay.
+    pub(super) fn render_sidebar_body(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+        self.render_chat_list_body(cx)
+    }
+
+    /// Compact history panel for the mini overlay. Wraps the shared chat
+    /// list body with a mini-specific header containing New Chat and Close.
+    pub(super) fn render_mini_history_panel(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+        let label_color = cx.theme().muted_foreground.opacity(OPACITY_SELECTED);
+
+        tracing::info!(
+            target: "ai",
+            category = "mini_history_panel",
+            event = "render",
+            chat_count = self.chats.len(),
+            search_active = !self.search_query.is_empty(),
+            "Rendering mini history panel"
+        );
+
+        div()
+            .flex()
+            .flex_col()
+            .w_full()
+            .h_full()
+            // Compact header: "Recent" label + New Chat + Close
+            .child(
+                div()
+                    .id("ai-mini-history-header")
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .justify_between()
+                    .w_full()
+                    .h(MINI_HISTORY_HEADER_H)
+                    .px(SIDEBAR_INSET_X)
+                    .border_b_1()
+                    .border_color(cx.theme().border)
+                    .child(
+                        div()
+                            .text_xs()
+                            .font_weight(gpui::FontWeight::SEMIBOLD)
+                            .text_color(label_color)
+                            .child("Recent"),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap(SP_2)
+                            // New Chat button
+                            .child(
+                                div()
+                                    .id("ai-mini-history-new")
+                                    .size(MINI_BTN_SIZE)
+                                    .rounded(R_SM)
+                                    .cursor_pointer()
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .text_color(label_color)
+                                    .hover(|el| {
+                                        el.bg(cx.theme().muted.opacity(OPACITY_HOVER))
+                                            .text_color(cx.theme().foreground)
+                                    })
+                                    .tooltip(|window, cx| {
+                                        Tooltip::new("New chat")
+                                            .key_binding(
+                                                gpui::Keystroke::parse("cmd-n").ok().map(Kbd::new),
+                                            )
+                                            .build(window, cx)
+                                    })
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        this.new_conversation(window, cx);
+                                    }))
+                                    .child(
+                                        svg()
+                                            .external_path(LocalIconName::Plus.external_path())
+                                            .size(ICON_SM),
+                                    ),
+                            )
+                            // Close button
+                            .child(
+                                div()
+                                    .id("ai-mini-history-close")
+                                    .size(MINI_BTN_SIZE)
+                                    .rounded(R_SM)
+                                    .cursor_pointer()
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .text_color(label_color)
+                                    .hover(|el| {
+                                        el.bg(cx.theme().muted.opacity(OPACITY_HOVER))
+                                            .text_color(cx.theme().foreground)
+                                    })
+                                    .tooltip(|window, cx| {
+                                        Tooltip::new("Close")
+                                            .key_binding(
+                                                gpui::Keystroke::parse("escape").ok().map(Kbd::new),
+                                            )
+                                            .build(window, cx)
+                                    })
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        this.dismiss_mini_history_overlay(
+                                            "history_panel_close",
+                                            window,
+                                            cx,
+                                        );
+                                    }))
+                                    .child(
+                                        svg()
+                                            .external_path(LocalIconName::Close.external_path())
+                                            .size(ICON_SM),
+                                    ),
+                            ),
+                    ),
+            )
+            // Shared search + chat list body
+            .child(self.render_chat_list_body(cx))
     }
 
     /// Render the chats sidebar with date groupings

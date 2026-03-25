@@ -259,6 +259,17 @@ pub(super) const MINI_SUGGESTION_COUNT: usize = 2;
 /// Number of welcome suggestions shown in full mode.
 pub(super) const FULL_SUGGESTION_COUNT: usize = 4;
 
+/// Maximum width for the mini welcome suggestion list.
+pub(super) const MINI_WELCOME_MAX_W: Pixels = px(480.);
+/// Icon container size for mini welcome suggestion rows (smaller than full mode).
+pub(super) const MINI_WELCOME_ICON_CONTAINER: Pixels = px(28.);
+/// Icon size within mini welcome suggestion rows.
+pub(super) const MINI_WELCOME_ICON_SIZE: Pixels = px(14.);
+
+// -- Mini history panel header --
+/// Height of the compact header inside the mini history overlay panel.
+pub(super) const MINI_HISTORY_HEADER_H: Pixels = px(36.);
+
 // -- Overlay layout --
 pub(super) const ATTACHMENTS_PICKER_BOTTOM_INSET: Pixels = px(80.);
 
@@ -383,11 +394,6 @@ pub(super) struct LastUsedSetting {
     pub(super) provider_display_name: String,
 }
 
-/// Internal enum for handling new chat dropdown selection
-pub(super) enum NewChatAction {
-    Model { model_id: String, provider: String },
-    Preset { index: usize },
-}
 
 impl AiPreset {
     /// Get default presets

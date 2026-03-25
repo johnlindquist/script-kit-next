@@ -548,20 +548,28 @@ fn render_main_panel_branches_on_window_mode() {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn mini_overlay_reuses_sidebar_body() {
+fn mini_overlay_uses_dedicated_history_panel() {
     let source = read_source("src/ai/window/render_root.rs");
     assert!(
-        source.contains("render_sidebar_body(cx)"),
-        "mini history overlay must reuse sidebar_body"
+        source.contains("render_mini_history_panel(cx)"),
+        "mini history overlay must use render_mini_history_panel"
     );
 }
 
 #[test]
-fn sidebar_exposes_render_sidebar_body() {
+fn sidebar_exposes_chat_list_body_and_mini_panel() {
     let source = read_source("src/ai/window/render_sidebar.rs");
     assert!(
+        source.contains("fn render_chat_list_body("),
+        "render_sidebar.rs must define render_chat_list_body"
+    );
+    assert!(
+        source.contains("fn render_mini_history_panel("),
+        "render_sidebar.rs must define render_mini_history_panel"
+    );
+    assert!(
         source.contains("fn render_sidebar_body("),
-        "render_sidebar.rs must define render_sidebar_body"
+        "render_sidebar.rs must still define render_sidebar_body"
     );
     assert!(
         source.contains("fn render_sidebar("),
