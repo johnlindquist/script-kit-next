@@ -413,14 +413,25 @@ mod tests {
 
         let json = serde_json::to_string(&snapshot).expect("serialize");
         // Verify camelCase field names in output
-        assert!(json.contains("\"windowMode\""), "must use camelCase: windowMode");
-        assert!(json.contains("\"historyOverlayVisible\""), "must use camelCase: historyOverlayVisible");
-        assert!(json.contains("\"isStreaming\""), "must use camelCase: isStreaming");
-        assert!(json.contains("\"selectedModel\""), "must use camelCase: selectedModel");
+        assert!(
+            json.contains("\"windowMode\""),
+            "must use camelCase: windowMode"
+        );
+        assert!(
+            json.contains("\"historyOverlayVisible\""),
+            "must use camelCase: historyOverlayVisible"
+        );
+        assert!(
+            json.contains("\"isStreaming\""),
+            "must use camelCase: isStreaming"
+        );
+        assert!(
+            json.contains("\"selectedModel\""),
+            "must use camelCase: selectedModel"
+        );
 
         // Roundtrip
-        let deserialized: AiMiniDebugSnapshot =
-            serde_json::from_str(&json).expect("deserialize");
+        let deserialized: AiMiniDebugSnapshot = serde_json::from_str(&json).expect("deserialize");
         assert_eq!(snapshot, deserialized);
     }
 

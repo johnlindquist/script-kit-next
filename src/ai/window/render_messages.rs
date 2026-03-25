@@ -139,14 +139,14 @@ impl AiApp {
             .on_scroll_wheel(
                 cx.listener(move |this, event: &ScrollWheelEvent, _window, cx| {
                     let delta_y = event.delta.pixel_delta(px(1.0)).y;
-                    if delta_y > px(0.) {
+                    if delta_y > S0 {
                         // Scrolling up - only notify when state actually changes
                         // (avoids redundant re-renders during momentum scroll)
                         if !this.user_has_scrolled_up {
                             this.user_has_scrolled_up = true;
                             cx.notify();
                         }
-                    } else if delta_y < px(0.) {
+                    } else if delta_y < S0 {
                         // Scrolling down - check if at true bottom to resume auto-scroll.
                         // `logical_scroll_top` gives the topmost visible item index, so
                         // reaching the last item means we're at bottom.

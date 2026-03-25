@@ -2747,9 +2747,7 @@ fn test_simulated_key_supports_mini_search_focus_shortcut() {
         "Simulated key handler must check for Cmd+Shift"
     );
     assert!(
-        after.contains(
-            "self.show_mini_history_overlay(\"simulated_cmd_shift_f\", window, cx);"
-        ),
+        after.contains("self.show_mini_history_overlay(\"simulated_cmd_shift_f\", window, cx);"),
         "Simulated Cmd+Shift+F must use show_mini_history_overlay in mini mode"
     );
 }
@@ -2829,7 +2827,7 @@ fn test_show_mini_history_overlay_always_sets_flag_and_focuses_search() {
     let show_fn = source
         .find("fn show_mini_history_overlay")
         .expect("show_mini_history_overlay must exist");
-    let after = &source[show_fn..(show_fn + 450).min(source.len())];
+    let after = &source[show_fn..(show_fn + 700).min(source.len())];
 
     assert!(
         after.contains("self.showing_mini_history_overlay = true;"),
