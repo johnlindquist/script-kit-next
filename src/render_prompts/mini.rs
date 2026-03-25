@@ -29,9 +29,9 @@ impl ScriptListApp {
         let accent_color = theme.colors.accent.selected;
         let input_is_empty = self.arg_input.is_empty();
 
-        // Mini uses reduced padding (half of standard header padding)
-        let mini_padding_x: f32 = HEADER_PADDING_X * 0.75;
-        let mini_padding_y: f32 = HEADER_PADDING_Y * 0.75;
+        // Mini uses shared layout tokens from the resize contract
+        let mini_padding_x: f32 = crate::window_resize::mini_layout::HEADER_PADDING_X;
+        let mini_padding_y: f32 = crate::window_resize::mini_layout::HEADER_PADDING_Y;
 
         // Filtered choices for selection (mini shows no list, but tracks selection for submit)
         let filtered_choices = self.get_filtered_arg_choices_owned();
@@ -261,12 +261,12 @@ mod mini_prompt_render_tests {
     #[test]
     fn mini_prompt_has_compact_padding() {
         assert!(
-            MINI_SOURCE.contains("HEADER_PADDING_X * 0.75"),
-            "mini prompt should use reduced horizontal padding"
+            MINI_SOURCE.contains("mini_layout::HEADER_PADDING_X"),
+            "mini prompt should use shared mini layout horizontal padding token"
         );
         assert!(
-            MINI_SOURCE.contains("HEADER_PADDING_Y * 0.75"),
-            "mini prompt should use reduced vertical padding"
+            MINI_SOURCE.contains("mini_layout::HEADER_PADDING_Y"),
+            "mini prompt should use shared mini layout vertical padding token"
         );
     }
 
