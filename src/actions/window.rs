@@ -746,6 +746,42 @@ fn compute_popup_height(dialog: &ActionsDialog) -> f32 {
     actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header)
 }
 
+/// Compute the origin point for the actions popup window.
+///
+/// Pure helper that encapsulates all position-dependent origin math so it can
+/// be tested without standing up a real window.
+fn actions_popup_origin(
+    main_window_bounds: Bounds<Pixels>,
+    window_width: Pixels,
+    window_height: Pixels,
+    position: WindowPosition,
+) -> Point<Pixels> {
+    let right_aligned_x = main_window_bounds.origin.x + main_window_bounds.size.width
+        - window_width
+        - px(ACTIONS_MARGIN_X);
+
+    let y = match position {
+        WindowPosition::BottomRight => {
+            main_window_bounds.origin.y + main_window_bounds.size.height
+                - window_height
+                - px(FOOTER_HEIGHT)
+                - px(ACTIONS_MARGIN_Y)
+        }
+        WindowPosition::TopRight | WindowPosition::TopCenter => {
+            main_window_bounds.origin.y + px(TITLEBAR_HEIGHT) + px(ACTIONS_MARGIN_Y)
+        }
+    };
+
+    let x = match position {
+        WindowPosition::TopCenter => {
+            main_window_bounds.origin.x + (main_window_bounds.size.width - window_width) / 2.0
+        }
+        _ => right_aligned_x,
+    };
+
+    Point { x, y }
+}
+
 /// Open the actions window as a separate floating window with vibrancy
 ///
 /// The window is positioned at the top-right of the main window, below the header.
@@ -799,48 +835,18 @@ pub fn open_actions_window(
     let window_width = px(ACTIONS_WINDOW_WIDTH);
     let window_height = px(dynamic_height);
 
-    let window_x = main_window_bounds.origin.x + main_window_bounds.size.width
-        - window_width
-        - px(ACTIONS_MARGIN_X);
-
-    // Calculate Y position based on anchor position
-    let window_y = match position {
-        WindowPosition::BottomRight => {
-            // Position popup above the footer (footer is 40px)
-            main_window_bounds.origin.y + main_window_bounds.size.height
-                - window_height
-                - px(FOOTER_HEIGHT)
-                - px(ACTIONS_MARGIN_Y)
-        }
-        WindowPosition::TopRight => {
-            // Position popup below the titlebar
-            main_window_bounds.origin.y + px(TITLEBAR_HEIGHT) + px(ACTIONS_MARGIN_Y)
-        }
-        WindowPosition::TopCenter => {
-            // Position popup below the titlebar (same Y as TopRight)
-            main_window_bounds.origin.y + px(TITLEBAR_HEIGHT) + px(ACTIONS_MARGIN_Y)
-        }
-    };
-
-    // Override X position for TopCenter - center horizontally in the parent window
-    let window_x = match position {
-        WindowPosition::TopCenter => {
-            // Center horizontally within the parent window
-            main_window_bounds.origin.x + (main_window_bounds.size.width - window_width) / 2.0
-        }
-        _ => window_x, // Keep the right-aligned X for other positions
-    };
+    let origin = actions_popup_origin(main_window_bounds, window_width, window_height, position);
 
     let bounds = Bounds {
-        origin: Point {
-            x: window_x,
-            y: window_y,
-        },
+        origin,
         size: Size {
             width: window_width,
             height: window_height,
         },
     };
+
+    let window_x = origin.x;
+    let window_y = origin.y;
 
     crate::logging::log(
         "ACTIONS",
@@ -1434,6 +1440,118 @@ mod request_close_ordering_tests {
         assert!(
             source.contains("pub fn is_actions_window(window: &gpui::Window) -> bool"),
             "window.rs must export is_actions_window(window) for keystroke interceptor guards"
+        );
+    }
+}
+
+#[cfg(test)]
+mod actions_popup_origin_tests {
+    use super::*;
+    use gpui::{px, Bounds, Point, Size};
+
+    #[test]
+    fn top_center_centers_inside_mini_main_window() {
+        let origin = actions_popup_origin(
+            Bounds {
+                origin: Point {
+                    x: px(100.0),
+                    y: px(50.0),
+                },
+                size: Size {
+                    width: px(480.0),
+                    height: px(300.0),
+                },
+            },
+            px(ACTIONS_WINDOW_WIDTH),
+            px(220.0),
+            WindowPosition::TopCenter,
+        );
+
+        assert_eq!(
+            f32::from(origin.x),
+            100.0 + ((480.0 - ACTIONS_WINDOW_WIDTH) / 2.0),
+            "TopCenter must center horizontally within the parent window"
+        );
+        assert_eq!(
+            f32::from(origin.y),
+            50.0 + TITLEBAR_HEIGHT + ACTIONS_MARGIN_Y,
+            "TopCenter must anchor below the titlebar"
+        );
+    }
+
+    #[test]
+    fn bottom_right_stays_above_footer() {
+        let origin = actions_popup_origin(
+            Bounds {
+                origin: Point {
+                    x: px(20.0),
+                    y: px(40.0),
+                },
+                size: Size {
+                    width: px(750.0),
+                    height: px(500.0),
+                },
+            },
+            px(ACTIONS_WINDOW_WIDTH),
+            px(180.0),
+            WindowPosition::BottomRight,
+        );
+
+        assert_eq!(
+            f32::from(origin.x),
+            20.0 + 750.0 - ACTIONS_WINDOW_WIDTH - ACTIONS_MARGIN_X,
+            "BottomRight must right-align with margin"
+        );
+        assert_eq!(
+            f32::from(origin.y),
+            40.0 + 500.0 - 180.0 - FOOTER_HEIGHT - ACTIONS_MARGIN_Y,
+            "BottomRight must sit above the footer"
+        );
+    }
+
+    #[test]
+    fn top_right_right_aligns_below_titlebar() {
+        let origin = actions_popup_origin(
+            Bounds {
+                origin: Point {
+                    x: px(0.0),
+                    y: px(0.0),
+                },
+                size: Size {
+                    width: px(600.0),
+                    height: px(400.0),
+                },
+            },
+            px(ACTIONS_WINDOW_WIDTH),
+            px(200.0),
+            WindowPosition::TopRight,
+        );
+
+        assert_eq!(
+            f32::from(origin.x),
+            600.0 - ACTIONS_WINDOW_WIDTH - ACTIONS_MARGIN_X,
+            "TopRight must right-align with margin"
+        );
+        assert_eq!(
+            f32::from(origin.y),
+            TITLEBAR_HEIGHT + ACTIONS_MARGIN_Y,
+            "TopRight must anchor below the titlebar"
+        );
+    }
+
+    #[test]
+    fn open_actions_window_uses_actions_popup_origin_helper() {
+        let source = std::fs::read_to_string("src/actions/window.rs")
+            .expect("Failed to read src/actions/window.rs");
+
+        let fn_start = source
+            .find("pub fn open_actions_window(")
+            .expect("open_actions_window not found");
+        let fn_body = &source[fn_start..];
+
+        assert!(
+            fn_body.contains("actions_popup_origin("),
+            "open_actions_window must delegate to actions_popup_origin helper"
         );
     }
 }

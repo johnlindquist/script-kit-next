@@ -79,6 +79,45 @@ pub(crate) mod mini_layout {
     /// Opacity for hint strip shortcut text (uses OPACITY_TEXT_MUTED from theme/opacity).
     pub const HINT_TEXT_OPACITY: f32 = crate::theme::opacity::OPACITY_TEXT_MUTED;
 }
+/// Build a content-aware `MiniMainWindowSizing` from grouped items.
+///
+/// Walks the grouped items list, counting selectable items and section headers
+/// visible in the first page.  Uses the header-aware row cap so that section
+/// headers explicitly reduce the available selectable-row capacity instead of
+/// silently pushing the window height into the max-clamp.
+#[allow(dead_code)] // Called from include!()-ed code in app_impl/ui_window.rs
+pub(crate) fn mini_main_window_sizing_from_grouped_items(
+    grouped_items: &[crate::list_item::GroupedListItem],
+) -> MiniMainWindowSizing {
+    use crate::list_item::GroupedListItem;
+
+    let mut selectable_items = 0usize;
+    let mut visible_section_headers = 0usize;
+
+    for item in grouped_items {
+        let selectable_cap = capped_mini_main_window_selectable_rows(visible_section_headers);
+
+        if selectable_items >= selectable_cap {
+            break;
+        }
+
+        match item {
+            GroupedListItem::SectionHeader(..) => {
+                visible_section_headers += 1;
+            }
+            GroupedListItem::Item(_) => {
+                selectable_items += 1;
+            }
+        }
+    }
+
+    MiniMainWindowSizing {
+        selectable_items,
+        visible_section_headers,
+        is_empty: grouped_items.is_empty(),
+    }
+}
+
 /// Content-aware sizing input for the mini main window.
 ///
 /// Instead of passing a flat `item_count` (which conflates section headers with

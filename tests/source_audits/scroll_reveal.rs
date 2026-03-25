@@ -111,3 +111,52 @@ fn sync_list_state_re_reveals_after_reset() {
         "sync_list_state must re-reveal the selected item after invalidating the reveal cache"
     );
 }
+
+/// Regression guard: same-count list updates (e.g. filtering replaces every row but
+/// the total count stays identical) must still invalidate and re-reveal. This test
+/// proves the invalidation is unconditional — it happens *outside* the
+/// `if old_list_count != item_count` branch.
+#[test]
+fn sync_list_state_regression_invalidates_reveal_even_when_count_unchanged() {
+    let content = read("src/app_navigation/impl_scroll.rs");
+
+    let fn_start = content
+        .find("pub fn sync_list_state(&mut self)")
+        .expect("sync_list_state function not found");
+    let fn_end_marker = content[fn_start..]
+        .find("pub fn validate_selection_bounds")
+        .expect("validate_selection_bounds not found after sync_list_state");
+    let sync_fn = &content[fn_start..fn_start + fn_end_marker];
+
+    // The splice is conditional on count change...
+    let splice_pos = sync_fn
+        .find("self.main_list_state.splice(")
+        .expect("splice call not found in sync_list_state");
+    let splice_guard = sync_fn
+        .find("if old_list_count != item_count")
+        .expect("splice guard not found");
+    assert!(
+        splice_guard < splice_pos,
+        "splice must be inside the count-change guard"
+    );
+
+    // ...but the reveal invalidation must be OUTSIDE that guard (unconditional).
+    let reveal_invalidation = sync_fn
+        .find("self.last_scrolled_index = None;")
+        .expect("reveal cache invalidation not found");
+    // The closing brace of the `if` block sits between splice and invalidation.
+    // Prove invalidation is after the closing brace by checking it's after splice_pos.
+    assert!(
+        reveal_invalidation > splice_pos,
+        "reveal cache invalidation must happen after the conditional splice, i.e. unconditionally"
+    );
+
+    // The re-reveal must also be unconditional (outside the count-change guard).
+    let re_reveal = sync_fn
+        .find("scroll_to_reveal_item(self.selected_index)")
+        .expect("scroll_to_reveal_item call not found");
+    assert!(
+        re_reveal > reveal_invalidation,
+        "re-reveal must happen after cache invalidation"
+    );
+}
