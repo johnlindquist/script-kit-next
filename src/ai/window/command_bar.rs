@@ -366,11 +366,37 @@ impl AiApp {
             return;
         }
 
-        // Handle Cmd+Shift+M to toggle between mini and full window modes
-        if has_cmd && modifiers.contains(&KeyModifier::Shift) && key_lower == "m" {
-            tracing::debug!(target: "ai", "SimulateKey: Cmd+Shift+M - toggling window mode");
-            self.toggle_window_mode(window, cx);
-            return;
+        // Handle Cmd+Shift shortcuts
+        let has_shift = modifiers.contains(&KeyModifier::Shift);
+        if has_cmd && has_shift {
+            match key_lower.as_str() {
+                "m" => {
+                    tracing::debug!(target: "ai", "SimulateKey: Cmd+Shift+M - toggling window mode");
+                    self.toggle_window_mode(window, cx);
+                    return;
+                }
+                "f" => {
+                    tracing::debug!(target: "ai", "SimulateKey: Cmd+Shift+F - focusing search");
+                    if self.window_mode.is_mini() {
+                        self.hide_all_dropdowns(cx);
+                        self.show_mini_history_overlay("simulated_cmd_shift_f", window, cx);
+                    } else {
+                        if self.sidebar_collapsed {
+                            self.sidebar_collapsed = false;
+                        }
+                        self.hide_all_dropdowns(cx);
+                        self.focus_search(window, cx);
+                    }
+                    return;
+                }
+                "n" => {
+                    tracing::debug!(target: "ai", "SimulateKey: Cmd+Shift+N - presets dropdown");
+                    self.hide_all_dropdowns(cx);
+                    self.show_presets_dropdown(window, cx);
+                    return;
+                }
+                _ => {}
+            }
         }
 
         // Handle Cmd+N for new chat
@@ -428,6 +454,29 @@ impl AiApp {
             return;
         }
 
+        // Handle mini history overlay navigation when visible
+        if self.window_mode.is_mini() && self.showing_mini_history_overlay {
+            match key_lower.as_str() {
+                k if is_key_up(k) => {
+                    self.navigate_chat(1, window, cx);
+                    return;
+                }
+                k if is_key_down(k) => {
+                    self.navigate_chat(-1, window, cx);
+                    return;
+                }
+                k if is_key_enter(k) => {
+                    self.dismiss_mini_history_overlay("simulated_enter", window, cx);
+                    return;
+                }
+                k if is_key_escape(k) => {
+                    self.dismiss_mini_history_overlay("simulated_escape", window, cx);
+                    return;
+                }
+                _ => {}
+            }
+        }
+
         // Handle setup mode navigation (when no providers configured)
         let in_setup_mode = self.available_models.is_empty() && !self.showing_api_key_input;
         if in_setup_mode {
@@ -473,16 +522,8 @@ impl AiApp {
         if is_key_escape(&key_lower) {
             // 1. Mini history overlay
             if self.window_mode.is_mini() && self.showing_mini_history_overlay {
-                self.showing_mini_history_overlay = false;
-                self.clear_search_state(window, cx);
-                self.focus_input(window, cx);
-                super::telemetry::log_ai_ui(
-                    "mini_history_overlay_dismissed",
-                    self.window_mode,
-                    "simulated_escape",
-                );
+                self.dismiss_mini_history_overlay("simulated_escape", window, cx);
                 tracing::info!(target: "ai", "SimulateKey: Escape - dismissed mini history overlay");
-                cx.notify();
                 return;
             }
             // 2. Shortcuts overlay

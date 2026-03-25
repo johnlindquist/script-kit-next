@@ -208,7 +208,7 @@ mod ai_window_mode_tests {
         assert_eq!(MINI_TITLEBAR_H, px(44.));
         assert_eq!(MINI_CONTENT_MAX_W, px(760.));
         assert_eq!(MINI_HISTORY_OVERLAY_W, px(380.));
-        assert_eq!(MINI_HISTORY_OVERLAY_MAX_H, px(420.));
+        assert_eq!(MINI_HISTORY_OVERLAY_MAX_H, px(396.));
         assert_eq!(MINI_HISTORY_OVERLAY_TOP, MINI_TITLEBAR_H);
         assert_eq!(MINI_BTN_SIZE, px(28.));
     }
@@ -247,7 +247,8 @@ pub(super) const MINI_CONTENT_MAX_W: Pixels = px(760.);
 /// Must track MINI_TITLEBAR_H so there's no click-through gap.
 pub(super) const MINI_HISTORY_OVERLAY_TOP: Pixels = MINI_TITLEBAR_H;
 pub(super) const MINI_HISTORY_OVERLAY_W: Pixels = px(380.);
-pub(super) const MINI_HISTORY_OVERLAY_MAX_H: Pixels = px(420.);
+/// Derived: window height minus titlebar, so overlay never overflows the mini window.
+pub(super) const MINI_HISTORY_OVERLAY_MAX_H: Pixels = px(396.);
 pub(super) const MINI_BTN_SIZE: Pixels = px(28.);
 /// Number of welcome suggestions shown in mini mode (fewer to fit compact height).
 pub(super) const MINI_SUGGESTION_COUNT: usize = 2;
