@@ -32,6 +32,35 @@ const MINI_MAIN_WINDOW_DIVIDER_HEIGHT: f32 = 1.0;
 const MINI_MAIN_WINDOW_SECTION_HEADER_HEIGHT: f32 = 32.0;
 pub(crate) const MINI_MAIN_WINDOW_MAX_VISIBLE_ROWS: usize = 8;
 
+/// Available pixel budget for list content in the mini main window.
+///
+/// Subtracts the fixed chrome (header + divider + hint strip) from `MAX_HEIGHT`.
+#[allow(dead_code)] // Called from include!()-ed code in app_impl/ui_window.rs
+pub(crate) fn mini_main_window_list_budget_height() -> f32 {
+    MINI_MAIN_WINDOW_MAX_HEIGHT
+        - MINI_MAIN_WINDOW_HEADER_HEIGHT
+        - MINI_MAIN_WINDOW_DIVIDER_HEIGHT
+        - MINI_MAIN_WINDOW_HINT_STRIP_HEIGHT
+}
+
+/// Maximum number of selectable rows that can fit without clipping, given
+/// `visible_section_headers` section headers that each consume
+/// `MINI_MAIN_WINDOW_SECTION_HEADER_HEIGHT` pixels of the list budget.
+#[allow(dead_code)] // Called from include!()-ed code in app_impl/ui_window.rs
+pub(crate) fn capped_mini_main_window_selectable_rows(
+    visible_section_headers: usize,
+) -> usize {
+    let remaining_list_height = mini_main_window_list_budget_height()
+        - (visible_section_headers as f32 * MINI_MAIN_WINDOW_SECTION_HEADER_HEIGHT);
+
+    if remaining_list_height <= 0.0 {
+        0
+    } else {
+        ((remaining_list_height / LIST_ITEM_HEIGHT).floor() as usize)
+            .min(MINI_MAIN_WINDOW_MAX_VISIBLE_ROWS)
+    }
+}
+
 /// Shared layout constants for the mini main window render branch.
 /// Both resize logic and render code consume these so the geometry contract stays in sync.
 /// Constants are consumed from the binary target via `include!()` render code.
@@ -1014,5 +1043,46 @@ mod tests {
         assert!((resized.width - 750.0).abs() < 0.001);
         // X should be preserved
         assert!((resized.x - 100.0).abs() < 0.001);
+    }
+}
+
+#[cfg(test)]
+mod mini_main_window_layout_tests {
+    use super::{
+        capped_mini_main_window_selectable_rows, height_for_mini_main_window,
+        MiniMainWindowSizing, MINI_MAIN_WINDOW_MAX_HEIGHT,
+        MINI_MAIN_WINDOW_MAX_VISIBLE_ROWS,
+    };
+
+    #[test]
+    fn capped_rows_account_for_section_headers() {
+        assert_eq!(
+            capped_mini_main_window_selectable_rows(0),
+            MINI_MAIN_WINDOW_MAX_VISIBLE_ROWS
+        );
+        assert_eq!(capped_mini_main_window_selectable_rows(1), 7);
+        assert_eq!(capped_mini_main_window_selectable_rows(2), 6);
+    }
+
+    #[test]
+    fn two_headers_and_capped_rows_stay_below_max_height() {
+        let height = height_for_mini_main_window(MiniMainWindowSizing {
+            selectable_items: capped_mini_main_window_selectable_rows(2),
+            visible_section_headers: 2,
+            is_empty: false,
+        });
+
+        assert_eq!(f32::from(height), 391.0);
+    }
+
+    #[test]
+    fn uncapped_two_headers_and_eight_rows_would_hit_max_clamp() {
+        let height = height_for_mini_main_window(MiniMainWindowSizing {
+            selectable_items: 8,
+            visible_section_headers: 2,
+            is_empty: false,
+        });
+
+        assert_eq!(f32::from(height), MINI_MAIN_WINDOW_MAX_HEIGHT);
     }
 }

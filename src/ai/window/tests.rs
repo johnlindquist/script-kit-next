@@ -2753,3 +2753,146 @@ fn test_simulated_key_supports_mini_search_focus_shortcut() {
         "Simulated Cmd+Shift+F must use show_mini_history_overlay in mini mode"
     );
 }
+
+/// Simulated Cmd+N must route to `new_conversation`, matching the real
+/// keyboard shortcut path — not `show_new_chat_command_bar`.
+#[test]
+fn test_simulated_cmd_n_routes_to_new_conversation() {
+    let source = include_str!("command_bar.rs");
+    let handler = source
+        .find("fn handle_simulated_key")
+        .expect("handle_simulated_key must exist in command_bar.rs");
+    let after = &source[handler..];
+    let cmd_n = after
+        .find("if has_cmd && key_lower == \"n\"")
+        .expect("Simulated Cmd+N handler must exist");
+    let region = &after[cmd_n..(cmd_n + 240).min(after.len())];
+
+    assert!(
+        region.contains("self.new_conversation(window, cx);"),
+        "Simulated Cmd+N must delegate to new_conversation"
+    );
+    assert!(
+        !region.contains("show_new_chat_command_bar"),
+        "Simulated Cmd+N must not open the command bar"
+    );
+}
+
+/// The mini header "New" button opens the new-chat command bar (options
+/// launcher) — deliberately different from `Cmd+N` which creates a blank
+/// conversation. The tooltip must clarify this distinction.
+#[test]
+fn test_mini_header_new_button_is_options_launcher() {
+    let source = include_str!("render_root.rs");
+    let mini_new = source
+        .find("ai-mini-new")
+        .expect("Mini header New button must exist");
+    let after = &source[mini_new..];
+    let region_end = after.find("ai-mini-actions").unwrap_or(after.len());
+    let region = &after[..region_end];
+
+    assert!(
+        region.contains("show_new_chat_command_bar("),
+        "Mini header New button should open the new-chat command bar"
+    );
+    assert!(
+        region.contains("New chat options"),
+        "Tooltip must clarify this is the options launcher, not Cmd+N"
+    );
+}
+
+/// Mini main panel must render context recommendations and show a disabled
+/// send affordance when the input is empty.
+#[test]
+fn test_mini_panel_renders_recommendations_and_disabled_send_affordance() {
+    let source = include_str!("render_main_panel.rs");
+    let mini_fn = source
+        .find("fn render_mini_main_panel")
+        .expect("render_mini_main_panel must exist");
+    let after = &source[mini_fn..(mini_fn + 12000).min(source.len())];
+
+    assert!(
+        after.contains("render_context_recommendations"),
+        "Mini panel must render context recommendations"
+    );
+    assert!(
+        after.contains("ai-mini-submit-btn-disabled"),
+        "Mini panel must render a disabled send affordance when input is empty"
+    );
+}
+
+/// show_mini_history_overlay must unconditionally set the flag and focus
+/// search, ensuring idempotent behavior when called repeatedly.
+#[test]
+fn test_show_mini_history_overlay_always_sets_flag_and_focuses_search() {
+    let source = include_str!("render_root.rs");
+    let show_fn = source
+        .find("fn show_mini_history_overlay")
+        .expect("show_mini_history_overlay must exist");
+    let after = &source[show_fn..(show_fn + 450).min(source.len())];
+
+    assert!(
+        after.contains("self.showing_mini_history_overlay = true;"),
+        "show_mini_history_overlay must set the overlay visible"
+    );
+    assert!(
+        after.contains("self.focus_search(window, cx);"),
+        "show_mini_history_overlay must always refocus search"
+    );
+}
+
+/// Mini titlebar model selector must use the Button-based chip from
+/// render_mini_model_chip, not plain text. The chip opens the command bar
+/// for model switching.
+#[test]
+fn test_mini_model_chip_uses_button_component() {
+    let source = include_str!("render_input.rs");
+    let chip_fn = source
+        .find("fn render_mini_model_chip")
+        .expect("render_mini_model_chip must exist in render_input.rs");
+    let after = &source[chip_fn..(chip_fn + 2500).min(source.len())];
+
+    // Uses the Button component, not a plain div
+    assert!(
+        after.contains("crate::components::Button::new("),
+        "Mini model chip must use the Button component"
+    );
+    // Uses Ghost variant for compact appearance
+    assert!(
+        after.contains("ButtonVariant::Ghost"),
+        "Mini model chip must use Ghost variant"
+    );
+    // Opens command bar, not cycle_model
+    assert!(
+        after.contains("show_command_bar("),
+        "Mini model chip must open command bar on click"
+    );
+    // Has setup-required fallback
+    assert!(
+        after.contains("Setup Required"),
+        "Mini model chip must show setup fallback when no models available"
+    );
+}
+
+/// The mini titlebar must delegate to render_mini_model_chip rather than
+/// inline plain-text model rendering.
+#[test]
+fn test_mini_titlebar_uses_model_chip() {
+    let source = include_str!("render_root.rs");
+    let titlebar = source
+        .find("ai-titlebar-mini")
+        .expect("Mini titlebar must exist in render_root.rs");
+    let after = &source[titlebar..];
+    let region_end = after.find("ai-mini-actions").unwrap_or(after.len());
+    let region = &after[..region_end];
+
+    assert!(
+        region.contains("render_mini_model_chip"),
+        "Mini titlebar must delegate to render_mini_model_chip"
+    );
+    // Plain text model name should no longer be inline
+    assert!(
+        !region.contains("ai-mini-model-name"),
+        "Mini titlebar should not have inline plain-text model selector"
+    );
+}

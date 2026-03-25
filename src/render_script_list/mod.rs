@@ -653,6 +653,25 @@ impl ScriptListApp {
                     }
                 }
 
+                // If actions popup is open, route all keyboard events through the shared router
+                let key_char = event.keystroke.key_char.as_ref().map(|s| s.as_ref());
+                match this.route_key_to_actions_dialog(
+                    key_str,
+                    key_char,
+                    &event.keystroke.modifiers,
+                    ActionsDialogHost::MainList,
+                    window,
+                    cx,
+                ) {
+                    ActionsRoute::Execute { action_id } => {
+                        this.handle_action(action_id, window, cx);
+                        cx.notify();
+                        return;
+                    }
+                    ActionsRoute::Handled => return,
+                    ActionsRoute::NotHandled => {}
+                }
+
                 if has_cmd {
                     let has_shift = event.keystroke.modifiers.shift;
 
@@ -743,142 +762,7 @@ impl ScriptListApp {
                     }
                 }
 
-                // If actions popup is open, route keyboard events to it
-                if this.show_actions_popup {
-                    if let Some(ref dialog) = this.actions_dialog {
-                        match key_str {
-                            key if sk_is_key_up(key) => {
-                                dialog.update(cx, |d, cx| d.move_up(cx));
-                                // Notify actions window to re-render
-                                cx.spawn(async move |_this, cx| {
-                                    cx.update(notify_actions_window);
-                                })
-                                .detach();
-                                return;
-                            }
-                            key if sk_is_key_down(key) => {
-                                dialog.update(cx, |d, cx| d.move_down(cx));
-                                // Notify actions window to re-render
-                                cx.spawn(async move |_this, cx| {
-                                    cx.update(notify_actions_window);
-                                })
-                                .detach();
-                                return;
-                            }
-                            key if sk_is_key_enter(key) => {
-                                // Get the selected action and execute it
-                                let action_id = dialog.read(cx).get_selected_action_id();
-                                let should_close = dialog.read(cx).selected_action_should_close();
-                                if let Some(action_id) = action_id {
-                                    logging::log(
-                                        "ACTIONS",
-                                        &format!(
-                                            "Executing action: {} (close={})",
-                                            action_id, should_close
-                                        ),
-                                    );
-                                    // Only close if action has close: true (default)
-                                    if should_close {
-                                        this.close_actions_popup(
-                                            ActionsDialogHost::MainList,
-                                            window,
-                                            cx,
-                                        );
-                                    }
-                                    this.handle_action(action_id, window, cx);
-                                }
-                                // Notify to update UI state after closing popup
-                                cx.notify();
-                                return;
-                            }
-                            key if sk_is_key_escape(key) => {
-                                this.close_actions_popup(ActionsDialogHost::MainList, window, cx);
-                                cx.notify();
-                                return;
-                            }
-                            "backspace" => {
-                                dialog.update(cx, |d, cx| d.handle_backspace(cx));
-                                // Resize and notify actions window to re-render
-                                let dialog_for_resize = dialog.clone();
-                                cx.spawn(async move |_this, cx| {
-                                    cx.update(|cx| {
-                                        resize_actions_window(cx, &dialog_for_resize);
-                                    });
-                                })
-                                .detach();
-                                return;
-                            }
-                            _ => {
-                                let modifiers = &event.keystroke.modifiers;
-
-                                // Check for printable character input (only when no modifiers are held)
-                                // This prevents Cmd+E from being treated as typing 'e' into the search
-                                if !modifiers.platform && !modifiers.control && !modifiers.alt {
-                                    if let Some(ref key_char) = event.keystroke.key_char {
-                                        if let Some(ch) = key_char.chars().next() {
-                                            if !ch.is_control() {
-                                                dialog.update(cx, |d, cx| d.handle_char(ch, cx));
-                                                // Resize and notify actions window to re-render
-                                                let dialog_for_resize = dialog.clone();
-                                                cx.spawn(async move |_this, cx| {
-                                                    cx.update(|cx| {
-                                                        resize_actions_window(
-                                                            cx,
-                                                            &dialog_for_resize,
-                                                        );
-                                                    });
-                                                })
-                                                .detach();
-                                                return;
-                                            }
-                                        }
-                                    }
-                                }
-
-                                // Check if keystroke matches any action shortcut in the dialog
-                                // This allows Cmd+E, Cmd+L, etc. to execute the corresponding action
-                                let key_lower = key_str.to_lowercase();
-                                let keystroke_shortcut =
-                                    shortcuts::keystroke_to_shortcut(&key_lower, modifiers);
-
-                                // Read dialog actions and look for matching shortcut
-                                let dialog_ref = dialog.read(cx);
-                                let mut matched_action: Option<String> = None;
-                                for action in &dialog_ref.actions {
-                                    if let Some(ref display_shortcut) = action.shortcut {
-                                        let normalized =
-                                            Self::normalize_display_shortcut(display_shortcut);
-                                        if normalized == keystroke_shortcut {
-                                            matched_action = Some(action.id.clone());
-                                            break;
-                                        }
-                                    }
-                                }
-                                let _ = dialog_ref;
-
-                                if let Some(action_id) = matched_action {
-                                    logging::log(
-                                        "ACTIONS",
-                                        &format!(
-                                            "Actions dialog shortcut matched: {} -> {}",
-                                            keystroke_shortcut, action_id
-                                        ),
-                                    );
-                                    // Close the dialog using centralized helper
-                                    this.close_actions_popup(
-                                        ActionsDialogHost::MainList,
-                                        window,
-                                        cx,
-                                    );
-                                    // Execute the action
-                                    this.handle_action(action_id, window, cx);
-                                    cx.notify();
-                                }
-                                return;
-                            }
-                        }
-                    }
-                }
+                // Actions popup keyboard routing is handled above via route_key_to_actions_dialog
 
                 // LEGACY: Check if we're in fallback mode (no script matches, showing fallback commands)
                 // Note: This is legacy code that handled a separate fallback rendering path.

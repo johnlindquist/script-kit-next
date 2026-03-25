@@ -16,7 +16,6 @@ fn mini_shell_exposes_machine_addressable_ids() {
         "ai-mini-new",
         "ai-mini-actions",
         "ai-mini-history-overlay",
-        "ai-mini-model-name",
         "ai-mini-history-backdrop",
     ] {
         assert!(
@@ -24,6 +23,12 @@ fn mini_shell_exposes_machine_addressable_ids() {
             "render_root.rs missing expected element ID: {id}"
         );
     }
+
+    let input = read("src/ai/window/render_input.rs");
+    assert!(
+        input.contains("ai-mini-model-chip") || input.contains("ai-mini-model-setup"),
+        "render_input.rs must expose the mini model chip or setup fallback ID"
+    );
 }
 
 #[test]
