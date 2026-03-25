@@ -2211,11 +2211,11 @@ mod from_dialog_builtin_action_validation_tests_22 {
             has_response: false,
         };
         let actions = get_chat_context_actions(&info);
-        // Just continue_in_chat
-        assert_eq!(actions.len(), 2);
+        // continue_in_chat + expand_full_chat + capture_screen_area
+        assert_eq!(actions.len(), 3);
         assert_eq!(actions[0].id, "chat:continue_in_chat");
     }
-    
+
     #[test]
     fn batch22_chat_two_models_both_flags() {
         let info = ChatPromptInfo {
@@ -2236,10 +2236,10 @@ mod from_dialog_builtin_action_validation_tests_22 {
             has_response: true,
         };
         let actions = get_chat_context_actions(&info);
-        // 2 models + continue + copy_response + clear_conversation = 5
-        assert_eq!(actions.len(), 6);
+        // 2 models + continue + expand + copy_response + clear_conversation + capture = 7
+        assert_eq!(actions.len(), 7);
     }
-    
+
     #[test]
     fn batch22_chat_current_model_checkmark() {
         let info = ChatPromptInfo {
@@ -4909,11 +4909,11 @@ mod from_dialog_builtin_action_validation_tests_24 {
             has_response: false,
         };
         let actions = get_chat_context_actions(&info);
-        // Only continue_in_chat
-        assert_eq!(actions.len(), 2);
+        // continue_in_chat + expand_full_chat + capture_screen_area
+        assert_eq!(actions.len(), 3);
         assert_eq!(actions[0].id, "chat:continue_in_chat");
     }
-    
+
     #[test]
     fn batch24_chat_response_only() {
         let info = ChatPromptInfo {
@@ -4923,11 +4923,11 @@ mod from_dialog_builtin_action_validation_tests_24 {
             has_response: true,
         };
         let actions = get_chat_context_actions(&info);
-        assert_eq!(actions.len(), 3);
+        assert_eq!(actions.len(), 4);
         assert!(actions.iter().any(|a| a.id == "chat:copy_response"));
         assert!(!actions.iter().any(|a| a.id == "chat:clear_conversation"));
     }
-    
+
     #[test]
     fn batch24_chat_messages_only() {
         let info = ChatPromptInfo {
@@ -4937,11 +4937,11 @@ mod from_dialog_builtin_action_validation_tests_24 {
             has_response: false,
         };
         let actions = get_chat_context_actions(&info);
-        assert_eq!(actions.len(), 3);
+        assert_eq!(actions.len(), 4);
         assert!(!actions.iter().any(|a| a.id == "chat:copy_response"));
         assert!(actions.iter().any(|a| a.id == "chat:clear_conversation"));
     }
-    
+
     #[test]
     fn batch24_chat_both_flags() {
         let info = ChatPromptInfo {
@@ -4951,11 +4951,11 @@ mod from_dialog_builtin_action_validation_tests_24 {
             has_response: true,
         };
         let actions = get_chat_context_actions(&info);
-        assert_eq!(actions.len(), 4);
+        assert_eq!(actions.len(), 5);
         assert!(actions.iter().any(|a| a.id == "chat:copy_response"));
         assert!(actions.iter().any(|a| a.id == "chat:clear_conversation"));
     }
-    
+
     // ============================================================
     // 5. Chat context: model checkmark only for current model
     // ============================================================
@@ -8024,10 +8024,10 @@ mod from_dialog_builtin_action_validation_tests_27 {
             has_response: false,
         };
         let actions = get_chat_context_actions(&info);
-        assert_eq!(actions.len(), 2);
+        assert_eq!(actions.len(), 3);
         assert_eq!(actions[0].id, "chat:continue_in_chat");
     }
-    
+
     #[test]
     fn cat27_06_chat_one_model_both_flags_four_actions() {
         let info = ChatPromptInfo {
@@ -8041,8 +8041,8 @@ mod from_dialog_builtin_action_validation_tests_27 {
             has_response: true,
         };
         let actions = get_chat_context_actions(&info);
-        // 1 model + continue_in_chat + copy_response + clear_conversation = 4
-        assert_eq!(actions.len(), 5);
+        // 1 model + continue + expand + copy_response + clear + capture = 6
+        assert_eq!(actions.len(), 6);
     }
     
     #[test]
@@ -8070,8 +8070,8 @@ mod from_dialog_builtin_action_validation_tests_27 {
             has_response: false,
         };
         let actions = get_chat_context_actions(&info);
-        // 3 models + continue_in_chat = 4
-        assert_eq!(actions.len(), 5);
+        // 3 models + continue + expand + capture = 6
+        assert_eq!(actions.len(), 6);
     }
     
     #[test]
@@ -8083,8 +8083,8 @@ mod from_dialog_builtin_action_validation_tests_27 {
             has_response: true,
         };
         let actions = get_chat_context_actions(&info);
-        // continue_in_chat + copy_response = 2
-        assert_eq!(actions.len(), 3);
+        // continue + expand + copy_response + capture = 4
+        assert_eq!(actions.len(), 4);
         let ids: Vec<&str> = actions.iter().map(|a| a.id.as_str()).collect();
         assert!(ids.contains(&"chat:copy_response"));
         assert!(!ids.contains(&"chat:clear_conversation"));

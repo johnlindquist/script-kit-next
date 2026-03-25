@@ -535,6 +535,24 @@ impl ScriptListApp {
         cx.notify();
     }
 
+    /// Resolve the chat actions popup window position based on the current window mode.
+    ///
+    /// Mini mode uses `TopCenter` to match the mini main launcher feel.
+    /// Full mode uses `BottomRight` (existing behavior).
+    fn chat_actions_window_position(&self) -> crate::actions::WindowPosition {
+        let position = match self.main_window_mode {
+            MainWindowMode::Mini => crate::actions::WindowPosition::TopCenter,
+            MainWindowMode::Full => crate::actions::WindowPosition::BottomRight,
+        };
+        tracing::info!(
+            event = "chat_actions_window_position.resolved",
+            mode = ?self.main_window_mode,
+            position = ?position,
+            "Resolved chat actions anchor position"
+        );
+        position
+    }
+
     /// Toggle actions dialog for chat prompts
     /// Opens ActionsDialog with model selection and chat-specific actions
     pub fn toggle_chat_actions(&mut self, cx: &mut Context<Self>, window: &mut Window) {
@@ -621,13 +639,15 @@ impl ScriptListApp {
                 ),
             );
 
+            let position = self.chat_actions_window_position();
+
             // Open the actions window via spawn
             Self::spawn_open_actions_window(
                 cx,
                 main_bounds,
                 display_id,
                 dialog,
-                crate::actions::WindowPosition::BottomRight,
+                position,
                 "Chat actions popup window opened",
                 "Failed to open chat actions window",
             );

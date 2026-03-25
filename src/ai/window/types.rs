@@ -1231,11 +1231,21 @@ mod shortcut_mode_filter_tests {
     #[test]
     fn cross_mode_shortcuts_include_context_and_window_actions() {
         assert!(
-            has_shortcut(AI_SHORTCUTS_INPUT, "\u{2318}\u{21e7}A", "Attach context", None),
+            has_shortcut(
+                AI_SHORTCUTS_INPUT,
+                "\u{2318}\u{21e7}A",
+                "Attach context",
+                None
+            ),
             "⌘⇧A attach context must be registered as cross-mode"
         );
         assert!(
-            has_shortcut(AI_SHORTCUTS_ACTIONS, "\u{2325}\u{2318}I", "Inspect context", None),
+            has_shortcut(
+                AI_SHORTCUTS_ACTIONS,
+                "\u{2325}\u{2318}I",
+                "Inspect context",
+                None
+            ),
             "⌥⌘I inspect context must be registered as cross-mode"
         );
         assert!(

@@ -30,9 +30,28 @@ impl ScriptListApp {
         // Handle other chat actions
         match action_id {
             "continue_in_chat" => {
+                tracing::info!(
+                    event = "execute_chat_action",
+                    action = "continue_in_chat",
+                    reuses = "handle_continue_in_chat",
+                    "Handoff to mini AI window via existing continue_in_chat path"
+                );
                 if let AppView::ChatPrompt { entity, .. } = &self.current_view {
                     entity.update(cx, |chat, cx| {
                         chat.handle_continue_in_chat(cx);
+                    });
+                }
+            }
+            "expand_full_chat" => {
+                tracing::info!(
+                    event = "execute_chat_action",
+                    action = "expand_full_chat",
+                    reuses = "handle_expand_full_chat",
+                    "Handoff to full AI window via expand_full_chat path"
+                );
+                if let AppView::ChatPrompt { entity, .. } = &self.current_view {
+                    entity.update(cx, |chat, cx| {
+                        chat.handle_expand_full_chat(cx);
                     });
                 }
             }

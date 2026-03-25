@@ -39,23 +39,7 @@ impl ChatPrompt {
                 input_content.child(div().text_color(placeholder_text_color).child(placeholder));
         }
 
-        let input_bg_alpha = if is_focused {
-            CHAT_LAYOUT_INPUT_BG_FOCUSED_ALPHA
-        } else {
-            CHAT_LAYOUT_INPUT_BG_IDLE_ALPHA
-        };
-        let input_border = if is_focused {
-            theme_colors.accent.selected
-        } else {
-            theme_colors.ui.border
-        };
-        let input_border_alpha = if is_focused {
-            CHAT_LAYOUT_INPUT_BORDER_FOCUSED_ALPHA
-        } else {
-            CHAT_LAYOUT_INPUT_BORDER_IDLE_ALPHA
-        };
-
-        div()
+        let mut field = div()
             .id("chat-input-field")
             .w_full()
             .min_h(px(28.0))
@@ -63,14 +47,36 @@ impl ChatPrompt {
             .py(px(CHAT_LAYOUT_SECTION_PADDING_Y))
             .flex()
             .flex_row()
-            .items_center()
-            .rounded(px(8.0))
-            .bg(rgba(
-                (theme_colors.background.search_box << 8) | input_bg_alpha,
-            ))
-            .border_1()
-            .border_color(rgba((input_border << 8) | input_border_alpha))
-            .child(input_content)
+            .items_center();
+
+        if !self.mini_mode {
+            // Full mode: card-style input with rounded corners, bg, and border.
+            let input_bg_alpha = if is_focused {
+                CHAT_LAYOUT_INPUT_BG_FOCUSED_ALPHA
+            } else {
+                CHAT_LAYOUT_INPUT_BG_IDLE_ALPHA
+            };
+            let input_border = if is_focused {
+                theme_colors.accent.selected
+            } else {
+                theme_colors.ui.border
+            };
+            let input_border_alpha = if is_focused {
+                CHAT_LAYOUT_INPUT_BORDER_FOCUSED_ALPHA
+            } else {
+                CHAT_LAYOUT_INPUT_BORDER_IDLE_ALPHA
+            };
+
+            field = field
+                .rounded(px(8.0))
+                .bg(rgba(
+                    (theme_colors.background.search_box << 8) | input_bg_alpha,
+                ))
+                .border_1()
+                .border_color(rgba((input_border << 8) | input_border_alpha));
+        }
+
+        field.child(input_content)
     }
 
     /// Render the header with back button and title

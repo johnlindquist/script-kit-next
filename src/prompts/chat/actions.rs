@@ -81,7 +81,21 @@ impl ChatPrompt {
     }
 
     pub fn handle_continue_in_chat(&mut self, cx: &mut Context<Self>) {
-        logging::log("CHAT", "Continue in Chat - opening AI window");
+        self.transfer_to_ai_window(false, cx);
+    }
+
+    pub fn handle_expand_full_chat(&mut self, cx: &mut Context<Self>) {
+        self.transfer_to_ai_window(true, cx);
+    }
+
+    /// Shared handoff: collect messages, save, reset inline state, dismiss,
+    /// then open the AI window in the requested mode.
+    fn transfer_to_ai_window(&mut self, full_mode: bool, cx: &mut Context<Self>) {
+        let mode_label = if full_mode { "full" } else { "mini" };
+        logging::log(
+            "CHAT",
+            &format!("Transfer to AI window (mode={})", mode_label),
+        );
 
         // Collect conversation history from messages, including image attachments
         let messages: Vec<ai::PendingChatMessage> = self
@@ -104,7 +118,8 @@ impl ChatPrompt {
         let message_count = messages.len();
         let image_count = messages.iter().filter(|m| m.image_base64.is_some()).count();
         tracing::info!(
-            action = "continue_in_chat",
+            action = "transfer_to_ai_window",
+            target_mode = mode_label,
             message_count = message_count,
             image_count = image_count,
             "Transferring conversation to AI window"
@@ -140,7 +155,11 @@ impl ChatPrompt {
                 .await;
 
             let open_result = cx.update(|cx| {
-                ai::open_ai_window(cx).map_err(|error| error.to_string())?;
+                if full_mode {
+                    ai::open_ai_window(cx).map_err(|error| error.to_string())?;
+                } else {
+                    ai::open_mini_ai_window(cx).map_err(|error| error.to_string())?;
+                }
                 ai::set_ai_pending_chat(cx, messages)?;
                 Ok::<(), String>(())
             });
@@ -148,12 +167,17 @@ impl ChatPrompt {
             match open_result {
                 Ok(()) => {
                     tracing::info!(
-                        action = "continue_in_chat",
+                        action = "transfer_to_ai_window",
+                        target_mode = full_mode,
                         "AI window opened with deferred pending chat"
                     );
                 }
                 Err(error) => {
-                    tracing::error!(error = %error, "Failed to open AI window for continue-in-chat");
+                    tracing::error!(
+                        error = %error,
+                        target_mode = full_mode,
+                        "Failed to open AI window for chat transfer"
+                    );
                 }
             }
         })
@@ -274,10 +298,19 @@ impl ChatPrompt {
     pub(super) fn toggle_actions_menu(&mut self, _cx: &mut Context<Self>) {
         // Delegate to parent via callback to open standard ActionsDialog
         if let Some(ref callback) = self.on_show_actions {
-            logging::log("CHAT", "Requesting actions dialog via callback");
+            tracing::info!(
+                event = "toggle_actions_menu.delegated",
+                id = %self.id,
+                mini_mode = self.mini_mode,
+                "ChatPrompt delegating actions toggle to parent via callback"
+            );
             callback(self.id.clone());
         } else {
-            logging::log("CHAT", "No on_show_actions callback set");
+            tracing::warn!(
+                event = "toggle_actions_menu.no_callback",
+                id = %self.id,
+                "No on_show_actions callback set — actions toggle request dropped"
+            );
         }
     }
 }

@@ -759,8 +759,8 @@ fn chat_zero_models() {
         has_response: false,
     };
     let actions = get_chat_context_actions(&info);
-    // Should have only "continue_in_chat" (no copy_response, no clear)
-    assert_eq!(actions.len(), 2);
+    // Should have only "continue_in_chat" + expand_full_chat + capture_screen_area (no copy_response, no clear)
+    assert_eq!(actions.len(), 3);
     assert_eq!(actions[0].id, "chat:continue_in_chat");
 }
 

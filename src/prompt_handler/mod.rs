@@ -2508,11 +2508,21 @@ impl ScriptListApp {
                     }
                 }
 
-                // Note: ⌘K for actions is handled at the main app level in handle_key_event
-                // The ChatPrompt's on_show_actions callback is not needed when main app handles it
-
+                // Wire on_show_actions so ChatPrompt's internal toggle_actions_menu
+                // has a live callback. ⌘K is also intercepted at the parent level.
                 logging::bench_log("ChatPrompt_creating");
                 let entity = cx.new(|_| chat_prompt);
+                let app_weak = cx.entity().downgrade();
+                entity.update(cx, |chat, _cx| {
+                    chat.set_on_show_actions(std::sync::Arc::new(move |_prompt_id| {
+                        tracing::info!(
+                            event = "on_show_actions.triggered",
+                            source = "sdk-chat",
+                            "ChatPrompt requested actions dialog via callback"
+                        );
+                        let _ = &app_weak;
+                    }));
+                });
                 self.current_view = AppView::ChatPrompt { id, entity };
                 self.focused_input = FocusedInput::None;
                 self.pending_focus = Some(FocusTarget::ChatPrompt);
