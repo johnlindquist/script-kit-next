@@ -8,7 +8,9 @@ use crate::theme::opacity::{OPACITY_HOVER, OPACITY_SELECTED};
 /// - For windows where available space is less than `MINI_HISTORY_OVERLAY_MAX_H`,
 ///   returns the available space.
 /// - For tall windows, caps at `MINI_HISTORY_OVERLAY_MAX_H`.
-pub(super) fn mini_history_overlay_max_height_for_window(window_height: gpui::Pixels) -> gpui::Pixels {
+pub(super) fn mini_history_overlay_max_height_for_window(
+    window_height: gpui::Pixels,
+) -> gpui::Pixels {
     let available = window_height - MINI_HISTORY_OVERLAY_TOP - S3;
 
     if available < S9 {
@@ -161,9 +163,7 @@ impl AiApp {
     /// Compute the effective max height for the mini history overlay,
     /// clamping against the actual window bounds so the panel never overflows.
     fn mini_history_overlay_max_height(&self, window: &Window) -> gpui::Pixels {
-        mini_history_overlay_max_height_for_window(
-            window.window_bounds().get_bounds().size.height,
-        )
+        mini_history_overlay_max_height_for_window(window.window_bounds().get_bounds().size.height)
     }
 
     fn render_mini_history_overlay(
