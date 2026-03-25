@@ -373,7 +373,6 @@ mod prompt_layout_shell_tests {
             "render_select_prompt",
             "render_env_prompt",
             "render_drop_prompt",
-            "render_chat_prompt",
         ] {
             let body = fn_source(fn_name);
             assert!(
@@ -381,6 +380,27 @@ mod prompt_layout_shell_tests {
                 "{fn_name} should delegate to render_simple_prompt_shell"
             );
         }
+    }
+
+    #[test]
+    fn chat_prompt_uses_chat_specific_shell_wrapper_in_other_rs() {
+        let body = fn_source("render_chat_prompt");
+        assert!(
+            body.contains("prompt_shell_container("),
+            "render_chat_prompt should use prompt_shell_container directly"
+        );
+        assert!(
+            body.contains("prompt_shell_content(entity)"),
+            "render_chat_prompt should use prompt_shell_content directly"
+        );
+        assert!(
+            body.contains("other_prompt_shell_handle_key_chat"),
+            "render_chat_prompt should keep the chat-specific key handler"
+        );
+        assert!(
+            !body.contains("render_simple_prompt_shell("),
+            "render_chat_prompt should not delegate to render_simple_prompt_shell"
+        );
     }
 
     #[test]
