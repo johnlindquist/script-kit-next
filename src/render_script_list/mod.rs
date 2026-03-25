@@ -994,21 +994,29 @@ impl ScriptListApp {
                     .child(div().w_full().h_full().min_h(px(0.)).child(list_element)),
             );
 
-            // Compact hint strip instead of footer
-            let hint_text_color = self.theme.colors.text.dimmed;
+            // Compact hint strip instead of footer — uses shared mini_layout tokens
+            // and opacity-blended text for a softer, Raycast-like launcher feel.
+            let hint_text_hex = self.theme.colors.text.primary;
+            let hint_opacity_byte = (crate::window_resize::mini_layout::HINT_TEXT_OPACITY * 255.0)
+                .round() as u32;
+            let hint_text_rgba = (hint_text_hex << 8) | hint_opacity_byte;
             main_div = main_div.child(
                 div()
                     .w_full()
+                    .h(px(crate::window_resize::mini_layout::HINT_STRIP_HEIGHT))
                     .px(px(crate::window_resize::mini_layout::HINT_STRIP_PADDING_X))
                     .py(px(crate::window_resize::mini_layout::HINT_STRIP_PADDING_Y))
                     .flex()
                     .flex_row()
                     .items_center()
                     .justify_between()
+                    // Subtle top border to separate hint strip from list
+                    .border_t(px(crate::window_resize::mini_layout::DIVIDER_HEIGHT))
+                    .border_color(rgba(chrome.divider_rgba))
                     .child(
                         div()
                             .text_xs()
-                            .text_color(rgb(hint_text_color))
+                            .text_color(rgba(hint_text_rgba))
                             .child("↵ Run  ·  ⌘K Actions  ·  Tab AI"),
                     ),
             );
@@ -1019,13 +1027,16 @@ impl ScriptListApp {
 
             if state_changed {
                 let total_elapsed = render_list_start.elapsed();
-                logging::log(
-                    "RENDER_PERF",
-                    &format!(
-                        "[RENDER_SCRIPT_LIST_END] filter='{}' total={:.2}ms mode=mini",
-                        filter_for_log,
-                        total_elapsed.as_secs_f64() * 1000.0
-                    ),
+                tracing::info!(
+                    target: "RENDER_PERF",
+                    category = "mini_render",
+                    event = "render_script_list_end",
+                    filter = %filter_for_log,
+                    item_count = item_count_for_log,
+                    selected_index = self.selected_index,
+                    total_ms = format_args!("{:.2}", total_elapsed.as_secs_f64() * 1000.0),
+                    mode = "mini",
+                    "mini script list render complete"
                 );
                 self.last_render_log_filter = self.filter_text.clone();
                 self.last_render_log_selection = self.selected_index;
