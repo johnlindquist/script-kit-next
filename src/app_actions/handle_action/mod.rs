@@ -454,9 +454,22 @@ impl ScriptListApp {
     /// Return true when the current view has any available actions.
     fn has_actions(&mut self) -> bool {
         match &self.current_view {
-            AppView::ClipboardHistoryView { .. } => self.selected_clipboard_entry().is_some(),
+            AppView::ClipboardHistoryView { .. } => {
+                let has = self.selected_clipboard_entry().is_some();
+                tracing::debug!(
+                    event = "has_actions.clipboard",
+                    has_selected_entry = has,
+                    "has_actions (clipboard)",
+                );
+                has
+            }
             _ => {
                 let script_info = self.get_focused_script_info();
+                let has_script_info = script_info.is_some();
+                let script_name = script_info
+                    .as_ref()
+                    .map(|s| s.name.clone())
+                    .unwrap_or_default();
                 let mut actions = Vec::new();
 
                 if let Some(ref script) = script_info {
@@ -469,8 +482,20 @@ impl ScriptListApp {
                     }
                 }
 
+                let global_count_before = actions.len();
                 actions.extend(crate::actions::get_global_actions());
-                !actions.is_empty()
+                let result = !actions.is_empty();
+                tracing::debug!(
+                    event = "has_actions.check",
+                    has_script_info = has_script_info,
+                    script_name = %script_name,
+                    script_actions = global_count_before,
+                    total_actions = actions.len(),
+                    result = result,
+                    selected_index = self.selected_index,
+                    "has_actions: script_info={}", has_script_info,
+                );
+                result
             }
         }
     }
