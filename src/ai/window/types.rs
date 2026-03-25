@@ -870,6 +870,21 @@ pub(super) const AI_SHORTCUTS_NAVIGATION: &[AiShortcutItem] = &[
         mode: Some(AiWindowMode::Mini),
     },
     AiShortcutItem {
+        keys: "\u{2191}\u{2193}",
+        description: "Navigate history (overlay)",
+        mode: Some(AiWindowMode::Mini),
+    },
+    AiShortcutItem {
+        keys: "Enter",
+        description: "Select chat (overlay)",
+        mode: Some(AiWindowMode::Mini),
+    },
+    AiShortcutItem {
+        keys: "Esc",
+        description: "Close overlay",
+        mode: Some(AiWindowMode::Mini),
+    },
+    AiShortcutItem {
         keys: "\u{2318}B",
         description: "Toggle sidebar",
         mode: Some(AiWindowMode::Full),
