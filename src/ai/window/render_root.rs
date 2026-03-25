@@ -139,7 +139,28 @@ impl AiApp {
         }
     }
 
-    fn render_mini_history_overlay(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
+    /// Compute the effective max height for the mini history overlay,
+    /// clamping against the actual window bounds so the panel never overflows.
+    fn mini_history_overlay_max_height(&self, window: &Window) -> gpui::Pixels {
+        let available =
+            window.window_bounds().get_bounds().size.height - MINI_HISTORY_OVERLAY_TOP - S3;
+
+        if available < S9 {
+            S9
+        } else if available < MINI_HISTORY_OVERLAY_MAX_H {
+            available
+        } else {
+            MINI_HISTORY_OVERLAY_MAX_H
+        }
+    }
+
+    fn render_mini_history_overlay(
+        &mut self,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let overlay_max_height = self.mini_history_overlay_max_height(window);
+
         // Transparent backdrop catches clicks outside the overlay to dismiss it.
         div()
             .id("ai-mini-history-backdrop")
@@ -160,7 +181,7 @@ impl AiApp {
                     .top(MINI_HISTORY_OVERLAY_TOP)
                     .right(S3)
                     .w(MINI_HISTORY_OVERLAY_W)
-                    .max_h(MINI_HISTORY_OVERLAY_MAX_H)
+                    .max_h(overlay_max_height)
                     .bg(cx.theme().background)
                     .border_1()
                     .border_color(cx.theme().border)
@@ -753,7 +774,7 @@ impl Render for AiApp {
             })
             .when(
                 self.window_mode.is_mini() && self.showing_mini_history_overlay,
-                |el| el.child(self.render_mini_history_overlay(cx)),
+                |el| el.child(self.render_mini_history_overlay(window, cx)),
             )
             // Overlay dropdowns (only one at a time)
             .when(self.showing_presets_dropdown, |el| {

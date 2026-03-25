@@ -305,8 +305,7 @@ fn mini_cmd_shift_f_opens_history_overlay() {
     let preempt_start = keydown
         .find("modifiers.platform && modifiers.shift && key == \"f\"")
         .expect("Cmd+Shift+F preempt handler must exist in render_keydown.rs");
-    let preempt_section =
-        &keydown[preempt_start..(preempt_start + 2000).min(keydown.len())];
+    let preempt_section = &keydown[preempt_start..(preempt_start + 2000).min(keydown.len())];
     assert!(
         preempt_section.contains("self.window_mode.is_mini()"),
         "Cmd+Shift+F handler must check for mini mode"
@@ -677,8 +676,8 @@ fn new_conversation_clears_mini_overlay() {
     let new_conv_end = (new_conv_start + 2000).min(chat.len());
     let new_conv_body = &chat[new_conv_start..new_conv_end];
     assert!(
-        new_conv_body.contains("showing_mini_history_overlay = false"),
-        "new_conversation must clear mini history overlay"
+        new_conv_body.contains("dismiss_mini_history_overlay(\"new_conversation\""),
+        "new_conversation must dismiss mini history overlay through the canonical helper"
     );
 
     // select_chat delegates to select_chat_internal which conditionally clears
@@ -693,7 +692,9 @@ fn new_conversation_clears_mini_overlay() {
         "select_chat_internal must clear mini history overlay when dismiss_mini_overlay is true"
     );
     // The wrapper select_chat must pass true so normal select always dismisses
-    let select_chat_start = chat.find("fn select_chat(").expect("select_chat must exist");
+    let select_chat_start = chat
+        .find("fn select_chat(")
+        .expect("select_chat must exist");
     let select_chat_end = (select_chat_start + 300).min(chat.len());
     let select_chat_body = &chat[select_chat_start..select_chat_end];
     assert!(
@@ -1549,13 +1550,7 @@ fn mini_overlay_max_height_does_not_overflow_window() {
     let parse_f32 = |line: &str| -> f32 {
         line.split('=')
             .nth(1)
-            .and_then(|s| {
-                s.trim()
-                    .trim_end_matches(';')
-                    .trim()
-                    .parse::<f32>()
-                    .ok()
-            })
+            .and_then(|s| s.trim().trim_end_matches(';').trim().parse::<f32>().ok())
             .unwrap_or_else(|| panic!("Could not parse f32 value from: {line}"))
     };
 

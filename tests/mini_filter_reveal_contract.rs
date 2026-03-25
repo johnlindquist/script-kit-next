@@ -141,7 +141,8 @@ fn queue_filter_compute_uses_shared_reconciliation_helper() {
     let section = &source[start..(start + 2600).min(source.len())];
 
     assert!(
-        section.contains("app.reconcile_script_list_after_filter_change(\"filter_coalesced\", cx);"),
+        section
+            .contains("app.reconcile_script_list_after_filter_change(\"filter_coalesced\", cx);"),
         "queue_filter_compute should use the shared reconciliation helper"
     );
     assert!(
@@ -233,8 +234,7 @@ fn sync_list_state_restores_reveal_for_current_selection() {
         "pub fn validate_selection_bounds",
     );
 
-    let has_reveal =
-        body.contains("scroll_to_reveal_item(self.selected_index)");
+    let has_reveal = body.contains("scroll_to_reveal_item(self.selected_index)");
 
     assert!(
         has_reveal,

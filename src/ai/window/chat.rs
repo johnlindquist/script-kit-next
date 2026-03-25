@@ -293,6 +293,24 @@ impl AiApp {
             self.stop_streaming(cx);
         }
 
+        // In mini mode, always clear history-overlay search state through the
+        // canonical dismissal/clear path before creating the next chat.
+        // This prevents Cmd+N and the mini-history "New Chat" button from hiding
+        // the overlay while leaving a stale search query + filtered chat list
+        // behind for the next overlay open.
+        if self.window_mode.is_mini() {
+            if self.showing_mini_history_overlay {
+                self.dismiss_mini_history_overlay("new_conversation", window, cx);
+            } else if !self.search_query.is_empty() {
+                tracing::info!(
+                    target: "ai",
+                    stale_query = %self.search_query,
+                    "new_conversation_clearing_orphaned_search"
+                );
+                self.clear_search_state(window, cx);
+            }
+        }
+
         // Clear per-conversation transient state that select_chat does not cover
         let had_image = self.pending_image.is_some();
         let context_parts_count = self.pending_context_parts.len();
@@ -320,7 +338,6 @@ impl AiApp {
         self.last_context_receipt = None;
         self.show_context_inspector = false;
         self.show_context_drawer = false;
-        self.showing_mini_history_overlay = false;
 
         let chat_id = self.create_chat(window, cx);
 
@@ -916,8 +933,8 @@ mod mini_history_overlay_select_regression_tests {
 
     #[test]
     fn select_chat_routes_through_internal_helper_with_dismiss_true() {
-        let source =
-            fs::read_to_string("src/ai/window/chat.rs").expect("Failed to read src/ai/window/chat.rs");
+        let source = fs::read_to_string("src/ai/window/chat.rs")
+            .expect("Failed to read src/ai/window/chat.rs");
 
         let select_start = source
             .find("pub(super) fn select_chat(")
@@ -935,8 +952,8 @@ mod mini_history_overlay_select_regression_tests {
 
     #[test]
     fn preserving_select_routes_through_internal_helper_with_dismiss_false() {
-        let source =
-            fs::read_to_string("src/ai/window/chat.rs").expect("Failed to read src/ai/window/chat.rs");
+        let source = fs::read_to_string("src/ai/window/chat.rs")
+            .expect("Failed to read src/ai/window/chat.rs");
 
         let preserve_start = source
             .find("pub(super) fn select_chat_preserving_overlay(")
@@ -954,8 +971,8 @@ mod mini_history_overlay_select_regression_tests {
 
     #[test]
     fn internal_select_only_clears_overlay_inside_the_guard() {
-        let source =
-            fs::read_to_string("src/ai/window/chat.rs").expect("Failed to read src/ai/window/chat.rs");
+        let source = fs::read_to_string("src/ai/window/chat.rs")
+            .expect("Failed to read src/ai/window/chat.rs");
 
         let internal_start = source
             .find("fn select_chat_internal(")

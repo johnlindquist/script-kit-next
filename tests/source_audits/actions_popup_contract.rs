@@ -13,7 +13,14 @@ fn actions_popup_event_enum_defined_in_window() {
         content.contains("pub(crate) enum ActionsPopupEvent"),
         "actions/window.rs must define ActionsPopupEvent enum"
     );
-    for variant in ["OpenRequested", "OpenSucceeded", "OpenFailed", "RoutedKey", "Resized", "Closed"] {
+    for variant in [
+        "OpenRequested",
+        "OpenSucceeded",
+        "OpenFailed",
+        "RoutedKey",
+        "Resized",
+        "Closed",
+    ] {
         assert!(
             content.contains(variant),
             "ActionsPopupEvent must include variant {variant}"
