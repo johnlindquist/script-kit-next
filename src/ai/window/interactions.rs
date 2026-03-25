@@ -897,3 +897,48 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+mod mini_history_overlay_navigation_regression_tests {
+    use std::fs;
+
+    #[test]
+    fn preserving_navigation_routes_through_preserving_select_helper() {
+        let source = fs::read_to_string("src/ai/window/interactions.rs")
+            .expect("Failed to read src/ai/window/interactions.rs");
+
+        let nav_start = source
+            .find("pub(super) fn navigate_chat_preserving_mini_overlay(")
+            .expect("navigate_chat_preserving_mini_overlay function not found");
+        let nav_fn = &source[nav_start..];
+
+        assert!(
+            nav_fn.contains("self.select_chat_preserving_overlay("),
+            "navigate_chat_preserving_mini_overlay must call select_chat_preserving_overlay so arrow preview does not dismiss the overlay"
+        );
+    }
+
+    #[test]
+    fn preserving_navigation_keeps_the_empty_chat_guard() {
+        let source = fs::read_to_string("src/ai/window/interactions.rs")
+            .expect("Failed to read src/ai/window/interactions.rs");
+
+        let nav_start = source
+            .find("pub(super) fn navigate_chat_preserving_mini_overlay(")
+            .expect("navigate_chat_preserving_mini_overlay function not found");
+        let nav_fn = &source[nav_start..];
+
+        let guard_pos = nav_fn
+            .find("if self.chats.is_empty() {")
+            .expect("preserving navigation must retain the empty-chat guard");
+        let return_pos = nav_fn[guard_pos..]
+            .find("return;")
+            .map(|offset| guard_pos + offset)
+            .expect("empty-chat guard must return early");
+
+        assert!(
+            guard_pos < return_pos,
+            "empty-chat guard should short-circuit before any selection math"
+        );
+    }
+}
