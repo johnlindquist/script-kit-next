@@ -47,9 +47,7 @@ pub(crate) fn mini_main_window_list_budget_height() -> f32 {
 /// `visible_section_headers` section headers that each consume
 /// `MINI_MAIN_WINDOW_SECTION_HEADER_HEIGHT` pixels of the list budget.
 #[allow(dead_code)] // Called from include!()-ed code in app_impl/ui_window.rs
-pub(crate) fn capped_mini_main_window_selectable_rows(
-    visible_section_headers: usize,
-) -> usize {
+pub(crate) fn capped_mini_main_window_selectable_rows(visible_section_headers: usize) -> usize {
     let remaining_list_height = mini_main_window_list_budget_height()
         - (visible_section_headers as f32 * MINI_MAIN_WINDOW_SECTION_HEADER_HEIGHT);
 
@@ -107,10 +105,7 @@ pub(crate) fn height_for_mini_main_window(sizing: MiniMainWindowSizing) -> Pixel
         + MINI_MAIN_WINDOW_HINT_STRIP_HEIGHT
         + list_height;
 
-    px(total_height.clamp(
-        MINI_MAIN_WINDOW_MIN_HEIGHT,
-        MINI_MAIN_WINDOW_MAX_HEIGHT,
-    ))
+    px(total_height.clamp(MINI_MAIN_WINDOW_MIN_HEIGHT, MINI_MAIN_WINDOW_MAX_HEIGHT))
 }
 
 /// Defer a mini main window resize to the end of the current effect cycle.
@@ -1049,9 +1044,8 @@ mod tests {
 #[cfg(test)]
 mod mini_main_window_layout_tests {
     use super::{
-        capped_mini_main_window_selectable_rows, height_for_mini_main_window,
-        MiniMainWindowSizing, MINI_MAIN_WINDOW_MAX_HEIGHT,
-        MINI_MAIN_WINDOW_MAX_VISIBLE_ROWS,
+        capped_mini_main_window_selectable_rows, height_for_mini_main_window, MiniMainWindowSizing,
+        MINI_MAIN_WINDOW_MAX_HEIGHT, MINI_MAIN_WINDOW_MAX_VISIBLE_ROWS,
     };
 
     #[test]

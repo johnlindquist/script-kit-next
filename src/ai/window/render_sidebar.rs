@@ -38,7 +38,7 @@ impl AiApp {
                     .flex()
                     .items_center()
                     .justify_center()
-                    .size(px(24.))
+                    .size(S6)
                     .rounded_md()
                     .cursor_pointer()
                     .hover(|s| s.bg(cx.theme().muted.opacity(OPACITY_HOVER)))
@@ -56,7 +56,7 @@ impl AiApp {
                     .child(
                         svg()
                             .external_path(LocalIconName::Sidebar.external_path())
-                            .size(px(16.))
+                            .size(ICON_MD)
                             .text_color(icon_color),
                     ),
             )
@@ -154,7 +154,7 @@ impl AiApp {
                         .child(
                             svg()
                                 .external_path(LocalIconName::MagnifyingGlass.external_path())
-                                .size(px(24.))
+                                .size(S6)
                                 .text_color(cx.theme().muted_foreground.opacity(OPACITY_HOVER)),
                         )
                         .child(
@@ -189,7 +189,7 @@ impl AiApp {
                         .child(
                             svg()
                                 .external_path(LocalIconName::MessageCircle.external_path())
-                                .size(px(28.))
+                                .size(MINI_BTN_SIZE)
                                 .text_color(cx.theme().muted_foreground.opacity(OPACITY_DANGER_BG)),
                         )
                         .child(
@@ -240,7 +240,7 @@ impl AiApp {
     pub(super) fn render_sidebar(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
         // If sidebar is collapsed, completely hide it (Raycast-style)
         if self.sidebar_collapsed {
-            return div().w(px(0.)).h_full().into_any_element();
+            return div().w(S0).h_full().into_any_element();
         }
 
         div()

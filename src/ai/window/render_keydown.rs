@@ -300,6 +300,16 @@ impl AiApp {
                         self.hide_all_dropdowns(cx);
                         self.show_presets_dropdown(window, cx);
                     } else {
+                        super::telemetry::log_ai_shortcut_decision(
+                            "cmd_n",
+                            self.window_mode,
+                            "handle_root_key_down",
+                            key,
+                            "new_conversation",
+                            true,
+                            self.showing_mini_history_overlay,
+                            !self.search_query.is_empty(),
+                        );
                         self.new_conversation(window, cx);
                     }
                     cx.stop_propagation();
@@ -307,14 +317,24 @@ impl AiApp {
                 // Cmd+Shift+F to focus search
                 "f" => {
                     if modifiers.shift {
+                        super::telemetry::log_ai_shortcut_decision(
+                            "cmd_shift_f",
+                            self.window_mode,
+                            "handle_root_key_down",
+                            key,
+                            if self.window_mode.is_mini() {
+                                "mini_show_overlay"
+                            } else {
+                                "full_focus_search"
+                            },
+                            true,
+                            self.showing_mini_history_overlay,
+                            !self.search_query.is_empty(),
+                        );
                         if self.window_mode.is_mini() {
                             // Mini mode: idempotently open history overlay and focus search
                             self.hide_all_dropdowns(cx);
-                            self.show_mini_history_overlay(
-                                "shortcut_cmd_shift_f",
-                                window,
-                                cx,
-                            );
+                            self.show_mini_history_overlay("shortcut_cmd_shift_f", window, cx);
                         } else {
                             // Full mode: expand sidebar if collapsed, focus search
                             if self.sidebar_collapsed {
@@ -416,25 +436,66 @@ impl AiApp {
         // Mini history overlay key routing: Up/Down navigate, Enter selects, Esc dismisses.
         // This guard must precede the generic edit_last_user_message path below.
         if self.window_mode.is_mini() && self.showing_mini_history_overlay {
+            let search_active = !self.search_query.is_empty();
             match key {
                 // navigate_chat(1) moves toward newer / visually up
                 k if is_key_up(k) => {
+                    super::telemetry::log_ai_shortcut_decision(
+                        "mini_history_overlay_key",
+                        self.window_mode,
+                        "handle_root_key_down",
+                        key,
+                        "overlay_up",
+                        true,
+                        true,
+                        search_active,
+                    );
                     self.navigate_chat(1, window, cx);
                     cx.stop_propagation();
                     return;
                 }
                 // navigate_chat(-1) moves toward older / visually down
                 k if is_key_down(k) => {
+                    super::telemetry::log_ai_shortcut_decision(
+                        "mini_history_overlay_key",
+                        self.window_mode,
+                        "handle_root_key_down",
+                        key,
+                        "overlay_down",
+                        true,
+                        true,
+                        search_active,
+                    );
                     self.navigate_chat(-1, window, cx);
                     cx.stop_propagation();
                     return;
                 }
                 k if is_key_enter(k) => {
+                    super::telemetry::log_ai_shortcut_decision(
+                        "mini_history_overlay_key",
+                        self.window_mode,
+                        "handle_root_key_down",
+                        key,
+                        "overlay_enter",
+                        true,
+                        true,
+                        search_active,
+                    );
                     self.dismiss_mini_history_overlay("enter_key", window, cx);
                     cx.stop_propagation();
                     return;
                 }
                 k if is_key_escape(k) => {
+                    super::telemetry::log_ai_shortcut_decision(
+                        "mini_history_overlay_key",
+                        self.window_mode,
+                        "handle_root_key_down",
+                        key,
+                        "overlay_escape",
+                        true,
+                        true,
+                        search_active,
+                    );
                     self.dismiss_mini_history_overlay("escape_key", window, cx);
                     super::telemetry::log_ai_state(
                         "esc_dismiss_history_overlay",

@@ -52,8 +52,7 @@ fn mini_main_panel_exposes_compact_composer_ids() {
 fn mini_keydown_closes_overlay_before_window_close() {
     let source = read("src/ai/window/render_keydown.rs");
     // The mini history overlay key guard intercepts Up/Down/Enter/Esc before other handlers
-    let overlay_guard =
-        "if self.window_mode.is_mini() && self.showing_mini_history_overlay";
+    let overlay_guard = "if self.window_mode.is_mini() && self.showing_mini_history_overlay";
     let final_close = "if is_key_escape(key) && self.window_mode.is_mini() {";
     assert!(
         source.contains(overlay_guard),
@@ -305,7 +304,7 @@ fn mini_cmd_shift_f_opens_history_overlay() {
     let f_section_start = keydown
         .find("\"f\" => {")
         .expect("Cmd+F handler must exist in render_keydown.rs");
-    let f_section = &keydown[f_section_start..(f_section_start + 600).min(keydown.len())];
+    let f_section = &keydown[f_section_start..(f_section_start + 900).min(keydown.len())];
     assert!(
         f_section.contains("self.window_mode.is_mini()"),
         "Cmd+Shift+F handler must check for mini mode"

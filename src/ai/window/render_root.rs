@@ -46,6 +46,14 @@ impl AiApp {
     ) {
         let was_closed = !self.showing_mini_history_overlay;
         self.showing_mini_history_overlay = true;
+
+        super::telemetry::log_ai_focus_request(
+            "focus_search",
+            self.window_mode,
+            source,
+            "search",
+            self.showing_mini_history_overlay,
+        );
         // Always (re-)focus search so Cmd+Shift+F is idempotent
         self.focus_search(window, cx);
 
@@ -74,6 +82,14 @@ impl AiApp {
         self.showing_mini_history_overlay = false;
         // Clear stale search so next open starts fresh (Raycast pattern)
         self.clear_search_state(window, cx);
+
+        super::telemetry::log_ai_focus_request(
+            "focus_input",
+            self.window_mode,
+            source,
+            "input",
+            self.showing_mini_history_overlay,
+        );
         // Return focus to the composer input after dismissing the overlay
         self.focus_input(window, cx);
         tracing::info!(
@@ -499,8 +515,7 @@ impl Render for AiApp {
                                             .text_color(cx.theme().foreground)
                                     })
                                     .tooltip(|window, cx| {
-                                        Tooltip::new("New chat options")
-                                            .build(window, cx)
+                                        Tooltip::new("New chat options").build(window, cx)
                                     })
                                     .on_click(cx.listener(|this, _, window, cx| {
                                         this.show_new_chat_command_bar(

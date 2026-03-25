@@ -67,6 +67,60 @@ pub(super) fn log_ai_state(
     );
 }
 
+/// Emit a structured shortcut-decision event for AI keyboard routing.
+///
+/// Logs which branch a keyboard shortcut took, including overlay and search
+/// state at decision time. Agents and log parsers can filter on
+/// `category = "AI_SHORTCUT"` to reconstruct the full shortcut decision tree.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn log_ai_shortcut_decision(
+    event: &'static str,
+    window_mode: AiWindowMode,
+    source: &'static str,
+    key: &str,
+    branch: &'static str,
+    handled: bool,
+    overlay_visible: bool,
+    search_active: bool,
+) {
+    tracing::info!(
+        target: "ai",
+        category = "AI_SHORTCUT",
+        event,
+        window_mode = ?window_mode,
+        source,
+        key,
+        branch,
+        handled,
+        overlay_visible,
+        search_active,
+        "ai_shortcut_decision"
+    );
+}
+
+/// Emit a structured focus-request event for AI window focus transitions.
+///
+/// Logs when focus moves between input, search, or other targets. Agents and
+/// log parsers can filter on `category = "AI_FOCUS"` to trace focus flow.
+pub(super) fn log_ai_focus_request(
+    event: &'static str,
+    window_mode: AiWindowMode,
+    source: &'static str,
+    target: &'static str,
+    overlay_visible: bool,
+) {
+    tracing::info!(
+        target: "ai",
+        category = "AI_FOCUS",
+        event,
+        window_mode = ?window_mode,
+        source,
+        target,
+        overlay_visible,
+        "ai_focus_request"
+    );
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -111,5 +165,24 @@ mod tests {
             renaming_chat_present: false,
         };
         log_ai_state("test_event", "test", &snapshot);
+    }
+
+    #[test]
+    fn log_ai_shortcut_decision_does_not_panic() {
+        log_ai_shortcut_decision(
+            "test_shortcut",
+            AiWindowMode::Mini,
+            "test",
+            "n",
+            "cmd_n_new_conversation",
+            true,
+            false,
+            false,
+        );
+    }
+
+    #[test]
+    fn log_ai_focus_request_does_not_panic() {
+        log_ai_focus_request("test_focus", AiWindowMode::Mini, "test", "search", true);
     }
 }
