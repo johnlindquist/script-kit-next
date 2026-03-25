@@ -112,6 +112,54 @@ impl AiApp {
             return;
         }
 
+        // Cmd+Shift+F: always focus search — preempts all modal guards below.
+        // This must run before command_bar / new_chat_command_bar / presets_dropdown
+        // early-returns so the shortcut is never swallowed by an open popup.
+        if modifiers.platform && modifiers.shift && key == "f" {
+            super::telemetry::log_ai_shortcut_decision(
+                "cmd_shift_f",
+                self.window_mode,
+                "handle_root_key_down",
+                key,
+                if self.window_mode.is_mini() {
+                    "mini_show_overlay"
+                } else {
+                    "full_focus_search"
+                },
+                true,
+                self.showing_mini_history_overlay,
+                !self.search_query.is_empty(),
+            );
+            super::observability::emit_ai_ui_event(
+                &super::observability::AiUiEvent {
+                    kind: AiUiEventKind::ShortcutDecision,
+                    action: if self.window_mode.is_mini() {
+                        "mini_show_overlay"
+                    } else {
+                        "full_focus_search"
+                    },
+                    source: "handle_root_key_down",
+                    window_mode: self.window_mode,
+                    selected_chat_id: self.selected_chat_id.as_ref(),
+                    overlay_visible: self.showing_mini_history_overlay,
+                    search_active: !self.search_query.is_empty(),
+                },
+                None,
+            );
+            if self.window_mode.is_mini() {
+                self.hide_all_dropdowns(cx);
+                self.show_mini_history_overlay("shortcut_cmd_shift_f", window, cx);
+            } else {
+                if self.sidebar_collapsed {
+                    self.sidebar_collapsed = false;
+                }
+                self.hide_all_dropdowns(cx);
+                self.focus_search(window, cx);
+            }
+            cx.stop_propagation();
+            return;
+        }
+
         // Handle command bar navigation when it's open
         // This routes all relevant keys to the CommandBar
         // CRITICAL: Must stop propagation to prevent Input from consuming the keys
@@ -326,54 +374,7 @@ impl AiApp {
                     }
                     cx.stop_propagation();
                 }
-                // Cmd+Shift+F to focus search
-                "f" => {
-                    if modifiers.shift {
-                        super::telemetry::log_ai_shortcut_decision(
-                            "cmd_shift_f",
-                            self.window_mode,
-                            "handle_root_key_down",
-                            key,
-                            if self.window_mode.is_mini() {
-                                "mini_show_overlay"
-                            } else {
-                                "full_focus_search"
-                            },
-                            true,
-                            self.showing_mini_history_overlay,
-                            !self.search_query.is_empty(),
-                        );
-                        super::observability::emit_ai_ui_event(
-                            &super::observability::AiUiEvent {
-                                kind: AiUiEventKind::ShortcutDecision,
-                                action: if self.window_mode.is_mini() {
-                                    "mini_show_overlay"
-                                } else {
-                                    "full_focus_search"
-                                },
-                                source: "handle_root_key_down",
-                                window_mode: self.window_mode,
-                                selected_chat_id: self.selected_chat_id.as_ref(),
-                                overlay_visible: self.showing_mini_history_overlay,
-                                search_active: !self.search_query.is_empty(),
-                            },
-                            None,
-                        );
-                        if self.window_mode.is_mini() {
-                            // Mini mode: idempotently open history overlay and focus search
-                            self.hide_all_dropdowns(cx);
-                            self.show_mini_history_overlay("shortcut_cmd_shift_f", window, cx);
-                        } else {
-                            // Full mode: expand sidebar if collapsed, focus search
-                            if self.sidebar_collapsed {
-                                self.sidebar_collapsed = false;
-                            }
-                            self.hide_all_dropdowns(cx);
-                            self.focus_search(window, cx);
-                        }
-                        cx.stop_propagation();
-                    }
-                }
+                // Cmd+Shift+F handled above modal guards (preempt block)
                 k if is_key_enter(k) => self.submit_message(window, cx),
                 // Cmd+Shift+M toggles between Mini and Full mode
                 "m" if modifiers.shift => {
@@ -478,11 +479,11 @@ impl AiApp {
                         true,
                         search_active,
                     );
-                    self.navigate_chat(1, window, cx);
+                    self.navigate_chat_preserving_mini_overlay(1, window, cx);
                     cx.stop_propagation();
                     return;
                 }
-                // navigate_chat(-1) moves toward older / visually down
+                // navigate_chat_preserving_mini_overlay(-1) moves toward older / visually down
                 k if is_key_down(k) => {
                     super::telemetry::log_ai_shortcut_decision(
                         "mini_history_overlay_key",
@@ -494,7 +495,7 @@ impl AiApp {
                         true,
                         search_active,
                     );
-                    self.navigate_chat(-1, window, cx);
+                    self.navigate_chat_preserving_mini_overlay(-1, window, cx);
                     cx.stop_propagation();
                     return;
                 }

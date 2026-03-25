@@ -400,6 +400,34 @@ impl AiApp {
 
     /// Select a chat
     pub(super) fn select_chat(&mut self, id: ChatId, window: &mut Window, cx: &mut Context<Self>) {
+        self.select_chat_internal(id, true, window, cx);
+    }
+
+    /// Select a chat but keep the mini history overlay open.
+    ///
+    /// Used by arrow-key navigation inside the overlay so the user can
+    /// preview different chats without dismissing the list.
+    pub(super) fn select_chat_preserving_overlay(
+        &mut self,
+        id: ChatId,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.select_chat_internal(id, false, window, cx);
+    }
+
+    /// Internal select-chat implementation.
+    ///
+    /// When `dismiss_mini_overlay` is true the mini history overlay is closed
+    /// (normal select path). When false the overlay stays open so the user can
+    /// continue browsing (arrow-key preview path).
+    fn select_chat_internal(
+        &mut self,
+        id: ChatId,
+        dismiss_mini_overlay: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         // Save draft for outgoing chat
         self.save_draft(cx);
 
@@ -484,8 +512,10 @@ impl AiApp {
         // while UI shows the newly selected chat's messages
         publish_streaming_state(AiStreamingSnapshot::default());
 
-        // Reset UX state for new chat
-        self.showing_mini_history_overlay = false;
+        // Reset UX state for new chat — only dismiss overlay when caller requests it
+        if dismiss_mini_overlay {
+            self.showing_mini_history_overlay = false;
+        }
         self.editing_message_id = None;
         if let Some(message) = provider_error_message {
             self.clear_streaming_state_with_error(message, cx);

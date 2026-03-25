@@ -21,65 +21,33 @@ fn section_between<'a>(source: &'a str, start: &str, end: &str) -> &'a str {
 }
 
 // ---------------------------------------------------------------------------
-// 1) queue_filter_compute must perform the full post-filter pipeline
+// 1) Shared reconciliation helper exists with the correct pipeline
 // ---------------------------------------------------------------------------
 
 #[test]
-fn queue_filter_compute_performs_full_post_filter_pipeline() {
+fn shared_script_list_reconciliation_helper_exists() {
     let source = read("src/app_impl/filter_input_updates.rs");
-    let body = section_between(
-        &source,
-        "pub(crate) fn queue_filter_compute",
-        "pub(crate) fn set_filter_text_immediate",
+    assert!(
+        source.contains("fn reconcile_script_list_after_filter_change"),
+        "expected shared script-list filter reconciliation helper"
     );
-
-    let required_steps: &[(&str, &str)] = &[
-        (
-            "sync_list_state()",
-            "queue_filter_compute must sync list state after recompute",
-        ),
-        (
-            "selected_index = 0",
-            "queue_filter_compute must reset selection to zero",
-        ),
-        (
-            "validate_selection_bounds(cx)",
-            "queue_filter_compute must validate selection bounds",
-        ),
-        (
-            "scroll_to_reveal_item(app.selected_index)",
-            "queue_filter_compute must reveal the selected item",
-        ),
-        (
-            "last_scrolled_index = Some(app.selected_index)",
-            "queue_filter_compute must update scroll tracking",
-        ),
-        (
-            "rebuild_main_window_preflight_if_needed()",
-            "queue_filter_compute must rebuild preflight",
-        ),
-        (
-            "update_window_size()",
-            "queue_filter_compute must trigger window resize",
-        ),
-        (
-            "cx.notify()",
-            "queue_filter_compute must notify after mutations",
-        ),
-    ];
-
-    for (needle, msg) in required_steps {
-        assert!(body.contains(needle), "{msg}");
-    }
+    assert!(
+        source.contains("self.scroll_to_selected_if_needed(reason);"),
+        "shared reconciliation must reveal the final selected row"
+    );
+    assert!(
+        source.contains("self.rebuild_main_window_preflight_if_needed();"),
+        "shared reconciliation must rebuild preflight outside render"
+    );
 }
 
 #[test]
-fn queue_filter_compute_ordering_sync_before_select_before_reveal_before_resize() {
+fn reconciliation_helper_ordering_sync_before_select_before_reveal_before_preflight() {
     let source = read("src/app_impl/filter_input_updates.rs");
     let body = section_between(
         &source,
+        "fn reconcile_script_list_after_filter_change",
         "pub(crate) fn queue_filter_compute",
-        "pub(crate) fn set_filter_text_immediate",
     );
 
     // Verify ordering: each step must appear after the previous one
@@ -87,24 +55,134 @@ fn queue_filter_compute_ordering_sync_before_select_before_reveal_before_resize(
         "sync_list_state()",
         "selected_index = 0",
         "validate_selection_bounds",
-        "scroll_to_reveal_item",
-        "last_scrolled_index = Some",
+        "scroll_to_selected_if_needed(reason)",
         "rebuild_main_window_preflight_if_needed()",
-        "update_window_size()",
-        "cx.notify()",
     ];
 
     let mut last_pos = 0usize;
     for marker in ordered_markers {
         let pos = body
             .find(marker)
-            .unwrap_or_else(|| panic!("marker not found in queue_filter_compute: '{marker}'"));
+            .unwrap_or_else(|| panic!("marker not found in reconciliation helper: '{marker}'"));
         assert!(
             pos >= last_pos,
-            "ordering violation: '{marker}' appeared before the previous step in queue_filter_compute"
+            "ordering violation: '{marker}' appeared before the previous step in reconciliation helper"
         );
         last_pos = pos;
     }
+}
+
+// ---------------------------------------------------------------------------
+// 1b) Reconciliation helper must clear scroll dedup guard before reveal
+// ---------------------------------------------------------------------------
+
+#[test]
+fn reconciliation_helper_clears_last_scrolled_index_before_reveal() {
+    // scroll_to_selected_if_needed has a dedup guard:
+    //   if self.last_scrolled_index == Some(target) { return; }
+    // After a filter change resets selected_index to 0, last_scrolled_index
+    // could already be Some(0) from the previous cycle. Without clearing it,
+    // the scroll would be silently skipped even though list content changed.
+    let source = read("src/app_impl/filter_input_updates.rs");
+    let body = section_between(
+        &source,
+        "fn reconcile_script_list_after_filter_change",
+        "pub(crate) fn queue_filter_compute",
+    );
+
+    assert!(
+        body.contains("self.last_scrolled_index = None;"),
+        "reconciliation helper must clear last_scrolled_index to bypass \
+         scroll_to_selected_if_needed's dedup guard after filter changes"
+    );
+
+    // The clear must happen BEFORE the reveal call
+    let clear_pos = body
+        .find("self.last_scrolled_index = None;")
+        .expect("last_scrolled_index = None not found");
+    let reveal_pos = body
+        .find("self.scroll_to_selected_if_needed(reason);")
+        .expect("scroll_to_selected_if_needed not found");
+    assert!(
+        clear_pos < reveal_pos,
+        "last_scrolled_index must be cleared BEFORE scroll_to_selected_if_needed \
+         to ensure the dedup guard doesn't skip the reveal"
+    );
+}
+
+// Also verify scroll_to_selected_if_needed actually HAS the dedup guard
+// (if someone removes it, clearing last_scrolled_index becomes dead code)
+#[test]
+fn scroll_helper_has_dedup_guard_on_last_scrolled_index() {
+    let source = read("src/app_navigation/impl_scroll.rs");
+    let body = section_between(
+        &source,
+        "fn scroll_to_selected_if_needed",
+        "fn trigger_scroll_activity",
+    );
+
+    assert!(
+        body.contains("if self.last_scrolled_index == Some(target)"),
+        "scroll_to_selected_if_needed must have the dedup guard that \
+         reconciliation_helper_clears_last_scrolled_index_before_reveal depends on"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// 2) Both callsites delegate to the shared helper
+// ---------------------------------------------------------------------------
+
+#[test]
+fn queue_filter_compute_uses_shared_reconciliation_helper() {
+    let source = read("src/app_impl/filter_input_updates.rs");
+    let start = source
+        .find("pub(crate) fn queue_filter_compute")
+        .expect("queue_filter_compute not found");
+    let section = &source[start..(start + 2600).min(source.len())];
+
+    assert!(
+        section.contains("app.reconcile_script_list_after_filter_change(\"filter_coalesced\", cx);"),
+        "queue_filter_compute should use the shared reconciliation helper"
+    );
+    assert!(
+        !section.contains("scroll_to_reveal_item(app.selected_index)"),
+        "queue_filter_compute should not bypass scroll_to_selected_if_needed"
+    );
+}
+
+#[test]
+fn set_filter_text_immediate_uses_shared_reconciliation_helper() {
+    let source = read("src/app_impl/filter_input_updates.rs");
+    let start = source
+        .find("pub(crate) fn set_filter_text_immediate")
+        .expect("set_filter_text_immediate not found");
+    let section = &source[start..(start + 2600).min(source.len())];
+
+    assert!(
+        section.contains(
+            "self.reconcile_script_list_after_filter_change(\"set_filter_text_immediate\", cx);"
+        ),
+        "set_filter_text_immediate should use the shared reconciliation helper"
+    );
+}
+
+#[test]
+fn queue_filter_compute_still_resizes_and_notifies() {
+    let source = read("src/app_impl/filter_input_updates.rs");
+    let body = section_between(
+        &source,
+        "pub(crate) fn queue_filter_compute",
+        "pub(crate) fn set_filter_text_immediate",
+    );
+
+    assert!(
+        body.contains("update_window_size()"),
+        "queue_filter_compute must trigger window resize after reconciliation"
+    );
+    assert!(
+        body.contains("cx.notify()"),
+        "queue_filter_compute must notify after mutations"
+    );
 }
 
 // ---------------------------------------------------------------------------

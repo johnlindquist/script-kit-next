@@ -1,6 +1,39 @@
 use super::*;
 
 impl ScriptListApp {
+    /// Single authoritative post-filter reconciliation path for ScriptList.
+    ///
+    /// Called after `computed_filter_text` changes (both debounced and immediate).
+    /// Syncs the GPUI list model, resets selection to the first selectable row,
+    /// reveals it, and rebuilds preflight — all outside `render()`.
+    fn reconcile_script_list_after_filter_change(
+        &mut self,
+        reason: &'static str,
+        cx: &mut Context<Self>,
+    ) {
+        if !matches!(self.current_view, AppView::ScriptList) {
+            return;
+        }
+
+        // Keep GPUI's list model aligned with the newly computed grouped results.
+        self.sync_list_state();
+
+        // Filter changes intentionally restart from the first selectable row.
+        self.selected_index = 0;
+        self.validate_selection_bounds(cx);
+
+        // Clear last_scrolled_index so the reveal is never skipped —
+        // filter changes always need a fresh scroll even if selected_index == 0.
+        self.last_scrolled_index = None;
+
+        // Reveal the final selected row after selection coercion.
+        self.scroll_to_selected_if_needed(reason);
+
+        // Preflight depends on filter + selection and must stay out of render().
+        self.rebuild_main_window_preflight_if_needed();
+
+    }
+
     pub(crate) fn queue_filter_compute(&mut self, value: String, cx: &mut Context<Self>) {
         // P3: Debounce expensive search/window resize work.
         // Use 8ms debounce (half a frame) to batch rapid keystrokes.
@@ -28,16 +61,7 @@ impl ScriptListApp {
                                     ),
                                 );
                                 app.computed_filter_text = latest.clone();
-                                // Sync list component state and validate selection
-                                // This moves state mutation OUT of render() (anti-pattern fix)
-                                app.sync_list_state();
-                                app.selected_index = 0;
-                                app.validate_selection_bounds(cx);
-                                app.main_list_state
-                                    .scroll_to_reveal_item(app.selected_index);
-                                app.last_scrolled_index = Some(app.selected_index);
-                                app.rebuild_main_window_preflight_if_needed();
-                                // This will trigger window resize
+                                app.reconcile_script_list_after_filter_change("filter_coalesced", cx);
                                 app.update_window_size();
                                 let coalesce_elapsed = coalesce_start.elapsed();
                                 logging::log(
@@ -80,15 +104,7 @@ impl ScriptListApp {
 
         self.computed_filter_text = text.clone();
         self.filter_coalescer.reset();
-
-        // Sync list component state and validate selection
-        // This moves state mutation OUT of render() (anti-pattern fix)
-        self.sync_list_state();
-        self.selected_index = 0;
-        self.validate_selection_bounds(cx);
-        self.main_list_state
-            .scroll_to_reveal_item(self.selected_index);
-        self.last_scrolled_index = Some(self.selected_index);
+        self.reconcile_script_list_after_filter_change("set_filter_text_immediate", cx);
 
         // Update fallback mode immediately based on filter results
         // This ensures SimulateKey commands can check fallback_mode correctly

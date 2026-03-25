@@ -345,6 +345,41 @@ impl AiApp {
         }
     }
 
+    /// Navigate chats while keeping the mini history overlay open.
+    ///
+    /// Used for Up/Down arrow keys inside the mini history overlay so the user
+    /// can preview different conversations without dismissing the list.
+    pub(super) fn navigate_chat_preserving_mini_overlay(
+        &mut self,
+        direction: i32,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.chats.is_empty() {
+            return;
+        }
+
+        let current_index = self
+            .selected_chat_id
+            .and_then(|id| self.chats.iter().position(|c| c.id == id))
+            .unwrap_or(0);
+
+        let new_index = if direction < 0 {
+            if current_index + 1 < self.chats.len() {
+                current_index + 1
+            } else {
+                current_index
+            }
+        } else {
+            current_index.saturating_sub(1)
+        };
+
+        if new_index != current_index {
+            let new_id = self.chats[new_index].id;
+            self.select_chat_preserving_overlay(new_id, window, cx);
+        }
+    }
+
     /// Delete the currently selected chat (Cmd+Shift+Backspace).
     pub(super) fn delete_current_chat(&mut self, cx: &mut Context<Self>) {
         if let Some(chat_id) = self.selected_chat_id {

@@ -470,11 +470,11 @@ impl AiApp {
         if self.window_mode.is_mini() && self.showing_mini_history_overlay {
             match key_lower.as_str() {
                 k if is_key_up(k) => {
-                    self.navigate_chat(1, window, cx);
+                    self.navigate_chat_preserving_mini_overlay(1, window, cx);
                     return;
                 }
                 k if is_key_down(k) => {
-                    self.navigate_chat(-1, window, cx);
+                    self.navigate_chat_preserving_mini_overlay(-1, window, cx);
                     return;
                 }
                 k if is_key_enter(k) => {

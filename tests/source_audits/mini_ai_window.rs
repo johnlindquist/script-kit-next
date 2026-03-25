@@ -301,17 +301,35 @@ fn mode_switch_focuses_input_after_switch() {
 #[test]
 fn mini_cmd_shift_f_opens_history_overlay() {
     let keydown = read("src/ai/window/render_keydown.rs");
-    let f_section_start = keydown
-        .find("\"f\" => {")
-        .expect("Cmd+F handler must exist in render_keydown.rs");
-    let f_section = &keydown[f_section_start..(f_section_start + 2000).min(keydown.len())];
+    // Cmd+Shift+F is now an early preempt handler before modal guards
+    let preempt_start = keydown
+        .find("modifiers.platform && modifiers.shift && key == \"f\"")
+        .expect("Cmd+Shift+F preempt handler must exist in render_keydown.rs");
+    let preempt_section =
+        &keydown[preempt_start..(preempt_start + 2000).min(keydown.len())];
     assert!(
-        f_section.contains("self.window_mode.is_mini()"),
+        preempt_section.contains("self.window_mode.is_mini()"),
         "Cmd+Shift+F handler must check for mini mode"
     );
     assert!(
-        f_section.contains("show_mini_history_overlay"),
+        preempt_section.contains("show_mini_history_overlay"),
         "Cmd+Shift+F in mini mode must idempotently open the history overlay"
+    );
+}
+
+#[test]
+fn cmd_shift_f_precedes_command_bar_modal_guard() {
+    let keydown = read("src/ai/window/render_keydown.rs");
+    let preempt_pos = keydown
+        .find("modifiers.platform && modifiers.shift && key == \"f\"")
+        .expect("Cmd+Shift+F preempt handler must exist");
+    let command_bar_pos = keydown
+        .find("if self.command_bar.is_open()")
+        .expect("command_bar modal guard must exist");
+    assert!(
+        preempt_pos < command_bar_pos,
+        "Cmd+Shift+F must be handled before the command_bar modal guard \
+         (preempt at {preempt_pos}, guard at {command_bar_pos})"
     );
 }
 
@@ -663,12 +681,24 @@ fn new_conversation_clears_mini_overlay() {
         "new_conversation must clear mini history overlay"
     );
 
-    let select_chat_start = chat.find("fn select_chat").expect("select_chat must exist");
-    let select_chat_end = (select_chat_start + 4000).min(chat.len());
+    // select_chat delegates to select_chat_internal which conditionally clears
+    // the overlay. The internal method must contain the dismiss logic.
+    let select_internal_start = chat
+        .find("fn select_chat_internal")
+        .expect("select_chat_internal must exist");
+    let select_internal_end = (select_internal_start + 5000).min(chat.len());
+    let select_internal_body = &chat[select_internal_start..select_internal_end];
+    assert!(
+        select_internal_body.contains("showing_mini_history_overlay = false"),
+        "select_chat_internal must clear mini history overlay when dismiss_mini_overlay is true"
+    );
+    // The wrapper select_chat must pass true so normal select always dismisses
+    let select_chat_start = chat.find("fn select_chat(").expect("select_chat must exist");
+    let select_chat_end = (select_chat_start + 300).min(chat.len());
     let select_chat_body = &chat[select_chat_start..select_chat_end];
     assert!(
-        select_chat_body.contains("showing_mini_history_overlay = false"),
-        "select_chat must clear mini history overlay"
+        select_chat_body.contains("select_chat_internal(id, true,"),
+        "select_chat must delegate to select_chat_internal with dismiss_mini_overlay=true"
     );
 }
 
@@ -785,7 +815,7 @@ fn cmd_n_calls_new_conversation_in_all_modes() {
         .find("\"n\" => {")
         .expect("Cmd+N handler must exist in render_keydown.rs");
     let f_arm = keydown[n_arm..]
-        .find("// Cmd+Shift+F to focus search")
+        .find("// Cmd+Shift+F handled above modal guards (preempt block)")
         .expect("Cmd+Shift+F comment must bound Cmd+N handler");
     let n_section = &keydown[n_arm..n_arm + f_arm];
     assert!(
