@@ -1028,8 +1028,8 @@ fn test_chat_no_models_no_messages() {
     };
 
     let actions = get_chat_context_actions(&info);
-    // Should only have continue_in_chat
-    assert_eq!(actions.len(), 2);
+    // Should only have continue_in_chat + expand_full_chat + capture_screen_area
+    assert_eq!(actions.len(), 3);
     assert_eq!(actions[0].id, "chat:continue_in_chat");
 }
 
@@ -1054,8 +1054,8 @@ fn test_chat_with_models_and_response() {
     };
 
     let actions = get_chat_context_actions(&info);
-    // 2 models + continue_in_chat + copy_response + clear_conversation = 5
-    assert_eq!(actions.len(), 6);
+    // 2 models + continue_in_chat + expand_full_chat + copy_response + clear_conversation + capture_screen_area = 7
+    assert_eq!(actions.len(), 7);
 
     // Current model should have checkmark
     let current = actions

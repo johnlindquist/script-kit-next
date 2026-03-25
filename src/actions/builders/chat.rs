@@ -89,11 +89,21 @@ pub fn get_chat_context_actions(info: &ChatPromptInfo) -> Vec<Action> {
     actions.push(
         Action::new(
             "chat:continue_in_chat",
-            "Continue in Chat",
-            Some("Opens the AI chat window".to_string()),
+            "Continue in AI Chat",
+            Some("Opens the mini AI chat window".to_string()),
             ActionCategory::ScriptContext,
         )
         .with_shortcut("⌘↵")
+        .with_icon(IconName::MessageCircle),
+    );
+
+    actions.push(
+        Action::new(
+            "chat:expand_full_chat",
+            "Expand to Full Chat",
+            Some("Opens the full AI chat window".to_string()),
+            ActionCategory::ScriptContext,
+        )
         .with_icon(IconName::MessageCircle),
     );
 

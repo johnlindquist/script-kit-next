@@ -457,7 +457,7 @@ mod from_dialog_builtin_action_validation_tests_32 {
             has_response: false,
         };
         let actions = get_chat_context_actions(&info);
-        assert_eq!(actions.len(), 3, "1 model + continue_in_chat = 2");
+        assert_eq!(actions.len(), 4, "1 model + continue + expand + capture = 4");
     }
     
     // --- merged from part_02.rs ---
@@ -475,7 +475,7 @@ mod from_dialog_builtin_action_validation_tests_32 {
             has_response: true,
         };
         let actions = get_chat_context_actions(&info);
-        assert_eq!(actions.len(), 5, "1 model + continue + copy + clear = 4");
+        assert_eq!(actions.len(), 6, "1 model + continue + expand + copy + clear + capture = 6");
     }
     
     #[test]
@@ -533,10 +533,10 @@ mod from_dialog_builtin_action_validation_tests_32 {
             has_response: false,
         };
         let actions = get_chat_context_actions(&info);
-        assert_eq!(actions.len(), 2);
+        assert_eq!(actions.len(), 3);
         assert_eq!(actions[0].id, "chat:continue_in_chat");
     }
-    
+
     // ---------------------------------------------------------------------------
     // 12. Notes command bar: find_in_note details
     // ---------------------------------------------------------------------------
@@ -3240,12 +3240,12 @@ mod from_dialog_builtin_action_validation_tests_34 {
             has_response: false,
         };
         let actions = get_chat_context_actions(&info);
-        // 1 model + continue_in_chat = 2
-        assert_eq!(actions.len(), 3);
+        // 1 model + continue + expand + capture = 4
+        assert_eq!(actions.len(), 4);
         assert!(!actions.iter().any(|a| a.id == "chat:copy_response"));
         assert!(!actions.iter().any(|a| a.id == "chat:clear_conversation"));
     }
-    
+
     #[test]
     fn chat_has_messages_no_response_has_clear_no_copy() {
         let info = ChatPromptInfo {
@@ -3295,10 +3295,10 @@ mod from_dialog_builtin_action_validation_tests_34 {
         let actions = get_chat_context_actions(&info);
         assert!(actions.iter().any(|a| a.id == "chat:copy_response"));
         assert!(actions.iter().any(|a| a.id == "chat:clear_conversation"));
-        // 1 model + continue + copy + clear = 4
-        assert_eq!(actions.len(), 5);
+        // 1 model + continue + expand + copy + clear + capture = 6
+        assert_eq!(actions.len(), 6);
     }
-    
+
     // =====================================================================
     // 11. Chat context: continue_in_chat always present regardless of flags
     // =====================================================================
@@ -7760,9 +7760,9 @@ mod from_dialog_builtin_action_validation_tests_38 {
                 has_response: false,
             };
             let actions = get_chat_context_actions(&info);
-            assert_eq!(actions.len(), 2);
+            assert_eq!(actions.len(), 3);
         }
-    
+
         #[test]
         fn chat_model_id_uses_model_id_field() {
             let info = ChatPromptInfo {
@@ -13223,10 +13223,10 @@ mod from_dialog_builtin_action_validation_tests_41 {
                 has_response: true,
             };
             let actions = get_chat_context_actions(&info);
-            // 1 model + continue + copy_response + clear_conversation = 4
-            assert_eq!(actions.len(), 5);
+            // 1 model + continue + expand + copy_response + clear + capture = 6
+            assert_eq!(actions.len(), 6);
         }
-    
+
         #[test]
         fn chat_no_models_no_messages_minimal() {
             let info = ChatPromptInfo {
@@ -13236,11 +13236,11 @@ mod from_dialog_builtin_action_validation_tests_41 {
                 has_response: false,
             };
             let actions = get_chat_context_actions(&info);
-            // Only continue_in_chat
-            assert_eq!(actions.len(), 2);
+            // continue + expand + capture
+            assert_eq!(actions.len(), 3);
             assert_eq!(actions[0].id, "chat:continue_in_chat");
         }
-    
+
         // =========================================================================
         // 29. New chat: section ordering across last_used, presets, models
         // =========================================================================
@@ -14435,9 +14435,9 @@ mod from_dialog_builtin_action_validation_tests_44 {
             has_response: false,
         };
         let actions = get_chat_context_actions(&info);
-        assert_eq!(actions.len(), 2);
+        assert_eq!(actions.len(), 3);
     }
-    
+
     #[test]
     fn chat_no_models_single_is_continue() {
         let info = ChatPromptInfo {
@@ -14459,9 +14459,9 @@ mod from_dialog_builtin_action_validation_tests_44 {
             has_response: false,
         };
         let actions = get_chat_context_actions(&info);
-        assert_eq!(actions.len(), 3);
+        assert_eq!(actions.len(), 4);
     }
-    
+
     #[test]
     fn chat_with_response_adds_copy() {
         let info = ChatPromptInfo {
@@ -14471,9 +14471,9 @@ mod from_dialog_builtin_action_validation_tests_44 {
             has_response: true,
         };
         let actions = get_chat_context_actions(&info);
-        assert_eq!(actions.len(), 3);
+        assert_eq!(actions.len(), 4);
     }
-    
+
     // =========== 23. Chat context: model IDs use select_model_{model.id} ===========
     
     #[test]
@@ -15944,9 +15944,9 @@ mod from_dialog_builtin_action_validation_tests_45 {
             has_response: true,
         };
         let actions = get_chat_context_actions(&info);
-        assert_eq!(actions.len(), 6);
+        assert_eq!(actions.len(), 7);
     }
-    
+
     #[test]
     fn chat_2_models_response_messages_has_continue() {
         let info = ChatPromptInfo {

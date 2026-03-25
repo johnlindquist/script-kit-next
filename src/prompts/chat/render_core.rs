@@ -93,7 +93,7 @@ impl ChatPrompt {
         } else if has_assistant {
             (
                 ChatFooterButtonAction::ContinueInChat,
-                "Continue in Chat",
+                "Continue in AI Chat",
                 "⌘↵",
             )
         } else {
@@ -101,27 +101,22 @@ impl ChatPrompt {
             (ChatFooterButtonAction::ToggleActionsPanel, "Actions", "⌘K")
         };
 
+        // Compact hint-rail: no logo, model + newline hint merged into helper text
+        let helper_text = format!("{model_text} · Shift+Enter newline");
         let footer_config = PromptFooterConfig::new()
             .primary_label(primary_label)
             .primary_shortcut(primary_shortcut)
             .secondary_label("Actions")
             .secondary_shortcut("⌘K")
-            .helper_text(model_text)
+            .helper_text(helper_text)
+            .show_logo(false)
             .show_info_label(false);
-
-        let footer_hint = div()
-            .id("chat-footer-newline-hint")
-            .text_xs()
-            .text_color(rgb(footer_colors.text_muted))
-            .child("Shift+Enter newline")
-            .into_any_element();
 
         let primary_handle = cx.entity().downgrade();
         let secondary_handle = cx.entity().downgrade();
 
         PromptFooter::new(footer_config, footer_colors)
             .left_slot_opt(self.render_script_generation_footer_actions(cx))
-            .right_slot_opt(Some(footer_hint))
             .on_primary_click(Box::new(move |_event, _window, cx| {
                 if let Some(entity) = primary_handle.upgrade() {
                     entity.update(cx, |this, cx| {
@@ -643,8 +638,12 @@ mod chat_footer_button_click_handler_tests {
             "Chat footer should inject script generation actions through left slot"
         );
         assert!(
-            CHAT_RENDER_CORE_SOURCE.contains(".right_slot_opt(Some(footer_hint))"),
-            "Chat footer should inject newline helper text through right slot"
+            CHAT_RENDER_CORE_SOURCE.contains("Shift+Enter newline"),
+            "Chat footer should include newline hint in helper text"
+        );
+        assert!(
+            CHAT_RENDER_CORE_SOURCE.contains(".show_logo(false)"),
+            "Chat footer should hide logo for compact hint-rail feel"
         );
         assert!(
             CHAT_RENDER_CORE_SOURCE.contains("let primary_handle = cx.entity().downgrade();"),

@@ -71,6 +71,8 @@ pub struct ChatPrompt {
     pub(super) pending_image: Option<String>,
     pub(super) pending_image_render: Option<Arc<RenderImage>>,
     pub(super) image_render_cache: HashMap<String, Arc<RenderImage>>,
+    /// When true, renders input as a borderless text field (cursor + text + placeholder only).
+    pub(super) mini_mode: bool,
 }
 
 impl ChatPrompt {
@@ -144,12 +146,19 @@ impl ChatPrompt {
             pending_image: None,
             pending_image_render: None,
             image_render_cache: HashMap::new(),
+            mini_mode: false,
         }
     }
 
     /// Set the callback for showing actions dialog
     pub fn set_on_show_actions(&mut self, callback: ChatShowActionsCallback) {
         self.on_show_actions = Some(callback);
+    }
+
+    /// Enable mini mode — renders input as a borderless text field matching the mini main window.
+    pub fn with_mini_mode(mut self, mini: bool) -> Self {
+        self.mini_mode = mini;
+        self
     }
 
     /// Set the callback for running a generated script path in the parent app.
