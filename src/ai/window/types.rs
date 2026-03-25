@@ -258,6 +258,12 @@ pub(super) const FULL_SUGGESTION_COUNT: usize = 4;
 // -- Overlay layout --
 pub(super) const ATTACHMENTS_PICKER_BOTTOM_INSET: Pixels = px(80.);
 
+// -- Shortcuts overlay --
+pub(super) const SHORTCUTS_PANEL_W_MINI: Pixels = px(380.);
+pub(super) const SHORTCUTS_PANEL_W_FULL: Pixels = px(420.);
+pub(super) const SHORTCUTS_PANEL_MAX_H_MINI: Pixels = px(360.);
+pub(super) const SHORTCUTS_PANEL_MAX_H_FULL: Pixels = px(520.);
+
 // -- Animation constants --
 pub(super) const ANIM_CYCLE_MS: u64 = 1200;
 
@@ -946,6 +952,21 @@ pub(super) const AI_SHORTCUTS_ACTIONS: &[AiShortcutItem] = &[
     AiShortcutItem {
         keys: "\u{2318}\u{21e7}E",
         description: "Export chat as markdown",
+        mode: None,
+    },
+    AiShortcutItem {
+        keys: "\u{2325}\u{2318}I",
+        description: "Inspect context",
+        mode: None,
+    },
+    AiShortcutItem {
+        keys: "\u{2318}V",
+        description: "Paste image",
+        mode: None,
+    },
+    AiShortcutItem {
+        keys: "\u{2318}W",
+        description: "Close window",
         mode: None,
     },
     AiShortcutItem {

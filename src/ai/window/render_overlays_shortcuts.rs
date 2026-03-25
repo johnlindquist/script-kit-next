@@ -26,12 +26,6 @@ impl ShortcutCategory {
 }
 
 impl AiApp {
-    pub(super) fn render_command_bar_overlay(&self, _cx: &mut Context<Self>) -> impl IntoElement {
-        // Command bar now renders in a separate vibrancy window (not inline)
-        // See CommandBar component for window management
-        div().id("command-bar-overlay-deprecated")
-    }
-
     /// Render the keyboard shortcuts overlay (Cmd+/).
     /// Reads from AI_SHORTCUT_SECTIONS so the overlay stays in sync with actual keybindings.
     pub(super) fn render_shortcuts_overlay(&self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -63,8 +57,16 @@ impl AiApp {
                 div()
                     .id("shortcuts-panel")
                     // Compact sizing in mini mode to fit the 720×440 window
-                    .w(if is_mini { px(380.) } else { px(420.) })
-                    .max_h(if is_mini { px(360.) } else { px(520.) })
+                    .w(if is_mini {
+                        SHORTCUTS_PANEL_W_MINI
+                    } else {
+                        SHORTCUTS_PANEL_W_FULL
+                    })
+                    .max_h(if is_mini {
+                        SHORTCUTS_PANEL_MAX_H_MINI
+                    } else {
+                        SHORTCUTS_PANEL_MAX_H_FULL
+                    })
                     .rounded(R_LG)
                     .bg(panel_bg)
                     .border_1()
