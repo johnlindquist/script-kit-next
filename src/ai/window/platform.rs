@@ -81,7 +81,7 @@ pub(super) fn configure_ai_window_vibrancy() {
 /// Configure the AI window as a floating panel (always on top).
 ///
 /// This sets:
-/// - NSFloatingWindowLevel (3) - floats above normal windows
+/// - Preserve the GPUI-assigned PopUp window level (101)
 /// - NSWindowCollectionBehaviorMoveToActiveSpace - moves to current space when shown
 /// - Disabled window restoration - prevents macOS position caching
 #[cfg(target_os = "macos")]
@@ -106,10 +106,7 @@ fn configure_ai_as_floating_panel() {
                     if is_ai_window_title(&title_str) {
                         // Found the AI window - configure it
 
-                        // NSFloatingWindowLevel = 3
-                        // Use i64 (NSInteger) for proper ABI compatibility on 64-bit macOS
-                        let floating_level: i64 = 3;
-                        let _: () = msg_send![window, setLevel:floating_level];
+                        // Keep the GPUI-assigned PopUp window level (101).
 
                         // Get current collection behavior to preserve existing flags
                         let current: u64 = msg_send![window, collectionBehavior];
@@ -132,7 +129,7 @@ fn configure_ai_as_floating_panel() {
 
                         logging::log(
                             "PANEL",
-                            "AI window configured as floating panel (level=3, MoveToActiveSpace, vibrancy)",
+                            "AI window configured as floating panel (GPUI level preserved, MoveToActiveSpace, vibrancy)",
                         );
                         return;
                     }

@@ -34,9 +34,8 @@ const CONFIRM_MAX_HEIGHT: f32 = 360.0;
 const CONFIRM_BODY_MAX_LINES: usize = 10;
 const CONFIRM_LIFECYCLE_POLL_MS: u64 = 120;
 const CONFIRM_RADIUS: f32 = 14.0;
-// NSModalPanelWindowLevel = 8 — above NSFloatingWindowLevel (3) so the
-// confirm popup appears in front of the main window.
-const NS_MODAL_PANEL_WINDOW_LEVEL: i64 = 8;
+/// NSWindowOrderingMode::NSWindowAbove — place child above parent.
+const NS_WINDOW_ABOVE: i64 = 1;
 
 static CONFIRM_WINDOW: OnceLock<Mutex<Option<WindowHandle<ConfirmPopupWindow>>>> = OnceLock::new();
 static CONFIRM_RESULT_TX: OnceLock<Mutex<Option<async_channel::Sender<bool>>>> = OnceLock::new();
@@ -300,6 +299,9 @@ pub(crate) fn close_confirm_window(cx: &mut App) {
                     event = "close_confirm_window_removing",
                     "close_confirm_window: removing window"
                 );
+                // remove_window() destroys the NSWindow, which causes AppKit
+                // to automatically detach it from its parent (addChildWindow
+                // relationship). No manual removeChildWindow: needed.
                 let _ = handle.update(cx, |_root, window, _cx| {
                     window.remove_window();
                 });
@@ -500,27 +502,59 @@ pub(crate) fn open_confirm_popup_window(
                         );
                         platform::configure_confirm_popup_window(confirm_ns_window, is_dark_vibrancy);
 
-                        // SAFETY: confirm_ns_window verified non-nil.
-                        // Override the level set by configure_actions_popup_window
-                        // (which sets NSFloatingWindowLevel=3). The confirm popup
-                        // needs to be above the main window, so use modal panel level.
-                        let _: () = msg_send![confirm_ns_window, setLevel: NS_MODAL_PANEL_WINDOW_LEVEL];
+                        // Attach confirm as child of the main window so AppKit
+                        // guarantees it stays above the parent across render cycles.
+                        // This is more robust than orderFrontRegardless alone at the
+                        // same window level (both are 101 for PopUp windows).
+                        // Find the main window: prefer the current key window,
+                        // fall back to the first visible window that isn't the confirm.
+                        let mut main_ns_window: cocoa::base::id = nil;
+                        let mut fallback_ns_window: cocoa::base::id = nil;
+                        for idx in 0..count {
+                            let w: cocoa::base::id = msg_send![windows, objectAtIndex: idx];
+                            if w != nil && w != confirm_ns_window {
+                                let w_visible: bool = msg_send![w, isVisible];
+                                if w_visible {
+                                    let w_key: bool = msg_send![w, isKeyWindow];
+                                    if w_key {
+                                        main_ns_window = w;
+                                        break;
+                                    }
+                                    if fallback_ns_window == nil {
+                                        fallback_ns_window = w;
+                                    }
+                                }
+                            }
+                        }
+                        if main_ns_window == nil {
+                            main_ns_window = fallback_ns_window;
+                            if main_ns_window == nil {
+                                tracing::warn!(
+                                    target: "script_kit::confirm",
+                                    event = "confirm_window.no_parent_found",
+                                    "No visible parent window found for addChildWindow"
+                                );
+                            }
+                        }
+                        if main_ns_window != nil {
+                            // SAFETY: both pointers verified non-nil and distinct.
+                            let _: () = msg_send![main_ns_window, addChildWindow:confirm_ns_window ordered:NS_WINDOW_ABOVE];
+                        }
 
-                        // Bring the confirm popup to front and give it keyboard focus.
+                        // Always order front + make key regardless of parent attachment.
+                        // orderFrontRegardless is needed for the no-parent fallback and
+                        // also ensures the child is visually ordered even if addChildWindow
+                        // doesn't immediately reorder on non-activating panels.
                         let _: () = msg_send![confirm_ns_window, orderFrontRegardless];
                         let _: () = msg_send![confirm_ns_window, makeKeyWindow];
-
-                        // Verify key status after makeKeyWindow
-                        let is_key_after: bool = msg_send![confirm_ns_window, isKeyWindow];
-                        let level_after: i64 = msg_send![confirm_ns_window, level];
-                        tracing::info!(
-                            target: "script_kit::confirm",
-                            event = "configure_confirm_popup_done",
-                            is_key_after,
-                            level_after,
-                            "Confirm popup configured: isKey={}, level={}",
-                            is_key_after, level_after
-                        );
+                        let is_key: bool = msg_send![confirm_ns_window, isKeyWindow];
+                        if !is_key {
+                            tracing::warn!(
+                                target: "script_kit::confirm",
+                                event = "confirm_window.make_key_failed",
+                                "makeKeyWindow did not make confirm popup the key window"
+                            );
+                        }
                     } else {
                         tracing::error!(
                             target: "script_kit::confirm",

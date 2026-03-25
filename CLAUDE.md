@@ -93,6 +93,15 @@ Rules:
 9. Use `cx.listener(|this, event, window, cx| { ... })` to create entity-bound callbacks in render context.
 10. Flex children containing lists need `.min_h(px(0.))` to prevent overflow beyond parent bounds.
 
+## Window Level Rules (Non-Negotiable)
+
+- **Never call `setLevel` on a `WindowKind::PopUp` window.** GPUI assigns `NSPopUpMenuWindowLevel` (101) to all PopUp windows. Any manual `setLevel` call downgrades the window below the main panel and makes it invisible behind it.
+- The main window is also `WindowKind::PopUp` at level 101. Child popups (actions, confirm, notes, AI) must stay at 101 to be visible.
+- Use `orderFrontRegardless` to bring a popup to front without activating the app.
+- For popups that must stay above the main window across render cycles (e.g., confirm dialogs), use `addChildWindow:ordered:NSWindowAbove` to attach as a native AppKit child window.
+- `orderFrontRegardless` only reorders within the same level — it cannot promote a window above a higher-level window.
+- The `NS_FLOATING_WINDOW_LEVEL` (3) constant in the codebase is stale — the main window is NOT at level 3 at runtime.
+
 ## Keyboard Event Propagation
 
 - Call `cx.stop_propagation()` after handling a key to prevent parent handlers from also processing it.
