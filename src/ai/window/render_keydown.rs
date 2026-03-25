@@ -17,6 +17,46 @@ pub(super) fn is_mini_history_shortcut(key: &str, modifiers: &gpui::Modifiers) -
     modifiers.platform && !modifiers.shift && !modifiers.alt && !modifiers.control && key == "j"
 }
 
+/// Classifies a keystroke for context-picker dispatch. Platform shortcuts (Cmd+*,
+/// Ctrl+*, Alt+*) fall through so global handlers like Cmd+Shift+F are never
+/// swallowed by the picker modal.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ContextPickerKeyRoute {
+    /// Up arrow — select previous picker item
+    Prev,
+    /// Down arrow — select next picker item
+    Next,
+    /// Enter or Tab — accept current selection
+    Accept,
+    /// Escape — close the picker
+    Close,
+    /// Plain text key (no system modifiers) — let it propagate to the input
+    PropagateToInput,
+    /// Platform/control/alt shortcut — fall through to global handlers
+    Fallthrough,
+}
+
+fn context_picker_key_route(
+    key: &str,
+    platform: bool,
+    control: bool,
+    alt: bool,
+) -> ContextPickerKeyRoute {
+    match key {
+        k if is_key_up(k) => ContextPickerKeyRoute::Prev,
+        k if is_key_down(k) => ContextPickerKeyRoute::Next,
+        k if is_key_enter(k) || is_key_tab(k) => ContextPickerKeyRoute::Accept,
+        k if is_key_escape(k) => ContextPickerKeyRoute::Close,
+        _ if !platform && !control && !alt => ContextPickerKeyRoute::PropagateToInput,
+        _ => ContextPickerKeyRoute::Fallthrough,
+    }
+}
+
+/// Returns true when the keystroke is the global focus-search shortcut (Cmd+Shift+F).
+fn is_global_focus_search_shortcut(key: &str, platform: bool, shift: bool) -> bool {
+    platform && shift && key == "f"
+}
+
 impl AiApp {
     pub(super) fn handle_root_key_down(
         &mut self,
@@ -75,41 +115,51 @@ impl AiApp {
             }
         }
 
-        // Handle context picker navigation when it's open
+        // Handle context picker navigation when it's open.
+        // Platform shortcuts (Cmd+*, Ctrl+*, Alt+*) fall through so global
+        // handlers like Cmd+Shift+F are never swallowed by the picker modal.
         if self.is_context_picker_open() {
-            match key {
-                k if is_key_up(k) => {
+            match context_picker_key_route(
+                key,
+                modifiers.platform,
+                modifiers.control,
+                modifiers.alt,
+            ) {
+                ContextPickerKeyRoute::Prev => {
                     self.context_picker_select_prev(cx);
                     cx.stop_propagation();
                     return;
                 }
-                k if is_key_down(k) => {
+                ContextPickerKeyRoute::Next => {
                     self.context_picker_select_next(cx);
                     cx.stop_propagation();
                     return;
                 }
-                k if is_key_enter(k) => {
+                ContextPickerKeyRoute::Accept => {
                     self.accept_context_picker_selection(window, cx);
                     cx.stop_propagation();
                     return;
                 }
-                k if is_key_escape(k) => {
+                ContextPickerKeyRoute::Close => {
                     self.close_context_picker(cx);
                     cx.stop_propagation();
                     return;
                 }
-                k if is_key_tab(k) => {
-                    self.accept_context_picker_selection(window, cx);
-                    cx.stop_propagation();
-                    return;
-                }
-                _ => {
-                    // Let other keys (including printable chars) propagate to the input.
+                ContextPickerKeyRoute::PropagateToInput => {
+                    // Let printable chars propagate to the input.
                     // The input change handler will update the picker query.
                     cx.propagate();
+                    return;
+                }
+                ContextPickerKeyRoute::Fallthrough => {
+                    // Platform/system shortcuts fall through to global handlers below.
+                    info!(
+                        key = key,
+                        picker_open = true,
+                        "context_picker_key_fallthrough"
+                    );
                 }
             }
-            return;
         }
 
         // Cmd+Shift+F: always focus search — preempts all modal guards below.
@@ -713,5 +763,131 @@ mod tests {
             !extra_shift,
             "Cmd+Shift+J must not match the dedicated mini history shortcut"
         );
+    }
+}
+
+#[cfg(test)]
+mod key_routing_tests {
+    use super::{context_picker_key_route, is_global_focus_search_shortcut, ContextPickerKeyRoute};
+
+    // --- context_picker_key_route ---
+
+    #[test]
+    fn arrow_keys_route_to_picker_navigation() {
+        assert_eq!(
+            context_picker_key_route("up", false, false, false),
+            ContextPickerKeyRoute::Prev,
+        );
+        assert_eq!(
+            context_picker_key_route("arrowup", false, false, false),
+            ContextPickerKeyRoute::Prev,
+        );
+        assert_eq!(
+            context_picker_key_route("down", false, false, false),
+            ContextPickerKeyRoute::Next,
+        );
+        assert_eq!(
+            context_picker_key_route("arrowdown", false, false, false),
+            ContextPickerKeyRoute::Next,
+        );
+    }
+
+    #[test]
+    fn enter_and_tab_accept_picker_selection() {
+        assert_eq!(
+            context_picker_key_route("enter", false, false, false),
+            ContextPickerKeyRoute::Accept,
+        );
+        assert_eq!(
+            context_picker_key_route("Enter", false, false, false),
+            ContextPickerKeyRoute::Accept,
+        );
+        assert_eq!(
+            context_picker_key_route("tab", false, false, false),
+            ContextPickerKeyRoute::Accept,
+        );
+    }
+
+    #[test]
+    fn escape_closes_picker() {
+        assert_eq!(
+            context_picker_key_route("escape", false, false, false),
+            ContextPickerKeyRoute::Close,
+        );
+    }
+
+    #[test]
+    fn plain_text_keys_propagate_to_input() {
+        assert_eq!(
+            context_picker_key_route("a", false, false, false),
+            ContextPickerKeyRoute::PropagateToInput,
+        );
+        assert_eq!(
+            context_picker_key_route("/", false, false, false),
+            ContextPickerKeyRoute::PropagateToInput,
+        );
+        assert_eq!(
+            context_picker_key_route("space", false, false, false),
+            ContextPickerKeyRoute::PropagateToInput,
+        );
+    }
+
+    #[test]
+    fn platform_shortcuts_are_not_swallowed_by_picker() {
+        // Cmd+F should fall through so Cmd+Shift+F can be handled globally
+        assert_eq!(
+            context_picker_key_route("f", true, false, false),
+            ContextPickerKeyRoute::Fallthrough,
+        );
+        // Cmd+N should fall through for new-conversation
+        assert_eq!(
+            context_picker_key_route("n", true, false, false),
+            ContextPickerKeyRoute::Fallthrough,
+        );
+        // Cmd+K should fall through for command bar
+        assert_eq!(
+            context_picker_key_route("k", true, false, false),
+            ContextPickerKeyRoute::Fallthrough,
+        );
+        // Cmd+W should fall through for close
+        assert_eq!(
+            context_picker_key_route("w", true, false, false),
+            ContextPickerKeyRoute::Fallthrough,
+        );
+    }
+
+    #[test]
+    fn control_and_alt_shortcuts_fall_through() {
+        assert_eq!(
+            context_picker_key_route("a", false, true, false),
+            ContextPickerKeyRoute::Fallthrough,
+        );
+        assert_eq!(
+            context_picker_key_route("a", false, false, true),
+            ContextPickerKeyRoute::Fallthrough,
+        );
+    }
+
+    // --- is_global_focus_search_shortcut ---
+
+    #[test]
+    fn cmd_shift_f_is_classified_as_global_search_shortcut() {
+        assert!(is_global_focus_search_shortcut("f", true, true));
+    }
+
+    #[test]
+    fn cmd_f_without_shift_is_not_search_shortcut() {
+        assert!(!is_global_focus_search_shortcut("f", true, false));
+    }
+
+    #[test]
+    fn wrong_key_is_not_search_shortcut() {
+        assert!(!is_global_focus_search_shortcut("k", true, true));
+        assert!(!is_global_focus_search_shortcut("s", true, true));
+    }
+
+    #[test]
+    fn shift_f_without_platform_is_not_search_shortcut() {
+        assert!(!is_global_focus_search_shortcut("f", false, true));
     }
 }
