@@ -82,8 +82,9 @@ impl AiApp {
     }
 
     /// Render a compact model chip for the mini titlebar.
-    /// Matches full mode's button + fallback pattern but opens command bar
-    /// (model/preset picker) instead of cycling.
+    /// Matches full mode's button + fallback pattern: click cycles to the
+    /// next available model (same as `render_model_picker`). Does NOT open
+    /// the generic command bar — model selection is direct.
     pub(super) fn render_mini_model_chip(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let button_colors =
             crate::components::ButtonColors::from_theme(&crate::theme::get_cached_theme());
@@ -134,9 +135,16 @@ impl AiApp {
         crate::components::Button::new(model_label, button_colors)
             .id("ai-mini-model-chip")
             .variant(crate::components::ButtonVariant::Ghost)
-            .on_click(Box::new(move |_, window, cx| {
+            .on_click(Box::new(move |_, _window, cx| {
                 click_entity.update(cx, |this, cx| {
-                    this.show_command_bar("header_model_click", window, cx);
+                    tracing::info!(
+                        target: "ai",
+                        category = "AI_UI",
+                        event = "mini_model_chip_cycle",
+                        window_mode = ?this.window_mode,
+                        "Mini model chip clicked — cycling model"
+                    );
+                    this.cycle_model(cx);
                 });
             }))
             .into_any_element()

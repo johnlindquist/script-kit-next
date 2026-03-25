@@ -2844,8 +2844,8 @@ fn test_show_mini_history_overlay_always_sets_flag_and_focuses_search() {
 }
 
 /// Mini titlebar model selector must use the Button-based chip from
-/// render_mini_model_chip, not plain text. The chip opens the command bar
-/// for model switching.
+/// render_mini_model_chip, not plain text. The chip cycles models on click
+/// (matching full mode's render_model_picker behavior).
 #[test]
 fn test_mini_model_chip_uses_button_component() {
     let source = include_str!("render_input.rs");
@@ -2864,10 +2864,10 @@ fn test_mini_model_chip_uses_button_component() {
         after.contains("ButtonVariant::Ghost"),
         "Mini model chip must use Ghost variant"
     );
-    // Opens command bar, not cycle_model
+    // Cycles model on click (matches full mode's render_model_picker)
     assert!(
-        after.contains("show_command_bar("),
-        "Mini model chip must open command bar on click"
+        after.contains("cycle_model("),
+        "Mini model chip must cycle model on click (not open generic command bar)"
     );
     // Has setup-required fallback
     assert!(
