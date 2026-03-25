@@ -1260,7 +1260,12 @@ pub fn resize_actions_window_direct(
     let current_width_f32: f32 = current_bounds.size.width.into();
 
     let position = get_actions_window_position();
-    log_actions_popup_resize("resize_direct_requested", position, current_bounds, new_height_f32);
+    log_actions_popup_resize(
+        "resize_direct_requested",
+        position,
+        current_bounds,
+        new_height_f32,
+    );
 
     // Skip if height hasn't changed
     if (current_height_f32 - new_height_f32).abs() < 1.0 {
@@ -1513,15 +1518,15 @@ pub fn resize_actions_window(cx: &mut App, dialog_entity: &Entity<ActionsDialog>
         );
 
         let dialog_for_receipt = dialog_entity.read(cx);
-        let section_header_count = if dialog_for_receipt.config.section_style == SectionStyle::Headers
-        {
-            count_section_headers(
-                &dialog_for_receipt.actions,
-                &dialog_for_receipt.filtered_actions,
-            )
-        } else {
-            0
-        };
+        let section_header_count =
+            if dialog_for_receipt.config.section_style == SectionStyle::Headers {
+                count_section_headers(
+                    &dialog_for_receipt.actions,
+                    &dialog_for_receipt.filtered_actions,
+                )
+            } else {
+                0
+            };
         emit_actions_popup_event(
             ActionsPopupEvent::Resized,
             None,

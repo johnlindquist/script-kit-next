@@ -1,6 +1,25 @@
 use super::*;
 use crate::theme::opacity::{OPACITY_HOVER, OPACITY_SELECTED};
 
+/// Pure helper: compute the effective max height for the mini history overlay
+/// given a window height. Clamps so the overlay never overflows below the window.
+///
+/// - For small windows, returns a floor of `S9` so the overlay stays usable.
+/// - For windows where available space is less than `MINI_HISTORY_OVERLAY_MAX_H`,
+///   returns the available space.
+/// - For tall windows, caps at `MINI_HISTORY_OVERLAY_MAX_H`.
+pub(super) fn mini_history_overlay_max_height_for_window(window_height: gpui::Pixels) -> gpui::Pixels {
+    let available = window_height - MINI_HISTORY_OVERLAY_TOP - S3;
+
+    if available < S9 {
+        S9
+    } else if available < MINI_HISTORY_OVERLAY_MAX_H {
+        available
+    } else {
+        MINI_HISTORY_OVERLAY_MAX_H
+    }
+}
+
 impl AiApp {
     /// Add a file attachment by enqueuing a `FilePath` context part with dedup.
     pub(super) fn add_attachment(&mut self, path: String, cx: &mut Context<Self>) {
@@ -142,16 +161,9 @@ impl AiApp {
     /// Compute the effective max height for the mini history overlay,
     /// clamping against the actual window bounds so the panel never overflows.
     fn mini_history_overlay_max_height(&self, window: &Window) -> gpui::Pixels {
-        let available =
-            window.window_bounds().get_bounds().size.height - MINI_HISTORY_OVERLAY_TOP - S3;
-
-        if available < S9 {
-            S9
-        } else if available < MINI_HISTORY_OVERLAY_MAX_H {
-            available
-        } else {
-            MINI_HISTORY_OVERLAY_MAX_H
-        }
+        mini_history_overlay_max_height_for_window(
+            window.window_bounds().get_bounds().size.height,
+        )
     }
 
     fn render_mini_history_overlay(
@@ -784,5 +796,77 @@ impl Render for AiApp {
             .when(self.showing_shortcuts_overlay, |el| {
                 el.child(self.render_shortcuts_overlay(cx))
             })
+    }
+}
+
+#[cfg(test)]
+mod mini_history_overlay_height_tests {
+    use super::*;
+
+    #[test]
+    fn default_mini_window_clamps_to_available_space() {
+        let window_h = px(MINI_WINDOW_DEFAULT_H);
+        let expected = window_h - MINI_HISTORY_OVERLAY_TOP - S3;
+        let result = mini_history_overlay_max_height_for_window(window_h);
+        assert_eq!(
+            result, expected,
+            "default mini window ({window_h}) should use runtime clamp ({expected}), got {result}"
+        );
+        // Verify the result is strictly less than the static constant
+        // (the whole point of the runtime clamp)
+        assert!(
+            result < MINI_HISTORY_OVERLAY_MAX_H,
+            "default window clamp ({result}) must be less than static max ({MINI_HISTORY_OVERLAY_MAX_H})"
+        );
+    }
+
+    #[test]
+    fn tall_window_caps_at_overlay_max_constant() {
+        let result = mini_history_overlay_max_height_for_window(px(800.));
+        assert_eq!(
+            result, MINI_HISTORY_OVERLAY_MAX_H,
+            "tall window should cap at MINI_HISTORY_OVERLAY_MAX_H ({MINI_HISTORY_OVERLAY_MAX_H}), got {result}"
+        );
+    }
+
+    #[test]
+    fn tiny_window_uses_floor() {
+        // Window so small that available < S9
+        let tiny_h = MINI_HISTORY_OVERLAY_TOP + S3 + px(10.);
+        let result = mini_history_overlay_max_height_for_window(tiny_h);
+        assert_eq!(
+            result, S9,
+            "tiny window should floor at S9 ({S9}), got {result}"
+        );
+    }
+
+    #[test]
+    fn exact_boundary_window_returns_max_constant() {
+        // Window height where available == MINI_HISTORY_OVERLAY_MAX_H exactly
+        let boundary_h = MINI_HISTORY_OVERLAY_TOP + S3 + MINI_HISTORY_OVERLAY_MAX_H;
+        let result = mini_history_overlay_max_height_for_window(boundary_h);
+        assert_eq!(
+            result, MINI_HISTORY_OVERLAY_MAX_H,
+            "boundary window should return max constant ({MINI_HISTORY_OVERLAY_MAX_H}), got {result}"
+        );
+    }
+
+    #[test]
+    fn result_never_exceeds_window_minus_titlebar() {
+        // Property: for any window height, result + MINI_HISTORY_OVERLAY_TOP + S3 <= window_height
+        // (unless floored at S9 for tiny windows)
+        for h in [100., 200., 300., 440., 500., 600., 800., 1200.] {
+            let window_h = px(h);
+            let result = mini_history_overlay_max_height_for_window(window_h);
+            let consumed = result + MINI_HISTORY_OVERLAY_TOP + S3;
+            // For non-tiny windows the overlay must fit
+            if window_h >= MINI_HISTORY_OVERLAY_TOP + S3 + S9 {
+                assert!(
+                    consumed <= window_h,
+                    "overlay ({result}) + top ({MINI_HISTORY_OVERLAY_TOP}) + margin ({S3}) = {consumed} \
+                     exceeds window height {window_h}"
+                );
+            }
+        }
     }
 }

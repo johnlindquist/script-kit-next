@@ -1183,4 +1183,68 @@ mod shortcut_mode_filter_tests {
             .expect("Toggle sidebar shortcut should exist");
         assert_eq!(cmd_b.mode, Some(AiWindowMode::Full));
     }
+
+    /// Helper: checks whether a shortcut with exact keys, description, and mode exists
+    /// in the given slice.
+    fn has_shortcut(
+        items: &[AiShortcutItem],
+        keys: &str,
+        description: &str,
+        mode: Option<AiWindowMode>,
+    ) -> bool {
+        items
+            .iter()
+            .any(|item| item.keys == keys && item.description == description && item.mode == mode)
+    }
+
+    #[test]
+    fn mini_navigation_shortcuts_include_history_overlay_bindings() {
+        assert!(
+            has_shortcut(
+                AI_SHORTCUTS_NAVIGATION,
+                "\u{2191}\u{2193}",
+                "Navigate history (overlay)",
+                Some(AiWindowMode::Mini),
+            ),
+            "↑↓ navigate history (overlay) must be registered as mini-only"
+        );
+        assert!(
+            has_shortcut(
+                AI_SHORTCUTS_NAVIGATION,
+                "Enter",
+                "Select chat (overlay)",
+                Some(AiWindowMode::Mini),
+            ),
+            "Enter select chat (overlay) must be registered as mini-only"
+        );
+        assert!(
+            has_shortcut(
+                AI_SHORTCUTS_NAVIGATION,
+                "Esc",
+                "Close overlay",
+                Some(AiWindowMode::Mini),
+            ),
+            "Esc close overlay must be registered as mini-only"
+        );
+    }
+
+    #[test]
+    fn cross_mode_shortcuts_include_context_and_window_actions() {
+        assert!(
+            has_shortcut(AI_SHORTCUTS_INPUT, "\u{2318}\u{21e7}A", "Attach context", None),
+            "⌘⇧A attach context must be registered as cross-mode"
+        );
+        assert!(
+            has_shortcut(AI_SHORTCUTS_ACTIONS, "\u{2325}\u{2318}I", "Inspect context", None),
+            "⌥⌘I inspect context must be registered as cross-mode"
+        );
+        assert!(
+            has_shortcut(AI_SHORTCUTS_ACTIONS, "\u{2318}V", "Paste image", None),
+            "⌘V paste image must be registered as cross-mode"
+        );
+        assert!(
+            has_shortcut(AI_SHORTCUTS_ACTIONS, "\u{2318}W", "Close window", None),
+            "⌘W close window must be registered as cross-mode"
+        );
+    }
 }
