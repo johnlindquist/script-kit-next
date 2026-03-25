@@ -782,6 +782,183 @@ fn actions_popup_origin(
     Point { x, y }
 }
 
+/// Full popup bounds (origin + size) for the actions window.
+///
+/// Wraps [`actions_popup_origin`] so callers get a single `Bounds` value
+/// without reconstructing size separately.
+fn actions_popup_bounds(
+    main_window_bounds: Bounds<Pixels>,
+    window_width: Pixels,
+    window_height: Pixels,
+    position: WindowPosition,
+) -> Bounds<Pixels> {
+    Bounds {
+        origin: actions_popup_origin(main_window_bounds, window_width, window_height, position),
+        size: Size {
+            width: window_width,
+            height: window_height,
+        },
+    }
+}
+
+/// Structured placement receipt for the actions popup.
+///
+/// Captures all inputs and computed outputs of a placement decision so that
+/// agentic callers can verify geometry deterministically.
+#[derive(Debug)]
+struct ActionsPopupPlacementReceipt {
+    position: WindowPosition,
+    display_id: Option<DisplayId>,
+    main_window_bounds: Bounds<Pixels>,
+    popup_bounds: Bounds<Pixels>,
+    anchor_x: Pixels,
+    anchor_y: Pixels,
+    pinned_edge: &'static str,
+}
+
+fn actions_popup_placement_receipt(
+    main_window_bounds: Bounds<Pixels>,
+    window_width: Pixels,
+    window_height: Pixels,
+    position: WindowPosition,
+    display_id: Option<DisplayId>,
+) -> ActionsPopupPlacementReceipt {
+    let popup_bounds =
+        actions_popup_bounds(main_window_bounds, window_width, window_height, position);
+
+    let (anchor_x, anchor_y, pinned_edge) = match position {
+        WindowPosition::BottomRight => (
+            main_window_bounds.origin.x + main_window_bounds.size.width - px(ACTIONS_MARGIN_X),
+            main_window_bounds.origin.y + main_window_bounds.size.height
+                - px(FOOTER_HEIGHT)
+                - px(ACTIONS_MARGIN_Y),
+            "bottom",
+        ),
+        WindowPosition::TopRight => (
+            main_window_bounds.origin.x + main_window_bounds.size.width - px(ACTIONS_MARGIN_X),
+            main_window_bounds.origin.y + px(TITLEBAR_HEIGHT) + px(ACTIONS_MARGIN_Y),
+            "top",
+        ),
+        WindowPosition::TopCenter => (
+            main_window_bounds.origin.x + (main_window_bounds.size.width / 2.0),
+            main_window_bounds.origin.y + px(TITLEBAR_HEIGHT) + px(ACTIONS_MARGIN_Y),
+            "top",
+        ),
+    };
+
+    ActionsPopupPlacementReceipt {
+        position,
+        display_id,
+        main_window_bounds,
+        popup_bounds,
+        anchor_x,
+        anchor_y,
+        pinned_edge,
+    }
+}
+
+fn log_actions_popup_placement(stage: &'static str, receipt: &ActionsPopupPlacementReceipt) {
+    let main_origin_x_px: f32 = receipt.main_window_bounds.origin.x.into();
+    let main_origin_y_px: f32 = receipt.main_window_bounds.origin.y.into();
+    let main_width_px: f32 = receipt.main_window_bounds.size.width.into();
+    let main_height_px: f32 = receipt.main_window_bounds.size.height.into();
+
+    let popup_origin_x_px: f32 = receipt.popup_bounds.origin.x.into();
+    let popup_origin_y_px: f32 = receipt.popup_bounds.origin.y.into();
+    let popup_width_px: f32 = receipt.popup_bounds.size.width.into();
+    let popup_height_px: f32 = receipt.popup_bounds.size.height.into();
+
+    let anchor_x_px: f32 = receipt.anchor_x.into();
+    let anchor_y_px: f32 = receipt.anchor_y.into();
+
+    tracing::info!(
+        target: "ACTIONS_POPUP",
+        stage = stage,
+        position = ?receipt.position,
+        display_id = ?receipt.display_id,
+        pinned_edge = receipt.pinned_edge,
+        main_origin_x_px,
+        main_origin_y_px,
+        main_width_px,
+        main_height_px,
+        popup_origin_x_px,
+        popup_origin_y_px,
+        popup_width_px,
+        popup_height_px,
+        anchor_x_px,
+        anchor_y_px,
+        "actions popup placement receipt"
+    );
+}
+
+/// Pure resize origin calculation shared by both resize entry points.
+///
+/// For bottom-anchored positions the origin stays fixed (bottom edge is pinned).
+/// For top-anchored positions the top edge stays fixed, so origin.y shifts.
+fn resized_actions_window_origin_y(
+    current_origin_y: f64,
+    current_height: f64,
+    target_height: f64,
+    position: WindowPosition,
+) -> f64 {
+    match position {
+        WindowPosition::BottomRight => current_origin_y,
+        WindowPosition::TopRight | WindowPosition::TopCenter => {
+            let old_top = current_origin_y + current_height;
+            old_top - target_height
+        }
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn resized_actions_window_frame(
+    frame: cocoa::foundation::NSRect,
+    new_height_f32: f32,
+    position: WindowPosition,
+) -> cocoa::foundation::NSRect {
+    use cocoa::foundation::{NSPoint, NSRect, NSSize};
+
+    let new_origin_y = resized_actions_window_origin_y(
+        frame.origin.y,
+        frame.size.height,
+        new_height_f32 as f64,
+        position,
+    );
+
+    NSRect::new(
+        NSPoint::new(frame.origin.x, new_origin_y),
+        NSSize::new(frame.size.width, new_height_f32 as f64),
+    )
+}
+
+fn log_actions_popup_resize(
+    stage: &'static str,
+    position: WindowPosition,
+    current_bounds: Bounds<Pixels>,
+    target_height_px: f32,
+) {
+    let current_origin_x_px: f32 = current_bounds.origin.x.into();
+    let current_origin_y_px: f32 = current_bounds.origin.y.into();
+    let current_width_px: f32 = current_bounds.size.width.into();
+    let current_height_px: f32 = current_bounds.size.height.into();
+
+    tracing::info!(
+        target: "ACTIONS_POPUP",
+        stage = stage,
+        position = ?position,
+        pinned_edge = match position {
+            WindowPosition::BottomRight => "bottom",
+            WindowPosition::TopRight | WindowPosition::TopCenter => "top",
+        },
+        current_origin_x_px,
+        current_origin_y_px,
+        current_width_px,
+        current_height_px,
+        target_height_px,
+        "actions popup resize receipt"
+    );
+}
+
 /// Open the actions window as a separate floating window with vibrancy
 ///
 /// The window is positioned at the top-right of the main window, below the header.
@@ -835,24 +1012,27 @@ pub fn open_actions_window(
     let window_width = px(ACTIONS_WINDOW_WIDTH);
     let window_height = px(dynamic_height);
 
-    let origin = actions_popup_origin(main_window_bounds, window_width, window_height, position);
+    let receipt = actions_popup_placement_receipt(
+        main_window_bounds,
+        window_width,
+        window_height,
+        position,
+        display_id,
+    );
+    log_actions_popup_placement("open", &receipt);
 
-    let bounds = Bounds {
-        origin,
-        size: Size {
-            width: window_width,
-            height: window_height,
-        },
-    };
-
-    let window_x = origin.x;
-    let window_y = origin.y;
+    let bounds = receipt.popup_bounds;
 
     crate::logging::log(
         "ACTIONS",
         &format!(
-            "Opening actions window at ({:?}, {:?}), size {:?}x{:?}, display_id={:?}",
-            window_x, window_y, window_width, window_height, display_id
+            "Opening actions window at ({:?}, {:?}), size {:?}x{:?}, display_id={:?}, position={:?}",
+            bounds.origin.x,
+            bounds.origin.y,
+            bounds.size.width,
+            bounds.size.height,
+            display_id,
+            position,
         ),
     );
 
@@ -1079,53 +1259,47 @@ pub fn resize_actions_window_direct(
     let current_height_f32: f32 = current_bounds.size.height.into();
     let current_width_f32: f32 = current_bounds.size.width.into();
 
-    crate::logging::log(
-        "ACTIONS",
-        &format!(
-            "resize_actions_window_direct: current={:.0}x{:.0}, target_height={:.0}",
-            current_width_f32, current_height_f32, new_height_f32
-        ),
-    );
+    let position = get_actions_window_position();
+    log_actions_popup_resize("resize_direct_requested", position, current_bounds, new_height_f32);
 
     // Skip if height hasn't changed
     if (current_height_f32 - new_height_f32).abs() < 1.0 {
-        crate::logging::log(
-            "ACTIONS",
-            "resize_actions_window_direct: skipping - height unchanged",
+        tracing::debug!(
+            target: "ACTIONS_POPUP",
+            stage = "resize_direct_skipped",
+            position = ?position,
+            current_height_px = current_height_f32,
+            target_height_px = new_height_f32,
+            reason = "height_unchanged",
+            "actions popup resize skipped"
         );
         return;
     }
 
-    // Resize via NSWindow to keep bottom pinned
+    // Resize via NSWindow using the shared geometry contract
     #[cfg(target_os = "macos")]
     {
         use cocoa::appkit::NSScreen;
         use cocoa::base::nil;
-        use cocoa::foundation::{NSPoint, NSRect, NSSize};
         use objc::{msg_send, sel, sel_impl};
 
+        // SAFETY: accessing NSApp and iterating its windows array to find our
+        // popup by matching dimensions, then resizing it via setFrame:display:animate:.
+        // All ObjC pointers are nil-checked before use.
         unsafe {
             let ns_app: cocoa::base::id = cocoa::appkit::NSApp();
             let windows: cocoa::base::id = msg_send![ns_app, windows];
             let count: usize = msg_send![windows, count];
 
-            crate::logging::log(
-                "ACTIONS",
-                &format!(
-                    "NSWindow search: looking for {:.0}x{:.0} among {} windows",
-                    current_width_f32, current_height_f32, count
-                ),
-            );
-
+            let mut found = false;
             for i in 0..count {
                 let ns_window: cocoa::base::id = msg_send![windows, objectAtIndex: i];
                 if ns_window == nil {
                     continue;
                 }
 
-                let frame: NSRect = msg_send![ns_window, frame];
+                let frame: cocoa::foundation::NSRect = msg_send![ns_window, frame];
 
-                // Match by width (actions window has unique width of 320)
                 if (frame.size.width - current_width_f32 as f64).abs() < 2.0
                     && (frame.size.height - current_height_f32 as f64).abs() < 2.0
                 {
@@ -1135,23 +1309,7 @@ pub fn resize_actions_window_direct(
                         let _primary: cocoa::base::id = msg_send![screens, objectAtIndex: 0u64];
                     }
 
-                    // Pin the correct edge based on window position:
-                    // - BottomRight: keep bottom fixed (origin.y stays the same)
-                    // - TopCenter/TopRight: keep top fixed (adjust origin.y)
-                    let new_origin_y = match get_actions_window_position() {
-                        WindowPosition::BottomRight => frame.origin.y,
-                        WindowPosition::TopRight | WindowPosition::TopCenter => {
-                            // In macOS coords, top = origin.y + height
-                            // Keep top fixed: new_origin_y = old_top - new_height
-                            let old_top = frame.origin.y + frame.size.height;
-                            old_top - new_height_f32 as f64
-                        }
-                    };
-
-                    let new_frame = NSRect::new(
-                        NSPoint::new(frame.origin.x, new_origin_y),
-                        NSSize::new(frame.size.width, new_height_f32 as f64),
-                    );
+                    let new_frame = resized_actions_window_frame(frame, new_height_f32, position);
 
                     let _: () = msg_send![
                         ns_window,
@@ -1160,15 +1318,22 @@ pub fn resize_actions_window_direct(
                         animate:ACTIONS_WINDOW_RESIZE_ANIMATE
                     ];
 
-                    crate::logging::log(
-                        "ACTIONS",
-                        &format!(
-                            "Resized actions window (top pinned): height {:.0} -> {:.0}",
-                            current_height_f32, new_height_f32
-                        ),
-                    );
+                    found = true;
                     break;
                 }
+            }
+
+            if !found {
+                tracing::warn!(
+                    target: "ACTIONS_POPUP",
+                    stage = "resize_direct_window_match_failed",
+                    position = ?position,
+                    current_width_px = current_width_f32,
+                    current_height_px = current_height_f32,
+                    target_height_px = new_height_f32,
+                    window_count = count,
+                    "actions popup NSWindow lookup failed"
+                );
             }
         }
     }
@@ -1235,48 +1400,37 @@ pub fn resize_actions_window(cx: &mut App, dialog_entity: &Entity<ActionsDialog>
             let current_height_f32: f32 = current_bounds.size.height.into();
             let current_width_f32: f32 = current_bounds.size.width.into();
 
-            crate::logging::log(
-                "ACTIONS",
-                &format!(
-                    "resize_actions_window inside update: current={:.0}x{:.0}, target_height={:.0}",
-                    current_width_f32, current_height_f32, new_height_f32
-                ),
-            );
+            let position = get_actions_window_position();
+            log_actions_popup_resize("resize_requested", position, current_bounds, new_height_f32);
 
             // Skip if height hasn't changed
             if (current_height_f32 - new_height_f32).abs() < 1.0 {
-                crate::logging::log(
-                    "ACTIONS",
-                    "resize_actions_window: skipping - height unchanged",
+                tracing::debug!(
+                    target: "ACTIONS_POPUP",
+                    stage = "resize_skipped",
+                    position = ?position,
+                    current_height_px = current_height_f32,
+                    target_height_px = new_height_f32,
+                    reason = "height_unchanged",
+                    "actions popup resize skipped"
                 );
                 return;
             }
 
-            // "Pin to bottom": keep the bottom edge fixed
-            // In macOS screen coords (bottom-left origin), the bottom of the window
-            // is at frame.origin.y. When we change height, we keep origin.y the same
-            // and only change height - this naturally keeps the bottom fixed.
             #[cfg(target_os = "macos")]
             {
                 use cocoa::appkit::NSScreen;
                 use cocoa::base::nil;
-                use cocoa::foundation::{NSPoint, NSRect, NSSize};
                 use objc::{msg_send, sel, sel_impl};
 
+                // SAFETY: accessing NSApp and iterating its windows array to find our
+                // popup by matching dimensions, then resizing via setFrame:display:animate:.
+                // All ObjC pointers are nil-checked before use.
                 unsafe {
                     let ns_app: cocoa::base::id = cocoa::appkit::NSApp();
                     let windows: cocoa::base::id = msg_send![ns_app, windows];
                     let count: usize = msg_send![windows, count];
 
-                    crate::logging::log(
-                        "ACTIONS",
-                        &format!(
-                            "NSWindow search: looking for {:.0}x{:.0} among {} windows",
-                            current_width_f32, current_height_f32, count
-                        ),
-                    );
-
-                    // Find our actions window by matching current dimensions
                     let mut found = false;
                     for i in 0..count {
                         let ns_window: cocoa::base::id = msg_send![windows, objectAtIndex: i];
@@ -1284,38 +1438,20 @@ pub fn resize_actions_window(cx: &mut App, dialog_entity: &Entity<ActionsDialog>
                             continue;
                         }
 
-                        let frame: NSRect = msg_send![ns_window, frame];
+                        let frame: cocoa::foundation::NSRect = msg_send![ns_window, frame];
 
-                        // Match by width (actions window has unique width)
                         if (frame.size.width - current_width_f32 as f64).abs() < 2.0
                             && (frame.size.height - current_height_f32 as f64).abs() < 2.0
                         {
-                            // Get the screen this window is on (NOT primary screen!)
                             let window_screen: cocoa::base::id = msg_send![ns_window, screen];
                             if window_screen == nil {
-                                // Fallback to primary if no screen
                                 let screens: cocoa::base::id = NSScreen::screens(nil);
                                 let _primary: cocoa::base::id =
                                     msg_send![screens, objectAtIndex: 0u64];
                             }
 
-                            // Pin the correct edge based on window position:
-                            // - BottomRight: keep bottom fixed (origin.y stays the same)
-                            // - TopCenter/TopRight: keep top fixed (adjust origin.y)
-                            let new_origin_y = match get_actions_window_position() {
-                                WindowPosition::BottomRight => frame.origin.y,
-                                WindowPosition::TopRight | WindowPosition::TopCenter => {
-                                    // In macOS coords, top = origin.y + height
-                                    // Keep top fixed: new_origin_y = old_top - new_height
-                                    let old_top = frame.origin.y + frame.size.height;
-                                    old_top - new_height_f32 as f64
-                                }
-                            };
-
-                            let new_frame = NSRect::new(
-                                NSPoint::new(frame.origin.x, new_origin_y),
-                                NSSize::new(frame.size.width, new_height_f32 as f64),
-                            );
+                            let new_frame =
+                                resized_actions_window_frame(frame, new_height_f32, position);
 
                             let _: () = msg_send![
                                 ns_window,
@@ -1324,24 +1460,21 @@ pub fn resize_actions_window(cx: &mut App, dialog_entity: &Entity<ActionsDialog>
                                 animate:ACTIONS_WINDOW_RESIZE_ANIMATE
                             ];
 
-                            crate::logging::log(
-                                "ACTIONS",
-                                &format!(
-                                    "Resized actions window (top pinned): height {:.0} -> {:.0}",
-                                    current_height_f32, new_height_f32
-                                ),
-                            );
                             found = true;
                             break;
                         }
                     }
+
                     if !found {
-                        crate::logging::log(
-                            "ACTIONS",
-                            &format!(
-                                "NSWindow NOT FOUND - no window matches {:.0}x{:.0}",
-                                current_width_f32, current_height_f32
-                            ),
+                        tracing::warn!(
+                            target: "ACTIONS_POPUP",
+                            stage = "resize_window_match_failed",
+                            position = ?position,
+                            current_width_px = current_width_f32,
+                            current_height_px = current_height_f32,
+                            target_height_px = new_height_f32,
+                            window_count = count,
+                            "actions popup NSWindow lookup failed"
                         );
                     }
                 }
@@ -1377,6 +1510,25 @@ pub fn resize_actions_window(cx: &mut App, dialog_entity: &Entity<ActionsDialog>
                 "Resized actions window: {} items, height={:.0}",
                 num_actions, new_height_f32
             ),
+        );
+
+        let dialog_for_receipt = dialog_entity.read(cx);
+        let section_header_count = if dialog_for_receipt.config.section_style == SectionStyle::Headers
+        {
+            count_section_headers(
+                &dialog_for_receipt.actions,
+                &dialog_for_receipt.filtered_actions,
+            )
+        } else {
+            0
+        };
+        emit_actions_popup_event(
+            ActionsPopupEvent::Resized,
+            None,
+            Some(get_actions_window_position()),
+            Some(num_actions),
+            Some(section_header_count),
+            Some(new_height_f32),
         );
     }
 }
@@ -1536,7 +1688,7 @@ mod actions_popup_origin_tests {
     }
 
     #[test]
-    fn open_actions_window_uses_actions_popup_origin_helper() {
+    fn open_actions_window_uses_placement_receipt_helper() {
         let source = std::fs::read_to_string("src/actions/window.rs")
             .expect("Failed to read src/actions/window.rs");
 
@@ -1546,8 +1698,141 @@ mod actions_popup_origin_tests {
         let fn_body = &source[fn_start..];
 
         assert!(
-            fn_body.contains("actions_popup_origin("),
-            "open_actions_window must delegate to actions_popup_origin helper"
+            fn_body.contains("actions_popup_placement_receipt("),
+            "open_actions_window must delegate to actions_popup_placement_receipt helper"
+        );
+    }
+}
+
+#[cfg(test)]
+mod actions_popup_geometry_tests {
+    use super::*;
+    use gpui::{px, Bounds, Point, Size};
+
+    fn test_main_window_bounds() -> Bounds<Pixels> {
+        Bounds {
+            origin: Point {
+                x: px(100.0),
+                y: px(50.0),
+            },
+            size: Size {
+                width: px(480.0),
+                height: px(220.0),
+            },
+        }
+    }
+
+    #[test]
+    fn top_center_bounds_are_centered_below_titlebar() {
+        let bounds = actions_popup_bounds(
+            test_main_window_bounds(),
+            px(320.0),
+            px(180.0),
+            WindowPosition::TopCenter,
+        );
+
+        let x: f32 = bounds.origin.x.into();
+        let y: f32 = bounds.origin.y.into();
+
+        assert_eq!(x, 180.0);
+        assert_eq!(y, 94.0);
+    }
+
+    #[test]
+    fn bottom_right_bounds_are_right_aligned_above_footer() {
+        let bounds = actions_popup_bounds(
+            test_main_window_bounds(),
+            px(320.0),
+            px(180.0),
+            WindowPosition::BottomRight,
+        );
+
+        let x: f32 = bounds.origin.x.into();
+        let y: f32 = bounds.origin.y.into();
+
+        // x = 100 + 480 - 320 - 8 = 252
+        assert_eq!(x, 252.0);
+        // y = 50 + 220 - 180 - FOOTER_HEIGHT(30) - ACTIONS_MARGIN_Y(8) = 52
+        assert_eq!(y, 52.0);
+    }
+
+    #[test]
+    fn top_anchored_resize_keeps_top_edge_fixed() {
+        assert_eq!(
+            resized_actions_window_origin_y(94.0, 180.0, 216.0, WindowPosition::TopCenter),
+            58.0
+        );
+        assert_eq!(
+            resized_actions_window_origin_y(94.0, 180.0, 216.0, WindowPosition::TopRight),
+            58.0
+        );
+    }
+
+    #[test]
+    fn bottom_anchored_resize_keeps_bottom_edge_fixed() {
+        assert_eq!(
+            resized_actions_window_origin_y(42.0, 180.0, 216.0, WindowPosition::BottomRight),
+            42.0
+        );
+    }
+
+    #[test]
+    fn placement_receipt_captures_correct_pinned_edge() {
+        let receipt = actions_popup_placement_receipt(
+            test_main_window_bounds(),
+            px(320.0),
+            px(180.0),
+            WindowPosition::TopCenter,
+            None,
+        );
+        assert_eq!(receipt.pinned_edge, "top");
+
+        let receipt = actions_popup_placement_receipt(
+            test_main_window_bounds(),
+            px(320.0),
+            px(180.0),
+            WindowPosition::BottomRight,
+            None,
+        );
+        assert_eq!(receipt.pinned_edge, "bottom");
+    }
+
+    #[test]
+    fn actions_popup_bounds_size_matches_inputs() {
+        let bounds = actions_popup_bounds(
+            test_main_window_bounds(),
+            px(320.0),
+            px(180.0),
+            WindowPosition::TopCenter,
+        );
+
+        let w: f32 = bounds.size.width.into();
+        let h: f32 = bounds.size.height.into();
+        assert_eq!(w, 320.0);
+        assert_eq!(h, 180.0);
+    }
+
+    #[test]
+    fn resize_paths_use_shared_geometry_helpers() {
+        let source = std::fs::read_to_string("src/actions/window.rs")
+            .expect("Failed to read src/actions/window.rs");
+
+        let direct_start = source
+            .find("pub fn resize_actions_window_direct(")
+            .expect("resize_actions_window_direct not found");
+        let direct_body = &source[direct_start..];
+        assert!(
+            direct_body.contains("resized_actions_window_frame("),
+            "resize_actions_window_direct must use resized_actions_window_frame helper"
+        );
+
+        let indirect_start = source
+            .find("pub fn resize_actions_window(")
+            .expect("resize_actions_window not found");
+        let indirect_body = &source[indirect_start..];
+        assert!(
+            indirect_body.contains("resized_actions_window_frame("),
+            "resize_actions_window must use resized_actions_window_frame helper"
         );
     }
 }
