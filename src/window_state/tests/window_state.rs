@@ -281,6 +281,44 @@ mod tests {
         );
     }
 
+    #[test]
+    fn test_simulate_key_escape_uses_go_back_or_close_for_opened_from_main_menu() {
+        let content = read_source_file("main_entry/app_run_setup.rs");
+        let anchor = "SimulateKey: Escape - clear filter, go back, or hide";
+        let start = content
+            .find(anchor)
+            .unwrap_or_else(|| panic!("Expected Escape SimulateKey branch log anchor"));
+        let branch = &content[start..std::cmp::min(start + 1200, content.len())];
+
+        assert!(
+            branch.contains("view.opened_from_main_menu"),
+            "Escape SimulateKey branch must check opened_from_main_menu"
+        );
+        assert!(
+            branch.contains("view.go_back_or_close(window, ctx);"),
+            "Escape SimulateKey branch must delegate opened-from-main-menu handling to go_back_or_close"
+        );
+
+        let fallback_start = branch
+            .find("} else {")
+            .unwrap_or_else(|| panic!("Expected fallback else branch after opened_from_main_menu"));
+        let fallback_branch = &branch[fallback_start..];
+        assert!(
+            fallback_branch.contains("ctx.hide();"),
+            "non-opened-from-main-menu fallback should still hide the app"
+        );
+
+        let opened_from_main_menu_start = branch
+            .find("} else if view.opened_from_main_menu {")
+            .unwrap_or_else(|| panic!("Expected opened_from_main_menu branch"));
+        let opened_from_main_menu_branch =
+            &branch[opened_from_main_menu_start..fallback_start];
+        assert!(
+            !opened_from_main_menu_branch.contains("ctx.hide();"),
+            "opened_from_main_menu branch must not directly call ctx.hide()"
+        );
+    }
+
     /// Document the valid patterns for hiding windows
     /// This test always passes but serves as documentation
     #[test]

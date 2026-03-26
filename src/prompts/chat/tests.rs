@@ -89,9 +89,8 @@ mod tests {
             "Render core should use shared horizontal padding constants"
         );
         assert!(
-            CHAT_RENDER_CORE_SOURCE.contains("CHAT_LAYOUT_FOOTER_BG_DARK_ALPHA")
-                && CHAT_RENDER_CORE_SOURCE.contains("CHAT_LAYOUT_FOOTER_BG_LIGHT_ALPHA"),
-            "Footer should use translucent overlay alpha constants for both theme modes"
+            CHAT_RENDER_CORE_SOURCE.contains("HINT_STRIP_HEIGHT"),
+            "Mini footer should use shared chrome hint strip tokens"
         );
         assert!(
             CHAT_RENDER_INPUT_SOURCE.contains("CHAT_LAYOUT_INPUT_BG_FOCUSED_ALPHA")
