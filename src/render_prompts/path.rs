@@ -367,19 +367,13 @@ impl ScriptListApp {
 
         // PathPrompt entity has its own track_focus and on_key_down in its render method.
         // We add an outer key handler to intercept events when actions are showing.
-        div()
-            .relative()
-            .flex()
-            .flex_col()
-            // Removed: .bg(rgba(bg_with_alpha)) - let vibrancy show through from Root
-            // NOTE: No shadow - shadows on transparent elements cause gray fill with vibrancy
-            .w_full()
-            .h_full()
-            .overflow_hidden()
-            .rounded(px(design_visual.radius_lg))
-            .key_context("path_prompt_container")
-            .on_key_down(handle_key)
-            .child(div().size_full().child(entity))
+        crate::components::prompt_shell_container(
+            design_visual.radius_lg,
+            crate::ui_foundation::get_vibrancy_background(&self.theme),
+        )
+        .key_context("path_prompt_container")
+        .on_key_down(handle_key)
+        .child(div().size_full().child(entity))
             // Actions dialog overlays on top (upper-right corner, below the header bar)
             .when_some(actions_dialog, |d, dialog| {
                 d.child(

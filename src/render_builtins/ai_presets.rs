@@ -93,33 +93,54 @@ impl ScriptListApp {
             div().w_full().flex().flex_col().min_h(px(0.)).children(list_items).into_any_element()
         };
 
-        div()
-            .flex().flex_col().w_full().h_full()
-            .rounded(px(design_visual.radius_lg))
-            .text_color(rgb(text_primary))
-            .font_family(design_typography.font_family)
+        let header = div()
+            .flex_1()
+            .flex()
+            .flex_row()
+            .items_center()
+            .gap_3()
             .child(
-                div().w_full()
-                    .px(px(design_spacing.padding_lg))
-                    .py(px(design_spacing.padding_md))
-                    .flex().flex_row().items_center().gap_3()
-                    .child(
-                        div().flex_1().child(
-                            Input::new(&self.gpui_input_state)
-                                .w_full().h(px(28.)).px(px(0.)).py(px(0.))
-                                .with_size(Size::Size(px(design_typography.font_size_xl)))
-                                .appearance(false).bordered(false).focus_bordered(false),
-                        ),
-                    )
-                    .child(
-                        div().text_size(px(design_typography.font_size_sm))
-                            .text_color(rgb(text_dimmed))
-                            .child(format!("{} presets", count)),
-                    ),
+                div().flex_1().child(
+                    Input::new(&self.gpui_input_state)
+                        .w_full()
+                        .h(px(28.))
+                        .px(px(0.))
+                        .py(px(0.))
+                        .with_size(Size::Size(px(design_typography.font_size_xl)))
+                        .appearance(false)
+                        .bordered(false)
+                        .focus_bordered(false),
+                ),
             )
-            .child(div().w_full().h(px(1.)).bg(rgb(self.theme.colors.ui.border)))
-            .child(div().flex_1().w_full().min_h(px(0.)).child(list_element))
-            .into_any_element()
+            .child(
+                div()
+                    .text_size(px(design_typography.font_size_sm))
+                    .text_color(rgb(text_dimmed))
+                    .child(format!("{} presets", count)),
+            );
+
+        let content = div()
+            .flex_1()
+            .min_h(px(0.))
+            .w_full()
+            .overflow_hidden()
+            .child(list_element);
+
+        crate::components::render_minimal_list_prompt_scaffold(
+            header,
+            content,
+            vec![
+                gpui::SharedString::from("↵ Select"),
+                gpui::SharedString::from("Esc Back"),
+            ],
+            None,
+        )
+        .rounded(px(design_visual.radius_lg))
+        .text_color(rgb(text_primary))
+        .font_family(design_typography.font_family)
+        .key_context("search_ai_presets")
+        .track_focus(&self.focus_handle)
+        .into_any_element()
     }
 
     /// Render the create AI preset form.
@@ -317,5 +338,23 @@ impl ScriptListApp {
                 self.go_back_or_close(window, cx);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod ai_presets_chrome_audit {
+    #[test]
+    fn ai_presets_search_uses_minimal_chrome_scaffold() {
+        let source = include_str!("ai_presets.rs");
+        assert!(
+            source.contains("render_minimal_list_prompt_scaffold("),
+            "ai_presets search should use render_minimal_list_prompt_scaffold"
+        );
+        let legacy = "Prompt".to_owned() + "Footer::new(";
+        assert_eq!(
+            source.matches(&legacy).count(),
+            0,
+            "ai_presets should not construct PromptFooter"
+        );
     }
 }

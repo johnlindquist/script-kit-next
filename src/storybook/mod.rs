@@ -24,9 +24,11 @@ pub use diagnostics::{
     StoryCatalogSnapshot, StorySurfaceSummary, StoryVariantSummary,
 };
 pub use footer_variations::{
+    config_from_footer_variation_spec,
     config_from_storybook_footer_selection, config_from_storybook_footer_selection_value,
     footer_story_variants, footer_variation_specs, render_footer_story_preview,
-    FooterVariationId, FooterVariationSpec,
+    render_footer_slot_text, resolve_footer_selection, resolve_footer_selection_spec,
+    FooterSelectionResolution, FooterVariationId, FooterVariationSpec,
 };
 pub use input_variations::{
     adopted_input_variation, adopted_input_variation_id, input_story_variants,
@@ -38,8 +40,8 @@ pub use registry::{
     stories_by_surface, StoryEntry,
 };
 pub use selection::{
-    load_selected_story_variant, load_story_selections, save_story_selections,
-    StorySelectionStore,
+    load_selected_story_variant, load_story_selections, save_selected_story_variant,
+    save_story_selections, StorySelectionStore, StorySelectionWriteResult,
 };
 pub(crate) use selection::selection_store_path;
 pub use story::{Story, StorySurface, StoryVariant};
