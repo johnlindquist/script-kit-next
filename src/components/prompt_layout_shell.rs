@@ -344,6 +344,25 @@ pub(crate) fn render_simple_hint_strip(
     }
 }
 
+/// Render muted leading text for a minimal hint strip footer.
+///
+/// Computes the text color from `text_primary` (0x00RRGGBB hex) combined with
+/// [`HINT_TEXT_OPACITY`] so callers avoid duplicating the opacity math.
+#[allow(dead_code)]
+pub(crate) fn render_hint_strip_leading_text(
+    text: impl Into<SharedString>,
+    text_primary: u32,
+) -> AnyElement {
+    div()
+        .text_xs()
+        .text_color(rgba(
+            ((text_primary & 0x00FF_FFFF) << 8)
+                | crate::ui::chrome::alpha_from_opacity(crate::ui::chrome::HINT_TEXT_OPACITY),
+        ))
+        .child(text.into())
+        .into_any_element()
+}
+
 /// Machine-readable contract describing how a prompt surface resolves its chrome.
 ///
 /// Emitted via [`emit_prompt_chrome_audit`] at surface-activation time (not per-frame)
@@ -771,8 +790,8 @@ mod prompt_layout_shell_tests {
 
         let process_manager = include_str!("../render_builtins/process_manager.rs");
         assert!(
-            process_manager.contains("PromptChromeAudit::exception("),
-            "process_manager.rs should classify as exception"
+            process_manager.contains("PromptChromeAudit::minimal("),
+            "process_manager.rs should classify as minimal (migrated from exception)"
         );
 
         let settings = include_str!("../render_builtins/settings.rs");

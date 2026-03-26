@@ -61,12 +61,7 @@
                     )
             })
             // Divider
-            .child(
-                div()
-                    .mx(px(design_spacing.padding_lg))
-                    .h(px(design_visual.border_thin))
-                    .bg(rgba((ui_border << 8) | 0x60)),
-            )
+            .child(crate::components::SectionDivider::new())
             // Main content: loading state OR empty state OR 50/50 split
             .child(if is_loading && filtered_len == 0 {
                 // Loading state: full-width centered (no split, clean appearance)
@@ -131,12 +126,13 @@
                             .child(preview_content),
                     )
             })
-            // Footer
-            .child(PromptFooter::new(
-                PromptFooterConfig::new()
-                    .primary_label("Open")
-                    .primary_shortcut("↵"),
-                // Default config already has secondary_label="Actions", secondary_shortcut="⌘K", show_secondary=true
-                PromptFooterColors::from_theme(&self.theme),
-            ))
+            // Footer — minimal hint strip
+            .child({
+                let mut hints = vec![
+                    gpui::SharedString::from("↵ Open"),
+                ];
+                hints.push(gpui::SharedString::from("⌘K Actions"));
+                hints.push(gpui::SharedString::from("Esc Back"));
+                crate::components::render_simple_hint_strip(hints, None)
+            })
             .into_any_element()
