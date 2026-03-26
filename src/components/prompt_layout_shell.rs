@@ -383,19 +383,15 @@ mod prompt_layout_shell_tests {
     }
 
     #[test]
-    fn chat_prompt_uses_chat_specific_shell_wrapper_in_other_rs() {
+    fn chat_prompt_uses_simple_prompt_shell_in_other_rs() {
         let body = fn_source("render_chat_prompt");
         assert!(
-            body.contains("MinimalPromptShell::new("),
-            "render_chat_prompt should use MinimalPromptShell"
+            body.contains("render_simple_prompt_shell("),
+            "render_chat_prompt should delegate to render_simple_prompt_shell"
         );
         assert!(
             body.contains("other_prompt_shell_handle_key_chat"),
             "render_chat_prompt should keep the chat-specific key handler"
-        );
-        assert!(
-            !body.contains("render_simple_prompt_shell("),
-            "render_chat_prompt should not delegate to render_simple_prompt_shell"
         );
     }
 

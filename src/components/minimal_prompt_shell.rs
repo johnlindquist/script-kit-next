@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use gpui::{div, prelude::*, px, AnyElement, App, IntoElement, RenderOnce, Window};
 
 use crate::ui::chrome::{HEADER_PADDING_X, HEADER_PADDING_Y};

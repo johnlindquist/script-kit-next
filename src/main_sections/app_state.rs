@@ -283,6 +283,13 @@ struct ScriptListApp {
     /// Receiver for inline chat escape signals
     /// Checked by timer to trigger view reset
     inline_chat_escape_receiver: mpsc::Receiver<()>,
+    /// Sender for inline chat continue signals
+    /// The ChatPrompt continue callback uses this to signal "Continue in AI Chat"
+    #[allow(dead_code)]
+    inline_chat_continue_sender: mpsc::SyncSender<()>,
+    /// Receiver for inline chat continue signals
+    /// Checked by timer to hide main window when transferring to AI window
+    inline_chat_continue_receiver: mpsc::Receiver<()>,
     /// Sender for inline chat configure signals
     /// The ChatPrompt configure callback uses this to signal when user wants to configure API key
     inline_chat_configure_sender: mpsc::SyncSender<()>,
