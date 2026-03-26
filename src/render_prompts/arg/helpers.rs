@@ -313,6 +313,36 @@ fn resolve_arg_tab_completion(
         .map(|(_, choice)| choice.name.clone())
 }
 
+#[inline]
+fn arg_prompt_hints(has_actions: bool) -> Vec<gpui::SharedString> {
+    let mut hints = vec![
+        gpui::SharedString::from("↵ Continue"),
+        gpui::SharedString::from("Esc Back"),
+    ];
+
+    if has_actions {
+        hints.insert(1, gpui::SharedString::from("⌘K Actions"));
+    }
+
+    hints
+}
+
+#[inline]
+fn arg_prompt_leading_status(
+    has_choices: bool,
+    filtered_choices_len: usize,
+    input_is_empty: bool,
+) -> Option<gpui::SharedString> {
+    Some(
+        arg_helper_status_text(resolve_arg_helper_status(
+            has_choices,
+            filtered_choices_len,
+            input_is_empty,
+        ))
+        .into(),
+    )
+}
+
 impl ScriptListApp {
     #[inline]
     fn arg_prompt_has_choices(&self) -> bool {

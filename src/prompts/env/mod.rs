@@ -16,7 +16,6 @@ use gpui::{
 };
 use std::sync::Arc;
 
-use crate::components::prompt_footer::{PromptFooter, PromptFooterColors, PromptFooterConfig};
 use crate::components::TextInputState;
 use crate::designs::icon_variations::IconName;
 use crate::designs::{get_tokens, DesignVariant};

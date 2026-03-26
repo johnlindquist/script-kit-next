@@ -1112,7 +1112,7 @@ mod from_dialog_builtin_action_validation_tests_32 {
     #[test]
     fn batch32_config_ai_style_show_footer_true() {
         let config = CommandBarConfig::ai_style();
-        assert!(config.dialog_config.show_footer);
+        assert!(!config.dialog_config.show_footer);
     }
     
     #[test]
@@ -1840,7 +1840,7 @@ mod from_dialog_builtin_action_validation_tests_33 {
     fn command_bar_ai_shows_icons_and_footer() {
         let config = CommandBarConfig::ai_style();
         assert!(config.dialog_config.show_icons);
-        assert!(config.dialog_config.show_footer);
+        assert!(!config.dialog_config.show_footer);
     }
     
     #[test]
@@ -1854,7 +1854,7 @@ mod from_dialog_builtin_action_validation_tests_33 {
     fn command_bar_notes_shows_icons_and_footer() {
         let config = CommandBarConfig::notes_style();
         assert!(config.dialog_config.show_icons);
-        assert!(config.dialog_config.show_footer);
+        assert!(!config.dialog_config.show_footer);
     }
     
     #[test]
@@ -3564,15 +3564,15 @@ mod from_dialog_builtin_action_validation_tests_34 {
     }
     
     #[test]
-    fn constant_action_item_height_36() {
+    fn constant_action_item_height_30() {
         use crate::actions::constants::ACTION_ITEM_HEIGHT;
-        assert_eq!(ACTION_ITEM_HEIGHT, 36.0);
+        assert_eq!(ACTION_ITEM_HEIGHT, 30.0);
     }
-    
+
     #[test]
-    fn constant_search_input_height_44() {
+    fn constant_search_input_height_36() {
         use crate::actions::constants::SEARCH_INPUT_HEIGHT;
-        assert_eq!(SEARCH_INPUT_HEIGHT, 44.0);
+        assert_eq!(SEARCH_INPUT_HEIGHT, 36.0);
     }
     
     // =====================================================================
@@ -3606,7 +3606,7 @@ mod from_dialog_builtin_action_validation_tests_34 {
     #[test]
     fn notes_style_show_footer_true() {
         let config = CommandBarConfig::notes_style();
-        assert!(config.dialog_config.show_footer);
+        assert!(!config.dialog_config.show_footer);
     }
     
     // =====================================================================
@@ -5195,46 +5195,46 @@ mod from_dialog_builtin_action_validation_tests_35 {
     
     #[test]
     fn constant_section_header_height() {
-        assert_eq!(SECTION_HEADER_HEIGHT, 22.0);
+        assert_eq!(SECTION_HEADER_HEIGHT, 20.0);
     }
-    
+
     #[test]
     fn constant_header_height() {
         assert_eq!(HEADER_HEIGHT, 24.0);
     }
-    
+
     #[test]
     fn constant_action_row_inset() {
-        assert_eq!(ACTION_ROW_INSET, 6.0);
+        assert_eq!(ACTION_ROW_INSET, 4.0);
     }
-    
+
     #[test]
     fn constant_selection_radius() {
-        assert_eq!(SELECTION_RADIUS, 8.0);
+        assert_eq!(SELECTION_RADIUS, 6.0);
     }
-    
+
     // =====================================================================
     // 18. Constants: keycap and accent bar
     // =====================================================================
-    
+
     #[test]
     fn constant_keycap_min_width() {
-        assert_eq!(KEYCAP_MIN_WIDTH, 22.0);
+        assert_eq!(KEYCAP_MIN_WIDTH, 20.0);
     }
-    
+
     #[test]
     fn constant_keycap_height() {
-        assert_eq!(KEYCAP_HEIGHT, 22.0);
+        assert_eq!(KEYCAP_HEIGHT, 20.0);
     }
-    
+
     #[test]
     fn constant_accent_bar_width() {
         assert_eq!(ACCENT_BAR_WIDTH, 3.0);
     }
-    
+
     #[test]
     fn constant_search_input_height() {
-        assert_eq!(SEARCH_INPUT_HEIGHT, 44.0);
+        assert_eq!(SEARCH_INPUT_HEIGHT, 36.0);
     }
     
     // =====================================================================

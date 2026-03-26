@@ -59,7 +59,7 @@ fn terminal_actions_dialog_config() -> crate::actions::ActionsDialogConfig {
         section_style: SectionStyle::Headers,
         anchor: AnchorPosition::Top,
         show_icons: true,
-        show_footer: true,
+        show_footer: false,
     }
 }
 

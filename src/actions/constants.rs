@@ -9,11 +9,11 @@ pub const POPUP_WIDTH: f32 = 320.0;
 pub const POPUP_MAX_HEIGHT: f32 = 400.0;
 
 /// Fixed height for action items (required for uniform_list virtualization)
-/// Compact height at 36px for visual consistency with main menu list items
-pub const ACTION_ITEM_HEIGHT: f32 = 36.0;
+/// Compact height at 30px for tight, distilled appearance
+pub const ACTION_ITEM_HEIGHT: f32 = 30.0;
 
-/// Fixed height for the search input row (matches Notes panel PANEL_SEARCH_HEIGHT)
-pub const SEARCH_INPUT_HEIGHT: f32 = 44.0;
+/// Fixed height for the search input row
+pub const SEARCH_INPUT_HEIGHT: f32 = 36.0;
 
 /// Width of the left accent bar for selected items (legacy, kept for reference)
 pub const ACCENT_BAR_WIDTH: f32 = 3.0;
@@ -22,26 +22,25 @@ pub const ACCENT_BAR_WIDTH: f32 = 3.0;
 pub const HEADER_HEIGHT: f32 = 24.0;
 
 /// Horizontal padding for section/header rows in the actions dialog
-pub const ACTION_PADDING_X: f32 = 16.0;
+pub const ACTION_PADDING_X: f32 = 12.0;
 
 /// Top padding for section/header rows in the actions dialog
 pub const ACTION_PADDING_TOP: f32 = 8.0;
 
 /// Height for section headers within the action list (used when SectionStyle::Headers is enabled)
-/// This includes the text (~12px) + top padding (4-8px) + bottom padding (2px)
-pub const SECTION_HEADER_HEIGHT: f32 = 22.0;
+pub const SECTION_HEADER_HEIGHT: f32 = 20.0;
 
 /// Horizontal inset for action rows (creates rounded pill appearance)
-pub const ACTION_ROW_INSET: f32 = 6.0;
+pub const ACTION_ROW_INSET: f32 = 4.0;
 
 /// Corner radius for selected row background (pill style)
-pub const SELECTION_RADIUS: f32 = 8.0;
+pub const SELECTION_RADIUS: f32 = 6.0;
 
 /// Minimum width for keycap badges
-pub const KEYCAP_MIN_WIDTH: f32 = 22.0;
+pub const KEYCAP_MIN_WIDTH: f32 = 20.0;
 
 /// Height for keycap badges
-pub const KEYCAP_HEIGHT: f32 = 22.0;
+pub const KEYCAP_HEIGHT: f32 = 20.0;
 
 #[cfg(test)]
 mod tests {
@@ -55,27 +54,21 @@ mod tests {
 
     #[test]
     fn test_action_item_height_constant() {
-        // Fixed height is required for uniform_list virtualization
-        // Compact height at 36px for visual consistency with main menu list items
-        assert_eq!(ACTION_ITEM_HEIGHT, 36.0);
-        // Ensure item height is positive and reasonable
+        assert_eq!(ACTION_ITEM_HEIGHT, 30.0);
         const _: () = assert!(ACTION_ITEM_HEIGHT > 0.0);
         const _: () = assert!(ACTION_ITEM_HEIGHT < POPUP_MAX_HEIGHT);
     }
 
     #[test]
     fn test_max_visible_items() {
-        // Calculate max visible items that can fit in the popup
-        // This helps verify scroll virtualization is worthwhile
         let max_visible = (POPUP_MAX_HEIGHT / ACTION_ITEM_HEIGHT) as usize;
-        // With 400px max height and 36px items, ~11 items fit
         assert!(max_visible >= 8, "Should fit at least 8 items");
         assert!(max_visible <= 15, "Sanity check on max visible");
     }
 
     #[test]
     fn test_action_padding_constants() {
-        assert_eq!(ACTION_PADDING_X, 16.0);
+        assert_eq!(ACTION_PADDING_X, 12.0);
         assert_eq!(ACTION_PADDING_TOP, 8.0);
     }
 }

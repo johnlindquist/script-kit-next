@@ -2482,8 +2482,8 @@ mod tests {
         let viewport_height =
             actions_dialog_scrollbar_viewport_height(total_content_height, true, true, true);
 
-        // POPUP_MAX_HEIGHT (400) - SEARCH_INPUT_HEIGHT (44) - HEADER_HEIGHT (24) - footer (32)
-        assert_eq!(viewport_height, 300.0);
+        // POPUP_MAX_HEIGHT (400) - SEARCH_INPUT_HEIGHT (36) - HEADER_HEIGHT (24) - footer (32)
+        assert_eq!(viewport_height, 308.0);
     }
 
     #[test]

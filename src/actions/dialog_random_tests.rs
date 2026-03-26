@@ -1294,7 +1294,7 @@ fn command_bar_ai_style() {
     assert_eq!(config.dialog_config.section_style, SectionStyle::Headers);
     assert_eq!(config.dialog_config.anchor, AnchorPosition::Top);
     assert!(config.dialog_config.show_icons);
-    assert!(config.dialog_config.show_footer);
+    assert!(!config.dialog_config.show_footer);
 }
 
 #[test]
@@ -1304,7 +1304,7 @@ fn command_bar_notes_style() {
     assert_eq!(config.dialog_config.section_style, SectionStyle::Separators);
     assert_eq!(config.dialog_config.anchor, AnchorPosition::Top);
     assert!(config.dialog_config.show_icons);
-    assert!(config.dialog_config.show_footer);
+    assert!(!config.dialog_config.show_footer);
 }
 
 #[test]
