@@ -617,14 +617,28 @@ impl ScriptListApp {
             self.begin_actions_popup_window_open(cx, window);
 
             let theme_arc = std::sync::Arc::clone(&self.theme);
+            let is_mini = matches!(self.main_window_mode, MainWindowMode::Mini);
             let dialog = cx.new(|cx| {
                 let focus_handle = cx.focus_handle();
-                ActionsDialog::with_chat(
+                let mut dialog = ActionsDialog::with_chat(
                     focus_handle,
                     std::sync::Arc::new(|_action_id| {}), // Callback handled via main app
                     &chat_info,
                     theme_arc,
-                )
+                );
+
+                // Mini mode: input at top, anchor top (collapses from bottom up)
+                if is_mini {
+                    dialog.set_config(crate::actions::ActionsDialogConfig {
+                        search_position: crate::actions::SearchPosition::Top,
+                        section_style: crate::actions::SectionStyle::Headers,
+                        anchor: crate::actions::AnchorPosition::Top,
+                        show_icons: true,
+                        show_footer: true,
+                    });
+                }
+
+                dialog
             });
 
             // Store the dialog entity for keyboard routing
