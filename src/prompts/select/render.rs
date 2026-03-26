@@ -103,18 +103,14 @@ impl Render for SelectPrompt {
         let colors = tokens.colors();
         let spacing = tokens.spacing();
 
-        let (text_color, muted_color) =
-            if self.design_variant == DesignVariant::Default {
-                (
-                    rgb(self.theme.colors.text.secondary),
-                    rgb(self.theme.colors.text.muted),
-                )
-            } else {
-                (
-                    rgb(colors.text_secondary),
-                    rgb(colors.text_muted),
-                )
-            };
+        let (text_color, muted_color) = if self.design_variant == DesignVariant::Default {
+            (
+                rgb(self.theme.colors.text.secondary),
+                rgb(self.theme.colors.text.muted),
+            )
+        } else {
+            (rgb(colors.text_secondary), rgb(colors.text_muted))
+        };
         let row_accent_color = if self.design_variant == DesignVariant::Default {
             self.theme.colors.accent.selected
         } else {
@@ -316,6 +312,19 @@ impl Render for SelectPrompt {
             .px(px(8.0))
             .child(choices_content);
 
+        let hints: Vec<SharedString> = if self.multiple {
+            vec![
+                SharedString::from("↵ Select"),
+                SharedString::from("⌘Space Toggle"),
+                SharedString::from("Esc Back"),
+            ]
+        } else {
+            vec![
+                SharedString::from("↵ Select"),
+                SharedString::from("Esc Back"),
+            ]
+        };
+
         let container = div()
             .id(gpui::ElementId::Name("window:select".into()))
             .flex()
@@ -325,7 +334,8 @@ impl Render for SelectPrompt {
             .text_color(text_color)
             .child(input_container)
             .child(crate::components::SectionDivider::new())
-            .child(choices_container);
+            .child(choices_container)
+            .child(crate::components::render_simple_hint_strip(hints, None));
 
         FocusablePrompt::new(container)
             .key_context("select_prompt")
@@ -436,6 +446,23 @@ mod tests {
         assert!(
             source.contains("SectionDivider::new()"),
             "select container should use SectionDivider between input and list"
+        );
+    }
+
+    #[test]
+    fn select_prompt_uses_hint_strip_footer() {
+        let source = include_str!("render.rs");
+        assert!(
+            source.contains("render_simple_hint_strip("),
+            "select prompt should render a minimal hint strip footer"
+        );
+        // Verify no PromptFooter usage (split string to avoid self-match)
+        let needle = ["PromptFooter", "::new("].concat();
+        let render_fn_end = source.find("#[cfg(test)]").unwrap_or(source.len());
+        let render_code = &source[..render_fn_end];
+        assert!(
+            !render_code.contains(&needle),
+            "select prompt render code should not use PromptFooter"
         );
     }
 }

@@ -10,15 +10,12 @@ mod __render_prompts_div_docs {
 impl ScriptListApp {
     fn render_div_prompt(
         &mut self,
-        id: String,
+        _id: String,
         entity: Entity<DivPrompt>,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let render_context = PromptRenderContext::new(self.theme.as_ref(), self.current_design);
         let theme = render_context.theme;
-        let design_colors = render_context.design_colors;
-        let design_spacing = render_context.design_spacing;
-        let design_typography = render_context.design_typography;
         let design_visual = render_context.design_visual;
         let actions_dialog_top = render_context.actions_dialog_top;
         let actions_dialog_right = render_context.actions_dialog_right;
@@ -55,88 +52,27 @@ impl ScriptListApp {
         // Use explicit height from layout constants
         let content_height = window_resize::layout::STANDARD_HEIGHT;
 
-        // Footer colors and config aligned with other interactive prompts.
-        let footer_colors = PromptFooterColors::from_theme(theme);
-        let footer_config = prompt_footer_config_with_status(
-            "Continue",
-            has_actions,
-            Some(running_status_text("review output and press Enter")),
-            Some("Output".to_string()),
-        );
-
-        // Create click handlers for footer
-        let handle_submit = cx.entity().downgrade();
-        let handle_actions = cx.entity().downgrade();
-        let prompt_id = id.clone();
+        // Minimal chrome: hint strip footer instead of PromptFooter
+        let mut div_hints: Vec<SharedString> = vec![SharedString::from("↵ Continue")];
+        if has_actions {
+            div_hints.push(SharedString::from("⌘K Actions"));
+        }
 
         crate::components::prompt_shell_container(design_visual.radius_lg, vibrancy_bg)
             .h(content_height)
             .track_focus(&self.focus_handle) // Required to receive key events
             .on_key_down(handle_key)
-            // Header + content shell
+            // Content shell — no titled header, let the output speak for itself
             .child(
                 div()
                     .flex_1()
                     .w_full()
                     .min_h(px(0.)) // Critical: allows flex children to size properly
                     .overflow_hidden()
-                    .child(
-                        div()
-                            .w_full()
-                            .px(px(HEADER_PADDING_X))
-                            .py(px(HEADER_PADDING_Y))
-                            .flex()
-                            .flex_row()
-                            .items_center()
-                            .justify_between()
-                            .gap(px(HEADER_GAP))
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(rgb(design_colors.text_primary))
-                                    .font_family(design_typography.font_family)
-                                    .child("Script Output"),
-                            )
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .text_color(rgb(design_colors.text_muted))
-                                    .font_family(design_typography.font_family)
-                                    .child("Enter to continue"),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .mx(px(design_spacing.padding_lg))
-                            .h(px(design_visual.border_thin))
-                            .bg(rgba(
-                                (design_colors.border << 8)
-                                    | u32::from(ui_foundation::ALPHA_DIVIDER),
-                            )),
-                    )
                     .child(crate::components::prompt_shell_content(entity.clone())),
             )
-            // Footer with Submit button and Actions
-            .child(
-                PromptFooter::new(footer_config, footer_colors)
-                    .on_primary_click(Box::new(move |_, _window, cx| {
-                        if let Some(app) = handle_submit.upgrade() {
-                            let id = prompt_id.clone();
-                            app.update(cx, |this, cx| {
-                                // Submit the div prompt - send empty value to continue
-                                this.submit_prompt_response(id, None, cx);
-                            });
-                        }
-                    }))
-                    .on_secondary_click(Box::new(move |_, window, cx| {
-                        if let Some(app) = handle_actions.upgrade() {
-                            app.update(cx, |this, cx| {
-                                this.toggle_arg_actions(cx, window);
-                            });
-                        }
-                    })),
-            )
+            // Minimal hint strip footer
+            .child(crate::components::render_simple_hint_strip(div_hints, None))
             // Actions dialog overlay (when Cmd+K is pressed with SDK actions)
             .when_some(
                 render_actions_backdrop(
@@ -159,7 +95,7 @@ impl ScriptListApp {
 }
 
 #[cfg(test)]
-mod div_prompt_render_backdrop_tests {
+mod div_prompt_render_tests {
     const DIV_RENDER_SOURCE: &str = include_str!("div.rs");
 
     #[test]
@@ -183,9 +119,9 @@ mod div_prompt_render_backdrop_tests {
     }
 
     #[test]
-    fn test_div_key_handling_uses_preamble_helper_with_handled_propagation_stop() {
+    fn test_div_key_handling_uses_preamble_helper() {
         assert!(
-            DIV_RENDER_SOURCE.contains("handle_prompt_key_preamble("),
+            DIV_RENDER_SOURCE.contains("handle_prompt_key_preamble_default("),
             "div key handling should delegate shared preamble behavior to helper"
         );
         assert!(
@@ -195,6 +131,28 @@ mod div_prompt_render_backdrop_tests {
         assert!(
             DIV_RENDER_SOURCE.contains("stop_propagation_when_handled: true"),
             "div key preamble should stop propagation when helper branches handle the key"
+        );
+    }
+
+    #[test]
+    fn div_prompt_uses_minimal_hint_strip_footer() {
+        assert!(
+            DIV_RENDER_SOURCE.contains("render_simple_hint_strip("),
+            "div prompt should render a minimal hint strip footer"
+        );
+        // Split string to avoid self-match in source audit
+        let needle = ["PromptFooter", "::new("].concat();
+        let render_fn_end = DIV_RENDER_SOURCE
+            .find("#[cfg(test)]")
+            .unwrap_or(DIV_RENDER_SOURCE.len());
+        let render_code = &DIV_RENDER_SOURCE[..render_fn_end];
+        assert!(
+            !render_code.contains(&needle),
+            "div prompt render code should not use PromptFooter"
+        );
+        assert!(
+            !render_code.contains("\"Script Output\""),
+            "div prompt should not have a titled Script Output header"
         );
     }
 }

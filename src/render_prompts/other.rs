@@ -114,7 +114,7 @@ impl ScriptListApp {
         }
     }
 
-    fn render_simple_prompt_shell(
+    fn render_wrapped_prompt_entity(
         &mut self,
         entity: impl IntoElement,
         key_handler: impl Fn(&mut Self, &gpui::KeyDownEvent, &mut Window, &mut Context<Self>) + 'static,
@@ -124,9 +124,8 @@ impl ScriptListApp {
         let handle_key = cx.listener(key_handler);
         let vibrancy_bg = get_vibrancy_background(&self.theme);
 
-        crate::components::prompt_shell_container(shell_radius, vibrancy_bg)
+        crate::components::render_simple_prompt_shell(shell_radius, vibrancy_bg, entity, None)
             .on_key_down(handle_key)
-            .child(crate::components::prompt_shell_content(entity))
             .into_any_element()
     }
 
@@ -135,7 +134,7 @@ impl ScriptListApp {
         entity: Entity<SelectPrompt>,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        self.render_simple_prompt_shell(entity, Self::other_prompt_shell_handle_key_default, cx)
+        self.render_wrapped_prompt_entity(entity, Self::other_prompt_shell_handle_key_default, cx)
     }
 
     fn render_env_prompt(
@@ -143,7 +142,7 @@ impl ScriptListApp {
         entity: Entity<EnvPrompt>,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        self.render_simple_prompt_shell(entity, Self::other_prompt_shell_handle_key_default, cx)
+        self.render_wrapped_prompt_entity(entity, Self::other_prompt_shell_handle_key_default, cx)
     }
 
     fn render_drop_prompt(
@@ -151,7 +150,7 @@ impl ScriptListApp {
         entity: Entity<DropPrompt>,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        self.render_simple_prompt_shell(entity, Self::other_prompt_shell_handle_key_default, cx)
+        self.render_wrapped_prompt_entity(entity, Self::other_prompt_shell_handle_key_default, cx)
     }
 
     fn render_template_prompt(
@@ -194,7 +193,7 @@ impl ScriptListApp {
         entity: Entity<prompts::ChatPrompt>,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        self.render_simple_prompt_shell(entity, Self::other_prompt_shell_handle_key_chat, cx)
+        self.render_wrapped_prompt_entity(entity, Self::other_prompt_shell_handle_key_chat, cx)
     }
 
     fn render_naming_prompt(
@@ -420,8 +419,8 @@ mod other_prompt_render_wrapper_tests {
         ] {
             let body = fn_source(fn_name);
             assert!(
-                body.contains("render_simple_prompt_shell("),
-                "{fn_name} should delegate to render_simple_prompt_shell"
+                body.contains("render_wrapped_prompt_entity("),
+                "{fn_name} should delegate to render_wrapped_prompt_entity"
             );
             assert!(
                 !body.contains("hex_to_rgba_with_opacity"),
@@ -432,6 +431,15 @@ mod other_prompt_render_wrapper_tests {
                 "{fn_name} should not allocate unused box shadows in the shell wrapper"
             );
         }
+    }
+
+    #[test]
+    fn render_wrapped_prompt_entity_calls_shared_shell_helper() {
+        let body = fn_source("render_wrapped_prompt_entity");
+        assert!(
+            body.contains("crate::components::render_simple_prompt_shell("),
+            "render_wrapped_prompt_entity must call the shared component helper explicitly"
+        );
     }
 
     #[test]

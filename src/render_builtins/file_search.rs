@@ -1138,13 +1138,14 @@ impl ScriptListApp {
                             .child(preview_content),
                     )
             })
-            // Footer
-            .child(PromptFooter::new(
-                PromptFooterConfig::new()
-                    .primary_label("Open")
-                    .primary_shortcut("↵"),
-                // Default config already has secondary_label="Actions", secondary_shortcut="⌘K", show_secondary=true
-                PromptFooterColors::from_theme(&self.theme),
+            // Footer — minimal hint strip
+            .child(crate::components::render_simple_hint_strip(
+                vec![
+                    gpui::SharedString::from("↵ Open"),
+                    gpui::SharedString::from("⌘K Actions"),
+                    gpui::SharedString::from("Esc Back"),
+                ],
+                None,
             ))
             .into_any_element()
 

@@ -3,6 +3,8 @@
 //! Features:
 //! - Left sidebar with searchable story list grouped by category
 //! - Right panel showing selected story preview
+//! - Compare mode: side-by-side variant preview with keyboard selection
+//! - Adopt flow: persist selected variant to disk
 //! - Theme and design variant controls in toolbar
 //! - Keyboard navigation support
 //! - Screenshot capture (Cmd+Shift+S)
@@ -12,15 +14,29 @@ use std::fs;
 use std::path::PathBuf;
 
 use crate::designs::DesignVariant;
-use crate::storybook::{all_categories, all_stories, StoryEntry};
+use crate::storybook::{
+    all_categories, all_stories, load_story_selections, save_story_selections, StoryEntry,
+    StorySelectionStore, StoryVariant,
+};
+
+/// Preview mode for the story browser
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PreviewMode {
+    Single,
+    Compare,
+}
 
 /// Main browser view for the storybook
 pub struct StoryBrowser {
     stories: Vec<&'static StoryEntry>,
     selected_index: usize,
+    selected_variant_index: usize,
     filter: String,
     theme_name: String,
     design_variant: DesignVariant,
+    preview_mode: PreviewMode,
+    selection_store: StorySelectionStore,
+    status_line: Option<String>,
     focus_handle: FocusHandle,
     screenshot_dir: PathBuf,
 }
@@ -35,15 +51,22 @@ impl StoryBrowser {
             .join("test-screenshots");
         fs::create_dir_all(&screenshot_dir).ok();
 
-        Self {
+        let mut browser = Self {
             stories,
             selected_index: 0,
+            selected_variant_index: 0,
             filter: String::new(),
             theme_name: "Default".to_string(),
             design_variant: DesignVariant::Default,
+            preview_mode: PreviewMode::Single,
+            selection_store: load_story_selections().unwrap_or_default(),
+            status_line: None,
             focus_handle: cx.focus_handle(),
             screenshot_dir,
-        }
+        };
+
+        browser.reset_variant_selection();
+        browser
     }
 
     pub fn load_theme(&mut self, theme_name: &str) {
@@ -51,14 +74,202 @@ impl StoryBrowser {
         self.theme_name = theme_name.to_string();
     }
 
-    pub fn select_story(&mut self, story_id: &str) {
+    /// Select a story by its ID. Returns `true` if the story was found.
+    pub fn select_story(&mut self, story_id: &str) -> bool {
         if let Some(pos) = self.stories.iter().position(|s| s.story.id() == story_id) {
             self.selected_index = pos;
+            self.reset_variant_selection();
+            tracing::info!(story_id = %story_id, event = "story_selected", "Story selected");
+            true
+        } else {
+            tracing::warn!(story_id = %story_id, event = "story_not_found", "Unknown story ID");
+            false
         }
     }
 
     pub fn set_design_variant(&mut self, variant: DesignVariant) {
         self.design_variant = variant;
+    }
+
+    /// Open compare mode if the current story has more than one variant.
+    /// Returns `true` if compare mode was activated.
+    pub fn open_compare_mode(&mut self) -> bool {
+        if self.current_story_variants().len() > 1 {
+            self.preview_mode = PreviewMode::Compare;
+            tracing::info!(event = "compare_mode_opened", "Compare mode activated");
+            true
+        } else {
+            tracing::warn!(event = "compare_mode_skipped", "Story has fewer than 2 variants");
+            false
+        }
+    }
+
+    /// Pre-select a variant by its stable id. Returns `true` if the variant was found.
+    pub fn select_variant_id(&mut self, variant_id: &str) -> bool {
+        if let Some(index) = self
+            .current_story_variants()
+            .iter()
+            .position(|v| v.stable_id() == variant_id)
+        {
+            self.selected_variant_index = index;
+            tracing::info!(variant_id = %variant_id, event = "variant_selected", "Variant pre-selected");
+            true
+        } else {
+            tracing::warn!(variant_id = %variant_id, event = "variant_not_found", "Unknown variant ID");
+            false
+        }
+    }
+
+    /// Return all known story IDs (for CLI diagnostics).
+    pub fn story_ids(&self) -> Vec<&'static str> {
+        self.stories.iter().map(|s| s.story.id()).collect()
+    }
+
+    /// Return variant IDs for the currently selected story (for CLI diagnostics).
+    pub fn variant_ids(&self) -> Vec<String> {
+        self.current_story_variants()
+            .iter()
+            .map(|v| v.stable_id())
+            .collect()
+    }
+
+    fn current_story(&self) -> Option<&'static StoryEntry> {
+        self.stories.get(self.selected_index).copied()
+    }
+
+    fn current_story_variants(&self) -> Vec<StoryVariant> {
+        let Some(story) = self.current_story() else {
+            return vec![StoryVariant::default_named("default", "Default")];
+        };
+
+        let mut variants = story.story.variants();
+        if variants.is_empty() {
+            variants.push(StoryVariant::default_named("default", "Default"));
+        }
+        variants
+    }
+
+    fn reset_variant_selection(&mut self) {
+        let Some(story) = self.current_story() else {
+            self.selected_variant_index = 0;
+            return;
+        };
+
+        let variants = self.current_story_variants();
+
+        if let Some(saved_variant_id) = self.selection_store.selected_variant(story.story.id()) {
+            if let Some(index) = variants
+                .iter()
+                .position(|v| v.stable_id() == saved_variant_id)
+            {
+                self.selected_variant_index = index;
+                return;
+            }
+        }
+
+        self.selected_variant_index = 0;
+    }
+
+    fn toggle_compare_mode(&mut self, cx: &mut Context<Self>) {
+        if self.current_story_variants().len() <= 1 {
+            self.preview_mode = PreviewMode::Single;
+            self.status_line =
+                Some("Selected story has no comparable variants yet".to_string());
+            cx.notify();
+            return;
+        }
+
+        self.preview_mode = match self.preview_mode {
+            PreviewMode::Single => PreviewMode::Compare,
+            PreviewMode::Compare => PreviewMode::Single,
+        };
+        self.status_line = None;
+        cx.notify();
+    }
+
+    fn move_variant_left(&mut self, cx: &mut Context<Self>) {
+        let count = self.current_story_variants().len();
+        if count <= 1 {
+            return;
+        }
+
+        self.selected_variant_index = if self.selected_variant_index == 0 {
+            count - 1
+        } else {
+            self.selected_variant_index - 1
+        };
+        cx.notify();
+    }
+
+    fn move_variant_right(&mut self, cx: &mut Context<Self>) {
+        let count = self.current_story_variants().len();
+        if count <= 1 {
+            return;
+        }
+
+        self.selected_variant_index = (self.selected_variant_index + 1) % count;
+        cx.notify();
+    }
+
+    fn select_variant_by_shortcut(&mut self, key: &str, cx: &mut Context<Self>) {
+        let Some(digit) = key.chars().next() else {
+            return;
+        };
+        let Some(index) = digit
+            .to_digit(10)
+            .map(|value| value.saturating_sub(1) as usize)
+        else {
+            return;
+        };
+
+        if index < self.current_story_variants().len() {
+            self.selected_variant_index = index;
+            cx.notify();
+        }
+    }
+
+    fn adopt_selected_variant(&mut self, cx: &mut Context<Self>) {
+        let Some(story) = self.current_story() else {
+            return;
+        };
+
+        let story_id = story.story.id().to_string();
+        let story_name = story.story.name().to_string();
+        let variants = self.current_story_variants();
+
+        let Some(variant) = variants.get(self.selected_variant_index) else {
+            return;
+        };
+
+        let variant_id = variant.stable_id();
+        let variant_name = if variant.name.is_empty() {
+            variant_id.clone()
+        } else {
+            variant.name.clone()
+        };
+
+        self.selection_store
+            .set_selected_variant(story_id.clone(), variant_id.clone());
+
+        tracing::info!(
+            story_id = %story_id,
+            variant_id = %variant_id,
+            event = "variant_adopted",
+            "Adopted variant"
+        );
+
+        match save_story_selections(&self.selection_store) {
+            Ok(()) => {
+                self.status_line =
+                    Some(format!("Adopted \"{}\" for {}", variant_name, story_name));
+            }
+            Err(error) => {
+                tracing::error!(error = %error, "Failed to save story selection");
+                self.status_line = Some(format!("Failed to save adoption: {}", error));
+            }
+        }
+
+        cx.notify();
     }
 
     fn filtered_stories(&self) -> Vec<&'static StoryEntry> {
@@ -96,7 +307,7 @@ impl StoryBrowser {
                     .rounded_md()
                     .child(
                         // Search icon
-                        div().text_color(rgb(theme.colors.text.dimmed)).child("🔍"),
+                        div().text_color(rgb(theme.colors.text.dimmed)).child("?"),
                     )
                     .child(
                         div()
@@ -181,6 +392,7 @@ impl StoryBrowser {
                                     this.stories.iter().position(|s| s.story.id() == story_id)
                                 {
                                     this.selected_index = pos;
+                                    this.reset_variant_selection();
                                     cx.notify();
                                 }
                             }));
@@ -233,9 +445,18 @@ impl StoryBrowser {
                             .text_xs()
                             .text_color(rgb(theme.colors.text.dimmed))
                             .child(
-                                self.stories
-                                    .get(self.selected_index)
-                                    .map(|s| format!("({})", s.story.category()))
+                                self.current_story()
+                                    .map(|story| {
+                                        format!(
+                                            "({} \u{00b7} {} \u{00b7} {})",
+                                            story.story.category(),
+                                            story.story.surface().label(),
+                                            match self.preview_mode {
+                                                PreviewMode::Single => "single",
+                                                PreviewMode::Compare => "compare",
+                                            }
+                                        )
+                                    })
                                     .unwrap_or_default(),
                             ),
                     ),
@@ -298,10 +519,132 @@ impl StoryBrowser {
             )
     }
 
+    fn render_single_preview(&self, story: &'static StoryEntry) -> AnyElement {
+        let variants = self.current_story_variants();
+
+        if let Some(variant) = variants.get(self.selected_variant_index) {
+            return story.story.render_variant(variant);
+        }
+
+        story.story.render()
+    }
+
+    fn render_compare_preview(&self, story: &'static StoryEntry) -> AnyElement {
+        let theme = crate::theme::get_cached_theme();
+        let card_bg = theme.colors.background.title_bar;
+        let preview_bg = theme.colors.background.main;
+        let border = theme.colors.ui.border;
+        let accent = theme.colors.accent.selected;
+        let text_primary = theme.colors.text.primary;
+        let text_muted = theme.colors.text.dimmed;
+
+        let adopted_variant = self
+            .selection_store
+            .selected_variant(story.story.id())
+            .map(str::to_string);
+
+        let variants = self.current_story_variants();
+
+        div()
+            .id("compare-scroll")
+            .w_full()
+            .h_full()
+            .overflow_x_scroll()
+            .child(
+                div()
+                    .flex()
+                    .flex_row()
+                    .gap_4()
+                    .p_4()
+                    .children(variants.into_iter().enumerate().map(|(index, variant)| {
+                        let variant_id = variant.stable_id();
+                        let description = variant.description.clone().unwrap_or_default();
+                        let is_selected = index == self.selected_variant_index;
+                        let is_adopted =
+                            adopted_variant.as_deref() == Some(variant_id.as_str());
+
+                        let mut card = div()
+                            .w(px(360.))
+                            .min_h(px(320.))
+                            .flex()
+                            .flex_col()
+                            .gap_3()
+                            .p_3()
+                            .rounded(px(12.))
+                            .border_1()
+                            .border_color(rgb(border))
+                            .bg(rgb(card_bg));
+
+                        if is_selected {
+                            card = card.border_color(rgb(accent));
+                        }
+
+                        card.child(
+                            div()
+                                .flex()
+                                .flex_row()
+                                .justify_between()
+                                .items_center()
+                                .gap_3()
+                                .child(
+                                    div()
+                                        .flex_1()
+                                        .child(
+                                            div()
+                                                .text_sm()
+                                                .font_weight(FontWeight::SEMIBOLD)
+                                                .text_color(rgb(text_primary))
+                                                .child(format!(
+                                                    "[{}] {}",
+                                                    index + 1,
+                                                    variant.name
+                                                )),
+                                        )
+                                        .child(
+                                            div()
+                                                .text_xs()
+                                                .text_color(rgb(text_muted))
+                                                .child(description),
+                                        ),
+                                )
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(if is_adopted {
+                                            rgb(accent)
+                                        } else {
+                                            rgb(text_muted)
+                                        })
+                                        .child(if is_adopted { "Adopted" } else { "" }),
+                                ),
+                        )
+                        .child(
+                            div()
+                                .id(gpui::ElementId::Name(
+                                    format!("variant-preview-{index}").into(),
+                                ))
+                                .flex_1()
+                                .min_h(px(0.))
+                                .overflow_y_scroll()
+                                .rounded(px(8.))
+                                .border_1()
+                                .border_color(rgb(border))
+                                .bg(rgb(preview_bg))
+                                .child(story.story.render_variant(&variant)),
+                        )
+                    })),
+            )
+            .into_any_element()
+    }
+
     fn render_preview(&self) -> AnyElement {
         let theme = crate::theme::get_cached_theme();
-        if let Some(story) = self.stories.get(self.selected_index) {
-            story.story.render()
+
+        if let Some(story) = self.current_story() {
+            match self.preview_mode {
+                PreviewMode::Single => self.render_single_preview(story),
+                PreviewMode::Compare => self.render_compare_preview(story),
+            }
         } else {
             div()
                 .flex()
@@ -312,6 +655,30 @@ impl StoryBrowser {
                 .child("No story selected")
                 .into_any_element()
         }
+    }
+
+    fn render_status_bar(&self) -> impl IntoElement {
+        let theme = crate::theme::get_cached_theme();
+
+        let default_text = match self.preview_mode {
+            PreviewMode::Single => {
+                "Tab compare \u{00b7} \u{2191}\u{2193} stories \u{00b7} Cmd+Shift+S screenshot"
+                    .to_string()
+            }
+            PreviewMode::Compare => {
+                "\u{2190}\u{2192} variants \u{00b7} 1-9 focus \u{00b7} Enter adopt \u{00b7} Tab single \u{00b7} Esc exit compare"
+                    .to_string()
+            }
+        };
+
+        div()
+            .px_4()
+            .py_2()
+            .border_t_1()
+            .border_color(rgb(theme.colors.ui.border))
+            .text_xs()
+            .text_color(rgb(theme.colors.text.dimmed))
+            .child(self.status_line.clone().unwrap_or(default_text))
     }
 
     fn move_selection_up(&mut self, cx: &mut Context<Self>) {
@@ -335,6 +702,7 @@ impl StoryBrowser {
                         .position(|s| s.story.id() == prev_story.story.id())
                     {
                         self.selected_index = main_pos;
+                        self.reset_variant_selection();
                         cx.notify();
                     }
                 }
@@ -363,10 +731,70 @@ impl StoryBrowser {
                         .position(|s| s.story.id() == next_story.story.id())
                     {
                         self.selected_index = main_pos;
+                        self.reset_variant_selection();
                         cx.notify();
                     }
                 }
             }
+        }
+    }
+
+    fn handle_key_down(
+        &mut self,
+        event: &KeyDownEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let key = event.keystroke.key.as_str();
+        let modifiers = &event.keystroke.modifiers;
+
+        // Cmd+Shift+S for screenshot
+        if key == "s" && modifiers.platform && modifiers.shift {
+            self.capture_screenshot(window, cx);
+            cx.stop_propagation();
+            return;
+        }
+
+        match key {
+            "tab" | "Tab" => {
+                self.toggle_compare_mode(cx);
+                cx.stop_propagation();
+            }
+            "left" | "arrowleft" if self.preview_mode == PreviewMode::Compare => {
+                self.move_variant_left(cx);
+                cx.stop_propagation();
+            }
+            "right" | "arrowright" if self.preview_mode == PreviewMode::Compare => {
+                self.move_variant_right(cx);
+                cx.stop_propagation();
+            }
+            "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9"
+                if self.preview_mode == PreviewMode::Compare =>
+            {
+                self.select_variant_by_shortcut(key, cx);
+                cx.stop_propagation();
+            }
+            "enter" | "Enter" | "return" | "Return"
+                if self.preview_mode == PreviewMode::Compare =>
+            {
+                self.adopt_selected_variant(cx);
+                cx.stop_propagation();
+            }
+            "escape" | "Escape" if self.preview_mode == PreviewMode::Compare => {
+                self.preview_mode = PreviewMode::Single;
+                self.status_line = None;
+                cx.notify();
+                cx.stop_propagation();
+            }
+            "up" | "arrowup" => {
+                self.move_selection_up(cx);
+                cx.stop_propagation();
+            }
+            "down" | "arrowdown" => {
+                self.move_selection_down(cx);
+                cx.stop_propagation();
+            }
+            _ => cx.propagate(),
         }
     }
 
@@ -458,20 +886,7 @@ impl Render for StoryBrowser {
             .key_context("StoryBrowser")
             .track_focus(&self.focus_handle)
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
-                let key = event.keystroke.key.as_str();
-                let modifiers = &event.keystroke.modifiers;
-
-                // Cmd+Shift+S for screenshot
-                if key == "s" && modifiers.platform && modifiers.shift {
-                    this.capture_screenshot(window, cx);
-                    return;
-                }
-
-                match key {
-                    "up" | "arrowup" => this.move_selection_up(cx),
-                    "down" | "arrowdown" => this.move_selection_down(cx),
-                    _ => {}
-                }
+                this.handle_key_down(event, window, cx);
             }))
             .flex()
             .flex_row()
@@ -527,7 +942,8 @@ impl Render for StoryBrowser {
                             .flex_1()
                             .overflow_y_scroll()
                             .child(preview),
-                    ),
+                    )
+                    .child(self.render_status_bar()),
             )
     }
 }

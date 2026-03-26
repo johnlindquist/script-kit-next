@@ -276,7 +276,11 @@ impl Render for EnvPrompt {
             )
             // Footer — minimal chrome hint strip with storage context
             .child({
-                let primary_hint = if self.exists_in_keyring { "↵ Update" } else { "↵ Save" };
+                let primary_hint = if self.exists_in_keyring {
+                    "↵ Update"
+                } else {
+                    "↵ Save"
+                };
                 let hints = vec![
                     gpui::SharedString::from(primary_hint),
                     gpui::SharedString::from("Esc Cancel"),
