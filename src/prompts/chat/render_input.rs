@@ -7,12 +7,17 @@ impl ChatPrompt {
         let cursor_visible = self.cursor_visible && is_focused;
         let input_text_color = rgb(theme_colors.text.primary);
         let placeholder_text_color = rgb(theme_colors.text.muted);
+        // Mini mode: match mini main window's visual input size.
+        // The mini main window uses font_size_xl (20.0) on gpui-component Input, which renders
+        // smaller than 20px on a raw div().text_size(). font_size_lg (16.0) is the visual match.
+        let input_font_size = if self.mini_mode { 16.0 } else { 14.0 };
+
         let mut input_content = div()
             .flex()
             .flex_row()
             .items_center()
             .w_full()
-            .text_size(px(14.0))
+            .text_size(px(input_font_size))
             .text_color(input_text_color);
         input_content = input_content.child(
             crate::components::text_input::render_text_input_cursor_selection(
@@ -43,13 +48,14 @@ impl ChatPrompt {
             .id("chat-input-field")
             .w_full()
             .min_h(px(28.0))
-            .px(px(CHAT_LAYOUT_CARD_PADDING_X))
-            .py(px(CHAT_LAYOUT_SECTION_PADDING_Y))
             .flex()
             .flex_row()
             .items_center();
 
-        if !self.mini_mode {
+        if self.mini_mode {
+            // Mini mode: no inner padding — outer input_area handles spacing
+            // to match the mini main window's bare input feel
+        } else {
             // Full mode: card-style input with rounded corners, bg, and border.
             let input_bg_alpha = if is_focused {
                 CHAT_LAYOUT_INPUT_BG_FOCUSED_ALPHA

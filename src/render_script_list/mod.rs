@@ -843,18 +843,7 @@ impl ScriptListApp {
                     key if sk_is_key_tab(key) => {
                         if !this.filter_text.is_empty() {
                             let query = this.filter_text.clone();
-
-                            // Open AI window first
-                            if let Err(e) = ai::open_ai_window(cx) {
-                                logging::log("ERROR", &format!("Failed to open AI window: {}", e));
-                            } else {
-                                // Set input in AI chat (don't auto-submit - let user review first)
-                                let _ = ai::set_ai_input(cx, &query, false);
-                            }
-
-                            // Clear filter and close main window
-                            this.clear_filter(window, cx);
-                            this.close_and_reset_window(cx);
+                            this.open_ai_chat_from_main_window_query(query, cx);
                         }
                     }
                     _ => {}

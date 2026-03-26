@@ -278,7 +278,7 @@ impl ScriptListApp {
                         section_style: crate::actions::SectionStyle::Headers,
                         anchor: crate::actions::AnchorPosition::Top,
                         show_icons: true,
-                        show_footer: true,
+                        show_footer: false,
                     });
                 }
 
@@ -634,7 +634,7 @@ impl ScriptListApp {
                         section_style: crate::actions::SectionStyle::Headers,
                         anchor: crate::actions::AnchorPosition::Top,
                         show_icons: true,
-                        show_footer: true,
+                        show_footer: false,
                     });
                 }
 
@@ -947,7 +947,7 @@ mod terminal_command_shortcut_tests {
         assert_eq!(config.section_style, SectionStyle::Headers);
         assert_eq!(config.anchor, AnchorPosition::Top);
         assert!(config.show_icons);
-        assert!(config.show_footer);
+        assert!(!config.show_footer, "Mini mode actions should not show footer");
     }
 
     #[test]

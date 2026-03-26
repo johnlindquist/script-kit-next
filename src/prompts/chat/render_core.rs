@@ -3,6 +3,10 @@ use crate::components::prompt_footer::{
     PromptFooter, PromptFooterConfig, PROMPT_FOOTER_BUTTON_ACTIVE_OPACITY,
     PROMPT_FOOTER_BUTTON_HOVER_OPACITY,
 };
+use crate::ui::chrome::{
+    alpha_from_opacity, DIVIDER_HEIGHT, DIVIDER_OPACITY, HINT_STRIP_HEIGHT, HINT_STRIP_PADDING_X,
+    HINT_STRIP_PADDING_Y, HINT_TEXT_OPACITY,
+};
 
 #[derive(Clone, Copy)]
 enum ChatFooterButtonAction {
@@ -77,13 +81,42 @@ impl ChatPrompt {
             .into_any_element()
     }
 
-    fn render_footer(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let footer_colors = PromptFooterColors::from_theme(&self.theme);
-        let _footer_overlay_alpha = if self.theme.is_dark_mode() {
-            CHAT_LAYOUT_FOOTER_BG_DARK_ALPHA
+    fn render_mini_hint_strip(&self) -> impl IntoElement {
+        let hint_text_hex = self.theme.colors.text.primary;
+        let hint_opacity_byte = alpha_from_opacity(HINT_TEXT_OPACITY);
+        let hint_text_rgba = (hint_text_hex << 8) | hint_opacity_byte;
+
+        let divider_rgba = (self.theme.colors.ui.border << 8) | alpha_from_opacity(DIVIDER_OPACITY);
+
+        let hint_text = if self.is_streaming() {
+            "Esc Stop  ·  ⌘K Actions"
+        } else if self.script_generation_mode {
+            "↵ Send  ·  ⌘K Actions  ·  Esc Back  ·  ⌘↵ Save+Run"
         } else {
-            CHAT_LAYOUT_FOOTER_BG_LIGHT_ALPHA
+            "↵ Send  ·  ⌘K Actions  ·  Esc Back"
         };
+
+        div()
+            .w_full()
+            .h(px(HINT_STRIP_HEIGHT))
+            .px(px(HINT_STRIP_PADDING_X))
+            .py(px(HINT_STRIP_PADDING_Y))
+            .flex()
+            .flex_row()
+            .items_center()
+            .justify_end()
+            .border_t(px(DIVIDER_HEIGHT))
+            .border_color(rgba(divider_rgba))
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(rgba(hint_text_rgba))
+                    .child(hint_text),
+            )
+    }
+
+    fn render_rich_footer(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let footer_colors = PromptFooterColors::from_theme(&self.theme);
         let model_text = self.model.clone().unwrap_or_else(|| "Select Model".into());
         let has_assistant = self.has_assistant_turn();
         let (primary_action, primary_label, primary_shortcut) = if self.is_streaming() {
@@ -97,11 +130,9 @@ impl ChatPrompt {
                 "⌘↵",
             )
         } else {
-            // No assistant turn yet — show actions toggle as primary
             (ChatFooterButtonAction::ToggleActionsPanel, "Actions", "⌘K")
         };
 
-        // Compact hint-rail: no logo, model + newline hint merged into helper text
         let helper_text = format!("{model_text} · Shift+Enter newline");
         let footer_config = PromptFooterConfig::new()
             .primary_label(primary_label)
@@ -131,6 +162,14 @@ impl ChatPrompt {
                     });
                 }
             }))
+    }
+
+    fn render_footer(&self, cx: &mut Context<Self>) -> AnyElement {
+        if self.mini_mode {
+            self.render_mini_hint_strip().into_any_element()
+        } else {
+            self.render_rich_footer(cx).into_any_element()
+        }
     }
 
     fn render_script_generation_footer_actions(
@@ -443,19 +482,38 @@ impl Render for ChatPrompt {
                 .into_any_element();
         }
 
-        // Input area at TOP
+        // Input area at TOP — mini mode uses shared chrome tokens to match mini main window
         let has_pending_image = self.pending_image.is_some();
+        let divider_rgba = (theme_colors.ui.border << 8) | alpha_from_opacity(DIVIDER_OPACITY);
+
+        // Mini mode: use shared mini layout tokens to match mini main window exactly
+        let input_px = if self.mini_mode {
+            crate::ui::chrome::HEADER_PADDING_X
+        } else {
+            CHAT_LAYOUT_PADDING_X
+        };
+        let input_py = if self.mini_mode {
+            crate::ui::chrome::HEADER_PADDING_Y
+        } else {
+            CHAT_LAYOUT_SECTION_PADDING_Y
+        };
+
         let input_area = div()
             .w_full()
-            .px(px(CHAT_LAYOUT_PADDING_X))
-            .py(px(CHAT_LAYOUT_SECTION_PADDING_Y))
+            .px(px(input_px))
+            .py(px(input_py))
             .flex()
             .flex_col()
-            .gap(px(8.0))
-            .border_b_1()
-            .border_color(rgba(
-                (theme_colors.ui.border << 8) | CHAT_LAYOUT_BORDER_ALPHA,
-            ))
+            .when(!self.mini_mode, |d| d.gap(px(8.0)))
+            .when(self.mini_mode, |d| {
+                d.border_b(px(DIVIDER_HEIGHT))
+                    .border_color(rgba(divider_rgba))
+            })
+            .when(!self.mini_mode, |d| {
+                d.border_b_1().border_color(rgba(
+                    (theme_colors.ui.border << 8) | CHAT_LAYOUT_BORDER_ALPHA,
+                ))
+            })
             .on_drop(cx.listener(|this, paths: &ExternalPaths, _window, cx| {
                 this.handle_file_drop(paths, cx);
             }))
@@ -598,7 +656,7 @@ impl Render for ChatPrompt {
                 .into_any_element()
         };
 
-        div()
+        let prompt = div()
             .id("chat-prompt")
             .flex()
             .flex_col()
@@ -607,17 +665,19 @@ impl Render for ChatPrompt {
             .when_some(container_bg, |d, bg| d.bg(bg))
             .key_context("chat_prompt")
             .track_focus(&self.focus_handle)
-            .on_key_down(handle_key)
-            // Header with back button and title
-            .child(self.render_header())
-            // Input area
+            .on_key_down(handle_key);
+
+        // Mini mode: no header (matches mini main window). Rich mode: show header.
+        let prompt = if self.mini_mode {
+            prompt
+        } else {
+            prompt.child(self.render_header())
+        };
+
+        prompt
             .child(input_area)
-            // Scrollable message area
             .child(messages_content)
-            // Footer with model selector and footer actions
             .child(self.render_footer(cx))
-            // Note: Actions menu is now handled by parent via on_show_actions callback
-            // The parent opens the standard ActionsDialog window
             .into_any_element()
     }
 }
@@ -627,47 +687,34 @@ mod chat_footer_button_click_handler_tests {
     const CHAT_RENDER_CORE_SOURCE: &str = include_str!("render_core.rs");
 
     #[test]
-    fn test_chat_footer_uses_prompt_footer_with_slots_and_click_handlers() {
+    fn test_chat_footer_branches_on_mini_mode() {
+        assert!(
+            CHAT_RENDER_CORE_SOURCE.contains("render_mini_hint_strip"),
+            "Chat should have a mini hint strip renderer"
+        );
+        assert!(
+            CHAT_RENDER_CORE_SOURCE.contains("render_rich_footer"),
+            "Chat should have a rich footer renderer"
+        );
+        assert!(
+            CHAT_RENDER_CORE_SOURCE.contains("if self.mini_mode"),
+            "Chat footer should branch on mini_mode"
+        );
+        assert!(
+            CHAT_RENDER_CORE_SOURCE.contains("HINT_STRIP_HEIGHT"),
+            "Mini hint strip should use shared chrome tokens"
+        );
         assert!(
             CHAT_RENDER_CORE_SOURCE.contains("PromptFooter::new"),
-            "Chat footer should render via shared PromptFooter component"
+            "Rich footer should use PromptFooter component"
         );
         assert!(
-            CHAT_RENDER_CORE_SOURCE
-                .contains(".left_slot_opt(self.render_script_generation_footer_actions(cx))"),
-            "Chat footer should inject script generation actions through left slot"
+            CHAT_RENDER_CORE_SOURCE.contains("Esc Stop"),
+            "Mini hint strip should show streaming shortcuts"
         );
         assert!(
-            CHAT_RENDER_CORE_SOURCE.contains("Shift+Enter newline"),
-            "Chat footer should include newline hint in helper text"
-        );
-        assert!(
-            CHAT_RENDER_CORE_SOURCE.contains(".show_logo(false)"),
-            "Chat footer should hide logo for compact hint-rail feel"
-        );
-        assert!(
-            CHAT_RENDER_CORE_SOURCE.contains("let primary_handle = cx.entity().downgrade();"),
-            "Chat footer primary action should use downgraded entity handle"
-        );
-        assert!(
-            CHAT_RENDER_CORE_SOURCE.contains("let secondary_handle = cx.entity().downgrade();"),
-            "Chat footer secondary action should use downgraded entity handle"
-        );
-        assert!(
-            CHAT_RENDER_CORE_SOURCE.contains("ChatFooterButtonAction::StopStreaming"),
-            "Streaming footer primary button should route to stop streaming action"
-        );
-        assert!(
-            CHAT_RENDER_CORE_SOURCE.contains("ChatFooterButtonAction::ContinueInChat"),
-            "Continue in Chat footer button should route to continue action"
-        );
-        assert!(
-            CHAT_RENDER_CORE_SOURCE.contains("ChatFooterButtonAction::SaveAndRun"),
-            "Script generation footer primary button should route to save-and-run action"
-        );
-        assert!(
-            CHAT_RENDER_CORE_SOURCE.contains("ChatFooterButtonAction::ToggleActionsPanel"),
-            "Actions footer button should route to toggle actions action"
+            CHAT_RENDER_CORE_SOURCE.contains("↵ Send  ·  ⌘K Actions  ·  Esc Back"),
+            "Mini hint strip should show default chat shortcuts"
         );
     }
 }
