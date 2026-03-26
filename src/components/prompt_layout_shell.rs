@@ -1039,6 +1039,15 @@ mod prompt_layout_shell_tests {
     }
 
     #[test]
+    fn arg_prompt_uses_shared_minimal_list_prompt_shell() {
+        let source = include_str!("../render_prompts/arg/render.rs");
+        assert!(
+            source.contains("render_minimal_list_prompt_shell("),
+            "arg prompt should use the shared minimal list prompt shell"
+        );
+    }
+
+    #[test]
     fn render_minimal_list_prompt_shell_delegates_to_simple_shell() {
         let fn_start = SHELL_SOURCE
             .find("fn render_minimal_list_prompt_shell(")

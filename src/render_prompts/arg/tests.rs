@@ -263,11 +263,11 @@ mod arg_prompt_render_tests {
     }
 
     #[test]
-    fn arg_prompt_render_uses_hint_strip_not_prompt_footer() {
+    fn arg_prompt_render_uses_shared_shell_not_prompt_footer() {
         let render_source = include_str!("render.rs");
         assert!(
-            render_source.contains("render_simple_hint_strip("),
-            "arg render should use render_simple_hint_strip for minimal chrome footer"
+            render_source.contains("render_minimal_list_prompt_shell("),
+            "arg render should delegate layout to the shared minimal list prompt shell"
         );
         assert!(
             render_source.contains("arg_prompt_hints("),
@@ -287,12 +287,8 @@ mod arg_prompt_render_tests {
     fn arg_render_prompt_matches_minimal_chrome_contract() {
         let source = include_str!("render.rs");
         assert!(
-            source.contains("render_simple_hint_strip("),
-            "arg render_prompt should use render_simple_hint_strip"
-        );
-        assert!(
-            source.contains("SectionDivider::new()"),
-            "arg render_prompt should use SectionDivider between input and list"
+            source.contains("render_minimal_list_prompt_shell("),
+            "arg render_prompt should use the shared minimal list prompt shell"
         );
         assert!(
             !source.contains("PromptFooter::new("),

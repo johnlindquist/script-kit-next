@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-03-26T06:49:51.920Z",
+  "updatedAt": "2026-03-26T11:38:49.636Z",
   "agents": {
     "storybook-contract-a1": {
       "id": "storybook-contract-a1",
@@ -52,6 +52,54 @@
           "src/storybook/mod.rs",
           "src/storybook/selection.rs",
           "src/storybook/story.rs"
+        ]
+      },
+      "claimed_at": {}
+    },
+    "list-shell-scaffold-a1": {
+      "id": "list-shell-scaffold-a1",
+      "kind": "codex",
+      "mode": "exec",
+      "model": "openai/gpt-5.4",
+      "task": "Add two new helpers to src/components/prompt_layout_shell.rs and their regression tests. This is a Rust GPUI project — read CLAUDE.md for conventions.\n\nOBJECTIVE: Add render_minimal_list_prompt_scaffold() and render_minimal_list_prompt_shell() to src/components/prompt_layout_shell.rs, plus source-regression tests in the existing prompt_layout_shell_tests module.\n\nCONCRETE STEPS:\n1. Read src/components/prompt_layout_shell.rs fully first.\n2. Insert these two functions directly AFTER the render_simple_prompt_shell() function (after line ~327, before render_simple_hint_strip):\n\n#[allow(dead_code)]\npub(crate) fn render_minimal_list_prompt_scaffold(\n    header: impl IntoElement,\n    content: impl IntoElement,\n    hints: impl crate::components::hint_strip::IntoHints,\n    leading: Option<AnyElement>,\n) -> Div {\n    div()\n        .w_full()\n        .h_full()\n        .flex()\n        .flex_col()\n        .child(\n            div()\n                .w_full()\n                .px(px(crate::ui::chrome::HEADER_PADDING_X))\n                .py(px(crate::ui::chrome::HEADER_PADDING_Y))\n                .flex()\n                .flex_row()\n                .items_center()\n                .child(header),\n        )\n        .child(crate::components::SectionDivider::new())\n        .child(\n            div()\n                .flex()\n                .flex_col()\n                .flex_1()\n                .min_h(px(0.))\n                .w_full()\n                .overflow_hidden()\n                .child(content),\n        )\n        .child(render_simple_hint_strip(hints, leading))\n}\n\n#[allow(dead_code)]\npub(crate) fn render_minimal_list_prompt_shell(\n    radius: f32,\n    vibrancy_bg: Option<Rgba>,\n    header: impl IntoElement,\n    content: impl IntoElement,\n    hints: impl crate::components::hint_strip::IntoHints,\n    leading: Option<AnyElement>,\n) -> Div {\n    render_simple_prompt_shell(\n        radius,\n        vibrancy_bg,\n        render_minimal_list_prompt_scaffold(header, content, hints, leading),\n        None,\n    )\n}\n\n3. Then add re-exports in src/components/mod.rs. Find the existing block:\npub(crate) use prompt_layout_shell::{\n    render_hint_strip_leading_text, render_simple_hint_strip, render_simple_prompt_shell,\n};\nAnd add render_minimal_list_prompt_scaffold and render_minimal_list_prompt_shell to that list.\n\n4. Add these two tests inside the existing #[cfg(test)] mod prompt_layout_shell_tests block (at the end, before the closing brace):\n\n    #[test]\n    fn render_minimal_list_prompt_scaffold_uses_shared_tokens_and_footer() {\n        let fn_start = SHELL_SOURCE\n            .find(\"fn render_minimal_list_prompt_scaffold(\")\n            .expect(\"function must exist\");\n        let fn_body = &SHELL_SOURCE[fn_start..];\n\n        assert!(\n            fn_body.contains(\"HEADER_PADDING_X\"),\n            \"shared list scaffold must own HEADER_PADDING_X\"\n        );\n        assert!(\n            fn_body.contains(\"HEADER_PADDING_Y\"),\n            \"shared list scaffold must own HEADER_PADDING_Y\"\n        );\n        assert!(\n            fn_body.contains(\"SectionDivider::new()\"),\n            \"shared list scaffold must own the divider\"\n        );\n        assert!(\n            fn_body.contains(\"render_simple_hint_strip(\"),\n            \"shared list scaffold must own the hint strip footer\"\n        );\n        assert!(\n            fn_body.contains(\"flex_1()\") && fn_body.contains(\"min_h(px(0.\"),\n            \"shared list scaffold must own the flex content contract\"\n        );\n    }\n\n    #[test]\n    fn render_minimal_list_prompt_shell_delegates_to_simple_shell() {\n        let fn_start = SHELL_SOURCE\n            .find(\"fn render_minimal_list_prompt_shell(\")\n            .expect(\"function must exist\");\n        let fn_body = &SHELL_SOURCE[fn_start..];\n\n        assert!(\n            fn_body.contains(\"render_simple_prompt_shell(\"),\n            \"shared list shell must delegate to render_simple_prompt_shell\"\n        );\n        assert!(\n            fn_body.contains(\"render_minimal_list_prompt_scaffold(\"),\n            \"shared list shell must wrap the scaffold\"\n        );\n    }\n\n5. Run verification: cargo check && cargo clippy --all-targets -- -D warnings && cargo test prompt_layout_shell\n\nKEY FILES:\n- src/components/prompt_layout_shell.rs — the file to edit (read it first)\n- src/components/mod.rs — add re-exports\n- src/ui/chrome/tokens.rs — HEADER_PADDING_X, HEADER_PADDING_Y constants\n- src/components/hint_strip.rs — IntoHints trait\n- src/components/section_divider.rs — SectionDivider::new()\n\nCONVENTIONS (from CLAUDE.md):\n- Use #[allow(dead_code)] on new helpers not yet called\n- pub(crate) visibility for cross-module internals\n- No unwrap() in production code (tests can use .expect())\n- cargo check && cargo clippy --all-targets -- -D warnings && cargo test must pass",
+      "scope": "src/components/prompt_layout_shell.rs,src/components/mod.rs",
+      "readonly": false,
+      "status": "done",
+      "claims": [],
+      "createdAt": "2026-03-26T11:35:58.471Z",
+      "lastSeenAt": "2026-03-26T11:38:49.636Z",
+      "host": "Johns-MacBook-Pro.local",
+      "startSha": "c7db22f72d0757bdc25cfbbfd22184aee24fccad",
+      "notes": "done. exit=0. final=.ai/logs/list-shell-scaffold-a1.final.md. See final message file.",
+      "report": {
+        "schema": "opex.agent_report.v1",
+        "agentId": "list-shell-scaffold-a1",
+        "taskSummary": "Added minimal list prompt scaffold/shell helpers, re-exported them, and added regression tests covering their shared layout contract and delegation.",
+        "tests": [
+          {
+            "cmd": "cargo check",
+            "result": "pass"
+          },
+          {
+            "cmd": "cargo clippy --all-targets -- -D warnings",
+            "result": "pass"
+          },
+          {
+            "cmd": "cargo test prompt_layout_shell",
+            "result": "pass"
+          }
+        ],
+        "changedFiles": [
+          "src/components/prompt_layout_shell.rs",
+          "src/components/mod.rs"
+        ],
+        "commitCount": 1,
+        "commitShas": [
+          "35ee703565e502a238cb68b2cc466615231a8c97"
+        ],
+        "commitFiles": [
+          "src/components/mod.rs",
+          "src/components/prompt_layout_shell.rs"
         ]
       },
       "claimed_at": {}

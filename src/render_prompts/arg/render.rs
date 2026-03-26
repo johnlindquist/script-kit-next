@@ -238,128 +238,102 @@ impl ScriptListApp {
             .into_any_element()
         };
 
-        div()
-            .relative() // Needed for absolute positioned actions dialog overlay
-            .flex()
-            .flex_col()
-            // Removed: .bg(rgba(bg_with_alpha)) - let vibrancy show through from Root
-            // NOTE: No shadow - shadows on transparent elements cause gray fill with vibrancy
+        let header = div()
             .w_full()
-            .h_full()
-            .rounded(px(design_visual.radius_lg))
-            .text_color(rgb(text_primary))
-            .font_family(design_typography.font_family)
-            .key_context("arg_prompt")
-            .track_focus(&self.focus_handle)
-            .on_key_down(handle_key)
-            // Header with input - uses shared header constants for visual consistency with main menu
-            .child(
+            .flex()
+            .flex_row()
+            .items_center()
+            .gap(px(HEADER_GAP))
+            .child({
+                let input_height = CURSOR_HEIGHT_LG + (CURSOR_MARGIN_Y * 2.0);
                 div()
-                    .w_full()
-                    .px(px(HEADER_PADDING_X))
-                    .py(px(HEADER_PADDING_Y))
+                    .flex_1()
                     .flex()
                     .flex_row()
                     .items_center()
-                    .gap(px(HEADER_GAP))
-                    // Search input with cursor and selection support
-                    // Use explicit height matching main menu: CURSOR_HEIGHT_LG + 2*CURSOR_MARGIN_Y = 22px
-                    .child({
-                        let input_height = CURSOR_HEIGHT_LG + (CURSOR_MARGIN_Y * 2.0);
-                        div()
-                            .flex_1()
-                            .flex()
-                            .flex_row()
-                            .items_center()
-                            .h(px(input_height)) // Fixed height for consistent vertical centering
-                            .text_size(px(design_typography.font_size_lg))
-                            .text_color(if input_is_empty {
-                                rgb(text_muted)
-                            } else {
-                                rgb(text_primary)
-                            })
-                            // When empty: show cursor (always reserve space) + placeholder
-                            .when(input_is_empty, |d: gpui::Div| {
-                                let is_cursor_visible = self.focused_input
-                                    == FocusedInput::ArgPrompt
-                                    && self.cursor_visible;
-                                // Both cursor and placeholder in same flex container, centered together
-                                // Use relative positioning for the placeholder to overlay cursor space
-                                d.child(
+                    .h(px(input_height))
+                    .text_size(px(design_typography.font_size_lg))
+                    .text_color(if input_is_empty {
+                        rgb(text_muted)
+                    } else {
+                        rgb(text_primary)
+                    })
+                    .when(input_is_empty, |d: gpui::Div| {
+                        let is_cursor_visible =
+                            self.focused_input == FocusedInput::ArgPrompt && self.cursor_visible;
+                        d.child(
+                            div()
+                                .flex()
+                                .flex_row()
+                                .items_center()
+                                .child(
                                     div()
-                                        .flex()
-                                        .flex_row()
-                                        .items_center()
-                                        .child(
-                                            div()
-                                                .w(px(CURSOR_WIDTH))
-                                                .h(px(CURSOR_HEIGHT_LG))
-                                                .when(is_cursor_visible, |d: gpui::Div| {
-                                                    d.bg(rgb(text_primary))
-                                                }),
-                                        )
-                                        .child(
-                                            div()
-                                                .ml(px(-(CURSOR_WIDTH)))
-                                                .text_color(rgb(text_muted))
-                                                .child(placeholder.clone()),
-                                        ),
+                                        .w(px(CURSOR_WIDTH))
+                                        .h(px(CURSOR_HEIGHT_LG))
+                                        .when(is_cursor_visible, |d: gpui::Div| {
+                                            d.bg(rgb(text_primary))
+                                        }),
                                 )
-                            })
-                            // When has text: show text with cursor/selection via helper
-                            .when(!input_is_empty, |d: gpui::Div| {
-                                d.child(self.render_arg_input_text(text_primary, accent_color))
-                            })
-                    }),
-            )
-            // Choices list (only when prompt has choices)
-            .when(has_choices, |d| {
-                d.child(crate::components::SectionDivider::new())
-                .child(
-                    div()
-                        .flex()
-                        .flex_col()
-                        .flex_1()
-                        .min_h(px(0.)) // P0: Allow flex container to shrink
-                        .w_full()
-                        .py(px(design_spacing.padding_xs))
-                        .child(list_element),
-                )
-            })
-            // Footer with minimal chrome hint strip
-            .child({
-                let leading = arg_prompt_leading_status(
-                    has_choices,
-                    filtered_choices_len,
-                    input_is_empty,
-                )
-                .map(|status| {
-                    crate::components::render_hint_strip_leading_text(status, text_primary)
-                });
+                                .child(
+                                    div()
+                                        .ml(px(-(CURSOR_WIDTH)))
+                                        .text_color(rgb(text_muted))
+                                        .child(placeholder.clone()),
+                                ),
+                        )
+                    })
+                    .when(!input_is_empty, |d: gpui::Div| {
+                        d.child(self.render_arg_input_text(text_primary, accent_color))
+                    })
+            });
 
-                crate::components::render_simple_hint_strip(
-                    arg_prompt_hints(has_actions),
-                    leading,
-                )
-            })
-            // Actions dialog overlay (when Cmd+K is pressed with SDK actions)
-            .when_some(
-                render_actions_backdrop(
-                    self.show_actions_popup,
-                    self.actions_dialog.clone(),
-                    actions_dialog_top,
-                    actions_dialog_right,
-                    ActionsBackdropConfig {
-                        backdrop_id: "arg-actions-backdrop",
-                        close_host: ActionsDialogHost::ArgPrompt,
-                        backdrop_log_message: "Arg actions backdrop clicked - dismissing dialog",
-                        show_pointer_cursor: true,
-                    },
-                    cx,
-                ),
-                |d, backdrop_overlay| d.child(backdrop_overlay),
-            )
-            .into_any_element()
+        let content = if has_choices {
+            div()
+                .flex()
+                .flex_col()
+                .w_full()
+                .py(px(design_spacing.padding_xs))
+                .child(list_element)
+        } else {
+            div()
+        };
+
+        let leading = arg_prompt_leading_status(has_choices, filtered_choices_len, input_is_empty)
+            .map(|status| {
+                crate::components::render_hint_strip_leading_text(status, text_primary)
+            });
+
+        crate::components::render_minimal_list_prompt_shell(
+            design_visual.radius_lg,
+            crate::ui_foundation::get_vibrancy_background(&self.theme),
+            header,
+            content,
+            arg_prompt_hints(has_actions),
+            leading,
+        )
+        .relative()
+        .text_color(rgb(text_primary))
+        .font_family(design_typography.font_family)
+        .key_context("arg_prompt")
+        .track_focus(&self.focus_handle)
+        .on_key_down(handle_key)
+        .when_some(
+            render_actions_backdrop(
+                self.show_actions_popup,
+                self.actions_dialog.clone(),
+                actions_dialog_top,
+                actions_dialog_right,
+                ActionsBackdropConfig {
+                    backdrop_id: "arg-actions-backdrop",
+                    close_host: ActionsDialogHost::ArgPrompt,
+                    backdrop_log_message: "Arg actions backdrop clicked - dismissing dialog",
+                    show_pointer_cursor: true,
+                },
+                cx,
+            ),
+            |d, backdrop_overlay| d.child(backdrop_overlay),
+        )
+        .into_any_element()
     }
 }
 

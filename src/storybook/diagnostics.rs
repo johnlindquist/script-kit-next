@@ -207,6 +207,19 @@ mod tests {
     }
 
     #[test]
+    fn catalog_snapshot_surfaces_include_input() {
+        let snapshot = build_story_catalog_snapshot(&StorySelectionStore::default());
+
+        let input_surface = snapshot
+            .surfaces
+            .iter()
+            .find(|s| s.surface == "Input")
+            .expect("Input surface should be present");
+
+        assert!(input_surface.comparable_story_count >= 1);
+    }
+
+    #[test]
     fn catalog_snapshot_includes_variant_props() {
         let snapshot = build_story_catalog_snapshot(&StorySelectionStore::default());
         let header_story = snapshot

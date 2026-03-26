@@ -18,6 +18,7 @@ mod header_logo_variations;
 mod header_raycast_variations;
 mod header_stories;
 mod header_tab_spacing_variations;
+mod input_design_variations;
 mod list_item_state_variations;
 mod list_item_stories;
 mod logo_centering_stories;
@@ -46,6 +47,7 @@ pub use header_logo_variations::HeaderLogoVariationsStory;
 pub use header_raycast_variations::HeaderRaycastVariationsStory;
 pub use header_stories::HeaderVariationsStory;
 pub use header_tab_spacing_variations::HeaderTabSpacingVariationsStory;
+pub use input_design_variations::InputDesignVariationsStory;
 pub use list_item_state_variations::ListItemStateVariationsStory;
 pub use list_item_stories::ListItemStory;
 pub use logo_centering_stories::LogoCenteringStory;
@@ -78,6 +80,7 @@ static ALL_STORIES: LazyLock<Vec<StoryEntry>> = LazyLock::new(|| {
         StoryEntry::new(Box::new(LogoCenteringStory)),
         StoryEntry::new(Box::new(FooterLayoutVariationsStory)),
         StoryEntry::new(Box::new(FooterActionVariationsStory)),
+        StoryEntry::new(Box::new(InputDesignVariationsStory)),
         StoryEntry::new(Box::new(ActionsWindowStory)),
         // Prompts
         StoryEntry::new(Box::new(ArgPromptStory)),

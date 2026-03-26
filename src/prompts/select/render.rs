@@ -131,12 +131,10 @@ impl Render for SelectPrompt {
             SharedString::from(self.filter_text.clone())
         };
 
-        // Search input — minimal chrome: no bg, no border, chrome-token padding
-        let input_container = div()
+        // Search input — minimal chrome: no bg, no border, scaffold owns padding
+        let header = div()
             .id(gpui::ElementId::Name("input:select-filter".into()))
             .w_full()
-            .px(px(crate::ui::chrome::HEADER_PADDING_X))
-            .py(px(crate::ui::chrome::HEADER_PADDING_Y))
             .flex()
             .flex_row()
             .items_center()
@@ -303,7 +301,7 @@ impl Render for SelectPrompt {
             .into_any_element()
         };
 
-        let choices_container = div()
+        let content = div()
             .id(gpui::ElementId::Name("list:select-choices".into()))
             .flex()
             .flex_col()
@@ -325,17 +323,14 @@ impl Render for SelectPrompt {
             ]
         };
 
-        let container = div()
-            .id(gpui::ElementId::Name("window:select".into()))
-            .flex()
-            .flex_col()
-            .w_full()
-            .h_full()
-            .text_color(text_color)
-            .child(input_container)
-            .child(crate::components::SectionDivider::new())
-            .child(choices_container)
-            .child(crate::components::render_simple_hint_strip(hints, None));
+        let container = crate::components::render_minimal_list_prompt_scaffold(
+            header,
+            content,
+            hints,
+            None,
+        )
+        .id(gpui::ElementId::Name("window:select".into()))
+        .text_color(text_color);
 
         FocusablePrompt::new(container)
             .key_context("select_prompt")
@@ -428,35 +423,17 @@ mod tests {
     }
 
     #[test]
-    fn select_prompt_render_uses_chrome_token_padding() {
+    fn select_prompt_uses_shared_minimal_list_prompt_scaffold() {
         let source = include_str!("render.rs");
         assert!(
-            source.contains("crate::ui::chrome::HEADER_PADDING_X"),
-            "select input should use chrome-token HEADER_PADDING_X"
-        );
-        assert!(
-            source.contains("crate::ui::chrome::HEADER_PADDING_Y"),
-            "select input should use chrome-token HEADER_PADDING_Y"
+            source.contains("render_minimal_list_prompt_scaffold("),
+            "select prompt should use the shared minimal list prompt scaffold"
         );
     }
 
     #[test]
-    fn select_prompt_container_uses_section_divider() {
+    fn select_prompt_does_not_use_prompt_footer() {
         let source = include_str!("render.rs");
-        assert!(
-            source.contains("SectionDivider::new()"),
-            "select container should use SectionDivider between input and list"
-        );
-    }
-
-    #[test]
-    fn select_prompt_uses_hint_strip_footer() {
-        let source = include_str!("render.rs");
-        assert!(
-            source.contains("render_simple_hint_strip("),
-            "select prompt should render a minimal hint strip footer"
-        );
-        // Verify no PromptFooter usage (split string to avoid self-match)
         let needle = ["PromptFooter", "::new("].concat();
         let render_fn_end = source.find("#[cfg(test)]").unwrap_or(source.len());
         let render_code = &source[..render_fn_end];
