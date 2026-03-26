@@ -8,7 +8,13 @@
 //! cargo run --bin storybook
 //! cargo run --bin storybook -- --story "button"
 //! cargo run --bin storybook -- --story "header-variations" --screenshot
+//! cargo run --bin storybook -- --story "footer-layout-variations" --compare --variant scriptkit-branded
 //! ```
+//!
+//! # Exit Codes
+//!
+//! - 0: success
+//! - 1: invalid `--story` or `--variant` ID
 
 use gpui::*;
 use script_kit_gpui::storybook::StoryBrowser;
@@ -19,7 +25,9 @@ fn main() {
     // Parse command line args
     let args: Vec<String> = std::env::args().collect();
     let mut initial_story: Option<String> = None;
+    let mut initial_variant: Option<String> = None;
     let mut auto_screenshot = false;
+    let mut start_compare = false;
 
     let mut i = 1;
     while i < args.len() {
@@ -29,6 +37,15 @@ fn main() {
                     initial_story = Some(args[i + 1].clone());
                     i += 1;
                 }
+            }
+            "--variant" | "-v" => {
+                if i + 1 < args.len() {
+                    initial_variant = Some(args[i + 1].clone());
+                    i += 1;
+                }
+            }
+            "--compare" => {
+                start_compare = true;
             }
             "--screenshot" | "-c" => {
                 auto_screenshot = true;
@@ -40,6 +57,8 @@ fn main() {
                 eprintln!();
                 eprintln!("Options:");
                 eprintln!("  -s, --story <ID>     Open a specific story by ID");
+                eprintln!("  -v, --variant <ID>   Pre-select a variant id");
+                eprintln!("  --compare            Open in side-by-side compare mode");
                 eprintln!("  -c, --screenshot     Capture screenshot and exit");
                 eprintln!("  -h, --help           Show this help message");
                 eprintln!();
@@ -51,6 +70,7 @@ fn main() {
                 eprintln!("  scrollbar        - Scrollbar component");
                 eprintln!("  design-tokens    - Design system tokens");
                 eprintln!("  header-variations - Header component variants");
+                eprintln!("  footer-layout-variations - Footer layout variants (compare-ready)");
                 std::process::exit(0);
             }
             _ => {}
@@ -59,6 +79,10 @@ fn main() {
     }
 
     let should_screenshot = Arc::new(AtomicBool::new(auto_screenshot));
+
+    let initial_story_for_window = initial_story.clone();
+    let initial_variant_for_window = initial_variant.clone();
+    let start_compare_for_window = start_compare;
 
     gpui_platform::application().run(move |cx| {
         // Create window options
@@ -82,14 +106,41 @@ fn main() {
         };
 
         let should_screenshot_clone = should_screenshot.clone();
+        let initial_story = initial_story_for_window.clone();
+        let initial_variant = initial_variant_for_window.clone();
+
         let _window_handle = cx
-            .open_window(options, |_window, cx| {
-                cx.new(|cx| {
+            .open_window(options, move |_window, cx| {
+                let initial_story = initial_story.clone();
+                let initial_variant = initial_variant.clone();
+
+                cx.new(move |cx| {
                     let mut browser = StoryBrowser::new(cx);
 
-                    // Select initial story if specified
                     if let Some(ref story_id) = initial_story {
-                        browser.select_story(story_id);
+                        if !browser.select_story(story_id) {
+                            let known = browser.story_ids();
+                            eprintln!(
+                                "{{\"error\":\"unknown_story\",\"story\":{:?},\"available\":{:?}}}",
+                                story_id, known
+                            );
+                            std::process::exit(1);
+                        }
+                    }
+
+                    if start_compare_for_window {
+                        browser.open_compare_mode();
+                    }
+
+                    if let Some(ref variant_id) = initial_variant {
+                        if !browser.select_variant_id(variant_id) {
+                            let known = browser.variant_ids();
+                            eprintln!(
+                                "{{\"error\":\"unknown_variant\",\"variant\":{:?},\"available\":{:?}}}",
+                                variant_id, known
+                            );
+                            std::process::exit(1);
+                        }
                     }
 
                     browser

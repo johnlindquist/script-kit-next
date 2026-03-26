@@ -10,7 +10,9 @@
 
 use gpui::*;
 
-use crate::storybook::{story_container, story_divider, story_section, Story, StoryVariant};
+use crate::storybook::{
+    story_container, story_divider, story_section, Story, StorySurface, StoryVariant,
+};
 use crate::theme::Theme;
 use crate::ui_foundation::HexColorExt;
 
@@ -30,8 +32,18 @@ impl Story for FooterLayoutVariationsStory {
         "Layouts"
     }
 
+    fn surface(&self) -> StorySurface {
+        StorySurface::Footer
+    }
+
+    fn render_variant(&self, variant: &StoryVariant) -> AnyElement {
+        let theme = crate::theme::get_cached_theme();
+        let colors = LayoutColors::from_theme(&theme);
+        render_footer_variant_preview(colors, &variant.stable_id())
+    }
+
     fn render(&self) -> AnyElement {
-        let theme = Theme::default();
+        let theme = crate::theme::get_cached_theme();
         let colors = LayoutColors::from_theme(&theme);
 
         story_container()
@@ -89,21 +101,12 @@ impl Story for FooterLayoutVariationsStory {
 
     fn variants(&self) -> Vec<StoryVariant> {
         vec![
-            StoryVariant {
-                name: "raycast-exact".into(),
-                description: Some("Exact Raycast layout".into()),
-                ..Default::default()
-            },
-            StoryVariant {
-                name: "scriptkit-branded".into(),
-                description: Some("Script Kit styling".into()),
-                ..Default::default()
-            },
-            StoryVariant {
-                name: "minimal".into(),
-                description: Some("Minimal footer".into()),
-                ..Default::default()
-            },
+            StoryVariant::default_named("raycast-exact", "Raycast Exact")
+                .description("Exact Raycast footer layout"),
+            StoryVariant::default_named("scriptkit-branded", "Script Kit Branded")
+                .description("Gold-accent Script Kit footer"),
+            StoryVariant::default_named("minimal", "Minimal")
+                .description("Hint strip footer with no action buttons"),
         ]
     }
 }
@@ -144,15 +147,17 @@ impl LayoutColors {
 // =============================================================================
 
 fn variation_label(text: &str) -> impl IntoElement {
+    let theme = crate::theme::get_cached_theme();
     div()
         .text_xs()
-        .text_color(rgb(0x666666))
+        .text_color(rgb(theme.colors.text.dimmed))
         .italic()
         .mb_2()
         .child(text.to_string())
 }
 
 fn variation_item(label: &str, content: impl IntoElement) -> impl IntoElement {
+    let theme = crate::theme::get_cached_theme();
     div()
         .flex()
         .flex_col()
@@ -161,7 +166,7 @@ fn variation_item(label: &str, content: impl IntoElement) -> impl IntoElement {
         .child(
             div()
                 .text_xs()
-                .text_color(rgb(0x888888))
+                .text_color(rgb(theme.colors.text.muted))
                 .child(label.to_string()),
         )
         .child(content)
@@ -366,6 +371,19 @@ fn sample_list(colors: LayoutColors) -> impl IntoElement {
             "Command",
             false,
         ))
+}
+
+// =============================================================================
+// VARIANT-AWARE PREVIEW DISPATCH
+// =============================================================================
+
+fn render_footer_variant_preview(colors: LayoutColors, variant_id: &str) -> AnyElement {
+    match variant_id {
+        "raycast-exact" => render_raycast_exact(colors).into_any_element(),
+        "scriptkit-branded" => render_scriptkit_branded(colors).into_any_element(),
+        "minimal" => render_minimal_footer(colors).into_any_element(),
+        _ => render_scriptkit_branded(colors).into_any_element(),
+    }
 }
 
 // =============================================================================

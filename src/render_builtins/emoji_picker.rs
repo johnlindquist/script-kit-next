@@ -408,12 +408,12 @@ impl ScriptListApp {
                             .child(list_scrollbar),
                     ),
             )
-            .child(PromptFooter::new(
-                PromptFooterConfig::new()
-                    .primary_label("Copy")
-                    .primary_shortcut("↵")
-                    .show_secondary(false),
-                PromptFooterColors::from_theme(&self.theme),
+            .child(crate::components::render_simple_hint_strip(
+                vec![
+                    gpui::SharedString::from("↵ Copy"),
+                    gpui::SharedString::from("Esc Back"),
+                ],
+                None,
             ))
             .into_any_element()
     }

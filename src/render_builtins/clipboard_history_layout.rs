@@ -3,7 +3,6 @@
             .get(selected_index)
             .map(|(_, e)| (*e).clone());
         let has_entry = selected_entry.is_some();
-        let selected_entry_for_footer = selected_entry.clone();
         let preview_panel = self.render_clipboard_preview_panel(
             &selected_entry,
             &image_cache,
@@ -91,24 +90,15 @@
                             .child(preview_panel),
                     ),
             )
-            // Footer
+            // Footer — minimal hint strip
             .child({
-                let handle_actions = cx.entity().downgrade();
-
-                let footer_config = PromptFooterConfig::new()
-                    .primary_label("Paste")
-                    .primary_shortcut("↵")
-                    .show_secondary(has_entry);
-
-                PromptFooter::new(footer_config, PromptFooterColors::from_theme(&self.theme))
-                    .on_secondary_click(Box::new(move |_, window, cx| {
-                        if let Some(app) = handle_actions.upgrade() {
-                            if let Some(entry) = selected_entry_for_footer.clone() {
-                                app.update(cx, |this, cx| {
-                                    this.toggle_clipboard_actions(entry, window, cx);
-                                });
-                            }
-                        }
-                    }))
+                let mut hints = vec![
+                    gpui::SharedString::from("↵ Paste"),
+                ];
+                if has_entry {
+                    hints.push(gpui::SharedString::from("⌘K Actions"));
+                }
+                hints.push(gpui::SharedString::from("Esc Back"));
+                crate::components::render_simple_hint_strip(hints, None)
             })
             .into_any_element()
