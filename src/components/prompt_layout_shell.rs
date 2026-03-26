@@ -1048,6 +1048,40 @@ mod prompt_layout_shell_tests {
     }
 
     #[test]
+    fn launcher_surfaces_use_shared_minimal_list_scaffold() {
+        for (source, label) in [
+            (
+                include_str!("../render_builtins/emoji_picker.rs"),
+                "emoji_picker",
+            ),
+            (
+                include_str!("../render_builtins/window_switcher.rs"),
+                "window_switcher",
+            ),
+            (
+                include_str!("../render_builtins/app_launcher.rs"),
+                "app_launcher",
+            ),
+            (
+                include_str!("../render_builtins/current_app_commands.rs"),
+                "current_app_commands",
+            ),
+        ] {
+            assert!(
+                source.contains("render_minimal_list_prompt_scaffold("),
+                "{label} should use the shared minimal list prompt scaffold"
+            );
+            let legacy = ["PromptFooter", "::new("].concat();
+            let render_fn_end = source.find("#[cfg(test)]").unwrap_or(source.len());
+            let render_code = &source[..render_fn_end];
+            assert!(
+                !render_code.contains(&legacy),
+                "{label} should not construct PromptFooter"
+            );
+        }
+    }
+
+    #[test]
     fn render_minimal_list_prompt_shell_delegates_to_simple_shell() {
         let fn_start = SHELL_SOURCE
             .find("fn render_minimal_list_prompt_shell(")

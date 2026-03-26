@@ -15,8 +15,11 @@ fn assert_minimal_builtin_surface(name: &str, source: &str) {
     let prompt_footer_needle = ["PromptFooter", "::new("].concat();
 
     assert!(
-        source.contains("render_simple_hint_strip(") || source.contains("HintStrip::new("),
-        "{name} should render a minimal hint strip footer"
+        source.contains("render_simple_hint_strip(")
+            || source.contains("HintStrip::new(")
+            || source.contains("render_minimal_list_prompt_scaffold(")
+            || source.contains("render_minimal_list_prompt_shell("),
+        "{name} should use a shared minimal chrome helper (hint strip or scaffold)"
     );
 
     assert!(
@@ -24,17 +27,24 @@ fn assert_minimal_builtin_surface(name: &str, source: &str) {
         "{name} should not use PromptFooter::new"
     );
 
-    assert!(
-        source.contains("HEADER_PADDING_X") && source.contains("HEADER_PADDING_Y"),
-        "{name} should use shared chrome header padding tokens"
-    );
+    // Surfaces using the scaffold inherit header padding and divider from the scaffold.
+    // Only require direct token usage for surfaces that assemble chrome manually.
+    let uses_scaffold = source.contains("render_minimal_list_prompt_scaffold(")
+        || source.contains("render_minimal_list_prompt_shell(");
 
-    assert!(
-        source.contains("SectionDivider::new()")
-            || source.contains("border_t(px(DIVIDER_HEIGHT))")
-            || source.contains("border_b(px(DIVIDER_HEIGHT))"),
-        "{name} should use the shared minimal divider contract"
-    );
+    if !uses_scaffold {
+        assert!(
+            source.contains("HEADER_PADDING_X") && source.contains("HEADER_PADDING_Y"),
+            "{name} should use shared chrome header padding tokens"
+        );
+
+        assert!(
+            source.contains("SectionDivider::new()")
+                || source.contains("border_t(px(DIVIDER_HEIGHT))")
+                || source.contains("border_b(px(DIVIDER_HEIGHT))"),
+            "{name} should use the shared minimal divider contract"
+        );
+    }
 }
 
 #[test]

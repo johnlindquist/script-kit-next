@@ -346,71 +346,63 @@ impl ScriptListApp {
             8,
         );
 
-        div()
-            .flex()
-            .flex_col()
+        let header = div()
             .w_full()
-            .h_full()
-            .rounded(px(design_visual.radius_lg))
-            .text_color(rgb(text_primary))
-            .font_family(design_typography.font_family)
-            .key_context("emoji_picker")
-            .track_focus(&self.focus_handle)
-            .on_key_down(handle_key)
+            .flex()
+            .flex_row()
+            .items_center()
+            .gap_3()
+            .child(
+                div().flex_1().flex().flex_row().items_center().child(
+                    Input::new(&self.gpui_input_state)
+                        .w_full()
+                        .h(px(28.0))
+                        .px(px(0.0))
+                        .py(px(0.0))
+                        .with_size(Size::Size(px(design_typography.font_size_xl)))
+                        .appearance(false)
+                        .bordered(false)
+                        .focus_bordered(false),
+                ),
+            )
             .child(
                 div()
-                    .w_full()
-                    .px(px(crate::ui::chrome::HEADER_PADDING_X))
-                    .py(px(crate::ui::chrome::HEADER_PADDING_Y))
-                    .flex()
-                    .flex_row()
-                    .items_center()
-                    .gap_3()
-                    .child(
-                        div().flex_1().flex().flex_row().items_center().child(
-                            Input::new(&self.gpui_input_state)
-                                .w_full()
-                                .h(px(28.0))
-                                .px(px(0.0))
-                                .py(px(0.0))
-                                .with_size(Size::Size(px(design_typography.font_size_xl)))
-                                .appearance(false)
-                                .bordered(false)
-                                .focus_bordered(false),
-                        ),
-                    )
-                    .child(
-                        div()
-                            .text_sm()
-                            .text_color(rgb(text_dimmed))
-                            .child(format!("{} emojis", filtered_len)),
-                    ),
-            )
-            .child(crate::components::SectionDivider::new())
+                    .text_sm()
+                    .text_color(rgb(text_dimmed))
+                    .child(format!("{} emojis", filtered_len)),
+            );
+
+        let content = div()
+            .flex_1()
+            .min_h(px(0.0))
+            .w_full()
+            .overflow_hidden()
+            .py(px(design_spacing.padding_xs))
             .child(
                 div()
-                    .flex_1()
+                    .relative()
                     .w_full()
-                    .min_h(px(0.0))
-                    .overflow_hidden()
-                    .py(px(design_spacing.padding_xs))
-                    .child(
-                        div()
-                            .relative()
-                            .w_full()
-                            .h_full()
-                            .child(grid_element)
-                            .child(list_scrollbar),
-                    ),
-            )
-            .child(crate::components::render_simple_hint_strip(
-                vec![
-                    gpui::SharedString::from("↵ Copy"),
-                    gpui::SharedString::from("Esc Back"),
-                ],
-                None,
-            ))
-            .into_any_element()
+                    .h_full()
+                    .child(grid_element)
+                    .child(list_scrollbar),
+            );
+
+        crate::components::render_minimal_list_prompt_scaffold(
+            header,
+            content,
+            vec![
+                gpui::SharedString::from("↵ Copy"),
+                gpui::SharedString::from("Esc Back"),
+            ],
+            None,
+        )
+        .rounded(px(design_visual.radius_lg))
+        .text_color(rgb(text_primary))
+        .font_family(design_typography.font_family)
+        .key_context("emoji_picker")
+        .track_focus(&self.focus_handle)
+        .on_key_down(handle_key)
+        .into_any_element()
     }
 }
 
@@ -420,26 +412,14 @@ mod emoji_picker_chrome_audit {
     fn emoji_picker_uses_minimal_chrome_footer() {
         let source = include_str!("emoji_picker.rs");
         assert!(
-            source.contains("render_simple_hint_strip("),
-            "emoji_picker should use render_simple_hint_strip"
-        );
-        assert!(
-            source.contains("SectionDivider::new()"),
-            "emoji_picker should use SectionDivider"
+            source.contains("render_minimal_list_prompt_scaffold("),
+            "emoji_picker should use render_minimal_list_prompt_scaffold"
         );
         let legacy = "Prompt".to_owned() + "Footer::new(";
         assert_eq!(
             source.matches(&legacy).count(),
             0,
             "emoji_picker should not use PromptFooter"
-        );
-        assert!(
-            source.contains("HEADER_PADDING_X"),
-            "emoji_picker should use chrome token HEADER_PADDING_X"
-        );
-        assert!(
-            source.contains("HEADER_PADDING_Y"),
-            "emoji_picker should use chrome token HEADER_PADDING_Y"
         );
     }
 }

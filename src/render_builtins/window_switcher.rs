@@ -310,89 +310,76 @@ impl ScriptListApp {
             cx,
         );
 
-        div()
+        let header = div()
+            .w_full()
             .flex()
-            .flex_col()
-            // Removed: .bg(rgba(bg_with_alpha)) - let vibrancy show through from Root
-            // Removed: .shadow(box_shadows) - shadows on transparent elements block vibrancy
+            .flex_row()
+            .items_center()
+            .gap_3()
+            // Search input - uses shared gpui_input_state for consistent cursor/selection
+            .child(
+                div().flex_1().flex().flex_row().items_center().child(
+                    Input::new(&self.gpui_input_state)
+                        .w_full()
+                        .h(px(28.))
+                        .px(px(0.))
+                        .py(px(0.))
+                        .with_size(Size::Size(px(design_typography.font_size_xl)))
+                        .appearance(false)
+                        .bordered(false)
+                        .focus_bordered(false),
+                ),
+            )
+            .child(
+                div()
+                    .text_sm()
+                    .text_color(rgb(text_dimmed))
+                    .child(format!("{} windows", self.cached_windows.len())),
+            );
+
+        // Main content area - 50/50 split: Window list on left, Actions on right
+        let content = div()
+            .flex()
+            .flex_row()
+            .flex_1()
+            .min_h(px(0.))
             .w_full()
             .h_full()
-            .rounded(px(design_visual.radius_lg))
-            .text_color(rgb(text_primary))
-            .font_family(design_typography.font_family)
-            .key_context("window_switcher")
-            .track_focus(&self.focus_handle)
-            .on_key_down(handle_key)
-            // Header with input
+            // Left side: Window list (50% width)
             .child(
                 div()
-                    .w_full()
-                    .px(px(crate::ui::chrome::HEADER_PADDING_X))
-                    .py(px(crate::ui::chrome::HEADER_PADDING_Y))
-                    .flex()
-                    .flex_row()
-                    .items_center()
-                    .gap_3()
-                    // Search input - uses shared gpui_input_state for consistent cursor/selection
-                    .child(
-                        div().flex_1().flex().flex_row().items_center().child(
-                            Input::new(&self.gpui_input_state)
-                                .w_full()
-                                .h(px(28.))
-                                .px(px(0.))
-                                .py(px(0.))
-                                .with_size(Size::Size(px(design_typography.font_size_xl)))
-                                .appearance(false)
-                                .bordered(false)
-                                .focus_bordered(false),
-                        ),
-                    )
-                    .child(
-                        div()
-                            .text_sm()
-                            .text_color(rgb(text_dimmed))
-                            .child(format!("{} windows", self.cached_windows.len())),
-                    ),
-            )
-            // Divider
-            .child(crate::components::SectionDivider::new())
-            // Main content area - 50/50 split: Window list on left, Actions on right
-            .child(
-                div()
-                    .flex()
-                    .flex_row()
-                    .flex_1()
+                    .w_1_2()
+                    .h_full()
                     .min_h(px(0.))
-                    .w_full()
-                    .overflow_hidden()
-                    // Left side: Window list (50% width)
-                    .child(
-                        div()
-                            .w_1_2()
-                            .h_full()
-                            .min_h(px(0.))
-                            .py(px(design_spacing.padding_xs))
-                            .child(list_element),
-                    )
-                    // Right side: Actions panel (50% width)
-                    .child(
-                        div()
-                            .w_1_2()
-                            .h_full()
-                            .min_h(px(0.))
-                            .overflow_hidden()
-                            .child(actions_panel),
-                    ),
+                    .py(px(design_spacing.padding_xs))
+                    .child(list_element),
             )
-            // Footer — minimal hint strip
-            .child(crate::components::render_simple_hint_strip(
-                vec![
-                    gpui::SharedString::from("↵ Switch"),
-                    gpui::SharedString::from("Esc Back"),
-                ],
-                None,
-            ))
-            .into_any_element()
+            // Right side: Actions panel (50% width)
+            .child(
+                div()
+                    .w_1_2()
+                    .h_full()
+                    .min_h(px(0.))
+                    .overflow_hidden()
+                    .child(actions_panel),
+            );
+
+        crate::components::render_minimal_list_prompt_scaffold(
+            header,
+            content,
+            vec![
+                gpui::SharedString::from("↵ Switch"),
+                gpui::SharedString::from("Esc Back"),
+            ],
+            None,
+        )
+        .rounded(px(design_visual.radius_lg))
+        .text_color(rgb(text_primary))
+        .font_family(design_typography.font_family)
+        .key_context("window_switcher")
+        .track_focus(&self.focus_handle)
+        .on_key_down(handle_key)
+        .into_any_element()
     }
 }
 
@@ -402,12 +389,8 @@ mod window_switcher_chrome_audit {
     fn window_switcher_uses_minimal_chrome_footer() {
         let source = include_str!("window_switcher.rs");
         assert!(
-            source.contains("render_simple_hint_strip("),
-            "window_switcher should use render_simple_hint_strip"
-        );
-        assert!(
-            source.contains("SectionDivider::new()"),
-            "window_switcher should use SectionDivider"
+            source.contains("render_minimal_list_prompt_scaffold("),
+            "window_switcher should use render_minimal_list_prompt_scaffold"
         );
         let legacy = "Prompt".to_owned() + "Footer::new(";
         assert_eq!(

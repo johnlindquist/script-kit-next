@@ -301,115 +301,101 @@ impl ScriptListApp {
         let list_scrollbar =
             self.builtin_uniform_list_scrollbar(&self.list_scroll_handle, filtered_len, 8);
 
-        div()
-            .flex()
-            .flex_col()
-            // Removed: .bg(rgba(bg_with_alpha)) - let vibrancy show through from Root
-            // Removed: .shadow(box_shadows) - shadows on transparent elements block vibrancy
+        let header = div()
             .w_full()
-            .h_full()
-            .rounded(px(design_visual.radius_lg))
-            .text_color(rgb(text_primary))
-            .font_family(design_typography.font_family)
-            .key_context("app_launcher")
-            .track_focus(&self.focus_handle)
-            .on_key_down(handle_key)
-            // Header with input
+            .flex()
+            .flex_row()
+            .items_center()
+            .gap_3()
+            // Title
             .child(
                 div()
-                    .w_full()
-                    .px(px(crate::ui::chrome::HEADER_PADDING_X))
-                    .py(px(crate::ui::chrome::HEADER_PADDING_Y))
+                    .text_sm()
+                    .text_color(rgb(text_dimmed))
+                    .child("🚀 Apps"),
+            )
+            // Search input with blinking cursor
+            // ALIGNMENT FIX: Uses canonical cursor constants and negative margin for placeholder
+            .child(
+                div()
+                    .flex_1()
                     .flex()
                     .flex_row()
                     .items_center()
-                    .gap_3()
-                    // Title
-                    .child(
-                        div()
-                            .text_sm()
-                            .text_color(rgb(text_dimmed))
-                            .child("🚀 Apps"),
-                    )
-                    // Search input with blinking cursor
-                    // ALIGNMENT FIX: Uses canonical cursor constants and negative margin for placeholder
-                    .child(
-                        div()
-                            .flex_1()
-                            .flex()
-                            .flex_row()
-                            .items_center()
-                            .text_lg()
-                            .text_color(if input_is_empty {
-                                rgb(text_muted)
-                            } else {
-                                rgb(text_primary)
-                            })
-                            .when(input_is_empty, |d| {
-                                d.child(
-                                    div()
-                                        .w(px(CURSOR_WIDTH))
-                                        .h(px(CURSOR_HEIGHT_LG))
-                                        .my(px(CURSOR_MARGIN_Y))
-                                        .mr(px(CURSOR_GAP_X))
-                                        .when(self.cursor_visible, |d| d.bg(rgb(text_primary))),
-                                )
-                            })
-                            .when(input_is_empty, |d| {
-                                d.child(
-                                    div()
-                                        .ml(px(-(CURSOR_WIDTH + CURSOR_GAP_X)))
-                                        .child(input_display.clone()),
-                                )
-                            })
-                            .when(!input_is_empty, |d| d.child(input_display.clone()))
-                            .when(!input_is_empty, |d| {
-                                d.child(
-                                    div()
-                                        .w(px(CURSOR_WIDTH))
-                                        .h(px(CURSOR_HEIGHT_LG))
-                                        .my(px(CURSOR_MARGIN_Y))
-                                        .ml(px(CURSOR_GAP_X))
-                                        .when(self.cursor_visible, |d| d.bg(rgb(text_primary))),
-                                )
-                            }),
-                    )
-                    .child(
-                        div()
-                            .text_sm()
-                            .text_color(rgb(text_dimmed))
-                            .child(format!("{} apps", self.apps.len())),
-                    ),
+                    .text_lg()
+                    .text_color(if input_is_empty {
+                        rgb(text_muted)
+                    } else {
+                        rgb(text_primary)
+                    })
+                    .when(input_is_empty, |d| {
+                        d.child(
+                            div()
+                                .w(px(CURSOR_WIDTH))
+                                .h(px(CURSOR_HEIGHT_LG))
+                                .my(px(CURSOR_MARGIN_Y))
+                                .mr(px(CURSOR_GAP_X))
+                                .when(self.cursor_visible, |d| d.bg(rgb(text_primary))),
+                        )
+                    })
+                    .when(input_is_empty, |d| {
+                        d.child(
+                            div()
+                                .ml(px(-(CURSOR_WIDTH + CURSOR_GAP_X)))
+                                .child(input_display.clone()),
+                        )
+                    })
+                    .when(!input_is_empty, |d| d.child(input_display.clone()))
+                    .when(!input_is_empty, |d| {
+                        d.child(
+                            div()
+                                .w(px(CURSOR_WIDTH))
+                                .h(px(CURSOR_HEIGHT_LG))
+                                .my(px(CURSOR_MARGIN_Y))
+                                .ml(px(CURSOR_GAP_X))
+                                .when(self.cursor_visible, |d| d.bg(rgb(text_primary))),
+                        )
+                    }),
             )
-            // Divider
-            .child(crate::components::SectionDivider::new())
-            // App list
             .child(
                 div()
-                    .flex()
-                    .flex_col()
-                    .flex_1()
-                    .min_h(px(0.))
+                    .text_sm()
+                    .text_color(rgb(text_dimmed))
+                    .child(format!("{} apps", self.apps.len())),
+            );
+
+        let content = div()
+            .flex()
+            .flex_col()
+            .flex_1()
+            .min_h(px(0.))
+            .w_full()
+            .py(px(design_spacing.padding_xs))
+            .child(
+                div()
+                    .relative()
                     .w_full()
-                    .py(px(design_spacing.padding_xs))
-                    .child(
-                        div()
-                            .relative()
-                            .w_full()
-                            .h_full()
-                            .child(list_element)
-                            .child(list_scrollbar),
-                    ),
-            )
-            // Footer — minimal hint strip
-            .child(crate::components::render_simple_hint_strip(
-                vec![
-                    gpui::SharedString::from("↵ Launch"),
-                    gpui::SharedString::from("Esc Back"),
-                ],
-                None,
-            ))
-            .into_any_element()
+                    .h_full()
+                    .child(list_element)
+                    .child(list_scrollbar),
+            );
+
+        crate::components::render_minimal_list_prompt_scaffold(
+            header,
+            content,
+            vec![
+                gpui::SharedString::from("↵ Launch"),
+                gpui::SharedString::from("Esc Back"),
+            ],
+            None,
+        )
+        .rounded(px(design_visual.radius_lg))
+        .text_color(rgb(text_primary))
+        .font_family(design_typography.font_family)
+        .key_context("app_launcher")
+        .track_focus(&self.focus_handle)
+        .on_key_down(handle_key)
+        .into_any_element()
     }
 }
 
@@ -419,12 +405,8 @@ mod app_launcher_chrome_audit {
     fn app_launcher_uses_minimal_chrome_footer() {
         let source = include_str!("app_launcher.rs");
         assert!(
-            source.contains("render_simple_hint_strip("),
-            "app_launcher should use render_simple_hint_strip"
-        );
-        assert!(
-            source.contains("SectionDivider::new()"),
-            "app_launcher should use SectionDivider"
+            source.contains("render_minimal_list_prompt_scaffold("),
+            "app_launcher should use render_minimal_list_prompt_scaffold"
         );
         let legacy = "Prompt".to_owned() + "Footer::new(";
         assert_eq!(
