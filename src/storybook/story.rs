@@ -35,6 +35,7 @@ pub enum StorySurface {
     ActionDialog,
     TurnCard,
     FullPrompt,
+    MainMenu,
 }
 
 impl StorySurface {
@@ -48,6 +49,7 @@ impl StorySurface {
             Self::ActionDialog => "Action Dialog",
             Self::TurnCard => "Turn Card",
             Self::FullPrompt => "Full Prompt",
+            Self::MainMenu => "Main Menu",
         }
     }
 }

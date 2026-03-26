@@ -1,7 +1,8 @@
 use anyhow::{Context, Result};
 use itertools::Itertools;
+use serde::{Deserialize, Serialize};
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use super::config::ModelInfo;
@@ -13,6 +14,8 @@ const SCRIPT_KIT_SDK_IMPORT_MODULE: &str = "@scriptkit/sdk";
 const SCRIPT_KIT_SDK_IMPORT_STATEMENT: &str = "import \"@scriptkit/sdk\";";
 const AI_SCRIPT_USER_REQUEST_START_DELIMITER: &str = "---USER_REQUEST---";
 const AI_SCRIPT_USER_REQUEST_END_DELIMITER: &str = "---END_REQUEST---";
+pub const AI_GENERATED_SCRIPT_RECEIPT_SCHEMA_VERSION: u32 = 1;
+
 const AI_SCRIPT_SHELL_EXECUTION_PATTERNS: [(&str, &str); 5] = [
     ("child_process", "child_process"),
     ("exec", "exec"),
@@ -23,7 +26,7 @@ const AI_SCRIPT_SHELL_EXECUTION_PATTERNS: [(&str, &str); 5] = [
 
 pub(crate) const AI_SCRIPT_GENERATION_SYSTEM_PROMPT: &str = r#"You write production-ready Script Kit TypeScript scripts.
 
-CRITICAL: Your ENTIRE response must be valid TypeScript. No prose, no markdown, no explanations, no preamble, no postamble. The very first character of your response must be "/" (the start of "// Name:"). If you include ANY text that is not valid TypeScript, the script will fail to parse and crash.
+CRITICAL: Your ENTIRE response must be valid TypeScript. No prose, no markdown, no explanations, no preamble, no postamble. Start immediately with valid TypeScript source (for example `// Name:` comment headers or `import "@scriptkit/sdk";`). If you include ANY text that is not valid TypeScript, the script will fail to parse and crash.
 
 WRONG (will crash):
 **Assumed:** You want a script that...
@@ -35,20 +38,36 @@ Here's a script that does X:
 // Name: My Script
 ```
 
-RIGHT (the ONLY acceptable format):
+RIGHT (acceptable formats):
 // Name: My Script
 // Description: Does something useful
 import "@scriptkit/sdk";
 
+ALSO RIGHT:
+import "@scriptkit/sdk";
+export const metadata = { name: "My Script", description: "Does something useful" };
+
 NON-NEGOTIABLE OUTPUT FORMAT
 
-1. The FIRST line must be: // Name: <short, clear, user-facing title>
-2. The SECOND line must be: // Description: <one-line summary>
-3. Near the top include EXACTLY ONE import (and no others):
-   import "@scriptkit/sdk";
-4. Use top-level await (no main(), no async IIFE, no servers).
-5. Prefer Script Kit prompts + UI over console.log.
-6. NO markdown fences. NO explanations. NO commentary. ONLY TypeScript code.
+METADATA — use EITHER format (both are valid, pick one):
+
+Format A (comment headers):
+// Name: <short, clear, user-facing title>
+// Description: <one-line summary>
+import "@scriptkit/sdk";
+
+Format B (metadata export — preferred for new scripts):
+import "@scriptkit/sdk";
+export const metadata = {
+  name: "<short, clear, user-facing title>",
+  description: "<one-line summary>",
+};
+
+RULES:
+1. Include EXACTLY ONE import (and no others): import "@scriptkit/sdk";
+2. Use top-level await (no main(), no async IIFE, no servers).
+3. Prefer Script Kit prompts + UI over console.log.
+4. NO markdown fences. NO explanations. NO commentary. ONLY TypeScript code.
 
 RUNTIME ASSUMPTIONS
 
@@ -238,11 +257,58 @@ Handy Globals
 
 FINAL CHECKLIST
 * Only TypeScript source code.
-* Includes // Name: and // Description: at top.
+* Includes metadata (// Name: + // Description: headers OR export const metadata = { name, description }).
 * Exactly one import: import "@scriptkit/sdk";
 * Top-level await + Script Kit globals.
 * Interactive UX (prompts, previews, actions) instead of console output.
 * Practical errors + safe cancellation."#;
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum GeneratedScriptMetadataStyle {
+    CommentHeaders,
+    MetadataExport,
+    Hybrid,
+    Missing,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct GeneratedScriptContractAudit {
+    pub metadata_style: GeneratedScriptMetadataStyle,
+    pub has_name: bool,
+    pub has_description: bool,
+    pub has_kit_import: bool,
+    pub has_current_app_recipe_header: bool,
+    pub current_app_recipe_header_at_top: bool,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct GeneratedScriptReceipt {
+    pub schema_version: u32,
+    pub prompt: String,
+    pub slug: String,
+    pub slug_source: String,
+    pub slug_source_kind: String,
+    pub model_id: String,
+    pub provider_id: String,
+    pub script_path: String,
+    pub receipt_path: String,
+    pub shell_execution_warning: bool,
+    pub contract: GeneratedScriptContractAudit,
+}
+
+#[derive(Debug, Clone)]
+struct PreparedGeneratedScript {
+    slug: String,
+    source: String,
+    slug_source: String,
+    slug_source_kind: &'static str,
+    contract: GeneratedScriptContractAudit,
+}
 
 #[derive(Debug, Clone)]
 pub struct GeneratedScriptOutput {
@@ -253,10 +319,38 @@ pub struct GeneratedScriptOutput {
     pub shell_execution_warning: bool,
 }
 
+pub fn generated_script_receipt_path(script_path: &Path) -> PathBuf {
+    let mut receipt_path = script_path.to_path_buf();
+    receipt_path.set_extension("scriptkit.json");
+    receipt_path
+}
+
+fn write_generated_script_receipt(
+    receipt_path: &Path,
+    receipt: &GeneratedScriptReceipt,
+) -> Result<()> {
+    let json = serde_json::to_string_pretty(receipt)
+        .context("Failed to serialize generated script receipt")?;
+    fs::write(receipt_path, json).with_context(|| {
+        format!(
+            "Failed writing generated script receipt (state=receipt_write_failed, path={})",
+            receipt_path.display()
+        )
+    })
+}
+
 pub fn generate_script_from_prompt(
     prompt: &str,
     config: Option<&crate::config::Config>,
 ) -> Result<GeneratedScriptOutput> {
+    let (output, _receipt) = generate_script_from_prompt_with_receipt(prompt, config)?;
+    Ok(output)
+}
+
+pub fn generate_script_from_prompt_with_receipt(
+    prompt: &str,
+    config: Option<&crate::config::Config>,
+) -> Result<(GeneratedScriptOutput, GeneratedScriptReceipt)> {
     let normalized_prompt = prompt.trim();
     if normalized_prompt.is_empty() {
         anyhow::bail!("AI script generation requires a non-empty prompt");
@@ -291,12 +385,14 @@ pub fn generate_script_from_prompt(
             )
         })?;
 
-    let (slug, finalized) = prepare_script_from_ai_response(normalized_prompt, &raw_response)?;
+    let prepared = prepare_script_from_ai_response_with_contract(normalized_prompt, &raw_response)?;
+
     let suspicious_shell_patterns =
-        detect_unexpected_shell_execution_patterns(normalized_prompt, &finalized);
+        detect_unexpected_shell_execution_patterns(normalized_prompt, &prepared.source);
     let shell_execution_warning = !suspicious_shell_patterns.is_empty();
     if shell_execution_warning {
         tracing::warn!(
+            target: "ai",
             correlation_id = "ai-script-generation",
             state = "suspicious_shell_pattern_detected",
             patterns = ?suspicious_shell_patterns,
@@ -306,42 +402,72 @@ pub fn generate_script_from_prompt(
         );
     }
 
-    let path = crate::script_creation::create_new_script(&slug).with_context(|| {
+    let path = crate::script_creation::create_new_script(&prepared.slug).with_context(|| {
         format!(
             "Failed creating AI-generated script (state=create_failed, slug={})",
-            slug
+            prepared.slug
         )
     })?;
 
-    fs::write(&path, &finalized).with_context(|| {
+    fs::write(&path, &prepared.source).with_context(|| {
         format!(
             "Failed writing AI-generated script content (state=write_failed, path={})",
             path.display()
         )
     })?;
 
+    let receipt_path = generated_script_receipt_path(&path);
+    let receipt = GeneratedScriptReceipt {
+        schema_version: AI_GENERATED_SCRIPT_RECEIPT_SCHEMA_VERSION,
+        prompt: normalized_prompt.to_string(),
+        slug: prepared.slug.clone(),
+        slug_source: prepared.slug_source.clone(),
+        slug_source_kind: prepared.slug_source_kind.to_string(),
+        model_id: selected_model.id.clone(),
+        provider_id: selected_model.provider.clone(),
+        script_path: path.display().to_string(),
+        receipt_path: receipt_path.display().to_string(),
+        shell_execution_warning,
+        contract: prepared.contract.clone(),
+    };
+
+    write_generated_script_receipt(&receipt_path, &receipt)?;
+
     tracing::info!(
         target: "ai",
         correlation_id = "ai-script-generation",
         state = "script_written",
         path = %path.display(),
-        slug = %slug,
+        receipt_path = %receipt_path.display(),
+        slug = %prepared.slug,
+        metadata_style = ?prepared.contract.metadata_style,
+        contract_warning_count = prepared.contract.warnings.len(),
         "AI-generated script written"
     );
 
-    Ok(GeneratedScriptOutput {
+    let output = GeneratedScriptOutput {
         path,
-        slug,
+        slug: prepared.slug,
         model_id: selected_model.id,
         provider_id: selected_model.provider,
         shell_execution_warning,
-    })
+    };
+
+    Ok((output, receipt))
 }
 
 pub(crate) fn prepare_script_from_ai_response(
     prompt: &str,
     raw_response: &str,
 ) -> Result<(String, String)> {
+    let prepared = prepare_script_from_ai_response_with_contract(prompt, raw_response)?;
+    Ok((prepared.slug, prepared.source))
+}
+
+fn prepare_script_from_ai_response_with_contract(
+    prompt: &str,
+    raw_response: &str,
+) -> Result<PreparedGeneratedScript> {
     let normalized_prompt = prompt.trim();
     if normalized_prompt.is_empty() {
         anyhow::bail!("AI script generation requires a non-empty prompt");
@@ -352,33 +478,92 @@ pub(crate) fn prepare_script_from_ai_response(
         anyhow::bail!("AI returned an empty response for script generation (state=empty_response)");
     }
 
-    // Prefer the AI's // Name: as the slug source — it's concise and descriptive.
-    // Fall back to the prompt only if the AI didn't include one.
-    let slug_source =
-        extract_name_comment(&extracted).unwrap_or_else(|| normalized_prompt.to_string());
+    let (slug_source, slug_source_kind) = resolve_slug_source(&extracted, normalized_prompt);
+
+    tracing::info!(
+        target: "ai",
+        correlation_id = "ai-script-generation",
+        state = "slug_source_resolved",
+        source = slug_source_kind,
+        slug_source = %slug_source,
+        "Resolved slug source for generated script"
+    );
+
     let slug = slugify_script_name(&slug_source);
     let finalized = enforce_script_kit_conventions(&extracted, normalized_prompt, &slug);
-    Ok((slug, finalized))
+    let contract = audit_generated_script_contract(&finalized);
+
+    if contract.has_current_app_recipe_header && !contract.current_app_recipe_header_at_top {
+        anyhow::bail!(
+            "Generated script contract invalid (state=current_app_recipe_header_not_at_top). \
+             The script contains // Current-App-Recipe-* headers, but they are not at the top of the file after normalization."
+        );
+    }
+
+    if !contract.warnings.is_empty() {
+        tracing::warn!(
+            target: "ai",
+            correlation_id = "ai-script-generation",
+            state = "contract_warnings",
+            warnings = ?contract.warnings,
+            metadata_style = ?contract.metadata_style,
+            "Generated script finalized with contract warnings"
+        );
+    }
+
+    Ok(PreparedGeneratedScript {
+        slug,
+        source: finalized,
+        slug_source,
+        slug_source_kind,
+        contract,
+    })
+}
+
+fn resolve_slug_source(script: &str, normalized_prompt: &str) -> (String, &'static str) {
+    if let Some(name) = extract_name_comment(script) {
+        (name, "comment_header")
+    } else if let Some(name) = extract_metadata_name(script) {
+        (name, "metadata_export")
+    } else {
+        (normalized_prompt.to_string(), "normalized_prompt")
+    }
 }
 
 pub(crate) fn save_generated_script_from_response(
     prompt: &str,
     raw_response: &str,
 ) -> Result<PathBuf> {
-    let (slug, script_source) = prepare_script_from_ai_response(prompt, raw_response)?;
-    let script_path = crate::script_creation::create_new_script(&slug).with_context(|| {
+    let prepared = prepare_script_from_ai_response_with_contract(prompt, raw_response)?;
+    let script_path = crate::script_creation::create_new_script(&prepared.slug).with_context(|| {
         format!(
             "Failed to create script for AI response (state=create_failed, slug={})",
-            slug
+            prepared.slug
         )
     })?;
 
-    fs::write(&script_path, script_source).with_context(|| {
+    fs::write(&script_path, &prepared.source).with_context(|| {
         format!(
             "Failed writing script for AI response (state=write_failed, path={})",
             script_path.display()
         )
     })?;
+
+    let receipt_path = generated_script_receipt_path(&script_path);
+    let receipt = GeneratedScriptReceipt {
+        schema_version: AI_GENERATED_SCRIPT_RECEIPT_SCHEMA_VERSION,
+        prompt: prompt.trim().to_string(),
+        slug: prepared.slug,
+        slug_source: prepared.slug_source,
+        slug_source_kind: prepared.slug_source_kind.to_string(),
+        model_id: "unknown".to_string(),
+        provider_id: "unknown".to_string(),
+        script_path: script_path.display().to_string(),
+        receipt_path: receipt_path.display().to_string(),
+        shell_execution_warning: false,
+        contract: prepared.contract,
+    };
+    write_generated_script_receipt(&receipt_path, &receipt)?;
 
     Ok(script_path)
 }
@@ -564,6 +749,53 @@ fn extract_name_comment(script: &str) -> Option<String> {
         .filter(|name| !name.is_empty())
 }
 
+/// Extract the name from an `export const metadata = { name: "..." }` block.
+fn extract_metadata_name(source: &str) -> Option<String> {
+    extract_metadata_string_field(source, "name")
+}
+
+/// Return the source slice from `{` through its matching `}`.
+fn extract_braced_region(source: &str) -> Option<&str> {
+    if !source.starts_with('{') {
+        return None;
+    }
+
+    let mut depth = 0usize;
+    let mut in_string: Option<char> = None;
+    let mut escaped = false;
+
+    for (idx, ch) in source.char_indices() {
+        if let Some(quote) = in_string {
+            if escaped {
+                escaped = false;
+                continue;
+            }
+            if ch == '\\' {
+                escaped = true;
+                continue;
+            }
+            if ch == quote {
+                in_string = None;
+            }
+            continue;
+        }
+
+        match ch {
+            '"' | '\'' => in_string = Some(ch),
+            '{' => depth += 1,
+            '}' => {
+                depth = depth.saturating_sub(1);
+                if depth == 0 {
+                    return Some(&source[..=idx]);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    None
+}
+
 fn slugify_script_name(prompt: &str) -> String {
     let mut slug = String::new();
     let mut last_was_hyphen = false;
@@ -631,41 +863,194 @@ fn has_kit_import(script: &str) -> bool {
     })
 }
 
-fn enforce_script_kit_conventions(script: &str, prompt: &str, slug: &str) -> String {
-    let mut prefix_lines: Vec<String> = Vec::new();
-    let trimmed_script = script.trim();
-
-    if !trimmed_script
+fn has_description_comment(script: &str) -> bool {
+    script
         .lines()
-        .any(|line| line.trim_start().starts_with("// Name:"))
-    {
+        .any(|line| line.trim_start().starts_with("// Description:"))
+}
+
+fn has_name_contract(script: &str) -> bool {
+    extract_name_comment(script).is_some() || extract_metadata_name(script).is_some()
+}
+
+fn has_description_contract(script: &str) -> bool {
+    has_description_comment(script) || extract_metadata_description(script).is_some()
+}
+
+fn has_current_app_recipe_header(script: &str) -> bool {
+    script
+        .lines()
+        .any(|line| line.trim_start().starts_with("// Current-App-Recipe-"))
+}
+
+fn current_app_recipe_header_at_top(script: &str) -> bool {
+    match script.lines().find(|line| !line.trim().is_empty()) {
+        Some(line) => line.trim_start().starts_with("// Current-App-Recipe-"),
+        None => false,
+    }
+}
+
+fn extract_metadata_description(source: &str) -> Option<String> {
+    extract_metadata_string_field(source, "description")
+}
+
+fn extract_metadata_string_field(source: &str, field_name: &str) -> Option<String> {
+    let metadata_start = source.find("export const metadata")?;
+    let metadata_region = &source[metadata_start..];
+    let object_start = metadata_region.find('{')?;
+    let object_body = extract_braced_region(&metadata_region[object_start..])?;
+
+    let needle = format!("{field_name}:");
+    let field_start = object_body.find(&needle)?;
+    let value = object_body[field_start + needle.len()..].trim_start();
+
+    let quote = match value.chars().next() {
+        Some('"') => '"',
+        Some('\'') => '\'',
+        _ => return None,
+    };
+
+    let closing_index = value[1..].find(quote)?;
+    let field_value = value[1..1 + closing_index].trim();
+
+    if field_value.is_empty() {
+        None
+    } else {
+        Some(field_value.to_string())
+    }
+}
+
+fn detect_metadata_style(script: &str) -> GeneratedScriptMetadataStyle {
+    let has_comment_headers =
+        extract_name_comment(script).is_some() || has_description_comment(script);
+    let has_metadata_export = script.contains("export const metadata");
+
+    match (has_comment_headers, has_metadata_export) {
+        (true, false) => GeneratedScriptMetadataStyle::CommentHeaders,
+        (false, true) => GeneratedScriptMetadataStyle::MetadataExport,
+        (true, true) => GeneratedScriptMetadataStyle::Hybrid,
+        (false, false) => GeneratedScriptMetadataStyle::Missing,
+    }
+}
+
+fn audit_generated_script_contract(script: &str) -> GeneratedScriptContractAudit {
+    let has_name = has_name_contract(script);
+    let has_description = has_description_contract(script);
+    let has_kit_import = has_kit_import(script);
+    let recipe_header = has_current_app_recipe_header(script);
+    let recipe_at_top = !recipe_header || current_app_recipe_header_at_top(script);
+
+    let metadata_style = detect_metadata_style(script);
+    let mut warnings = Vec::new();
+
+    if !has_name {
+        warnings.push("missing_name_contract".to_string());
+    }
+    if !has_description {
+        warnings.push("missing_description_contract".to_string());
+    }
+    if !has_kit_import {
+        warnings.push("missing_scriptkit_import".to_string());
+    }
+    if matches!(metadata_style, GeneratedScriptMetadataStyle::Hybrid) {
+        warnings.push("mixed_metadata_formats".to_string());
+    }
+    if recipe_header && !recipe_at_top {
+        warnings.push("current_app_recipe_header_not_at_top".to_string());
+    }
+
+    GeneratedScriptContractAudit {
+        metadata_style,
+        has_name,
+        has_description,
+        has_kit_import,
+        has_current_app_recipe_header: recipe_header,
+        current_app_recipe_header_at_top: recipe_at_top,
+        warnings,
+    }
+}
+
+/// Split recipe headers from the rest of the script so they can be preserved at the top.
+fn split_reserved_header_prefix(script: &str) -> (String, String) {
+    let mut prefix_lines = Vec::new();
+    let mut body_lines = Vec::new();
+    let mut saw_recipe_header = false;
+    let mut collecting_prefix = true;
+
+    for line in script.lines() {
+        let trimmed = line.trim_start();
+
+        if collecting_prefix && trimmed.starts_with("// Current-App-Recipe-") {
+            saw_recipe_header = true;
+            prefix_lines.push(line.to_string());
+            continue;
+        }
+
+        if collecting_prefix && saw_recipe_header && trimmed.is_empty() {
+            prefix_lines.push(line.to_string());
+            continue;
+        }
+
+        collecting_prefix = false;
+        body_lines.push(line.to_string());
+    }
+
+    (
+        prefix_lines.join("\n").trim_end().to_string(),
+        body_lines.join("\n").trim().to_string(),
+    )
+}
+
+fn enforce_script_kit_conventions(script: &str, prompt: &str, slug: &str) -> String {
+    let trimmed_script = script.trim();
+    let (reserved_prefix, body) = split_reserved_header_prefix(trimmed_script);
+    let body = if body.is_empty() {
+        trimmed_script.to_string()
+    } else {
+        body
+    };
+
+    let mut prefix_lines: Vec<String> = Vec::new();
+
+    // Only inject // Name: if neither comment header nor metadata export provides a name
+    if !has_name_contract(&body) {
         prefix_lines.push(format!("// Name: {}", slug_to_title(slug)));
     }
 
-    if !trimmed_script
-        .lines()
-        .any(|line| line.trim_start().starts_with("// Description:"))
-    {
+    // Only inject // Description: if neither comment header nor metadata export provides a description
+    if !has_description_contract(&body) {
         prefix_lines.push(format!(
             "// Description: {}",
             description_from_prompt(prompt)
         ));
     }
 
-    if !has_kit_import(trimmed_script) {
+    if !has_kit_import(&body) {
         prefix_lines.push(SCRIPT_KIT_SDK_IMPORT_STATEMENT.to_string());
     }
 
-    let mut output = String::new();
-    if !prefix_lines.is_empty() {
-        output.push_str(&prefix_lines.join("\n"));
-        output.push_str("\n\n");
+    let mut sections = Vec::new();
+
+    if !reserved_prefix.is_empty() {
+        sections.push(reserved_prefix);
     }
 
-    output.push_str(trimmed_script);
+    if !prefix_lines.is_empty() {
+        sections.push(prefix_lines.join("\n"));
+    }
+
+    sections.push(body.trim().to_string());
+
+    let mut output = sections
+        .into_iter()
+        .filter(|section| !section.trim().is_empty())
+        .collect::<Vec<_>>()
+        .join("\n\n");
+
     if !output.ends_with('\n') {
         output.push('\n');
     }
+
     output
 }
 
@@ -958,4 +1343,346 @@ await arg("hello");
         );
         assert!(!extracted.contains("Here's a script"));
     }
+
+    #[test]
+    fn test_extract_metadata_name_finds_double_quoted_name() {
+        let source = r#"import "@scriptkit/sdk";
+export const metadata = {
+  name: "My Cool Script",
+  description: "Does cool things",
+};
+await arg("hello");
+"#;
+        assert_eq!(
+            extract_metadata_name(source),
+            Some("My Cool Script".to_string())
+        );
+    }
+
+    #[test]
+    fn test_extract_metadata_name_finds_single_quoted_name() {
+        let source = r#"import "@scriptkit/sdk";
+export const metadata = {
+  name: 'Single Quoted',
+  description: 'desc',
+};
+"#;
+        assert_eq!(
+            extract_metadata_name(source),
+            Some("Single Quoted".to_string())
+        );
+    }
+
+    #[test]
+    fn test_extract_metadata_name_returns_none_when_no_metadata() {
+        let source = r#"import "@scriptkit/sdk";
+await arg("hello");
+"#;
+        assert_eq!(extract_metadata_name(source), None);
+    }
+
+    #[test]
+    fn test_extract_metadata_name_returns_none_for_empty_name() {
+        let source = r#"export const metadata = {
+  name: "",
+  description: "desc",
+};
+"#;
+        assert_eq!(extract_metadata_name(source), None, "empty name should return None");
+    }
+
+    #[test]
+    fn test_extract_metadata_name_ignores_name_outside_metadata_block() {
+        let source = r#"const config = { name: "Not This" };
+export const metadata = {
+  name: "Correct Name",
+};
+"#;
+        assert_eq!(
+            extract_metadata_name(source),
+            Some("Correct Name".to_string()),
+            "should find name only after export const metadata"
+        );
+    }
+
+    #[test]
+    fn test_extract_metadata_name_finds_inline_metadata_export_name() {
+        let source = r#"import "@scriptkit/sdk";
+export const metadata = { name: "Inline Name", description: "desc" };
+await arg("hello");
+"#;
+        assert_eq!(
+            extract_metadata_name(source),
+            Some("Inline Name".to_string())
+        );
+    }
+
+    #[test]
+    fn test_extract_metadata_name_does_not_leak_past_metadata_block() {
+        let source = r#"export const metadata = {
+  description: "desc",
+};
+const other = {
+  name: "Wrong Name",
+};
+"#;
+        assert_eq!(
+            extract_metadata_name(source),
+            None,
+            "name outside metadata block should not be used"
+        );
+    }
+
+    #[test]
+    fn test_prepare_script_from_ai_response_uses_metadata_name_for_slug() {
+        let prompt = "Generate a Script Kit script for the current app";
+        let response = r#"import "@scriptkit/sdk";
+
+export const metadata = {
+  name: "App Automator",
+  description: "Automates the current app",
+};
+
+await arg("Pick an action");
+"#;
+        let (slug, _source) = prepare_script_from_ai_response(prompt, response).unwrap();
+        assert_eq!(
+            slug, "app-automator",
+            "slug should come from metadata export name, not the prompt"
+        );
+    }
+
+    #[test]
+    fn test_prepare_script_comment_header_takes_priority_over_metadata_export() {
+        let prompt = "do something";
+        let response = r#"// Name: Comment Winner
+// Description: from comment
+import "@scriptkit/sdk";
+
+export const metadata = {
+  name: "Metadata Loser",
+  description: "from metadata",
+};
+
+await arg("hi");
+"#;
+        let (slug, _source) = prepare_script_from_ai_response(prompt, response).unwrap();
+        assert_eq!(
+            slug, "comment-winner",
+            "comment header should take priority over metadata export for slug"
+        );
+    }
+
+    // --- Contract-aware finalization tests ---
+
+    #[test]
+    fn metadata_export_prevents_comment_header_injection() {
+        let input = r#"import "@scriptkit/sdk";
+export const metadata = {
+  name: "Save Selection",
+  description: "Save the current selection",
+};
+
+await div("ok");
+"#;
+
+        let output = enforce_script_kit_conventions(input, "save selection", "save-selection");
+
+        assert!(
+            !output.contains("// Name: Save Selection"),
+            "should not inject // Name: when metadata export has name"
+        );
+        assert!(
+            !output.contains("// Description: Save the current selection"),
+            "should not inject // Description: when metadata export has description"
+        );
+        assert!(output.contains("export const metadata = {"));
+    }
+
+    #[test]
+    fn metadata_name_is_used_for_slug_source() {
+        let input = r#"import "@scriptkit/sdk";
+export const metadata = {
+  name: "My AI Tool",
+  description: "Do something useful",
+};
+
+await div("ok");
+"#;
+
+        let (slug, _) = prepare_script_from_ai_response("fallback prompt", input).unwrap();
+        assert_eq!(slug, "my-ai-tool");
+    }
+
+    #[test]
+    fn incomplete_metadata_export_only_injects_missing_fields() {
+        let input = r#"import "@scriptkit/sdk";
+export const metadata = {
+  name: "Only Name Present",
+};
+
+await div("ok");
+"#;
+
+        let output =
+            enforce_script_kit_conventions(input, "fallback description", "only-name-present");
+
+        assert!(
+            !output.contains("// Name: Only Name Present"),
+            "should not inject // Name: when metadata export has name"
+        );
+        assert!(
+            output.contains("// Description: fallback description"),
+            "should inject // Description: when metadata export lacks description"
+        );
+        assert!(matches!(
+            audit_generated_script_contract(&output).metadata_style,
+            GeneratedScriptMetadataStyle::Hybrid
+        ));
+    }
+
+    #[test]
+    fn current_app_recipe_headers_stay_at_top_after_enforcement() {
+        let input = r#"// Current-App-Recipe-Base64: abc123
+// Current-App-Recipe-Name: Safari Save Selection
+
+export const metadata = {
+  name: "Safari Save Selection",
+  description: "Save the current Safari selection",
+};
+
+await div("ok");
+"#;
+
+        let output = enforce_script_kit_conventions(
+            input,
+            "save the current Safari selection",
+            "safari-save-selection",
+        );
+
+        let first_non_empty = output
+            .lines()
+            .find(|line| !line.trim().is_empty())
+            .expect("output should have non-empty lines");
+
+        assert_eq!(first_non_empty, "// Current-App-Recipe-Base64: abc123");
+
+        let contract = audit_generated_script_contract(&output);
+        assert!(contract.has_current_app_recipe_header);
+        assert!(contract.current_app_recipe_header_at_top);
+        assert!(!contract
+            .warnings
+            .iter()
+            .any(|warning| warning == "current_app_recipe_header_not_at_top"));
+    }
+
+    #[test]
+    fn audit_detects_missing_metadata() {
+        let input = r#"import "@scriptkit/sdk";
+await div("hello");
+"#;
+        let contract = audit_generated_script_contract(input);
+        assert!(matches!(
+            contract.metadata_style,
+            GeneratedScriptMetadataStyle::Missing
+        ));
+        assert!(!contract.has_name);
+        assert!(!contract.has_description);
+        assert!(contract.warnings.contains(&"missing_name_contract".to_string()));
+        assert!(contract
+            .warnings
+            .contains(&"missing_description_contract".to_string()));
+    }
+
+    #[test]
+    fn audit_detects_hybrid_metadata() {
+        let input = r#"// Name: Comment Name
+import "@scriptkit/sdk";
+export const metadata = {
+  name: "Metadata Name",
+  description: "desc",
+};
+"#;
+        let contract = audit_generated_script_contract(input);
+        assert!(matches!(
+            contract.metadata_style,
+            GeneratedScriptMetadataStyle::Hybrid
+        ));
+        assert!(contract.warnings.contains(&"mixed_metadata_formats".to_string()));
+    }
+
+    #[test]
+    fn receipt_serde_roundtrip() {
+        let receipt = GeneratedScriptReceipt {
+            schema_version: AI_GENERATED_SCRIPT_RECEIPT_SCHEMA_VERSION,
+            prompt: "close duplicate tabs".to_string(),
+            slug: "close-duplicate-tabs".to_string(),
+            slug_source: "Close Duplicate Tabs".to_string(),
+            slug_source_kind: "metadata_export".to_string(),
+            model_id: "gpt-4".to_string(),
+            provider_id: "openai".to_string(),
+            script_path: "/tmp/test.ts".to_string(),
+            receipt_path: "/tmp/test.scriptkit.json".to_string(),
+            shell_execution_warning: false,
+            contract: GeneratedScriptContractAudit {
+                metadata_style: GeneratedScriptMetadataStyle::MetadataExport,
+                has_name: true,
+                has_description: true,
+                has_kit_import: true,
+                has_current_app_recipe_header: false,
+                current_app_recipe_header_at_top: true,
+                warnings: vec![],
+            },
+        };
+
+        let json = serde_json::to_string_pretty(&receipt).expect("serialize receipt");
+        let deserialized: GeneratedScriptReceipt =
+            serde_json::from_str(&json).expect("deserialize receipt");
+        assert_eq!(receipt, deserialized);
+        assert!(json.contains("\"schemaVersion\": 1"));
+        assert!(json.contains("\"metadataStyle\": \"metadataExport\""));
+    }
+
+    #[test]
+    fn recipe_header_with_metadata_export_gets_correct_slug_source() {
+        let input = r#"// Current-App-Recipe-Base64: abc123
+// Current-App-Recipe-Name: Safari Close Duplicate Tabs
+
+export const metadata = {
+  name: "Safari Close Duplicate Tabs",
+  description: "Close duplicate tabs in the current Safari window",
+};
+
+await div("Ready");
+"#;
+
+        let prepared =
+            prepare_script_from_ai_response_with_contract("close duplicate tabs in Safari", input)
+                .unwrap();
+        assert_eq!(prepared.slug_source_kind, "metadata_export");
+        assert_eq!(prepared.slug, "safari-close-duplicate-tabs");
+        assert!(prepared.contract.has_current_app_recipe_header);
+        assert!(prepared.contract.current_app_recipe_header_at_top);
+    }
+
+    #[test]
+    fn extract_metadata_description_finds_value() {
+        let source = r#"export const metadata = {
+  name: "Test",
+  description: "A useful test script",
+};
+"#;
+        assert_eq!(
+            extract_metadata_description(source),
+            Some("A useful test script".to_string())
+        );
+    }
+
+    #[test]
+    fn generated_script_receipt_path_replaces_extension() {
+        let script_path = PathBuf::from("/tmp/my-script.ts");
+        let receipt = generated_script_receipt_path(&script_path);
+        assert_eq!(receipt, PathBuf::from("/tmp/my-script.scriptkit.json"));
+    }
+
 }

@@ -13,6 +13,7 @@ mod browser;
 mod diagnostics;
 pub mod footer_variations;
 pub mod input_variations;
+pub mod main_menu_variations;
 mod layout;
 mod registry;
 mod selection;
@@ -33,6 +34,9 @@ pub use footer_variations::{
 pub use input_variations::{
     adopted_input_variation, adopted_input_variation_id, input_story_variants,
     input_variation_specs, render_input_story_preview, InputVariationId, InputVariationSpec,
+};
+pub use main_menu_variations::{
+    main_menu_story_variants, render_main_menu_story_preview, MainMenuVariationId,
 };
 pub use layout::{code_block, story_container, story_divider, story_item, story_section};
 pub use registry::{
