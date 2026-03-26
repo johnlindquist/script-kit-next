@@ -368,7 +368,7 @@ pub(crate) fn render_hint_strip_leading_text(
 /// Emitted via [`emit_prompt_chrome_audit`] at surface-activation time (not per-frame)
 /// so that agents and structured-log consumers can verify which surfaces are minimal,
 /// which are intentional exceptions, and which have silently drifted.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, serde::Serialize)]
 pub(crate) struct PromptChromeAudit {
     pub surface: &'static str,
     pub input_mode: &'static str,
@@ -422,49 +422,35 @@ impl PromptChromeAudit {
     }
 }
 
+fn seen_prompt_chrome_audits() -> &'static Mutex<HashSet<PromptChromeAudit>> {
+    static SEEN: OnceLock<Mutex<HashSet<PromptChromeAudit>>> = OnceLock::new();
+    SEEN.get_or_init(|| Mutex::new(HashSet::new()))
+}
+
+/// Record an audit contract and return `true` if it was first-seen, `false` if duplicate.
+///
+/// Uses `Hash + Eq` on the full struct so any field change is treated as a new contract.
+pub(crate) fn mark_prompt_chrome_audit_seen(audit: &PromptChromeAudit) -> bool {
+    let mut seen = seen_prompt_chrome_audits()
+        .lock()
+        .unwrap_or_else(|poison| poison.into_inner());
+    seen.insert(audit.clone())
+}
+
 /// Emit a structured log line describing the chrome contract for a prompt surface.
 ///
 /// Call this from surface-activation or configuration paths, **not** from `render()`.
+/// Identical contracts are emitted at most once per process.
 /// Non-exception surfaces that still resolve to `prompt_footer` emit a warning.
 #[allow(dead_code)]
 pub(crate) fn emit_prompt_chrome_audit(audit: &PromptChromeAudit) {
-    static EMITTED_CONTRACTS: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
-
-    let contract_key = format!(
-        "{}|{}|{}|{}|{}|{}|{}|{}|{}|{}",
-        audit.surface,
-        audit.input_mode,
-        audit.divider_mode,
-        audit.footer_mode,
-        audit.header_padding_x,
-        audit.header_padding_y,
-        audit.hint_count,
-        audit.has_leading_status,
-        audit.has_actions,
-        audit.exception_reason.unwrap_or("")
-    );
-
-    let mut emitted_contracts = match EMITTED_CONTRACTS
-        .get_or_init(|| Mutex::new(HashSet::new()))
-        .lock()
-    {
-        Ok(guard) => guard,
-        Err(poisoned) => {
-            tracing::warn!(
-                target: "PROMPT_CHROME",
-                "prompt chrome audit registry lock poisoned; recovering"
-            );
-            poisoned.into_inner()
-        }
-    };
-    if !emitted_contracts.insert(contract_key) {
+    if !mark_prompt_chrome_audit_seen(audit) {
         return;
     }
-    drop(emitted_contracts);
 
     tracing::info!(
-        target: "PROMPT_CHROME",
-        event = "surface_contract",
+        target: "script_kit::prompt_chrome",
+        event = "prompt_chrome_audit",
         surface = audit.surface,
         input_mode = audit.input_mode,
         divider_mode = audit.divider_mode,
@@ -475,14 +461,16 @@ pub(crate) fn emit_prompt_chrome_audit(audit: &PromptChromeAudit) {
         has_leading_status = audit.has_leading_status,
         has_actions = audit.has_actions,
         exception_reason = audit.exception_reason.unwrap_or(""),
-        "prompt chrome contract resolved"
+        "prompt chrome audit"
     );
 
-    if audit.footer_mode == "prompt_footer" && audit.exception_reason.is_none() {
+    if audit.exception_reason.is_none() && audit.footer_mode == "prompt_footer" {
         tracing::warn!(
-            target: "PROMPT_CHROME",
+            target: "script_kit::prompt_chrome",
+            event = "prompt_chrome_contract_violation",
             surface = audit.surface,
-            "legacy footer used on non-exception surface"
+            footer_mode = audit.footer_mode,
+            "non-exception surface resolved to prompt_footer"
         );
     }
 }
@@ -721,6 +709,20 @@ mod prompt_layout_shell_tests {
     }
 
     #[test]
+    fn prompt_chrome_audit_dedupes_identical_contracts() {
+        let audit = super::PromptChromeAudit::minimal("test_dedup_surface", 2, false, false);
+
+        // First insert is new → true
+        assert!(super::mark_prompt_chrome_audit_seen(&audit));
+        // Duplicate → false
+        assert!(!super::mark_prompt_chrome_audit_seen(&audit));
+
+        // Changed contract (different hint_count and has_actions) → true
+        let changed = super::PromptChromeAudit::minimal("test_dedup_surface", 3, false, true);
+        assert!(super::mark_prompt_chrome_audit_seen(&changed));
+    }
+
+    #[test]
     fn exception_surfaces_in_other_rs_emit_chrome_audit() {
         let source = OTHER_RENDERERS_SOURCE;
         // Template, naming, webcam, and creation_feedback prompts should emit audit logs
@@ -838,6 +840,37 @@ mod prompt_layout_shell_tests {
         );
     }
 
+    /// Assert that source declares a runtime `PromptChromeAudit` with the given
+    /// constructor and surface name literal. The failure message names the
+    /// drifting surface so agents can pinpoint which builtin regressed.
+    fn assert_surface_declares_runtime_audit(
+        source: &str,
+        surface: &str,
+        constructor: &str,
+    ) {
+        let ctor = format!("PromptChromeAudit::{constructor}(");
+        let surface_literal = format!("\"{surface}\"");
+
+        assert!(
+            source.contains(&ctor) && source.contains(&surface_literal),
+            "{surface} should declare PromptChromeAudit::{constructor}(\"{surface}\", ...)"
+        );
+    }
+
+    /// Combined source-level and runtime-audit assertion for a minimal surface.
+    ///
+    /// Checks both that the layout file uses `SectionDivider`, `render_simple_hint_strip`,
+    /// and shared header padding tokens, AND that the entry-point file declares
+    /// `PromptChromeAudit::minimal("<surface>", ...)`.
+    macro_rules! assert_minimal_surface_file {
+        ($layout_path:literal, $entry_path:literal, $surface:literal, $require_header_padding:expr) => {{
+            let layout_source = include_str!($layout_path);
+            let entry_source = include_str!($entry_path);
+            assert_surface_declares_runtime_audit(entry_source, $surface, "minimal");
+            assert_minimal_surface_source(layout_source, $surface, $require_header_padding);
+        }};
+    }
+
     #[test]
     fn process_manager_source_matches_minimal_contract() {
         let source = include_str!("../render_builtins/process_manager.rs");
@@ -862,6 +895,39 @@ mod prompt_layout_shell_tests {
     fn file_search_source_matches_minimal_contract() {
         let source = include_str!("../render_builtins/file_search_layout.rs");
         assert_minimal_surface_source(source, "file_search_layout.rs", true);
+    }
+
+    /// Table-driven regression test covering all migrated minimal builtin surfaces.
+    ///
+    /// Each entry asserts both source-level markers (SectionDivider, hint strip,
+    /// header padding tokens, no PromptFooter) and the presence of a runtime
+    /// `PromptChromeAudit::minimal("<surface>", ...)` declaration in the entry file.
+    /// When a surface drifts, the failure message names it explicitly.
+    #[test]
+    fn migrated_builtin_surfaces_match_minimal_contract() {
+        // process_manager: layout and entry are in the same file
+        assert_minimal_surface_file!(
+            "../render_builtins/process_manager.rs",
+            "../render_builtins/process_manager.rs",
+            "process_manager",
+            true
+        );
+
+        // clipboard_history: entry in clipboard.rs, layout in clipboard_history_layout.rs
+        assert_minimal_surface_file!(
+            "../render_builtins/clipboard_history_layout.rs",
+            "../render_builtins/clipboard.rs",
+            "clipboard_history",
+            true
+        );
+
+        // file_search: entry in file_search.rs, layout in file_search_layout.rs
+        assert_minimal_surface_file!(
+            "../render_builtins/file_search_layout.rs",
+            "../render_builtins/file_search.rs",
+            "file_search",
+            true
+        );
     }
 
     #[test]

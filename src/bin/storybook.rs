@@ -15,9 +15,10 @@
 //!
 //! - 0: success
 //! - 1: invalid `--story` or `--variant` ID
+//! - 2: `--catalog-json` failure (structured JSON error on stderr)
 
 use gpui::*;
-use script_kit_gpui::storybook::StoryBrowser;
+use script_kit_gpui::storybook::{StorybookJsonError, StorybookJsonErrorBody, StoryBrowser};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
@@ -217,18 +218,33 @@ fn capture_storybook_screenshot() -> Result<(), Box<dyn std::error::Error>> {
     Err("Storybook window not found".into())
 }
 
-fn print_story_catalog_json_and_exit() {
-    match script_kit_gpui::storybook::load_story_catalog_snapshot() {
-        Ok(snapshot) => {
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&snapshot)
-                    .expect("serialize storybook catalog snapshot")
-            );
+fn build_story_catalog_json() -> Result<String, Box<dyn std::error::Error>> {
+    let snapshot = script_kit_gpui::storybook::load_story_catalog_snapshot()?;
+    Ok(serde_json::to_string_pretty(&snapshot)?)
+}
+
+fn print_story_catalog_json_and_exit() -> ! {
+    match build_story_catalog_json() {
+        Ok(json) => {
+            println!("{json}");
             std::process::exit(0);
         }
         Err(error) => {
-            eprintln!("storybook catalog error: {error:#}");
+            let payload = StorybookJsonError {
+                schema_version: 1,
+                ok: false,
+                error: StorybookJsonErrorBody {
+                    kind: "catalog_load_failed",
+                    message: format!("{error:#}"),
+                    hint: "Run `cargo check` and verify story registration compiles before requesting --catalog-json.",
+                },
+            };
+
+            eprintln!(
+                "{}",
+                serde_json::to_string_pretty(&payload)
+                    .expect("serialize storybook catalog error payload"),
+            );
             std::process::exit(2);
         }
     }
