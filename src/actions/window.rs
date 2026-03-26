@@ -735,7 +735,7 @@ fn actions_window_dynamic_height(
 fn compute_popup_height(dialog: &ActionsDialog) -> f32 {
     let num_actions = dialog.filtered_actions.len();
     let hide_search = dialog.hide_search;
-    let has_header = dialog.context_title.is_some();
+    let has_header = dialog.config.show_context_header && dialog.context_title.is_some();
 
     let section_header_count = if dialog.config.section_style == SectionStyle::Headers {
         count_section_headers(&dialog.actions, &dialog.filtered_actions)
@@ -1243,7 +1243,7 @@ pub fn resize_actions_window_direct(
     let dialog = dialog_entity.read(cx);
     let num_actions = dialog.filtered_actions.len();
     let hide_search = dialog.hide_search;
-    let has_header = dialog.context_title.is_some();
+    let has_header = dialog.config.show_context_header && dialog.context_title.is_some();
 
     crate::logging::log(
         "ACTIONS",
@@ -1389,7 +1389,7 @@ pub fn resize_actions_window(cx: &mut App, dialog_entity: &Entity<ActionsDialog>
         let dialog = dialog_entity.read(cx);
         let num_actions = dialog.filtered_actions.len();
         let hide_search = dialog.hide_search;
-        let has_header = dialog.context_title.is_some();
+        let has_header = dialog.config.show_context_header && dialog.context_title.is_some();
         crate::logging::log(
             "ACTIONS",
             &format!(

@@ -59,7 +59,7 @@ fn terminal_actions_dialog_config() -> crate::actions::ActionsDialogConfig {
         section_style: SectionStyle::Headers,
         anchor: AnchorPosition::Top,
         show_icons: true,
-        show_footer: false,
+        ..ActionsDialogConfig::default()
     }
 }
 
@@ -278,7 +278,18 @@ impl ScriptListApp {
                         section_style: crate::actions::SectionStyle::Headers,
                         anchor: crate::actions::AnchorPosition::Top,
                         show_icons: true,
-                        show_footer: false,
+                        search_placeholder: script_info.as_ref().map(|script| script.name.clone()),
+                        show_context_header: false,
+                        ..crate::actions::ActionsDialogConfig::default()
+                    });
+                } else {
+                    dialog.set_config(crate::actions::ActionsDialogConfig {
+                        search_position: crate::actions::SearchPosition::Bottom,
+                        section_style: crate::actions::SectionStyle::Separators,
+                        anchor: crate::actions::AnchorPosition::Bottom,
+                        search_placeholder: script_info.as_ref().map(|script| script.name.clone()),
+                        show_context_header: false,
+                        ..crate::actions::ActionsDialogConfig::default()
                     });
                 }
 
@@ -634,7 +645,7 @@ impl ScriptListApp {
                         section_style: crate::actions::SectionStyle::Headers,
                         anchor: crate::actions::AnchorPosition::Top,
                         show_icons: true,
-                        show_footer: false,
+                        ..crate::actions::ActionsDialogConfig::default()
                     });
                 }
 

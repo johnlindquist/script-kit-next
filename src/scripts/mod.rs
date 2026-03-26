@@ -32,8 +32,10 @@ pub use self::grouping::get_grouped_results;
 pub use self::loader::read_scripts;
 pub use self::scheduling::register_scheduled_scripts;
 pub use self::scriptlet_loader::{load_scriptlets, read_scriptlets_from_file};
+#[allow(unused_imports)]
 pub use self::search::{
-    compute_match_indices_for_result, fuzzy_search_unified, fuzzy_search_unified_all, NucleoCtx,
+    compute_match_indices_for_result, fuzzy_search_builtins, fuzzy_search_unified,
+    fuzzy_search_unified_all, NucleoCtx,
 };
 #[allow(unused_imports)]
 pub use self::types::{
@@ -48,8 +50,8 @@ pub(crate) use self::metadata::{
 
 #[cfg(test)]
 pub(crate) use self::search::{
-    fuzzy_search_builtins, fuzzy_search_scriptlets, fuzzy_search_scripts,
-    fuzzy_search_unified_with_builtins, fuzzy_search_unified_with_windows, fuzzy_search_windows,
+    fuzzy_search_scriptlets, fuzzy_search_scripts, fuzzy_search_unified_with_builtins,
+    fuzzy_search_unified_with_windows, fuzzy_search_windows,
 };
 
 // Re-export external types needed by tests via super::*

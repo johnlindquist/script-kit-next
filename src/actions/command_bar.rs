@@ -185,8 +185,7 @@ impl CommandBarConfig {
                 search_position: SearchPosition::Bottom,
                 section_style: SectionStyle::Separators,
                 anchor: AnchorPosition::Bottom,
-                show_icons: false,
-                show_footer: false,
+                ..ActionsDialogConfig::default()
             },
             ..Default::default()
         }
@@ -200,7 +199,7 @@ impl CommandBarConfig {
                 section_style: SectionStyle::Headers,
                 anchor: AnchorPosition::Top,
                 show_icons: true,
-                show_footer: false,
+                ..ActionsDialogConfig::default()
             },
             ..Default::default()
         }
@@ -213,8 +212,7 @@ impl CommandBarConfig {
                 search_position: SearchPosition::Hidden,
                 section_style: SectionStyle::Separators,
                 anchor: AnchorPosition::Bottom,
-                show_icons: false,
-                show_footer: false,
+                ..ActionsDialogConfig::default()
             },
             ..Default::default()
         }
@@ -229,7 +227,7 @@ impl CommandBarConfig {
                 section_style: SectionStyle::Separators,
                 anchor: AnchorPosition::Top,
                 show_icons: true,
-                show_footer: false,
+                ..ActionsDialogConfig::default()
             },
             ..Default::default()
         }
