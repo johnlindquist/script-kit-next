@@ -91,6 +91,16 @@ mod tests {
     }
 
     #[test]
+    fn input_surface_has_compare_ready_story() {
+        assert!(
+            stories_by_surface(StorySurface::Input)
+                .into_iter()
+                .any(|entry| entry.story.variants().len() > 1),
+            "Input surface should expose at least one compare-ready story"
+        );
+    }
+
+    #[test]
     fn action_dialog_surface_has_compare_ready_story() {
         assert!(
             stories_by_surface(StorySurface::ActionDialog)

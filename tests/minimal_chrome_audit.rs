@@ -4,12 +4,11 @@
 //! footer and chrome-token dividers instead of the old PromptFooter component.
 
 #[test]
-fn arg_prompt_uses_shared_chrome_divider() {
+fn arg_prompt_uses_shared_minimal_list_shell() {
     let source = include_str!("../src/render_prompts/arg/render.rs");
     assert!(
-        source.contains("SectionDivider::new()")
-            || (source.contains("DIVIDER_HEIGHT") && source.contains("DIVIDER_OPACITY")),
-        "arg prompt divider should use the shared chrome contract"
+        source.contains("render_minimal_list_prompt_shell("),
+        "arg prompt should delegate layout to the shared minimal list prompt shell"
     );
     assert!(
         !source.contains("ALPHA_DIVIDER"),

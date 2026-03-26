@@ -12,6 +12,7 @@
 mod browser;
 mod diagnostics;
 pub mod footer_variations;
+pub mod input_variations;
 mod layout;
 mod registry;
 mod selection;
@@ -25,6 +26,10 @@ pub use diagnostics::{
 pub use footer_variations::{
     footer_story_variants, footer_variation_specs, render_footer_story_preview,
     FooterVariationId, FooterVariationSpec,
+};
+pub use input_variations::{
+    input_story_variants, input_variation_specs, render_input_story_preview, InputVariationId,
+    InputVariationSpec,
 };
 pub use layout::{code_block, story_container, story_divider, story_item, story_section};
 pub use registry::{
