@@ -345,5 +345,24 @@ fn render_cursor() -> AnyElement {
         .into_any_element()
 }
 
+/// Resolve a persisted storybook input selection value to an `InputVariationId`.
+///
+/// Falls back to `InputVariationId::Bare` when the value is `None` or unrecognised.
+pub fn adopted_input_variation_id(selected: Option<&str>) -> InputVariationId {
+    selected
+        .and_then(InputVariationId::from_stable_id)
+        .unwrap_or(InputVariationId::Bare)
+}
+
+/// Resolve the on-disk storybook input selection to an `InputVariationId`.
+///
+/// Reads the persisted `design-explorer-selections.json` for the
+/// `"input-design-variations"` story and resolves via [`adopted_input_variation_id`].
+pub fn adopted_input_variation() -> InputVariationId {
+    let selected = super::load_selected_story_variant("input-design-variations");
+
+    adopted_input_variation_id(selected.as_deref())
+}
+
 #[cfg(test)]
 mod tests;

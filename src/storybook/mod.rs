@@ -24,12 +24,13 @@ pub use diagnostics::{
     StoryCatalogSnapshot, StorySurfaceSummary, StoryVariantSummary,
 };
 pub use footer_variations::{
+    config_from_storybook_footer_selection, config_from_storybook_footer_selection_value,
     footer_story_variants, footer_variation_specs, render_footer_story_preview,
     FooterVariationId, FooterVariationSpec,
 };
 pub use input_variations::{
-    input_story_variants, input_variation_specs, render_input_story_preview, InputVariationId,
-    InputVariationSpec,
+    adopted_input_variation, adopted_input_variation_id, input_story_variants,
+    input_variation_specs, render_input_story_preview, InputVariationId, InputVariationSpec,
 };
 pub use layout::{code_block, story_container, story_divider, story_item, story_section};
 pub use registry::{

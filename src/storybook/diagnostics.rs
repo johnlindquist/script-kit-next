@@ -220,6 +220,62 @@ mod tests {
     }
 
     #[test]
+    fn catalog_snapshot_marks_persisted_footer_and_input_selections() {
+        let mut store = StorySelectionStore::default();
+        store.set_selected_variant("footer-layout-variations", "minimal");
+        store.set_selected_variant("input-design-variations", "search-icon");
+
+        let snapshot = build_story_catalog_snapshot(&store);
+
+        let footer_story = snapshot
+            .stories
+            .iter()
+            .find(|story| story.story_id == "footer-layout-variations")
+            .expect("footer-layout-variations story should be registered");
+        assert_eq!(
+            footer_story.selected_variant_id.as_deref(),
+            Some("minimal"),
+            "Footer story should reflect persisted 'minimal' selection"
+        );
+
+        let input_story = snapshot
+            .stories
+            .iter()
+            .find(|story| story.story_id == "input-design-variations")
+            .expect("input-design-variations story should be registered");
+        assert_eq!(
+            input_story.selected_variant_id.as_deref(),
+            Some("search-icon"),
+            "Input story should reflect persisted 'search-icon' selection"
+        );
+    }
+
+    #[test]
+    fn catalog_snapshot_unset_selections_are_none() {
+        let snapshot = build_story_catalog_snapshot(&StorySelectionStore::default());
+
+        let footer_story = snapshot
+            .stories
+            .iter()
+            .find(|story| story.story_id == "footer-layout-variations")
+            .expect("footer-layout-variations story should be registered");
+        assert_eq!(
+            footer_story.selected_variant_id, None,
+            "Footer story should have no selection when store is empty"
+        );
+
+        let input_story = snapshot
+            .stories
+            .iter()
+            .find(|story| story.story_id == "input-design-variations")
+            .expect("input-design-variations story should be registered");
+        assert_eq!(
+            input_story.selected_variant_id, None,
+            "Input story should have no selection when store is empty"
+        );
+    }
+
+    #[test]
     fn catalog_snapshot_includes_variant_props() {
         let snapshot = build_story_catalog_snapshot(&StorySelectionStore::default());
         let header_story = snapshot
