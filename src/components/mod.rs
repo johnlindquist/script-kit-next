@@ -34,12 +34,16 @@ pub mod focusable_prompt_wrapper;
 pub mod form_fields;
 #[cfg(test)]
 mod form_fields_tests;
+pub mod hint_strip;
+pub mod inline_prompt_input;
+pub mod minimal_prompt_shell;
 pub(crate) mod overlay_modal;
 pub mod prompt_container;
 pub mod prompt_footer;
 pub mod prompt_header;
 pub mod prompt_layout_shell;
 pub mod scrollbar;
+pub mod section_divider;
 pub mod shortcut_recorder;
 pub mod text_input;
 pub mod toast;
@@ -57,6 +61,12 @@ pub use focusable_prompt_wrapper::{
 };
 #[allow(unused_imports)]
 pub use form_fields::{FormCheckbox, FormFieldColors, FormFieldState, FormTextArea, FormTextField};
+#[allow(unused_imports)]
+pub use hint_strip::HintStrip;
+#[allow(unused_imports)]
+pub use inline_prompt_input::InlinePromptInput;
+#[allow(unused_imports)]
+pub use minimal_prompt_shell::MinimalPromptShell;
 #[allow(unused_imports)]
 pub use scrollbar::{
     Scrollbar, ScrollbarColors, MIN_THUMB_HEIGHT, SCROLLBAR_PADDING, SCROLLBAR_WIDTH,
@@ -76,6 +86,8 @@ pub(crate) use prompt_layout_shell::{
 };
 #[allow(unused_imports)]
 pub use prompt_layout_shell::{prompt_shell_container, prompt_shell_content};
+#[allow(unused_imports)]
+pub use section_divider::SectionDivider;
 #[allow(unused_imports)]
 pub use shortcut_recorder::{
     RecordedShortcut, ShortcutConflict, ShortcutRecorder, ShortcutRecorderColors,

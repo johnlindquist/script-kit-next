@@ -52,6 +52,7 @@ pub mod toast_manager;
 
 #[cfg(not(test))]
 pub mod tray;
+pub mod ui;
 pub mod utils;
 pub mod warning_banner;
 pub mod window_manager;

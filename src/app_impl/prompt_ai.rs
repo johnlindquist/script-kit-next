@@ -358,6 +358,13 @@ impl ScriptListApp {
             let _ = escape_sender.try_send(());
         });
 
+        // Create continue callback that signals via channel (hides main window for AI handoff)
+        let continue_sender = self.inline_chat_continue_sender.clone();
+        let continue_callback: crate::prompts::ChatContinueCallback =
+            std::sync::Arc::new(move |_id| {
+                let _ = continue_sender.try_send(());
+            });
+
         // Use cached registry if available, otherwise build synchronously as fallback
         let registry = self
             .cached_provider_registry
@@ -404,7 +411,7 @@ impl ScriptListApp {
             .with_needs_setup(true)
             .with_configure_callback(configure_callback)
             .with_claude_code_callback(claude_code_callback)
-            .with_mini_mode(self.main_window_mode == MainWindowMode::Mini);
+            .with_rich_chrome();
 
             let entity = cx.new(|_| chat_prompt);
             self.current_view = AppView::ChatPrompt {
@@ -446,13 +453,13 @@ impl ScriptListApp {
         .with_title("Ask AI")
         .with_save_history(true)
         .with_escape_callback(escape_callback)
-        .with_builtin_ai(registry, true) // true = prefer Vercel AI Gateway
-        .with_mini_mode(self.main_window_mode == MainWindowMode::Mini);
+        .with_continue_callback(continue_callback)
+        .with_builtin_ai(registry, true); // true = prefer Vercel AI Gateway
 
         tracing::info!(
             event = "inline_chat.construction",
             id = "inline-ai",
-            mini_mode = (self.main_window_mode == MainWindowMode::Mini),
+            chrome = ?"Minimal",
             on_show_actions_set = true,
             "ChatPrompt constructed with on_show_actions wired"
         );
@@ -568,7 +575,7 @@ impl ScriptListApp {
             .with_needs_setup(true)
             .with_configure_callback(configure_callback)
             .with_claude_code_callback(claude_code_callback)
-            .with_mini_mode(self.main_window_mode == MainWindowMode::Mini);
+            .with_rich_chrome();
 
             let entity = cx.new(|_| chat_prompt);
             self.current_view = AppView::ChatPrompt {
@@ -675,8 +682,7 @@ impl ScriptListApp {
         .with_script_saved_callback(script_saved_callback)
         .with_builtin_ai(registry, true) // true = prefer Vercel AI Gateway
         .with_builtin_system_prompt(crate::ai::script_generation::AI_SCRIPT_GENERATION_SYSTEM_PROMPT)
-        .with_script_generation_mode(true)
-        .with_mini_mode(self.main_window_mode == MainWindowMode::Mini);
+        .with_script_generation_mode(true);
 
         // If there's an initial query, set it in the input and auto-submit
         if let Some(query) = initial_query {
@@ -702,7 +708,7 @@ impl ScriptListApp {
         tracing::info!(
             event = "script_generation_chat.construction",
             id = "script-generation",
-            mini_mode = (self.main_window_mode == MainWindowMode::Mini),
+            chrome = ?"Minimal",
             on_show_actions_set = true,
             "Script generation ChatPrompt constructed with on_show_actions wired"
         );

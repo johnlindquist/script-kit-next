@@ -86,6 +86,7 @@ mod test_utils;
 mod theme;
 mod transitions;
 mod tray;
+mod ui;
 mod ui_foundation;
 mod utils;
 mod warning_banner;
