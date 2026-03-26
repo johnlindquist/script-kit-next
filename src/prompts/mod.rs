@@ -44,8 +44,8 @@ mod webcam_stub;
 #[allow(unused_imports)]
 pub use base::{DesignContext, PromptBase, ResolvedColors};
 pub use chat::{
-    ChatClaudeCodeCallback, ChatConfigureCallback, ChatContinueCallback, ChatEscapeCallback,
-    ChatPrompt, ChatSubmitCallback,
+    ChatClaudeCodeCallback, ChatConfigureCallback, ChatEscapeCallback, ChatPrompt,
+    ChatSubmitCallback,
 };
 pub use creation_feedback::CreationFeedbackPanel;
 pub use div::{ContainerOptions, ContainerPadding, DivPrompt};

@@ -71,7 +71,8 @@ pub struct ChatPrompt {
     pub(super) pending_image: Option<String>,
     pub(super) pending_image_render: Option<Arc<RenderImage>>,
     pub(super) image_render_cache: HashMap<String, Arc<RenderImage>>,
-    pub(super) chrome: crate::ui::chrome::ChromeStyle,
+    /// When true, renders input as a borderless text field (cursor + text + placeholder only).
+    pub(super) mini_mode: bool,
 }
 
 impl ChatPrompt {
@@ -145,7 +146,7 @@ impl ChatPrompt {
             pending_image: None,
             pending_image_render: None,
             image_render_cache: HashMap::new(),
-            chrome: crate::ui::chrome::ChromeStyle::Minimal,
+            mini_mode: false,
         }
     }
 
@@ -154,8 +155,9 @@ impl ChatPrompt {
         self.on_show_actions = Some(callback);
     }
 
-    pub fn with_rich_chrome(mut self) -> Self {
-        self.chrome = crate::ui::chrome::ChromeStyle::Rich;
+    /// Enable mini mode — renders input as a borderless text field matching the mini main window.
+    pub fn with_mini_mode(mut self, mini: bool) -> Self {
+        self.mini_mode = mini;
         self
     }
 

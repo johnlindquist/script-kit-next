@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use gpui::{div, prelude::*, px, rgba, App, IntoElement, RenderOnce, SharedString, Window};
 
 use crate::ui::chrome::{alpha_from_opacity, DIVIDER_HEIGHT, DIVIDER_OPACITY};

@@ -83,31 +83,25 @@ mod tests {
     }
 
     #[test]
-    fn chat_layout_renderers_use_shared_chrome_tokens_and_minimal_input() {
+    fn chat_layout_renderers_use_shared_spacing_and_translucent_surfaces() {
         assert!(
-            CHAT_RENDER_CORE_SOURCE.contains(".px(px(HEADER_PADDING_X))")
-                && CHAT_RENDER_CORE_SOURCE.contains(".py(px(HEADER_PADDING_Y))"),
-            "Render core should use shared chrome padding tokens"
+            CHAT_RENDER_CORE_SOURCE.contains(".px(px(CHAT_LAYOUT_PADDING_X))"),
+            "Render core should use shared horizontal padding constants"
         );
         assert!(
-            CHAT_RENDER_CORE_SOURCE.contains("HintStrip::new")
-                && CHAT_RENDER_CORE_SOURCE.contains("ChromeStyle::Minimal"),
-            "Render core should route minimal chrome through the shared hint strip"
-        );
-        // Input floats bare over vibrancy — no background chrome needed.
-        // Verify it uses the shared text input renderer.
-        assert!(
-            CHAT_RENDER_INPUT_SOURCE.contains("render_text_input_cursor_selection"),
-            "Input should use the shared text input cursor/selection renderer"
+            CHAT_RENDER_CORE_SOURCE.contains("CHAT_LAYOUT_FOOTER_BG_DARK_ALPHA")
+                && CHAT_RENDER_CORE_SOURCE.contains("CHAT_LAYOUT_FOOTER_BG_LIGHT_ALPHA"),
+            "Footer should use translucent overlay alpha constants for both theme modes"
         );
         assert!(
-            CHAT_RENDER_INPUT_SOURCE.contains("InlinePromptInput::new"),
-            "Input should use the shared InlinePromptInput chrome wrapper"
+            CHAT_RENDER_INPUT_SOURCE.contains("CHAT_LAYOUT_INPUT_BG_FOCUSED_ALPHA")
+                && CHAT_RENDER_INPUT_SOURCE.contains("CHAT_LAYOUT_INPUT_BG_IDLE_ALPHA"),
+            "Input surface should use shared opacity constants"
         );
         assert!(
-            CHAT_RENDER_TURNS_SOURCE.contains("HEADER_PADDING_X")
-                && CHAT_RENDER_TURNS_SOURCE.contains("HEADER_PADDING_Y"),
-            "Turn renderer should use shared chrome padding tokens"
+            CHAT_RENDER_TURNS_SOURCE.contains("CHAT_LAYOUT_CARD_PADDING_X")
+                && CHAT_RENDER_TURNS_SOURCE.contains("CHAT_LAYOUT_CARD_PADDING_Y"),
+            "Turn renderer should use shared card padding constants"
         );
     }
 

@@ -194,18 +194,7 @@ impl ScriptListApp {
         entity: Entity<prompts::ChatPrompt>,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let handle_key = cx.listener(Self::other_prompt_shell_handle_key_chat);
-
-        div()
-            .on_key_down(handle_key)
-            // MinimalPromptShell preserves the prompt_shell_container(...) contract
-            // and owns prompt_shell_content(entity) for the chat surface.
-            .child(crate::components::MinimalPromptShell::new(
-                self.other_prompt_shell_radius_lg(),
-                get_vibrancy_background(&self.theme),
-                entity,
-            ))
-            .into_any_element()
+        self.render_simple_prompt_shell(entity, Self::other_prompt_shell_handle_key_chat, cx)
     }
 
     fn render_naming_prompt(
@@ -423,7 +412,12 @@ mod other_prompt_render_wrapper_tests {
 
     #[test]
     fn simple_prompt_wrappers_skip_unused_shell_allocations() {
-        for fn_name in ["render_select_prompt", "render_env_prompt", "render_drop_prompt"] {
+        for fn_name in [
+            "render_select_prompt",
+            "render_env_prompt",
+            "render_drop_prompt",
+            "render_chat_prompt",
+        ] {
             let body = fn_source(fn_name);
             assert!(
                 body.contains("render_simple_prompt_shell("),
@@ -438,23 +432,6 @@ mod other_prompt_render_wrapper_tests {
                 "{fn_name} should not allocate unused box shadows in the shell wrapper"
             );
         }
-    }
-
-    #[test]
-    fn render_chat_prompt_uses_chat_specific_shell_wrapper() {
-        let body = fn_source("render_chat_prompt");
-        assert!(
-            body.contains("MinimalPromptShell::new("),
-            "render_chat_prompt should use MinimalPromptShell"
-        );
-        assert!(
-            body.contains("other_prompt_shell_handle_key_chat"),
-            "render_chat_prompt should keep the chat-specific key handler"
-        );
-        assert!(
-            !body.contains("render_simple_prompt_shell("),
-            "render_chat_prompt should not delegate to render_simple_prompt_shell"
-        );
     }
 
     #[test]

@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use gpui::{
     div, prelude::*, px, rgba, AnyElement, App, FontWeight, IntoElement, RenderOnce, SharedString,
     Window,

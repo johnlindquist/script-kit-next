@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 mod tokens;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

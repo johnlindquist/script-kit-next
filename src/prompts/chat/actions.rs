@@ -1,11 +1,50 @@
 use super::*;
 
+const TRANSFER_TO_AI_WINDOW_READY_RETRY_DELAY_MS: u64 = 16;
+const TRANSFER_TO_AI_WINDOW_READY_MAX_WAITS: usize = 8;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ChatPromptDismissalKind {
+    CloseInline,
+    TransferToAiWindow,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TransferToAiWindowReadyBarrierStep {
+    Ready,
+    Wait,
+    TimedOut,
+}
+
+fn should_persist_chat_before_prompt_dismissal(
+    save_history: bool,
+    dismissal_kind: ChatPromptDismissalKind,
+) -> bool {
+    save_history && dismissal_kind == ChatPromptDismissalKind::CloseInline
+}
+
+fn next_transfer_to_ai_window_ready_barrier_step(
+    is_ready: bool,
+    waits_completed: usize,
+) -> TransferToAiWindowReadyBarrierStep {
+    if is_ready {
+        TransferToAiWindowReadyBarrierStep::Ready
+    } else if waits_completed < TRANSFER_TO_AI_WINDOW_READY_MAX_WAITS {
+        TransferToAiWindowReadyBarrierStep::Wait
+    } else {
+        TransferToAiWindowReadyBarrierStep::TimedOut
+    }
+}
+
 impl ChatPrompt {
     pub(super) fn handle_escape(&mut self, _cx: &mut Context<Self>) {
         logging::log("CHAT", "Escape pressed - closing chat");
 
         // Save conversation to database if save_history is enabled
-        if self.save_history {
+        if should_persist_chat_before_prompt_dismissal(
+            self.save_history,
+            ChatPromptDismissalKind::CloseInline,
+        ) {
             self.save_to_database();
         }
 
@@ -88,10 +127,16 @@ impl ChatPrompt {
         self.transfer_to_ai_window(true, cx);
     }
 
-    /// Shared handoff: collect messages, save, reset inline state, dismiss,
+    /// Shared handoff: collect messages, reset inline state, dismiss,
     /// then open the AI window in the requested mode.
     fn transfer_to_ai_window(&mut self, full_mode: bool, cx: &mut Context<Self>) {
         let mode_label = if full_mode { "full" } else { "mini" };
+        let transfer_start = std::time::Instant::now();
+        tracing::info!(
+            action = "transfer_to_ai_window",
+            target_mode = mode_label,
+            "=== BEACHBALL TRACE: transfer_to_ai_window START ==="
+        );
         logging::log(
             "CHAT",
             &format!("Transfer to AI window (mode={})", mode_label),
@@ -125,9 +170,20 @@ impl ChatPrompt {
             "Transferring conversation to AI window"
         );
 
-        // Save conversation before clearing inline state
-        if self.save_history {
+        if should_persist_chat_before_prompt_dismissal(
+            self.save_history,
+            ChatPromptDismissalKind::TransferToAiWindow,
+        ) {
             self.save_to_database();
+        } else if self.save_history {
+            tracing::info!(
+                action = "transfer_to_ai_window",
+                target_mode = mode_label,
+                persistence = "initialize_with_pending_chat",
+                message_count,
+                image_count,
+                "Skipping inline save_to_database before AI handoff"
+            );
         }
 
         // Reset the inline prompt to empty state BEFORE the deferred AI open
@@ -142,10 +198,26 @@ impl ChatPrompt {
         self.ensure_conversation_turns_cache();
         cx.notify();
 
-        // Dismiss the main prompt window via escape callback
-        if let Some(ref callback) = self.on_escape {
+        tracing::info!(
+            action = "transfer_to_ai_window",
+            elapsed_ms = transfer_start.elapsed().as_millis(),
+            "BEACHBALL TRACE: state reset done, about to dismiss"
+        );
+
+        // Dismiss the main prompt window.
+        // Use on_continue (hides main window) for transfer, falling back to on_escape
+        // (returns to script list) if on_continue is not wired.
+        if let Some(ref callback) = self.on_continue {
+            callback(self.id.clone());
+        } else if let Some(ref callback) = self.on_escape {
             callback(self.id.clone());
         }
+
+        tracing::info!(
+            action = "transfer_to_ai_window",
+            elapsed_ms = transfer_start.elapsed().as_millis(),
+            "BEACHBALL TRACE: dismiss done, spawning async open"
+        );
 
         // Defer AI window open so the inline prompt dismisses first,
         // avoiding synchronous image transfer work on the original prompt path.
@@ -154,28 +226,104 @@ impl ChatPrompt {
                 .timer(std::time::Duration::from_millis(1))
                 .await;
 
+            let open_start = std::time::Instant::now();
+            tracing::info!(
+                action = "transfer_to_ai_window",
+                target_mode = mode_label,
+                "BEACHBALL TRACE: async open starting"
+            );
+
             let open_result = cx.update(|cx| {
                 if full_mode {
-                    ai::open_ai_window(cx).map_err(|error| error.to_string())?;
+                    ai::open_ai_window(cx).map_err(|error| {
+                        format!("failed to open full AI window for chat transfer: {error}")
+                    })?;
                 } else {
-                    ai::open_mini_ai_window(cx).map_err(|error| error.to_string())?;
+                    ai::open_mini_ai_window(cx).map_err(|error| {
+                        format!("failed to open mini AI window for chat transfer: {error}")
+                    })?;
                 }
-                ai::set_ai_pending_chat(cx, messages)?;
                 Ok::<(), String>(())
             });
 
-            match open_result {
+            tracing::info!(
+                action = "transfer_to_ai_window",
+                target_mode = mode_label,
+                open_elapsed_ms = open_start.elapsed().as_millis(),
+                "BEACHBALL TRACE: window open complete"
+            );
+
+            let handoff_result = match open_result {
                 Ok(()) => {
                     tracing::info!(
                         action = "transfer_to_ai_window",
-                        target_mode = full_mode,
+                        target_mode = mode_label,
+                        max_waits = TRANSFER_TO_AI_WINDOW_READY_MAX_WAITS,
+                        retry_delay_ms = TRANSFER_TO_AI_WINDOW_READY_RETRY_DELAY_MS,
+                        "Waiting for AI window readiness before pending chat handoff"
+                    );
+
+                    let mut waits_completed = 0usize;
+                    loop {
+                        let ready_now = cx.update(ai::is_ai_window_ready);
+                        match next_transfer_to_ai_window_ready_barrier_step(
+                            ready_now,
+                            waits_completed,
+                        ) {
+                            TransferToAiWindowReadyBarrierStep::Ready => {
+                                break cx.update(|cx| {
+                                    ai::set_ai_pending_chat(cx, messages).map_err(|error| {
+                                        format!(
+                                            "failed to stash pending chat after AI window became ready: {error}"
+                                        )
+                                    })
+                                });
+                            }
+                            TransferToAiWindowReadyBarrierStep::Wait => {
+                                waits_completed += 1;
+                                tracing::debug!(
+                                    action = "transfer_to_ai_window",
+                                    target_mode = mode_label,
+                                    waits_completed,
+                                    max_waits = TRANSFER_TO_AI_WINDOW_READY_MAX_WAITS,
+                                    retry_delay_ms = TRANSFER_TO_AI_WINDOW_READY_RETRY_DELAY_MS,
+                                    "AI window not ready yet; retrying pending chat handoff"
+                                );
+                                cx.background_executor()
+                                    .timer(std::time::Duration::from_millis(
+                                        TRANSFER_TO_AI_WINDOW_READY_RETRY_DELAY_MS,
+                                    ))
+                                    .await;
+                            }
+                            TransferToAiWindowReadyBarrierStep::TimedOut => {
+                                break Err(format!(
+                                    "AI window not ready after open; cannot hand off pending chat (mode={mode_label}, waits_completed={waits_completed}, max_waits={}, retry_delay_ms={}, message_count={message_count}, image_count={image_count})",
+                                    TRANSFER_TO_AI_WINDOW_READY_MAX_WAITS,
+                                    TRANSFER_TO_AI_WINDOW_READY_RETRY_DELAY_MS,
+                                ));
+                            }
+                        }
+                    }
+                }
+                Err(error) => Err(error),
+            };
+
+            match handoff_result {
+                Ok(()) => {
+                    tracing::info!(
+                        action = "transfer_to_ai_window",
+                        target_mode = mode_label,
+                        message_count,
+                        image_count,
                         "AI window opened with deferred pending chat"
                     );
                 }
                 Err(error) => {
                     tracing::error!(
                         error = %error,
-                        target_mode = full_mode,
+                        target_mode = mode_label,
+                        message_count,
+                        image_count,
                         "Failed to open AI window for chat transfer"
                     );
                 }
@@ -312,5 +460,75 @@ impl ChatPrompt {
                 "No on_show_actions callback set — actions toggle request dropped"
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        next_transfer_to_ai_window_ready_barrier_step, should_persist_chat_before_prompt_dismissal,
+        ChatPromptDismissalKind, TransferToAiWindowReadyBarrierStep,
+        TRANSFER_TO_AI_WINDOW_READY_MAX_WAITS,
+    };
+
+    #[test]
+    fn test_should_persist_chat_before_prompt_dismissal_when_closing_inline_with_history_enabled() {
+        assert!(should_persist_chat_before_prompt_dismissal(
+            true,
+            ChatPromptDismissalKind::CloseInline
+        ));
+    }
+
+    #[test]
+    fn test_should_not_persist_chat_before_prompt_dismissal_when_transferring_to_ai_window() {
+        assert!(!should_persist_chat_before_prompt_dismissal(
+            true,
+            ChatPromptDismissalKind::TransferToAiWindow
+        ));
+    }
+
+    #[test]
+    fn test_should_not_persist_chat_before_prompt_dismissal_when_history_is_disabled() {
+        assert!(!should_persist_chat_before_prompt_dismissal(
+            false,
+            ChatPromptDismissalKind::CloseInline
+        ));
+    }
+
+    #[test]
+    fn test_next_transfer_to_ai_window_ready_barrier_step_returns_ready_immediately() {
+        assert_eq!(
+            next_transfer_to_ai_window_ready_barrier_step(true, 0),
+            TransferToAiWindowReadyBarrierStep::Ready
+        );
+        assert_eq!(
+            next_transfer_to_ai_window_ready_barrier_step(
+                true,
+                TRANSFER_TO_AI_WINDOW_READY_MAX_WAITS
+            ),
+            TransferToAiWindowReadyBarrierStep::Ready
+        );
+    }
+
+    #[test]
+    fn test_next_transfer_to_ai_window_ready_barrier_step_retries_before_timeout() {
+        assert_eq!(
+            next_transfer_to_ai_window_ready_barrier_step(false, 0),
+            TransferToAiWindowReadyBarrierStep::Wait
+        );
+        assert_eq!(
+            next_transfer_to_ai_window_ready_barrier_step(
+                false,
+                TRANSFER_TO_AI_WINDOW_READY_MAX_WAITS - 1
+            ),
+            TransferToAiWindowReadyBarrierStep::Wait
+        );
+        assert_eq!(
+            next_transfer_to_ai_window_ready_barrier_step(
+                false,
+                TRANSFER_TO_AI_WINDOW_READY_MAX_WAITS
+            ),
+            TransferToAiWindowReadyBarrierStep::TimedOut
+        );
     }
 }

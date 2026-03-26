@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use gpui::{div, prelude::*, px, App, IntoElement, RenderOnce, Window};
 
 /// Minimum height keeps the input tappable/clickable even when empty (matches standard touch target).
