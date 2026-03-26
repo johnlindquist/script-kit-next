@@ -451,10 +451,8 @@ impl ScriptListApp {
                 // Use with_template if template provided, or if content contains tabstop patterns
                 // This auto-detects VSCode-style templates like ${1:name} or $1
                 let content_str = content.unwrap_or_default();
-                let has_tabstops = content_str.contains("${")
-                    || regex::Regex::new(r"\$\d")
-                        .map(|re| re.is_match(&content_str))
-                        .unwrap_or(false);
+                let has_tabstops =
+                    crate::snippet::analysis::contains_explicit_tabstops(&content_str);
 
                 let editor_prompt = if let Some(template_str) = template {
                     EditorPrompt::with_template(

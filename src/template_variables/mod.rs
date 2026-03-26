@@ -124,11 +124,123 @@ impl VariableContext {
     ///
     /// Disabling built-ins leaves placeholders unchanged unless a matching
     /// custom variable is present.
+    #[allow(dead_code)]
     pub fn with_builtins(mut self, enabled: bool) -> Self {
         self.evaluate_builtins = enabled;
         self
     }
 }
+// ============================================================================
+// Resolution Receipts
+// ============================================================================
+
+/// Tracks which variables were resolved vs left untouched during substitution.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VariableResolutionReceipt {
+    /// The substituted text output.
+    pub text: String,
+    /// Variable names that were successfully resolved.
+    pub resolved_names: Vec<String>,
+    /// Variable names that had no value in the context.
+    pub unresolved_names: Vec<String>,
+}
+
+/// Substitute template variables and return a receipt tracking resolution.
+///
+/// Unlike [`substitute_variables_with_context`], this reports which variables
+/// were resolved and which remain unresolved — enabling callers to promote
+/// unresolved names into interactive snippet tabstops.
+pub fn substitute_variables_with_receipt(
+    content: &str,
+    ctx: &VariableContext,
+) -> VariableResolutionReceipt {
+    let mut result = content.to_string();
+
+    if !result.contains('$') && !result.contains('{') {
+        return VariableResolutionReceipt {
+            text: result,
+            resolved_names: Vec::new(),
+            unresolved_names: Vec::new(),
+        };
+    }
+
+    let values = build_variable_values(ctx);
+    let discovered = extract_variable_names(content);
+    let mut resolved_names = Vec::new();
+    let mut unresolved_names = Vec::new();
+
+    for name in discovered {
+        // Skip names that look like numeric tabstop indices (e.g., "1", "1:name")
+        if name.starts_with(|c: char| c.is_ascii_digit()) {
+            continue;
+        }
+
+        let dollar_pattern = format!("${{{}}}", name);
+        let brace_pattern = format!("{{{{{}}}}}", name);
+
+        if let Some(value) = values.get(&name) {
+            result = result.replace(&dollar_pattern, value);
+            result = result.replace(&brace_pattern, value);
+            resolved_names.push(name);
+        } else {
+            unresolved_names.push(name);
+        }
+    }
+
+    // Legacy clipboard expression
+    if result.contains("${await clipboard.readText()}") {
+        if let Some(clipboard_value) = values.get("clipboard") {
+            result = result.replace("${await clipboard.readText()}", clipboard_value);
+            if !resolved_names.iter().any(|n| n == "clipboard") {
+                resolved_names.push("clipboard".to_string());
+            }
+        }
+    }
+
+    debug!(
+        resolved_count = resolved_names.len(),
+        unresolved_count = unresolved_names.len(),
+        resolved = ?resolved_names,
+        unresolved = ?unresolved_names,
+        "Variable resolution receipt"
+    );
+
+    VariableResolutionReceipt {
+        text: result,
+        resolved_names,
+        unresolved_names,
+    }
+}
+
+/// Promote unresolved named variables to VSCode-style tabstops.
+///
+/// Repeated names map to the same tabstop index, enabling linked editing.
+/// `next_index_start` should be `max_explicit_tabstop + 1` so promoted
+/// indices don't collide with author-written tabstops.
+pub fn promote_unresolved_variables_to_tabstops(
+    content: &str,
+    unresolved_names: &[String],
+    next_index_start: usize,
+) -> String {
+    let mut result = content.to_string();
+    let mut assigned_indices: HashMap<String, usize> = HashMap::new();
+    let mut next_index = next_index_start.max(1);
+
+    for name in unresolved_names {
+        let index = *assigned_indices.entry(name.clone()).or_insert_with(|| {
+            let current = next_index;
+            next_index += 1;
+            current
+        });
+
+        let replacement = format!("${{{}:{}}}", index, name);
+        result = result.replace(&format!("${{{}}}", name), &replacement);
+        result = result.replace(&format!("{{{{{}}}}}", name), &replacement);
+    }
+
+    result
+}
+
 // ============================================================================
 // Main Substitution Functions
 // ============================================================================
@@ -146,9 +258,10 @@ impl VariableContext {
 /// # Returns
 /// The content with all recognized variables substituted
 ///
+#[allow(dead_code)]
 pub fn substitute_variables(content: &str) -> String {
     let ctx = VariableContext::new().with_builtins(true);
-    substitute_variables_with_context(content, &ctx)
+    substitute_variables_with_receipt(content, &ctx).text
 }
 /// Substitute template variables with a custom context.
 ///
@@ -165,37 +278,9 @@ pub fn substitute_variables(content: &str) -> String {
 /// # Returns
 /// The content with all recognized variables substituted
 ///
+#[allow(dead_code)]
 pub fn substitute_variables_with_context(content: &str, ctx: &VariableContext) -> String {
-    let mut result = content.to_string();
-
-    // Early exit if no variable markers present
-    if !result.contains('$') && !result.contains('{') {
-        return result;
-    }
-
-    // Build the set of values to substitute
-    let values = build_variable_values(ctx);
-
-    // Substitute all variables in both syntaxes
-    for (name, value) in &values {
-        // ${variable} syntax
-        let dollar_pattern = format!("${{{}}}", name);
-        result = result.replace(&dollar_pattern, value);
-
-        // {{variable}} syntax
-        let brace_pattern = format!("{{{{{}}}}}", name);
-        result = result.replace(&brace_pattern, value);
-    }
-
-    // Handle special JavaScript-style patterns that may appear in Script Kit templates
-    // e.g., ${await clipboard.readText()}
-    if result.contains("${await clipboard.readText()}") {
-        if let Some(clipboard_value) = values.get("clipboard") {
-            result = result.replace("${await clipboard.readText()}", clipboard_value);
-        }
-    }
-
-    result
+    substitute_variables_with_receipt(content, ctx).text
 }
 /// Extract variable names from template content.
 ///

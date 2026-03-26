@@ -32,7 +32,8 @@ use crate::keyboard_monitor::{KeyEvent, KeyboardMonitor, KeyboardMonitorError};
 use crate::keystroke_logger::keystroke_logger;
 use crate::keyword_matcher::KeywordMatcher;
 use crate::scripts::load_scriptlets;
-use crate::template_variables::substitute_variables;
+use crate::snippet::analysis::build_hybrid_snippet_plan;
+use crate::template_variables::VariableContext;
 use crate::text_injector::{TextInjector, TextInjectorConfig};
 /// Delay after stopping monitor before performing expansion (ms)
 const STOP_DELAY_MS: u64 = 50;
@@ -329,9 +330,30 @@ impl KeywordManager {
                                     }
                                 };
 
-                                // Substitute template variables (${clipboard}, ${date}, etc.)
-                                // Uses the centralized template_variables module
-                                let replacement = substitute_variables(&raw_content);
+                                // Build hybrid snippet plan (resolves known variables,
+                                // detects whether interactive template is needed)
+                                let ctx = VariableContext::new();
+                                let plan = build_hybrid_snippet_plan(&raw_content, &ctx);
+
+                                debug!(
+                                    trigger = %result.trigger,
+                                    kind = ?plan.kind,
+                                    unresolved = ?plan.unresolved_variables,
+                                    has_explicit_tabstops = plan.has_explicit_tabstops,
+                                    "Built hybrid text expansion plan"
+                                );
+
+                                if plan.needs_interaction() {
+                                    info!(
+                                        trigger = %result.trigger,
+                                        unresolved = ?plan.unresolved_variables,
+                                        has_explicit_tabstops = plan.has_explicit_tabstops,
+                                        "Interactive hybrid snippet detected; session bridge follow-up required"
+                                    );
+                                }
+
+                                // Use resolved content for paste (same behavior as before for static snippets)
+                                let replacement = plan.resolved_content.clone();
 
                                 debug!(
                                     original_len = raw_content.len(),
