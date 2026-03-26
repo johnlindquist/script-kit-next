@@ -57,6 +57,26 @@ impl Render for ScriptListApp {
             self.go_back_or_close(window, cx);
         }
 
+        // Check for inline chat continue (Continue in AI Chat → hide main window)
+        if self.inline_chat_continue_receiver.try_recv().is_ok() {
+            crate::logging::log(
+                "CHAT",
+                "Inline chat continue received - hiding main window for AI handoff",
+            );
+            // Reset state and visibility tracking
+            script_kit_gpui::set_main_window_visible(false);
+            self.is_pinned = false;
+            self.main_window_mode = MainWindowMode::Full;
+            self.reset_to_script_list(cx);
+            // Hide the main window directly via GPUI. We cannot use
+            // defer_hide_main_window here because the window_manager may not
+            // have the NSPanel handle registered. We cannot use cx.hide()
+            // because that hides the entire app including the AI window.
+            // window.remove_window() is GPUI's window-level close which
+            // hides this specific window without affecting other windows.
+            window.remove_window();
+        }
+
         // Check for inline chat configure (user wants to set up API key)
         // The ChatPrompt configure callback signals via channel
         if self.inline_chat_configure_receiver.try_recv().is_ok() {

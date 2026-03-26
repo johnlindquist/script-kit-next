@@ -353,8 +353,10 @@ pub fn find_and_register_main_window() -> bool {
     }
 
     // Expected main window dimensions (with tolerance)
-    const EXPECTED_WIDTH: f64 = 750.0;
-    const WIDTH_TOLERANCE: f64 = 50.0;
+    // Width can vary widely: 750 is the default, but saved positions may be
+    // any size the user resized to (e.g. 480). Use a wide range to catch all.
+    const MIN_WIDTH: f64 = 300.0;
+    const MAX_WIDTH: f64 = 1200.0;
     // MIN_HEIGHT lowered to 50 to accommodate compact arg prompts (76px)
     const MIN_HEIGHT: f64 = 50.0;
     const MAX_HEIGHT: f64 = 800.0;
@@ -367,8 +369,8 @@ pub fn find_and_register_main_window() -> bool {
         logging::log(
             "WINDOW_MGR",
             &format!(
-                "Searching for main window among {} windows (expecting ~{:.0}x400-600)",
-                count, EXPECTED_WIDTH
+                "Searching for main window among {} windows (expecting {:.0}-{:.0}x{:.0}-{:.0})",
+                count, MIN_WIDTH, MAX_WIDTH, MIN_HEIGHT, MAX_HEIGHT
             ),
         );
 
@@ -388,7 +390,7 @@ pub fn find_and_register_main_window() -> bool {
             );
 
             // Check if this looks like our main window
-            let width_matches = (width - EXPECTED_WIDTH).abs() < WIDTH_TOLERANCE;
+            let width_matches = (MIN_WIDTH..=MAX_WIDTH).contains(&width);
             let height_matches = (MIN_HEIGHT..=MAX_HEIGHT).contains(&height);
 
             if width_matches && height_matches {

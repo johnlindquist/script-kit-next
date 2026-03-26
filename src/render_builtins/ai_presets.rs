@@ -233,7 +233,6 @@ impl ScriptListApp {
             DeferredAiWindowAction::ApplyPreset {
                 preset_id: preset_id.to_string(),
             },
-            "Preset applied",
             cx,
         );
     }

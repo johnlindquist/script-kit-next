@@ -297,7 +297,6 @@ impl ScriptListApp {
                                             image_base64,
                                             submit: false,
                                         },
-                                        "Attached to AI",
                                         cx,
                                     );
                                 }
@@ -322,7 +321,6 @@ impl ScriptListApp {
                     action_id,
                     &dctx.trace_id,
                     deferred_action,
-                    "Attached to AI",
                     cx,
                 );
                 DispatchOutcome::success()

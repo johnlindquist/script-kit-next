@@ -16,6 +16,9 @@ use super::model::{Chat, ChatId, ChatSource, ImageAttachment, Message, MessageRo
 /// Global database connection for AI chats
 static AI_DB: OnceLock<Arc<Mutex<Connection>>> = OnceLock::new();
 
+/// Storage-level alias used by bulk chat creation APIs.
+pub type ChatMessage = Message;
+
 /// Get the path to the AI chats database (~/.scriptkit/db/ai-chats.sqlite)
 fn get_ai_db_path() -> PathBuf {
     let kit_dir = crate::setup::get_kit_path();
@@ -255,17 +258,7 @@ fn get_db() -> Result<Arc<Mutex<Connection>>> {
         .ok_or_else(|| anyhow::anyhow!("AI database not initialized"))
 }
 
-// ============================================================================
-// Chat Operations
-// ============================================================================
-
-/// Create a new chat
-pub fn create_chat(chat: &Chat) -> Result<()> {
-    let db = get_db()?;
-    let conn = db
-        .lock()
-        .map_err(|e| anyhow::anyhow!("DB lock error: {}", e))?;
-
+fn insert_chat_record(conn: &Connection, chat: &Chat) -> Result<()> {
     conn.execute(
         r#"
         INSERT INTO chats (id, title, created_at, updated_at, deleted_at, model_id, provider, source)
@@ -284,7 +277,134 @@ pub fn create_chat(chat: &Chat) -> Result<()> {
     )
     .context("Failed to create chat")?;
 
+    Ok(())
+}
+
+fn replace_message_images(conn: &Connection, message: &Message) -> Result<()> {
+    conn.execute(
+        "DELETE FROM message_images WHERE message_id = ?1",
+        params![message.id.as_str()],
+    )
+    .with_context(|| format!("Failed to clear existing images for message {}", message.id))?;
+
+    if message.images.is_empty() {
+        return Ok(());
+    }
+
+    let mut image_stmt = conn
+        .prepare(
+            r#"
+            INSERT INTO message_images (message_id, idx, data, media_type)
+            VALUES (?1, ?2, ?3, ?4)
+            "#,
+        )
+        .context("Failed to prepare image insert statement")?;
+
+    for (idx, image) in message.images.iter().enumerate() {
+        image_stmt
+            .execute(params![
+                message.id.as_str(),
+                idx as i64,
+                image.data.as_str(),
+                image.media_type.as_str(),
+            ])
+            .with_context(|| {
+                format!(
+                    "Failed to save image idx={} for message {}",
+                    idx, message.id
+                )
+            })?;
+    }
+
+    Ok(())
+}
+
+fn save_message_record(
+    conn: &Connection,
+    message: &Message,
+    update_chat_timestamp: bool,
+) -> Result<()> {
+    conn.execute(
+        r#"
+        INSERT INTO messages (id, chat_id, role, content, created_at, tokens_used)
+        VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+        ON CONFLICT(id) DO UPDATE SET
+            content = excluded.content,
+            tokens_used = excluded.tokens_used
+        "#,
+        params![
+            message.id,
+            message.chat_id.as_str(),
+            message.role.as_str(),
+            message.content,
+            message.created_at.to_rfc3339(),
+            message.tokens_used,
+        ],
+    )
+    .context("Failed to save message")?;
+
+    replace_message_images(conn, message)?;
+
+    if update_chat_timestamp {
+        let now = Utc::now().to_rfc3339();
+        conn.execute(
+            "UPDATE chats SET updated_at = ?2 WHERE id = ?1",
+            params![message.chat_id.as_str(), now],
+        )
+        .context("Failed to update chat timestamp")?;
+    }
+
+    Ok(())
+}
+
+// ============================================================================
+// Chat Operations
+// ============================================================================
+
+/// Create a new chat
+pub fn create_chat(chat: &Chat) -> Result<()> {
+    let db = get_db()?;
+    let conn = db
+        .lock()
+        .map_err(|e| anyhow::anyhow!("DB lock error: {}", e))?;
+
+    insert_chat_record(&conn, chat)?;
+
     debug!(chat_id = %chat.id, title = %chat.title, "Chat created");
+    Ok(())
+}
+
+/// Create a chat and all of its messages in a single SQLite transaction.
+pub fn create_chat_with_messages_bulk(chat: &Chat, messages: &[ChatMessage]) -> Result<()> {
+    let db = get_db()?;
+    let mut conn = db
+        .lock()
+        .map_err(|e| anyhow::anyhow!("DB lock error: {}", e))?;
+
+    let tx = conn
+        .transaction()
+        .context("Failed to start bulk chat transaction")?;
+
+    insert_chat_record(&tx, chat).context("Failed to create chat in bulk insert")?;
+
+    for message in messages {
+        save_message_record(&tx, message, true).with_context(|| {
+            format!(
+                "Failed to save message {} while bulk-creating chat {}",
+                message.id, chat.id
+            )
+        })?;
+    }
+
+    tx.commit()
+        .context("Failed to commit bulk chat transaction")?;
+
+    debug!(
+        chat_id = %chat.id,
+        title = %chat.title,
+        message_count = messages.len(),
+        "Chat and messages created in bulk transaction"
+    );
     Ok(())
 }
 
@@ -789,67 +909,7 @@ fn save_message_internal(message: &Message, update_chat_timestamp: bool) -> Resu
     // 2. Performance: one fsync instead of two autocommit fsyncs
     let tx = conn.transaction().context("Failed to start transaction")?;
 
-    tx.execute(
-        r#"
-        INSERT INTO messages (id, chat_id, role, content, created_at, tokens_used)
-        VALUES (?1, ?2, ?3, ?4, ?5, ?6)
-        ON CONFLICT(id) DO UPDATE SET
-            content = excluded.content,
-            tokens_used = excluded.tokens_used
-        "#,
-        params![
-            message.id,
-            message.chat_id.as_str(),
-            message.role.as_str(),
-            message.content,
-            message.created_at.to_rfc3339(),
-            message.tokens_used,
-        ],
-    )
-    .context("Failed to save message")?;
-
-    tx.execute(
-        "DELETE FROM message_images WHERE message_id = ?1",
-        params![message.id.as_str()],
-    )
-    .with_context(|| format!("Failed to clear existing images for message {}", message.id))?;
-
-    if !message.images.is_empty() {
-        let mut image_stmt = tx
-            .prepare(
-                r#"
-                INSERT INTO message_images (message_id, idx, data, media_type)
-                VALUES (?1, ?2, ?3, ?4)
-                "#,
-            )
-            .context("Failed to prepare image insert statement")?;
-
-        for (idx, image) in message.images.iter().enumerate() {
-            image_stmt
-                .execute(params![
-                    message.id.as_str(),
-                    idx as i64,
-                    image.data.as_str(),
-                    image.media_type.as_str(),
-                ])
-                .with_context(|| {
-                    format!(
-                        "Failed to save image idx={} for message {}",
-                        idx, message.id
-                    )
-                })?;
-        }
-    }
-
-    // Update the chat's updated_at timestamp (unless explicitly skipped for mock data)
-    if update_chat_timestamp {
-        let now = Utc::now().to_rfc3339();
-        tx.execute(
-            "UPDATE chats SET updated_at = ?2 WHERE id = ?1",
-            params![message.chat_id.as_str(), now],
-        )
-        .context("Failed to update chat timestamp")?;
-    }
+    save_message_record(&tx, message, update_chat_timestamp)?;
 
     tx.commit()
         .context("Failed to commit message transaction")?;
@@ -2064,6 +2124,87 @@ mod tests {
         );
 
         delete_chat_permanently(&chat.id).expect("Should cleanup test chat");
+    }
+
+    #[test]
+    fn test_create_chat_with_messages_bulk_persists_chat_and_messages() {
+        init_test_db();
+
+        let mut chat = Chat::new("test-model-bulk-create", "test-provider-bulk-create");
+        chat.title = "Bulk create test chat".to_string();
+
+        let mut first = Message::user(chat.id, "bulk user message").with_tokens(11);
+        first.images = vec![ImageAttachment::png("bulk-image-1".to_string())];
+        let second = Message::assistant(chat.id, "bulk assistant message").with_tokens(17);
+
+        create_chat_with_messages_bulk(&chat, &[first.clone(), second.clone()])
+            .expect("Should create chat and messages in a single transaction");
+
+        let stored_chat = get_chat(&chat.id)
+            .expect("Should query stored chat")
+            .expect("Bulk-created chat should exist");
+        assert_eq!(stored_chat.id, chat.id);
+        assert_eq!(stored_chat.title, chat.title);
+        assert_eq!(stored_chat.model_id, chat.model_id);
+        assert_eq!(stored_chat.provider, chat.provider);
+
+        let stored_messages = get_chat_messages(&chat.id).expect("Should fetch stored messages");
+        assert_eq!(
+            stored_messages.len(),
+            2,
+            "Should persist both bulk messages"
+        );
+
+        let stored_first = stored_messages
+            .iter()
+            .find(|message| message.id == first.id)
+            .expect("First bulk message should exist");
+        assert_eq!(stored_first.content, first.content);
+        assert_eq!(stored_first.tokens_used, first.tokens_used);
+        assert_eq!(stored_first.images.len(), 1);
+        assert_eq!(stored_first.images[0].data, "bulk-image-1");
+        assert_eq!(stored_first.images[0].media_type, "image/png");
+
+        let stored_second = stored_messages
+            .iter()
+            .find(|message| message.id == second.id)
+            .expect("Second bulk message should exist");
+        assert_eq!(stored_second.content, second.content);
+        assert_eq!(stored_second.tokens_used, second.tokens_used);
+        assert!(
+            stored_second.images.is_empty(),
+            "Second bulk message should not have images"
+        );
+
+        delete_chat_permanently(&chat.id).expect("Should cleanup test chat");
+    }
+
+    #[test]
+    fn test_create_chat_with_messages_bulk_rolls_back_when_message_insert_fails() {
+        init_test_db();
+
+        let chat = Chat::new("test-model-bulk-rollback", "test-provider-bulk-rollback");
+        let first = Message::user(chat.id, "first bulk message");
+        let failing = Message::assistant(ChatId::new(), "message with missing parent chat");
+
+        let result = create_chat_with_messages_bulk(&chat, &[first, failing]);
+        assert!(
+            result.is_err(),
+            "Bulk create should fail when one message insert violates FK constraints"
+        );
+
+        let stored_chat = get_chat(&chat.id).expect("Should query bulk-created chat");
+        assert!(
+            stored_chat.is_none(),
+            "Bulk transaction should rollback the chat insert when a message insert fails"
+        );
+
+        let stored_messages =
+            get_chat_messages(&chat.id).expect("Should query messages after rollback");
+        assert!(
+            stored_messages.is_empty(),
+            "Bulk transaction should rollback prior message inserts on failure"
+        );
     }
 
     #[test]
