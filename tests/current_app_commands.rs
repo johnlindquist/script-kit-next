@@ -10,11 +10,11 @@ use script_kit_gpui::builtins::{
 use script_kit_gpui::config::BuiltInConfig;
 use script_kit_gpui::menu_bar::current_app_commands::{
     build_current_app_command_recipe, build_current_app_intent_trace_receipt,
-    build_generate_script_prompt_from_snapshot, normalize_trace_current_app_intent_request,
-    normalize_turn_this_into_a_command_request, parse_current_app_command_recipe_json,
-    resolve_do_in_current_app_intent, suggest_current_app_command_name,
-    verify_current_app_command_recipe, DoInCurrentAppAction, FrontmostMenuSnapshot,
-    CURRENT_APP_COMMAND_RECIPE_SCHEMA_VERSION,
+    build_generate_script_prompt_from_snapshot, build_generated_script_prompt_from_recipe,
+    normalize_trace_current_app_intent_request, normalize_turn_this_into_a_command_request,
+    parse_current_app_command_recipe_json, resolve_do_in_current_app_intent,
+    suggest_current_app_command_name, verify_current_app_command_recipe, DoInCurrentAppAction,
+    FrontmostMenuSnapshot, CURRENT_APP_COMMAND_RECIPE_SCHEMA_VERSION,
 };
 use script_kit_gpui::menu_bar::{KeyboardShortcut, MenuBarItem, ModifierFlags};
 
@@ -1046,4 +1046,216 @@ fn verify_current_app_command_recipe_serializes_to_valid_json() {
     assert!(parsed["browserUrlExpected"].as_bool().unwrap_or(false));
     assert!(!parsed["browserUrlPresent"].as_bool().unwrap_or(true));
     assert!(parsed["warningCount"].as_u64().unwrap_or(0) >= 1);
+}
+
+// ---------------------------------------------------------------------------
+// Recipe → generated script prompt
+// ---------------------------------------------------------------------------
+
+#[test]
+fn build_current_app_command_recipe_marks_context_flags() {
+    let recipe = build_current_app_command_recipe(
+        safari_snapshot_with_menus(),
+        Some("close duplicate tabs"),
+        Some("tab 1\ntab 2"),
+        Some("https://example.com"),
+    );
+
+    assert_eq!(recipe.recipe_type, "currentAppCommand");
+    assert_eq!(recipe.effective_query, "close duplicate tabs");
+    assert_eq!(recipe.trace.action, "generate_script");
+    assert!(recipe.prompt_receipt.included_user_request);
+    assert!(recipe.prompt_receipt.included_selected_text);
+    assert!(recipe.prompt_receipt.included_browser_url);
+    assert_eq!(
+        recipe.suggested_script_name,
+        "Safari Close Duplicate Tabs"
+    );
+}
+
+#[test]
+fn generated_script_prompt_from_recipe_embeds_contract_and_recipe_header() {
+    let recipe = build_current_app_command_recipe(
+        safari_snapshot_with_menus(),
+        Some("close duplicate tabs"),
+        None,
+        Some("https://example.com"),
+    );
+
+    let prompt = build_generated_script_prompt_from_recipe(&recipe);
+
+    assert!(
+        prompt.contains("OUTPUT CONTRACT:"),
+        "prompt must include OUTPUT CONTRACT section"
+    );
+    assert!(
+        prompt.contains("Return only runnable Script Kit TypeScript."),
+        "prompt must request Script Kit TypeScript"
+    );
+    assert!(
+        prompt.contains("Current-App-Recipe-Base64:"),
+        "prompt must embed base64 recipe header"
+    );
+    assert!(
+        prompt.contains("Current-App-Recipe-Name:"),
+        "prompt must embed recipe name header"
+    );
+    assert!(
+        prompt.contains("Safari Close Duplicate Tabs"),
+        "prompt must include suggested script name"
+    );
+    assert!(
+        prompt.contains("Bias toward direct menu-command automation"),
+        "prompt must bias toward menu automation"
+    );
+}
+
+#[test]
+fn generated_script_prompt_base64_roundtrips_recipe() {
+    use base64::Engine as _;
+
+    let recipe = build_current_app_command_recipe(
+        safari_snapshot_with_menus(),
+        Some("close duplicate tabs"),
+        Some("selected text here"),
+        Some("https://example.com"),
+    );
+
+    let prompt = build_generated_script_prompt_from_recipe(&recipe);
+
+    // Extract base64 from the prompt
+    let base64_prefix = "Current-App-Recipe-Base64: ";
+    let base64_start = prompt
+        .find(base64_prefix)
+        .expect("prompt must contain base64 prefix")
+        + base64_prefix.len();
+    let base64_end = prompt[base64_start..]
+        .find('\n')
+        .expect("base64 line must end with newline")
+        + base64_start;
+    let base64_str = &prompt[base64_start..base64_end];
+
+    let decoded_bytes = base64::engine::general_purpose::STANDARD
+        .decode(base64_str)
+        .expect("base64 must decode");
+    let decoded_json: serde_json::Value =
+        serde_json::from_slice(&decoded_bytes).expect("decoded bytes must be valid JSON");
+
+    assert_eq!(decoded_json["recipeType"], "currentAppCommand");
+    assert_eq!(decoded_json["effectiveQuery"], "close duplicate tabs");
+    assert_eq!(
+        decoded_json["suggestedScriptName"],
+        "Safari Close Duplicate Tabs"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Ranking: DoInCurrentApp outranks weaker generation paths
+// ---------------------------------------------------------------------------
+
+/// Helper: run fuzzy search and return the position of a builtin by id.
+fn rank_of(entries: &[builtins::BuiltInEntry], query: &str, target_id: &str) -> Option<usize> {
+    let matches = script_kit_gpui::scripts::fuzzy_search_builtins(entries, query);
+    matches.iter().position(|m| m.entry.id == target_id)
+}
+
+#[test]
+fn do_in_current_app_outranks_generate_script_from_current_app_for_intent_queries() {
+    let entries = builtins::get_builtin_entries(&BuiltInConfig::default());
+
+    let do_in_id = "builtin-do-in-current-app";
+    let gen_app_id = "builtin-generate-script-from-current-app";
+
+    // For intent-oriented queries, DoInCurrentApp (recipe-backed) must
+    // outrank GenerateScriptFromCurrentApp (weaker raw-prompt path).
+    // These overlap on keywords; DoInCurrentApp wins because it has
+    // more keyword hits and its name/description match "automation" etc.
+    let intent_queries = vec![
+        "automation",
+        "automate",
+        "current",
+        "intent",
+        "execute",
+        "do",
+        "shortcut",
+    ];
+
+    for query in &intent_queries {
+        let do_in_rank = rank_of(&entries, query, do_in_id);
+        let gen_app_rank = rank_of(&entries, query, gen_app_id);
+
+        assert!(
+            do_in_rank.is_some(),
+            "DoInCurrentApp must match query '{query}'"
+        );
+
+        if let (Some(do_pos), Some(gen_app_pos)) = (do_in_rank, gen_app_rank) {
+            assert!(
+                do_pos <= gen_app_pos,
+                "DoInCurrentApp (rank {do_pos}) must rank <= GenerateScriptFromCurrentApp (rank {gen_app_pos}) for query '{query}'"
+            );
+        }
+    }
+}
+
+#[test]
+fn do_in_current_app_matches_all_generation_keywords() {
+    let entries = builtins::get_builtin_entries(&BuiltInConfig::default());
+
+    // After keyword promotion, DoInCurrentApp must match every keyword
+    // that GenerateScript or GenerateScriptFromCurrentApp would match.
+    let generation_keywords = vec![
+        "generate", "ai", "create", "code", "script", "context", "browser", "selection",
+        "automation", "menu", "frontmost",
+    ];
+
+    for keyword in &generation_keywords {
+        let pos = rank_of(&entries, keyword, "builtin-do-in-current-app");
+        assert!(
+            pos.is_some(),
+            "DoInCurrentApp must match keyword '{keyword}'"
+        );
+    }
+}
+
+#[test]
+fn do_in_current_app_matches_context_and_selection_keywords() {
+    let entries = builtins::get_builtin_entries(&BuiltInConfig::default());
+
+    // These keywords previously only matched GenerateScriptFromCurrentApp.
+    // After promotion, DoInCurrentApp must also match them.
+    for query in &["context", "browser", "selection"] {
+        let pos = rank_of(&entries, query, "builtin-do-in-current-app");
+        assert!(
+            pos.is_some(),
+            "DoInCurrentApp must match keyword '{query}'"
+        );
+    }
+}
+
+#[test]
+fn unrelated_builtins_ranking_stable_after_promotion() {
+    let entries = builtins::get_builtin_entries(&BuiltInConfig::default());
+
+    // Clipboard History should still rank first for "clipboard"
+    let matches = script_kit_gpui::scripts::fuzzy_search_builtins(&entries, "clipboard");
+    assert!(
+        !matches.is_empty(),
+        "clipboard query must return results"
+    );
+    assert_eq!(
+        matches[0].entry.id, "builtin-clipboard-history",
+        "Clipboard History must still be the top result for 'clipboard'"
+    );
+
+    // Scratch Pad should still rank first for "scratch"
+    let matches = script_kit_gpui::scripts::fuzzy_search_builtins(&entries, "scratch");
+    assert!(
+        !matches.is_empty(),
+        "scratch query must return results"
+    );
+    assert_eq!(
+        matches[0].entry.id, "builtin-scratch-pad",
+        "Scratch Pad must still be the top result for 'scratch'"
+    );
 }

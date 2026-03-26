@@ -341,6 +341,7 @@ Detailed guidance lives in `.claude/skills/` — load only when relevant:
 | `script-kit-agent-workflow` | Fix-verify loop, session completion |
 | `script-kit-ui-testing` | Screenshots, stdin JSON protocol, layout debugging |
 | `gpui-patterns` | UI code, keyboard events, layouts, themes |
+| `storybook` | Design explorer, stories, footer/input variations, adoption, chrome audits |
 | `visual-test` | Visual iteration, named-pipe testing, captureWindow |
 | `dev-loop` | Background dev server, log monitoring, runtime verification |
 | `script-kit-architecture` | Navigating codebase, understanding modules |

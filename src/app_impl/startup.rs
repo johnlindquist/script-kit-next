@@ -363,7 +363,7 @@ impl ScriptListApp {
             scrollbar_fade_gen: 0,
             last_scroll_time: None,
             current_view: AppView::ScriptList,
-            main_window_mode: MainWindowMode::Full,
+            main_window_mode: MainWindowMode::Mini,
             script_session: Arc::new(ParkingMutex::new(None)),
             arg_input: TextInputState::new(),
             arg_selected_index: 0,

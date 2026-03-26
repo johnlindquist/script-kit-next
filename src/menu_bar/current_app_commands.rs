@@ -650,6 +650,46 @@ pub fn build_current_app_command_recipe(
 }
 
 // ---------------------------------------------------------------------------
+// Recipe → generation prompt
+// ---------------------------------------------------------------------------
+
+/// Builds a generation prompt from a pre-built recipe, embedding the recipe as
+/// a base64-encoded header so the generated script can be round-tripped back to
+/// recipe tooling (verify, replay) later.
+pub fn build_generated_script_prompt_from_recipe(recipe: &CurrentAppCommandRecipe) -> String {
+    use base64::Engine as _;
+
+    let recipe_json = match serde_json::to_string_pretty(recipe) {
+        Ok(json) => json,
+        Err(error) => {
+            tracing::warn!(
+                error = %error,
+                "current_app_recipe.embed_serialize_failed"
+            );
+            "{}".to_string()
+        }
+    };
+
+    let recipe_base64 = base64::engine::general_purpose::STANDARD.encode(recipe_json.as_bytes());
+
+    format!(
+        "{prompt}\n\n\
+         OUTPUT CONTRACT:\n\
+         - Return only runnable Script Kit TypeScript.\n\
+         - Bias toward direct menu-command automation before brittle click/coordinate automation.\n\
+         - Keep the script as small as possible.\n\
+         - Put these exact header lines at the top of the generated file:\n\
+         \x20 // Current-App-Recipe-Base64: {recipe_base64}\n\
+         \x20 // Current-App-Recipe-Name: {script_name}\n\
+         - If Accessibility is required, say so in a comment near the top.\n\
+         - If the task needs AI, isolate that in one function instead of spreading it across the file.\n\
+         - Do not include prose outside the code.",
+        prompt = recipe.prompt,
+        script_name = recipe.suggested_script_name,
+    )
+}
+
+// ---------------------------------------------------------------------------
 // Verify Current App Recipe
 // ---------------------------------------------------------------------------
 
@@ -1766,5 +1806,78 @@ mod tests {
         assert_eq!(receipt.verification.status, "drift");
         assert_eq!(receipt.action, "blocked_by_drift");
         assert!(receipt.verification.warning_count > 0);
+    }
+
+    // -----------------------------------------------------------------------
+    // Recipe construction contract: context flags and fields
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn build_current_app_command_recipe_marks_context_flags() {
+        let snap = FrontmostMenuSnapshot {
+            app_name: "Safari".into(),
+            bundle_id: "com.apple.Safari".into(),
+            items: vec![
+                apple_menu(),
+                menu("File", vec![leaf("New Tab", vec![1, 0])], vec![1]),
+            ],
+        };
+
+        let recipe = build_current_app_command_recipe(
+            snap,
+            Some("close duplicate tabs"),
+            Some("tab 1\ntab 2"),
+            Some("https://example.com"),
+        );
+
+        assert_eq!(recipe.recipe_type, "currentAppCommand");
+        assert_eq!(recipe.effective_query, "close duplicate tabs");
+        assert_eq!(recipe.trace.action, "generate_script");
+        assert!(recipe.prompt_receipt.included_user_request);
+        assert!(recipe.prompt_receipt.included_selected_text);
+        assert!(recipe.prompt_receipt.included_browser_url);
+        assert_eq!(recipe.suggested_script_name, "Safari Close Duplicate Tabs");
+    }
+
+    // -----------------------------------------------------------------------
+    // Prompt contract stability: output contract and recipe header
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn generated_script_prompt_from_recipe_embeds_contract_and_recipe_header() {
+        let snap = FrontmostMenuSnapshot {
+            app_name: "Safari".into(),
+            bundle_id: "com.apple.Safari".into(),
+            items: vec![
+                apple_menu(),
+                menu("File", vec![leaf("New Tab", vec![1, 0])], vec![1]),
+            ],
+        };
+
+        let recipe = build_current_app_command_recipe(
+            snap,
+            Some("close duplicate tabs"),
+            None,
+            Some("https://example.com"),
+        );
+
+        let prompt = build_generated_script_prompt_from_recipe(&recipe);
+
+        assert!(
+            prompt.contains("OUTPUT CONTRACT:"),
+            "prompt must contain OUTPUT CONTRACT section"
+        );
+        assert!(
+            prompt.contains("Return only runnable Script Kit TypeScript."),
+            "prompt must require runnable Script Kit TypeScript"
+        );
+        assert!(
+            prompt.contains("Current-App-Recipe-Base64:"),
+            "prompt must embed base64-encoded recipe header"
+        );
+        assert!(
+            prompt.contains("Bias toward direct menu-command automation"),
+            "prompt must bias toward menu-command automation"
+        );
     }
 }

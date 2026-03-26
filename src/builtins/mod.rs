@@ -1383,6 +1383,15 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
                 "frontmost",
                 "script",
                 "shortcut",
+                // Overlap with GenerateScript / GenerateScriptFromCurrentApp so
+                // this recipe-backed entry outranks the weaker generic paths.
+                "generate",
+                "ai",
+                "create",
+                "code",
+                "context",
+                "browser",
+                "selection",
             ],
             BuiltInFeature::UtilityCommand(UtilityCommandType::DoInCurrentApp),
             "🎯",

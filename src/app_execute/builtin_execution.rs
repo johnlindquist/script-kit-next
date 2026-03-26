@@ -780,7 +780,10 @@ impl ScriptListApp {
 
         platform::defer_hide_main_window(cx);
 
-        let prompt = recipe.prompt.clone();
+        let prompt =
+            crate::menu_bar::current_app_commands::build_generated_script_prompt_from_recipe(
+                &recipe,
+            );
 
         cx.spawn(async move |this, cx| {
             cx.background_executor()
@@ -3065,6 +3068,7 @@ impl ScriptListApp {
 
                         match crate::menu_bar::load_frontmost_menu_snapshot() {
                             Ok(snapshot) => {
+                                let snapshot_for_recipe = snapshot.clone();
                                 let (entries, snapshot_receipt) = snapshot.into_entries_with_receipt();
 
                                 if entries.is_empty() && trimmed_query.is_empty() {
@@ -3133,14 +3137,56 @@ impl ScriptListApp {
                                             tracing::info!(
                                                 trace_id = %dctx.trace_id,
                                                 trimmed_query = %trimmed_query,
-                                                "do_in_current_app.action → GenerateScript — no menu match, falling back to AI"
+                                                "do_in_current_app.action → GenerateScript — routing through recipe flow"
                                             );
-                                            self.spawn_generate_script_from_current_app_after_hide(
+
+                                            let selected_text = crate::selected_text::get_selected_text()
+                                                .ok()
+                                                .filter(|text| !text.trim().is_empty());
+
+                                            let browser_url = crate::platform::get_focused_browser_tab_url()
+                                                .ok()
+                                                .filter(|url| !url.trim().is_empty());
+
+                                            let recipe =
+                                                crate::menu_bar::current_app_commands::build_current_app_command_recipe(
+                                                    snapshot_for_recipe,
+                                                    Some(&raw_query_owned),
+                                                    selected_text.as_deref(),
+                                                    browser_url.as_deref(),
+                                                );
+
+                                            match serde_json::to_string_pretty(&recipe) {
+                                                Ok(json) => {
+                                                    tracing::info!(
+                                                        category = "CURRENT_APP_RECIPE",
+                                                        trace_id = %dctx.trace_id,
+                                                        app_name = %recipe.prompt_receipt.app_name,
+                                                        bundle_id = %recipe.prompt_receipt.bundle_id,
+                                                        effective_query = %recipe.effective_query,
+                                                        route = %recipe.trace.action,
+                                                        suggested_script_name = %recipe.suggested_script_name,
+                                                        included_selected_text = recipe.prompt_receipt.included_selected_text,
+                                                        included_browser_url = recipe.prompt_receipt.included_browser_url,
+                                                        json_bytes = json.len(),
+                                                        "do_in_current_app.recipe_prepared"
+                                                    );
+                                                }
+                                                Err(error) => {
+                                                    tracing::warn!(
+                                                        trace_id = %dctx.trace_id,
+                                                        error = %error,
+                                                        "do_in_current_app.recipe_serialize_failed"
+                                                    );
+                                                }
+                                            }
+
+                                            self.spawn_generate_script_from_recipe_after_hide(
                                                 dctx.trace_id.to_string(),
-                                                Some(trimmed_query),
+                                                recipe,
                                                 cx,
                                             );
-                                            Self::builtin_success(dctx, "do_in_current_app_generate_script")
+                                            Self::builtin_success(dctx, "do_in_current_app_generate_script_from_recipe")
                                         }
                                     }
                                 }

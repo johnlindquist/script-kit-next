@@ -112,18 +112,18 @@ mod tests {
         );
     }
 
-    /// Verify the main window starts in full mode.
+    /// Verify the main window starts in mini mode.
     ///
-    /// Mini mode is an explicit launcher variant and should never be the
-    /// default for the primary ScriptListApp startup path.
+    /// The minimalist launcher is now the default for the primary
+    /// ScriptListApp startup path.
     #[test]
-    fn test_main_window_mode_defaults_to_full_in_startup_state() {
+    fn test_main_window_mode_defaults_to_mini_in_startup_state() {
         let new_body = read_new_startup_sequence();
 
         assert!(
-            new_body.contains("main_window_mode: MainWindowMode::Full,"),
-            "ScriptListApp::new() must initialize main_window_mode to MainWindowMode::Full \
-             in startup_new_state.rs so the standard launcher remains the default."
+            new_body.contains("main_window_mode: MainWindowMode::Mini,"),
+            "ScriptListApp::new() must initialize main_window_mode to MainWindowMode::Mini \
+             in startup_new_state.rs so the minimalist launcher remains the default."
         );
     }
 

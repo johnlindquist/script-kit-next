@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-03-26T11:38:49.636Z",
+  "updatedAt": "2026-03-26T17:52:03.915Z",
   "agents": {
     "storybook-contract-a1": {
       "id": "storybook-contract-a1",
@@ -100,6 +100,56 @@
         "commitFiles": [
           "src/components/mod.rs",
           "src/components/prompt_layout_shell.rs"
+        ]
+      },
+      "claimed_at": {}
+    },
+    "flash-fix-a1": {
+      "id": "flash-fix-a1",
+      "kind": "codex",
+      "mode": "exec",
+      "model": "openai/gpt-5.4",
+      "task": "Fix the window flash/stretch bug on hotkey activation. The root cause: show_main_window_helper in src/main_sections/window_visibility.rs makes the panel visible (orderFrontRegardless + makeKeyWindow) BEFORE the final view-specific size is applied, and the corrective resize is deferred via defer_resize_to_view(). This guarantees a bad first visible frame.\n\nTHE FIX (strict hidden-prep pipeline):\n1. Consume NEEDS_RESET FIRST, before computing any geometry.\n2. If reset needed, call view.reset_to_script_list(ctx) BEFORE computing bounds.\n3. Compute the FINAL target geometry from post-reset state using calculate_window_size_params() and height_for_view() (for Full mode) or mini sizing helpers (for Mini mode). Do NOT use initial_window_height() as the pre-show size.\n4. Apply that geometry via move_first_window_to_bounds() while the panel is still hidden.\n5. THEN call show_main_window_without_activation().\n6. Post-show: focus only (activate_window, focus, set focused_input/pending_focus). NO defer_resize_to_view in the show path.\n\nKEY FILES:\n- src/main_sections/window_visibility.rs — show_main_window_helper (PRIMARY TARGET)\n- src/platform/visibility_focus.rs — show_main_window_without_activation(), move_first_window_to_bounds()\n- src/main_sections/app_view_state.rs — calculate_window_size_params(), height_for_view(), reset_to_script_list()\n- src/app_impl/lifecycle_reset.rs — NEEDS_RESET atomic, reset logic\n\nIMPORTANT CONSTRAINTS (from CLAUDE.md):\n- include!() files (main_sections/, app_impl/) share main.rs scope: NO top-level use statements, NO mod declarations\n- Use fully qualified paths or existing main.rs scope imports in include!() files\n- After any render-affecting mutation: cx.notify()\n- Never unwrap() in production code — use ? or graceful handling\n- Verification: cargo check && cargo clippy --all-targets -- -D warnings && cargo test\n\nThe goal is: hidden state reset → hidden exact geometry → show panel → focus only. Remove defer_resize_to_view from the hotkey show path entirely. Keep deferred resize for interactive changes after the window is already visible.",
+      "scope": "src/main_sections/window_visibility.rs,src/platform/visibility_focus.rs,src/main_sections/app_view_state.rs,src/app_impl/lifecycle_reset.rs",
+      "readonly": false,
+      "status": "needs_split",
+      "claims": [],
+      "createdAt": "2026-03-26T17:42:42.370Z",
+      "lastSeenAt": "2026-03-26T17:52:03.915Z",
+      "host": "Johns-MacBook-Pro.local",
+      "startSha": "f8798129836f6b422c7af0741ac05d844dc633a9",
+      "notes": "[policy] tests failed",
+      "report": {
+        "schema": "opex.agent_report.v1",
+        "agentId": "flash-fix-a1",
+        "taskSummary": "Reworked the hotkey show path to prepare reset state and exact window geometry while hidden, then show and focus without deferred corrective resizing.",
+        "tests": [
+          {
+            "cmd": "cargo check",
+            "result": "pass"
+          },
+          {
+            "cmd": "cargo clippy --all-targets -- -D warnings",
+            "result": "fail"
+          },
+          {
+            "cmd": "cargo test",
+            "result": "fail"
+          },
+          {
+            "cmd": "cargo test --test source_audits mini_main_window::lifecycle_resets_restore_full_main_window_mode_on_close_and_go_back",
+            "result": "pass"
+          }
+        ],
+        "changedFiles": [
+          "src/main_sections/window_visibility.rs"
+        ],
+        "commitCount": 1,
+        "commitShas": [
+          "fa8c9055fbaad63fe84624ecb228f148acdc4105"
+        ],
+        "commitFiles": [
+          "src/main_sections/window_visibility.rs"
         ]
       },
       "claimed_at": {}

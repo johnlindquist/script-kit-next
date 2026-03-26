@@ -129,7 +129,7 @@ pub enum AnchorPosition {
 
 /// Complete configuration for ActionsDialog appearance and behavior
 #[allow(dead_code)] // Public API - will be used by AI window integration
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct ActionsDialogConfig {
     /// Position of search input
     pub search_position: SearchPosition,
@@ -141,6 +141,24 @@ pub struct ActionsDialogConfig {
     pub show_icons: bool,
     /// Whether to show the footer with keyboard hints
     pub show_footer: bool,
+    /// Placeholder shown when the actions search is empty
+    pub search_placeholder: Option<String>,
+    /// Whether to render the separate context header row
+    pub show_context_header: bool,
+}
+
+impl Default for ActionsDialogConfig {
+    fn default() -> Self {
+        Self {
+            search_position: SearchPosition::default(),
+            section_style: SectionStyle::default(),
+            anchor: AnchorPosition::default(),
+            show_icons: false,
+            show_footer: false,
+            search_placeholder: None,
+            show_context_header: true,
+        }
+    }
 }
 
 /// Category for grouping actions in the actions menu.

@@ -66,7 +66,7 @@ impl Render for ScriptListApp {
             // Reset state and visibility tracking
             script_kit_gpui::set_main_window_visible(false);
             self.is_pinned = false;
-            self.main_window_mode = MainWindowMode::Full;
+            self.main_window_mode = MainWindowMode::Mini;
             self.reset_to_script_list(cx);
             // Hide the main window directly via GPUI. We cannot use
             // defer_hide_main_window here because the window_manager may not

@@ -353,6 +353,24 @@ mod empty_state_message_tests {
 const ACTIONS_DIALOG_LIST_OVERDRAW_PX: f32 = 100.0;
 
 impl ActionsDialog {
+    fn shows_context_header(&self) -> bool {
+        self.config.show_context_header && self.context_title.is_some()
+    }
+
+    fn search_placeholder_text(&self) -> SharedString {
+        self.config
+            .search_placeholder
+            .as_ref()
+            .cloned()
+            .or_else(|| {
+                self.context_title
+                    .clone()
+                    .filter(|_| !self.config.show_context_header)
+            })
+            .unwrap_or_else(|| "Search actions...".to_string())
+            .into()
+    }
+
     pub fn new(
         focus_handle: FocusHandle,
         on_select: ActionCallback,
@@ -1504,7 +1522,7 @@ impl Render for ActionsDialog {
 
         // Render search input - compact version
         let search_display = if self.search_text.is_empty() {
-            SharedString::from("Search actions...")
+            self.search_placeholder_text()
         } else {
             SharedString::from(self.search_text.clone())
         };
@@ -1635,7 +1653,7 @@ impl Render for ActionsDialog {
                     total_content_height
                 },
                 show_search,
-                self.context_title.is_some(),
+                self.shows_context_header(),
                 self.config.show_footer,
             );
 
@@ -2145,7 +2163,7 @@ impl Render for ActionsDialog {
         } else {
             0.0
         };
-        let header_height = if self.context_title.is_some() {
+        let header_height = if self.shows_context_header() {
             HEADER_HEIGHT
         } else {
             0.0
@@ -2184,7 +2202,8 @@ impl Render for ActionsDialog {
         // - Smaller font (text_xs)
         // - Semibold weight
         // - Dimmed color (visually distinct from actionable items)
-        let header_container = self.context_title.as_ref().map(|title| {
+        let header_container = if self.shows_context_header() {
+            self.context_title.as_ref().map(|title| {
             let header_text = if self.design_variant == DesignVariant::Default {
                 rgb(self.theme.colors.text.dimmed)
             } else {
@@ -2214,7 +2233,10 @@ impl Render for ActionsDialog {
                         .text_color(header_text)
                         .child(title.clone()),
                 )
-        });
+            })
+        } else {
+            None
+        };
 
         // Main overlay popup container
         // Fixed width, dynamic height based on content, rounded corners, shadow

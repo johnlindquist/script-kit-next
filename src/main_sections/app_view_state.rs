@@ -227,8 +227,8 @@ enum FocusedInput {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub(crate) enum MainWindowMode {
-    #[default]
     Full,
+    #[default]
     Mini,
 }
 
