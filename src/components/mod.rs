@@ -88,7 +88,8 @@ pub(crate) use prompt_layout_shell::{
 pub use prompt_layout_shell::{prompt_shell_container, prompt_shell_content};
 #[allow(unused_imports)]
 pub(crate) use prompt_layout_shell::{
-    render_hint_strip_leading_text, render_simple_hint_strip, render_simple_prompt_shell,
+    render_hint_strip_leading_text, render_minimal_list_prompt_scaffold,
+    render_minimal_list_prompt_shell, render_simple_hint_strip, render_simple_prompt_shell,
 };
 #[allow(unused_imports)]
 pub(crate) use prompt_layout_shell::{emit_prompt_chrome_audit, PromptChromeAudit};
