@@ -46,6 +46,12 @@ pub fn load_story_selections() -> Result<StorySelectionStore> {
         .with_context(|| format!("failed to parse story selections: {}", path.display()))
 }
 
+pub fn load_selected_story_variant(story_id: &str) -> Option<String> {
+    load_story_selections()
+        .ok()
+        .and_then(|store| store.selected_variant(story_id).map(str::to_owned))
+}
+
 pub fn save_story_selections(store: &StorySelectionStore) -> Result<()> {
     let path = selection_store_path();
 
@@ -79,5 +85,17 @@ mod tests {
 
         assert_eq!(deserialized.selected_variant("button-story"), Some("ghost"));
         assert_eq!(deserialized, store);
+    }
+
+    #[test]
+    fn later_selection_wins_for_same_story() {
+        let mut store = StorySelectionStore::default();
+        store.set_selected_variant("footer-layout-variations", "raycast-exact");
+        store.set_selected_variant("footer-layout-variations", "minimal");
+
+        assert_eq!(
+            store.selected_variant("footer-layout-variations"),
+            Some("minimal")
+        );
     }
 }

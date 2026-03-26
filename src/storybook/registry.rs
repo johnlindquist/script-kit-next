@@ -69,4 +69,34 @@ mod tests {
             assert!(entry.story.variants().len() > 1);
         }
     }
+
+    #[test]
+    fn footer_surface_has_compare_ready_story() {
+        assert!(
+            stories_by_surface(StorySurface::Footer)
+                .into_iter()
+                .any(|entry| entry.story.variants().len() > 1),
+            "Footer surface should expose at least one compare-ready story"
+        );
+    }
+
+    #[test]
+    fn header_surface_has_compare_ready_story() {
+        assert!(
+            stories_by_surface(StorySurface::Header)
+                .into_iter()
+                .any(|entry| entry.story.variants().len() > 1),
+            "Header surface should expose at least one compare-ready story"
+        );
+    }
+
+    #[test]
+    fn action_dialog_surface_has_compare_ready_story() {
+        assert!(
+            stories_by_surface(StorySurface::ActionDialog)
+                .into_iter()
+                .any(|entry| entry.story.variants().len() > 1),
+            "ActionDialog surface should expose at least one compare-ready story"
+        );
+    }
 }
