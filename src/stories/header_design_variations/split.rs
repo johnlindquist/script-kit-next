@@ -153,15 +153,30 @@ impl Story for HeaderDesignVariationsStory {
     fn variants(&self) -> Vec<StoryVariant> {
         vec![
             StoryVariant::default_named("current-production", "Current Production")
-                .description("Existing production header layout"),
+                .description("Existing production header layout")
+                .with_prop("layoutFamily", "production")
+                .with_prop("density", "comfortable")
+                .with_prop("actionPlacement", "trailing"),
             StoryVariant::default_named("compact", "Compact")
-                .description("No separators, tighter button grouping"),
+                .description("No separators, tighter button grouping")
+                .with_prop("layoutFamily", "compact")
+                .with_prop("density", "dense")
+                .with_prop("separatorMode", "none"),
             StoryVariant::default_named("minimal", "Minimal")
-                .description("Input plus primary action only"),
+                .description("Input plus primary action only")
+                .with_prop("layoutFamily", "minimal")
+                .with_prop("density", "airy")
+                .with_prop("chromeLevel", "low"),
             StoryVariant::default_named("command-palette", "Command Palette")
-                .description("Palette-style header with stronger grouping"),
+                .description("Palette-style header with stronger grouping")
+                .with_prop("layoutFamily", "palette")
+                .with_prop("density", "comfortable")
+                .with_prop("grouping", "strong"),
             StoryVariant::default_named("raycast-style", "Raycast Style")
-                .description("Header aligned to Raycast treatment"),
+                .description("Header aligned to Raycast treatment")
+                .with_prop("layoutFamily", "raycast")
+                .with_prop("density", "comfortable")
+                .with_prop("reference", "raycast"),
         ]
     }
 }
@@ -1042,4 +1057,31 @@ fn render_logo(colors: PromptHeaderColors) -> Div {
         .justify_center()
         .text_color(colors.accent.to_rgb())
         .child("▶") // Placeholder for actual SVG logo
+}
+
+#[cfg(test)]
+fn supports_header_variant(variant_id: &str) -> bool {
+    matches!(
+        variant_id,
+        "current-production" | "compact" | "minimal" | "command-palette" | "raycast-style"
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{supports_header_variant, HeaderDesignVariationsStory};
+    use crate::storybook::Story;
+
+    #[test]
+    fn compare_variants_have_preview_dispatch() {
+        let story = HeaderDesignVariationsStory;
+        for variant in story.variants() {
+            let variant_id = variant.stable_id();
+            assert!(
+                supports_header_variant(&variant_id),
+                "missing header preview dispatch for {}",
+                variant_id
+            );
+        }
+    }
 }

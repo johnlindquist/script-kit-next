@@ -10,12 +10,17 @@
 //!
 
 mod browser;
+mod diagnostics;
 mod layout;
 mod registry;
 mod selection;
 mod story;
 
 pub use browser::StoryBrowser;
+pub use diagnostics::{
+    build_story_catalog_snapshot, load_story_catalog_snapshot, StoryCatalogEntry,
+    StoryCatalogSnapshot, StorySurfaceSummary, StoryVariantSummary,
+};
 pub use layout::{code_block, story_container, story_divider, story_item, story_section};
 pub use registry::{
     all_categories, all_stories, first_story_with_multiple_variants, stories_by_category,
@@ -25,4 +30,5 @@ pub use selection::{
     load_selected_story_variant, load_story_selections, save_story_selections,
     StorySelectionStore,
 };
+pub(crate) use selection::selection_store_path;
 pub use story::{Story, StorySurface, StoryVariant};

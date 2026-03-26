@@ -279,16 +279,10 @@ impl Render for EnvPrompt {
                     gpui::SharedString::from(primary_hint),
                     gpui::SharedString::from("Esc Cancel"),
                 ];
-                let leading = div()
-                    .text_xs()
-                    .text_color(gpui::rgba(
-                        ((text_primary & 0x00FF_FFFF) << 8)
-                            | crate::ui::chrome::alpha_from_opacity(
-                                crate::ui::chrome::HINT_TEXT_OPACITY,
-                            ),
-                    ))
-                    .child(env_storage_hint_text(self.secret))
-                    .into_any_element();
+                let leading = crate::components::render_hint_strip_leading_text(
+                    env_storage_hint_text(self.secret),
+                    text_primary,
+                );
 
                 crate::components::render_simple_hint_strip(hints, Some(leading))
             });

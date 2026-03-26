@@ -334,16 +334,7 @@ impl ScriptListApp {
                     input_is_empty,
                 )
                 .map(|status| {
-                    div()
-                        .text_xs()
-                        .text_color(rgba(
-                            ((text_primary & 0x00FF_FFFF) << 8)
-                                | crate::ui::chrome::alpha_from_opacity(
-                                    crate::ui::chrome::HINT_TEXT_OPACITY,
-                                ),
-                        ))
-                        .child(status)
-                        .into_any_element()
+                    crate::components::render_hint_strip_leading_text(status, text_primary)
                 });
 
                 crate::components::render_simple_hint_strip(
