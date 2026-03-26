@@ -167,34 +167,36 @@ impl ScriptListApp {
         failed_prefix: &'static str,
     ) {
         cx.spawn(async move |this, cx| {
-            cx.update(|cx| match open_actions_window(cx, main_bounds, display_id, dialog, position) {
-                Ok(_handle) => {
-                    logging::log("ACTIONS", opened_log);
-                }
-                Err(e) => {
-                    tracing::error!(error = %e, "{}", failed_prefix);
-                    crate::actions::emit_actions_popup_event(
-                        crate::actions::ActionsPopupEvent::OpenFailed,
-                        None,
-                        None,
-                        None,
-                        None,
-                        None,
-                    );
-                    // Roll back popup state and show Toast on failure
-                    let _ = this.update(cx, |app, cx| {
-                        app.show_actions_popup = false;
-                        app.actions_dialog = None;
-                        app.pop_focus_overlay(cx);
-                        app.toast_manager.push(
-                            components::toast::Toast::error(
-                                format!("{}: {}", failed_prefix, e),
-                                &app.theme,
-                            )
-                            .duration_ms(Some(TOAST_ERROR_MS)),
+            cx.update(|cx| {
+                match open_actions_window(cx, main_bounds, display_id, dialog, position) {
+                    Ok(_handle) => {
+                        logging::log("ACTIONS", opened_log);
+                    }
+                    Err(e) => {
+                        tracing::error!(error = %e, "{}", failed_prefix);
+                        crate::actions::emit_actions_popup_event(
+                            crate::actions::ActionsPopupEvent::OpenFailed,
+                            None,
+                            None,
+                            None,
+                            None,
+                            None,
                         );
-                        cx.notify();
-                    });
+                        // Roll back popup state and show Toast on failure
+                        let _ = this.update(cx, |app, cx| {
+                            app.show_actions_popup = false;
+                            app.actions_dialog = None;
+                            app.pop_focus_overlay(cx);
+                            app.toast_manager.push(
+                                components::toast::Toast::error(
+                                    format!("{}: {}", failed_prefix, e),
+                                    &app.theme,
+                                )
+                                .duration_ms(Some(TOAST_ERROR_MS)),
+                            );
+                            cx.notify();
+                        });
+                    }
                 }
             });
         })
@@ -258,7 +260,8 @@ impl ScriptListApp {
 
             // Create the dialog entity HERE in main app (for keyboard routing)
             let theme_arc = std::sync::Arc::clone(&self.theme);
-            // Create the dialog entity (search input shown at bottom, Raycast-style)
+            let is_mini = matches!(self.main_window_mode, MainWindowMode::Mini);
+            // Create the dialog entity
             let dialog = cx.new(|cx| {
                 let focus_handle = cx.focus_handle();
                 let mut dialog = ActionsDialog::with_script(
@@ -267,6 +270,17 @@ impl ScriptListApp {
                     script_info.clone(),
                     theme_arc,
                 );
+
+                // Mini mode: input at top, anchor top (collapses from bottom up)
+                if is_mini {
+                    dialog.set_config(crate::actions::ActionsDialogConfig {
+                        search_position: crate::actions::SearchPosition::Top,
+                        section_style: crate::actions::SectionStyle::Headers,
+                        anchor: crate::actions::AnchorPosition::Top,
+                        show_icons: true,
+                        show_footer: true,
+                    });
+                }
 
                 // If we have a scriptlet with actions, pass it to the dialog
                 if let Some(ref scriptlet) = focused_scriptlet {
@@ -725,7 +739,9 @@ mod on_close_reentrancy_tests {
             .next()
             .expect("Expected implementation section before tests");
 
-        let helper_call_count = impl_source.matches("Self::spawn_open_actions_window(").count();
+        let helper_call_count = impl_source
+            .matches("Self::spawn_open_actions_window(")
+            .count();
         assert_eq!(
             helper_call_count, 4,
             "toggle_actions, toggle_webcam_actions, toggle_chat_actions, and toggle_terminal_commands should use the shared spawn helper"
@@ -778,7 +794,8 @@ mod on_close_reentrancy_tests {
             .and_then(|section| section.split("pub fn toggle_terminal_commands").next())
             .expect("toggle_webcam_actions source section should exist");
         assert!(
-            toggle_webcam_actions_source.contains("self.begin_actions_popup_window_open(cx, window);"),
+            toggle_webcam_actions_source
+                .contains("self.begin_actions_popup_window_open(cx, window);"),
             "toggle_webcam_actions should use begin_actions_popup_window_open"
         );
 
@@ -787,7 +804,8 @@ mod on_close_reentrancy_tests {
             .nth(1)
             .expect("toggle_chat_actions source section should exist");
         assert!(
-            toggle_chat_actions_source.contains("self.begin_actions_popup_window_open(cx, window);"),
+            toggle_chat_actions_source
+                .contains("self.begin_actions_popup_window_open(cx, window);"),
             "toggle_chat_actions should use begin_actions_popup_window_open"
         );
 
@@ -817,7 +835,8 @@ mod on_close_reentrancy_tests {
             .and_then(|section| section.split("pub fn toggle_chat_actions").next())
             .expect("toggle_terminal_commands source section should exist");
         assert!(
-            toggle_terminal_commands_source.contains("self.begin_actions_popup_window_open(cx, window);"),
+            toggle_terminal_commands_source
+                .contains("self.begin_actions_popup_window_open(cx, window);"),
             "toggle_terminal_commands should open a vibrancy popup window for native blur"
         );
     }

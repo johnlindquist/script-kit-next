@@ -214,7 +214,17 @@ mod ai_window_mode_tests {
         assert_eq!(MINI_HISTORY_OVERLAY_W, px(380.));
         assert_eq!(MINI_HISTORY_OVERLAY_MAX_H, px(396.));
         assert_eq!(MINI_HISTORY_OVERLAY_TOP, MINI_TITLEBAR_H);
-        assert_eq!(MINI_BTN_SIZE, px(28.));
+        assert_eq!(MINI_BTN_SIZE, px(24.));
+        assert_eq!(MINI_HEADER_PADDING_X, px(12.0));
+        assert_eq!(MINI_HEADER_PADDING_Y, px(10.0));
+        assert_eq!(MINI_HINT_STRIP_PADDING_X, px(14.0));
+        assert_eq!(MINI_HINT_STRIP_PADDING_Y, px(8.0));
+        assert_eq!(MINI_HINT_STRIP_HEIGHT, px(30.0));
+        assert_eq!(MINI_DIVIDER_HEIGHT, px(1.0));
+        assert_eq!(MINI_HINT_TEXT_OPACITY, 0.45);
+        assert_eq!(MINI_MESSAGE_PX, px(12.0));
+        assert_eq!(MINI_MESSAGE_PY, px(2.0));
+        assert_eq!(MINI_MESSAGE_GAP, px(8.0));
     }
 
     #[test]
@@ -253,7 +263,18 @@ pub(super) const MINI_HISTORY_OVERLAY_TOP: Pixels = MINI_TITLEBAR_H;
 pub(super) const MINI_HISTORY_OVERLAY_W: Pixels = px(380.);
 /// Derived: window height minus titlebar, so overlay never overflows the mini window.
 pub(super) const MINI_HISTORY_OVERLAY_MAX_H: Pixels = px(396.);
-pub(super) const MINI_BTN_SIZE: Pixels = px(28.);
+// Mini layout tokens — synced with crate::window_resize::mini_layout
+pub(super) const MINI_BTN_SIZE: Pixels = px(24.);
+pub(super) const MINI_HEADER_PADDING_X: Pixels = px(12.0);
+pub(super) const MINI_HEADER_PADDING_Y: Pixels = px(10.0);
+pub(super) const MINI_HINT_STRIP_PADDING_X: Pixels = px(14.0);
+pub(super) const MINI_HINT_STRIP_PADDING_Y: Pixels = px(8.0);
+pub(super) const MINI_HINT_STRIP_HEIGHT: Pixels = px(30.0);
+pub(super) const MINI_DIVIDER_HEIGHT: Pixels = px(1.0);
+pub(super) const MINI_HINT_TEXT_OPACITY: f32 = 0.45;
+pub(super) const MINI_MESSAGE_PX: Pixels = px(12.0);
+pub(super) const MINI_MESSAGE_PY: Pixels = px(2.0);
+pub(super) const MINI_MESSAGE_GAP: Pixels = px(8.0);
 /// Number of welcome suggestions shown in mini mode (fewer to fit compact height).
 pub(super) const MINI_SUGGESTION_COUNT: usize = 2;
 /// Number of welcome suggestions shown in full mode.
