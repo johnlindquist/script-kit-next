@@ -360,8 +360,8 @@ impl ScriptListApp {
             .child(
                 div()
                     .w_full()
-                    .px(px(design_spacing.padding_lg))
-                    .py(px(design_spacing.padding_md))
+                    .px(px(crate::ui::chrome::HEADER_PADDING_X))
+                    .py(px(crate::ui::chrome::HEADER_PADDING_Y))
                     .flex()
                     .flex_row()
                     .items_center()
@@ -386,12 +386,7 @@ impl ScriptListApp {
                             .child(format!("{} emojis", filtered_len)),
                     ),
             )
-            .child(
-                div()
-                    .mx(px(design_spacing.padding_lg))
-                    .h(px(design_visual.border_thin))
-                    .bg(rgba((ui_border << 8) | 0x60)),
-            )
+            .child(crate::components::SectionDivider::new())
             .child(
                 div()
                     .flex_1()

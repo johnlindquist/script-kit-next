@@ -113,6 +113,11 @@ enum AppView {
         filter: String,
         selected_index: usize,
     },
+    /// Showing the in-app storybook compare view for design exploration (debug only)
+    #[cfg(debug_assertions)]
+    DesignExplorerView {
+        entity: Entity<script_kit_gpui::storybook::StoryBrowser>,
+    },
     /// Showing webcam prompt
     WebcamView {
         entity: Entity<prompts::WebcamPrompt>,

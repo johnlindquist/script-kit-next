@@ -154,6 +154,8 @@ impl ScriptListApp {
                 };
                 Some((ViewType::ScriptList, filtered_count))
             }
+            #[cfg(debug_assertions)]
+            AppView::DesignExplorerView { .. } => Some((ViewType::DivPrompt, 0)),
             AppView::ProcessManagerView { filter, .. } => {
                 let filtered_count = if filter.is_empty() {
                     self.cached_processes.len()

@@ -237,8 +237,8 @@ impl ScriptListApp {
             .child(
                 div()
                     .w_full()
-                    .px(px(design_spacing.padding_lg))
-                    .py(px(design_spacing.padding_md))
+                    .px(px(crate::ui::chrome::HEADER_PADDING_X))
+                    .py(px(crate::ui::chrome::HEADER_PADDING_Y))
                     .flex()
                     .flex_row()
                     .items_center()
@@ -268,12 +268,7 @@ impl ScriptListApp {
                     ),
             )
             // Divider
-            .child(
-                div()
-                    .mx(px(design_spacing.padding_lg))
-                    .h(px(design_visual.border_thin))
-                    .bg(rgba((ui_border << 8) | 0x60)),
-            )
+            .child(crate::components::SectionDivider::new())
             // Command list
             .child(
                 div()
@@ -284,13 +279,13 @@ impl ScriptListApp {
                     .py(px(design_spacing.padding_xs))
                     .child(list_element),
             )
-            // Footer
-            .child(PromptFooter::new(
-                PromptFooterConfig::new()
-                    .primary_label("Run")
-                    .primary_shortcut("↵")
-                    .show_secondary(false),
-                PromptFooterColors::from_theme(&self.theme),
+            // Footer — minimal hint strip
+            .child(crate::components::render_simple_hint_strip(
+                vec![
+                    gpui::SharedString::from("↵ Run"),
+                    gpui::SharedString::from("Esc Back"),
+                ],
+                None,
             ))
             .into_any_element()
     }

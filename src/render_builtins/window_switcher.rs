@@ -327,8 +327,8 @@ impl ScriptListApp {
             .child(
                 div()
                     .w_full()
-                    .px(px(design_spacing.padding_lg))
-                    .py(px(design_spacing.padding_md))
+                    .px(px(crate::ui::chrome::HEADER_PADDING_X))
+                    .py(px(crate::ui::chrome::HEADER_PADDING_Y))
                     .flex()
                     .flex_row()
                     .items_center()
@@ -355,12 +355,7 @@ impl ScriptListApp {
                     ),
             )
             // Divider
-            .child(
-                div()
-                    .mx(px(design_spacing.padding_lg))
-                    .h(px(design_visual.border_thin))
-                    .bg(rgba((ui_border << 8) | 0x60)),
-            )
+            .child(crate::components::SectionDivider::new())
             // Main content area - 50/50 split: Window list on left, Actions on right
             .child(
                 div()
@@ -389,13 +384,13 @@ impl ScriptListApp {
                             .child(actions_panel),
                     ),
             )
-            // Footer
-            .child(PromptFooter::new(
-                PromptFooterConfig::new()
-                    .primary_label("Switch")
-                    .primary_shortcut("↵")
-                    .show_secondary(false),
-                PromptFooterColors::from_theme(&self.theme),
+            // Footer — minimal hint strip
+            .child(crate::components::render_simple_hint_strip(
+                vec![
+                    gpui::SharedString::from("↵ Switch"),
+                    gpui::SharedString::from("Esc Back"),
+                ],
+                None,
             ))
             .into_any_element()
     }

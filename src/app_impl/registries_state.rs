@@ -160,6 +160,8 @@ impl ScriptListApp {
             AppView::AppLauncherView { .. } => "AppLauncherView",
             AppView::WindowSwitcherView { .. } => "WindowSwitcherView",
             AppView::DesignGalleryView { .. } => "DesignGalleryView",
+            #[cfg(debug_assertions)]
+            AppView::DesignExplorerView { .. } => "DesignExplorerView",
             AppView::ScratchPadView { .. } => "ScratchPadView",
             AppView::QuickTerminalView { .. } => "QuickTerminalView",
             AppView::WebcamView { .. } => "WebcamView",

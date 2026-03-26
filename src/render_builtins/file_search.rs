@@ -1061,12 +1061,7 @@ impl ScriptListApp {
                     )
             })
             // Divider
-            .child(
-                div()
-                    .mx(px(design_spacing.padding_lg))
-                    .h(px(design_visual.border_thin))
-                    .bg(rgba((ui_border << 8) | 0x60)),
-            )
+            .child(crate::components::SectionDivider::new())
             // Main content: loading state OR empty state OR 50/50 split
             .child(if is_loading && filtered_len == 0 {
                 // Loading state: full-width centered (no split, clean appearance)

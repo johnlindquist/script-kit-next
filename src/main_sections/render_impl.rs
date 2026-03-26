@@ -297,6 +297,10 @@ impl Render for ScriptListApp {
             } => self
                 .render_design_gallery(filter, selected_index, cx)
                 .into_any_element(),
+            #[cfg(debug_assertions)]
+            AppView::DesignExplorerView { entity } => {
+                gpui::div().size_full().child(entity).into_any_element()
+            }
             AppView::WebcamView { entity } => {
                 self.render_webcam_prompt(entity, cx).into_any_element()
             }

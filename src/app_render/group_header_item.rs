@@ -27,6 +27,8 @@ fn builtin_feature_annotation(feature: &builtins::BuiltInFeature) -> String {
         builtins::BuiltInFeature::App(name) => name.clone(),
         builtins::BuiltInFeature::WindowSwitcher => "Window Manager".to_string(),
         builtins::BuiltInFeature::DesignGallery => "Design Gallery".to_string(),
+        #[cfg(debug_assertions)]
+        builtins::BuiltInFeature::DesignExplorer => "Design Explorer".to_string(),
         builtins::BuiltInFeature::AiChat => "AI Assistant".to_string(),
         builtins::BuiltInFeature::Notes => "Notes & Scratchpad".to_string(),
         builtins::BuiltInFeature::EmojiPicker => "Emoji Picker".to_string(),

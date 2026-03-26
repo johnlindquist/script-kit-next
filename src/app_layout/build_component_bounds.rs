@@ -47,6 +47,8 @@ impl ScriptListApp {
             AppView::AppLauncherView { .. } => "AppLauncher",
             AppView::WindowSwitcherView { .. } => "WindowSwitcher",
             AppView::DesignGalleryView { .. } => "DesignGallery",
+            #[cfg(debug_assertions)]
+            AppView::DesignExplorerView { .. } => "DesignExplorer",
             AppView::ScratchPadView { .. } => "ScratchPad",
             AppView::QuickTerminalView { .. } => "QuickTerminal",
             AppView::FileSearchView { .. } => "FileSearch",
