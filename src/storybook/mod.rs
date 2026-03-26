@@ -11,6 +11,7 @@
 
 mod browser;
 mod diagnostics;
+pub mod footer_variations;
 mod layout;
 mod registry;
 mod selection;
@@ -20,6 +21,10 @@ pub use browser::StoryBrowser;
 pub use diagnostics::{
     build_story_catalog_snapshot, load_story_catalog_snapshot, StoryCatalogEntry,
     StoryCatalogSnapshot, StorySurfaceSummary, StoryVariantSummary,
+};
+pub use footer_variations::{
+    footer_story_variants, footer_variation_specs, render_footer_story_preview,
+    FooterVariationId, FooterVariationSpec,
 };
 pub use layout::{code_block, story_container, story_divider, story_item, story_section};
 pub use registry::{
@@ -32,3 +37,46 @@ pub use selection::{
 };
 pub(crate) use selection::selection_store_path;
 pub use story::{Story, StorySurface, StoryVariant};
+
+/// Machine-readable error payload for `--catalog-json` failures.
+#[derive(Debug, serde::Serialize)]
+pub struct StorybookJsonError<'a> {
+    pub schema_version: u8,
+    pub ok: bool,
+    pub error: StorybookJsonErrorBody<'a>,
+}
+
+/// Structured body within [`StorybookJsonError`].
+#[derive(Debug, serde::Serialize)]
+pub struct StorybookJsonErrorBody<'a> {
+    pub kind: &'a str,
+    pub message: String,
+    pub hint: &'a str,
+}
+
+#[cfg(test)]
+mod catalog_json_tests {
+    use super::*;
+
+    #[test]
+    fn storybook_json_error_payload_is_machine_readable() {
+        let payload = StorybookJsonError {
+            schema_version: 1,
+            ok: false,
+            error: StorybookJsonErrorBody {
+                kind: "catalog_load_failed",
+                message: "boom".to_string(),
+                hint: "Run cargo check.",
+            },
+        };
+
+        let json = serde_json::to_string(&payload).expect("serialize error payload");
+        let value: serde_json::Value =
+            serde_json::from_str(&json).expect("parse error payload");
+
+        assert_eq!(value["schema_version"], 1);
+        assert_eq!(value["ok"], false);
+        assert_eq!(value["error"]["kind"], "catalog_load_failed");
+        assert_eq!(value["error"]["message"], "boom");
+    }
+}

@@ -11,7 +11,8 @@
 use gpui::*;
 
 use crate::storybook::{
-    story_container, story_divider, story_section, Story, StorySurface, StoryVariant,
+    footer_story_variants, render_footer_story_preview, story_container, story_divider,
+    story_section, Story, StorySurface, StoryVariant,
 };
 use crate::theme::Theme;
 use crate::ui_foundation::HexColorExt;
@@ -37,9 +38,7 @@ impl Story for FooterLayoutVariationsStory {
     }
 
     fn render_variant(&self, variant: &StoryVariant) -> AnyElement {
-        let theme = crate::theme::get_cached_theme();
-        let colors = LayoutColors::from_theme(&theme);
-        render_footer_variant_preview(colors, &variant.stable_id())
+        render_footer_story_preview(&variant.stable_id())
     }
 
     fn render(&self) -> AnyElement {
@@ -100,14 +99,7 @@ impl Story for FooterLayoutVariationsStory {
     }
 
     fn variants(&self) -> Vec<StoryVariant> {
-        vec![
-            StoryVariant::default_named("raycast-exact", "Raycast Exact")
-                .description("Exact Raycast footer layout"),
-            StoryVariant::default_named("scriptkit-branded", "Script Kit Branded")
-                .description("Gold-accent Script Kit footer"),
-            StoryVariant::default_named("minimal", "Minimal")
-                .description("Hint strip footer with no action buttons"),
-        ]
+        footer_story_variants()
     }
 }
 
@@ -371,19 +363,6 @@ fn sample_list(colors: LayoutColors) -> impl IntoElement {
             "Command",
             false,
         ))
-}
-
-// =============================================================================
-// VARIANT-AWARE PREVIEW DISPATCH
-// =============================================================================
-
-fn render_footer_variant_preview(colors: LayoutColors, variant_id: &str) -> AnyElement {
-    match variant_id {
-        "raycast-exact" => render_raycast_exact(colors).into_any_element(),
-        "scriptkit-branded" => render_scriptkit_branded(colors).into_any_element(),
-        "minimal" => render_minimal_footer(colors).into_any_element(),
-        _ => render_scriptkit_branded(colors).into_any_element(),
-    }
 }
 
 // =============================================================================
