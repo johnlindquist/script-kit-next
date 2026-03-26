@@ -7,6 +7,14 @@ impl ScriptListApp {
         selected_index: usize,
         cx: &mut Context<Self>,
     ) -> AnyElement {
+        crate::components::emit_prompt_chrome_audit(
+            &crate::components::PromptChromeAudit::minimal(
+                "clipboard_history",
+                3,     // hints: "↵ Paste", "⌘K Actions", "Esc Back"
+                false, // no leading status text
+                true,  // has actions hint
+            ),
+        );
         // Use theme for all colors - consistent with main menu
         let tokens = get_tokens(self.current_design);
         let design_spacing = tokens.spacing();

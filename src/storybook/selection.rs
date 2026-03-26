@@ -25,7 +25,7 @@ impl StorySelectionStore {
     }
 }
 
-fn selection_store_path() -> PathBuf {
+pub(crate) fn selection_store_path() -> PathBuf {
     crate::setup::get_kit_path().join("design-explorer-selections.json")
 }
 

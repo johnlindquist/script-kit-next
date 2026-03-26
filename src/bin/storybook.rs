@@ -50,6 +50,9 @@ fn main() {
             "--screenshot" | "-c" => {
                 auto_screenshot = true;
             }
+            "--catalog-json" => {
+                print_story_catalog_json_and_exit();
+            }
             "--help" | "-h" => {
                 eprintln!("Script Kit Storybook - Component Preview Tool");
                 eprintln!();
@@ -60,6 +63,7 @@ fn main() {
                 eprintln!("  -v, --variant <ID>   Pre-select a variant id");
                 eprintln!("  --compare            Open in side-by-side compare mode");
                 eprintln!("  -c, --screenshot     Capture screenshot and exit");
+                eprintln!("  --catalog-json       Print compare-ready story catalog as JSON");
                 eprintln!("  -h, --help           Show this help message");
                 eprintln!();
                 eprintln!("Available stories:");
@@ -211,4 +215,21 @@ fn capture_storybook_screenshot() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     Err("Storybook window not found".into())
+}
+
+fn print_story_catalog_json_and_exit() {
+    match script_kit_gpui::storybook::load_story_catalog_snapshot() {
+        Ok(snapshot) => {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&snapshot)
+                    .expect("serialize storybook catalog snapshot")
+            );
+            std::process::exit(0);
+        }
+        Err(error) => {
+            eprintln!("storybook catalog error: {error:#}");
+            std::process::exit(2);
+        }
+    }
 }

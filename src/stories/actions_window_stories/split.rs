@@ -145,13 +145,25 @@ impl Story for ActionsWindowStory {
     fn variants(&self) -> Vec<StoryVariant> {
         vec![
             StoryVariant::default_named("base-raycast", "Base Raycast")
-                .description("Classic command palette list with footer actions"),
+                .description("Classic command palette list with footer actions")
+                .with_prop("layoutFamily", "raycast")
+                .with_prop("searchPosition", "bottom")
+                .with_prop("density", "comfortable"),
             StoryVariant::default_named("search-at-top", "Search at Top")
-                .description("Search input above the action list"),
+                .description("Search input above the action list")
+                .with_prop("layoutFamily", "raycast")
+                .with_prop("searchPosition", "top")
+                .with_prop("density", "comfortable"),
             StoryVariant::default_named("compact", "Compact")
-                .description("Dense rows for power users"),
+                .description("Dense rows for power users")
+                .with_prop("layoutFamily", "compact")
+                .with_prop("searchPosition", "bottom")
+                .with_prop("density", "dense"),
             StoryVariant::default_named("floating", "Floating")
-                .description("Detached palette treatment"),
+                .description("Detached palette treatment")
+                .with_prop("layoutFamily", "floating")
+                .with_prop("searchPosition", "bottom")
+                .with_prop("elevation", "high"),
         ]
     }
 }
@@ -2017,4 +2029,31 @@ fn actions_window_raycast_clone(_colors: ActionColors) -> impl IntoElement {
                         ),
                 ),
         )
+}
+
+#[cfg(test)]
+fn supports_actions_window_variant(variant_id: &str) -> bool {
+    matches!(
+        variant_id,
+        "base-raycast" | "search-at-top" | "compact" | "floating"
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{supports_actions_window_variant, ActionsWindowStory};
+    use crate::storybook::Story;
+
+    #[test]
+    fn compare_variants_have_preview_dispatch() {
+        let story = ActionsWindowStory;
+        for variant in story.variants() {
+            let variant_id = variant.stable_id();
+            assert!(
+                supports_actions_window_variant(&variant_id),
+                "missing actions-window preview dispatch for {}",
+                variant_id
+            );
+        }
+    }
 }

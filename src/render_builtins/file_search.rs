@@ -279,6 +279,14 @@ impl ScriptListApp {
     ) -> AnyElement {
         use crate::file_search::{self, FileType};
 
+        crate::components::emit_prompt_chrome_audit(
+            &crate::components::PromptChromeAudit::minimal(
+                "file_search",
+                3,     // hints: "↵ Open", "⌘K Actions", "Esc Back"
+                false, // no leading status text
+                true,  // has actions hint
+            ),
+        );
         // Use design tokens for spacing/visual, theme for colors
         let tokens = get_tokens(self.current_design);
         let design_spacing = tokens.spacing();

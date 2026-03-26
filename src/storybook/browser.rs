@@ -16,8 +16,8 @@ use std::path::PathBuf;
 use crate::designs::DesignVariant;
 use crate::storybook::{
     all_categories, all_stories, first_story_with_multiple_variants, load_story_selections,
-    save_story_selections, stories_by_surface, StoryEntry, StorySelectionStore, StorySurface,
-    StoryVariant,
+    save_story_selections, selection_store_path, stories_by_surface, StoryEntry,
+    StorySelectionStore, StorySurface, StoryVariant,
 };
 
 /// Preview mode for the story browser
@@ -46,11 +46,45 @@ impl StoryBrowser {
     pub fn new(cx: &mut Context<Self>) -> Self {
         let stories: Vec<_> = all_stories().collect();
 
-        // Set up screenshot directory
         let screenshot_dir = std::env::current_dir()
             .unwrap_or_else(|_| PathBuf::from("."))
             .join("test-screenshots");
-        fs::create_dir_all(&screenshot_dir).ok();
+
+        if let Err(error) = fs::create_dir_all(&screenshot_dir) {
+            tracing::warn!(
+                event = "storybook_screenshot_dir_unavailable",
+                path = %screenshot_dir.display(),
+                error = %error,
+                "Failed to prepare screenshot directory"
+            );
+        }
+
+        let (selection_store, status_line) = match load_story_selections() {
+            Ok(store) => {
+                tracing::info!(
+                    event = "design_explorer_selection_store_loaded",
+                    path = %selection_store_path().display(),
+                    selection_count = store.selections.len(),
+                    "Loaded design explorer selection store"
+                );
+                (store, None)
+            }
+            Err(error) => {
+                tracing::error!(
+                    event = "design_explorer_selection_store_load_failed",
+                    path = %selection_store_path().display(),
+                    error = %error,
+                    "Failed to load design explorer selection store; falling back to empty state"
+                );
+                (
+                    StorySelectionStore::default(),
+                    Some(format!(
+                        "Design explorer selections were reset for this session: {}",
+                        error
+                    )),
+                )
+            }
+        };
 
         let mut browser = Self {
             stories,
@@ -60,8 +94,8 @@ impl StoryBrowser {
             theme_name: "Default".to_string(),
             design_variant: DesignVariant::Default,
             preview_mode: PreviewMode::Single,
-            selection_store: load_story_selections().unwrap_or_default(),
-            status_line: None,
+            selection_store,
+            status_line,
             focus_handle: cx.focus_handle(),
             screenshot_dir,
         };
@@ -262,10 +296,31 @@ impl StoryBrowser {
             return;
         };
 
-        if index < self.current_story_variants().len() {
-            self.selected_variant_index = index;
-            cx.notify();
+        let variants = self.current_story_variants();
+        let Some(variant) = variants.get(index) else {
+            tracing::warn!(
+                event = "variant_shortcut_out_of_range",
+                shortcut = %key,
+                variant_count = variants.len(),
+                "Ignored out-of-range compare shortcut"
+            );
+            return;
+        };
+
+        self.selected_variant_index = index;
+
+        if let Some(story) = self.current_story() {
+            tracing::info!(
+                event = "variant_focus_changed",
+                story_id = %story.story.id(),
+                variant_id = %variant.stable_id(),
+                source = "shortcut",
+                shortcut = %key,
+                "Focused compare variant"
+            );
         }
+
+        cx.notify();
     }
 
     fn adopt_selected_variant(&mut self, cx: &mut Context<Self>) {
@@ -275,6 +330,7 @@ impl StoryBrowser {
 
         let story_id = story.story.id().to_string();
         let story_name = story.story.name().to_string();
+        let surface = story.story.surface().label().to_string();
         let variants = self.current_story_variants();
 
         let Some(variant) = variants.get(self.selected_variant_index) else {
@@ -288,24 +344,51 @@ impl StoryBrowser {
             variant.name.clone()
         };
 
-        self.selection_store
-            .set_selected_variant(story_id.clone(), variant_id.clone());
+        let mut next_store = self.selection_store.clone();
+        next_store.set_selected_variant(story_id.clone(), variant_id.clone());
 
-        tracing::info!(
-            story_id = %story_id,
-            variant_id = %variant_id,
-            event = "variant_adopted",
-            "Adopted variant"
-        );
+        let selection_path = selection_store_path();
 
-        match save_story_selections(&self.selection_store) {
+        match save_story_selections(&next_store) {
             Ok(()) => {
-                self.status_line =
-                    Some(format!("Adopted \"{}\" for {}", variant_name, story_name));
+                self.selection_store = next_store;
+                tracing::info!(
+                    event = "variant_adopted",
+                    story_id = %story_id,
+                    story_name = %story_name,
+                    surface = %surface,
+                    variant_id = %variant_id,
+                    variant_name = %variant_name,
+                    path = %selection_path.display(),
+                    selection_count = self.selection_store.selections.len(),
+                    "Persisted adopted variant"
+                );
+                self.status_line = Some(format!(
+                    "Adopted \"{}\" for {} and saved to {}",
+                    variant_name,
+                    story_name,
+                    selection_path.display()
+                ));
             }
             Err(error) => {
-                tracing::error!(error = %error, "Failed to save story selection");
-                self.status_line = Some(format!("Failed to save adoption: {}", error));
+                tracing::error!(
+                    event = "variant_adoption_failed",
+                    story_id = %story_id,
+                    story_name = %story_name,
+                    surface = %surface,
+                    variant_id = %variant_id,
+                    variant_name = %variant_name,
+                    path = %selection_path.display(),
+                    error = %error,
+                    "Failed to persist adopted variant"
+                );
+                self.status_line = Some(format!(
+                    "Failed to save \"{}\" for {} at {}: {}",
+                    variant_name,
+                    story_name,
+                    selection_path.display(),
+                    error
+                ));
             }
         }
 

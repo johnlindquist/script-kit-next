@@ -346,7 +346,7 @@ pub(crate) fn render_simple_hint_strip(
 
 /// Render muted leading text for a minimal hint strip footer.
 ///
-/// Computes the text color from `text_primary` (0x00RRGGBB hex) combined with
+/// Computes the text color from a theme text color (`0xAARRGGBB`) combined with
 /// [`HINT_TEXT_OPACITY`] so callers avoid duplicating the opacity math.
 #[allow(dead_code)]
 pub(crate) fn render_hint_strip_leading_text(
@@ -798,6 +798,95 @@ mod prompt_layout_shell_tests {
         assert!(
             settings.contains("PromptChromeAudit::exception("),
             "settings.rs should classify as exception"
+        );
+    }
+
+    // ── Minimal-chrome source-audit tests for migrated builtins ──────
+
+    fn assert_minimal_surface_source(
+        source: &str,
+        surface: &str,
+        require_header_padding: bool,
+    ) {
+        let render_fn_end = source.find("#[cfg(test)]").unwrap_or(source.len());
+        let render_code = &source[..render_fn_end];
+
+        if require_header_padding {
+            assert!(
+                render_code.contains("HEADER_PADDING_X"),
+                "{surface} should use chrome HEADER_PADDING_X"
+            );
+            assert!(
+                render_code.contains("HEADER_PADDING_Y"),
+                "{surface} should use chrome HEADER_PADDING_Y"
+            );
+        }
+
+        assert!(
+            render_code.contains("SectionDivider::new()"),
+            "{surface} should use SectionDivider for its subtle divider"
+        );
+        assert!(
+            render_code.contains("render_simple_hint_strip("),
+            "{surface} should render a minimal hint strip footer"
+        );
+
+        let needle = ["PromptFooter", "::new("].concat();
+        assert!(
+            !render_code.contains(&needle),
+            "{surface} should not construct PromptFooter after migration"
+        );
+    }
+
+    #[test]
+    fn process_manager_source_matches_minimal_contract() {
+        let source = include_str!("../render_builtins/process_manager.rs");
+        assert!(
+            source.contains("PromptChromeAudit::minimal("),
+            "process_manager.rs should emit a minimal chrome audit"
+        );
+        assert!(
+            !source.contains("PromptChromeAudit::exception("),
+            "process_manager.rs should no longer emit an exception audit"
+        );
+        assert_minimal_surface_source(source, "process_manager.rs", false);
+    }
+
+    #[test]
+    fn clipboard_history_source_matches_minimal_contract() {
+        let source = include_str!("../render_builtins/clipboard_history_layout.rs");
+        assert_minimal_surface_source(source, "clipboard_history_layout.rs", true);
+    }
+
+    #[test]
+    fn file_search_source_matches_minimal_contract() {
+        let source = include_str!("../render_builtins/file_search_layout.rs");
+        assert_minimal_surface_source(source, "file_search_layout.rs", true);
+    }
+
+    #[test]
+    fn clipboard_history_emits_minimal_chrome_audit() {
+        let source = include_str!("../render_builtins/clipboard.rs");
+        assert!(
+            source.contains("PromptChromeAudit::minimal("),
+            "clipboard.rs should emit a minimal chrome audit"
+        );
+        assert!(
+            source.contains("\"clipboard_history\""),
+            "clipboard.rs should identify as clipboard_history surface"
+        );
+    }
+
+    #[test]
+    fn file_search_emits_minimal_chrome_audit() {
+        let source = include_str!("../render_builtins/file_search.rs");
+        assert!(
+            source.contains("PromptChromeAudit::minimal("),
+            "file_search.rs should emit a minimal chrome audit"
+        );
+        assert!(
+            source.contains("\"file_search\""),
+            "file_search.rs should identify as file_search surface"
         );
     }
 }
