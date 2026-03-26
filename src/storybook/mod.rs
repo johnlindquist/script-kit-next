@@ -12,9 +12,11 @@
 mod browser;
 mod layout;
 mod registry;
+mod selection;
 mod story;
 
 pub use browser::StoryBrowser;
 pub use layout::{code_block, story_container, story_divider, story_item, story_section};
 pub use registry::{all_categories, all_stories, stories_by_category, StoryEntry};
-pub use story::{Story, StoryVariant};
+pub use selection::{load_story_selections, save_story_selections, StorySelectionStore};
+pub use story::{Story, StorySurface, StoryVariant};
