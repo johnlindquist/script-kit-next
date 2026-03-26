@@ -9,12 +9,12 @@
 ///
 /// This is the canonical way to show the main window. It:
 /// 1. Sets MAIN_WINDOW_VISIBLE state
-/// 2. Moves window to active space
-/// 3. Positions at eye-line on the display containing the mouse
-/// 4. Configures as floating panel (first time only)
-/// 5. If NEEDS_RESET is set, resets to script list before showing
-/// 6. Shows the window as a non-activating panel and focuses the input
-/// 7. Resets resize debounce
+/// 2. Moves the panel to the active space
+/// 3. Consumes NEEDS_RESET and resets hidden state before sizing
+/// 4. Computes and applies final hidden geometry
+/// 5. Configures as floating panel (first time only)
+/// 6. Shows the window as a non-activating panel
+/// 7. Restores focus state after the panel becomes key
 ///
 /// # Arguments
 /// * `window` - The main window handle (WindowHandle<Root>)
@@ -41,8 +41,62 @@ fn show_main_window_helper(
     // 4. Move to active space (macOS)
     platform::ensure_move_to_active_space();
 
-    // 4. Position window - try per-display saved position first, then fall back to eye-line
-    let window_size = gpui::size(px(750.), initial_window_height());
+    // 5. Consume NEEDS_RESET BEFORE any geometry is computed so we size the hidden
+    // window for the actual post-reset view instead of the stale pre-show surface.
+    let needs_reset_before_show = NEEDS_RESET
+        .compare_exchange(true, false, Ordering::SeqCst, Ordering::SeqCst)
+        .is_ok();
+    if needs_reset_before_show {
+        logging::log(
+            "VISIBILITY",
+            "NEEDS_RESET was true - resetting to script list before computing show bounds",
+        );
+    }
+
+    let current_window_width =
+        platform::get_main_window_bounds().map(|(_, _, width, _)| width as f32);
+    let window_size = app_entity.update(cx, |view, ctx| {
+        if needs_reset_before_show {
+            view.reset_to_script_list(ctx);
+        } else {
+            view.ensure_selection_at_first_item(ctx);
+        }
+
+        if matches!(view.current_view, AppView::ScriptList)
+            && view.main_window_mode == MainWindowMode::Mini
+        {
+            let (grouped_items, _) = view.get_grouped_results_cached();
+            let sizing =
+                crate::window_resize::mini_main_window_sizing_from_grouped_items(&grouped_items);
+            gpui::size(
+                px(
+                    crate::window_resize::width_for_view(ViewType::MiniMainWindow)
+                        .unwrap_or(750.0),
+                ),
+                crate::window_resize::height_for_mini_main_window(sizing),
+            )
+        } else if let Some((view_type, item_count)) = view.calculate_window_size_params() {
+            gpui::size(
+                px(
+                    crate::window_resize::width_for_view(view_type)
+                        .or(current_window_width)
+                        .unwrap_or(750.0),
+                ),
+                crate::window_resize::height_for_view(view_type, item_count),
+            )
+        } else {
+            gpui::size(
+                px(current_window_width.unwrap_or(750.0)),
+                crate::window_resize::height_for_view(ViewType::ScriptList, 0),
+            )
+        }
+    });
+
+    // Keep legacy resize state clear before re-opening. Interactive resizes still
+    // use the deferred paths after the window is already visible.
+    reset_resize_debounce();
+
+    // 6. Position the hidden window using the exact target size, then show it.
     let visible_displays = platform::get_macos_visible_displays();
     let displays: Vec<_> = visible_displays
         .iter()
@@ -98,7 +152,7 @@ fn show_main_window_helper(
     };
     platform::move_first_window_to_bounds(&bounds);
 
-    // 5. Configure as floating panel (first time only)
+    // 7. Configure as floating panel (first time only)
     if !PANEL_CONFIGURED.load(Ordering::SeqCst) {
         platform::configure_as_floating_panel();
         // HACK: Swizzle GPUI's BlurredView to preserve native CAChameleonLayer tint
@@ -113,22 +167,7 @@ fn show_main_window_helper(
         PANEL_CONFIGURED.store(true, Ordering::SeqCst);
     }
 
-    // 6. Handle NEEDS_RESET before showing.
-    // This avoids flashing stale UI (e.g. clipboard history) for one frame.
-    let needs_reset_before_show = NEEDS_RESET
-        .compare_exchange(true, false, Ordering::SeqCst, Ordering::SeqCst)
-        .is_ok();
-    if needs_reset_before_show {
-        logging::log(
-            "VISIBILITY",
-            "NEEDS_RESET was true - resetting to script list before showing window",
-        );
-        app_entity.update(cx, |view, ctx| {
-            view.reset_to_script_list(ctx);
-        });
-    }
-
-    // 7. Show without app activation, then focus (DEFERRED via cx.spawn).
+    // 8. Show without app activation, then focus (DEFERRED via cx.spawn).
     //
     // macOS makeKeyWindow / makeKeyAndOrderFront: synchronously fires
     // windowDidBecomeKey: → GPUI request_frame_callback → AsyncApp::update().
@@ -159,24 +198,13 @@ fn show_main_window_helper(
                         win.focus(&focus_handle, _cx);
                     });
 
-                    // Reset resize debounce to ensure proper window sizing
-                    reset_resize_debounce();
-
-                    if !needs_reset_before_show {
-                        view.ensure_selection_at_first_item(ctx);
-                    }
-
                     // Always re-apply focus state after the window becomes visible.
                     // reset_to_script_list sets these too, but that runs BEFORE the
                     // window is shown — the render loop needs pending_focus set AFTER
                     // the window is key to actually move focus to the input element.
                     view.focused_input = FocusedInput::MainFilter;
                     view.pending_focus = Some(FocusTarget::MainFilter);
-
-                    // Always ensure window size matches current view using deferred resize.
-                    let _ = window.update(ctx, |_root, win, win_cx| {
-                        defer_resize_to_view(ViewType::ScriptList, 0, win, win_cx);
-                    });
+                    ctx.notify();
                 });
 
                 logging::log("VISIBILITY", "Main window shown and focused");
