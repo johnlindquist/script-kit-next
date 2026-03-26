@@ -286,10 +286,12 @@ pub fn render_footer_story_preview(stable_id: &str) -> AnyElement {
     shell.into_any_element()
 }
 
-fn render_footer_component(spec: FooterVariationSpec) -> AnyElement {
-    let theme = crate::theme::get_cached_theme();
-    let colors = PromptFooterColors::from_theme(&theme);
-
+/// Build a `PromptFooterConfig` from a `FooterVariationSpec`.
+///
+/// This is the single conversion path used by both story previews and runtime
+/// adoption. Keeping it here avoids a `crate::storybook` dependency in
+/// `prompt_footer.rs` (which is compiled in both the lib and binary crates).
+pub fn config_from_footer_variation_spec(spec: &FooterVariationSpec) -> PromptFooterConfig {
     let mut config = PromptFooterConfig::new()
         .primary_label(spec.primary_label)
         .primary_shortcut(spec.primary_shortcut)
@@ -306,6 +308,47 @@ fn render_footer_component(spec: FooterVariationSpec) -> AnyElement {
     if let Some(info_label) = spec.info_label {
         config = config.info_label(info_label);
     }
+
+    config
+}
+
+/// Build a `PromptFooterConfig` from a persisted storybook footer selection value.
+///
+/// Looks up the given stable ID in the footer variation registry and maps
+/// the matching spec into a config. Falls back to the default
+/// `RaycastExact` spec when the ID is `None` or unrecognised.
+pub fn config_from_storybook_footer_selection_value(
+    selected: Option<&str>,
+) -> PromptFooterConfig {
+    let variation = selected
+        .and_then(FooterVariationId::from_stable_id)
+        .unwrap_or(FooterVariationId::RaycastExact);
+
+    let spec = footer_variation_specs()
+        .iter()
+        .find(|s| s.id == variation)
+        .copied()
+        .unwrap_or(footer_variation_specs()[0]);
+
+    config_from_footer_variation_spec(&spec)
+}
+
+/// Build a `PromptFooterConfig` from the on-disk storybook footer selection.
+///
+/// Reads the persisted `design-explorer-selections.json` for the
+/// `"footer-layout-variations"` story and resolves via
+/// [`config_from_storybook_footer_selection_value`].
+pub fn config_from_storybook_footer_selection() -> PromptFooterConfig {
+    let selected = super::load_selected_story_variant("footer-layout-variations");
+
+    config_from_storybook_footer_selection_value(selected.as_deref())
+}
+
+fn render_footer_component(spec: FooterVariationSpec) -> AnyElement {
+    let theme = crate::theme::get_cached_theme();
+    let colors = PromptFooterColors::from_theme(&theme);
+
+    let config = config_from_footer_variation_spec(&spec);
 
     let mut footer = PromptFooter::new(config, colors);
 

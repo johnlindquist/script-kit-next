@@ -81,3 +81,68 @@ fn footer_story_variants_have_surface_prop() {
 fn unknown_stable_id_returns_none() {
     assert_eq!(FooterVariationId::from_stable_id("nonexistent"), None);
 }
+
+// --- Storybook footer selection → PromptFooterConfig bridge tests ---
+
+use super::config_from_storybook_footer_selection_value;
+
+#[test]
+fn minimal_storybook_footer_selection_disables_action_buttons() {
+    let config = config_from_storybook_footer_selection_value(Some("minimal"));
+
+    assert!(!config.show_logo);
+    assert!(!config.show_primary);
+    assert!(!config.show_secondary);
+}
+
+#[test]
+fn invalid_storybook_footer_selection_falls_back_to_default() {
+    let config = config_from_storybook_footer_selection_value(Some("not-a-variant"));
+
+    assert!(config.show_logo);
+    assert!(config.show_primary);
+    assert!(config.show_secondary);
+    assert_eq!(config.primary_label, "Open Application");
+}
+
+#[test]
+fn none_storybook_footer_selection_falls_back_to_default() {
+    let config = config_from_storybook_footer_selection_value(None);
+
+    assert!(config.show_logo);
+    assert!(config.show_primary);
+    assert!(config.show_secondary);
+    assert_eq!(config.primary_label, "Open Application");
+}
+
+#[test]
+fn scriptkit_branded_storybook_footer_selection_enables_helper_and_info() {
+    let config = config_from_storybook_footer_selection_value(Some("scriptkit-branded"));
+
+    assert!(config.show_logo);
+    assert!(config.show_primary);
+    assert!(config.show_secondary);
+    assert!(config.show_info_label);
+    assert_eq!(config.primary_label, "Run Script");
+    assert_eq!(config.helper_text.as_deref(), Some("Tab AI"));
+    assert_eq!(config.info_label.as_deref(), Some("Built-in"));
+}
+
+#[test]
+fn invisible_storybook_footer_selection_hides_everything() {
+    let config = config_from_storybook_footer_selection_value(Some("invisible"));
+
+    assert!(!config.show_logo);
+    assert!(!config.show_primary);
+    assert!(!config.show_secondary);
+    assert!(!config.show_info_label);
+}
+
+#[test]
+fn status_bar_storybook_footer_selection_shows_logo_hides_buttons() {
+    let config = config_from_storybook_footer_selection_value(Some("status-bar"));
+
+    assert!(config.show_logo);
+    assert!(!config.show_primary);
+    assert!(!config.show_secondary);
+}

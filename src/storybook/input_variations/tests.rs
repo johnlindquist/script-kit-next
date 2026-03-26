@@ -1,6 +1,8 @@
 use std::collections::HashSet;
 
-use super::{input_story_variants, input_variation_specs, InputVariationId};
+use super::{
+    adopted_input_variation_id, input_story_variants, input_variation_specs, InputVariationId,
+};
 
 #[test]
 fn input_variation_ids_are_unique() {
@@ -56,4 +58,37 @@ fn input_story_variants_have_surface_prop() {
 #[test]
 fn unknown_stable_id_returns_none() {
     assert_eq!(InputVariationId::from_stable_id("nonexistent"), None);
+}
+
+#[test]
+fn adopted_input_variation_defaults_to_bare() {
+    assert_eq!(adopted_input_variation_id(None), InputVariationId::Bare);
+    assert_eq!(
+        adopted_input_variation_id(Some("not-a-variant")),
+        InputVariationId::Bare
+    );
+}
+
+#[test]
+fn adopted_input_variation_accepts_saved_ids() {
+    assert_eq!(
+        adopted_input_variation_id(Some("search-icon")),
+        InputVariationId::SearchIcon
+    );
+    assert_eq!(
+        adopted_input_variation_id(Some("prompt-prefix")),
+        InputVariationId::PromptPrefix
+    );
+}
+
+#[test]
+fn adopted_input_variation_resolves_all_known_ids() {
+    for variation in InputVariationId::ALL {
+        assert_eq!(
+            adopted_input_variation_id(Some(variation.as_str())),
+            variation,
+            "adopted_input_variation_id should resolve {}",
+            variation.as_str()
+        );
+    }
 }
