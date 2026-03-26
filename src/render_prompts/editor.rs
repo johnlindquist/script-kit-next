@@ -68,6 +68,12 @@ impl ScriptListApp {
         entity: Entity<EditorPrompt>,
         cx: &mut Context<Self>,
     ) -> AnyElement {
+        crate::components::emit_prompt_chrome_audit(
+            &crate::components::PromptChromeAudit::exception(
+                "editor_prompt",
+                "code_editor_with_snippet_navigation",
+            ),
+        );
         let render_context = PromptRenderContext::new(self.theme.as_ref(), self.current_design);
         let theme = render_context.theme;
         let design_visual = render_context.design_visual;

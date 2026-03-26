@@ -83,6 +83,23 @@ mod tests {
     }
 
     #[test]
+    fn env_prompt_uses_borderless_input_shell() {
+        let source = include_str!("render.rs");
+        assert!(
+            source.contains("InlinePromptInput::new("),
+            "env render should use InlinePromptInput for borderless input"
+        );
+        assert!(
+            !source.contains(".border_1()"),
+            "env render should not use .border_1() on input card"
+        );
+        assert!(
+            !source.contains(".rounded(px(12.))"),
+            "env render should not use .rounded(px(12.)) on input card"
+        );
+    }
+
+    #[test]
     fn env_prompt_render_uses_hint_strip_not_prompt_footer() {
         let source = include_str!("render.rs");
         assert!(

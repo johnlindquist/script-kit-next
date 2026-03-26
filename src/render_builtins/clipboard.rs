@@ -270,7 +270,7 @@ impl ScriptListApp {
         #[allow(unused_variables)]
         let text_muted = self.theme.colors.text.muted;
         let text_dimmed = self.theme.colors.text.dimmed;
-        let ui_border = self.theme.colors.ui.border;
+
 
         // Build virtualized list
         let list_element: AnyElement = if filtered_len == 0 {
@@ -565,5 +565,35 @@ impl ScriptListApp {
             })
             .into_any_element()
 
+    }
+}
+
+#[cfg(test)]
+mod clipboard_chrome_audit {
+    #[test]
+    fn clipboard_history_uses_minimal_chrome_footer() {
+        let source = include_str!("clipboard.rs");
+        assert!(
+            source.contains("render_simple_hint_strip("),
+            "clipboard should use render_simple_hint_strip"
+        );
+        assert!(
+            source.contains("SectionDivider::new()"),
+            "clipboard should use SectionDivider"
+        );
+        let legacy = "Prompt".to_owned() + "Footer::new(";
+        assert_eq!(
+            source.matches(&legacy).count(),
+            0,
+            "clipboard should not use PromptFooter"
+        );
+        assert!(
+            source.contains("HEADER_PADDING_X"),
+            "clipboard should use chrome token HEADER_PADDING_X"
+        );
+        assert!(
+            source.contains("HEADER_PADDING_Y"),
+            "clipboard should use chrome token HEADER_PADDING_Y"
+        );
     }
 }

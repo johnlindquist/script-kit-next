@@ -429,6 +429,12 @@ impl ScriptListApp {
         results: Vec<KitStoreSearchResult>,
         cx: &mut Context<Self>,
     ) -> AnyElement {
+        crate::components::emit_prompt_chrome_audit(
+            &crate::components::PromptChromeAudit::exception(
+                "kit_store_browse",
+                "store_browse_with_install_actions",
+            ),
+        );
         let tokens = get_tokens(self.current_design);
         let design_spacing = tokens.spacing();
         let design_typography = tokens.typography();
@@ -854,6 +860,12 @@ impl ScriptListApp {
         kits: Vec<script_kit_gpui::kit_store::InstalledKit>,
         cx: &mut Context<Self>,
     ) -> AnyElement {
+        crate::components::emit_prompt_chrome_audit(
+            &crate::components::PromptChromeAudit::exception(
+                "kit_store_installed",
+                "store_management_with_uninstall_actions",
+            ),
+        );
         let tokens = get_tokens(self.current_design);
         let design_spacing = tokens.spacing();
         let design_typography = tokens.typography();

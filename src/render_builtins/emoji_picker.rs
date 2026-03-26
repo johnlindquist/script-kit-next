@@ -413,3 +413,33 @@ impl ScriptListApp {
             .into_any_element()
     }
 }
+
+#[cfg(test)]
+mod emoji_picker_chrome_audit {
+    #[test]
+    fn emoji_picker_uses_minimal_chrome_footer() {
+        let source = include_str!("emoji_picker.rs");
+        assert!(
+            source.contains("render_simple_hint_strip("),
+            "emoji_picker should use render_simple_hint_strip"
+        );
+        assert!(
+            source.contains("SectionDivider::new()"),
+            "emoji_picker should use SectionDivider"
+        );
+        let legacy = "Prompt".to_owned() + "Footer::new(";
+        assert_eq!(
+            source.matches(&legacy).count(),
+            0,
+            "emoji_picker should not use PromptFooter"
+        );
+        assert!(
+            source.contains("HEADER_PADDING_X"),
+            "emoji_picker should use chrome token HEADER_PADDING_X"
+        );
+        assert!(
+            source.contains("HEADER_PADDING_Y"),
+            "emoji_picker should use chrome token HEADER_PADDING_Y"
+        );
+    }
+}

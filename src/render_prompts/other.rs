@@ -333,6 +333,12 @@ impl ScriptListApp {
         path: std::path::PathBuf,
         cx: &mut Context<Self>,
     ) -> AnyElement {
+        crate::components::emit_prompt_chrome_audit(
+            &crate::components::PromptChromeAudit::exception(
+                "creation_feedback",
+                "post_creation_confirmation_surface",
+            ),
+        );
         let render_context = PromptRenderContext::new(self.theme.as_ref(), self.current_design);
         let theme = self.theme.clone();
         let design_colors = render_context.design_colors;

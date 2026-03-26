@@ -153,7 +153,7 @@ impl ScriptListApp {
         let text_primary = self.theme.colors.text.primary;
         let text_muted = self.theme.colors.text.muted;
         let text_dimmed = self.theme.colors.text.dimmed;
-        let ui_border = self.theme.colors.ui.border;
+
 
         // Build virtualized list
         let list_element: AnyElement = if filtered_len == 0 {
@@ -410,5 +410,27 @@ impl ScriptListApp {
                 None,
             ))
             .into_any_element()
+    }
+}
+
+#[cfg(test)]
+mod app_launcher_chrome_audit {
+    #[test]
+    fn app_launcher_uses_minimal_chrome_footer() {
+        let source = include_str!("app_launcher.rs");
+        assert!(
+            source.contains("render_simple_hint_strip("),
+            "app_launcher should use render_simple_hint_strip"
+        );
+        assert!(
+            source.contains("SectionDivider::new()"),
+            "app_launcher should use SectionDivider"
+        );
+        let legacy = "Prompt".to_owned() + "Footer::new(";
+        assert_eq!(
+            source.matches(&legacy).count(),
+            0,
+            "app_launcher should not use PromptFooter"
+        );
     }
 }

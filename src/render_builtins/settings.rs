@@ -151,6 +151,12 @@ impl ScriptListApp {
         selected_index: usize,
         cx: &mut Context<Self>,
     ) -> AnyElement {
+        crate::components::emit_prompt_chrome_audit(
+            &crate::components::PromptChromeAudit::exception(
+                "settings",
+                "settings_hub_with_categorized_options",
+            ),
+        );
         let tokens = get_tokens(self.current_design);
         let design_spacing = tokens.spacing();
         let design_typography = tokens.typography();

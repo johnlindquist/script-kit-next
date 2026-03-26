@@ -101,6 +101,12 @@ impl ScriptListApp {
         selected_index: usize,
         cx: &mut Context<Self>,
     ) -> AnyElement {
+        crate::components::emit_prompt_chrome_audit(
+            &crate::components::PromptChromeAudit::exception(
+                "process_manager",
+                "process_list_with_kill_actions",
+            ),
+        );
         let tokens = get_tokens(self.current_design);
         let _design_colors = tokens.colors();
         let design_spacing = tokens.spacing();
