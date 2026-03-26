@@ -38,14 +38,7 @@ impl Story for ActionsWindowStory {
     fn render_variant(&self, variant: &StoryVariant) -> AnyElement {
         let theme = crate::theme::get_cached_theme();
         let colors = ActionColors::from_theme(&theme);
-
-        match variant.stable_id().as_str() {
-            "base-raycast" => actions_window_base(colors).into_any_element(),
-            "search-at-top" => actions_window_search_top(colors).into_any_element(),
-            "compact" => actions_window_compact(colors).into_any_element(),
-            "floating" => actions_window_floating(colors).into_any_element(),
-            _ => actions_window_base(colors).into_any_element(),
-        }
+        render_actions_window_variant_preview(colors, &variant.stable_id())
     }
 
     fn render(&self) -> AnyElement {
@@ -2029,6 +2022,16 @@ fn actions_window_raycast_clone(_colors: ActionColors) -> impl IntoElement {
                         ),
                 ),
         )
+}
+
+fn render_actions_window_variant_preview(colors: ActionColors, variant_id: &str) -> AnyElement {
+    match variant_id {
+        "base-raycast" => actions_window_base(colors).into_any_element(),
+        "search-at-top" => actions_window_search_top(colors).into_any_element(),
+        "compact" => actions_window_compact(colors).into_any_element(),
+        "floating" => actions_window_floating(colors).into_any_element(),
+        _ => actions_window_base(colors).into_any_element(),
+    }
 }
 
 #[cfg(test)]

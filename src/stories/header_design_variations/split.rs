@@ -36,15 +36,7 @@ impl Story for HeaderDesignVariationsStory {
     fn render_variant(&self, variant: &StoryVariant) -> AnyElement {
         let theme = crate::theme::get_cached_theme();
         let colors = PromptHeaderColors::from_theme(&theme);
-
-        match variant.stable_id().as_str() {
-            "current-production" => render_variation_1(colors).into_any_element(),
-            "compact" => render_variation_2(colors).into_any_element(),
-            "minimal" => render_variation_8(colors).into_any_element(),
-            "command-palette" => render_variation_13(colors).into_any_element(),
-            "raycast-style" => render_variation_20(colors).into_any_element(),
-            _ => render_variation_1(colors).into_any_element(),
-        }
+        render_header_variant_preview(colors, &variant.stable_id())
     }
 
     fn render(&self) -> AnyElement {
@@ -1057,6 +1049,17 @@ fn render_logo(colors: PromptHeaderColors) -> Div {
         .justify_center()
         .text_color(colors.accent.to_rgb())
         .child("▶") // Placeholder for actual SVG logo
+}
+
+fn render_header_variant_preview(colors: PromptHeaderColors, variant_id: &str) -> AnyElement {
+    match variant_id {
+        "current-production" => render_variation_1(colors).into_any_element(),
+        "compact" => render_variation_2(colors).into_any_element(),
+        "minimal" => render_variation_8(colors).into_any_element(),
+        "command-palette" => render_variation_13(colors).into_any_element(),
+        "raycast-style" => render_variation_20(colors).into_any_element(),
+        _ => render_variation_1(colors).into_any_element(),
+    }
 }
 
 #[cfg(test)]
