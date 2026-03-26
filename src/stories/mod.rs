@@ -21,6 +21,7 @@ mod header_tab_spacing_variations;
 mod input_design_variations;
 mod list_item_state_variations;
 mod list_item_stories;
+mod main_menu_variations;
 mod logo_centering_stories;
 mod path_prompt_stories;
 mod run_button_exploration;
@@ -50,6 +51,7 @@ pub use header_tab_spacing_variations::HeaderTabSpacingVariationsStory;
 pub use input_design_variations::InputDesignVariationsStory;
 pub use list_item_state_variations::ListItemStateVariationsStory;
 pub use list_item_stories::ListItemStory;
+pub use main_menu_variations::MainMenuVariationsStory;
 pub use logo_centering_stories::LogoCenteringStory;
 pub use path_prompt_stories::PathPromptStory;
 pub use run_button_exploration::RunButtonExplorationStory;
@@ -81,6 +83,7 @@ static ALL_STORIES: LazyLock<Vec<StoryEntry>> = LazyLock::new(|| {
         StoryEntry::new(Box::new(FooterLayoutVariationsStory)),
         StoryEntry::new(Box::new(FooterActionVariationsStory)),
         StoryEntry::new(Box::new(InputDesignVariationsStory)),
+        StoryEntry::new(Box::new(MainMenuVariationsStory)),
         StoryEntry::new(Box::new(ActionsWindowStory)),
         // Prompts
         StoryEntry::new(Box::new(ArgPromptStory)),

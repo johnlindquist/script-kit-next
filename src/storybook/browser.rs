@@ -722,6 +722,7 @@ impl StoryBrowser {
 
                         let mut card = div()
                             .w(px(360.))
+                            .flex_shrink_0()
                             .min_h(px(320.))
                             .flex()
                             .flex_col()

@@ -53,8 +53,15 @@ fn show_main_window_helper(
         );
     }
 
-    let current_window_width =
-        platform::get_main_window_bounds().map(|(_, _, width, _)| width as f32);
+    let current_bounds = platform::get_main_window_bounds();
+    let current_window_width = current_bounds.map(|(_, _, width, _)| width as f32);
+    logging::log(
+        "POSITION_TRACE",
+        &format!(
+            "Current window bounds before show: {:?}",
+            current_bounds
+        ),
+    );
     let window_size = app_entity.update(cx, |view, ctx| {
         if needs_reset_before_show {
             view.reset_to_script_list(ctx);
@@ -91,6 +98,14 @@ fn show_main_window_helper(
             )
         }
     });
+    logging::log(
+        "POSITION_TRACE",
+        &format!(
+            "Computed window_size for show: width={:.0}, height={:.0}",
+            f32::from(window_size.width),
+            f32::from(window_size.height)
+        ),
+    );
 
     // Keep legacy resize state clear before re-opening. Interactive resizes still
     // use the deferred paths after the window is already visible.
@@ -110,18 +125,31 @@ fn show_main_window_helper(
         {
             // Validate the saved position is still visible
             if window_state::is_bounds_visible(&saved, &displays) {
+                let target_width = f32::from(window_size.width) as f64;
+                let width_delta = saved.width - target_width;
                 logging::log(
-                    "VISIBILITY",
+                    "POSITION_TRACE",
                     &format!(
-                        "Restoring saved position for display {}: ({:.0}, {:.0})",
+                        "Restoring saved position for display {}: saved=({:.0}, {:.0}, {:.0}x{:.0}), target_width={:.0}, width_delta={:.1}",
                         window_state::display_key(&display),
-                        saved.x,
-                        saved.y
+                        saved.x, saved.y, saved.width, saved.height,
+                        target_width, width_delta
+                    ),
+                );
+                // Re-center horizontally when the target width differs from the saved width.
+                // Without this, a width change shifts the left edge, causing the window
+                // to appear offset from its original center.
+                let adjusted_x = saved.x + (saved.width - target_width) / 2.0;
+                logging::log(
+                    "POSITION_TRACE",
+                    &format!(
+                        "Adjusted x: saved.x={:.0} -> adjusted_x={:.0} (shift={:.1})",
+                        saved.x, adjusted_x, adjusted_x - saved.x
                     ),
                 );
                 // Use saved position but with current window height (may have changed)
                 gpui::Bounds {
-                    origin: gpui::point(px(saved.x as f32), px(saved.y as f32)),
+                    origin: gpui::point(px(adjusted_x as f32), px(saved.y as f32)),
                     size: window_size,
                 }
             } else {
@@ -234,6 +262,13 @@ fn hide_main_window_helper(app_entity: Entity<ScriptListApp>, cx: &mut App) {
     if let Some((x, y, width, height)) = platform::get_main_window_bounds() {
         let displays = platform::get_macos_displays();
         let bounds = window_state::PersistedWindowBounds::new(x, y, width, height);
+        logging::log(
+            "POSITION_TRACE",
+            &format!(
+                "Hide: saving bounds ({:.0}, {:.0}, {:.0}x{:.0})",
+                x, y, width, height
+            ),
+        );
 
         // Find which display the window center is on
         if let Some(display) = window_state::find_display_for_bounds(&bounds, &displays) {

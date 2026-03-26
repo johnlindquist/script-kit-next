@@ -66,7 +66,11 @@ pub use self::preflight_audit::{
     AiPreflightAudit, AI_PREFLIGHT_AUDIT_SCHEMA_VERSION,
 };
 pub use self::providers::{AiProvider, ProviderMessage, ProviderRegistry};
-pub use self::script_generation::{generate_script_from_prompt, GeneratedScriptOutput};
+pub use self::script_generation::{
+    generate_script_from_prompt, generate_script_from_prompt_with_receipt,
+    generated_script_receipt_path, GeneratedScriptContractAudit, GeneratedScriptMetadataStyle,
+    GeneratedScriptOutput, GeneratedScriptReceipt, AI_GENERATED_SCRIPT_RECEIPT_SCHEMA_VERSION,
+};
 pub use self::sdk_handlers::try_handle_ai_message;
 pub use self::storage::{
     clear_all_chats, create_chat, delete_chat, get_all_chats, get_chat, get_chat_messages,

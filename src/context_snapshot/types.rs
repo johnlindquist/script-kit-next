@@ -28,14 +28,17 @@ impl CaptureContextOptions {
 
     /// Lightweight live probe for composer recommendations.
     /// Includes selected text because recommendation quality depends on knowing
-    /// whether a selection exists, but still skips menu bar capture.
+    /// whether a selection exists, but skips menu bar and focused-window capture.
+    /// Focused-window is excluded because the current provider captures a screenshot
+    /// (PNG-encoding overhead) even though only metadata is stored — too expensive
+    /// for the typing path. Re-enable once a metadata-only provider exists.
     pub const fn recommendation() -> Self {
         Self {
             include_selected_text: true,
             include_frontmost_app: true,
             include_menu_bar: false,
             include_browser_url: true,
-            include_focused_window: true,
+            include_focused_window: false,
         }
     }
 
