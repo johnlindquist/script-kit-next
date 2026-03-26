@@ -71,6 +71,8 @@ fn main() {
                 eprintln!("  design-tokens    - Design system tokens");
                 eprintln!("  header-variations - Header component variants");
                 eprintln!("  footer-layout-variations - Footer layout variants (compare-ready)");
+                eprintln!("  header-design-variations - Header layout variants (compare-ready)");
+                eprintln!("  actions-window           - Actions dialog variants (compare-ready)");
                 std::process::exit(0);
             }
             _ => {}

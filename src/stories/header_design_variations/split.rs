@@ -8,8 +8,7 @@
 use gpui::*;
 
 use crate::components::PromptHeaderColors;
-use crate::storybook::{story_container, story_divider, story_section, Story, StoryVariant};
-use crate::theme::Theme;
+use crate::storybook::{story_container, story_divider, story_section, Story, StorySurface, StoryVariant};
 use crate::ui_foundation::HexColorExt;
 
 // Story showcasing 20 header layout variations
@@ -30,8 +29,26 @@ impl Story for HeaderDesignVariationsStory {
         "Layouts"
     }
 
+    fn surface(&self) -> StorySurface {
+        StorySurface::Header
+    }
+
+    fn render_variant(&self, variant: &StoryVariant) -> AnyElement {
+        let theme = crate::theme::get_cached_theme();
+        let colors = PromptHeaderColors::from_theme(&theme);
+
+        match variant.stable_id().as_str() {
+            "current-production" => render_variation_1(colors).into_any_element(),
+            "compact" => render_variation_2(colors).into_any_element(),
+            "minimal" => render_variation_8(colors).into_any_element(),
+            "command-palette" => render_variation_13(colors).into_any_element(),
+            "raycast-style" => render_variation_20(colors).into_any_element(),
+            _ => render_variation_1(colors).into_any_element(),
+        }
+    }
+
     fn render(&self) -> AnyElement {
-        let theme = Theme::default();
+        let theme = crate::theme::get_cached_theme();
         let colors = PromptHeaderColors::from_theme(&theme);
 
         story_container()
@@ -134,13 +151,18 @@ impl Story for HeaderDesignVariationsStory {
     }
 
     fn variants(&self) -> Vec<StoryVariant> {
-        (1..=20)
-            .map(|i| StoryVariant {
-                name: format!("variation-{}", i),
-                description: Some(format!("Layout variation {}", i)),
-                ..Default::default()
-            })
-            .collect()
+        vec![
+            StoryVariant::default_named("current-production", "Current Production")
+                .description("Existing production header layout"),
+            StoryVariant::default_named("compact", "Compact")
+                .description("No separators, tighter button grouping"),
+            StoryVariant::default_named("minimal", "Minimal")
+                .description("Input plus primary action only"),
+            StoryVariant::default_named("command-palette", "Command Palette")
+                .description("Palette-style header with stronger grouping"),
+            StoryVariant::default_named("raycast-style", "Raycast Style")
+                .description("Header aligned to Raycast treatment"),
+        ]
     }
 }
 

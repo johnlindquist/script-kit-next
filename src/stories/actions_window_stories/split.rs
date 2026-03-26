@@ -11,7 +11,7 @@
 
 use gpui::*;
 
-use crate::storybook::{story_container, story_section, Story, StoryVariant};
+use crate::storybook::{story_container, story_section, Story, StorySurface, StoryVariant};
 use crate::theme::Theme;
 use crate::ui_foundation::HexColorExt;
 
@@ -31,8 +31,25 @@ impl Story for ActionsWindowStory {
         "Layouts"
     }
 
+    fn surface(&self) -> StorySurface {
+        StorySurface::ActionDialog
+    }
+
+    fn render_variant(&self, variant: &StoryVariant) -> AnyElement {
+        let theme = crate::theme::get_cached_theme();
+        let colors = ActionColors::from_theme(&theme);
+
+        match variant.stable_id().as_str() {
+            "base-raycast" => actions_window_base(colors).into_any_element(),
+            "search-at-top" => actions_window_search_top(colors).into_any_element(),
+            "compact" => actions_window_compact(colors).into_any_element(),
+            "floating" => actions_window_floating(colors).into_any_element(),
+            _ => actions_window_base(colors).into_any_element(),
+        }
+    }
+
     fn render(&self) -> AnyElement {
-        let theme = Theme::default();
+        let theme = crate::theme::get_cached_theme();
         let colors = ActionColors::from_theme(&theme);
 
         story_container()
@@ -126,11 +143,16 @@ impl Story for ActionsWindowStory {
     }
 
     fn variants(&self) -> Vec<StoryVariant> {
-        vec![StoryVariant {
-            name: "base".into(),
-            description: Some("Base actions window layout".into()),
-            ..Default::default()
-        }]
+        vec![
+            StoryVariant::default_named("base-raycast", "Base Raycast")
+                .description("Classic command palette list with footer actions"),
+            StoryVariant::default_named("search-at-top", "Search at Top")
+                .description("Search input above the action list"),
+            StoryVariant::default_named("compact", "Compact")
+                .description("Dense rows for power users"),
+            StoryVariant::default_named("floating", "Floating")
+                .description("Detached palette treatment"),
+        ]
     }
 }
 

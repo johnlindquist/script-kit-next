@@ -21,5 +21,8 @@ pub use registry::{
     all_categories, all_stories, first_story_with_multiple_variants, stories_by_category,
     stories_by_surface, StoryEntry,
 };
-pub use selection::{load_story_selections, save_story_selections, StorySelectionStore};
+pub use selection::{
+    load_selected_story_variant, load_story_selections, save_story_selections,
+    StorySelectionStore,
+};
 pub use story::{Story, StorySurface, StoryVariant};
