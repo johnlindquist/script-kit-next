@@ -3148,6 +3148,95 @@ impl ScriptListApp {
                                                 .ok()
                                                 .filter(|url| !url.trim().is_empty());
 
+                                            // --- Automation memory lookup: replay/repair/generate ---
+                                            let memory_decision = crate::ai::resolve_current_app_automation_from_memory(
+                                                &raw_query_owned,
+                                                &snapshot_for_recipe,
+                                                &entries,
+                                                selected_text.as_deref(),
+                                                browser_url.as_deref(),
+                                            );
+
+                                            if let Ok(ref decision) = memory_decision {
+                                                if let Some(ref replay) = decision.replay {
+                                                    tracing::info!(
+                                                        category = "CURRENT_APP_AUTOMATION_MEMORY",
+                                                        trace_id = %dctx.trace_id,
+                                                        action = %decision.action,
+                                                        best_score = decision.best_score,
+                                                        matched_slug = decision
+                                                            .matched
+                                                            .as_ref()
+                                                            .map(|entry| entry.slug.as_str())
+                                                            .unwrap_or(""),
+                                                        reason = %decision.reason,
+                                                        "do_in_current_app.memory_resolved"
+                                                    );
+
+                                                    match decision.action.as_str() {
+                                                        "replay_recipe" => {
+                                                            match replay.action.as_str() {
+                                                                "execute_entry" => {
+                                                                    if let Some(entry_index) = replay.selected_entry_index {
+                                                                        if entry_index < entries.len() {
+                                                                            let entry = entries[entry_index].clone();
+                                                                            return self.execute_builtin_inner(
+                                                                                &entry,
+                                                                                Some(&raw_query_owned),
+                                                                                dctx,
+                                                                                cx,
+                                                                            );
+                                                                        }
+                                                                    }
+                                                                }
+                                                                "open_command_palette" => {
+                                                                    let filter = replay.verification.live_recipe.effective_query.clone();
+                                                                    self.cached_current_app_entries = entries.clone();
+                                                                    self.open_builtin_filterable_view_with_filter(
+                                                                        AppView::CurrentAppCommandsView {
+                                                                            filter: filter.clone(),
+                                                                            selected_index: 0,
+                                                                        },
+                                                                        &filter,
+                                                                        &snapshot_receipt.placeholder,
+                                                                        cx,
+                                                                    );
+                                                                    return Self::builtin_success(
+                                                                        dctx,
+                                                                        "do_in_current_app_replay_memory_open_palette",
+                                                                    );
+                                                                }
+                                                                "generate_script" => {
+                                                                    self.spawn_generate_script_from_recipe_after_hide(
+                                                                        dctx.trace_id.to_string(),
+                                                                        replay.verification.live_recipe.clone(),
+                                                                        cx,
+                                                                    );
+                                                                    return Self::builtin_success(
+                                                                        dctx,
+                                                                        "do_in_current_app_replay_memory_generate_script",
+                                                                    );
+                                                                }
+                                                                _ => {}
+                                                            }
+                                                        }
+                                                        "repair_recipe" => {
+                                                            self.spawn_generate_script_from_recipe_after_hide(
+                                                                dctx.trace_id.to_string(),
+                                                                replay.verification.live_recipe.clone(),
+                                                                cx,
+                                                            );
+                                                            return Self::builtin_success(
+                                                                dctx,
+                                                                "do_in_current_app_repair_memory_recipe",
+                                                            );
+                                                        }
+                                                        _ => {}
+                                                    }
+                                                }
+                                            }
+                                            // --- End automation memory lookup ---
+
                                             let recipe =
                                                 crate::menu_bar::current_app_commands::build_current_app_command_recipe(
                                                     snapshot_for_recipe,

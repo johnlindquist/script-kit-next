@@ -37,6 +37,7 @@ pub(crate) mod context_contract;
 #[cfg(test)]
 mod context_contract_integration_tests;
 pub(crate) mod context_mentions;
+pub(crate) mod current_app_automation_memory;
 pub mod message_parts;
 pub(crate) mod model;
 pub(crate) mod preflight_audit;
@@ -52,6 +53,11 @@ pub(crate) mod window;
 
 // Re-export commonly used types
 pub use self::config::{DetectedKeys, ModelInfo, ProviderConfig};
+pub use self::current_app_automation_memory::{
+    current_app_automation_memory_index_path, read_current_app_automation_memory_index,
+    resolve_current_app_automation_from_memory, upsert_current_app_automation_memory_from_receipt,
+    CurrentAppAutomationMemoryDecision, CurrentAppAutomationMemoryIndexEntry,
+};
 pub use self::message_parts::{
     file_path_parts, merge_context_parts, prepare_user_message_with_receipt,
     resolve_context_part_to_prompt_block, resolve_context_parts_to_prompt_prefix,
@@ -67,9 +73,10 @@ pub use self::preflight_audit::{
 };
 pub use self::providers::{AiProvider, ProviderMessage, ProviderRegistry};
 pub use self::script_generation::{
-    generate_script_from_prompt, generate_script_from_prompt_with_receipt,
-    generated_script_receipt_path, GeneratedScriptContractAudit, GeneratedScriptMetadataStyle,
-    GeneratedScriptOutput, GeneratedScriptReceipt, AI_GENERATED_SCRIPT_RECEIPT_SCHEMA_VERSION,
+    extract_current_app_recipe_from_script, generate_script_from_prompt,
+    generate_script_from_prompt_with_receipt, generated_script_receipt_path,
+    GeneratedScriptContractAudit, GeneratedScriptMetadataStyle, GeneratedScriptOutput,
+    GeneratedScriptReceipt, AI_GENERATED_SCRIPT_RECEIPT_SCHEMA_VERSION,
 };
 pub use self::sdk_handlers::try_handle_ai_message;
 pub use self::storage::{
