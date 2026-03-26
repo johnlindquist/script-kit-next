@@ -93,7 +93,7 @@ fn command_bar_config_ai_style() {
     ));
     assert!(matches!(config.dialog_config.anchor, AnchorPosition::Top));
     assert!(config.dialog_config.show_icons);
-    assert!(config.dialog_config.show_footer);
+    assert!(!config.dialog_config.show_footer);
     assert!(config.close_on_select);
     assert!(config.close_on_escape);
     assert!(config.close_on_click_outside);
@@ -116,6 +116,25 @@ fn command_bar_config_no_search() {
     ));
     assert!(!config.dialog_config.show_icons);
     assert!(!config.dialog_config.show_footer);
+}
+
+#[test]
+fn command_bar_config_notes_style() {
+    let config = CommandBarConfig::notes_style();
+    assert!(matches!(
+        config.dialog_config.search_position,
+        SearchPosition::Top
+    ));
+    assert!(matches!(
+        config.dialog_config.section_style,
+        SectionStyle::Separators
+    ));
+    assert!(matches!(config.dialog_config.anchor, AnchorPosition::Top));
+    assert!(config.dialog_config.show_icons);
+    assert!(!config.dialog_config.show_footer);
+    assert!(config.close_on_select);
+    assert!(config.close_on_escape);
+    assert!(config.close_on_click_outside);
 }
 
 // =========================================================================

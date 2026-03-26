@@ -81,4 +81,25 @@ mod tests {
         assert_eq!(env_key_action("ESC"), Some(EnvKeyAction::Cancel));
         assert_eq!(env_key_action("tab"), None);
     }
+
+    #[test]
+    fn env_prompt_render_uses_hint_strip_not_prompt_footer() {
+        let source = include_str!("render.rs");
+        assert!(
+            source.contains("render_simple_hint_strip("),
+            "env render should use render_simple_hint_strip for minimal chrome footer"
+        );
+        assert!(
+            source.contains("env_storage_hint_text("),
+            "env render should preserve storage hint text in the hint strip leading slot"
+        );
+        assert!(
+            !source.contains("PromptFooter::new("),
+            "env render should no longer use PromptFooter"
+        );
+        assert!(
+            !source.contains("PromptFooterColors"),
+            "env render should not reference PromptFooterColors"
+        );
+    }
 }

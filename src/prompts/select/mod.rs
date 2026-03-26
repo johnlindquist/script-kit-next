@@ -21,11 +21,9 @@ use crate::components::{
 use crate::designs::{get_tokens, DesignColors, DesignVariant};
 use crate::list_item::{IconKind, LIST_ITEM_HEIGHT};
 use crate::logging;
-use crate::panel::PROMPT_INPUT_FIELD_HEIGHT;
 use crate::protocol::{generate_semantic_id, Choice};
 use crate::scripts;
 use crate::theme;
-use crate::ui_foundation::get_vibrancy_background;
 
 use super::SubmitCallback;
 

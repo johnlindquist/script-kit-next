@@ -1835,7 +1835,7 @@ mod from_dialog_builtin_action_validation_tests_12 {
             assert_eq!(cfg.dialog_config.section_style, SectionStyle::Headers);
             assert_eq!(cfg.dialog_config.anchor, AnchorPosition::Top);
             assert!(cfg.dialog_config.show_icons);
-            assert!(cfg.dialog_config.show_footer);
+            assert!(!cfg.dialog_config.show_footer);
             assert!(cfg.close_on_select);
             assert!(cfg.close_on_click_outside);
             assert!(cfg.close_on_escape);
@@ -1868,7 +1868,7 @@ mod from_dialog_builtin_action_validation_tests_12 {
             assert_eq!(cfg.dialog_config.section_style, SectionStyle::Separators);
             assert_eq!(cfg.dialog_config.anchor, AnchorPosition::Top);
             assert!(cfg.dialog_config.show_icons);
-            assert!(cfg.dialog_config.show_footer);
+            assert!(!cfg.dialog_config.show_footer);
         }
     
         #[test]
@@ -7011,7 +7011,7 @@ mod from_dialog_builtin_action_validation_tests_14 {
         #[test]
         fn cat18_notes_style_footer_enabled() {
             let cfg = CommandBarConfig::notes_style();
-            assert!(cfg.dialog_config.show_footer);
+            assert!(!cfg.dialog_config.show_footer);
         }
     
         #[test]
@@ -13016,7 +13016,7 @@ mod from_dialog_builtin_action_validation_tests_17 {
         #[test]
         fn cat23_notes_style_footer_enabled() {
             let config = CommandBarConfig::notes_style();
-            assert!(config.dialog_config.show_footer);
+            assert!(!config.dialog_config.show_footer);
         }
     
         #[test]
@@ -14698,7 +14698,7 @@ mod from_dialog_builtin_action_validation_tests_18 {
         #[test]
         fn cat20_ai_style_footer_enabled() {
             let config = CommandBarConfig::ai_style();
-            assert!(config.dialog_config.show_footer);
+            assert!(!config.dialog_config.show_footer);
         }
     
         // =========================================================================
@@ -18280,7 +18280,7 @@ mod from_dialog_builtin_action_validation_tests_20 {
                 SectionStyle::Separators
             ));
             assert!(config.dialog_config.show_icons);
-            assert!(config.dialog_config.show_footer);
+            assert!(!config.dialog_config.show_footer);
         }
     
         // =========================================================================

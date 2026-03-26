@@ -962,7 +962,7 @@ mod from_dialog_builtin_action_validation_tests_21 {
     #[test]
     fn batch21_config_notes_style_footer_true() {
         let c = CommandBarConfig::notes_style();
-        assert!(c.dialog_config.show_footer);
+        assert!(!c.dialog_config.show_footer);
     }
     
     // ============================================================
@@ -2824,7 +2824,7 @@ mod from_dialog_builtin_action_validation_tests_22 {
         let cfg = CommandBarConfig::ai_style();
         assert_eq!(cfg.dialog_config.search_position, SearchPosition::Top);
         assert!(cfg.dialog_config.show_icons);
-        assert!(cfg.dialog_config.show_footer);
+        assert!(!cfg.dialog_config.show_footer);
     }
     
     #[test]
@@ -6094,7 +6094,7 @@ mod from_dialog_builtin_action_validation_tests_24 {
         let config = CommandBarConfig::ai_style();
         assert_eq!(config.dialog_config.search_position, SearchPosition::Top);
         assert!(config.dialog_config.show_icons);
-        assert!(config.dialog_config.show_footer);
+        assert!(!config.dialog_config.show_footer);
     }
     
     #[test]
@@ -6118,7 +6118,7 @@ mod from_dialog_builtin_action_validation_tests_24 {
         let config = CommandBarConfig::notes_style();
         assert_eq!(config.dialog_config.section_style, SectionStyle::Separators);
         assert!(config.dialog_config.show_icons);
-        assert!(config.dialog_config.show_footer);
+        assert!(!config.dialog_config.show_footer);
     }
     
     // ============================================================
@@ -11776,7 +11776,7 @@ mod from_dialog_builtin_action_validation_tests_29 {
     fn cat29_25_ai_style_has_icons_and_footer() {
         let config = CommandBarConfig::ai_style();
         assert!(config.dialog_config.show_icons);
-        assert!(config.dialog_config.show_footer);
+        assert!(!config.dialog_config.show_footer);
     }
     
     #[test]
@@ -11790,7 +11790,7 @@ mod from_dialog_builtin_action_validation_tests_29 {
     fn cat29_25_notes_style_has_icons_and_footer() {
         let config = CommandBarConfig::notes_style();
         assert!(config.dialog_config.show_icons);
-        assert!(config.dialog_config.show_footer);
+        assert!(!config.dialog_config.show_footer);
     }
     
     #[test]
@@ -13116,7 +13116,7 @@ mod from_dialog_builtin_action_validation_tests_30 {
     fn batch30_command_bar_notes_style_show_icons_and_footer() {
         let cfg = CommandBarConfig::notes_style();
         assert!(cfg.dialog_config.show_icons);
-        assert!(cfg.dialog_config.show_footer);
+        assert!(!cfg.dialog_config.show_footer);
     }
     
     // ---------------------------------------------------------------------------

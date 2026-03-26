@@ -103,32 +103,18 @@ impl Render for SelectPrompt {
         let colors = tokens.colors();
         let spacing = tokens.spacing();
 
-        // VIBRANCY: Optional background override when a vibrancy surface is available.
-        let vibrancy_bg = get_vibrancy_background(&self.theme);
-
-        let (_main_bg, text_color, muted_color, border_color, border_color_hex) =
+        let (text_color, muted_color) =
             if self.design_variant == DesignVariant::Default {
                 (
-                    rgb(self.theme.colors.background.main),
                     rgb(self.theme.colors.text.secondary),
                     rgb(self.theme.colors.text.muted),
-                    rgb(self.theme.colors.ui.border),
-                    self.theme.colors.ui.border,
                 )
             } else {
                 (
-                    rgb(colors.background),
                     rgb(colors.text_secondary),
                     rgb(colors.text_muted),
-                    rgb(colors.border),
-                    colors.border,
                 )
             };
-        let search_box_bg = rgb(resolve_search_box_bg_hex(
-            &self.theme,
-            self.design_variant,
-            &colors,
-        ));
         let row_accent_color = if self.design_variant == DesignVariant::Default {
             self.theme.colors.accent.selected
         } else {
@@ -149,24 +135,19 @@ impl Render for SelectPrompt {
             SharedString::from(self.filter_text.clone())
         };
 
-        // Search input
+        // Search input — minimal chrome: no bg, no border, chrome-token padding
         let input_container = div()
             .id(gpui::ElementId::Name("input:select-filter".into()))
             .w_full()
-            .min_h(px(PROMPT_INPUT_FIELD_HEIGHT))
-            .px(px(spacing.item_padding_x))
-            .py(px(spacing.padding_md))
-            .bg(search_box_bg)
-            .border_b_1()
-            .border_color(border_color)
+            .px(px(crate::ui::chrome::HEADER_PADDING_X))
+            .py(px(crate::ui::chrome::HEADER_PADDING_Y))
             .flex()
             .flex_row()
-            .gap_2()
             .items_center()
-            .child(div().text_color(muted_color).child("🔍"))
             .child(
                 div()
                     .flex_1()
+                    .text_size(px(16.0))
                     .text_color(if self.filter_text.is_empty() {
                         muted_color
                     } else {
@@ -177,7 +158,7 @@ impl Render for SelectPrompt {
             .when(self.multiple, |container| {
                 container.child(
                     div()
-                        .text_sm()
+                        .text_xs()
                         .text_color(muted_color)
                         .child(format!("{} selected", self.selected.len())),
                 )
@@ -341,14 +322,9 @@ impl Render for SelectPrompt {
             .flex_col()
             .w_full()
             .h_full()
-            .bg(_main_bg)
-            .when_some(vibrancy_bg, |d, bg| d.bg(bg))
-            .rounded(px(12.0))
-            .overflow_hidden()
-            .border_1()
-            .border_color(rgba((border_color_hex << 8) | 0x40))
             .text_color(text_color)
             .child(input_container)
+            .child(crate::components::SectionDivider::new())
             .child(choices_container);
 
         FocusablePrompt::new(container)
@@ -438,6 +414,28 @@ mod tests {
         assert_eq!(
             resolve_row_bg_hex(hovered_row, focused_bg_hex, hovered_bg_hex),
             hovered_bg_hex
+        );
+    }
+
+    #[test]
+    fn select_prompt_render_uses_chrome_token_padding() {
+        let source = include_str!("render.rs");
+        assert!(
+            source.contains("crate::ui::chrome::HEADER_PADDING_X"),
+            "select input should use chrome-token HEADER_PADDING_X"
+        );
+        assert!(
+            source.contains("crate::ui::chrome::HEADER_PADDING_Y"),
+            "select input should use chrome-token HEADER_PADDING_Y"
+        );
+    }
+
+    #[test]
+    fn select_prompt_container_uses_section_divider() {
+        let source = include_str!("render.rs");
+        assert!(
+            source.contains("SectionDivider::new()"),
+            "select container should use SectionDivider between input and list"
         );
     }
 }

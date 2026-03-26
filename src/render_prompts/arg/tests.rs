@@ -213,8 +213,8 @@ mod arg_prompt_render_tests {
             "arg helpers should define key_preamble"
         );
         assert!(
-            include_str!("render.rs").contains("key_preamble(this, event, true, false, cx)"),
-            "arg prompt key handler should use key_preamble"
+            include_str!("render.rs").contains("handle_prompt_key_preamble_default("),
+            "arg prompt key handler should use handle_prompt_key_preamble_default"
         );
         assert!(
             include_str!("../div.rs").contains("key_preamble(this, event, true, true, cx)"),
@@ -231,6 +231,55 @@ mod arg_prompt_render_tests {
         assert!(
             include_str!("../term.rs").contains("key_preamble(this, event, false, false, cx)"),
             "term prompt key handler should use key_preamble"
+        );
+    }
+
+    #[test]
+    fn arg_prompt_hints_include_actions_when_available() {
+        let hints = arg_prompt_hints(true)
+            .into_iter()
+            .map(|hint| hint.to_string())
+            .collect::<Vec<_>>();
+        assert_eq!(hints, vec!["↵ Continue", "⌘K Actions", "Esc Back"]);
+    }
+
+    #[test]
+    fn arg_prompt_hints_omit_actions_when_unavailable() {
+        let hints = arg_prompt_hints(false)
+            .into_iter()
+            .map(|hint| hint.to_string())
+            .collect::<Vec<_>>();
+        assert_eq!(hints, vec!["↵ Continue", "Esc Back"]);
+    }
+
+    #[test]
+    fn arg_prompt_leading_status_reuses_existing_helper_text() {
+        assert_eq!(
+            arg_prompt_leading_status(true, 0, false).map(|s| s.to_string()),
+            Some(arg_helper_status_text(resolve_arg_helper_status(
+                true, 0, false
+            )))
+        );
+    }
+
+    #[test]
+    fn arg_prompt_render_uses_hint_strip_not_prompt_footer() {
+        let render_source = include_str!("render.rs");
+        assert!(
+            render_source.contains("render_simple_hint_strip("),
+            "arg render should use render_simple_hint_strip for minimal chrome footer"
+        );
+        assert!(
+            render_source.contains("arg_prompt_hints("),
+            "arg render should use arg_prompt_hints for hint text"
+        );
+        assert!(
+            render_source.contains("arg_prompt_leading_status("),
+            "arg render should use arg_prompt_leading_status for status text"
+        );
+        assert!(
+            !render_source.contains("PromptFooter::new("),
+            "arg render should no longer use PromptFooter"
         );
     }
 }

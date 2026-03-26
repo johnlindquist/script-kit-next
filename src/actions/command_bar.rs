@@ -200,7 +200,7 @@ impl CommandBarConfig {
                 section_style: SectionStyle::Headers,
                 anchor: AnchorPosition::Top,
                 show_icons: true,
-                show_footer: true,
+                show_footer: false,
             },
             ..Default::default()
         }
@@ -229,7 +229,7 @@ impl CommandBarConfig {
                 section_style: SectionStyle::Separators,
                 anchor: AnchorPosition::Top,
                 show_icons: true,
-                show_footer: true,
+                show_footer: false,
             },
             ..Default::default()
         }
@@ -911,7 +911,7 @@ mod command_bar_config_tests {
             SectionStyle::Headers
         ));
         assert!(config.dialog_config.show_icons);
-        assert!(config.dialog_config.show_footer);
+        assert!(!config.dialog_config.show_footer);
     }
 
     #[test]

@@ -274,40 +274,25 @@ impl Render for EnvPrompt {
                         )
                     }),
             )
-            // Footer with submit action
+            // Footer — minimal chrome hint strip with storage context
             .child({
-                let footer_colors = PromptFooterColors::from_theme(&self.theme);
-                let primary_label = if self.exists_in_keyring {
-                    "Update & Continue"
-                } else {
-                    "Save & Continue"
-                };
-                let footer_config = PromptFooterConfig::new()
-                    .primary_label(primary_label)
-                    .primary_shortcut("↵")
-                    .helper_text("Script running")
-                    .show_secondary(true)
-                    .secondary_label("Cancel")
-                    .secondary_shortcut("Esc");
+                let primary_hint = if self.exists_in_keyring { "↵ Update" } else { "↵ Save" };
+                let hints = vec![
+                    gpui::SharedString::from(primary_hint),
+                    gpui::SharedString::from("Esc Cancel"),
+                ];
+                let leading = div()
+                    .text_xs()
+                    .text_color(gpui::rgba(
+                        ((text_primary & 0x00FF_FFFF) << 8)
+                            | crate::ui::chrome::alpha_from_opacity(
+                                crate::ui::chrome::HINT_TEXT_OPACITY,
+                            ),
+                    ))
+                    .child(env_storage_hint_text(self.secret))
+                    .into_any_element();
 
-                // Add click handlers
-                let handle = cx.entity().downgrade();
-                let handle_cancel = cx.entity().downgrade();
-                PromptFooter::new(footer_config, footer_colors)
-                    .on_primary_click(Box::new(move |_, _window, cx| {
-                        if let Some(entity) = handle.upgrade() {
-                            entity.update(cx, |this, cx| {
-                                this.submit(cx);
-                            });
-                        }
-                    }))
-                    .on_secondary_click(Box::new(move |_, _window, cx| {
-                        if let Some(entity) = handle_cancel.upgrade() {
-                            entity.update(cx, |this, _cx| {
-                                this.submit_cancel();
-                            });
-                        }
-                    }))
+                crate::components::render_simple_hint_strip(hints, Some(leading))
             });
 
         FocusablePrompt::new(container)

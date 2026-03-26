@@ -1,4 +1,4 @@
-use gpui::{div, prelude::*, px, rems, rgb, rgba, Div, FontWeight, Rgba, SharedString};
+use gpui::{div, prelude::*, px, rems, rgb, rgba, AnyElement, Div, FontWeight, Rgba, SharedString};
 
 use crate::ui_foundation::hex_to_rgba_with_opacity;
 
@@ -302,6 +302,46 @@ pub fn prompt_shell_content(content: impl IntoElement) -> Div {
     prompt_frame_fill_content(content)
 }
 
+/// Shared outer shell for minimal-chrome prompt surfaces.
+///
+/// Combines `prompt_shell_container` + `prompt_shell_content` with an optional
+/// footer element (typically a `HintStrip`). Callers pass body content and an
+/// optional `AnyElement` footer — the shell handles the column layout, vibrancy
+/// background, and rounded corners.
+#[allow(dead_code)]
+pub(crate) fn render_simple_prompt_shell(
+    radius: f32,
+    vibrancy_bg: Option<Rgba>,
+    body: impl IntoElement,
+    footer: Option<AnyElement>,
+) -> Div {
+    let shell = prompt_shell_container(radius, vibrancy_bg).child(prompt_shell_content(body));
+
+    if let Some(footer) = footer {
+        shell.child(footer)
+    } else {
+        shell
+    }
+}
+
+/// Build a hint-strip footer with optional leading status text.
+///
+/// Wraps `HintStrip::new(hints)` and optionally attaches a leading element
+/// (e.g., contextual status text) so callers can replace `PromptFooter` with a
+/// single function call while preserving any existing status information.
+#[allow(dead_code)]
+pub(crate) fn render_simple_hint_strip(
+    hints: impl crate::components::hint_strip::IntoHints,
+    leading: Option<AnyElement>,
+) -> AnyElement {
+    let strip = crate::components::HintStrip::new(hints);
+
+    match leading {
+        Some(leading) => strip.leading(leading).into_any_element(),
+        None => strip.into_any_element(),
+    }
+}
+
 #[cfg(test)]
 mod prompt_layout_shell_tests {
     use super::{prompt_shell_frame_config, PromptFrameConfig};
@@ -418,6 +458,63 @@ mod prompt_layout_shell_tests {
         assert!(
             body.contains("STANDARD_HEIGHT"),
             "render_naming_prompt should use STANDARD_HEIGHT"
+        );
+    }
+
+    // ── render_simple_prompt_shell contract tests ──────────────────────
+
+    const SHELL_SOURCE: &str = include_str!("prompt_layout_shell.rs");
+
+    #[test]
+    fn render_simple_prompt_shell_accepts_optional_footer() {
+        // The function signature must accept Option<AnyElement> for the footer
+        // so callers can pass None (no footer) or Some(hint_strip).
+        assert!(
+            SHELL_SOURCE.contains("footer: Option<AnyElement>"),
+            "render_simple_prompt_shell must accept footer as Option<AnyElement>"
+        );
+    }
+
+    #[test]
+    fn render_simple_prompt_shell_delegates_to_shell_container() {
+        // Must compose from the existing prompt_shell_container + prompt_shell_content.
+        let fn_start = SHELL_SOURCE
+            .find("fn render_simple_prompt_shell(")
+            .expect("function must exist");
+        let fn_body = &SHELL_SOURCE[fn_start..];
+        assert!(
+            fn_body.contains("prompt_shell_container("),
+            "must delegate to prompt_shell_container"
+        );
+        assert!(
+            fn_body.contains("prompt_shell_content("),
+            "must delegate to prompt_shell_content"
+        );
+    }
+
+    #[test]
+    fn render_simple_hint_strip_accepts_optional_leading() {
+        assert!(
+            SHELL_SOURCE.contains("fn render_simple_hint_strip("),
+            "render_simple_hint_strip must exist"
+        );
+        assert!(
+            SHELL_SOURCE.contains("leading: Option<AnyElement>"),
+            "render_simple_hint_strip must accept leading as Option<AnyElement>"
+        );
+    }
+
+    #[test]
+    fn render_simple_hint_strip_returns_any_element() {
+        let fn_start = SHELL_SOURCE
+            .find("fn render_simple_hint_strip(")
+            .expect("function must exist");
+        let fn_body = &SHELL_SOURCE[fn_start..];
+        let sig_end = fn_body.find('{').expect("must have body");
+        let sig = &fn_body[..sig_end];
+        assert!(
+            sig.contains("-> AnyElement"),
+            "render_simple_hint_strip must return AnyElement"
         );
     }
 }

@@ -337,47 +337,30 @@ impl ScriptListApp {
                         .child(list_element),
                 )
             })
-            // Footer with unified actions
+            // Footer with minimal chrome hint strip
             .child({
-                let footer_colors = PromptFooterColors::from_theme(theme);
-                let helper_status =
-                    resolve_arg_helper_status(has_choices, filtered_choices_len, input_is_empty);
-                let helper_text = Some(arg_helper_status_text(helper_status));
-                let info_label = if has_choices {
-                    Some(format!("{filtered_choices_len} options"))
-                } else {
-                    None
-                };
-                let footer_config = prompt_footer_config_with_status(
-                    "Continue",
-                    has_actions,
-                    helper_text,
-                    info_label,
-                );
+                let leading = arg_prompt_leading_status(
+                    has_choices,
+                    filtered_choices_len,
+                    input_is_empty,
+                )
+                .map(|status| {
+                    div()
+                        .text_xs()
+                        .text_color(rgba(
+                            ((text_primary & 0x00FF_FFFF) << 8)
+                                | crate::ui::chrome::alpha_from_opacity(
+                                    crate::ui::chrome::HINT_TEXT_OPACITY,
+                                ),
+                        ))
+                        .child(status)
+                        .into_any_element()
+                });
 
-                // Create click handlers
-                let prompt_id_for_primary = id.clone();
-                let handle_primary = cx.entity().downgrade();
-                let handle_secondary = cx.entity().downgrade();
-
-                PromptFooter::new(footer_config, footer_colors)
-                    .on_primary_click(Box::new(move |_, _window, cx| {
-                        if let Some(app) = handle_primary.upgrade() {
-                            app.update(cx, |this, cx| {
-                                this.submit_arg_prompt_from_current_state(
-                                    &prompt_id_for_primary,
-                                    cx,
-                                );
-                            });
-                        }
-                    }))
-                    .on_secondary_click(Box::new(move |_, window, cx| {
-                        if let Some(app) = handle_secondary.upgrade() {
-                            app.update(cx, |this, cx| {
-                                this.toggle_arg_actions(cx, window);
-                            });
-                        }
-                    }))
+                crate::components::render_simple_hint_strip(
+                    arg_prompt_hints(has_actions),
+                    leading,
+                )
             })
             // Actions dialog overlay (when Cmd+K is pressed with SDK actions)
             .when_some(
