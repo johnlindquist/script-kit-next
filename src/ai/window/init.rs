@@ -23,13 +23,30 @@ impl AiApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
+        let constructor_start = std::time::Instant::now();
+        tracing::info!(
+            window_mode = ?window_mode,
+            "BEACHBALL TRACE: AiApp::new_with_mode START"
+        );
+
         // Initialize storage
         if let Err(e) = storage::init_ai_db() {
             tracing::error!(error = %e, "Failed to initialize AI database");
         }
 
+        tracing::info!(
+            elapsed_ms = constructor_start.elapsed().as_millis(),
+            "BEACHBALL TRACE: init_ai_db done"
+        );
+
         // Load chats from storage
         let chats = storage::get_all_chats().unwrap_or_default();
+
+        tracing::info!(
+            elapsed_ms = constructor_start.elapsed().as_millis(),
+            chat_count = chats.len(),
+            "BEACHBALL TRACE: get_all_chats done"
+        );
         let selected_chat_id = chats.first().map(|c| c.id);
         let message_previews = std::collections::HashMap::new();
         let message_counts = std::collections::HashMap::new();
@@ -140,6 +157,10 @@ impl AiApp {
         // Publish initial active chat ID for SDK handlers
         publish_active_chat_id(selected_chat_id.as_ref());
 
+        tracing::info!(
+            elapsed_ms = constructor_start.elapsed().as_millis(),
+            "BEACHBALL TRACE: AiApp struct about to be built"
+        );
         info!(chat_count = chats.len(), "AI app initialized");
 
         // Pre-compute box shadows from theme (avoid reloading on every render)
@@ -265,6 +286,11 @@ impl AiApp {
         let sidebar_chat_ids: Vec<ChatId> = app.chats.iter().map(|chat| chat.id).collect();
         Self::spawn_sidebar_metadata_init(app_weak.clone(), sidebar_chat_ids, cx);
         Self::spawn_selected_chat_init(app_weak, selected_chat_id, cx);
+
+        tracing::info!(
+            elapsed_ms = constructor_start.elapsed().as_millis(),
+            "BEACHBALL TRACE: AiApp::new_with_mode END (deferred loads spawned)"
+        );
 
         app
     }

@@ -210,7 +210,6 @@ impl ScriptListApp {
                                 image_base64: base64_data,
                                 submit: false,
                             },
-                            "Sent to AI",
                             cx,
                         );
                     })
@@ -328,7 +327,6 @@ impl ScriptListApp {
                                 image_base64: base64_data,
                                 submit: false,
                             },
-                            "Sent to AI",
                             cx,
                         );
                     })
@@ -430,7 +428,6 @@ impl ScriptListApp {
                                 image_base64: base64_data,
                                 submit: false,
                             },
-                            "Sent to AI",
                             cx,
                         );
                     })
@@ -471,7 +468,6 @@ impl ScriptListApp {
         source_action: &'static str,
         trace_id: &str,
         capture_kind: &'static str,
-        success_message: &'static str,
         capture_fn: C,
         format_fn: F,
         cx: &mut Context<Self>,
@@ -540,7 +536,6 @@ impl ScriptListApp {
                             text: format_fn(captured),
                             submit: false,
                         },
-                        success_message,
                         cx,
                     );
                 }
@@ -582,7 +577,6 @@ impl ScriptListApp {
             "SendSelectedTextToAi",
             trace_id,
             "selected_text",
-            "Sent to AI",
             || {
                 crate::selected_text::get_selected_text()
                     .map_err(|error| error.to_string())
@@ -616,7 +610,6 @@ impl ScriptListApp {
             "SendBrowserTabToAi",
             trace_id,
             "browser_url",
-            "Sent to AI",
             || {
                 platform::get_focused_browser_tab_url()
                     .map_err(|error| error.to_string())
@@ -1621,7 +1614,6 @@ impl ScriptListApp {
                     "AiChat",
                     &dctx.trace_id,
                     DeferredAiWindowAction::OpenOnly,
-                    "AI Chat opened",
                     cx,
                 );
 
@@ -1799,7 +1791,6 @@ impl ScriptListApp {
                             &format!("ai_command::{cmd_type:?}"),
                             &dctx.trace_id,
                             DeferredAiWindowAction::OpenOnly,
-                            "AI Chat opened",
                             cx,
                         );
                         Self::builtin_success(dctx, format!("ai_command::{cmd_type:?}"))
@@ -1851,7 +1842,7 @@ impl ScriptListApp {
 
                             match handoff_result {
                                 Ok(apply_stage) => {
-                                    let _ = this.update(cx, |this, cx| {
+                                    let _ = this.update(cx, |_this, cx| {
                                         tracing::info!(
                                             category = "AI",
                                             event = "ai_handoff_defer_open_success",
@@ -1862,7 +1853,6 @@ impl ScriptListApp {
                                             duration_ms = started_at.elapsed().as_millis() as u64,
                                             "Mini AI handoff completed"
                                         );
-                                        this.show_hud("AI Chat opened".to_string(), Some(HUD_SHORT_MS), cx);
                                         cx.notify();
                                     });
                                 }
@@ -1899,7 +1889,6 @@ impl ScriptListApp {
                                     "ClearConversation",
                                     &dctx.trace_id,
                                     DeferredAiWindowAction::OpenOnly,
-                                    "Cleared AI conversations",
                                     cx,
                                 );
                                 Self::builtin_success(dctx, "ai_clear_conversation")

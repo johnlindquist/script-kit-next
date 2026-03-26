@@ -182,7 +182,6 @@ impl ScriptListApp {
         source_action: &str,
         trace_id: &str,
         deferred_action: DeferredAiWindowAction,
-        success_message: &'static str,
         cx: &mut Context<Self>,
     ) {
         self.hide_main_and_reset(cx);
@@ -190,7 +189,6 @@ impl ScriptListApp {
             source_action,
             trace_id,
             deferred_action,
-            success_message,
             cx,
         );
     }
@@ -208,7 +206,6 @@ impl ScriptListApp {
                 text: query,
                 submit: false,
             },
-            "AI Chat opened",
             cx,
         );
     }
@@ -218,7 +215,6 @@ impl ScriptListApp {
         source_action: &str,
         trace_id: &str,
         deferred_action: DeferredAiWindowAction,
-        success_message: &'static str,
         cx: &mut Context<Self>,
     ) {
         let source_action = source_action.to_string();
@@ -266,7 +262,7 @@ impl ScriptListApp {
 
             match handoff_result {
                 Ok(apply_stage) => {
-                    let _ = this.update(cx, |this, cx| {
+                    let _ = this.update(cx, |_this, cx| {
                         tracing::info!(
                             category = "AI",
                             event = "ai_handoff_defer_open_success",
@@ -277,7 +273,6 @@ impl ScriptListApp {
                             duration_ms = started_at.elapsed().as_millis() as u64,
                             "AI handoff completed"
                         );
-                        this.show_hud(success_message.to_string(), Some(HUD_SHORT_MS), cx);
                         cx.notify();
                     });
                 }

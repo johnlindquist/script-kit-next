@@ -141,6 +141,7 @@ fn open_ai_window_with_mode_from(
     }
 
     // Create new window
+    let create_start = std::time::Instant::now();
     super::telemetry::log_ai_lifecycle("ai_window_create", mode, source, "begin");
 
     // Load theme to determine window background appearance (vibrancy)
@@ -192,11 +193,24 @@ fn open_ai_window_with_mode_from(
         ..Default::default()
     };
 
+    // Switch to regular app mode BEFORE creating the window.
+    // The AI window uses WindowKind::Normal, which requires the app to be in
+    // regular activation policy. Creating a Normal window while in accessory
+    // mode causes AppKit to block (beachball) because the window server cannot
+    // properly register the window until the activation policy allows it.
+    crate::platform::set_regular_app_mode();
+    cx.activate(true);
+
     // Create a holder for the AiApp entity so we can focus it after window creation.
     // NOTE: This is a LOCAL holder, not stored globally, to avoid memory leaks.
     let ai_app_holder: std::sync::Arc<std::sync::Mutex<Option<Entity<AiApp>>>> =
         std::sync::Arc::new(std::sync::Mutex::new(None));
     let ai_app_holder_clone = ai_app_holder.clone();
+
+    tracing::info!(
+        elapsed_ms = create_start.elapsed().as_millis(),
+        "BEACHBALL TRACE: window options prepared, calling cx.open_window (app mode=regular)"
+    );
 
     let handle = match cx.open_window(window_options, |window, cx| {
         let view = cx.new(|cx| AiApp::new_with_mode(mode, window, cx));
@@ -213,8 +227,12 @@ fn open_ai_window_with_mode_from(
         }
     };
 
-    // Activate the app and window so user can immediately start typing
-    cx.activate(true);
+    tracing::info!(
+        elapsed_ms = create_start.elapsed().as_millis(),
+        "BEACHBALL TRACE: cx.open_window returned, window created"
+    );
+
+    // Activate the window (app already activated before open_window)
     let _ = handle.update(cx, |_root, window, _cx| {
         window.activate_window();
     });
@@ -246,10 +264,9 @@ fn open_ai_window_with_mode_from(
     }
     OPENING.store(false, Ordering::SeqCst);
 
-    // Switch to regular app mode so AI window appears in Cmd+Tab
-    // This is unique to the AI window - other windows (main, notes) stay in accessory mode
-    // The mode is restored to accessory when the AI window closes (see AiApp::drop)
-    crate::platform::set_regular_app_mode();
+    // NOTE: set_regular_app_mode() was already called BEFORE cx.open_window()
+    // to prevent AppKit from blocking when creating a Normal window in accessory mode.
+    // The mode is restored to accessory when the AI window closes (see AiApp::drop).
 
     // NOTE: We do NOT configure as floating panel - this is a normal window
     // that can go behind other windows
@@ -260,6 +277,10 @@ fn open_ai_window_with_mode_from(
     // (crate::theme::service::ensure_theme_service) which is started once at app init.
     // This eliminates per-window theme watcher tasks and their potential for leaks.
 
+    tracing::info!(
+        elapsed_ms = create_start.elapsed().as_millis(),
+        "BEACHBALL TRACE: AI window fully configured and ready"
+    );
     super::telemetry::log_ai_lifecycle("ai_window_create", mode, source, "success");
 
     Ok(())

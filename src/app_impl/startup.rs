@@ -320,6 +320,8 @@ impl ScriptListApp {
 
         // Create channel for inline chat escape signals
         let (inline_chat_escape_tx, inline_chat_escape_rx) = mpsc::sync_channel(4);
+        // Create channel for inline chat continue signals (Continue in AI Chat → hide main window)
+        let (inline_chat_continue_tx, inline_chat_continue_rx) = mpsc::sync_channel(4);
         // Create channel for inline chat configure signals (when user wants to set up API key)
         let (inline_chat_configure_tx, inline_chat_configure_rx) = mpsc::sync_channel(4);
         // Create channel for inline chat Claude Code signals (when user wants to enable Claude Code)
@@ -516,6 +518,9 @@ impl ScriptListApp {
             // Inline chat escape channel - for ChatPrompt escape callback to signal return to main menu
             inline_chat_escape_sender: inline_chat_escape_tx,
             inline_chat_escape_receiver: inline_chat_escape_rx,
+            // Inline chat continue channel - for ChatPrompt continue callback to hide main window
+            inline_chat_continue_sender: inline_chat_continue_tx,
+            inline_chat_continue_receiver: inline_chat_continue_rx,
             // Inline chat configure channel - for ChatPrompt configure callback to trigger API key setup
             inline_chat_configure_sender: inline_chat_configure_tx,
             inline_chat_configure_receiver: inline_chat_configure_rx,

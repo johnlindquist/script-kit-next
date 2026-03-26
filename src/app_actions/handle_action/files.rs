@@ -171,7 +171,6 @@ impl ScriptListApp {
                                 DeferredAiWindowAction::AddAttachment {
                                     path: path.clone(),
                                 },
-                                "Attached to AI",
                                 cx,
                             );
 
