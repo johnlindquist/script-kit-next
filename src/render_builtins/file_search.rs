@@ -1222,3 +1222,26 @@ mod file_search_thumbnail_tests {
         }
     }
 }
+
+#[cfg(test)]
+mod file_search_chrome_audit {
+    #[test]
+    fn file_search_uses_minimal_chrome_footer() {
+        let source = include_str!("file_search.rs");
+        assert!(
+            source.contains("render_simple_hint_strip("),
+            "file_search should use render_simple_hint_strip"
+        );
+        assert!(
+            source.contains("SectionDivider::new()"),
+            "file_search should use SectionDivider"
+        );
+        // Count occurrences of the legacy footer pattern — only the test assertion itself should match
+        let legacy = "Prompt".to_owned() + "Footer::new(";
+        let count = source.matches(&legacy).count();
+        assert_eq!(
+            count, 0,
+            "file_search should not use PromptFooter (found {count} occurrences)"
+        );
+    }
+}

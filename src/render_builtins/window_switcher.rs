@@ -156,7 +156,7 @@ impl ScriptListApp {
         #[allow(unused_variables)]
         let text_muted = self.theme.colors.text.muted;
         let text_dimmed = self.theme.colors.text.dimmed;
-        let ui_border = self.theme.colors.ui.border;
+
 
         // Build virtualized list
         let list_element: AnyElement = if filtered_len == 0 {
@@ -393,5 +393,27 @@ impl ScriptListApp {
                 None,
             ))
             .into_any_element()
+    }
+}
+
+#[cfg(test)]
+mod window_switcher_chrome_audit {
+    #[test]
+    fn window_switcher_uses_minimal_chrome_footer() {
+        let source = include_str!("window_switcher.rs");
+        assert!(
+            source.contains("render_simple_hint_strip("),
+            "window_switcher should use render_simple_hint_strip"
+        );
+        assert!(
+            source.contains("SectionDivider::new()"),
+            "window_switcher should use SectionDivider"
+        );
+        let legacy = "Prompt".to_owned() + "Footer::new(";
+        assert_eq!(
+            source.matches(&legacy).count(),
+            0,
+            "window_switcher should not use PromptFooter"
+        );
     }
 }

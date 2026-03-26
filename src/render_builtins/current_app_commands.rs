@@ -13,7 +13,7 @@ impl ScriptListApp {
 
         let text_primary = self.theme.colors.text.primary;
         let text_dimmed = self.theme.colors.text.dimmed;
-        let ui_border = self.theme.colors.ui.border;
+
 
         // Filter entries from cached data
         let (filtered_entries, _) =
@@ -288,5 +288,27 @@ impl ScriptListApp {
                 None,
             ))
             .into_any_element()
+    }
+}
+
+#[cfg(test)]
+mod current_app_commands_chrome_audit {
+    #[test]
+    fn current_app_commands_uses_minimal_chrome_footer() {
+        let source = include_str!("current_app_commands.rs");
+        assert!(
+            source.contains("render_simple_hint_strip("),
+            "current_app_commands should use render_simple_hint_strip"
+        );
+        assert!(
+            source.contains("SectionDivider::new()"),
+            "current_app_commands should use SectionDivider"
+        );
+        let legacy = "Prompt".to_owned() + "Footer::new(";
+        assert_eq!(
+            source.matches(&legacy).count(),
+            0,
+            "current_app_commands should not use PromptFooter"
+        );
     }
 }

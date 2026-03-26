@@ -704,7 +704,7 @@ mod prompt_layout_shell_tests {
     #[test]
     fn exception_surfaces_in_other_rs_emit_chrome_audit() {
         let source = OTHER_RENDERERS_SOURCE;
-        // Template, naming, and webcam prompts should emit audit logs
+        // Template, naming, webcam, and creation_feedback prompts should emit audit logs
         assert!(
             source.contains("emit_prompt_chrome_audit("),
             "other.rs should call emit_prompt_chrome_audit for exception surfaces"
@@ -712,6 +712,73 @@ mod prompt_layout_shell_tests {
         assert!(
             source.contains("PromptChromeAudit::exception("),
             "other.rs should use PromptChromeAudit::exception for rich-chrome surfaces"
+        );
+        // Verify all four exception surfaces in other.rs are classified
+        for surface in [
+            "template_prompt",
+            "naming_prompt",
+            "webcam_prompt",
+            "creation_feedback",
+        ] {
+            assert!(
+                source.contains(&format!("\"{}\"", surface)),
+                "other.rs should classify {surface} as an exception"
+            );
+        }
+    }
+
+    #[test]
+    fn editor_prompt_emits_chrome_audit_exception() {
+        let source = include_str!("../render_prompts/editor.rs");
+        assert!(
+            source.contains("emit_prompt_chrome_audit("),
+            "editor.rs should call emit_prompt_chrome_audit"
+        );
+        assert!(
+            source.contains("PromptChromeAudit::exception("),
+            "editor.rs should classify as exception"
+        );
+        assert!(
+            source.contains("\"editor_prompt\""),
+            "editor.rs should identify as editor_prompt surface"
+        );
+    }
+
+    #[test]
+    fn form_prompt_emits_chrome_audit_exception() {
+        let source = include_str!("../render_prompts/form/render.rs");
+        assert!(
+            source.contains("emit_prompt_chrome_audit("),
+            "form/render.rs should call emit_prompt_chrome_audit"
+        );
+        assert!(
+            source.contains("PromptChromeAudit::exception("),
+            "form/render.rs should classify as exception"
+        );
+        assert!(
+            source.contains("\"form_prompt\""),
+            "form/render.rs should identify as form_prompt surface"
+        );
+    }
+
+    #[test]
+    fn builtin_exception_surfaces_emit_chrome_audit() {
+        let kit_store = include_str!("../render_builtins/kit_store.rs");
+        assert!(
+            kit_store.contains("PromptChromeAudit::exception("),
+            "kit_store.rs should classify as exception"
+        );
+
+        let process_manager = include_str!("../render_builtins/process_manager.rs");
+        assert!(
+            process_manager.contains("PromptChromeAudit::exception("),
+            "process_manager.rs should classify as exception"
+        );
+
+        let settings = include_str!("../render_builtins/settings.rs");
+        assert!(
+            settings.contains("PromptChromeAudit::exception("),
+            "settings.rs should classify as exception"
         );
     }
 }
