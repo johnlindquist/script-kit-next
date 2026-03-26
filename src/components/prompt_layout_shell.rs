@@ -326,6 +326,59 @@ pub(crate) fn render_simple_prompt_shell(
     }
 }
 
+#[allow(dead_code)]
+pub(crate) fn render_minimal_list_prompt_scaffold(
+    header: impl IntoElement,
+    content: impl IntoElement,
+    hints: impl crate::components::hint_strip::IntoHints,
+    leading: Option<AnyElement>,
+) -> Div {
+    div()
+        .w_full()
+        .h_full()
+        .flex()
+        .flex_col()
+        .child(
+            div()
+                .w_full()
+                .px(px(crate::ui::chrome::HEADER_PADDING_X))
+                .py(px(crate::ui::chrome::HEADER_PADDING_Y))
+                .flex()
+                .flex_row()
+                .items_center()
+                .child(header),
+        )
+        .child(crate::components::SectionDivider::new())
+        .child(
+            div()
+                .flex()
+                .flex_col()
+                .flex_1()
+                .min_h(px(0.))
+                .w_full()
+                .overflow_hidden()
+                .child(content),
+        )
+        .child(render_simple_hint_strip(hints, leading))
+}
+
+#[allow(dead_code)]
+pub(crate) fn render_minimal_list_prompt_shell(
+    radius: f32,
+    vibrancy_bg: Option<Rgba>,
+    header: impl IntoElement,
+    content: impl IntoElement,
+    hints: impl crate::components::hint_strip::IntoHints,
+    leading: Option<AnyElement>,
+) -> Div {
+    render_simple_prompt_shell(
+        radius,
+        vibrancy_bg,
+        render_minimal_list_prompt_scaffold(header, content, hints, leading),
+        None,
+    )
+}
+
 /// Build a hint-strip footer with optional leading status text.
 ///
 /// Wraps `HintStrip::new(hints)` and optionally attaches a leading element
@@ -953,6 +1006,52 @@ mod prompt_layout_shell_tests {
         assert!(
             source.contains("\"file_search\""),
             "file_search.rs should identify as file_search surface"
+        );
+    }
+
+    #[test]
+    fn render_minimal_list_prompt_scaffold_uses_shared_tokens_and_footer() {
+        let fn_start = SHELL_SOURCE
+            .find("fn render_minimal_list_prompt_scaffold(")
+            .expect("function must exist");
+        let fn_body = &SHELL_SOURCE[fn_start..];
+
+        assert!(
+            fn_body.contains("HEADER_PADDING_X"),
+            "shared list scaffold must own HEADER_PADDING_X"
+        );
+        assert!(
+            fn_body.contains("HEADER_PADDING_Y"),
+            "shared list scaffold must own HEADER_PADDING_Y"
+        );
+        assert!(
+            fn_body.contains("SectionDivider::new()"),
+            "shared list scaffold must own the divider"
+        );
+        assert!(
+            fn_body.contains("render_simple_hint_strip("),
+            "shared list scaffold must own the hint strip footer"
+        );
+        assert!(
+            fn_body.contains("flex_1()") && fn_body.contains("min_h(px(0."),
+            "shared list scaffold must own the flex content contract"
+        );
+    }
+
+    #[test]
+    fn render_minimal_list_prompt_shell_delegates_to_simple_shell() {
+        let fn_start = SHELL_SOURCE
+            .find("fn render_minimal_list_prompt_shell(")
+            .expect("function must exist");
+        let fn_body = &SHELL_SOURCE[fn_start..];
+
+        assert!(
+            fn_body.contains("render_simple_prompt_shell("),
+            "shared list shell must delegate to render_simple_prompt_shell"
+        );
+        assert!(
+            fn_body.contains("render_minimal_list_prompt_scaffold("),
+            "shared list shell must wrap the scaffold"
         );
     }
 }
