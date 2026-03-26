@@ -386,12 +386,8 @@ mod prompt_layout_shell_tests {
     fn chat_prompt_uses_chat_specific_shell_wrapper_in_other_rs() {
         let body = fn_source("render_chat_prompt");
         assert!(
-            body.contains("prompt_shell_container("),
-            "render_chat_prompt should use prompt_shell_container directly"
-        );
-        assert!(
-            body.contains("prompt_shell_content(entity)"),
-            "render_chat_prompt should use prompt_shell_content directly"
+            body.contains("MinimalPromptShell::new("),
+            "render_chat_prompt should use MinimalPromptShell"
         );
         assert!(
             body.contains("other_prompt_shell_handle_key_chat"),

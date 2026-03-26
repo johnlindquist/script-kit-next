@@ -1,4 +1,5 @@
 use super::*;
+use crate::ui::chrome::{HEADER_PADDING_X, HEADER_PADDING_Y};
 
 fn truncate_str_chars(s: &str, max_chars: usize) -> &str {
     s.char_indices()
@@ -169,8 +170,8 @@ impl ChatPrompt {
         // The full-width container with copy button
         div()
             .w_full()
-            .px(px(CHAT_LAYOUT_CARD_PADDING_X))
-            .py(px(CHAT_LAYOUT_CARD_PADDING_Y))
+            .px(px(HEADER_PADDING_X))
+            .py(px(HEADER_PADDING_Y))
             .bg(container_bg)
             .rounded(px(8.0))
             .flex()
