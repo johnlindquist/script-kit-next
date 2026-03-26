@@ -312,19 +312,25 @@ impl ScriptListApp {
 
                     // Handle special tool types that need interactive prompts
                     if tool == "template" && !result.stdout.is_empty() {
-                        // Template tool: show template prompt with the content
                         let id = format!("scriptlet-template-{}", uuid::Uuid::new_v4());
-                        logging::log(
-                            "EXEC",
-                            &format!(
-                                "Template scriptlet '{}' - showing template prompt",
-                                scriptlet.name
-                            ),
+                        let plan = crate::snippet::analysis::build_hybrid_snippet_plan(
+                            &result.stdout,
+                            &crate::template_variables::VariableContext::new(),
                         );
+
+                        tracing::info!(
+                            category = "EXEC",
+                            kind = ?plan.kind,
+                            unresolved = ?plan.unresolved_variables,
+                            has_explicit_tabstops = plan.has_explicit_tabstops,
+                            "Template scriptlet '{}' resolved into hybrid snippet plan",
+                            scriptlet.name,
+                        );
+
                         self.handle_prompt_message(
                             PromptMessage::ShowTemplate {
                                 id,
-                                template: result.stdout.clone(),
+                                template: plan.template.clone(),
                             },
                             cx,
                         );
