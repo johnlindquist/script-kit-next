@@ -11,6 +11,10 @@ impl AiApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if self.showing_mini_history_overlay {
+            self.dismiss_mini_history_overlay("show_command_bar", window, cx);
+        }
+
         tracing::info!(
             target: "ai",
             category = "AI_UI",
@@ -121,6 +125,10 @@ impl AiApp {
         use crate::actions::{
             get_new_chat_actions, NewChatModelInfo, NewChatPresetInfo, WindowPosition,
         };
+
+        if self.showing_mini_history_overlay {
+            self.dismiss_mini_history_overlay("show_new_chat_command_bar", window, cx);
+        }
 
         // Build last used settings from recent chats
         let last_used: Vec<NewChatModelInfo> = self
