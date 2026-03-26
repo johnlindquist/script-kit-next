@@ -17,10 +17,8 @@ use gpui::{
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
-use crate::components::{
-    PromptContainer, PromptContainerColors, PromptContainerConfig, PromptHeader,
-    PromptHeaderColors, PromptHeaderConfig,
-};
+// Minimal chrome: uses render_minimal_list_prompt_scaffold + render_hint_strip_leading_text
+// from crate::components instead of legacy PromptContainer/PromptHeader
 use crate::designs::DesignVariant;
 use crate::list_item::{IconKind, ListItem, ListItemColors};
 use crate::logging;

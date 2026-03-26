@@ -9,18 +9,170 @@
 //! cargo run --bin storybook -- --story "button"
 //! cargo run --bin storybook -- --story "header-variations" --screenshot
 //! cargo run --bin storybook -- --story "footer-layout-variations" --compare --variant scriptkit-branded
+//! cargo run --bin storybook -- --adopt --story footer-layout-variations --variant minimal
 //! ```
 //!
 //! # Exit Codes
 //!
 //! - 0: success
-//! - 1: invalid `--story` or `--variant` ID
-//! - 2: `--catalog-json` failure (structured JSON error on stderr)
+//! - 1: invalid `--story` or `--variant` ID (interactive mode)
+//! - 2: structured error (JSON on stderr for `--catalog-json`, `--adopt`, `--screenshot`)
 
 use gpui::*;
-use script_kit_gpui::storybook::{StorybookJsonError, StorybookJsonErrorBody, StoryBrowser};
+use script_kit_gpui::storybook::{
+    all_stories, save_selected_story_variant, StorybookJsonError, StorybookJsonErrorBody,
+    StoryBrowser,
+};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+
+/// Uniform JSON success envelope matching the error envelope schema.
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct StorybookJsonSuccess<T: serde::Serialize> {
+    schema_version: u8,
+    ok: bool,
+    data: T,
+}
+
+/// Screenshot-specific success payload.
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ScreenshotSuccess {
+    path: String,
+}
+
+fn print_json_error_and_exit(
+    kind: &'static str,
+    message: String,
+    hint: &'static str,
+    code: i32,
+) -> ! {
+    let payload = StorybookJsonError {
+        schema_version: 1,
+        ok: false,
+        error: StorybookJsonErrorBody {
+            kind,
+            message,
+            hint,
+        },
+    };
+
+    eprintln!(
+        "{}",
+        serde_json::to_string_pretty(&payload).expect("serialize storybook json error payload"),
+    );
+    std::process::exit(code);
+}
+
+fn print_adopt_result_and_exit(story_id: Option<&str>, variant_id: Option<&str>) -> ! {
+    let Some(story_id) = story_id else {
+        print_json_error_and_exit(
+            "missing_story",
+            "Missing required --story <ID> for --adopt.".to_string(),
+            "Pass --adopt --story <ID> --variant <ID>.",
+            2,
+        );
+    };
+
+    let Some(variant_id) = variant_id else {
+        print_json_error_and_exit(
+            "missing_variant",
+            "Missing required --variant <ID> for --adopt.".to_string(),
+            "Pass --adopt --story <ID> --variant <ID>.",
+            2,
+        );
+    };
+
+    let Some(entry) = all_stories().find(|entry| entry.story.id() == story_id) else {
+        let available: Vec<String> = all_stories()
+            .map(|entry| entry.story.id().to_string())
+            .collect();
+
+        print_json_error_and_exit(
+            "unknown_story",
+            format!(
+                "Unknown story '{}'. Available stories: {}",
+                story_id,
+                available.join(", ")
+            ),
+            "Run `cargo run --bin storybook -- --catalog-json` to inspect available stories.",
+            2,
+        );
+    };
+
+    let available_variants: Vec<String> = entry
+        .story
+        .variants()
+        .into_iter()
+        .map(|variant| variant.stable_id())
+        .collect();
+
+    if !available_variants.iter().any(|id| id == variant_id) {
+        print_json_error_and_exit(
+            "unknown_variant",
+            format!(
+                "Unknown variant '{}' for story '{}'. Available variants: {}",
+                variant_id,
+                story_id,
+                available_variants.join(", ")
+            ),
+            "Run `cargo run --bin storybook -- --catalog-json` and inspect the story's variants.",
+            2,
+        );
+    }
+
+    match save_selected_story_variant(story_id, variant_id) {
+        Ok(result) => {
+            let payload = StorybookJsonSuccess {
+                schema_version: 1,
+                ok: true,
+                data: result,
+            };
+
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&payload)
+                    .expect("serialize storybook adopt success payload"),
+            );
+            std::process::exit(0);
+        }
+        Err(error) => {
+            print_json_error_and_exit(
+                "adopt_failed",
+                format!("{error:#}"),
+                "Verify the selection store path is writable and the existing JSON is valid.",
+                2,
+            );
+        }
+    }
+}
+
+fn print_screenshot_result_and_exit(result: Result<String, Box<dyn std::error::Error>>) -> ! {
+    match result {
+        Ok(path) => {
+            let payload = StorybookJsonSuccess {
+                schema_version: 1,
+                ok: true,
+                data: ScreenshotSuccess { path },
+            };
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&payload)
+                    .expect("serialize screenshot success payload"),
+            );
+            std::process::exit(0);
+        }
+        Err(error) => {
+            print_json_error_and_exit(
+                "screenshot_failed",
+                error.to_string(),
+                "Verify a Storybook window is visible before requesting --screenshot.",
+                2,
+            );
+        }
+    }
+}
 
 fn main() {
     // Parse command line args
@@ -29,6 +181,7 @@ fn main() {
     let mut initial_variant: Option<String> = None;
     let mut auto_screenshot = false;
     let mut start_compare = false;
+    let mut adopt_selection = false;
 
     let mut i = 1;
     while i < args.len() {
@@ -48,6 +201,9 @@ fn main() {
             "--compare" => {
                 start_compare = true;
             }
+            "--adopt" => {
+                adopt_selection = true;
+            }
             "--screenshot" | "-c" => {
                 auto_screenshot = true;
             }
@@ -63,6 +219,9 @@ fn main() {
                 eprintln!("  -s, --story <ID>     Open a specific story by ID");
                 eprintln!("  -v, --variant <ID>   Pre-select a variant id");
                 eprintln!("  --compare            Open in side-by-side compare mode");
+                eprintln!(
+                    "  --adopt              Persist the requested story/variant and exit as JSON"
+                );
                 eprintln!("  -c, --screenshot     Capture screenshot and exit");
                 eprintln!("  --catalog-json       Print compare-ready story catalog as JSON");
                 eprintln!("  -h, --help           Show this help message");
@@ -75,14 +234,25 @@ fn main() {
                 eprintln!("  scrollbar        - Scrollbar component");
                 eprintln!("  design-tokens    - Design system tokens");
                 eprintln!("  header-variations - Header component variants");
-                eprintln!("  footer-layout-variations - Footer layout variants (compare-ready)");
-                eprintln!("  header-design-variations - Header layout variants (compare-ready)");
-                eprintln!("  actions-window           - Actions dialog variants (compare-ready)");
+                eprintln!(
+                    "  footer-layout-variations - Footer layout variants (compare-ready)"
+                );
+                eprintln!(
+                    "  header-design-variations - Header layout variants (compare-ready)"
+                );
+                eprintln!(
+                    "  actions-window           - Actions dialog variants (compare-ready)"
+                );
                 std::process::exit(0);
             }
             _ => {}
         }
         i += 1;
+    }
+
+    // Non-interactive adopt: validate, persist, print JSON, exit — no GPUI window.
+    if adopt_selection {
+        print_adopt_result_and_exit(initial_story.as_deref(), initial_variant.as_deref());
     }
 
     let should_screenshot = Arc::new(AtomicBool::new(auto_screenshot));
@@ -162,20 +332,15 @@ fn main() {
                 // Wait for window to fully render
                 std::thread::sleep(std::time::Duration::from_millis(1500));
 
-                // Capture screenshot using xcap
-                if let Err(e) = capture_storybook_screenshot() {
-                    eprintln!("[SCREENSHOT ERROR] {}", e);
-                }
-
-                // Exit the process
-                std::process::exit(0);
+                let result = capture_storybook_screenshot();
+                print_screenshot_result_and_exit(result);
             });
         }
     });
 }
 
-/// Capture screenshot of storybook window using xcap
-fn capture_storybook_screenshot() -> Result<(), Box<dyn std::error::Error>> {
+/// Capture screenshot of storybook window using xcap, returning the saved path.
+fn capture_storybook_screenshot() -> Result<String, Box<dyn std::error::Error>> {
     use image::codecs::png::PngEncoder;
     use image::ImageEncoder;
     use std::fs;
@@ -210,8 +375,14 @@ fn capture_storybook_screenshot() -> Result<(), Box<dyn std::error::Error>> {
             let filepath = screenshot_dir.join(format!("storybook-{}.png", timestamp));
             fs::write(&filepath, &png_data)?;
 
-            eprintln!("[SCREENSHOT] Saved: {}", filepath.display());
-            return Ok(());
+            let saved_path = filepath.display().to_string();
+            tracing::info!(
+                event = "storybook_screenshot_saved",
+                path = %saved_path,
+                "Captured storybook screenshot"
+            );
+
+            return Ok(saved_path);
         }
     }
 
@@ -230,22 +401,12 @@ fn print_story_catalog_json_and_exit() -> ! {
             std::process::exit(0);
         }
         Err(error) => {
-            let payload = StorybookJsonError {
-                schema_version: 1,
-                ok: false,
-                error: StorybookJsonErrorBody {
-                    kind: "catalog_load_failed",
-                    message: format!("{error:#}"),
-                    hint: "Run `cargo check` and verify story registration compiles before requesting --catalog-json.",
-                },
-            };
-
-            eprintln!(
-                "{}",
-                serde_json::to_string_pretty(&payload)
-                    .expect("serialize storybook catalog error payload"),
+            print_json_error_and_exit(
+                "catalog_load_failed",
+                format!("{error:#}"),
+                "Run `cargo check` and verify story registration compiles before requesting --catalog-json.",
+                2,
             );
-            std::process::exit(2);
         }
     }
 }

@@ -82,6 +82,58 @@ fn unknown_stable_id_returns_none() {
     assert_eq!(FooterVariationId::from_stable_id("nonexistent"), None);
 }
 
+// --- resolve_footer_selection structured resolution tests ---
+
+use super::resolve_footer_selection;
+
+#[test]
+fn resolve_footer_selection_reports_fallback_for_unknown_value() {
+    let (_config, resolution) = resolve_footer_selection(Some("not-a-variant"));
+
+    assert_eq!(
+        resolution.resolved_variant_id,
+        FooterVariationId::RaycastExact.as_str()
+    );
+    assert!(resolution.fallback_used);
+    assert_eq!(
+        resolution.requested_variant_id.as_deref(),
+        Some("not-a-variant")
+    );
+}
+
+#[test]
+fn resolve_footer_selection_preserves_minimal_layout() {
+    let (config, resolution) = resolve_footer_selection(Some("minimal"));
+
+    assert_eq!(resolution.resolved_variant_id, "minimal");
+    assert!(!resolution.fallback_used);
+    assert!(!config.show_primary);
+    assert!(!config.show_secondary);
+}
+
+#[test]
+fn resolve_footer_selection_none_uses_default_without_fallback() {
+    let (_config, resolution) = resolve_footer_selection(None);
+
+    assert_eq!(
+        resolution.resolved_variant_id,
+        FooterVariationId::RaycastExact.as_str()
+    );
+    assert!(!resolution.fallback_used);
+    assert!(resolution.requested_variant_id.is_none());
+}
+
+#[test]
+fn resolve_footer_selection_resolution_serializes_to_json() {
+    let (_config, resolution) = resolve_footer_selection(Some("minimal"));
+    let json = serde_json::to_string(&resolution).expect("serialize resolution");
+    let value: serde_json::Value = serde_json::from_str(&json).expect("parse resolution");
+
+    assert_eq!(value["resolvedVariantId"], "minimal");
+    assert_eq!(value["fallbackUsed"], false);
+    assert_eq!(value["requestedVariantId"], "minimal");
+}
+
 // --- Storybook footer selection → PromptFooterConfig bridge tests ---
 
 use super::config_from_storybook_footer_selection_value;

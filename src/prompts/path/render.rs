@@ -66,86 +66,84 @@ impl Render for PathPrompt {
         .flex_1()
         .w_full();
 
-        // Get entity handles for click callbacks
-        let handle_select = cx.entity().downgrade();
-        let handle_actions = cx.entity().downgrade();
+        // Text colors from theme
+        let text_primary = self.theme.colors.text.primary;
+        let text_muted = self.theme.colors.text.muted;
 
-        // Check if actions are currently showing (for CLS-free toggle)
-        let show_actions = match self.actions_showing.lock() {
-            Ok(guard) => *guard,
-            Err(poison) => {
-                tracing::error!("path_prompt_actions_showing_mutex_poisoned_in_render");
-                *poison.into_inner()
-            }
-        };
-
-        // Get actions search text from shared state
-        let actions_search_text = match self.actions_search_text.lock() {
-            Ok(guard) => guard.clone(),
-            Err(poison) => {
-                tracing::error!("path_prompt_actions_search_text_mutex_poisoned_in_render");
-                poison.into_inner().clone()
-            }
-        };
-
-        // Create path prefix for display in search input
+        // Minimal chrome header: path prefix (muted) + filter text (primary), no buttons
         let path_prefix = self.path_prefix.clone();
+        let filter_text = self.filter_text.clone();
+        let filter_is_empty = filter_text.is_empty();
 
-        // Create header colors and config using shared components - always use theme
-        let header_colors = PromptHeaderColors::from_theme(&self.theme);
-
-        let header_config = PromptHeaderConfig::new()
-            .filter_text(self.filter_text.clone())
-            .placeholder("Type to filter...")
-            .path_prefix(Some(path_prefix))
-            .primary_button_label("Select")
-            .primary_button_shortcut("↵")
-            .show_actions_button(true)
-            .cursor_visible(self.cursor_visible)
-            .actions_mode(show_actions)
-            .actions_search_text(actions_search_text)
-            .focused(!show_actions);
-
-        let header = PromptHeader::new(header_config, header_colors)
-            .on_primary_click(Box::new(move |_, _window, cx| {
-                logging::log("CLICK", "PathPrompt primary button (Select) clicked");
-                if let Some(prompt) = handle_select.upgrade() {
-                    prompt.update(cx, |this, cx| {
-                        this.submit_selected(cx);
-                    });
-                }
-            }))
-            .on_actions_click(Box::new(move |_, _window, cx| {
-                logging::log("CLICK", "PathPrompt actions button clicked");
-                if let Some(prompt) = handle_actions.upgrade() {
-                    prompt.update(cx, |this, cx| {
-                        this.toggle_actions(cx);
-                    });
-                }
-            }));
-
-        // Create hint text for footer
-        let hint_text = self.hint.clone().unwrap_or_else(|| {
-            format!("{} items • ↑↓ navigate • ←→ in/out • Enter open • Tab into • ⌘K actions • Esc cancel", filtered_count)
-        });
-
-        // Create container colors and config - always use theme
-        let container_colors = PromptContainerColors::from_theme(&self.theme);
-
-        let container_config = PromptContainerConfig::new()
-            .show_divider(true)
-            .hint(hint_text);
-
-        let container = div()
-            .id(gpui::ElementId::Name("window:path".into()))
+        let header = div()
+            .id(gpui::ElementId::Name("input:path-filter".into()))
             .w_full()
-            .h_full()
+            .flex()
+            .flex_row()
+            .items_center()
             .child(
-                PromptContainer::new(container_colors)
-                    .config(container_config)
-                    .header(header)
-                    .content(list),
+                div()
+                    .flex_1()
+                    .flex()
+                    .flex_row()
+                    .text_size(gpui::px(16.0))
+                    .overflow_x_hidden()
+                    .child(
+                        div()
+                            .text_color(gpui::rgba(
+                                (text_muted << 8) | 0xCC,
+                            ))
+                            .flex_shrink_0()
+                            .max_w(gpui::px(200.0))
+                            .overflow_x_hidden()
+                            .child(gpui::SharedString::from(path_prefix)),
+                    )
+                    .child(
+                        div()
+                            .text_color(if filter_is_empty {
+                                gpui::rgb(text_muted)
+                            } else {
+                                gpui::rgb(text_primary)
+                            })
+                            .child(if filter_is_empty {
+                                gpui::SharedString::from("Type to filter...")
+                            } else {
+                                gpui::SharedString::from(filter_text)
+                            }),
+                    ),
             );
+
+        // Content wrapper
+        let content = div()
+            .id(gpui::ElementId::Name("list:path-entries".into()))
+            .flex()
+            .flex_col()
+            .flex_1()
+            .w_full()
+            .px(gpui::px(8.0))
+            .child(list);
+
+        // Hint strip footer with contextual shortcuts
+        let hints: Vec<gpui::SharedString> = vec![
+            gpui::SharedString::from("↵ Select"),
+            gpui::SharedString::from("←→ Navigate"),
+            gpui::SharedString::from("⌘K Actions"),
+            gpui::SharedString::from("Esc Back"),
+        ];
+
+        let leading = Some(crate::components::render_hint_strip_leading_text(
+            format!("{filtered_count} items"),
+            text_primary,
+        ));
+
+        let container = crate::components::render_minimal_list_prompt_scaffold(
+            header,
+            content,
+            hints,
+            leading,
+        )
+        .id(gpui::ElementId::Name("window:path".into()))
+        .text_color(gpui::rgb(text_primary));
 
         FocusablePrompt::new(container)
             .key_context("path_prompt")

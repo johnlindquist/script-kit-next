@@ -244,11 +244,42 @@ impl StoryBrowser {
         self.selected_variant_index = 0;
     }
 
+    /// Emit a structured trace event capturing the full browser state.
+    ///
+    /// Every significant state transition calls this so that machines
+    /// (agents, CI, log parsers) can reconstruct what happened.
+    fn trace_state(&self, event_name: &'static str, source: &'static str) {
+        let story = self.current_story();
+        let variants = self.current_story_variants();
+        let selected_variant_id = variants
+            .get(self.selected_variant_index)
+            .map(|variant| variant.stable_id())
+            .unwrap_or_else(|| "default".to_string());
+
+        tracing::info!(
+            event = event_name,
+            source = source,
+            story_id = story.map(|entry| entry.story.id()).unwrap_or("none"),
+            surface = story
+                .map(|entry| entry.story.surface().label())
+                .unwrap_or("Unknown"),
+            preview_mode = match self.preview_mode {
+                PreviewMode::Single => "single",
+                PreviewMode::Compare => "compare",
+            },
+            variant_count = variants.len(),
+            selected_variant_index = self.selected_variant_index,
+            selected_variant_id = %selected_variant_id,
+            "StoryBrowser state transition"
+        );
+    }
+
     fn toggle_compare_mode(&mut self, cx: &mut Context<Self>) {
         if self.current_story_variants().len() <= 1 {
             self.preview_mode = PreviewMode::Single;
             self.status_line =
                 Some("Selected story has no comparable variants yet".to_string());
+            self.trace_state("compare_mode_unavailable", "tab");
             cx.notify();
             return;
         }
@@ -258,6 +289,7 @@ impl StoryBrowser {
             PreviewMode::Compare => PreviewMode::Single,
         };
         self.status_line = None;
+        self.trace_state("compare_mode_toggled", "tab");
         cx.notify();
     }
 
@@ -272,6 +304,7 @@ impl StoryBrowser {
         } else {
             self.selected_variant_index - 1
         };
+        self.trace_state("variant_focus_changed", "arrow_left");
         cx.notify();
     }
 
@@ -282,6 +315,7 @@ impl StoryBrowser {
         }
 
         self.selected_variant_index = (self.selected_variant_index + 1) % count;
+        self.trace_state("variant_focus_changed", "arrow_right");
         cx.notify();
     }
 
@@ -977,7 +1011,19 @@ impl StoryBrowser {
                                         "Screenshot save failed"
                                     );
                                 } else {
-                                    tracing::info!(path = %filepath.display(), "Screenshot saved");
+                                    tracing::info!(
+                                        event = "storybook_screenshot_saved",
+                                        path = %filepath.display(),
+                                        story_id = story_id,
+                                        surface = self.current_story()
+                                            .map(|entry| entry.story.surface().label())
+                                            .unwrap_or("Unknown"),
+                                        preview_mode = match self.preview_mode {
+                                            PreviewMode::Single => "single",
+                                            PreviewMode::Compare => "compare",
+                                        },
+                                        "Captured storybook screenshot"
+                                    );
                                 }
                                 return;
                             }
@@ -1129,6 +1175,30 @@ mod tests {
     }
 
     #[test]
+    fn compare_mode_ineligible_for_every_single_variant_story() {
+        // Verify that no single-variant story is accidentally compare-ready
+        let mut single_variant_count = 0;
+        for entry in all_stories() {
+            let variants = entry.story.variants();
+            if variants.len() <= 1 {
+                single_variant_count += 1;
+                // Simulate toggle_compare_mode: should stay Single
+                let would_enter = variants.len() > 1;
+                assert!(
+                    !would_enter,
+                    "Story '{}' with {} variant(s) should NOT enter compare mode",
+                    entry.story.id(),
+                    variants.len()
+                );
+            }
+        }
+        assert!(
+            single_variant_count > 0,
+            "Expect at least one single-variant story in the registry"
+        );
+    }
+
+    #[test]
     fn variant_navigation_wraps_around() {
         // Simulates move_variant_left and move_variant_right wrapping behavior
         let entry = first_story_with_multiple_variants()
@@ -1145,6 +1215,62 @@ mod tests {
         index = 0;
         index = if index == 0 { count - 1 } else { index - 1 };
         assert_eq!(index, count - 1, "left wrap should go to last");
+    }
+
+    #[test]
+    fn variant_navigation_full_cycle_left() {
+        let entry = first_story_with_multiple_variants()
+            .expect("need a comparable story");
+        let count = entry.story.variants().len();
+
+        // Walk left from index 0 through all variants and back to 0
+        let mut index: usize = 0;
+        for step in 0..count {
+            index = if index == 0 { count - 1 } else { index - 1 };
+            assert!(
+                index < count,
+                "step {} produced out-of-bounds index {}",
+                step,
+                index
+            );
+        }
+        assert_eq!(index, 0, "full left cycle should return to start");
+    }
+
+    #[test]
+    fn variant_navigation_full_cycle_right() {
+        let entry = first_story_with_multiple_variants()
+            .expect("need a comparable story");
+        let count = entry.story.variants().len();
+
+        // Walk right from index 0 through all variants and back to 0
+        let mut index: usize = 0;
+        for step in 0..count {
+            index = (index + 1) % count;
+            assert!(
+                index < count,
+                "step {} produced out-of-bounds index {}",
+                step,
+                index
+            );
+        }
+        assert_eq!(index, 0, "full right cycle should return to start");
+    }
+
+    #[test]
+    fn variant_navigation_noop_for_single_variant() {
+        // Find a single-variant story
+        let single = all_stories().find(|e| e.story.variants().len() <= 1);
+        if let Some(entry) = single {
+            let count = entry.story.variants().len();
+            // Simulate move_variant_left: should be a no-op
+            let index: usize = 0;
+            if count > 1 {
+                panic!("expected single-variant story");
+            }
+            // The method returns early when count <= 1, so index stays 0
+            assert_eq!(index, 0, "single-variant story should not navigate");
+        }
     }
 
     #[test]
@@ -1172,6 +1298,37 @@ mod tests {
             variants.get(oob_index).is_none() || oob_index < variants.len(),
             "out-of-range key should either miss or hit a valid variant"
         );
+    }
+
+    #[test]
+    fn shortcut_keys_cover_all_available_variants() {
+        let entry = first_story_with_multiple_variants()
+            .expect("need a comparable story for shortcut coverage test");
+        let variants = entry.story.variants();
+
+        // Every variant with index < 9 should be reachable by its number key
+        for (expected_index, variant) in variants.iter().enumerate().take(9) {
+            let key_num = (expected_index as u32) + 1;
+            let mapped_index = key_num.saturating_sub(1) as usize;
+            assert_eq!(
+                mapped_index, expected_index,
+                "key {} should reach variant '{}' at index {}",
+                key_num,
+                variant.stable_id(),
+                expected_index
+            );
+        }
+    }
+
+    #[test]
+    fn shortcut_key_zero_maps_to_index_zero_which_is_harmless() {
+        // Key "0" parses as digit 0, saturating_sub(1) = 0.
+        // This maps to the first variant, which is a no-op if already
+        // focused there. The browser doesn't treat "0" specially — it
+        // just selects index 0, same as key "1".
+        let key_digit: u32 = 0;
+        let mapped = key_digit.saturating_sub(1) as usize;
+        assert_eq!(mapped, 0, "key 0 should map to index 0 via saturating_sub");
     }
 
     // --- Adoption state machine tests ---

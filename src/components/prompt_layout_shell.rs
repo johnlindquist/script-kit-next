@@ -1066,10 +1066,15 @@ mod prompt_layout_shell_tests {
                 include_str!("../render_builtins/current_app_commands.rs"),
                 "current_app_commands",
             ),
+            (
+                include_str!("../render_builtins/ai_presets.rs"),
+                "ai_presets",
+            ),
         ] {
             assert!(
-                source.contains("render_minimal_list_prompt_scaffold("),
-                "{label} should use the shared minimal list prompt scaffold"
+                source.contains("render_minimal_list_prompt_scaffold(")
+                    || source.contains("render_minimal_list_prompt_shell("),
+                "{label} should use the shared minimal list prompt scaffold or shell"
             );
             let legacy = ["PromptFooter", "::new("].concat();
             let render_fn_end = source.find("#[cfg(test)]").unwrap_or(source.len());
@@ -1095,6 +1100,98 @@ mod prompt_layout_shell_tests {
         assert!(
             fn_body.contains("render_minimal_list_prompt_scaffold("),
             "shared list shell must wrap the scaffold"
+        );
+    }
+
+    #[test]
+    fn app_launcher_keeps_shell_root_keyboard_hooks() {
+        let source = include_str!("../render_builtins/app_launcher.rs");
+        let render_fn_end = source.find("#[cfg(test)]").unwrap_or(source.len());
+        let render_code = &source[..render_fn_end];
+
+        assert!(
+            render_code.contains("render_minimal_list_prompt_shell("),
+            "app_launcher should return the shared minimal list prompt shell"
+        );
+        assert!(
+            render_code.contains(".key_context(\"app_launcher\")"),
+            "app_launcher should keep its key context on the shell root"
+        );
+        assert!(
+            render_code.contains(".track_focus(&self.focus_handle)"),
+            "app_launcher should keep focus tracking on the shell root"
+        );
+        assert!(
+            render_code.contains(".on_key_down(handle_key)"),
+            "app_launcher should keep the keyboard handler on the shell root"
+        );
+    }
+
+    #[test]
+    fn app_launcher_drops_redundant_header_and_footer_chrome() {
+        let source = include_str!("../render_builtins/app_launcher.rs");
+        let render_fn_end = source.find("#[cfg(test)]").unwrap_or(source.len());
+        let render_code = &source[..render_fn_end];
+
+        let legacy = ["PromptFooter", "::new("].concat();
+        assert!(
+            !render_code.contains(&legacy),
+            "app_launcher should not construct PromptFooter after migration"
+        );
+        assert!(
+            !render_code.contains("\u{1f680} Apps"),
+            "app_launcher should not keep a redundant launcher title row"
+        );
+        assert!(
+            render_code.contains("render_hint_strip_leading_text("),
+            "app count should live in the hint strip leading slot, not in header chrome"
+        );
+    }
+
+    #[test]
+    fn path_prompt_entity_uses_minimal_scaffold_and_hint_strip() {
+        let source = include_str!("../prompts/path/render.rs");
+
+        assert!(
+            source.contains("render_minimal_list_prompt_scaffold("),
+            "path prompt entity should use the shared minimal list prompt scaffold"
+        );
+        assert!(
+            source.contains("render_hint_strip_leading_text("),
+            "path prompt entity should use hint strip leading text for item count"
+        );
+        let legacy = ["PromptFooter", "::new("].concat();
+        assert!(
+            !source.contains(&legacy),
+            "path prompt entity should not construct PromptFooter"
+        );
+        assert!(
+            !source.contains("PromptContainer::new("),
+            "path prompt entity should not use legacy PromptContainer"
+        );
+        assert!(
+            !source.contains("PromptHeader::new("),
+            "path prompt entity should not use legacy PromptHeader"
+        );
+    }
+
+    #[test]
+    fn path_prompt_outer_wrapper_uses_shared_shell_container() {
+        let source = include_str!("../render_prompts/path.rs");
+        let render_fn_end = source.find("#[cfg(test)]").unwrap_or(source.len());
+        let render_code = &source[..render_fn_end];
+
+        assert!(
+            render_code.contains("prompt_shell_container("),
+            "path prompt outer wrapper should use the shared prompt_shell_container"
+        );
+        assert!(
+            render_code.contains(".key_context(\"path_prompt_container\")"),
+            "path prompt outer wrapper should keep its key context"
+        );
+        assert!(
+            render_code.contains(".on_key_down(handle_key)"),
+            "path prompt outer wrapper should keep the keyboard handler"
         );
     }
 }

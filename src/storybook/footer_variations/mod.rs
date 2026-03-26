@@ -312,6 +312,50 @@ pub fn config_from_footer_variation_spec(spec: &FooterVariationSpec) -> PromptFo
     config
 }
 
+/// Structured result of resolving a footer selection, exposing fallback status.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FooterSelectionResolution {
+    pub requested_variant_id: Option<String>,
+    pub resolved_variant_id: String,
+    pub fallback_used: bool,
+}
+
+/// Resolve a persisted footer selection value into a concrete spec and metadata.
+pub fn resolve_footer_selection_spec(
+    selected: Option<&str>,
+) -> (&'static FooterVariationSpec, FooterSelectionResolution) {
+    let requested_variant_id = selected.map(str::to_owned);
+    let resolved_from_input = selected.and_then(FooterVariationId::from_stable_id);
+    let variation = resolved_from_input.unwrap_or(FooterVariationId::RaycastExact);
+
+    let spec = footer_variation_specs()
+        .iter()
+        .find(|s| s.id == variation)
+        .unwrap_or(&footer_variation_specs()[0]);
+
+    (
+        spec,
+        FooterSelectionResolution {
+            requested_variant_id,
+            resolved_variant_id: spec.id.as_str().to_string(),
+            fallback_used: selected.is_some() && resolved_from_input.is_none(),
+        },
+    )
+}
+
+/// Resolve a persisted footer selection value into a config and structured resolution.
+///
+/// Returns the `PromptFooterConfig` for the requested variant (or the default
+/// `RaycastExact` when the ID is `None` or unrecognised) together with a
+/// [`FooterSelectionResolution`] that records whether a fallback was used.
+pub fn resolve_footer_selection(
+    selected: Option<&str>,
+) -> (PromptFooterConfig, FooterSelectionResolution) {
+    let (spec, resolution) = resolve_footer_selection_spec(selected);
+    (config_from_footer_variation_spec(spec), resolution)
+}
+
 /// Build a `PromptFooterConfig` from a persisted storybook footer selection value.
 ///
 /// Looks up the given stable ID in the footer variation registry and maps
@@ -320,17 +364,7 @@ pub fn config_from_footer_variation_spec(spec: &FooterVariationSpec) -> PromptFo
 pub fn config_from_storybook_footer_selection_value(
     selected: Option<&str>,
 ) -> PromptFooterConfig {
-    let variation = selected
-        .and_then(FooterVariationId::from_stable_id)
-        .unwrap_or(FooterVariationId::RaycastExact);
-
-    let spec = footer_variation_specs()
-        .iter()
-        .find(|s| s.id == variation)
-        .copied()
-        .unwrap_or(footer_variation_specs()[0]);
-
-    config_from_footer_variation_spec(&spec)
+    resolve_footer_selection(selected).0
 }
 
 /// Build a `PromptFooterConfig` from the on-disk storybook footer selection.
@@ -353,16 +387,16 @@ fn render_footer_component(spec: FooterVariationSpec) -> AnyElement {
     let mut footer = PromptFooter::new(config, colors);
 
     if let Some(left_slot_text) = spec.left_slot_text {
-        footer = footer.left_slot(render_slot_text(left_slot_text, true));
+        footer = footer.left_slot(render_footer_slot_text(left_slot_text, true));
     }
     if let Some(right_slot_text) = spec.right_slot_text {
-        footer = footer.right_slot(render_slot_text(right_slot_text, false));
+        footer = footer.right_slot(render_footer_slot_text(right_slot_text, false));
     }
 
     footer.into_any_element()
 }
 
-fn render_slot_text(text: &'static str, is_left: bool) -> impl IntoElement {
+pub fn render_footer_slot_text(text: &'static str, is_left: bool) -> AnyElement {
     let theme = crate::theme::get_cached_theme();
     let color = if is_left {
         theme.colors.text.muted
@@ -378,6 +412,7 @@ fn render_slot_text(text: &'static str, is_left: bool) -> impl IntoElement {
         })
         .text_color(color.to_rgb())
         .child(text)
+        .into_any_element()
 }
 
 #[cfg(test)]

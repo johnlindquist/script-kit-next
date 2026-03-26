@@ -1122,9 +1122,42 @@ impl ScriptListApp {
             let handle_run = cx.entity().downgrade();
             let handle_actions = cx.entity().downgrade();
 
-            // Keep footer action copy stable; do not reflect selected-item type/action text.
-            let mut footer_config =
-                PromptFooterConfig::default().primary_label(script_list_footer_primary_label());
+            // Resolve footer config from persisted storybook selection (falls back to default).
+            let selected_footer_variant =
+                script_kit_gpui::storybook::load_selected_story_variant("footer-layout-variations");
+            let (spec, resolution) = script_kit_gpui::storybook::resolve_footer_selection_spec(
+                selected_footer_variant.as_deref(),
+            );
+            let mut footer_config = PromptFooterConfig::new()
+                .primary_label(spec.primary_label)
+                .primary_shortcut(spec.primary_shortcut)
+                .secondary_label(spec.secondary_label)
+                .secondary_shortcut(spec.secondary_shortcut)
+                .show_logo(spec.show_logo)
+                .show_primary(spec.show_primary)
+                .show_secondary(spec.show_secondary)
+                .show_info_label(spec.show_info_label);
+            if let Some(helper_text) = spec.helper_text {
+                footer_config = footer_config.helper_text(helper_text);
+            }
+            if let Some(info_label) = spec.info_label {
+                footer_config = footer_config.info_label(info_label);
+            }
+
+            if state_changed {
+                tracing::info!(
+                    event = "script_list_footer_selection_resolved",
+                    requested_variant_id = resolution
+                        .requested_variant_id
+                        .as_deref()
+                        .unwrap_or(""),
+                    resolved_variant_id = resolution.resolved_variant_id.as_str(),
+                    fallback_used = resolution.fallback_used,
+                    "Resolved footer variant for live script list"
+                );
+            }
+
+            footer_config = footer_config.primary_label(script_list_footer_primary_label());
 
             let window_tweaker_enabled = std::env::var("SCRIPT_KIT_WINDOW_TWEAKER")
                 .map(|v| v == "1")
@@ -1132,18 +1165,22 @@ impl ScriptListApp {
             let opacity_percent = (self.theme.get_opacity().main * 100.0).round() as i32;
             let material = platform::get_current_material_name();
             let appearance = platform::get_current_appearance_name();
-            if let Some(info_label) = script_list_footer_info_label(
-                window_tweaker_enabled,
-                self.theme.is_dark_mode(),
-                opacity_percent,
-                &material,
-                &appearance,
-            ) {
-                footer_config = footer_config.info_label(info_label);
+            if footer_config.show_info_label {
+                if let Some(info_label) = script_list_footer_info_label(
+                    window_tweaker_enabled,
+                    self.theme.is_dark_mode(),
+                    opacity_percent,
+                    &material,
+                    &appearance,
+                ) {
+                    footer_config = footer_config.info_label(info_label);
+                }
             }
-            footer_config = footer_config.show_secondary(self.has_actions());
+            if footer_config.show_secondary {
+                footer_config = footer_config.show_secondary(self.has_actions());
+            }
 
-            PromptFooter::new(footer_config, footer_colors)
+            let mut footer = PromptFooter::new(footer_config, footer_colors)
                 .on_primary_click(Box::new(move |_, _window, cx| {
                     if let Some(app) = handle_run.upgrade() {
                         app.update(cx, |this, cx| {
@@ -1157,7 +1194,24 @@ impl ScriptListApp {
                             this.toggle_actions(cx, window);
                         });
                     }
-                }))
+                }));
+
+            if let Some(left_slot_text) = spec.left_slot_text {
+                footer =
+                    footer.left_slot(script_kit_gpui::storybook::render_footer_slot_text(
+                        left_slot_text,
+                        true,
+                    ));
+            }
+            if let Some(right_slot_text) = spec.right_slot_text {
+                footer =
+                    footer.right_slot(script_kit_gpui::storybook::render_footer_slot_text(
+                        right_slot_text,
+                        false,
+                    ));
+            }
+
+            footer
         });
 
         if let Some(panel) = log_panel {

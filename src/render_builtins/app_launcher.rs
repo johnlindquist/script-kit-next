@@ -152,7 +152,6 @@ impl ScriptListApp {
         let list_colors = ListItemColors::from_theme(&self.theme);
         let text_primary = self.theme.colors.text.primary;
         let text_muted = self.theme.colors.text.muted;
-        let text_dimmed = self.theme.colors.text.dimmed;
 
 
         // Build virtualized list
@@ -306,14 +305,6 @@ impl ScriptListApp {
             .flex()
             .flex_row()
             .items_center()
-            .gap_3()
-            // Title
-            .child(
-                div()
-                    .text_sm()
-                    .text_color(rgb(text_dimmed))
-                    .child("🚀 Apps"),
-            )
             // Search input with blinking cursor
             // ALIGNMENT FIX: Uses canonical cursor constants and negative margin for placeholder
             .child(
@@ -356,12 +347,6 @@ impl ScriptListApp {
                                 .when(self.cursor_visible, |d| d.bg(rgb(text_primary))),
                         )
                     }),
-            )
-            .child(
-                div()
-                    .text_sm()
-                    .text_color(rgb(text_dimmed))
-                    .child(format!("{} apps", self.apps.len())),
             );
 
         let content = div()
@@ -380,16 +365,23 @@ impl ScriptListApp {
                     .child(list_scrollbar),
             );
 
-        crate::components::render_minimal_list_prompt_scaffold(
+        let leading = Some(crate::components::render_hint_strip_leading_text(
+            format!("{} apps", self.apps.len()),
+            text_primary,
+        ));
+
+        crate::components::render_minimal_list_prompt_shell(
+            design_visual.radius_lg,
+            crate::ui_foundation::get_vibrancy_background(&self.theme),
             header,
             content,
             vec![
                 gpui::SharedString::from("↵ Launch"),
+                gpui::SharedString::from("⌘K Actions"),
                 gpui::SharedString::from("Esc Back"),
             ],
-            None,
+            leading,
         )
-        .rounded(px(design_visual.radius_lg))
         .text_color(rgb(text_primary))
         .font_family(design_typography.font_family)
         .key_context("app_launcher")
@@ -402,17 +394,55 @@ impl ScriptListApp {
 #[cfg(test)]
 mod app_launcher_chrome_audit {
     #[test]
-    fn app_launcher_uses_minimal_chrome_footer() {
+    fn app_launcher_uses_minimal_shell_with_keyboard_hooks() {
         let source = include_str!("app_launcher.rs");
+        let render_fn_end = source.find("#[cfg(test)]").unwrap_or(source.len());
+        let render_code = &source[..render_fn_end];
+
         assert!(
-            source.contains("render_minimal_list_prompt_scaffold("),
-            "app_launcher should use render_minimal_list_prompt_scaffold"
+            render_code.contains("render_minimal_list_prompt_shell("),
+            "app_launcher should return the shared minimal list prompt shell"
         );
+        assert!(
+            render_code.contains(".key_context(\"app_launcher\")"),
+            "app_launcher should keep its key context on the shell root"
+        );
+        assert!(
+            render_code.contains(".track_focus(&self.focus_handle)"),
+            "app_launcher should keep focus tracking on the shell root"
+        );
+        assert!(
+            render_code.contains(".on_key_down(handle_key)"),
+            "app_launcher should keep the keyboard handler on the shell root"
+        );
+    }
+
+    #[test]
+    fn app_launcher_drops_redundant_header_and_footer_chrome() {
+        let source = include_str!("app_launcher.rs");
+        let render_fn_end = source.find("#[cfg(test)]").unwrap_or(source.len());
+        let render_code = &source[..render_fn_end];
+
         let legacy = "Prompt".to_owned() + "Footer::new(";
-        assert_eq!(
-            source.matches(&legacy).count(),
-            0,
-            "app_launcher should not use PromptFooter"
+        assert!(
+            !render_code.contains(&legacy),
+            "app_launcher should not construct PromptFooter after migration"
+        );
+        assert!(
+            !render_code.contains("\u{1f680} Apps"),
+            "app_launcher should not keep a redundant launcher title row"
+        );
+    }
+
+    #[test]
+    fn app_launcher_uses_hint_strip_leading_for_app_count() {
+        let source = include_str!("app_launcher.rs");
+        let render_fn_end = source.find("#[cfg(test)]").unwrap_or(source.len());
+        let render_code = &source[..render_fn_end];
+
+        assert!(
+            render_code.contains("render_hint_strip_leading_text("),
+            "app count should live in the hint strip leading slot, not in header chrome"
         );
     }
 }
