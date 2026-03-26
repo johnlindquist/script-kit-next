@@ -7,6 +7,7 @@ use std::sync::Arc;
 
 use super::config::ModelInfo;
 use super::providers::{AiProvider, ProviderMessage, ProviderRegistry};
+use crate::menu_bar::current_app_commands::CurrentAppCommandRecipe;
 
 const AI_SCRIPT_DEFAULT_SLUG: &str = "ai-script";
 const AI_SCRIPT_MAX_SLUG_LEN: usize = 64;
@@ -299,6 +300,8 @@ pub struct GeneratedScriptReceipt {
     pub receipt_path: String,
     pub shell_execution_warning: bool,
     pub contract: GeneratedScriptContractAudit,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub current_app_recipe: Option<CurrentAppCommandRecipe>,
 }
 
 #[derive(Debug, Clone)]
@@ -308,6 +311,7 @@ struct PreparedGeneratedScript {
     slug_source: String,
     slug_source_kind: &'static str,
     contract: GeneratedScriptContractAudit,
+    current_app_recipe: Option<CurrentAppCommandRecipe>,
 }
 
 #[derive(Debug, Clone)]
@@ -337,6 +341,29 @@ fn write_generated_script_receipt(
             receipt_path.display()
         )
     })
+}
+
+pub fn extract_current_app_recipe_from_script(
+    script_source: &str,
+) -> Option<CurrentAppCommandRecipe> {
+    use base64::Engine as _;
+
+    let encoded = script_source.lines().find_map(|line| {
+        line.trim_start()
+            .strip_prefix("// Current-App-Recipe-Base64:")
+            .map(str::trim)
+    })?;
+
+    if encoded.is_empty() {
+        return None;
+    }
+
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(encoded)
+        .ok()?;
+    let json = String::from_utf8(bytes).ok()?;
+
+    crate::menu_bar::current_app_commands::parse_current_app_command_recipe_json(&json).ok()
 }
 
 pub fn generate_script_from_prompt(
@@ -429,9 +456,20 @@ pub fn generate_script_from_prompt_with_receipt(
         receipt_path: receipt_path.display().to_string(),
         shell_execution_warning,
         contract: prepared.contract.clone(),
+        current_app_recipe: prepared.current_app_recipe.clone(),
     };
 
     write_generated_script_receipt(&receipt_path, &receipt)?;
+
+    if let Err(error) = crate::ai::upsert_current_app_automation_memory_from_receipt(&receipt) {
+        tracing::warn!(
+            target: "ai",
+            error = %error,
+            slug = %receipt.slug,
+            receipt_path = %receipt.receipt_path,
+            "current_app_automation_memory.upsert_failed"
+        );
+    }
 
     tracing::info!(
         target: "ai",
@@ -511,12 +549,25 @@ fn prepare_script_from_ai_response_with_contract(
         );
     }
 
+    let current_app_recipe = extract_current_app_recipe_from_script(&finalized);
+
+    if current_app_recipe.is_some() {
+        tracing::info!(
+            target: "ai",
+            correlation_id = "ai-script-generation",
+            state = "current_app_recipe_extracted",
+            slug = %slug,
+            "Extracted current-app recipe from generated script"
+        );
+    }
+
     Ok(PreparedGeneratedScript {
         slug,
         source: finalized,
         slug_source,
         slug_source_kind,
         contract,
+        current_app_recipe,
     })
 }
 
@@ -535,12 +586,13 @@ pub(crate) fn save_generated_script_from_response(
     raw_response: &str,
 ) -> Result<PathBuf> {
     let prepared = prepare_script_from_ai_response_with_contract(prompt, raw_response)?;
-    let script_path = crate::script_creation::create_new_script(&prepared.slug).with_context(|| {
-        format!(
-            "Failed to create script for AI response (state=create_failed, slug={})",
-            prepared.slug
-        )
-    })?;
+    let script_path =
+        crate::script_creation::create_new_script(&prepared.slug).with_context(|| {
+            format!(
+                "Failed to create script for AI response (state=create_failed, slug={})",
+                prepared.slug
+            )
+        })?;
 
     fs::write(&script_path, &prepared.source).with_context(|| {
         format!(
@@ -562,8 +614,19 @@ pub(crate) fn save_generated_script_from_response(
         receipt_path: receipt_path.display().to_string(),
         shell_execution_warning: false,
         contract: prepared.contract,
+        current_app_recipe: prepared.current_app_recipe,
     };
     write_generated_script_receipt(&receipt_path, &receipt)?;
+
+    if let Err(error) = crate::ai::upsert_current_app_automation_memory_from_receipt(&receipt) {
+        tracing::warn!(
+            target: "ai",
+            error = %error,
+            slug = %receipt.slug,
+            receipt_path = %receipt.receipt_path,
+            "current_app_automation_memory.upsert_failed"
+        );
+    }
 
     Ok(script_path)
 }
@@ -1388,7 +1451,11 @@ await arg("hello");
   description: "desc",
 };
 "#;
-        assert_eq!(extract_metadata_name(source), None, "empty name should return None");
+        assert_eq!(
+            extract_metadata_name(source),
+            None,
+            "empty name should return None"
+        );
     }
 
     #[test]
@@ -1588,7 +1655,9 @@ await div("hello");
         ));
         assert!(!contract.has_name);
         assert!(!contract.has_description);
-        assert!(contract.warnings.contains(&"missing_name_contract".to_string()));
+        assert!(contract
+            .warnings
+            .contains(&"missing_name_contract".to_string()));
         assert!(contract
             .warnings
             .contains(&"missing_description_contract".to_string()));
@@ -1608,7 +1677,9 @@ export const metadata = {
             contract.metadata_style,
             GeneratedScriptMetadataStyle::Hybrid
         ));
-        assert!(contract.warnings.contains(&"mixed_metadata_formats".to_string()));
+        assert!(contract
+            .warnings
+            .contains(&"mixed_metadata_formats".to_string()));
     }
 
     #[test]
@@ -1633,6 +1704,7 @@ export const metadata = {
                 current_app_recipe_header_at_top: true,
                 warnings: vec![],
             },
+            current_app_recipe: None,
         };
 
         let json = serde_json::to_string_pretty(&receipt).expect("serialize receipt");
@@ -1641,6 +1713,10 @@ export const metadata = {
         assert_eq!(receipt, deserialized);
         assert!(json.contains("\"schemaVersion\": 1"));
         assert!(json.contains("\"metadataStyle\": \"metadataExport\""));
+        assert!(
+            !json.contains("\"currentAppRecipe\""),
+            "None recipe should be skipped in serialization"
+        );
     }
 
     #[test]
@@ -1685,4 +1761,194 @@ await div("Ready");
         assert_eq!(receipt, PathBuf::from("/tmp/my-script.scriptkit.json"));
     }
 
+    #[test]
+    fn generated_script_receipt_includes_current_app_recipe() {
+        use base64::Engine as _;
+
+        // Build a valid recipe using Rust types to guarantee serde field names match
+        use crate::menu_bar::current_app_commands::{
+            CurrentAppCommandRecipe as TestRecipe, CurrentAppIntentTraceReceipt,
+            CurrentAppScriptPromptReceipt,
+        };
+
+        let test_recipe = TestRecipe {
+            schema_version: 1,
+            recipe_type: "currentAppCommand".to_string(),
+            raw_query: "close duplicate tabs".to_string(),
+            effective_query: "close duplicate tabs".to_string(),
+            suggested_script_name: "safari-close-duplicate-tabs".to_string(),
+            trace: CurrentAppIntentTraceReceipt {
+                schema_version: 1,
+                source: "current_app_commands".to_string(),
+                app_name: "Safari".to_string(),
+                bundle_id: "com.apple.Safari".to_string(),
+                raw_query: "close duplicate tabs".to_string(),
+                effective_query: "close duplicate tabs".to_string(),
+                normalized_query: "close duplicate tabs".to_string(),
+                top_level_menu_count: 8,
+                leaf_entry_count: 120,
+                filtered_entries: 0,
+                exact_matches: 0,
+                action: "generate_script".to_string(),
+                selected_entry: None,
+                candidates: vec![],
+                prompt_receipt: None,
+                prompt_preview: None,
+            },
+            prompt_receipt: CurrentAppScriptPromptReceipt {
+                app_name: "Safari".to_string(),
+                bundle_id: "com.apple.Safari".to_string(),
+                total_menu_items: 120,
+                included_menu_items: 120,
+                included_user_request: true,
+                included_selected_text: false,
+                included_browser_url: false,
+            },
+            prompt: "You are writing a Script Kit automation...".to_string(),
+        };
+
+        let recipe_json = serde_json::to_string(&test_recipe).expect("serialize test recipe");
+
+        let encoded = base64::engine::general_purpose::STANDARD.encode(recipe_json.as_bytes());
+
+        let script_source = format!(
+            r#"// Current-App-Recipe-Base64: {encoded}
+// Current-App-Recipe-Name: Safari Close Duplicate Tabs
+
+export const metadata = {{
+  name: "Safari Close Duplicate Tabs",
+  description: "Close duplicate tabs in the current Safari window",
+}};
+
+import "@scriptkit/sdk";
+await div("Ready");
+"#
+        );
+
+        let prepared = prepare_script_from_ai_response_with_contract(
+            "close duplicate tabs in Safari",
+            &script_source,
+        )
+        .expect("should prepare script");
+
+        assert!(
+            prepared.current_app_recipe.is_some(),
+            "prepared script should contain extracted recipe"
+        );
+
+        let recipe = prepared
+            .current_app_recipe
+            .as_ref()
+            .expect("recipe present");
+        assert_eq!(recipe.recipe_type, "currentAppCommand");
+        assert_eq!(recipe.prompt_receipt.bundle_id, "com.apple.Safari");
+        assert_eq!(recipe.effective_query, "close duplicate tabs");
+
+        // Verify receipt serialization includes the recipe
+        let receipt = GeneratedScriptReceipt {
+            schema_version: AI_GENERATED_SCRIPT_RECEIPT_SCHEMA_VERSION,
+            prompt: "close duplicate tabs in Safari".to_string(),
+            slug: prepared.slug.clone(),
+            slug_source: prepared.slug_source.clone(),
+            slug_source_kind: prepared.slug_source_kind.to_string(),
+            model_id: "gpt-4".to_string(),
+            provider_id: "openai".to_string(),
+            script_path: "/tmp/test.ts".to_string(),
+            receipt_path: "/tmp/test.scriptkit.json".to_string(),
+            shell_execution_warning: false,
+            contract: prepared.contract.clone(),
+            current_app_recipe: prepared.current_app_recipe.clone(),
+        };
+
+        let json = serde_json::to_string_pretty(&receipt).expect("serialize receipt");
+        let deserialized: GeneratedScriptReceipt =
+            serde_json::from_str(&json).expect("deserialize receipt");
+
+        assert_eq!(receipt, deserialized);
+        assert!(
+            json.contains("\"currentAppRecipe\""),
+            "receipt JSON should include currentAppRecipe when present"
+        );
+        assert!(
+            json.contains("com.apple.Safari"),
+            "receipt JSON should contain the recipe's bundle ID"
+        );
+    }
+
+    #[test]
+    fn generated_script_receipt_ignores_invalid_current_app_recipe_header() {
+        // Script with invalid base64 in recipe header
+        let script_with_bad_base64 = r#"// Current-App-Recipe-Base64: not-valid-base64!!!
+// Current-App-Recipe-Name: Bad Recipe
+
+export const metadata = {
+  name: "Bad Recipe Test",
+  description: "A script with invalid recipe header",
+};
+
+import "@scriptkit/sdk";
+await div("ok");
+"#;
+
+        let extracted = extract_current_app_recipe_from_script(script_with_bad_base64);
+        assert!(
+            extracted.is_none(),
+            "invalid base64 should return None, not error"
+        );
+
+        let prepared = prepare_script_from_ai_response_with_contract(
+            "test with bad recipe",
+            script_with_bad_base64,
+        )
+        .expect("should prepare script despite invalid recipe header");
+
+        assert!(
+            prepared.current_app_recipe.is_none(),
+            "prepared script should have None recipe for invalid header"
+        );
+
+        // Verify receipt still works without recipe
+        let receipt = GeneratedScriptReceipt {
+            schema_version: AI_GENERATED_SCRIPT_RECEIPT_SCHEMA_VERSION,
+            prompt: "test with bad recipe".to_string(),
+            slug: prepared.slug.clone(),
+            slug_source: prepared.slug_source.clone(),
+            slug_source_kind: prepared.slug_source_kind.to_string(),
+            model_id: "unknown".to_string(),
+            provider_id: "unknown".to_string(),
+            script_path: "/tmp/test.ts".to_string(),
+            receipt_path: "/tmp/test.scriptkit.json".to_string(),
+            shell_execution_warning: false,
+            contract: prepared.contract.clone(),
+            current_app_recipe: prepared.current_app_recipe.clone(),
+        };
+
+        let json = serde_json::to_string_pretty(&receipt).expect("serialize receipt");
+        let deserialized: GeneratedScriptReceipt =
+            serde_json::from_str(&json).expect("deserialize receipt");
+        assert_eq!(receipt, deserialized);
+        assert!(
+            !json.contains("\"currentAppRecipe\""),
+            "receipt JSON should not include currentAppRecipe field when None"
+        );
+    }
+
+    #[test]
+    fn extract_current_app_recipe_returns_none_for_no_header() {
+        let script = r#"import "@scriptkit/sdk";
+// Name: Simple Script
+// Description: No recipe here
+await div("hello");
+"#;
+        assert!(extract_current_app_recipe_from_script(script).is_none());
+    }
+
+    #[test]
+    fn extract_current_app_recipe_returns_none_for_empty_base64() {
+        let script = r#"// Current-App-Recipe-Base64:
+import "@scriptkit/sdk";
+await div("hello");
+"#;
+        assert!(extract_current_app_recipe_from_script(script).is_none());
+    }
 }
