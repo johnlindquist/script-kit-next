@@ -939,6 +939,26 @@ mod command_bar_config_tests {
     }
 
     #[test]
+    fn command_bar_minimal_configs_hide_footer() {
+        assert!(
+            !CommandBarConfig::main_menu_style().dialog_config.show_footer,
+            "main_menu_style must hide footer for minimal chrome"
+        );
+        assert!(
+            !CommandBarConfig::no_search().dialog_config.show_footer,
+            "no_search must hide footer for minimal chrome"
+        );
+        assert!(
+            !CommandBarConfig::ai_style().dialog_config.show_footer,
+            "ai_style must hide footer for minimal chrome"
+        );
+        assert!(
+            !CommandBarConfig::notes_style().dialog_config.show_footer,
+            "notes_style must hide footer for minimal chrome"
+        );
+    }
+
+    #[test]
     fn test_command_bar_key_intent_supports_aliases_and_jump_keys() {
         let no_mods = gpui::Modifiers::default();
 

@@ -1148,6 +1148,17 @@ impl ScriptListApp {
                             None,
                         )
                     }
+                    #[cfg(debug_assertions)]
+                    AppView::DesignExplorerView { .. } => (
+                        "designExplorer".to_string(),
+                        None,
+                        None,
+                        String::new(),
+                        0,
+                        0,
+                        0,
+                        None,
+                    ),
                     AppView::ScratchPadView { .. } => (
                         "scratchPad".to_string(),
                         Some("scratch-pad".to_string()),

@@ -1,4 +1,6 @@
 use gpui::{div, prelude::*, px, rems, rgb, rgba, AnyElement, Div, FontWeight, Rgba, SharedString};
+use std::collections::HashSet;
+use std::sync::{Mutex, OnceLock};
 
 use crate::ui_foundation::hex_to_rgba_with_opacity;
 
@@ -342,6 +344,130 @@ pub(crate) fn render_simple_hint_strip(
     }
 }
 
+/// Machine-readable contract describing how a prompt surface resolves its chrome.
+///
+/// Emitted via [`emit_prompt_chrome_audit`] at surface-activation time (not per-frame)
+/// so that agents and structured-log consumers can verify which surfaces are minimal,
+/// which are intentional exceptions, and which have silently drifted.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct PromptChromeAudit {
+    pub surface: &'static str,
+    pub input_mode: &'static str,
+    pub divider_mode: &'static str,
+    pub footer_mode: &'static str,
+    pub header_padding_x: u16,
+    pub header_padding_y: u16,
+    pub hint_count: usize,
+    pub has_leading_status: bool,
+    pub has_actions: bool,
+    pub exception_reason: Option<&'static str>,
+}
+
+#[allow(dead_code)]
+impl PromptChromeAudit {
+    /// Contract for a surface that follows the minimal chrome design language.
+    pub(crate) fn minimal(
+        surface: &'static str,
+        hint_count: usize,
+        has_leading_status: bool,
+        has_actions: bool,
+    ) -> Self {
+        Self {
+            surface,
+            input_mode: "bare",
+            divider_mode: "section_divider",
+            footer_mode: "hint_strip",
+            header_padding_x: crate::ui::chrome::HEADER_PADDING_X as u16,
+            header_padding_y: crate::ui::chrome::HEADER_PADDING_Y as u16,
+            hint_count,
+            has_leading_status,
+            has_actions,
+            exception_reason: None,
+        }
+    }
+
+    /// Contract for a surface that intentionally keeps rich chrome (PromptFooter).
+    pub(crate) fn exception(surface: &'static str, reason: &'static str) -> Self {
+        Self {
+            surface,
+            input_mode: "custom",
+            divider_mode: "custom",
+            footer_mode: "prompt_footer",
+            header_padding_x: 0,
+            header_padding_y: 0,
+            hint_count: 0,
+            has_leading_status: false,
+            has_actions: false,
+            exception_reason: Some(reason),
+        }
+    }
+}
+
+/// Emit a structured log line describing the chrome contract for a prompt surface.
+///
+/// Call this from surface-activation or configuration paths, **not** from `render()`.
+/// Non-exception surfaces that still resolve to `prompt_footer` emit a warning.
+#[allow(dead_code)]
+pub(crate) fn emit_prompt_chrome_audit(audit: &PromptChromeAudit) {
+    static EMITTED_CONTRACTS: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
+
+    let contract_key = format!(
+        "{}|{}|{}|{}|{}|{}|{}|{}|{}|{}",
+        audit.surface,
+        audit.input_mode,
+        audit.divider_mode,
+        audit.footer_mode,
+        audit.header_padding_x,
+        audit.header_padding_y,
+        audit.hint_count,
+        audit.has_leading_status,
+        audit.has_actions,
+        audit.exception_reason.unwrap_or("")
+    );
+
+    let mut emitted_contracts = match EMITTED_CONTRACTS
+        .get_or_init(|| Mutex::new(HashSet::new()))
+        .lock()
+    {
+        Ok(guard) => guard,
+        Err(poisoned) => {
+            tracing::warn!(
+                target: "PROMPT_CHROME",
+                "prompt chrome audit registry lock poisoned; recovering"
+            );
+            poisoned.into_inner()
+        }
+    };
+    if !emitted_contracts.insert(contract_key) {
+        return;
+    }
+    drop(emitted_contracts);
+
+    tracing::info!(
+        target: "PROMPT_CHROME",
+        event = "surface_contract",
+        surface = audit.surface,
+        input_mode = audit.input_mode,
+        divider_mode = audit.divider_mode,
+        footer_mode = audit.footer_mode,
+        header_padding_x = audit.header_padding_x,
+        header_padding_y = audit.header_padding_y,
+        hint_count = audit.hint_count,
+        has_leading_status = audit.has_leading_status,
+        has_actions = audit.has_actions,
+        exception_reason = audit.exception_reason.unwrap_or(""),
+        "prompt chrome contract resolved"
+    );
+
+    if audit.footer_mode == "prompt_footer" && audit.exception_reason.is_none() {
+        tracing::warn!(
+            target: "PROMPT_CHROME",
+            surface = audit.surface,
+            "legacy footer used on non-exception surface"
+        );
+    }
+}
+
 #[cfg(test)]
 mod prompt_layout_shell_tests {
     use super::{prompt_shell_frame_config, PromptFrameConfig};
@@ -527,6 +653,65 @@ mod prompt_layout_shell_tests {
         assert!(
             sig.contains("-> AnyElement"),
             "render_simple_hint_strip must return AnyElement"
+        );
+    }
+
+    // ── PromptChromeAudit contract tests ────────────────────────────────
+
+    #[test]
+    fn prompt_chrome_audit_minimal_uses_shared_tokens() {
+        let audit = super::PromptChromeAudit::minimal("test_surface", 3, true, true);
+        assert_eq!(audit.surface, "test_surface");
+        assert_eq!(audit.input_mode, "bare");
+        assert_eq!(audit.divider_mode, "section_divider");
+        assert_eq!(audit.footer_mode, "hint_strip");
+        assert_eq!(
+            audit.header_padding_x,
+            crate::ui::chrome::HEADER_PADDING_X as u16
+        );
+        assert_eq!(
+            audit.header_padding_y,
+            crate::ui::chrome::HEADER_PADDING_Y as u16
+        );
+        assert_eq!(audit.hint_count, 3);
+        assert!(audit.has_leading_status);
+        assert!(audit.has_actions);
+        assert_eq!(audit.exception_reason, None);
+    }
+
+    #[test]
+    fn prompt_chrome_audit_exception_records_reason() {
+        let audit =
+            super::PromptChromeAudit::exception("webcam_prompt", "media_capture_surface");
+        assert_eq!(audit.surface, "webcam_prompt");
+        assert_eq!(audit.footer_mode, "prompt_footer");
+        assert_eq!(audit.exception_reason, Some("media_capture_surface"));
+        assert_eq!(audit.input_mode, "custom");
+        assert_eq!(audit.divider_mode, "custom");
+    }
+
+    #[test]
+    fn prompt_chrome_audit_emit_does_not_panic() {
+        // Verify both variants can be emitted without panicking.
+        let minimal = super::PromptChromeAudit::minimal("smoke_minimal", 2, false, true);
+        super::emit_prompt_chrome_audit(&minimal);
+
+        let exception =
+            super::PromptChromeAudit::exception("smoke_exception", "form_heavy_surface");
+        super::emit_prompt_chrome_audit(&exception);
+    }
+
+    #[test]
+    fn exception_surfaces_in_other_rs_emit_chrome_audit() {
+        let source = OTHER_RENDERERS_SOURCE;
+        // Template, naming, and webcam prompts should emit audit logs
+        assert!(
+            source.contains("emit_prompt_chrome_audit("),
+            "other.rs should call emit_prompt_chrome_audit for exception surfaces"
+        );
+        assert!(
+            source.contains("PromptChromeAudit::exception("),
+            "other.rs should use PromptChromeAudit::exception for rich-chrome surfaces"
         );
     }
 }

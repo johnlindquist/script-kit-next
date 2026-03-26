@@ -248,6 +248,9 @@ pub enum BuiltInFeature {
     WindowSwitcher,
     /// Design gallery for viewing separator and icon variations
     DesignGallery,
+    /// In-app StoryBrowser compare/adopt tool (debug builds only)
+    #[cfg(debug_assertions)]
+    DesignExplorer,
     /// AI Chat window for conversing with AI assistants
     AiChat,
     /// Notes window for quick notes and scratchpad
@@ -530,6 +533,24 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
                 "🎨",
             ));
             debug!("Added Design Gallery built-in entry");
+
+            entries.push(BuiltInEntry::new_with_icon(
+                "builtin-design-explorer",
+                "Design Explorer",
+                "Open the in-app explorer to compare story variants and adopt a winner",
+                vec![
+                    "design",
+                    "explorer",
+                    "storybook",
+                    "compare",
+                    "variant",
+                    "adopt",
+                    "ui",
+                ],
+                BuiltInFeature::DesignExplorer,
+                "🧪",
+            ));
+            debug!("Added Design Explorer built-in entry");
 
             // Test Confirmation entry for testing confirmation UI
             entries.push(BuiltInEntry::new_with_icon(

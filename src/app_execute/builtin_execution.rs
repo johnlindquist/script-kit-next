@@ -1604,6 +1604,27 @@ impl ScriptListApp {
 
                 Self::builtin_success(dctx, "open_design_gallery")
             }
+            #[cfg(debug_assertions)]
+            builtins::BuiltInFeature::DesignExplorer => {
+                tracing::info!(
+                    category = "BUILTIN",
+                    trace_id = %dctx.trace_id,
+                    "Opening Design Explorer"
+                );
+
+                let explorer = cx.new(|cx| {
+                    let mut browser = script_kit_gpui::storybook::StoryBrowser::new(cx);
+                    browser.configure_for_design_explorer(
+                        Some(script_kit_gpui::storybook::StorySurface::Footer),
+                    );
+                    browser
+                });
+
+                self.current_view = AppView::DesignExplorerView { entity: explorer };
+                cx.notify();
+
+                Self::builtin_success(dctx, "open_design_explorer")
+            }
             builtins::BuiltInFeature::AiChat => {
                 tracing::info!(
                     category = "BUILTIN",

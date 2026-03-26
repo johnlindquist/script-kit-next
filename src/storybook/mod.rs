@@ -17,6 +17,9 @@ mod story;
 
 pub use browser::StoryBrowser;
 pub use layout::{code_block, story_container, story_divider, story_item, story_section};
-pub use registry::{all_categories, all_stories, stories_by_category, StoryEntry};
+pub use registry::{
+    all_categories, all_stories, first_story_with_multiple_variants, stories_by_category,
+    stories_by_surface, StoryEntry,
+};
 pub use selection::{load_story_selections, save_story_selections, StorySelectionStore};
 pub use story::{Story, StorySurface, StoryVariant};

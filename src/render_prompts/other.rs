@@ -158,6 +158,12 @@ impl ScriptListApp {
         entity: Entity<TemplatePrompt>,
         cx: &mut Context<Self>,
     ) -> AnyElement {
+        crate::components::emit_prompt_chrome_audit(
+            &crate::components::PromptChromeAudit::exception(
+                "template_prompt",
+                "multi_field_form_surface",
+            ),
+        );
         let render_context = PromptRenderContext::new(self.theme.as_ref(), self.current_design);
         let theme = render_context.theme;
         let design_colors = render_context.design_colors;
@@ -201,6 +207,12 @@ impl ScriptListApp {
         entity: Entity<prompts::NamingPrompt>,
         cx: &mut Context<Self>,
     ) -> AnyElement {
+        crate::components::emit_prompt_chrome_audit(
+            &crate::components::PromptChromeAudit::exception(
+                "naming_prompt",
+                "naming_flow_with_validation",
+            ),
+        );
         let render_context = PromptRenderContext::new(self.theme.as_ref(), self.current_design);
         let theme = render_context.theme;
         let design_colors = render_context.design_colors;
@@ -236,6 +248,12 @@ impl ScriptListApp {
         entity: Entity<prompts::WebcamPrompt>,
         cx: &mut Context<Self>,
     ) -> AnyElement {
+        crate::components::emit_prompt_chrome_audit(
+            &crate::components::PromptChromeAudit::exception(
+                "webcam_prompt",
+                "media_capture_surface",
+            ),
+        );
         let render_context = PromptRenderContext::new(self.theme.as_ref(), self.current_design);
         let theme = render_context.theme;
         let design_colors = render_context.design_colors;

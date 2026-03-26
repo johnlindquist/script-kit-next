@@ -15,8 +15,9 @@ use std::path::PathBuf;
 
 use crate::designs::DesignVariant;
 use crate::storybook::{
-    all_categories, all_stories, load_story_selections, save_story_selections, StoryEntry,
-    StorySelectionStore, StoryVariant,
+    all_categories, all_stories, first_story_with_multiple_variants, load_story_selections,
+    save_story_selections, stories_by_surface, StoryEntry, StorySelectionStore, StorySurface,
+    StoryVariant,
 };
 
 /// Preview mode for the story browser
@@ -101,6 +102,45 @@ impl StoryBrowser {
         } else {
             tracing::warn!(event = "compare_mode_skipped", "Story has fewer than 2 variants");
             false
+        }
+    }
+
+    /// Configure the browser for the in-app design explorer.
+    ///
+    /// If a preferred surface has a comparable story (>1 variant), use it.
+    /// Otherwise, fall back to the first story that exposes >1 variant.
+    pub fn configure_for_design_explorer(&mut self, preferred_surface: Option<StorySurface>) {
+        if let Some(surface) = preferred_surface {
+            if let Some(entry) = stories_by_surface(surface)
+                .into_iter()
+                .find(|entry| entry.story.variants().len() > 1)
+            {
+                tracing::info!(
+                    event = "design_explorer_configured",
+                    surface = %surface.label(),
+                    story_id = %entry.story.id(),
+                    "Configured design explorer with preferred surface story"
+                );
+                let _ = self.select_story(entry.story.id());
+                let _ = self.open_compare_mode();
+                return;
+            }
+        }
+
+        if let Some(entry) = first_story_with_multiple_variants() {
+            tracing::info!(
+                event = "design_explorer_configured",
+                story_id = %entry.story.id(),
+                fallback = true,
+                "Configured design explorer with first comparable story"
+            );
+            let _ = self.select_story(entry.story.id());
+            let _ = self.open_compare_mode();
+        } else {
+            tracing::warn!(
+                event = "design_explorer_no_comparable_story",
+                "No story with multiple variants found for design explorer"
+            );
         }
     }
 

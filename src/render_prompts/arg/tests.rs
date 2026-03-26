@@ -282,4 +282,36 @@ mod arg_prompt_render_tests {
             "arg render should no longer use PromptFooter"
         );
     }
+
+    #[test]
+    fn arg_render_prompt_matches_minimal_chrome_contract() {
+        let source = include_str!("render.rs");
+        assert!(
+            source.contains("render_simple_hint_strip("),
+            "arg render_prompt should use render_simple_hint_strip"
+        );
+        assert!(
+            source.contains("SectionDivider::new()"),
+            "arg render_prompt should use SectionDivider between input and list"
+        );
+        assert!(
+            !source.contains("PromptFooter::new("),
+            "arg render_prompt should not use PromptFooter"
+        );
+    }
+
+    #[test]
+    fn arg_render_prompt_legacy_file_removed() {
+        // The legacy render_prompt.rs that used PromptFooter has been deleted.
+        // Only render.rs (with minimal chrome) should exist as the active entry point.
+        let arg_rs_source = include_str!("../arg.rs");
+        assert!(
+            !arg_rs_source.contains("render_prompt.rs"),
+            "arg.rs should not include the legacy render_prompt.rs"
+        );
+        assert!(
+            arg_rs_source.contains("include!(\"arg/render.rs\")"),
+            "arg.rs should include the minimal chrome render.rs"
+        );
+    }
 }
