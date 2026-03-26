@@ -222,72 +222,60 @@ impl ScriptListApp {
 
         let total_count = self.cached_current_app_entries.len();
 
-        div()
-            .flex()
-            .flex_col()
+        let header = div()
             .w_full()
-            .h_full()
-            .rounded(px(design_visual.radius_lg))
-            .text_color(rgb(text_primary))
-            .font_family(design_typography.font_family)
-            .key_context("current_app_commands")
-            .track_focus(&self.focus_handle)
-            .on_key_down(handle_key)
-            // Header with input
+            .flex()
+            .flex_row()
+            .items_center()
+            .gap_3()
+            .child(
+                div().flex_1().flex().flex_row().items_center().child(
+                    Input::new(&self.gpui_input_state)
+                        .w_full()
+                        .h(px(28.))
+                        .px(px(0.))
+                        .py(px(0.))
+                        .with_size(Size::Size(px(design_typography.font_size_xl)))
+                        .appearance(false)
+                        .bordered(false)
+                        .focus_bordered(false),
+                ),
+            )
             .child(
                 div()
-                    .w_full()
-                    .px(px(crate::ui::chrome::HEADER_PADDING_X))
-                    .py(px(crate::ui::chrome::HEADER_PADDING_Y))
-                    .flex()
-                    .flex_row()
-                    .items_center()
-                    .gap_3()
-                    .child(
-                        div().flex_1().flex().flex_row().items_center().child(
-                            Input::new(&self.gpui_input_state)
-                                .w_full()
-                                .h(px(28.))
-                                .px(px(0.))
-                                .py(px(0.))
-                                .with_size(Size::Size(px(design_typography.font_size_xl)))
-                                .appearance(false)
-                                .bordered(false)
-                                .focus_bordered(false),
-                        ),
-                    )
-                    .child(
-                        div()
-                            .text_sm()
-                            .text_color(rgb(text_dimmed))
-                            .child(format!(
-                                "{} command{}",
-                                total_count,
-                                if total_count == 1 { "" } else { "s" }
-                            )),
-                    ),
-            )
-            // Divider
-            .child(crate::components::SectionDivider::new())
-            // Command list
-            .child(
-                div()
-                    .flex_1()
-                    .min_h(px(0.))
-                    .w_full()
-                    .overflow_hidden()
-                    .py(px(design_spacing.padding_xs))
-                    .child(list_element),
-            )
-            // Footer — minimal hint strip
-            .child(crate::components::render_simple_hint_strip(
-                vec![
-                    gpui::SharedString::from("↵ Run"),
-                    gpui::SharedString::from("Esc Back"),
-                ],
-                None,
-            ))
-            .into_any_element()
+                    .text_sm()
+                    .text_color(rgb(text_dimmed))
+                    .child(format!(
+                        "{} command{}",
+                        total_count,
+                        if total_count == 1 { "" } else { "s" }
+                    )),
+            );
+
+        let content = div()
+            .flex_1()
+            .min_h(px(0.))
+            .w_full()
+            .overflow_hidden()
+            .py(px(design_spacing.padding_xs))
+            .child(list_element);
+
+        crate::components::render_minimal_list_prompt_scaffold(
+            header,
+            content,
+            vec![
+                gpui::SharedString::from("↵ Run"),
+                gpui::SharedString::from("Esc Back"),
+            ],
+            None,
+        )
+        .rounded(px(design_visual.radius_lg))
+        .text_color(rgb(text_primary))
+        .font_family(design_typography.font_family)
+        .key_context("current_app_commands")
+        .track_focus(&self.focus_handle)
+        .on_key_down(handle_key)
+        .into_any_element()
     }
 }
 
@@ -297,12 +285,8 @@ mod current_app_commands_chrome_audit {
     fn current_app_commands_uses_minimal_chrome_footer() {
         let source = include_str!("current_app_commands.rs");
         assert!(
-            source.contains("render_simple_hint_strip("),
-            "current_app_commands should use render_simple_hint_strip"
-        );
-        assert!(
-            source.contains("SectionDivider::new()"),
-            "current_app_commands should use SectionDivider"
+            source.contains("render_minimal_list_prompt_scaffold("),
+            "current_app_commands should use render_minimal_list_prompt_scaffold"
         );
         let legacy = "Prompt".to_owned() + "Footer::new(";
         assert_eq!(

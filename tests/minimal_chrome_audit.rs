@@ -37,8 +37,8 @@ fn emoji_picker_no_longer_uses_prompt_footer() {
         "emoji picker should use hint strip, not PromptFooter"
     );
     assert!(
-        source.contains("render_simple_hint_strip("),
-        "emoji picker should render a minimal hint strip footer"
+        source.contains("render_minimal_list_prompt_scaffold("),
+        "emoji picker should use the shared minimal list prompt scaffold"
     );
 }
 
