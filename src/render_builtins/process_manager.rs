@@ -102,9 +102,11 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         crate::components::emit_prompt_chrome_audit(
-            &crate::components::PromptChromeAudit::exception(
+            &crate::components::PromptChromeAudit::minimal(
                 "process_manager",
-                "process_list_with_kill_actions",
+                2,     // hints: "↵ Stop", "Esc Back"
+                false, // no leading status text
+                false, // no actions hint
             ),
         );
         let tokens = get_tokens(self.current_design);
@@ -115,7 +117,6 @@ impl ScriptListApp {
 
         let text_primary = self.theme.colors.text.primary;
         let text_dimmed = self.theme.colors.text.dimmed;
-        let ui_border = self.theme.colors.ui.border;
 
         // Filter processes from cached data
         let filtered_processes: Vec<_> = if filter.is_empty() {
@@ -437,8 +438,8 @@ impl ScriptListApp {
             .child(
                 div()
                     .w_full()
-                    .px(px(design_spacing.padding_lg))
-                    .py(px(design_spacing.padding_md))
+                    .px(px(crate::ui::chrome::HEADER_PADDING_X))
+                    .py(px(crate::ui::chrome::HEADER_PADDING_Y))
                     .flex()
                     .flex_row()
                     .items_center()
@@ -468,12 +469,7 @@ impl ScriptListApp {
                     ),
             )
             // Divider
-            .child(
-                div()
-                    .mx(px(design_spacing.padding_lg))
-                    .h(px(design_visual.border_thin))
-                    .bg(rgba((ui_border << 8) | 0x60)),
-            )
+            .child(crate::components::SectionDivider::new())
             // Process list
             .child(
                 div()
@@ -484,14 +480,40 @@ impl ScriptListApp {
                     .py(px(design_spacing.padding_xs))
                     .child(list_element),
             )
-            // Footer
-            .child(PromptFooter::new(
-                PromptFooterConfig::new()
-                    .primary_label("Stop")
-                    .primary_shortcut("↵")
-                    .show_secondary(false),
-                PromptFooterColors::from_theme(&self.theme),
+            // Footer — minimal hint strip
+            .child(crate::components::render_simple_hint_strip(
+                vec![
+                    gpui::SharedString::from("↵ Stop"),
+                    gpui::SharedString::from("Esc Back"),
+                ],
+                None,
             ))
             .into_any_element()
+    }
+}
+
+#[cfg(test)]
+mod process_manager_chrome_audit {
+    #[test]
+    fn process_manager_uses_minimal_chrome_footer() {
+        let source = include_str!("process_manager.rs");
+        assert!(
+            source.contains("render_simple_hint_strip("),
+            "process_manager should use render_simple_hint_strip"
+        );
+        assert!(
+            source.contains("SectionDivider::new()"),
+            "process_manager should use SectionDivider"
+        );
+        assert!(
+            source.contains("HEADER_PADDING_X") && source.contains("HEADER_PADDING_Y"),
+            "process_manager should use shared chrome header padding"
+        );
+        let legacy = "Prompt".to_owned() + "Footer::new(";
+        assert_eq!(
+            source.matches(&legacy).count(),
+            0,
+            "process_manager should not use PromptFooter"
+        );
     }
 }

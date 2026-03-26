@@ -28,8 +28,8 @@
             .child(
                 div()
                     .w_full()
-                    .px(px(design_spacing.padding_lg))
-                    .py(px(design_spacing.padding_md))
+                    .px(px(crate::ui::chrome::HEADER_PADDING_X))
+                    .py(px(crate::ui::chrome::HEADER_PADDING_Y))
                     .flex()
                     .flex_row()
                     .items_center()
@@ -56,12 +56,7 @@
                     ),
             )
             // Divider
-            .child(
-                div()
-                    .mx(px(design_spacing.padding_lg))
-                    .h(px(design_visual.border_thin))
-                    .bg(rgba((ui_border << 8) | 0x60)),
-            )
+            .child(crate::components::SectionDivider::new())
             // Main content area - 50/50 split: List on left, Preview on right
             .child(
                 div()
