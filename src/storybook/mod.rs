@@ -37,7 +37,8 @@ pub use input_variations::{
 };
 pub use layout::{code_block, story_container, story_divider, story_item, story_section};
 pub use main_menu_variations::{
-    main_menu_story_variants, render_main_menu_story_preview, MainMenuVariationId,
+    main_menu_story_variants, render_main_menu_compare_thumbnail, render_main_menu_story_preview,
+    MainMenuVariationId,
 };
 pub use registry::{
     all_categories, all_stories, first_story_with_multiple_variants, stories_by_category,

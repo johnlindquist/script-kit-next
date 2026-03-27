@@ -142,6 +142,69 @@ pub fn render_main_menu_story_preview(stable_id: &str) -> AnyElement {
     }
 }
 
+/// Renders a lightweight compare-mode thumbnail for non-selected cards.
+pub fn render_main_menu_compare_thumbnail(stable_id: &str) -> AnyElement {
+    let theme = crate::theme::get_cached_theme();
+    let row_border = theme.colors.ui.border.with_opacity(0.35);
+    let row_bg = theme.colors.background.title_bar.with_opacity(0.45);
+    let selected_bg = theme.colors.accent.selected.with_opacity(0.14);
+    let selected_border = theme.colors.accent.selected.with_opacity(0.32);
+
+    div()
+        .id(gpui::ElementId::Name(
+            format!("main-menu-compare-thumbnail-{stable_id}").into(),
+        ))
+        .w_full()
+        .h_full()
+        .p_3()
+        .flex()
+        .flex_col()
+        .gap_2()
+        .children(
+            MOCK_ITEMS
+                .iter()
+                .take(3)
+                .enumerate()
+                .map(|(index, &(name, _, _))| {
+                    let mut row = div()
+                        .w_full()
+                        .h(px(40.))
+                        .px_3()
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .justify_between()
+                        .rounded(px(8.))
+                        .border_1()
+                        .border_color(row_border)
+                        .bg(row_bg);
+
+                    if index == 1 {
+                        row = row.border_color(selected_border).bg(selected_bg);
+                    }
+
+                    row.child(
+                        div()
+                            .text_sm()
+                            .text_color(theme.colors.text.primary.to_rgb())
+                            .child(name),
+                    )
+                    .child(
+                        div()
+                            .w(px(48.))
+                            .h(px(6.))
+                            .rounded(px(999.))
+                            .bg(if index == 1 {
+                                theme.colors.accent.selected.with_opacity(0.28)
+                            } else {
+                                theme.colors.text.dimmed.with_opacity(0.18)
+                            }),
+                    )
+                }),
+        )
+        .into_any_element()
+}
+
 // ─── Shell helpers ──────────────────────────────────────────────────────
 
 fn shell(theme: &crate::theme::Theme) -> Div {

@@ -14,6 +14,7 @@ use std::fs;
 use std::path::PathBuf;
 
 use crate::designs::DesignVariant;
+use crate::storybook::main_menu_variations::render_main_menu_compare_thumbnail;
 use crate::storybook::{
     all_categories, all_stories, first_story_with_multiple_variants, load_story_selections,
     save_story_selections, selection_store_path, stories_by_surface, StoryEntry,
@@ -729,6 +730,13 @@ impl StoryBrowser {
                         let description = variant.description.clone().unwrap_or_default();
                         let is_selected = index == self.selected_variant_index;
                         let is_adopted = adopted_variant.as_deref() == Some(variant_id.as_str());
+                        let preview_content = if is_selected {
+                            story.story.render_variant(&variant)
+                        } else if story.story.id() == "main-menu-variations" {
+                            render_main_menu_compare_thumbnail(&variant_id)
+                        } else {
+                            story.story.render_variant(&variant)
+                        };
 
                         let mut card = div()
                             .w(px(CARD_WIDTH))
@@ -783,21 +791,27 @@ impl StoryBrowser {
                                         .child(if is_adopted { "Adopted" } else { "" }),
                                 ),
                         )
-                        .child(
-                            div()
+                        .child({
+                            let mut preview = div()
                                 .id(gpui::ElementId::Name(
                                     format!("variant-preview-{index}").into(),
                                 ))
                                 .flex_1()
                                 .min_h(px(0.))
                                 .min_w(px(0.))
-                                .overflow_y_scroll()
                                 .rounded(px(8.))
                                 .border_1()
                                 .border_color(rgb(border))
-                                .bg(rgb(preview_bg))
-                                .child(div().w_full().child(story.story.render_variant(&variant))),
-                        )
+                                .bg(rgb(preview_bg));
+
+                            if is_selected {
+                                preview = preview.overflow_y_scroll();
+                            } else {
+                                preview = preview.overflow_hidden();
+                            }
+
+                            preview.child(div().w_full().child(preview_content))
+                        })
                     })),
             )
             .into_any_element()
