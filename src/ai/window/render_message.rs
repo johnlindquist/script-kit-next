@@ -49,14 +49,17 @@ impl AiApp {
         let is_user = message.role == MessageRole::User;
         let is_system = message.role == MessageRole::System;
         let is_mini = self.window_mode.is_mini();
+        let mini_style = mini_ai_chat_style();
         let cue = message_bubble_cue(message.role);
         let colors = theme::PromptColors::from_theme(&crate::theme::get_cached_theme());
 
         // Mini mode uses whisper-level opacity; full mode keeps the original values.
         let bubble_opacity = if is_mini {
             match message.role {
-                MessageRole::User => MINI_MESSAGE_USER_BG_OPACITY,
-                MessageRole::Assistant | MessageRole::System => MINI_MESSAGE_ASSISTANT_BG_OPACITY,
+                MessageRole::User => mini_style.message_user_bg_opacity,
+                MessageRole::Assistant | MessageRole::System => {
+                    mini_style.message_assistant_bg_opacity
+                }
             }
         } else {
             cue.background_opacity
@@ -263,7 +266,10 @@ impl AiApp {
                 div()
                     .relative()
                     .w_full()
-                    .when(is_mini, |d| d.px(MINI_MESSAGE_PX).py(MINI_MESSAGE_PY))
+                    .when(is_mini, |d| {
+                        d.px(px(mini_style.message_padding_x))
+                            .py(px(mini_style.message_padding_y))
+                    })
                     .when(!is_mini, |d| {
                         d.px(MSG_PX)
                             .py(MSG_PY)
@@ -320,9 +326,7 @@ impl AiApp {
                                 .items_center()
                                 .gap(S1)
                                 .opacity(OPACITY_HIDDEN)
-                                .group_hover("message", |s| {
-                                    s.opacity(MINI_MESSAGE_META_OPACITY)
-                                })
+                                .group_hover("message", |s| s.opacity(MINI_MESSAGE_META_OPACITY))
                                 .child(
                                     div()
                                         .id(SharedString::from(format!(
@@ -331,13 +335,10 @@ impl AiApp {
                                         )))
                                         .text_xs()
                                         .text_color(
-                                            cx.theme()
-                                                .muted_foreground
-                                                .opacity(OPACITY_TEXT_MUTED),
+                                            cx.theme().muted_foreground.opacity(OPACITY_TEXT_MUTED),
                                         )
                                         .tooltip(move |window, cx| {
-                                            Tooltip::new(tooltip_text.clone())
-                                                .build(window, cx)
+                                            Tooltip::new(tooltip_text.clone()).build(window, cx)
                                         })
                                         .child(ts),
                                 )
@@ -357,16 +358,14 @@ impl AiApp {
                                             .hover(|s| {
                                                 s.bg(cx.theme().muted.opacity(OPACITY_HOVER))
                                             })
-                                            .on_click(cx.listener(
-                                                move |this, _, window, cx| {
-                                                    this.start_editing_message(
-                                                        edit_id.clone(),
-                                                        edit_content.clone(),
-                                                        window,
-                                                        cx,
-                                                    );
-                                                },
-                                            ))
+                                            .on_click(cx.listener(move |this, _, window, cx| {
+                                                this.start_editing_message(
+                                                    edit_id.clone(),
+                                                    edit_content.clone(),
+                                                    window,
+                                                    cx,
+                                                );
+                                            }))
                                             .child(
                                                 svg()
                                                     .external_path(
@@ -383,28 +382,21 @@ impl AiApp {
                                 })
                                 .child(
                                     div()
-                                        .id(SharedString::from(format!(
-                                            "mini-copy-{}",
-                                            copy_id
-                                        )))
+                                        .id(SharedString::from(format!("mini-copy-{}", copy_id)))
                                         .flex()
                                         .items_center()
                                         .justify_center()
                                         .size(MINI_BTN_SIZE)
                                         .rounded_full()
                                         .cursor_pointer()
-                                        .hover(|s| {
-                                            s.bg(cx.theme().muted.opacity(OPACITY_HOVER))
-                                        })
-                                        .on_click(cx.listener(
-                                            move |this, _, _window, cx| {
-                                                this.copy_message(
-                                                    click_id.clone(),
-                                                    copy_content.clone(),
-                                                    cx,
-                                                );
-                                            },
-                                        ))
+                                        .hover(|s| s.bg(cx.theme().muted.opacity(OPACITY_HOVER)))
+                                        .on_click(cx.listener(move |this, _, _window, cx| {
+                                            this.copy_message(
+                                                click_id.clone(),
+                                                copy_content.clone(),
+                                                cx,
+                                            );
+                                        }))
                                         .child(
                                             svg()
                                                 .external_path(

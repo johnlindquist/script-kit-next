@@ -1180,6 +1180,73 @@ impl AiUserFacingError {
 // causing the AiApp to never be dropped even after the window closed.
 // Instead, we use AI_FOCUS_REQUESTED (AtomicBool) which AiApp checks in render().
 
+// ─── Adopted mini AI chat style ─────────────────────────────────────────
+// When the storybook feature is enabled, delegate to the adoption system
+// so storybook variant selections drive the live surface.
+// When disabled, use hardcoded minilastic values as the default.
+
+#[cfg(feature = "storybook")]
+pub(super) fn mini_ai_chat_style() -> crate::storybook::MiniAiChatStyle {
+    crate::storybook::adopted_mini_ai_chat_style()
+}
+
+#[cfg(not(feature = "storybook"))]
+#[derive(Debug, Clone, Copy)]
+pub(super) struct MiniAiChatStyleLocal {
+    pub titlebar_height: f32,
+    pub titlebar_border_opacity: f32,
+    pub titlebar_title_opacity: f32,
+    pub titlebar_action_opacity: f32,
+    pub show_titlebar_border: bool,
+    pub composer_bg_opacity: f32,
+    pub composer_hairline_opacity: f32,
+    pub composer_hint_opacity: f32,
+    pub composer_active_icon_opacity: f32,
+    pub show_hint_strip: bool,
+    pub message_user_bg_opacity: f32,
+    pub message_assistant_bg_opacity: f32,
+    pub message_padding_x: f32,
+    pub message_padding_y: f32,
+    pub message_gap: f32,
+    pub suggestion_count: usize,
+    pub welcome_icon_opacity: f32,
+    pub welcome_heading_opacity: f32,
+    pub welcome_title_opacity: f32,
+    pub welcome_badge_bg_opacity: f32,
+    pub action_hint_reveal_opacity: f32,
+    pub show_action_hints: bool,
+    pub footer_hint_text: &'static str,
+}
+
+#[cfg(not(feature = "storybook"))]
+pub(super) fn mini_ai_chat_style() -> MiniAiChatStyleLocal {
+    MiniAiChatStyleLocal {
+        titlebar_height: 40.0,
+        titlebar_border_opacity: 0.0,
+        titlebar_title_opacity: 0.50,
+        titlebar_action_opacity: 0.40,
+        show_titlebar_border: false,
+        composer_bg_opacity: 0.0,
+        composer_hairline_opacity: 0.0,
+        composer_hint_opacity: 0.45,
+        composer_active_icon_opacity: 0.45,
+        show_hint_strip: true,
+        message_user_bg_opacity: 0.04,
+        message_assistant_bg_opacity: 0.0,
+        message_padding_x: 14.0,
+        message_padding_y: 2.0,
+        message_gap: 6.0,
+        suggestion_count: 2,
+        welcome_icon_opacity: 0.30,
+        welcome_heading_opacity: 0.35,
+        welcome_title_opacity: 0.65,
+        welcome_badge_bg_opacity: 0.03,
+        action_hint_reveal_opacity: 0.55,
+        show_action_hints: false,
+        footer_hint_text: "\u{23ce} Send \u{00b7} \u{2318}K Actions \u{00b7} Esc Dismiss",
+    }
+}
+
 #[cfg(test)]
 mod outbound_display_source_tests {
     use super::*;
