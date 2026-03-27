@@ -76,18 +76,14 @@ impl MainMenuVariationId {
             Self::TwoLine => {
                 "52px items with name + description stacked, large icons, section counts"
             }
-            Self::MinimalFlat => {
-                "No icons, no bars, no footer — just text in a list. Brutalist."
-            }
+            Self::MinimalFlat => "No icons, no bars, no footer — just text in a list. Brutalist.",
             Self::BigCards => {
                 "Wild: each item is a card with icon, title, desc, rounded corners, gaps between"
             }
             Self::Terminal => {
                 "Wild: monospace everything, > prefix, green-on-black, no rounded corners"
             }
-            Self::Neon => {
-                "Wild: thick accent borders, glow effects, oversized input, bold colors"
-            }
+            Self::Neon => "Wild: thick accent borders, glow effects, oversized input, bold colors",
         }
     }
 
@@ -150,15 +146,13 @@ pub fn render_main_menu_story_preview(stable_id: &str) -> AnyElement {
 
 fn shell(theme: &crate::theme::Theme) -> Div {
     div()
-        .w(px(420.))
-        .h(px(400.))
+        .w_full()
         .flex()
         .flex_col()
         .rounded(px(12.))
         .border_1()
         .border_color(theme.colors.ui.border.to_rgb())
         .bg(theme.colors.background.main.to_rgb())
-        .overflow_hidden()
 }
 
 fn divider(theme: &crate::theme::Theme) -> Div {
@@ -306,43 +300,43 @@ fn render_raycast_classic() -> AnyElement {
                                 row = row
                                     .bg(theme.colors.accent.selected.with_opacity(0.1))
                                     .child(
-                                        div()
-                                            .w(px(3.))
-                                            .h(px(20.))
-                                            .rounded(px(3.))
-                                            .bg(theme.colors.accent.selected.to_rgb()),
+                                        div().w(px(3.)).h(px(20.)).rounded(px(3.)).bg(theme
+                                            .colors
+                                            .accent
+                                            .selected
+                                            .to_rgb()),
                                     );
                             }
 
                             row.child(
-                                    div()
-                                        .w(px(20.))
-                                        .h(px(20.))
-                                        .flex()
-                                        .items_center()
-                                        .justify_center()
-                                        .text_size(px(16.))
-                                        .child(icon.to_string()),
-                                )
-                                .child(
-                                    div()
-                                        .flex_1()
-                                        .min_w(px(0.))
-                                        .text_size(px(14.))
-                                        .font_weight(if is_sel {
-                                            FontWeight::MEDIUM
-                                        } else {
-                                            FontWeight::NORMAL
-                                        })
-                                        .text_color(if is_sel {
-                                            theme.colors.text.primary.to_rgb()
-                                        } else {
-                                            theme.colors.text.secondary.to_rgb()
-                                        })
-                                        .overflow_hidden()
-                                        .whitespace_nowrap()
-                                        .child(name.to_string()),
-                                )
+                                div()
+                                    .w(px(20.))
+                                    .h(px(20.))
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .text_size(px(16.))
+                                    .child(icon.to_string()),
+                            )
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_w(px(0.))
+                                    .text_size(px(14.))
+                                    .font_weight(if is_sel {
+                                        FontWeight::MEDIUM
+                                    } else {
+                                        FontWeight::NORMAL
+                                    })
+                                    .text_color(if is_sel {
+                                        theme.colors.text.primary.to_rgb()
+                                    } else {
+                                        theme.colors.text.secondary.to_rgb()
+                                    })
+                                    .overflow_hidden()
+                                    .whitespace_nowrap()
+                                    .child(name.to_string()),
+                            )
                         })),
                 )
                 // Divider
@@ -448,38 +442,38 @@ fn render_compact_dense() -> AnyElement {
                         row = row
                             .bg(theme.colors.accent.selected.with_opacity(0.1))
                             .child(
-                                div()
-                                    .w(px(2.))
-                                    .h(px(14.))
-                                    .rounded(px(2.))
-                                    .bg(theme.colors.accent.selected.to_rgb()),
+                                div().w(px(2.)).h(px(14.)).rounded(px(2.)).bg(theme
+                                    .colors
+                                    .accent
+                                    .selected
+                                    .to_rgb()),
                             );
                     }
 
                     row.child(
-                            div()
-                                .w(px(14.))
-                                .h(px(14.))
-                                .flex()
-                                .items_center()
-                                .justify_center()
-                                .text_size(px(11.))
-                                .child(icon.to_string()),
-                        )
-                        .child(
-                            div()
-                                .flex_1()
-                                .min_w(px(0.))
-                                .text_size(px(12.5))
-                                .text_color(if is_sel {
-                                    theme.colors.text.primary.to_rgb()
-                                } else {
-                                    theme.colors.text.secondary.to_rgb()
-                                })
-                                .overflow_hidden()
-                                .whitespace_nowrap()
-                                .child(name.to_string()),
-                        )
+                        div()
+                            .w(px(14.))
+                            .h(px(14.))
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .text_size(px(11.))
+                            .child(icon.to_string()),
+                    )
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w(px(0.))
+                            .text_size(px(12.5))
+                            .text_color(if is_sel {
+                                theme.colors.text.primary.to_rgb()
+                            } else {
+                                theme.colors.text.secondary.to_rgb()
+                            })
+                            .overflow_hidden()
+                            .whitespace_nowrap()
+                            .child(name.to_string()),
+                    )
                 })),
         )
         .child(footer_hints(&theme))
@@ -623,31 +617,34 @@ fn render_two_line() -> AnyElement {
                                 .child("6"),
                         ),
                 )
-                .children(MOCK_ITEMS.iter().enumerate().map(
-                    |(i, &(name, desc, icon))| {
-                        let is_sel = i == selected;
-                        let mut row = div()
-                            .w_full()
-                            .h(px(52.))
-                            .px(px(14.))
-                            .flex()
-                            .flex_row()
-                            .items_center()
-                            .gap(px(10.));
+                .children(
+                    MOCK_ITEMS
+                        .iter()
+                        .enumerate()
+                        .map(|(i, &(name, desc, icon))| {
+                            let is_sel = i == selected;
+                            let mut row = div()
+                                .w_full()
+                                .h(px(52.))
+                                .px(px(14.))
+                                .flex()
+                                .flex_row()
+                                .items_center()
+                                .gap(px(10.));
 
-                        if is_sel {
-                            row = row
-                                .bg(theme.colors.accent.selected.with_opacity(0.1))
-                                .child(
-                                    div()
-                                        .w(px(3.))
-                                        .h(px(26.))
-                                        .rounded(px(3.))
-                                        .bg(theme.colors.accent.selected.to_rgb()),
-                                );
-                        }
+                            if is_sel {
+                                row = row
+                                    .bg(theme.colors.accent.selected.with_opacity(0.1))
+                                    .child(
+                                        div().w(px(3.)).h(px(26.)).rounded(px(3.)).bg(theme
+                                            .colors
+                                            .accent
+                                            .selected
+                                            .to_rgb()),
+                                    );
+                            }
 
-                        row.child(
+                            row.child(
                                 div()
                                     .w(px(28.))
                                     .h(px(28.))
@@ -686,8 +683,8 @@ fn render_two_line() -> AnyElement {
                                             .child(desc.to_string()),
                                     ),
                             )
-                    },
-                )),
+                        }),
+                ),
         )
         .child(footer_hints(&theme))
         .into_any_element()
@@ -807,31 +804,34 @@ fn render_big_cards() -> AnyElement {
                 .flex_col()
                 .gap(px(6.))
                 .overflow_hidden()
-                .children(MOCK_ITEMS.iter().enumerate().map(
-                    |(i, &(name, desc, icon))| {
-                        let is_sel = i == selected;
-                        let mut card = div()
-                            .w_full()
-                            .px(px(12.))
-                            .py(px(10.))
-                            .rounded(px(10.))
-                            .border_1()
-                            .flex()
-                            .flex_row()
-                            .items_center()
-                            .gap(px(10.));
+                .children(
+                    MOCK_ITEMS
+                        .iter()
+                        .enumerate()
+                        .map(|(i, &(name, desc, icon))| {
+                            let is_sel = i == selected;
+                            let mut card = div()
+                                .w_full()
+                                .px(px(12.))
+                                .py(px(10.))
+                                .rounded(px(10.))
+                                .border_1()
+                                .flex()
+                                .flex_row()
+                                .items_center()
+                                .gap(px(10.));
 
-                        if is_sel {
-                            card = card
-                                .bg(theme.colors.accent.selected.with_opacity(0.08))
-                                .border_color(theme.colors.accent.selected.with_opacity(0.4));
-                        } else {
-                            card = card
-                                .bg(theme.colors.background.title_bar.with_opacity(0.5))
-                                .border_color(theme.colors.ui.border.with_opacity(0.3));
-                        }
+                            if is_sel {
+                                card = card
+                                    .bg(theme.colors.accent.selected.with_opacity(0.08))
+                                    .border_color(theme.colors.accent.selected.with_opacity(0.4));
+                            } else {
+                                card = card
+                                    .bg(theme.colors.background.title_bar.with_opacity(0.5))
+                                    .border_color(theme.colors.ui.border.with_opacity(0.3));
+                            }
 
-                        card.child(
+                            card.child(
                                 div()
                                     .w(px(36.))
                                     .h(px(36.))
@@ -874,8 +874,8 @@ fn render_big_cards() -> AnyElement {
                                             .child(desc.to_string()),
                                     ),
                             )
-                    },
-                )),
+                        }),
+                ),
         )
         .into_any_element()
 }
@@ -889,15 +889,13 @@ fn render_terminal() -> AnyElement {
     let dim_green: u32 = 0x22C55E;
 
     div()
-        .w(px(420.))
-        .h(px(400.))
+        .w_full()
         .flex()
         .flex_col()
         .rounded(px(0.)) // Sharp corners!
         .border_1()
         .border_color(dim_green.with_opacity(0.3))
         .bg(rgb(0x0A0A0A))
-        .overflow_hidden()
         // Title bar
         .child(
             div()
@@ -969,27 +967,27 @@ fn render_terminal() -> AnyElement {
                     }
 
                     row.child(
-                            div()
-                                .font_family(FONT_MONO)
-                                .text_size(px(12.))
-                                .text_color(if is_sel {
-                                    green.to_rgb()
-                                } else {
-                                    green.to_rgb().opacity(0.3)
-                                })
-                                .child(if is_sel { "▸" } else { " " }),
-                        )
-                        .child(
-                            div()
-                                .font_family(FONT_MONO)
-                                .text_size(px(13.))
-                                .text_color(if is_sel {
-                                    green.to_rgb()
-                                } else {
-                                    green.to_rgb().opacity(0.5)
-                                })
-                                .child(name.to_lowercase().replace(' ', "-")),
-                        )
+                        div()
+                            .font_family(FONT_MONO)
+                            .text_size(px(12.))
+                            .text_color(if is_sel {
+                                green.to_rgb()
+                            } else {
+                                green.to_rgb().opacity(0.3)
+                            })
+                            .child(if is_sel { "▸" } else { " " }),
+                    )
+                    .child(
+                        div()
+                            .font_family(FONT_MONO)
+                            .text_size(px(13.))
+                            .text_color(if is_sel {
+                                green.to_rgb()
+                            } else {
+                                green.to_rgb().opacity(0.5)
+                            })
+                            .child(name.to_lowercase().replace(' ', "-")),
+                    )
                 })),
         )
         // Footer
@@ -1026,49 +1024,43 @@ fn render_neon() -> AnyElement {
     let card_bg: u32 = 0x14142B;
 
     div()
-        .w(px(420.))
-        .h(px(400.))
+        .w_full()
         .flex()
         .flex_col()
         .rounded(px(16.))
         .border_2()
         .border_color(neon_pink.with_opacity(0.4))
         .bg(rgb(dark_bg))
-        .overflow_hidden()
         // Header — oversized pill input
         .child(
-            div()
-                .w_full()
-                .px(px(16.))
-                .py(px(14.))
-                .child(
-                    div()
-                        .w_full()
-                        .px(px(16.))
-                        .py(px(12.))
-                        .rounded(px(20.))
-                        .border_2()
-                        .border_color(neon_blue.with_opacity(0.5))
-                        .bg(rgb(card_bg))
-                        .flex()
-                        .flex_row()
-                        .items_center()
-                        .gap(px(8.))
-                        .child(
-                            div()
-                                .text_size(px(20.))
-                                .font_weight(FontWeight::BOLD)
-                                .text_color(rgb(neon_blue))
-                                .child("Script Kit"),
-                        )
-                        .child(
-                            div()
-                                .w(px(2.))
-                                .h(px(22.))
-                                .bg(rgb(neon_pink))
-                                .rounded(px(1.)),
-                        ),
-                ),
+            div().w_full().px(px(16.)).py(px(14.)).child(
+                div()
+                    .w_full()
+                    .px(px(16.))
+                    .py(px(12.))
+                    .rounded(px(20.))
+                    .border_2()
+                    .border_color(neon_blue.with_opacity(0.5))
+                    .bg(rgb(card_bg))
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .gap(px(8.))
+                    .child(
+                        div()
+                            .text_size(px(20.))
+                            .font_weight(FontWeight::BOLD)
+                            .text_color(rgb(neon_blue))
+                            .child("Script Kit"),
+                    )
+                    .child(
+                        div()
+                            .w(px(2.))
+                            .h(px(22.))
+                            .bg(rgb(neon_pink))
+                            .rounded(px(1.)),
+                    ),
+            ),
         )
         // List with glow cards
         .child(
@@ -1080,33 +1072,36 @@ fn render_neon() -> AnyElement {
                 .flex_col()
                 .gap(px(4.))
                 .overflow_hidden()
-                .children(MOCK_ITEMS.iter().enumerate().map(
-                    |(i, &(name, desc, icon))| {
-                        let is_sel = i == selected;
+                .children(
+                    MOCK_ITEMS
+                        .iter()
+                        .enumerate()
+                        .map(|(i, &(name, desc, icon))| {
+                            let is_sel = i == selected;
 
-                        let mut row = div()
-                            .w_full()
-                            .h(px(48.))
-                            .px(px(14.))
-                            .rounded(px(12.))
-                            .flex()
-                            .flex_row()
-                            .items_center()
-                            .gap(px(12.));
+                            let mut row = div()
+                                .w_full()
+                                .h(px(48.))
+                                .px(px(14.))
+                                .rounded(px(12.))
+                                .flex()
+                                .flex_row()
+                                .items_center()
+                                .gap(px(12.));
 
-                        if is_sel {
-                            row = row
-                                .bg(neon_pink.with_opacity(0.12))
-                                .border_1()
-                                .border_color(neon_pink.with_opacity(0.5));
-                        } else {
-                            row = row
-                                .bg(card_bg.with_opacity(0.6))
-                                .border_1()
-                                .border_color(neon_blue.with_opacity(0.1));
-                        }
+                            if is_sel {
+                                row = row
+                                    .bg(neon_pink.with_opacity(0.12))
+                                    .border_1()
+                                    .border_color(neon_pink.with_opacity(0.5));
+                            } else {
+                                row = row
+                                    .bg(card_bg.with_opacity(0.6))
+                                    .border_1()
+                                    .border_color(neon_blue.with_opacity(0.1));
+                            }
 
-                        row.child(
+                            row.child(
                                 div()
                                     .w(px(32.))
                                     .h(px(32.))
@@ -1149,8 +1144,8 @@ fn render_neon() -> AnyElement {
                                             .child(desc.to_string()),
                                     ),
                             )
-                    },
-                )),
+                        }),
+                ),
         )
         // Footer
         .child(

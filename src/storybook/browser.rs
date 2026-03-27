@@ -134,7 +134,10 @@ impl StoryBrowser {
             tracing::info!(event = "compare_mode_opened", "Compare mode activated");
             true
         } else {
-            tracing::warn!(event = "compare_mode_skipped", "Story has fewer than 2 variants");
+            tracing::warn!(
+                event = "compare_mode_skipped",
+                "Story has fewer than 2 variants"
+            );
             false
         }
     }
@@ -277,8 +280,7 @@ impl StoryBrowser {
     fn toggle_compare_mode(&mut self, cx: &mut Context<Self>) {
         if self.current_story_variants().len() <= 1 {
             self.preview_mode = PreviewMode::Single;
-            self.status_line =
-                Some("Selected story has no comparable variants yet".to_string());
+            self.status_line = Some("Selected story has no comparable variants yet".to_string());
             self.trace_state("compare_mode_unavailable", "tab");
             cx.notify();
             return;
@@ -702,28 +704,37 @@ impl StoryBrowser {
 
         let variants = self.current_story_variants();
 
+        const CARD_WIDTH: f32 = 360.;
+        const CARD_GAP: f32 = 16.; // gap_4
+
+        let row_width = variants.len().max(1) as f32 * CARD_WIDTH
+            + variants.len().saturating_sub(1) as f32 * CARD_GAP;
+
         div()
             .id("compare-scroll")
-            .w_full()
-            .h_full()
+            .size_full()
+            .min_w(px(0.))
+            .min_h(px(0.))
+            .p_4()
             .overflow_x_scroll()
             .child(
                 div()
+                    .w(px(row_width))
+                    .h_full()
                     .flex()
                     .flex_row()
                     .gap_4()
-                    .p_4()
                     .children(variants.into_iter().enumerate().map(|(index, variant)| {
                         let variant_id = variant.stable_id();
                         let description = variant.description.clone().unwrap_or_default();
                         let is_selected = index == self.selected_variant_index;
-                        let is_adopted =
-                            adopted_variant.as_deref() == Some(variant_id.as_str());
+                        let is_adopted = adopted_variant.as_deref() == Some(variant_id.as_str());
 
                         let mut card = div()
-                            .w(px(360.))
+                            .w(px(CARD_WIDTH))
+                            .h_full()
+                            .min_h(px(0.))
                             .flex_shrink_0()
-                            .min_h(px(320.))
                             .flex()
                             .flex_col()
                             .gap_3()
@@ -752,11 +763,7 @@ impl StoryBrowser {
                                                 .text_sm()
                                                 .font_weight(FontWeight::SEMIBOLD)
                                                 .text_color(rgb(text_primary))
-                                                .child(format!(
-                                                    "[{}] {}",
-                                                    index + 1,
-                                                    variant.name
-                                                )),
+                                                .child(format!("[{}] {}", index + 1, variant.name)),
                                         )
                                         .child(
                                             div()
@@ -783,12 +790,13 @@ impl StoryBrowser {
                                 ))
                                 .flex_1()
                                 .min_h(px(0.))
+                                .min_w(px(0.))
                                 .overflow_y_scroll()
                                 .rounded(px(8.))
                                 .border_1()
                                 .border_color(rgb(border))
                                 .bg(rgb(preview_bg))
-                                .child(story.story.render_variant(&variant)),
+                                .child(div().w_full().child(story.story.render_variant(&variant))),
                         )
                     })),
             )
@@ -1202,8 +1210,8 @@ mod tests {
     #[test]
     fn variant_navigation_wraps_around() {
         // Simulates move_variant_left and move_variant_right wrapping behavior
-        let entry = first_story_with_multiple_variants()
-            .expect("need a comparable story for this test");
+        let entry =
+            first_story_with_multiple_variants().expect("need a comparable story for this test");
         let count = entry.story.variants().len();
         assert!(count > 1, "need >1 variant");
 
@@ -1220,8 +1228,7 @@ mod tests {
 
     #[test]
     fn variant_navigation_full_cycle_left() {
-        let entry = first_story_with_multiple_variants()
-            .expect("need a comparable story");
+        let entry = first_story_with_multiple_variants().expect("need a comparable story");
         let count = entry.story.variants().len();
 
         // Walk left from index 0 through all variants and back to 0
@@ -1240,8 +1247,7 @@ mod tests {
 
     #[test]
     fn variant_navigation_full_cycle_right() {
-        let entry = first_story_with_multiple_variants()
-            .expect("need a comparable story");
+        let entry = first_story_with_multiple_variants().expect("need a comparable story");
         let count = entry.story.variants().len();
 
         // Walk right from index 0 through all variants and back to 0
@@ -1312,7 +1318,8 @@ mod tests {
             let key_num = (expected_index as u32) + 1;
             let mapped_index = key_num.saturating_sub(1) as usize;
             assert_eq!(
-                mapped_index, expected_index,
+                mapped_index,
+                expected_index,
                 "key {} should reach variant '{}' at index {}",
                 key_num,
                 variant.stable_id(),
@@ -1410,10 +1417,7 @@ mod tests {
         let variants = footer_entry.story.variants();
         let resolved = resolve_variant_index("footer-layout-variations", &variants, &store);
 
-        assert_eq!(
-            resolved, 0,
-            "empty store should default to first variant"
-        );
+        assert_eq!(resolved, 0, "empty store should default to first variant");
     }
 
     #[test]
@@ -1426,9 +1430,7 @@ mod tests {
             StorySurface::ActionDialog,
         ] {
             let stories = stories_by_surface(surface);
-            let comparable = stories
-                .iter()
-                .any(|entry| entry.story.variants().len() > 1);
+            let comparable = stories.iter().any(|entry| entry.story.variants().len() > 1);
             assert!(
                 comparable,
                 "{:?} surface should have at least one compare-ready story",
