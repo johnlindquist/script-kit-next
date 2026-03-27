@@ -1,5 +1,5 @@
 use super::*;
-use crate::theme::opacity::{OPACITY_HOVER, OPACITY_MUTED, OPACITY_SELECTED, OPACITY_TEXT_MUTED};
+use crate::theme::opacity::{OPACITY_HOVER, OPACITY_SELECTED};
 
 /// Pure helper: compute the effective max height for the mini history overlay
 /// given a window height. Clamps so the overlay never overflows below the window.
@@ -534,27 +534,9 @@ impl Render for AiApp {
                                         ),
                                 )
                             })
-                            // Whisper: plain muted model name text, no bordered pill
-                            .child({
-                                let model_name: SharedString = self
-                                    .selected_model
-                                    .as_ref()
-                                    .map(|m| SharedString::from(m.display_name.clone()))
-                                    .unwrap_or_else(|| "Select Model".into());
-                                div()
-                                    .id("ai-mini-model-text")
-                                    .text_xs()
-                                    .text_color(muted_fg.opacity(OPACITY_TEXT_MUTED))
-                                    .cursor_pointer()
-                                    .hover(|el| el.text_color(muted_fg.opacity(OPACITY_MUTED)))
-                                    .on_click(cx.listener(|this, _, _window, cx| {
-                                        this.cycle_model_from_source(
-                                            "mini_model_text_click",
-                                            cx,
-                                        );
-                                    }))
-                                    .child(model_name)
-                            }),
+                            // Whisper: delegate to shared mini model renderer
+                            // (preserves setup fallback + model cycling + stronger hover)
+                            .child(self.render_mini_model_chip(cx)),
                     )
                     // Right: icon buttons — Recent (⌘J), New (⌘N), Actions (⌘K), Expand (⌘⇧M)
                     // Whisper: reduced resting opacity, no separator, expand is icon-only

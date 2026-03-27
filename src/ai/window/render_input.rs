@@ -1,4 +1,5 @@
 use super::*;
+use crate::theme::opacity::{OPACITY_STRONG, OPACITY_TEXT_MUTED};
 
 // -- Deterministic model-cycle planning (pure, no side effects) --
 
@@ -198,47 +199,53 @@ impl AiApp {
             .into_any_element()
     }
 
-    /// Render a compact model chip for the mini titlebar.
-    /// Matches full mode's button + fallback pattern: click cycles to the
-    /// next available model (same as `render_model_picker`). Does NOT open
-    /// the generic command bar — model selection is direct.
+    /// Render a Whisper-style plain-text model affordance for the mini titlebar.
+    ///
+    /// - No-model state: shows "Setup Required" / "Copied!" in accent color,
+    ///   clicking copies the setup command.
+    /// - With models: shows plain model name, clicking cycles to the next model.
+    /// - Hover strengthens opacity (`OPACITY_STRONG`) for discoverability.
     pub(super) fn render_mini_model_chip(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let button_colors =
-            crate::components::ButtonColors::from_theme(&crate::theme::get_cached_theme());
-        let entity = cx.entity();
+        let muted_fg = cx.theme().muted_foreground;
+        let fg = cx.theme().foreground;
+        let accent = cx.theme().accent;
 
         if self.available_models.is_empty() {
-            let show_copied = self.is_showing_copied_feedback();
-            let setup_entity = entity.clone();
-            return crate::components::Button::new(
-                if show_copied {
-                    "Copied!"
-                } else {
-                    "Setup Required"
-                },
-                button_colors,
-            )
-            .id("ai-mini-model-setup")
-            .variant(crate::components::ButtonVariant::Ghost)
-            .on_click(Box::new(move |_, window, cx| {
-                setup_entity.update(cx, |this, cx| {
+            let label: SharedString = if self.is_showing_copied_feedback() {
+                "Copied!".into()
+            } else {
+                "Setup Required".into()
+            };
+            return div()
+                .id("ai-mini-model-text")
+                .text_xs()
+                .cursor_pointer()
+                .text_color(accent.opacity(OPACITY_TEXT_MUTED))
+                .hover(move |el| el.text_color(accent.opacity(OPACITY_STRONG)))
+                .on_click(cx.listener(|this, _, window, cx| {
                     this.copy_setup_command(cx);
                     window.activate_window();
-                });
-            }))
-            .into_any_element();
+                }))
+                .child(label)
+                .into_any_element();
         }
 
-        let model_label = self.current_model_button_label();
-        let click_entity = entity.clone();
-        crate::components::Button::new(model_label, button_colors)
-            .id("ai-mini-model-chip")
-            .variant(crate::components::ButtonVariant::Ghost)
-            .on_click(Box::new(move |_, _window, cx| {
-                click_entity.update(cx, |this, cx| {
-                    this.cycle_model_from_source("mini_model_chip_click", cx);
-                });
+        let model_label: SharedString = self
+            .selected_model
+            .as_ref()
+            .map(|m| SharedString::from(m.display_name.clone()))
+            .unwrap_or_else(|| "Select Model".into());
+
+        div()
+            .id("ai-mini-model-text")
+            .text_xs()
+            .cursor_pointer()
+            .text_color(muted_fg.opacity(OPACITY_TEXT_MUTED))
+            .hover(move |el| el.text_color(fg.opacity(OPACITY_STRONG)))
+            .on_click(cx.listener(|this, _, _window, cx| {
+                this.cycle_model_from_source("mini_model_chip_click", cx);
             }))
+            .child(model_label)
             .into_any_element()
     }
 }

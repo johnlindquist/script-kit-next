@@ -426,6 +426,65 @@ impl ActionsDialog {
             .into()
     }
 
+    /// Build a presentation model from the current live dialog state.
+    ///
+    /// This extracts the same data that the shared presenter uses, enabling
+    /// storybook and live app to share a common data contract. The live dialog
+    /// still uses its own interactive render path (with list virtualization,
+    /// scrollbars, click handlers) but this model serves as the verified
+    /// bridge between the two surfaces.
+    #[cfg(feature = "storybook")]
+    pub fn build_presentation_model(
+        &self,
+    ) -> crate::storybook::ActionsDialogPresentationModel {
+        let search_placeholder = self.search_placeholder_text();
+        let show_search =
+            !matches!(self.config.search_position, SearchPosition::Hidden) && !self.hide_search;
+        let search_at_top = matches!(self.config.search_position, SearchPosition::Top);
+
+        let items = self
+            .grouped_items
+            .iter()
+            .filter_map(|grouped_item| match grouped_item {
+                GroupedActionItem::SectionHeader(label) => {
+                    Some(crate::storybook::ActionsDialogPresentationItem::SectionHeader(
+                        SharedString::from(label.clone()),
+                    ))
+                }
+                GroupedActionItem::Item(filter_idx) => {
+                    let action_idx = *self.filtered_actions.get(*filter_idx)?;
+                    let action = self.actions.get(action_idx)?;
+                    Some(crate::storybook::ActionsDialogPresentationItem::Action(
+                        crate::storybook::ActionsDialogPresentationAction {
+                            title: SharedString::from(action.title.clone()),
+                            subtitle: action_subtitle_for_display(action)
+                                .map(|v| SharedString::from(v.to_string())),
+                            shortcut: action.shortcut.clone().map(SharedString::from),
+                            icon_svg_path: action
+                                .icon
+                                .map(|icon| SharedString::from(icon.external_path().to_string())),
+                            is_destructive: is_destructive_action(action),
+                        },
+                    ))
+                }
+            })
+            .collect();
+
+        crate::storybook::ActionsDialogPresentationModel {
+            context_title: self.context_title.clone().map(SharedString::from),
+            search_text: SharedString::from(self.search_text.clone()),
+            search_placeholder,
+            cursor_visible: self.cursor_visible,
+            show_search,
+            search_at_top,
+            show_footer: self.config.show_footer,
+            items,
+            selected_index: self.selected_index,
+            hovered_index: self.hovered_index,
+            input_mode_mouse: self.input_mode == InputMode::Mouse,
+        }
+    }
+
     pub fn new(
         focus_handle: FocusHandle,
         on_select: ActionCallback,
