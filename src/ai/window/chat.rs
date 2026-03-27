@@ -733,6 +733,7 @@ impl AiApp {
 
         // Clear input and update placeholder
         self.clear_composer(window, cx);
+        self.dismiss_mini_composer_hint_if_needed("handle_start_chat", cx);
         self.update_input_placeholder(window, cx);
 
         info!(

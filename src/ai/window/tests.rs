@@ -2843,63 +2843,43 @@ fn test_show_mini_history_overlay_always_sets_flag_and_focuses_search() {
     );
 }
 
-/// Mini titlebar model selector must use the Button-based chip from
-/// render_mini_model_chip, not plain text. The chip cycles models on click
-/// (matching full mode's render_model_picker behavior).
+/// Mini model chip must preserve the setup fallback and use stronger hover
+/// (`OPACITY_STRONG`) for Whisper discoverability.
 #[test]
-fn test_mini_model_chip_uses_button_component() {
+fn test_render_mini_model_chip_keeps_setup_fallback_and_stronger_hover() {
     let source = include_str!("render_input.rs");
-    let chip_fn = source
-        .find("fn render_mini_model_chip")
-        .expect("render_mini_model_chip must exist in render_input.rs");
-    let after = &source[chip_fn..(chip_fn + 2500).min(source.len())];
+    let start = source
+        .find("pub(super) fn render_mini_model_chip")
+        .expect("render_mini_model_chip must exist");
+    let body = &source[start..];
 
-    // Uses the Button component, not a plain div
     assert!(
-        after.contains("crate::components::Button::new("),
-        "Mini model chip must use the Button component"
-    );
-    // Uses Ghost variant for compact appearance
-    assert!(
-        after.contains("ButtonVariant::Ghost"),
-        "Mini model chip must use Ghost variant"
-    );
-    // Cycles model on click via shared instrumented helper
-    assert!(
-        after.contains("cycle_model_from_source(\"mini_model_chip_click\""),
-        "Mini model chip must use the shared instrumented cycle helper"
+        body.contains("copy_setup_command(cx);"),
+        "Mini model affordance must keep the setup fallback when no models are available"
     );
     assert!(
-        !after.contains("show_command_bar("),
-        "Mini model chip must not open the generic command bar"
+        body.contains("cycle_model_from_source(\"mini_model_chip_click\", cx);"),
+        "Mini model affordance must still cycle models when models are available"
     );
-    // Has setup-required fallback
     assert!(
-        after.contains("Setup Required"),
-        "Mini model chip must show setup fallback when no models available"
+        body.contains("OPACITY_STRONG"),
+        "Mini model hover should strengthen the affordance instead of fading it further"
     );
 }
 
-/// The mini titlebar must use whisper-style plain-text model name that
-/// cycles on click via `cycle_model_from_source`.
+/// Mini titlebar must delegate to the shared `render_mini_model_chip` renderer
+/// so that setup fallback and model cycling stay in sync.
 #[test]
-fn test_mini_titlebar_uses_model_chip() {
+fn test_mini_titlebar_model_affordance_delegates_to_shared_renderer() {
     let source = include_str!("render_root.rs");
-    let titlebar = source
-        .find("ai-titlebar-mini")
-        .expect("Mini titlebar must exist in render_root.rs");
-    let after = &source[titlebar..];
-    let region_end = after.find("ai-mini-actions").unwrap_or(after.len());
-    let region = &after[..region_end];
+    let mini_titlebar = source
+        .find("id(\"ai-titlebar-mini\")")
+        .expect("Mini titlebar must exist");
+    let after = &source[mini_titlebar..];
 
-    // Whisper: plain text model name with cycle-on-click
     assert!(
-        region.contains("ai-mini-model-text"),
-        "Mini titlebar must have whisper plain-text model selector"
-    );
-    assert!(
-        region.contains("cycle_model_from_source"),
-        "Mini titlebar model text must cycle model on click"
+        after.contains(".child(self.render_mini_model_chip(cx))"),
+        "Mini titlebar must delegate to render_mini_model_chip so setup fallback and model cycling stay in sync"
     );
 }
 
@@ -3107,8 +3087,8 @@ fn test_model_picker_cycle_path_emits_structured_event() {
     );
 }
 
-/// Mini model chip must use the shared instrumented cycle helper,
-/// not duplicate logic or open the generic command bar.
+/// Mini model chip must use the shared instrumented cycle helper
+/// with Whisper plain-text styling (no Button component, no command bar).
 #[test]
 fn test_mini_model_chip_uses_shared_instrumented_cycle_helper() {
     let source = include_str!("render_input.rs");
@@ -3118,19 +3098,48 @@ fn test_mini_model_chip_uses_shared_instrumented_cycle_helper() {
         .expect("render_mini_model_chip should exist");
 
     assert!(
-        after.contains("Button::new("),
-        "Mini model chip must use the Button component"
-    );
-    assert!(
-        after.contains("ButtonVariant::Ghost"),
-        "Mini model chip must use Ghost variant"
-    );
-    assert!(
         after.contains("cycle_model_from_source(\"mini_model_chip_click\""),
         "Mini model chip must use the shared instrumented cycle helper"
     );
     assert!(
         !after.contains("show_command_bar("),
         "Mini model chip must not open the generic command bar"
+    );
+    assert!(
+        after.contains("copy_setup_command(cx)"),
+        "Mini model chip must preserve setup fallback"
+    );
+}
+
+#[test]
+fn test_mini_composer_hint_dismissal_is_wired_into_both_successful_send_paths() {
+    let interactions = include_str!("interactions.rs");
+    assert!(
+        interactions.contains("pub(super) fn dismiss_mini_composer_hint_if_needed("),
+        "interactions.rs must define a shared helper for mini composer hint dismissal"
+    );
+
+    let submit_source = include_str!("streaming_submit.rs");
+    let submit_clear = submit_source
+        .find("self.clear_composer(window, cx);")
+        .expect("submit_message must clear the composer after a successful send");
+    let submit_after = &submit_source[submit_clear..];
+    assert!(
+        submit_after.contains(
+            "self.dismiss_mini_composer_hint_if_needed(\"submit_message\", cx);"
+        ),
+        "submit_message must dismiss the mini composer hint after a successful send"
+    );
+
+    let chat_source = include_str!("chat.rs");
+    let chat_clear = chat_source
+        .find("self.clear_composer(window, cx);")
+        .expect("handle_start_chat must clear the composer after creating a chat");
+    let chat_after = &chat_source[chat_clear..];
+    assert!(
+        chat_after.contains(
+            "self.dismiss_mini_composer_hint_if_needed(\"handle_start_chat\", cx);"
+        ),
+        "handle_start_chat must dismiss the mini composer hint for the SDK/start-chat path too"
     );
 }

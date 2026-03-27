@@ -9,6 +9,7 @@
 //! - [`story_container`], [`story_section`], etc. - Layout helpers
 //!
 
+pub mod actions_dialog_presenter;
 pub mod actions_dialog_variations;
 pub mod adoption;
 mod browser;
@@ -21,6 +22,10 @@ mod registry;
 mod selection;
 mod story;
 
+pub use actions_dialog_presenter::{
+    render_actions_dialog_presentation, ActionsDialogPresentationAction,
+    ActionsDialogPresentationItem, ActionsDialogPresentationModel,
+};
 pub use actions_dialog_variations::{
     actions_dialog_story_variants, adopted_actions_dialog_style, resolve_actions_dialog_style,
     ActionsDialogStyle, ActionsDialogSurface, ActionsDialogVariationId, ActionsDialogVariationSpec,

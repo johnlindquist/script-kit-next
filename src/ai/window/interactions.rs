@@ -491,6 +491,20 @@ impl AiApp {
         self.set_composer_value("", window, cx);
     }
 
+    /// Dismiss the mini composer hint strip after the first successful send.
+    /// Only mutates state in mini mode; no-op otherwise.
+    pub(super) fn dismiss_mini_composer_hint_if_needed(
+        &mut self,
+        source: &'static str,
+        cx: &mut Context<Self>,
+    ) {
+        if self.window_mode.is_mini() && !self.mini_composer_hint_dismissed {
+            self.mini_composer_hint_dismissed = true;
+            tracing::info!(target: "ai", source, "mini_composer_hint_dismissed");
+            cx.notify();
+        }
+    }
+
     // -- UX enhancement methods --
 
     /// Retry after a streaming error.
