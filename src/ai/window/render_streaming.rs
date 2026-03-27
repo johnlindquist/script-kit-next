@@ -43,6 +43,7 @@ impl AiApp {
     pub(super) fn render_streaming_content(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let colors = theme::PromptColors::from_theme(&crate::theme::get_cached_theme());
         let is_mini = self.window_mode.is_mini();
+        let mini_style = mini_ai_chat_style();
         // No background for assistant streaming content (transparent, matching message style)
         let show_streaming_cursor = ai_should_render_streaming_cursor(
             self.is_streaming,
@@ -213,9 +214,7 @@ impl AiApp {
                                 div()
                                     .text_xs()
                                     .font_weight(gpui::FontWeight::MEDIUM)
-                                    .text_color(
-                                        cx.theme().muted_foreground.opacity(OPACITY_STRONG),
-                                    )
+                                    .text_color(cx.theme().muted_foreground.opacity(OPACITY_STRONG))
                                     .child("Assistant"),
                             )
                             .when_some(model_label, |d, label| {
@@ -223,9 +222,7 @@ impl AiApp {
                                     div()
                                         .text_xs()
                                         .text_color(
-                                            cx.theme()
-                                                .muted_foreground
-                                                .opacity(OPACITY_SELECTED),
+                                            cx.theme().muted_foreground.opacity(OPACITY_SELECTED),
                                         )
                                         .child(label),
                                 )
@@ -247,9 +244,12 @@ impl AiApp {
                 div()
                     .w_full()
                     .when(is_mini, |d| {
-                        d.px(MINI_MESSAGE_PX)
-                            .py(MINI_MESSAGE_PY)
-                            .bg(cx.theme().muted.opacity(MINI_MESSAGE_ASSISTANT_BG_OPACITY))
+                        d.px(px(mini_style.message_padding_x))
+                            .py(px(mini_style.message_padding_y))
+                            .bg(cx
+                                .theme()
+                                .muted
+                                .opacity(mini_style.message_assistant_bg_opacity))
                     })
                     .when(!is_mini, |d| d.px(MSG_PX).py(MSG_PY))
                     .child(content_element),

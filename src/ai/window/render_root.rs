@@ -464,23 +464,29 @@ impl Render for AiApp {
                 this.handle_root_key_down(event, window, cx);
             }))
             .child(if self.window_mode.is_mini() {
+                let mini_style = mini_ai_chat_style();
                 let muted_fg = cx.theme().muted_foreground;
-                let action_color = muted_fg.opacity(MINI_TITLEBAR_ACTION_OPACITY);
+                let action_color = muted_fg.opacity(mini_style.titlebar_action_opacity);
                 let has_messages = !self.current_messages.is_empty() || self.is_streaming;
                 let is_streaming = self.is_streaming;
-                div()
+                let mut titlebar = div()
                     .id("ai-titlebar-mini")
                     .w_full()
-                    .h(MINI_TITLEBAR_H)
+                    .h(px(mini_style.titlebar_height))
                     .pl(MINI_TITLEBAR_LEFT_PADDING)
                     .pr(S3)
                     .flex()
                     .flex_row()
                     .items_center()
-                    .justify_between()
-                    // Whisper: barely-there bottom border instead of full chrome
-                    .border_b_1()
-                    .border_color(cx.theme().border.opacity(MINI_TITLEBAR_BORDER_OPACITY))
+                    .justify_between();
+                if mini_style.show_titlebar_border {
+                    titlebar = titlebar.border_b_1().border_color(
+                        cx.theme()
+                            .border
+                            .opacity(mini_style.titlebar_border_opacity),
+                    );
+                }
+                titlebar
                     // Left: title + streaming dot + plain model name
                     .child(
                         div()
@@ -498,7 +504,7 @@ impl Render for AiApp {
                                     .text_color(
                                         cx.theme()
                                             .foreground
-                                            .opacity(MINI_TITLEBAR_TITLE_OPACITY),
+                                            .opacity(mini_style.titlebar_title_opacity),
                                     )
                                     .overflow_hidden()
                                     .text_ellipsis()

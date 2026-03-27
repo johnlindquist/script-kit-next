@@ -13,6 +13,10 @@ impl AiApp {
         // "mini-last-assistant" group wrapper in render_messages.rs.
         // No layout space is reserved when hidden.
         if self.window_mode.is_mini() {
+            let mini_style = mini_ai_chat_style();
+            if !mini_style.show_action_hints {
+                return div().id("message-actions-mini").into_any_element();
+            }
             let has_assistant = self
                 .current_messages
                 .iter()
@@ -42,7 +46,7 @@ impl AiApp {
                         .text_color(
                             cx.theme()
                                 .muted_foreground
-                                .opacity(MINI_ACTION_HINT_REVEAL_OPACITY),
+                                .opacity(mini_style.action_hint_reveal_opacity),
                         )
                         .child(hint),
                 )

@@ -47,6 +47,7 @@ impl AiApp {
     /// single-line suggestion rows, smaller icons, and no subtitle. The layout
     /// pushes content toward the composer so the panel feels dense and ready.
     pub(super) fn render_mini_welcome(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let mini_style = mini_ai_chat_style();
         if self.available_models.is_empty() {
             info!(
                 category = "mini_welcome",
@@ -82,7 +83,7 @@ impl AiApp {
                     .text_color(
                         cx.theme()
                             .muted_foreground
-                            .opacity(MINI_WELCOME_HEADING_OPACITY),
+                            .opacity(mini_style.welcome_heading_opacity),
                     )
                     .child("Try a suggestion"),
             )
@@ -97,7 +98,7 @@ impl AiApp {
                     .children(
                         all_suggestions
                             .into_iter()
-                            .take(MINI_SUGGESTION_COUNT)
+                            .take(mini_style.suggestion_count)
                             .enumerate()
                             .map(|(i, (title, _desc, icon))| {
                                 let prompt_text = SharedString::from(format!(
@@ -143,9 +144,9 @@ impl AiApp {
                                                     .external_path(icon.external_path())
                                                     .size(MINI_WELCOME_ICON_SIZE)
                                                     .text_color(
-                                                        cx.theme()
-                                                            .accent
-                                                            .opacity(MINI_WELCOME_ICON_OPACITY),
+                                                        cx.theme().accent.opacity(
+                                                            mini_style.welcome_icon_opacity,
+                                                        ),
                                                     ),
                                             ),
                                     )
@@ -157,7 +158,7 @@ impl AiApp {
                                             .text_color(
                                                 cx.theme()
                                                     .foreground
-                                                    .opacity(MINI_WELCOME_TITLE_OPACITY),
+                                                    .opacity(mini_style.welcome_title_opacity),
                                             )
                                             .child(title_s),
                                     )
@@ -168,9 +169,10 @@ impl AiApp {
                                             .px(SP_2)
                                             .py(SP_1)
                                             .rounded(SP_2)
-                                            .bg(cx.theme()
+                                            .bg(cx
+                                                .theme()
                                                 .muted
-                                                .opacity(MINI_WELCOME_BADGE_BG_OPACITY))
+                                                .opacity(mini_style.welcome_badge_bg_opacity))
                                             .text_color(
                                                 cx.theme()
                                                     .muted_foreground

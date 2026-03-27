@@ -120,6 +120,7 @@ impl AiApp {
     /// Mini mode: centered messages + compact composer, no word count chrome.
     /// Model picker lives in the header — composer is just input + submit.
     fn render_mini_main_panel(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let mini_style = mini_ai_chat_style();
         let has_pending_image = self.pending_image.is_some();
         let has_pending_context_parts = !self.pending_context_parts.is_empty();
         let is_editing = self.editing_message_id.is_some();
@@ -211,9 +212,9 @@ impl AiApp {
                             .border_color(
                                 cx.theme()
                                     .border
-                                    .opacity(MINI_COMPOSER_HAIRLINE_OPACITY),
+                                    .opacity(mini_style.composer_hairline_opacity),
                             )
-                            .bg(cx.theme().muted.opacity(MINI_COMPOSER_SURFACE_BG_OPACITY))
+                            .bg(cx.theme().muted.opacity(mini_style.composer_bg_opacity))
                             .child(self.render_input_with_cursor(cx))
                             // Inline submit/stop at right edge of composer
                             .child(if self.is_streaming {
@@ -230,7 +231,7 @@ impl AiApp {
                                     .text_color(
                                         cx.theme()
                                             .danger
-                                            .opacity(MINI_COMPOSER_ACTIVE_ICON_OPACITY),
+                                            .opacity(mini_style.composer_active_icon_opacity),
                                     )
                                     .hover(|el| {
                                         el.bg(cx.theme().danger.opacity(OPACITY_HOVER))
@@ -269,7 +270,7 @@ impl AiApp {
                                     .text_color(
                                         cx.theme()
                                             .accent
-                                            .opacity(MINI_COMPOSER_ACTIVE_ICON_OPACITY),
+                                            .opacity(mini_style.composer_active_icon_opacity),
                                     )
                                     .hover(|el| {
                                         el.bg(cx.theme().accent.opacity(OPACITY_HOVER))
@@ -328,7 +329,7 @@ impl AiApp {
                                 .text_color(
                                     cx.theme()
                                         .muted_foreground
-                                        .opacity(MINI_COMPOSER_HINT_STRIP_OPACITY),
+                                        .opacity(mini_style.composer_hint_opacity),
                                 )
                                 .child(
                                     "\u{21b5} Send \u{00b7} \u{2318}\u{21e7}\u{21b5} Send + Context \u{00b7} Esc Dismiss",
