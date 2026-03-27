@@ -344,7 +344,11 @@ fn do_in_current_app_generate_script_replays_from_memory() {
     write_index_to_temp(dir.path(), &[entry]);
 
     // Point HOME at the temp dir so the resolver reads our index
-    let _guard = temp_env::set_var("HOME", dir.path().to_str().unwrap());
+    // SAFETY: test-only; each test uses a unique temp dir so no collision risk
+    #[allow(deprecated)]
+    unsafe {
+        std::env::set_var("HOME", dir.path().to_str().unwrap())
+    };
 
     let snapshot = make_test_snapshot("com.apple.Safari", "TestApp");
     let decision = resolve_current_app_automation_from_memory(
@@ -387,7 +391,11 @@ fn do_in_current_app_generate_script_repairs_from_memory() {
     );
     write_index_to_temp(dir.path(), &[entry]);
 
-    let _guard = temp_env::set_var("HOME", dir.path().to_str().unwrap());
+    // SAFETY: test-only; each test uses a unique temp dir so no collision risk
+    #[allow(deprecated)]
+    unsafe {
+        std::env::set_var("HOME", dir.path().to_str().unwrap())
+    };
 
     let snapshot = make_test_snapshot("com.apple.Safari", "TestApp");
     // Similar but not identical query → repair path
@@ -431,7 +439,11 @@ fn do_in_current_app_generate_script_miss_falls_back_to_generation() {
     );
     write_index_to_temp(dir.path(), &[entry]);
 
-    let _guard = temp_env::set_var("HOME", dir.path().to_str().unwrap());
+    // SAFETY: test-only; each test uses a unique temp dir so no collision risk
+    #[allow(deprecated)]
+    unsafe {
+        std::env::set_var("HOME", dir.path().to_str().unwrap())
+    };
 
     // Different bundle_id → no match
     let snapshot = make_test_snapshot("com.microsoft.VSCode", "Visual Studio Code");

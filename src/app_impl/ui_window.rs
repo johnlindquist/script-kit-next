@@ -13,6 +13,18 @@ impl ScriptListApp {
         cx.notify();
     }
 
+    /// Toggle the focused-info panel visibility (Cmd+I / "Show Info" action).
+    pub(crate) fn toggle_info_panel(&mut self, cx: &mut Context<Self>) {
+        self.show_info_panel = !self.show_info_panel;
+        tracing::info!(
+            category = "UI",
+            event = "toggle_info_panel",
+            visible = self.show_info_panel,
+            "Info panel toggled"
+        );
+        cx.notify();
+    }
+
     /// Hide the mouse cursor while typing.
     /// The cursor will be shown again when the mouse moves.
     pub(crate) fn hide_mouse_cursor(&mut self, cx: &mut Context<Self>) {
@@ -154,7 +166,7 @@ impl ScriptListApp {
                 };
                 Some((ViewType::ScriptList, filtered_count))
             }
-            #[cfg(debug_assertions)]
+            #[cfg(feature = "storybook")]
             AppView::DesignExplorerView { .. } => Some((ViewType::DivPrompt, 0)),
             AppView::ProcessManagerView { filter, .. } => {
                 let filtered_count = if filter.is_empty() {

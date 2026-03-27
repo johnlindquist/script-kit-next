@@ -2880,8 +2880,8 @@ fn test_mini_model_chip_uses_button_component() {
     );
 }
 
-/// The mini titlebar must delegate to render_mini_model_chip rather than
-/// inline plain-text model rendering.
+/// The mini titlebar must use whisper-style plain-text model name that
+/// cycles on click via `cycle_model_from_source`.
 #[test]
 fn test_mini_titlebar_uses_model_chip() {
     let source = include_str!("render_root.rs");
@@ -2892,14 +2892,14 @@ fn test_mini_titlebar_uses_model_chip() {
     let region_end = after.find("ai-mini-actions").unwrap_or(after.len());
     let region = &after[..region_end];
 
+    // Whisper: plain text model name with cycle-on-click
     assert!(
-        region.contains("render_mini_model_chip"),
-        "Mini titlebar must delegate to render_mini_model_chip"
+        region.contains("ai-mini-model-text"),
+        "Mini titlebar must have whisper plain-text model selector"
     );
-    // Plain text model name should no longer be inline
     assert!(
-        !region.contains("ai-mini-model-name"),
-        "Mini titlebar should not have inline plain-text model selector"
+        region.contains("cycle_model_from_source"),
+        "Mini titlebar model text must cycle model on click"
     );
 }
 

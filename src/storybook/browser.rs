@@ -14,7 +14,6 @@ use std::fs;
 use std::path::PathBuf;
 
 use crate::designs::DesignVariant;
-use crate::storybook::main_menu_variations::render_main_menu_compare_thumbnail;
 use crate::storybook::{
     all_categories, all_stories, first_story_with_multiple_variants, load_story_selections,
     save_story_selections, selection_store_path, stories_by_surface, StoryEntry,
@@ -41,6 +40,7 @@ pub struct StoryBrowser {
     status_line: Option<String>,
     focus_handle: FocusHandle,
     screenshot_dir: PathBuf,
+    compare_scroll: ScrollHandle,
 }
 
 impl StoryBrowser {
@@ -99,6 +99,7 @@ impl StoryBrowser {
             status_line,
             focus_handle: cx.focus_handle(),
             screenshot_dir,
+            compare_scroll: ScrollHandle::new(),
         };
 
         browser.reset_variant_selection();
@@ -308,6 +309,8 @@ impl StoryBrowser {
             self.selected_variant_index - 1
         };
         self.trace_state("variant_focus_changed", "arrow_left");
+        self.compare_scroll
+            .scroll_to_item(self.selected_variant_index);
         cx.notify();
     }
 
@@ -319,6 +322,8 @@ impl StoryBrowser {
 
         self.selected_variant_index = (self.selected_variant_index + 1) % count;
         self.trace_state("variant_focus_changed", "arrow_right");
+        self.compare_scroll
+            .scroll_to_item(self.selected_variant_index);
         cx.notify();
     }
 
@@ -345,6 +350,7 @@ impl StoryBrowser {
         };
 
         self.selected_variant_index = index;
+        self.compare_scroll.scroll_to_item(index);
 
         if let Some(story) = self.current_story() {
             tracing::info!(
@@ -713,6 +719,7 @@ impl StoryBrowser {
 
         div()
             .id("compare-scroll")
+            .track_scroll(&self.compare_scroll)
             .size_full()
             .min_w(px(0.))
             .min_h(px(0.))
@@ -730,13 +737,7 @@ impl StoryBrowser {
                         let description = variant.description.clone().unwrap_or_default();
                         let is_selected = index == self.selected_variant_index;
                         let is_adopted = adopted_variant.as_deref() == Some(variant_id.as_str());
-                        let preview_content = if is_selected {
-                            story.story.render_variant(&variant)
-                        } else if story.story.id() == "main-menu-variations" {
-                            render_main_menu_compare_thumbnail(&variant_id)
-                        } else {
-                            story.story.render_variant(&variant)
-                        };
+                        let preview_content = story.story.render_variant(&variant);
 
                         let mut card = div()
                             .w(px(CARD_WIDTH))

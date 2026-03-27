@@ -9,6 +9,34 @@ const SHORTCUT_OPACITY: f32 = OPACITY_TEXT_MUTED * 0.6;
 
 impl AiApp {
     pub(super) fn render_message_actions(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        // Mini mode: single-line whisper hint strip instead of full button slab
+        if self.window_mode.is_mini() {
+            let has_assistant = self
+                .current_messages
+                .iter()
+                .any(|m| m.role == MessageRole::Assistant);
+            let hint: SharedString = if has_assistant {
+                "\u{2318}K Actions \u{00b7} \u{2318}\u{21e7}C Copy \u{00b7} \u{2318}\u{21e7}E Export \u{00b7} \u{2318}N New".into()
+            } else {
+                "\u{2318}K Actions \u{00b7} \u{2318}N New".into()
+            };
+            return div()
+                .id("message-actions-mini")
+                .flex()
+                .items_center()
+                .pl(MINI_MESSAGE_PX)
+                .mt(S1)
+                .mb(S1)
+                .text_xs()
+                .text_color(
+                    cx.theme()
+                        .muted_foreground
+                        .opacity(MINI_MESSAGE_HINT_OPACITY),
+                )
+                .child(hint)
+                .into_any_element();
+        }
+
         let muted_fg = cx.theme().muted_foreground;
         let success = cx.theme().success;
         let muted_bg = cx.theme().muted;
@@ -214,6 +242,7 @@ impl AiApp {
                         )
                     }),
             )
+            .into_any_element()
     }
 }
 

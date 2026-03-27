@@ -42,6 +42,7 @@ fn ai_should_render_streaming_cursor(
 impl AiApp {
     pub(super) fn render_streaming_content(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let colors = theme::PromptColors::from_theme(&crate::theme::get_cached_theme());
+        let is_mini = self.window_mode.is_mini();
         // No background for assistant streaming content (transparent, matching message style)
         let show_streaming_cursor = ai_should_render_streaming_cursor(
             self.is_streaming,
@@ -80,7 +81,13 @@ impl AiApp {
                 .child(
                     div()
                         .text_sm()
-                        .text_color(cx.theme().muted_foreground)
+                        .text_color(if is_mini {
+                            cx.theme()
+                                .muted_foreground
+                                .opacity(MINI_STREAMING_TEXT_OPACITY)
+                        } else {
+                            cx.theme().muted_foreground
+                        })
                         .child(thinking_label),
                 )
                 .child({
@@ -188,47 +195,65 @@ impl AiApp {
             .flex_col()
             .w_full()
             .mb(S3)
-            .child({
-                // Model name for display in streaming header
+            // Full mode: Assistant header row with model name and elapsed time.
+            // Mini mode: skip the header entirely for a quieter surface.
+            .when(!is_mini, |d| {
                 let model_label: Option<SharedString> = self
                     .selected_model
                     .as_ref()
                     .map(|m| SharedString::from(m.display_name.clone()));
 
-                // Role label matching render_message style
-                div().flex().items_center().justify_between().mb(S2).child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap(S2)
-                        .child(
-                            div()
-                                .text_xs()
-                                .font_weight(gpui::FontWeight::MEDIUM)
-                                .text_color(cx.theme().muted_foreground.opacity(OPACITY_STRONG))
-                                .child("Assistant"),
-                        )
-                        .when_some(model_label, |d, label| {
-                            d.child(
+                d.child(
+                    div().flex().items_center().justify_between().mb(S2).child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap(S2)
+                            .child(
                                 div()
                                     .text_xs()
+                                    .font_weight(gpui::FontWeight::MEDIUM)
                                     .text_color(
-                                        cx.theme().muted_foreground.opacity(OPACITY_SELECTED),
+                                        cx.theme().muted_foreground.opacity(OPACITY_STRONG),
                                     )
-                                    .child(label),
+                                    .child("Assistant"),
                             )
-                        })
-                        .when(show_elapsed, |d| {
-                            d.child(
-                                div()
-                                    .text_xs()
-                                    .text_color(cx.theme().muted_foreground.opacity(OPACITY_MUTED))
-                                    .child(elapsed_label),
-                            )
-                        }),
+                            .when_some(model_label, |d, label| {
+                                d.child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(
+                                            cx.theme()
+                                                .muted_foreground
+                                                .opacity(OPACITY_SELECTED),
+                                        )
+                                        .child(label),
+                                )
+                            })
+                            .when(show_elapsed, |d| {
+                                d.child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(
+                                            cx.theme().muted_foreground.opacity(OPACITY_MUTED),
+                                        )
+                                        .child(elapsed_label),
+                                )
+                            }),
+                    ),
                 )
             })
-            .child(div().w_full().px(MSG_PX).py(MSG_PY).child(content_element))
+            .child(
+                div()
+                    .w_full()
+                    .when(is_mini, |d| {
+                        d.px(MINI_MESSAGE_PX)
+                            .py(MINI_MESSAGE_PY)
+                            .bg(cx.theme().muted.opacity(MINI_MESSAGE_ASSISTANT_BG_OPACITY))
+                    })
+                    .when(!is_mini, |d| d.px(MSG_PX).py(MSG_PY))
+                    .child(content_element),
+            )
     }
 
     /// Render a streaming error row with a retry button and contextual help.

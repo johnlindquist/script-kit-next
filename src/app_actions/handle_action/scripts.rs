@@ -67,6 +67,16 @@ impl ScriptListApp {
                 self.execute_selected(cx);
                 DispatchOutcome::success()
             }
+            "toggle_info" => {
+                tracing::info!(
+                    category = "UI",
+                    trace_id = %trace_id,
+                    event = "toggle_info_action",
+                    "Toggle info panel action"
+                );
+                self.toggle_info_panel(cx);
+                DispatchOutcome::success()
+            }
             "view_logs" => {
                 tracing::info!(category = "UI", "view logs action");
                 self.toggle_logs(cx);

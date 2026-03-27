@@ -225,6 +225,31 @@ mod ai_window_mode_tests {
         assert_eq!(MINI_MESSAGE_PX, px(12.0));
         assert_eq!(MINI_MESSAGE_PY, px(2.0));
         assert_eq!(MINI_MESSAGE_GAP, px(8.0));
+
+        // Whisper message tokens
+        assert!((MINI_MESSAGE_USER_BG_OPACITY - 0.06).abs() < f32::EPSILON);
+        assert!((MINI_MESSAGE_ASSISTANT_BG_OPACITY - 0.03).abs() < f32::EPSILON);
+        assert!((MINI_MESSAGE_META_OPACITY - 0.72).abs() < f32::EPSILON);
+        assert!((MINI_MESSAGE_HINT_OPACITY - 0.42).abs() < f32::EPSILON);
+        assert!((MINI_STREAMING_TEXT_OPACITY - 0.40).abs() < f32::EPSILON);
+
+        // Whisper titlebar tokens
+        assert!((MINI_TITLEBAR_TITLE_OPACITY - 0.55).abs() < f32::EPSILON);
+        assert!((MINI_TITLEBAR_ACTION_OPACITY - 0.45).abs() < f32::EPSILON);
+        assert!((MINI_TITLEBAR_BORDER_OPACITY - 0.06).abs() < f32::EPSILON);
+
+        // Whisper composer tokens
+        assert!((MINI_COMPOSER_BG_OPACITY - 0.03).abs() < f32::EPSILON);
+        assert!((MINI_COMPOSER_BORDER_OPACITY - 0.08).abs() < f32::EPSILON);
+        assert!((MINI_COMPOSER_HINT_STRIP_OPACITY - 0.38).abs() < f32::EPSILON);
+
+        // Whisper welcome tokens
+        assert!((MINI_WELCOME_ICON_OPACITY - 0.35).abs() < f32::EPSILON);
+        assert!((MINI_WELCOME_HOVER_OPACITY - 0.04).abs() < f32::EPSILON);
+        assert!((MINI_WELCOME_HEADING_OPACITY - 0.40).abs() < f32::EPSILON);
+        assert!((MINI_WELCOME_TITLE_OPACITY - 0.72).abs() < f32::EPSILON);
+        assert!((MINI_WELCOME_BADGE_BG_OPACITY - 0.04).abs() < f32::EPSILON);
+        assert!((MINI_WELCOME_BADGE_TEXT_OPACITY - 0.38).abs() < f32::EPSILON);
     }
 
     #[test]
@@ -275,6 +300,34 @@ pub(super) const MINI_HINT_TEXT_OPACITY: f32 = 0.45;
 pub(super) const MINI_MESSAGE_PX: Pixels = px(12.0);
 pub(super) const MINI_MESSAGE_PY: Pixels = px(2.0);
 pub(super) const MINI_MESSAGE_GAP: Pixels = px(8.0);
+
+// -- Mini titlebar whisper tokens --
+/// Resting opacity for mini titlebar title text — lighter weight than full mode.
+pub(super) const MINI_TITLEBAR_TITLE_OPACITY: f32 = 0.55;
+/// Resting opacity for mini titlebar quick-action icon buttons.
+pub(super) const MINI_TITLEBAR_ACTION_OPACITY: f32 = 0.45;
+/// Opacity for the mini titlebar bottom border — barely visible.
+pub(super) const MINI_TITLEBAR_BORDER_OPACITY: f32 = 0.06;
+
+// -- Mini composer whisper tokens --
+/// Background opacity for the mini composer input area (near-transparent).
+pub(super) const MINI_COMPOSER_BG_OPACITY: f32 = 0.03;
+/// Border opacity for the mini composer — bottom-only hairline.
+pub(super) const MINI_COMPOSER_BORDER_OPACITY: f32 = 0.08;
+/// Opacity for the shortcut hint strip below the mini composer (fades after first send).
+pub(super) const MINI_COMPOSER_HINT_STRIP_OPACITY: f32 = 0.38;
+
+// -- Mini message whisper tokens --
+/// Mini user message background — barely-there tint (full mode uses 0.18).
+pub(super) const MINI_MESSAGE_USER_BG_OPACITY: f32 = 0.06;
+/// Mini assistant message background — near-invisible (full mode uses 0.10).
+pub(super) const MINI_MESSAGE_ASSISTANT_BG_OPACITY: f32 = 0.03;
+/// Opacity for hover-revealed metadata (timestamps, action icons) in mini mode.
+pub(super) const MINI_MESSAGE_META_OPACITY: f32 = 0.72;
+/// Opacity for the single-line hint strip replacing the action button slab in mini mode.
+pub(super) const MINI_MESSAGE_HINT_OPACITY: f32 = 0.42;
+/// Opacity for streaming "Thinking with…" text in mini mode.
+pub(super) const MINI_STREAMING_TEXT_OPACITY: f32 = 0.40;
 /// Number of welcome suggestions shown in mini mode (fewer to fit compact height).
 pub(super) const MINI_SUGGESTION_COUNT: usize = 2;
 /// Number of welcome suggestions shown in full mode.
@@ -286,6 +339,18 @@ pub(super) const MINI_WELCOME_MAX_W: Pixels = px(480.);
 pub(super) const MINI_WELCOME_ICON_CONTAINER: Pixels = px(28.);
 /// Icon size within mini welcome suggestion rows.
 pub(super) const MINI_WELCOME_ICON_SIZE: Pixels = px(14.);
+/// Opacity for mini welcome suggestion icon — quieter than full mode accent.
+pub(super) const MINI_WELCOME_ICON_OPACITY: f32 = 0.35;
+/// Opacity for mini welcome suggestion row hover background — barely-there.
+pub(super) const MINI_WELCOME_HOVER_OPACITY: f32 = 0.04;
+/// Opacity for mini welcome heading text — softer than muted text.
+pub(super) const MINI_WELCOME_HEADING_OPACITY: f32 = 0.40;
+/// Opacity for mini welcome suggestion title text — slightly subdued.
+pub(super) const MINI_WELCOME_TITLE_OPACITY: f32 = 0.72;
+/// Opacity for mini welcome keyboard badge background — near-invisible.
+pub(super) const MINI_WELCOME_BADGE_BG_OPACITY: f32 = 0.04;
+/// Opacity for mini welcome keyboard badge text.
+pub(super) const MINI_WELCOME_BADGE_TEXT_OPACITY: f32 = 0.38;
 
 // -- Mini history panel header --
 /// Height of the compact header inside the mini history overlay panel.

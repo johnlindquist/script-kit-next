@@ -121,6 +121,17 @@
                             }
                         }
 
+                        // Handle Cmd+I to toggle info panel in ScriptList
+                        // Must be intercepted here because the Input component has focus
+                        if has_cmd && key.eq_ignore_ascii_case("i") && !has_shift
+                            && matches!(this.current_view, AppView::ScriptList)
+                        {
+                            logging::log("KEY", "Interceptor: Cmd+I -> toggle_info (ScriptList)");
+                            this.toggle_info_panel(cx);
+                            cx.stop_propagation();
+                            return;
+                        }
+
                         // Handle Cmd+Shift+K for add_shortcut in ScriptList
                         if has_cmd && key.eq_ignore_ascii_case("k") && has_shift
                             && matches!(this.current_view, AppView::ScriptList)

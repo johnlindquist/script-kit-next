@@ -22,6 +22,7 @@ test = false
 name = "storybook"
 path = "src/bin/storybook.rs"
 test = false
+required-features = ["storybook"]
 
 [dependencies]
 gpui = { path = "vendor/gpui" }
@@ -166,9 +167,13 @@ ocr = []
 # Enables key event timing, scroll timing, and rate logging
 # Run with: cargo build --features perf
 perf = []
+# Storybook design explorer (disabled by default to speed up dev builds)
+# Run with: cargo run --bin storybook --features storybook
+storybook = []
 
 [dev-dependencies]
 tree-sitter-highlight = "0.25.4"
+temp-env = "0.3.6"
 
 [profile.dev]
 debug = 1

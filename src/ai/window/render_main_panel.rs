@@ -196,7 +196,8 @@ impl AiApp {
                                 .child(self.render_pending_image_preview(cx)),
                         )
                     })
-                    // Composer row: input + inline submit/stop button
+                    // Composer row: borderless input + inline submit/stop button
+                    // Whisper: no rounded border container, just a subtle bottom hairline
                     .child(
                         div()
                             .id("ai-mini-composer")
@@ -209,9 +210,7 @@ impl AiApp {
                             .py(S2)
                             .gap(S2)
                             .rounded(R_LG)
-                            .border_1()
-                            .border_color(cx.theme().border.opacity(OPACITY_SELECTED))
-                            .bg(cx.theme().muted.opacity(OPACITY_DISABLED))
+                            .bg(cx.theme().muted.opacity(MINI_COMPOSER_BG_OPACITY))
                             .child(self.render_input_with_cursor(cx))
                             // Inline submit/stop at right edge of composer
                             .child(if self.is_streaming {
@@ -300,7 +299,28 @@ impl AiApp {
                                     )
                                     .into_any_element()
                             }),
-                    ),
+                    )
+                    // Shortcut hint strip — visible until first successful send
+                    .when(!self.mini_composer_hint_dismissed, |d| {
+                        d.child(
+                            div()
+                                .id("ai-mini-composer-hints")
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .w_full()
+                                .pt(S1)
+                                .text_xs()
+                                .text_color(
+                                    cx.theme()
+                                        .muted_foreground
+                                        .opacity(MINI_COMPOSER_HINT_STRIP_OPACITY),
+                                )
+                                .child(
+                                    "\u{21b5} Send \u{00b7} \u{2318}\u{21e7}\u{21b5} Send + Context \u{00b7} Esc Dismiss",
+                                ),
+                        )
+                    }),
             )
     }
 

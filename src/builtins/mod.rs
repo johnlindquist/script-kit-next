@@ -248,8 +248,8 @@ pub enum BuiltInFeature {
     WindowSwitcher,
     /// Design gallery for viewing separator and icon variations
     DesignGallery,
-    /// In-app StoryBrowser compare/adopt tool (debug builds only)
-    #[cfg(debug_assertions)]
+    /// In-app StoryBrowser compare/adopt tool (storybook feature only)
+    #[cfg(feature = "storybook")]
     DesignExplorer,
     /// AI Chat window for conversing with AI assistants
     AiChat,
@@ -534,6 +534,21 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             ));
             debug!("Added Design Gallery built-in entry");
 
+            // Test Confirmation entry for testing confirmation UI
+            entries.push(BuiltInEntry::new_with_icon(
+                "builtin-test-confirmation",
+                "Test Confirmation",
+                "Open the confirmation dialog test tool (dev only)",
+                vec!["test", "confirmation", "dev", "debug"],
+                BuiltInFeature::SystemAction(SystemActionType::TestConfirmation),
+                "🧪",
+            ));
+            debug!("Added Test Confirmation built-in entry");
+        }
+
+        // Design Explorer is only available when storybook feature is enabled
+        #[cfg(feature = "storybook")]
+        {
             entries.push(BuiltInEntry::new_with_icon(
                 "builtin-design-explorer",
                 "Design Explorer",
@@ -551,17 +566,6 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
                 "🧪",
             ));
             debug!("Added Design Explorer built-in entry");
-
-            // Test Confirmation entry for testing confirmation UI
-            entries.push(BuiltInEntry::new_with_icon(
-                "builtin-test-confirmation",
-                "Test Confirmation",
-                "Open the confirmation dialog test tool (dev only)",
-                vec!["test", "confirmation", "dev", "debug"],
-                BuiltInFeature::SystemAction(SystemActionType::TestConfirmation),
-                "🧪",
-            ));
-            debug!("Added Test Confirmation built-in entry");
         }
 
         // =========================================================================

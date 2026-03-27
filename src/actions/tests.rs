@@ -49,3 +49,7 @@ mod core_tests;
 #[cfg(test)]
 #[path = "context_action_contract_tests.rs"]
 mod context_action_contract_tests;
+
+#[cfg(test)]
+#[path = "info_action_context_split_tests.rs"]
+mod info_action_context_split_tests;
