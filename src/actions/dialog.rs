@@ -434,9 +434,7 @@ impl ActionsDialog {
     /// scrollbars, click handlers) but this model serves as the verified
     /// bridge between the two surfaces.
     #[cfg(feature = "storybook")]
-    pub fn build_presentation_model(
-        &self,
-    ) -> crate::storybook::ActionsDialogPresentationModel {
+    pub fn build_presentation_model(&self) -> crate::storybook::ActionsDialogPresentationModel {
         let search_placeholder = self.search_placeholder_text();
         let show_search =
             !matches!(self.config.search_position, SearchPosition::Hidden) && !self.hide_search;
@@ -446,11 +444,11 @@ impl ActionsDialog {
             .grouped_items
             .iter()
             .filter_map(|grouped_item| match grouped_item {
-                GroupedActionItem::SectionHeader(label) => {
-                    Some(crate::storybook::ActionsDialogPresentationItem::SectionHeader(
+                GroupedActionItem::SectionHeader(label) => Some(
+                    crate::storybook::ActionsDialogPresentationItem::SectionHeader(
                         SharedString::from(label.clone()),
-                    ))
-                }
+                    ),
+                ),
                 GroupedActionItem::Item(filter_idx) => {
                     let action_idx = *self.filtered_actions.get(*filter_idx)?;
                     let action = self.actions.get(action_idx)?;
@@ -2110,13 +2108,12 @@ impl Render for ActionsDialog {
                                             },
                                         );
 
-                                        let selection_dot_color = if design_variant
-                                            == DesignVariant::Default
-                                        {
-                                            rgb(this.theme.colors.accent.selected)
-                                        } else {
-                                            rgb(item_colors.accent)
-                                        };
+                                        let selection_dot_color =
+                                            if design_variant == DesignVariant::Default {
+                                                rgb(this.theme.colors.accent.selected)
+                                            } else {
+                                                rgb(item_colors.accent)
+                                            };
 
                                         // Inner row with pill-style selection
                                         let on_select = this.on_select.clone();
@@ -2170,20 +2167,21 @@ impl Render for ActionsDialog {
                                         } else {
                                             8.0
                                         };
-                                        let mut left_side =
-                                            div().flex().flex_row().items_center().gap(px(left_gap));
+                                        let mut left_side = div()
+                                            .flex()
+                                            .flex_row()
+                                            .items_center()
+                                            .gap(px(left_gap));
 
                                         if style.selection_opacity == 0.0 {
                                             left_side = left_side.child(
-                                                div()
-                                                    .w(px(5.0))
-                                                    .h(px(5.0))
-                                                    .rounded(px(3.0))
-                                                    .bg(if is_selected {
+                                                div().w(px(5.0)).h(px(5.0)).rounded(px(3.0)).bg(
+                                                    if is_selected {
                                                         selection_dot_color
                                                     } else {
                                                         gpui::transparent_black().into()
-                                                    }),
+                                                    },
+                                                ),
                                             );
                                         }
 
@@ -2232,7 +2230,8 @@ impl Render for ActionsDialog {
                                         if style.mono_font {
                                             title = title.font_family(crate::list_item::FONT_MONO);
                                         }
-                                        text_stack = text_stack.child(title.child(action.title.clone()));
+                                        text_stack =
+                                            text_stack.child(title.child(action.title.clone()));
 
                                         if let Some(description) =
                                             action_subtitle_for_display(action)
@@ -2246,11 +2245,11 @@ impl Render for ActionsDialog {
                                                 })
                                                 .text_ellipsis();
                                             if style.mono_font {
-                                                subtitle =
-                                                    subtitle.font_family(crate::list_item::FONT_MONO);
+                                                subtitle = subtitle
+                                                    .font_family(crate::list_item::FONT_MONO);
                                             }
-                                            text_stack =
-                                                text_stack.child(subtitle.child(description.to_string()));
+                                            text_stack = text_stack
+                                                .child(subtitle.child(description.to_string()));
                                         }
 
                                         left_side = left_side.child(text_stack);
@@ -2273,12 +2272,16 @@ impl Render for ActionsDialog {
                                                         .child(shortcut.clone());
                                                     if style.mono_font {
                                                         shortcut_label = shortcut_label
-                                                            .font_family(crate::list_item::FONT_MONO);
+                                                            .font_family(
+                                                                crate::list_item::FONT_MONO,
+                                                            );
                                                     }
                                                     content = content.child(shortcut_label);
                                                 } else {
                                                     let keycaps =
-                                                        ActionsDialog::parse_shortcut_keycaps(shortcut);
+                                                        ActionsDialog::parse_shortcut_keycaps(
+                                                            shortcut,
+                                                        );
                                                     let mut keycap_row = div()
                                                         .flex()
                                                         .flex_row()
@@ -2334,7 +2337,9 @@ impl Render for ActionsDialog {
                                                 .border_color(section_separator_color);
                                         }
 
-                                        action_row.child(inner_row.child(content)).into_any_element()
+                                        action_row
+                                            .child(inner_row.child(content))
+                                            .into_any_element()
                                     } else {
                                         // Fallback for missing action
                                         div().h(px(style.row_height)).into_any_element()

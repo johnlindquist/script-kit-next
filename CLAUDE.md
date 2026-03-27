@@ -370,18 +370,78 @@ Script Kit is a sharp tool, not a playground. It respects the user's time and at
 
 ### Aesthetic Direction
 - **Reference:** Raycast — clean launcher with macOS vibrancy, polished transitions, keyboard-first interaction, information-dense but not cluttered
-- **Anti-references:** Electron apps with visible latency, over-decorated dashboards, anything that feels like a web page pretending to be native
+- **Anti-references:** Electron apps with visible latency, over-decorated dashboards, anything that feels like a web page pretending to be native. Hover-dependent UIs that hide functionality behind mouse discovery.
 - **Theme:** Dark mode primary with native macOS vibrancy (popover blur). Semi-transparent backgrounds let the desktop bleed through. Light mode supported but secondary
 - **Visual tone:** Native macOS feel — if Apple made a scriptable launcher, it would look like this. Precision over personality
 
 ### Design Principles
 
-1. **Speed is the design** — Every pixel serves instant comprehension. If an element slows the user down (visually or mechanically), remove it. Sub-frame response to input is non-negotiable.
+1. **Three keys, nothing more** — The footer shows at most three affordances: Run (Enter), Actions (⌘K), AI (Tab). If it doesn't fit in three slots, it belongs in the Actions dialog, not the chrome. This applies universally across all windows and surfaces.
 
-2. **Keyboard-first, always** — The mouse is a fallback. Every interaction must be reachable and obvious via keyboard. Visual affordances should reinforce keyboard shortcuts, not compete with them.
+2. **Discovery lives in Actions** — Features, commands, and contextual operations are discoverable through the Actions dialog (⌘K), not through persistent chrome, hover states, or tooltips. The main surface stays clean; ⌘K is the single entry point for "what can I do here?"
 
-3. **Quiet confidence** — Use restraint. One accent color (gold). One font stack (system). Subtle opacity shifts over hard borders. Let vibrancy and spacing do the work instead of decoration.
+3. **Peek, don't clutter** — For list-only surfaces, detail lives behind ⌘I (info/peek). Press to see, Esc to return. No inline expansion, no hover cards, no progressive disclosure on mouse. Exception: when the preview IS the experience (clipboard content, file preview, live theme swatch), a split panel is justified — see Surface Layouts below.
 
-4. **Native or nothing** — Respect macOS conventions. Vibrancy, system fonts, PopUp panel behavior, proper focus/unfocus dimming. Users should forget they're in a third-party app.
+4. **Whisper chrome** — UI surfaces use ultra-low opacity (0.03–0.06 at rest). Borders are hairline or absent. Backgrounds are barely perceptible. Content gets full opacity; everything else fades to near-invisible. Let vibrancy and spacing define structure, not boxes and dividers.
 
-5. **Information density without clutter** — Show everything the user needs in a single glance. Use typography hierarchy (weight, size, opacity) to create visual layers, not boxes and dividers.
+5. **Speed is the design** — Every pixel serves instant comprehension. If an element slows the user down (visually or mechanically), remove it. Sub-frame response to input is non-negotiable.
+
+6. **Keyboard-first, always** — The mouse is a fallback. Every interaction must be reachable and obvious via keyboard. Visual affordances reinforce keyboard shortcuts, not compete with them.
+
+7. **Native or nothing** — Respect macOS conventions. Vibrancy, system fonts, PopUp panel behavior, proper focus/unfocus dimming. Users should forget they're in a third-party app.
+
+### List Item Anatomy
+
+**Unfocused row:** Icon + name. Right-aligned metadata in hint opacity: keyboard shortcuts (^⇧S), snippet triggers (!mixed), scriptlet actions (open, paste). No description. No borders. No row dividers.
+
+**Focused row:** Gold left-bar accent (#fbbf24). Name promoted to full opacity. Description subtitle revealed below name in muted opacity. Right-aligned metadata tags (action type, target app) in muted opacity. Background is a subtle ghost-opacity highlight — no hard selection box.
+
+**Section headers:** Uppercase label + item count. Hint opacity. Section icon left-aligned. No separator lines — spacing alone defines groups.
+
+**Footer:** Exactly `↵ Run · ⌘K Actions · Tab AI`. Hint opacity. Right-aligned. Nothing else.
+
+### Surface Layouts
+
+#### The Decision Rule
+
+**Ask: "Is the list item the content, or a label pointing at content?"**
+
+- If the name IS the thing (a script, an app, a process, an emoji) → **Mini view**. ⌘I shows configuration/metadata — useful but not required to choose.
+- If the name is a LABEL for content you can't see (a clipboard entry, a file, a theme) → **Expanded view**. You can't confidently select without seeing what it points to.
+
+**Litmus test:** If you deleted the preview panel and a user said "I can still pick the right one" → mini. If they said "I'm guessing now" → expanded.
+
+**Mini view** (main menu, app launcher, process manager, favorites, AI presets): Single column. Mini list anatomy. ⌘I info shows configuration, metadata, settings.
+
+**Expanded view** (clipboard history, file search, window switcher, theme chooser): List + preview split. Rules:
+- List side follows mini list anatomy (icon + name, gold bar, no row dividers)
+- Preview side is chromeless — content flush, no wrapping borders or headers
+- Divider between panels: hairline or spacing only
+- Footer still follows three-key pattern
+
+**Editor** (code editor prompt): Justified exception — full editor surface. Footer simplifies to three-key hint strip.
+
+**Grid** (emoji picker, icon browsers): Correct layout when content is inherently visual and high-density. You scan emoji by shape, not name. Keep the grid; apply mini chrome to the surrounding shell (bare input, hint strip footer).
+
+### Actions Dialog (⌘K)
+
+The single discovery surface. Must feel like a natural extension of the main list — same visual language.
+
+**Container:** No rounded corners. Sharp edges matching the main window. A panel, not a modal card.
+
+**Row anatomy:** Same as main list — action name left, shortcut glyphs right-aligned. No row dividers. Focused row gets gold bar + ghost-opacity background. Destructive actions use red text + red-tinted glyphs.
+
+**Shortcut glyphs:** Separated key-cap style (individual ⌘ ⇧ K boxes), NOT inline text (^⇧K). Render **smaller** than current — secondary to the action name. Hint opacity for glyph background, muted opacity for glyph text.
+
+**Section headers:** Uppercase category labels in hint opacity. No separator lines — spacing defines groups.
+
+**Search input:** Bare, no border, gold cursor. Same as main menu input.
+
+### Opacity Tiers
+
+| Tier | Range | Use |
+|------|-------|-----|
+| **Ghost** | 0.03–0.06 | Surfaces, dividers, inactive backgrounds — barely visible, defines space without drawing attention |
+| **Hint** | 0.40–0.55 | Secondary labels, shortcut hints, inactive icons — readable but recessive |
+| **Muted** | 0.60–0.75 | Metadata, timestamps, descriptions — clearly readable, not competing with primary content |
+| **Present** | 0.85–1.0 | Primary content, active controls, focused elements — full visual weight |

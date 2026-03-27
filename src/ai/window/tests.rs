@@ -3125,9 +3125,7 @@ fn test_mini_composer_hint_dismissal_is_wired_into_both_successful_send_paths() 
         .expect("submit_message must clear the composer after a successful send");
     let submit_after = &submit_source[submit_clear..];
     assert!(
-        submit_after.contains(
-            "self.dismiss_mini_composer_hint_if_needed(\"submit_message\", cx);"
-        ),
+        submit_after.contains("self.dismiss_mini_composer_hint_if_needed(\"submit_message\", cx);"),
         "submit_message must dismiss the mini composer hint after a successful send"
     );
 
@@ -3137,9 +3135,8 @@ fn test_mini_composer_hint_dismissal_is_wired_into_both_successful_send_paths() 
         .expect("handle_start_chat must clear the composer after creating a chat");
     let chat_after = &chat_source[chat_clear..];
     assert!(
-        chat_after.contains(
-            "self.dismiss_mini_composer_hint_if_needed(\"handle_start_chat\", cx);"
-        ),
+        chat_after
+            .contains("self.dismiss_mini_composer_hint_if_needed(\"handle_start_chat\", cx);"),
         "handle_start_chat must dismiss the mini composer hint for the SDK/start-chat path too"
     );
 }

@@ -389,6 +389,11 @@ impl ScriptListApp {
                                                     app.cached_file_results.push(r);
                                                 }
 
+                                                // Keep the rendered list in sync with streaming
+                                                // batches so results become visible immediately
+                                                // instead of waiting for the final Done event.
+                                                app.recompute_file_search_display_indices();
+
                                                 if is_done {
                                                     app.file_search_loading = false;
                                                     // Clear frozen filter - now using real results
@@ -518,6 +523,10 @@ impl ScriptListApp {
                                         for r in batch {
                                             app.cached_file_results.push(r);
                                         }
+
+                                        // Recompute the rendered ordering for each batch so the
+                                        // visible list updates while the search is still streaming.
+                                        app.recompute_file_search_display_indices();
 
                                         if is_done {
                                             logging::log(
