@@ -199,11 +199,13 @@ impl ScriptListApp {
         let list_element: AnyElement = if filtered_choices_len == 0 {
             div()
                 .w_full()
-                .py(px(design_spacing.padding_xl))
-                .text_center()
+                .h(px(crate::list_item::LIST_ITEM_HEIGHT))
+                .px(px(design_spacing.padding_md))
+                .flex()
+                .items_center()
                 .text_color(rgb(text_muted))
                 .font_family(design_typography.font_family)
-                .child("No choices match your filter · press Enter to use typed value")
+                .child("No matches · Enter to submit typed value")
                 .into_any_element()
         } else {
             // P0: Use uniform_list for virtualized scrolling of arg choices
@@ -291,17 +293,15 @@ impl ScriptListApp {
             div()
                 .flex()
                 .flex_col()
+                .flex_1()
+                .min_h(px(0.))
                 .w_full()
-                .py(px(design_spacing.padding_xs))
                 .child(list_element)
         } else {
             div()
         };
 
-        let leading = arg_prompt_leading_status(has_choices, filtered_choices_len, input_is_empty)
-            .map(|status| {
-                crate::components::render_hint_strip_leading_text(status, text_primary)
-            });
+        let leading: Option<gpui::AnyElement> = None;
 
         crate::components::render_minimal_list_prompt_shell(
             design_visual.radius_lg,

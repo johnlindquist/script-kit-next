@@ -233,14 +233,6 @@ enum ArgSubmitOutcome {
     InvalidEmpty,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum ArgHelperStatus {
-    NavigateChoices,
-    NoMatchesSubmitTypedValue,
-    TypeValueToContinue,
-    SubmitTypedValue,
-}
-
 #[inline]
 fn resolve_arg_submit_outcome(
     selected_choice_value: Option<&str>,
@@ -255,43 +247,6 @@ fn resolve_arg_submit_outcome(
     }
 
     ArgSubmitOutcome::SubmitText(input_text.to_string())
-}
-
-#[inline]
-fn resolve_arg_helper_status(
-    has_choices: bool,
-    filtered_choices_len: usize,
-    input_is_empty: bool,
-) -> ArgHelperStatus {
-    if has_choices && filtered_choices_len > 0 {
-        return ArgHelperStatus::NavigateChoices;
-    }
-
-    if has_choices && !input_is_empty {
-        return ArgHelperStatus::NoMatchesSubmitTypedValue;
-    }
-
-    if input_is_empty {
-        return ArgHelperStatus::TypeValueToContinue;
-    }
-
-    ArgHelperStatus::SubmitTypedValue
-}
-
-#[inline]
-fn arg_helper_status_text(status: ArgHelperStatus) -> String {
-    match status {
-        ArgHelperStatus::NavigateChoices => {
-            running_status_text("use ↑/↓ to choose, Enter to continue")
-        }
-        ArgHelperStatus::NoMatchesSubmitTypedValue => {
-            running_status_text("no matches · Enter submits typed value")
-        }
-        ArgHelperStatus::TypeValueToContinue => running_status_text("type a value and press Enter"),
-        ArgHelperStatus::SubmitTypedValue => {
-            running_status_text("press Enter to submit typed value")
-        }
-    }
 }
 
 #[inline]
@@ -325,22 +280,6 @@ fn arg_prompt_hints(has_actions: bool) -> Vec<gpui::SharedString> {
     }
 
     hints
-}
-
-#[inline]
-fn arg_prompt_leading_status(
-    has_choices: bool,
-    filtered_choices_len: usize,
-    input_is_empty: bool,
-) -> Option<gpui::SharedString> {
-    Some(
-        arg_helper_status_text(resolve_arg_helper_status(
-            has_choices,
-            filtered_choices_len,
-            input_is_empty,
-        ))
-        .into(),
-    )
 }
 
 impl ScriptListApp {

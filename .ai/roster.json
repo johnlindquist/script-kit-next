@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-03-27T07:56:02.861Z",
+  "updatedAt": "2026-03-27T17:35:46.059Z",
   "agents": {
     "adoption-system-a1": {
       "id": "adoption-system-a1",
@@ -64,6 +64,56 @@
           "src/storybook/adoption.rs",
           "src/storybook/mod.rs",
           "src/storybook/selection.rs"
+        ]
+      },
+      "claimed_at": {}
+    },
+    "escape-to-mini-a1": {
+      "id": "escape-to-mini-a1",
+      "kind": "codex",
+      "mode": "exec",
+      "model": "openai/gpt-5.4",
+      "task": "When pressing Escape in various UI views (clipboard history, file search, and any other built-in views), the app returns to the old full-size main menu instead of the new mini main menu. Fix ALL such views so that Escape returns to the mini main menu and collapses the window width/size back to the mini main menu dimensions.\n\nKey architecture context from CLAUDE.md:\n- Built-in commands: BuiltInFeature enum in src/builtins/mod.rs → get_builtin_entries() → execute_builtin() in src/app_execute/builtin_execution.rs → AppView variant in src/main_sections/app_view_state.rs → render dispatch in src/main_sections/render_impl.rs\n- App navigation lives in src/app_navigation/\n- App state in src/main_sections/app_state.rs\n- Render dispatch in src/main_sections/render_impl.rs\n- Non-dismissable views: is_dismissable_view() in src/app_impl/shortcuts_hud_grid.rs\n- The mini main menu likely has its own AppView variant and window size configuration\n- Look for escape/dismiss handlers that navigate back to the main menu and ensure they go to the MINI variant instead\n- Also ensure the window resizes to mini dimensions when returning to mini main menu\n- include!() files share main.rs scope — no top-level use statements in those files\n- Verification: cargo check && cargo clippy --all-targets -- -D warnings && cargo test",
+      "scope": "src/app_navigation/**,src/main_sections/**,src/app_impl/**,src/app_execute/**,src/builtins/**,src/render_prompts/**,src/prompts/**",
+      "readonly": false,
+      "status": "needs_split",
+      "claims": [],
+      "createdAt": "2026-03-27T17:26:56.647Z",
+      "lastSeenAt": "2026-03-27T17:35:46.059Z",
+      "host": "Johns-MacBook-Pro.local",
+      "startSha": "cdca97c17ad4a2f394fe5701fc9558aa9e000c9b",
+      "notes": "[policy] tests failed",
+      "report": {
+        "schema": "opex.agent_report.v1",
+        "agentId": "escape-to-mini-a1",
+        "taskSummary": "Updated shared and direct Escape/cancel return paths so built-in views go back to the mini main menu and collapse the window back to mini dimensions.",
+        "tests": [
+          {
+            "cmd": "cargo check",
+            "result": "pass"
+          },
+          {
+            "cmd": "cargo clippy --all-targets -- -D warnings",
+            "result": "fail"
+          },
+          {
+            "cmd": "cargo test",
+            "result": "fail"
+          }
+        ],
+        "changedFiles": [
+          "src/app_impl/lifecycle_reset.rs",
+          "src/app_impl/naming_dialog.rs",
+          "src/render_prompts/other.rs"
+        ],
+        "commitCount": 1,
+        "commitShas": [
+          "ed1e2d2aad7aa34adc1c470491b110da2f00948d"
+        ],
+        "commitFiles": [
+          "src/app_impl/lifecycle_reset.rs",
+          "src/app_impl/naming_dialog.rs",
+          "src/render_prompts/other.rs"
         ]
       },
       "claimed_at": {}

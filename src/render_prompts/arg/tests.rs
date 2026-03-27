@@ -117,16 +117,6 @@ mod arg_prompt_render_tests {
     }
 
     #[test]
-    fn test_resolve_arg_helper_status_returns_no_match_hint_when_choices_filtered_out() {
-        let status = resolve_arg_helper_status(true, 0, false);
-        assert_eq!(status, ArgHelperStatus::NoMatchesSubmitTypedValue);
-        assert_eq!(
-            arg_helper_status_text(status),
-            "Script running · no matches · Enter submits typed value"
-        );
-    }
-
-    #[test]
     fn test_resolve_arg_tab_completion_returns_single_choice_when_single_match() {
         let choices = [choice("Alpha", "alpha")];
         let filtered: Vec<(usize, &Choice)> = choices.iter().enumerate().collect();
@@ -253,16 +243,6 @@ mod arg_prompt_render_tests {
     }
 
     #[test]
-    fn arg_prompt_leading_status_reuses_existing_helper_text() {
-        assert_eq!(
-            arg_prompt_leading_status(true, 0, false).map(|s| s.to_string()),
-            Some(arg_helper_status_text(resolve_arg_helper_status(
-                true, 0, false
-            )))
-        );
-    }
-
-    #[test]
     fn arg_prompt_render_uses_shared_shell_not_prompt_footer() {
         let render_source = include_str!("render.rs");
         assert!(
@@ -272,10 +252,6 @@ mod arg_prompt_render_tests {
         assert!(
             render_source.contains("arg_prompt_hints("),
             "arg render should use arg_prompt_hints for hint text"
-        );
-        assert!(
-            render_source.contains("arg_prompt_leading_status("),
-            "arg render should use arg_prompt_leading_status for status text"
         );
         assert!(
             !render_source.contains("PromptFooter::new("),
