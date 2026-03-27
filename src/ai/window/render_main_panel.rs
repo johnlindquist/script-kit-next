@@ -166,10 +166,8 @@ impl AiApp {
                     .id("ai-mini-input-area")
                     .flex()
                     .flex_col()
-                    .border_t_1()
-                    .border_color(cx.theme().border.opacity(OPACITY_BORDER))
                     .px(MSG_PX)
-                    .pt(S2)
+                    .pt(S1)
                     .pb(S3)
                     .gap(S1)
                     .on_drop(cx.listener(|this, paths: &ExternalPaths, _window, cx| {
@@ -206,11 +204,16 @@ impl AiApp {
                             .items_center()
                             .w_full()
                             .min_h(COMPOSER_H)
-                            .px(S3)
-                            .py(S2)
-                            .gap(S2)
-                            .rounded(R_LG)
-                            .bg(cx.theme().muted.opacity(MINI_COMPOSER_BG_OPACITY))
+                            .px(S2)
+                            .py(S1)
+                            .gap(S1)
+                            .border_b_1()
+                            .border_color(
+                                cx.theme()
+                                    .border
+                                    .opacity(MINI_COMPOSER_HAIRLINE_OPACITY),
+                            )
+                            .bg(cx.theme().muted.opacity(MINI_COMPOSER_SURFACE_BG_OPACITY))
                             .child(self.render_input_with_cursor(cx))
                             // Inline submit/stop at right edge of composer
                             .child(if self.is_streaming {
@@ -224,8 +227,15 @@ impl AiApp {
                                     .size(MINI_BTN_SIZE)
                                     .rounded_full()
                                     .cursor_pointer()
-                                    .bg(cx.theme().danger.opacity(OPACITY_HOVER))
-                                    .hover(|el| el.bg(cx.theme().danger.opacity(OPACITY_SELECTED)))
+                                    .text_color(
+                                        cx.theme()
+                                            .danger
+                                            .opacity(MINI_COMPOSER_ACTIVE_ICON_OPACITY),
+                                    )
+                                    .hover(|el| {
+                                        el.bg(cx.theme().danger.opacity(OPACITY_HOVER))
+                                            .text_color(cx.theme().danger)
+                                    })
                                     .on_mouse_down(
                                         gpui::MouseButton::Left,
                                         move |_, _window, cx| {
@@ -242,8 +252,7 @@ impl AiApp {
                                     .child(
                                         svg()
                                             .external_path(LocalIconName::Close.external_path())
-                                            .size(ICON_SM)
-                                            .text_color(cx.theme().foreground),
+                                            .size(ICON_SM),
                                     )
                                     .into_any_element()
                             } else if !input_is_empty {
@@ -257,8 +266,15 @@ impl AiApp {
                                     .size(MINI_BTN_SIZE)
                                     .rounded_full()
                                     .cursor_pointer()
-                                    .bg(cx.theme().primary.opacity(OPACITY_SELECTED))
-                                    .hover(|el| el.bg(cx.theme().primary))
+                                    .text_color(
+                                        cx.theme()
+                                            .accent
+                                            .opacity(MINI_COMPOSER_ACTIVE_ICON_OPACITY),
+                                    )
+                                    .hover(|el| {
+                                        el.bg(cx.theme().accent.opacity(OPACITY_HOVER))
+                                            .text_color(cx.theme().accent)
+                                    })
                                     .on_mouse_down(gpui::MouseButton::Left, move |_, window, cx| {
                                         submit_entity.update(cx, |this, cx| {
                                             super::telemetry::log_ai_ui(
@@ -272,8 +288,7 @@ impl AiApp {
                                     .child(
                                         svg()
                                             .external_path(LocalIconName::ArrowUp.external_path())
-                                            .size(ICON_SM)
-                                            .text_color(cx.theme().primary_foreground),
+                                            .size(ICON_SM),
                                     )
                                     .into_any_element()
                             } else {
@@ -286,16 +301,15 @@ impl AiApp {
                                     .justify_center()
                                     .size(MINI_BTN_SIZE)
                                     .rounded_full()
-                                    .bg(cx.theme().muted.opacity(OPACITY_DISABLED))
+                                    .text_color(
+                                        cx.theme()
+                                            .muted_foreground
+                                            .opacity(OPACITY_DISABLED),
+                                    )
                                     .child(
                                         svg()
                                             .external_path(LocalIconName::ArrowUp.external_path())
-                                            .size(ICON_SM)
-                                            .text_color(
-                                                cx.theme()
-                                                    .muted_foreground
-                                                    .opacity(OPACITY_DISABLED),
-                                            ),
+                                            .size(ICON_SM),
                                     )
                                     .into_any_element()
                             }),

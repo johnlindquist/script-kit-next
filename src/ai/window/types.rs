@@ -243,6 +243,16 @@ mod ai_window_mode_tests {
         assert!((MINI_COMPOSER_BORDER_OPACITY - 0.08).abs() < f32::EPSILON);
         assert!((MINI_COMPOSER_HINT_STRIP_OPACITY - 0.38).abs() < f32::EPSILON);
 
+        // Whisper action-hint reveal tokens
+        assert!((MINI_ACTION_HINT_REVEAL_OPACITY - 0.65).abs() < f32::EPSILON);
+        assert_eq!(MINI_ACTION_HINT_COLLAPSED_H, px(0.));
+        assert_eq!(MINI_ACTION_HINT_REVEALED_H, px(16.));
+
+        // Whisper composer surface tokens
+        assert!((MINI_COMPOSER_SURFACE_BG_OPACITY - 0.03).abs() < f32::EPSILON);
+        assert!((MINI_COMPOSER_HAIRLINE_OPACITY - 0.03).abs() < f32::EPSILON);
+        assert!((MINI_COMPOSER_ACTIVE_ICON_OPACITY - 0.50).abs() < f32::EPSILON);
+
         // Whisper welcome tokens
         assert!((MINI_WELCOME_ICON_OPACITY - 0.35).abs() < f32::EPSILON);
         assert!((MINI_WELCOME_HOVER_OPACITY - 0.04).abs() < f32::EPSILON);
@@ -316,6 +326,22 @@ pub(super) const MINI_COMPOSER_BG_OPACITY: f32 = 0.03;
 pub(super) const MINI_COMPOSER_BORDER_OPACITY: f32 = 0.08;
 /// Opacity for the shortcut hint strip below the mini composer (fades after first send).
 pub(super) const MINI_COMPOSER_HINT_STRIP_OPACITY: f32 = 0.38;
+
+// -- Mini action-hint reveal tokens --
+/// Opacity for the action-hint strip text when revealed on hover.
+pub(super) const MINI_ACTION_HINT_REVEAL_OPACITY: f32 = 0.65;
+/// Height of the action-hint strip when collapsed (hidden, zero height).
+pub(super) const MINI_ACTION_HINT_COLLAPSED_H: Pixels = S0;
+/// Height of the action-hint strip when revealed on hover.
+pub(super) const MINI_ACTION_HINT_REVEALED_H: Pixels = S4;
+
+// -- Mini composer surface tokens --
+/// Background opacity for the flattened mini composer surface (near-transparent hairline).
+pub(super) const MINI_COMPOSER_SURFACE_BG_OPACITY: f32 = 0.03;
+/// Opacity for the mini composer bottom hairline border.
+pub(super) const MINI_COMPOSER_HAIRLINE_OPACITY: f32 = 0.03;
+/// Opacity for active send/stop icons in the mini composer (gold accent or danger).
+pub(super) const MINI_COMPOSER_ACTIVE_ICON_OPACITY: f32 = 0.50;
 
 // -- Mini message whisper tokens --
 /// Mini user message background — barely-there tint (full mode uses 0.18).
