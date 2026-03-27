@@ -741,8 +741,7 @@ mod prompt_layout_shell_tests {
 
     #[test]
     fn prompt_chrome_audit_exception_records_reason() {
-        let audit =
-            super::PromptChromeAudit::exception("webcam_prompt", "media_capture_surface");
+        let audit = super::PromptChromeAudit::exception("webcam_prompt", "media_capture_surface");
         assert_eq!(audit.surface, "webcam_prompt");
         assert_eq!(audit.footer_mode, "prompt_footer");
         assert_eq!(audit.exception_reason, Some("media_capture_surface"));
@@ -858,11 +857,7 @@ mod prompt_layout_shell_tests {
 
     // ── Minimal-chrome source-audit tests for migrated builtins ──────
 
-    fn assert_minimal_surface_source(
-        source: &str,
-        surface: &str,
-        require_header_padding: bool,
-    ) {
+    fn assert_minimal_surface_source(source: &str, surface: &str, require_header_padding: bool) {
         let render_fn_end = source.find("#[cfg(test)]").unwrap_or(source.len());
         let render_code = &source[..render_fn_end];
 
@@ -896,11 +891,7 @@ mod prompt_layout_shell_tests {
     /// Assert that source declares a runtime `PromptChromeAudit` with the given
     /// constructor and surface name literal. The failure message names the
     /// drifting surface so agents can pinpoint which builtin regressed.
-    fn assert_surface_declares_runtime_audit(
-        source: &str,
-        surface: &str,
-        constructor: &str,
-    ) {
+    fn assert_surface_declares_runtime_audit(source: &str, surface: &str, constructor: &str) {
         let ctor = format!("PromptChromeAudit::{constructor}(");
         let surface_literal = format!("\"{surface}\"");
 

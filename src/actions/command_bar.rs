@@ -939,7 +939,9 @@ mod command_bar_config_tests {
     #[test]
     fn command_bar_minimal_configs_hide_footer() {
         assert!(
-            !CommandBarConfig::main_menu_style().dialog_config.show_footer,
+            !CommandBarConfig::main_menu_style()
+                .dialog_config
+                .show_footer,
             "main_menu_style must hide footer for minimal chrome"
         );
         assert!(

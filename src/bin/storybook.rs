@@ -20,8 +20,8 @@
 
 use gpui::*;
 use script_kit_gpui::storybook::{
-    all_stories, save_selected_story_variant, StorybookJsonError, StorybookJsonErrorBody,
-    StoryBrowser,
+    all_stories, save_selected_story_variant, StoryBrowser, StorybookJsonError,
+    StorybookJsonErrorBody,
 };
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -234,15 +234,9 @@ fn main() {
                 eprintln!("  scrollbar        - Scrollbar component");
                 eprintln!("  design-tokens    - Design system tokens");
                 eprintln!("  header-variations - Header component variants");
-                eprintln!(
-                    "  footer-layout-variations - Footer layout variants (compare-ready)"
-                );
-                eprintln!(
-                    "  header-design-variations - Header layout variants (compare-ready)"
-                );
-                eprintln!(
-                    "  actions-window           - Actions dialog variants (compare-ready)"
-                );
+                eprintln!("  footer-layout-variations - Footer layout variants (compare-ready)");
+                eprintln!("  header-design-variations - Header layout variants (compare-ready)");
+                eprintln!("  actions-window           - Actions dialog variants (compare-ready)");
                 std::process::exit(0);
             }
             _ => {}

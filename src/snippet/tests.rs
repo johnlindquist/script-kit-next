@@ -1,8 +1,8 @@
-use super::*;
 use super::analysis::{
     build_hybrid_snippet_plan, contains_explicit_tabstops, max_explicit_tabstop_index,
     HybridSnippetPlanKind,
 };
+use super::*;
 use crate::template_variables::{
     promote_unresolved_variables_to_tabstops, substitute_variables_with_receipt, VariableContext,
 };
@@ -559,8 +559,7 @@ fn hybrid_plan_respects_explicit_tabstops_alongside_variables() {
     let mut ctx = VariableContext::new().with_builtins(false);
     ctx.set("date", "2026-03-26");
 
-    let plan =
-        build_hybrid_snippet_plan("${1|Hi,Hello|} {{name}}, today is ${date}.", &ctx);
+    let plan = build_hybrid_snippet_plan("${1|Hi,Hello|} {{name}}, today is ${date}.", &ctx);
 
     assert_eq!(plan.kind, HybridSnippetPlanKind::InteractiveTemplate);
     assert!(plan.has_explicit_tabstops);

@@ -4,7 +4,10 @@ use super::{main_menu_story_variants, MainMenuVariationId};
 
 #[test]
 fn variation_ids_are_unique() {
-    let ids: HashSet<_> = MainMenuVariationId::ALL.iter().map(|id| id.as_str()).collect();
+    let ids: HashSet<_> = MainMenuVariationId::ALL
+        .iter()
+        .map(|id| id.as_str())
+        .collect();
     assert_eq!(ids.len(), MainMenuVariationId::ALL.len());
 }
 

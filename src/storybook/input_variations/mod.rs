@@ -240,12 +240,7 @@ fn render_underline_field(placeholder: &'static str) -> AnyElement {
                 )
                 .child(render_cursor()),
         )
-        .child(
-            div()
-                .h(px(1.))
-                .w_full()
-                .bg(theme.colors.ui.border.to_rgb()),
-        )
+        .child(div().h(px(1.)).w_full().bg(theme.colors.ui.border.to_rgb()))
         .into_any_element()
 }
 

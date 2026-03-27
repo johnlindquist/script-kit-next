@@ -323,14 +323,10 @@ impl Render for SelectPrompt {
             ]
         };
 
-        let container = crate::components::render_minimal_list_prompt_scaffold(
-            header,
-            content,
-            hints,
-            None,
-        )
-        .id(gpui::ElementId::Name("window:select".into()))
-        .text_color(text_color);
+        let container =
+            crate::components::render_minimal_list_prompt_scaffold(header, content, hints, None)
+                .id(gpui::ElementId::Name("window:select".into()))
+                .text_color(text_color);
 
         FocusablePrompt::new(container)
             .key_context("select_prompt")

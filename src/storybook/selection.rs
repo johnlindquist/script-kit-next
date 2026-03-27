@@ -217,10 +217,7 @@ mod tests {
 
         assert_eq!(result.story_id, "my-story");
         assert_eq!(result.variant_id, "new-variant");
-        assert_eq!(
-            result.previous_variant_id,
-            Some("old-variant".to_string())
-        );
+        assert_eq!(result.previous_variant_id, Some("old-variant".to_string()));
         assert_eq!(result.selection_count, 1);
     }
 

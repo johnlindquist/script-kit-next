@@ -79,6 +79,8 @@ pub use prompt_footer::{PromptFooter, PromptFooterColors, PromptFooterConfig};
 #[allow(unused_imports)]
 pub use prompt_header::{PromptHeader, PromptHeaderColors, PromptHeaderConfig};
 #[allow(unused_imports)]
+pub(crate) use prompt_layout_shell::{emit_prompt_chrome_audit, PromptChromeAudit};
+#[allow(unused_imports)]
 pub(crate) use prompt_layout_shell::{
     prompt_detail_card, prompt_field_style, prompt_form_help, prompt_form_intro,
     prompt_form_section, prompt_scroll_value, prompt_scroll_value_with_id, prompt_surface,
@@ -91,8 +93,6 @@ pub(crate) use prompt_layout_shell::{
     render_hint_strip_leading_text, render_minimal_list_prompt_scaffold,
     render_minimal_list_prompt_shell, render_simple_hint_strip, render_simple_prompt_shell,
 };
-#[allow(unused_imports)]
-pub(crate) use prompt_layout_shell::{emit_prompt_chrome_audit, PromptChromeAudit};
 #[allow(unused_imports)]
 pub use section_divider::SectionDivider;
 #[allow(unused_imports)]

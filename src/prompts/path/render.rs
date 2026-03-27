@@ -90,9 +90,7 @@ impl Render for PathPrompt {
                     .overflow_x_hidden()
                     .child(
                         div()
-                            .text_color(gpui::rgba(
-                                (text_muted << 8) | 0xCC,
-                            ))
+                            .text_color(gpui::rgba((text_muted << 8) | 0xCC))
                             .flex_shrink_0()
                             .max_w(gpui::px(200.0))
                             .overflow_x_hidden()
@@ -136,14 +134,10 @@ impl Render for PathPrompt {
             text_primary,
         ));
 
-        let container = crate::components::render_minimal_list_prompt_scaffold(
-            header,
-            content,
-            hints,
-            leading,
-        )
-        .id(gpui::ElementId::Name("window:path".into()))
-        .text_color(gpui::rgb(text_primary));
+        let container =
+            crate::components::render_minimal_list_prompt_scaffold(header, content, hints, leading)
+                .id(gpui::ElementId::Name("window:path".into()))
+                .text_color(gpui::rgb(text_primary));
 
         FocusablePrompt::new(container)
             .key_context("path_prompt")

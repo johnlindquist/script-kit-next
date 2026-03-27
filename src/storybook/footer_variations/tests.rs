@@ -56,7 +56,11 @@ fn footer_seed_set_preserves_existing_saved_ids() {
 #[test]
 fn footer_variation_id_names_are_nonempty() {
     for variation in FooterVariationId::ALL {
-        assert!(!variation.name().is_empty(), "{:?} has empty name", variation);
+        assert!(
+            !variation.name().is_empty(),
+            "{:?} has empty name",
+            variation
+        );
         assert!(
             !variation.description().is_empty(),
             "{:?} has empty description",

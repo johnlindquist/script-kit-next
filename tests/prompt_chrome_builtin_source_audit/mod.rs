@@ -2,14 +2,11 @@ const CLIPBOARD_HISTORY_LAYOUT_SOURCE: &str =
     include_str!("../../src/render_builtins/clipboard_history_layout.rs");
 const FILE_SEARCH_LAYOUT_SOURCE: &str =
     include_str!("../../src/render_builtins/file_search_layout.rs");
-const WINDOW_SWITCHER_SOURCE: &str =
-    include_str!("../../src/render_builtins/window_switcher.rs");
-const APP_LAUNCHER_SOURCE: &str =
-    include_str!("../../src/render_builtins/app_launcher.rs");
+const WINDOW_SWITCHER_SOURCE: &str = include_str!("../../src/render_builtins/window_switcher.rs");
+const APP_LAUNCHER_SOURCE: &str = include_str!("../../src/render_builtins/app_launcher.rs");
 const CURRENT_APP_COMMANDS_SOURCE: &str =
     include_str!("../../src/render_builtins/current_app_commands.rs");
-const PROCESS_MANAGER_SOURCE: &str =
-    include_str!("../../src/render_builtins/process_manager.rs");
+const PROCESS_MANAGER_SOURCE: &str = include_str!("../../src/render_builtins/process_manager.rs");
 
 fn assert_minimal_builtin_surface(name: &str, source: &str) {
     let prompt_footer_needle = ["PromptFooter", "::new("].concat();
