@@ -55,15 +55,13 @@ impl ScriptListApp {
     pub(crate) fn handle_naming_dialog_completion(
         &mut self,
         payload: Option<String>,
-        _window: &mut Window,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let Some(json) = payload else {
             // User cancelled
             logging::log("NAMING", "Naming dialog cancelled - returning to main menu");
-            self.current_view = AppView::ScriptList;
-            self.request_script_list_main_filter_focus(cx);
-            cx.notify();
+            self.go_back_or_close(window, cx);
             return;
         };
 
@@ -78,9 +76,7 @@ impl ScriptListApp {
                     )
                     .duration_ms(Some(TOAST_ERROR_MS)),
                 );
-                self.current_view = AppView::ScriptList;
-                self.request_script_list_main_filter_focus(cx);
-                cx.notify();
+                self.go_back_or_close(window, cx);
                 return;
             }
         };
@@ -161,9 +157,7 @@ impl ScriptListApp {
                     )
                     .duration_ms(Some(TOAST_ERROR_MS)),
                 );
-                self.current_view = AppView::ScriptList;
-                self.request_script_list_main_filter_focus(cx);
-                cx.notify();
+                self.go_back_or_close(window, cx);
             }
         }
     }

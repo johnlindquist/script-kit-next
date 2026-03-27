@@ -375,7 +375,8 @@ impl ScriptListApp {
     /// Go back to main menu or close window depending on how the view was opened.
     ///
     /// If the current built-in view was opened from the main menu, this returns to the
-    /// main menu (ScriptList). If it was opened directly via hotkey or protocol command,
+    /// mini main menu (ScriptList in mini mode). If it was opened directly via hotkey or
+    /// protocol command,
     /// this closes the window entirely.
     ///
     /// This provides consistent UX: pressing ESC always "goes back" one step.
@@ -387,13 +388,10 @@ impl ScriptListApp {
             );
             // Stop process manager refresh if it was running
             self.stop_process_manager_refresh();
-            // Return to main menu
-            self.current_view = AppView::ScriptList;
-            self.main_window_mode = MainWindowMode::Full;
+            // Return to the mini main menu
+            self.reset_to_script_list(cx);
             // Reset the flag since we're now in main menu
             self.opened_from_main_menu = false;
-
-            self.reset_script_list_filter_and_selection_state(cx);
 
             // Sync input and reset placeholder to default
             self.gpui_input_state.update(cx, |state, cx| {
