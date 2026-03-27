@@ -2204,35 +2204,35 @@ impl Render for ActionsDialog {
         // - Dimmed color (visually distinct from actionable items)
         let header_container = if self.shows_context_header() {
             self.context_title.as_ref().map(|title| {
-            let header_text = if self.design_variant == DesignVariant::Default {
-                rgb(self.theme.colors.text.dimmed)
-            } else {
-                rgb(colors.text_dimmed)
-            };
-            let header_border = if self.design_variant == DesignVariant::Default {
-                rgba(hex_with_alpha(self.theme.colors.ui.border, 0x40))
-            } else {
-                rgba(hex_with_alpha(colors.border, 0x40))
-            };
+                let header_text = if self.design_variant == DesignVariant::Default {
+                    rgb(self.theme.colors.text.dimmed)
+                } else {
+                    rgb(colors.text_dimmed)
+                };
+                let header_border = if self.design_variant == DesignVariant::Default {
+                    rgba(hex_with_alpha(self.theme.colors.ui.border, 0x40))
+                } else {
+                    rgba(hex_with_alpha(colors.border, 0x40))
+                };
 
-            div()
-                .w_full()
-                .h(px(HEADER_HEIGHT))
-                .px(px(crate::actions::constants::ACTION_PADDING_X)) // Match section header padding from list_item.rs
-                .pt(px(crate::actions::constants::ACTION_PADDING_TOP)) // Top padding for visual separation
-                .pb(px(4.0)) // Bottom padding
-                .flex()
-                .flex_col()
-                .justify_center()
-                .border_b_1()
-                .border_color(header_border)
-                .child(
-                    div()
-                        .text_xs() // Smaller font like section headers
-                        .font_weight(gpui::FontWeight::SEMIBOLD) // Semibold like section headers
-                        .text_color(header_text)
-                        .child(title.clone()),
-                )
+                div()
+                    .w_full()
+                    .h(px(HEADER_HEIGHT))
+                    .px(px(crate::actions::constants::ACTION_PADDING_X)) // Match section header padding from list_item.rs
+                    .pt(px(crate::actions::constants::ACTION_PADDING_TOP)) // Top padding for visual separation
+                    .pb(px(4.0)) // Bottom padding
+                    .flex()
+                    .flex_col()
+                    .justify_center()
+                    .border_b_1()
+                    .border_color(header_border)
+                    .child(
+                        div()
+                            .text_xs() // Smaller font like section headers
+                            .font_weight(gpui::FontWeight::SEMIBOLD) // Semibold like section headers
+                            .text_color(header_text)
+                            .child(title.clone()),
+                    )
             })
         } else {
             None

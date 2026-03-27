@@ -8,7 +8,9 @@
 use gpui::*;
 
 use crate::components::PromptHeaderColors;
-use crate::storybook::{story_container, story_divider, story_section, Story, StorySurface, StoryVariant};
+use crate::storybook::{
+    story_container, story_divider, story_section, Story, StorySurface, StoryVariant,
+};
 use crate::ui_foundation::HexColorExt;
 
 // Story showcasing 20 header layout variations

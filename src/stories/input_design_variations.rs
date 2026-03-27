@@ -32,16 +32,14 @@ impl Story for InputDesignVariationsStory {
         let variants = input_story_variants();
 
         story_container()
-            .child(
-                story_section("Input Variations").children(
-                    variants.into_iter().enumerate().map(|(index, variant)| {
-                        story_item(
-                            &format!("{}. {}", index + 1, variant.name),
-                            render_input_story_preview(&variant.stable_id()),
-                        )
-                    }),
-                ),
-            )
+            .child(story_section("Input Variations").children(
+                variants.into_iter().enumerate().map(|(index, variant)| {
+                    story_item(
+                        &format!("{}. {}", index + 1, variant.name),
+                        render_input_story_preview(&variant.stable_id()),
+                    )
+                }),
+            ))
             .into_any_element()
     }
 

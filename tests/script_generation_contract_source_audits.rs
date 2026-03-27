@@ -8,13 +8,15 @@ fn test_ai_generator_contract_does_not_disagree_with_default_script_template() {
     let template = read_source("src/script_creation/mod.rs");
 
     let template_uses_metadata_export = template.contains("export const metadata = {");
-    let generator_requires_only_comment_headers =
-        generator.contains("FIRST line must be: // Name:")
-            || generator.contains("SECOND line must be: // Description:");
+    let generator_requires_only_comment_headers = generator
+        .contains("FIRST line must be: // Name:")
+        || generator.contains("SECOND line must be: // Description:");
     let generator_mentions_metadata_export = generator.contains("export const metadata");
 
     assert!(
-        !template_uses_metadata_export || !generator_requires_only_comment_headers || generator_mentions_metadata_export,
+        !template_uses_metadata_export
+            || !generator_requires_only_comment_headers
+            || generator_mentions_metadata_export,
         "AI generation contract disagrees with the default script template. \
          The template uses `export const metadata` but the generator only accepts comment headers. \
          Pick one canonical metadata format and make both files accept it."
@@ -42,8 +44,7 @@ fn test_slug_derivation_supports_metadata_export_fallback() {
 
     // The slug resolution chain should be: comment header → metadata export → normalized prompt
     assert!(
-        generator.contains("extract_name_comment")
-            && generator.contains("extract_metadata_name"),
+        generator.contains("extract_name_comment") && generator.contains("extract_metadata_name"),
         "Slug derivation must try comment header first, then metadata export"
     );
 }

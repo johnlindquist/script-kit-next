@@ -210,9 +210,7 @@ use prompts::{
 use tray::{TrayManager, TrayMenuAction};
 use ui_foundation::get_vibrancy_background;
 use warning_banner::{WarningBanner, WarningBannerColors};
-use window_resize::{
-    initial_window_height, reset_resize_debounce, resize_to_view_sync, ViewType,
-};
+use window_resize::{initial_window_height, reset_resize_debounce, resize_to_view_sync, ViewType};
 
 use components::{
     FormFieldColors, PromptFooter, PromptFooterColors, PromptFooterConfig, Scrollbar,

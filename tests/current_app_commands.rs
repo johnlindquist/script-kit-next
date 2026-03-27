@@ -1067,10 +1067,7 @@ fn build_current_app_command_recipe_marks_context_flags() {
     assert!(recipe.prompt_receipt.included_user_request);
     assert!(recipe.prompt_receipt.included_selected_text);
     assert!(recipe.prompt_receipt.included_browser_url);
-    assert_eq!(
-        recipe.suggested_script_name,
-        "Safari Close Duplicate Tabs"
-    );
+    assert_eq!(recipe.suggested_script_name, "Safari Close Duplicate Tabs");
 }
 
 #[test]
@@ -1205,8 +1202,17 @@ fn do_in_current_app_matches_all_generation_keywords() {
     // After keyword promotion, DoInCurrentApp must match every keyword
     // that GenerateScript or GenerateScriptFromCurrentApp would match.
     let generation_keywords = vec![
-        "generate", "ai", "create", "code", "script", "context", "browser", "selection",
-        "automation", "menu", "frontmost",
+        "generate",
+        "ai",
+        "create",
+        "code",
+        "script",
+        "context",
+        "browser",
+        "selection",
+        "automation",
+        "menu",
+        "frontmost",
     ];
 
     for keyword in &generation_keywords {
@@ -1226,10 +1232,7 @@ fn do_in_current_app_matches_context_and_selection_keywords() {
     // After promotion, DoInCurrentApp must also match them.
     for query in &["context", "browser", "selection"] {
         let pos = rank_of(&entries, query, "builtin-do-in-current-app");
-        assert!(
-            pos.is_some(),
-            "DoInCurrentApp must match keyword '{query}'"
-        );
+        assert!(pos.is_some(), "DoInCurrentApp must match keyword '{query}'");
     }
 }
 
@@ -1239,10 +1242,7 @@ fn unrelated_builtins_ranking_stable_after_promotion() {
 
     // Clipboard History should still rank first for "clipboard"
     let matches = script_kit_gpui::scripts::fuzzy_search_builtins(&entries, "clipboard");
-    assert!(
-        !matches.is_empty(),
-        "clipboard query must return results"
-    );
+    assert!(!matches.is_empty(), "clipboard query must return results");
     assert_eq!(
         matches[0].entry.id, "builtin-clipboard-history",
         "Clipboard History must still be the top result for 'clipboard'"
@@ -1250,10 +1250,7 @@ fn unrelated_builtins_ranking_stable_after_promotion() {
 
     // Scratch Pad should still rank first for "scratch"
     let matches = script_kit_gpui::scripts::fuzzy_search_builtins(&entries, "scratch");
-    assert!(
-        !matches.is_empty(),
-        "scratch query must return results"
-    );
+    assert!(!matches.is_empty(), "scratch query must return results");
     assert_eq!(
         matches[0].entry.id, "builtin-scratch-pad",
         "Scratch Pad must still be the top result for 'scratch'"

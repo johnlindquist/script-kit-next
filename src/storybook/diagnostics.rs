@@ -141,18 +141,14 @@ mod tests {
 
         assert_eq!(header_story.surface, "Header");
         assert!(header_story.comparable);
-        assert!(
-            header_story
-                .variants
-                .iter()
-                .any(|variant| variant.id == "current-production")
-        );
-        assert!(
-            header_story
-                .variants
-                .iter()
-                .any(|variant| variant.id == "raycast-style")
-        );
+        assert!(header_story
+            .variants
+            .iter()
+            .any(|variant| variant.id == "current-production"));
+        assert!(header_story
+            .variants
+            .iter()
+            .any(|variant| variant.id == "raycast-style"));
     }
 
     #[test]

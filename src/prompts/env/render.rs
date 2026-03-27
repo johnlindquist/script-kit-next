@@ -111,69 +111,67 @@ impl Render for EnvPrompt {
                                     .text_color(rgb(text_muted))
                                     .child(env_input_label(self.secret)),
                             )
-                            .child(
-                                crate::components::InlinePromptInput::new(
-                                    div()
-                                        .flex()
-                                        .flex_row()
-                                        .items_center()
-                                        .gap(px(12.))
-                                        // Lock icon inside input
-                                        .child(
-                                            svg()
-                                                .external_path(if self.secret {
-                                                    IconName::EyeOff.external_path()
-                                                } else {
-                                                    IconName::Settings.external_path()
-                                                })
-                                                .size(px(18.))
-                                                .text_color(rgb(text_muted))
-                                                .flex_shrink_0(),
-                                        )
-                                        // Input text area
-                                        .child({
-                                            div()
-                                                .flex_1()
-                                                .overflow_hidden()
-                                                .text_lg()
-                                                .text_color(if input_is_empty {
-                                                    rgb(text_muted)
-                                                } else {
-                                                    rgb(text_primary)
-                                                })
-                                                // When empty: show cursor + placeholder
-                                                .when(input_is_empty, |d: Div| {
-                                                    d.child(
-                                                        div()
-                                                            .flex()
-                                                            .flex_row()
-                                                            .items_center()
-                                                            .child(
-                                                                div()
-                                                                    .w(px(CURSOR_WIDTH))
-                                                                    .h(px(CURSOR_HEIGHT_LG))
-                                                                    .bg(rgb(accent_color)),
-                                                            )
-                                                            .child(
-                                                                div()
-                                                                    .ml(px(4.))
-                                                                    .text_color(rgb(text_muted))
-                                                                    .child(input_placeholder.clone()),
-                                                            ),
-                                                    )
-                                                })
-                                                // When has text: show masked dots or text with cursor
-                                                .when(!input_is_empty, |d: Div| {
-                                                    d.child(
-                                                        self.render_input_text(
-                                                            text_primary,
-                                                            accent_color,
+                            .child(crate::components::InlinePromptInput::new(
+                                div()
+                                    .flex()
+                                    .flex_row()
+                                    .items_center()
+                                    .gap(px(12.))
+                                    // Lock icon inside input
+                                    .child(
+                                        svg()
+                                            .external_path(if self.secret {
+                                                IconName::EyeOff.external_path()
+                                            } else {
+                                                IconName::Settings.external_path()
+                                            })
+                                            .size(px(18.))
+                                            .text_color(rgb(text_muted))
+                                            .flex_shrink_0(),
+                                    )
+                                    // Input text area
+                                    .child({
+                                        div()
+                                            .flex_1()
+                                            .overflow_hidden()
+                                            .text_lg()
+                                            .text_color(if input_is_empty {
+                                                rgb(text_muted)
+                                            } else {
+                                                rgb(text_primary)
+                                            })
+                                            // When empty: show cursor + placeholder
+                                            .when(input_is_empty, |d: Div| {
+                                                d.child(
+                                                    div()
+                                                        .flex()
+                                                        .flex_row()
+                                                        .items_center()
+                                                        .child(
+                                                            div()
+                                                                .w(px(CURSOR_WIDTH))
+                                                                .h(px(CURSOR_HEIGHT_LG))
+                                                                .bg(rgb(accent_color)),
+                                                        )
+                                                        .child(
+                                                            div()
+                                                                .ml(px(4.))
+                                                                .text_color(rgb(text_muted))
+                                                                .child(input_placeholder.clone()),
                                                         ),
-                                                    )
-                                                })
-                                        }),
-                                ),
-                            )
+                                                )
+                                            })
+                                            // When has text: show masked dots or text with cursor
+                                            .when(!input_is_empty, |d: Div| {
+                                                d.child(
+                                                    self.render_input_text(
+                                                        text_primary,
+                                                        accent_color,
+                                                    ),
+                                                )
+                                            })
+                                    }),
+                            ))
                             .child(
                                 div()
                                     .text_xs()

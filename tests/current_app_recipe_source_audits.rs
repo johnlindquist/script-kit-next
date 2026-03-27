@@ -8,9 +8,9 @@ use script_kit_gpui::test_utils::read_source;
 /// Return the substring of `source` starting at the first occurrence of
 /// `needle`, or panic with a structured message naming the invariant.
 fn slice_from<'a>(source: &'a str, needle: &str) -> &'a str {
-    let idx = source
-        .find(needle)
-        .unwrap_or_else(|| panic!("expected to find '{needle}' in src/menu_bar/current_app_commands.rs"));
+    let idx = source.find(needle).unwrap_or_else(|| {
+        panic!("expected to find '{needle}' in src/menu_bar/current_app_commands.rs")
+    });
     &source[idx..]
 }
 

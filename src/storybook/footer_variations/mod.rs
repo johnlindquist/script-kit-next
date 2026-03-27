@@ -181,21 +181,14 @@ pub fn footer_story_variants() -> Vec<StoryVariant> {
                 .description(spec.id.description())
                 .with_prop("surface", "footer")
                 .with_prop("variantId", spec.id.as_str())
-                .with_prop(
-                    "showLogo",
-                    if spec.show_logo { "true" } else { "false" },
-                )
+                .with_prop("showLogo", if spec.show_logo { "true" } else { "false" })
                 .with_prop(
                     "showPrimary",
                     if spec.show_primary { "true" } else { "false" },
                 )
                 .with_prop(
                     "showSecondary",
-                    if spec.show_secondary {
-                        "true"
-                    } else {
-                        "false"
-                    },
+                    if spec.show_secondary { "true" } else { "false" },
                 );
 
             if let Some(info_label) = spec.info_label {
@@ -361,9 +354,7 @@ pub fn resolve_footer_selection(
 /// Looks up the given stable ID in the footer variation registry and maps
 /// the matching spec into a config. Falls back to the default
 /// `RaycastExact` spec when the ID is `None` or unrecognised.
-pub fn config_from_storybook_footer_selection_value(
-    selected: Option<&str>,
-) -> PromptFooterConfig {
+pub fn config_from_storybook_footer_selection_value(selected: Option<&str>) -> PromptFooterConfig {
     resolve_footer_selection(selected).0
 }
 
