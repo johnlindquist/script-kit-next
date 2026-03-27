@@ -281,6 +281,184 @@ fn receipt_without_recipe_is_ignored_by_upsert_logic() {
     assert!(result.is_ok());
 }
 
+// ---------------------------------------------------------------------------
+// Flow-integration tests: verify resolve_current_app_automation_from_memory
+// drives the correct decision for the GenerateScript branch in
+// builtin_execution.rs.
+// ---------------------------------------------------------------------------
+
+fn make_test_snapshot(
+    bundle_id: &str,
+    app_name: &str,
+) -> crate::menu_bar::current_app_commands::FrontmostMenuSnapshot {
+    crate::menu_bar::current_app_commands::FrontmostMenuSnapshot {
+        app_name: app_name.to_string(),
+        bundle_id: bundle_id.to_string(),
+        items: vec![],
+    }
+}
+
+fn write_index_to_temp(dir: &std::path::Path, entries: &[CurrentAppAutomationMemoryIndexEntry]) {
+    let scripts_dir = dir.join(".scriptkit").join("scripts");
+    std::fs::create_dir_all(&scripts_dir).expect("create scripts dir");
+    let index_path = scripts_dir.join(".current-app-automation-memory.json");
+    let json = serde_json::to_string_pretty(entries).expect("serialize index");
+    std::fs::write(index_path, json).expect("write index");
+}
+
+fn make_memory_entry(
+    bundle_id: &str,
+    effective_query: &str,
+    slug: &str,
+) -> CurrentAppAutomationMemoryIndexEntry {
+    let recipe = make_test_recipe(bundle_id, effective_query);
+    let recipe_ref = recipe.clone();
+    CurrentAppAutomationMemoryIndexEntry {
+        schema_version: CURRENT_APP_AUTOMATION_MEMORY_INDEX_SCHEMA_VERSION,
+        slug: slug.to_string(),
+        script_path: format!("/tmp/test-scripts/{slug}.ts"),
+        receipt_path: format!("/tmp/test-scripts/{slug}.scriptkit.json"),
+        bundle_id: bundle_id.to_string(),
+        app_name: "TestApp".to_string(),
+        effective_query: effective_query.to_string(),
+        raw_query: effective_query.to_string(),
+        prompt: format!("test prompt for {effective_query}"),
+        provider_id: "test-provider".to_string(),
+        model_id: "test-model".to_string(),
+        lookup_key: current_app_recipe_lookup_key(&recipe_ref),
+        auto_replay_eligible: true,
+        written_at_unix_ms: 1000,
+        recipe: recipe_ref,
+    }
+}
+
+#[test]
+fn do_in_current_app_generate_script_replays_from_memory() {
+    let dir = tempfile::tempdir().expect("create temp dir");
+
+    let entry = make_memory_entry(
+        "com.apple.Safari",
+        "summarize this article",
+        "summarize-article",
+    );
+    write_index_to_temp(dir.path(), &[entry]);
+
+    // Point HOME at the temp dir so the resolver reads our index
+    let _guard = temp_env::set_var("HOME", dir.path().to_str().unwrap());
+
+    let snapshot = make_test_snapshot("com.apple.Safari", "TestApp");
+    let decision = resolve_current_app_automation_from_memory(
+        "summarize this article",
+        &snapshot,
+        &[], // no builtin entries → replay routes to generate_script
+        None,
+        None,
+    )
+    .expect("resolve should succeed");
+
+    assert_eq!(
+        decision.action, "replay_recipe",
+        "exact match with same bundle_id should replay; got action={}, reason={}",
+        decision.action, decision.reason
+    );
+    assert!(
+        decision.best_score >= 0.90,
+        "exact match should score >= 0.90, got {}",
+        decision.best_score
+    );
+    assert!(
+        decision.matched.is_some(),
+        "replay decision must include matched entry"
+    );
+    assert!(
+        decision.replay.is_some(),
+        "replay decision must include replay receipt"
+    );
+}
+
+#[test]
+fn do_in_current_app_generate_script_repairs_from_memory() {
+    let dir = tempfile::tempdir().expect("create temp dir");
+
+    let entry = make_memory_entry(
+        "com.apple.Safari",
+        "summarize this article",
+        "summarize-article",
+    );
+    write_index_to_temp(dir.path(), &[entry]);
+
+    let _guard = temp_env::set_var("HOME", dir.path().to_str().unwrap());
+
+    let snapshot = make_test_snapshot("com.apple.Safari", "TestApp");
+    // Similar but not identical query → repair path
+    let decision = resolve_current_app_automation_from_memory(
+        "summarize this article and save it to notes",
+        &snapshot,
+        &[],
+        None,
+        None,
+    )
+    .expect("resolve should succeed");
+
+    assert_eq!(
+        decision.action, "repair_recipe",
+        "similar query should repair; got action={}, reason={}",
+        decision.action, decision.reason
+    );
+    assert!(
+        decision.best_score >= 0.55 && decision.best_score < 0.90,
+        "similar query should score in [0.55, 0.90), got {}",
+        decision.best_score
+    );
+    assert!(
+        decision.matched.is_some(),
+        "repair decision must include matched entry"
+    );
+    assert!(
+        decision.replay.is_some(),
+        "repair decision must include replay receipt"
+    );
+}
+
+#[test]
+fn do_in_current_app_generate_script_miss_falls_back_to_generation() {
+    let dir = tempfile::tempdir().expect("create temp dir");
+
+    let entry = make_memory_entry(
+        "com.apple.Safari",
+        "summarize this article",
+        "summarize-article",
+    );
+    write_index_to_temp(dir.path(), &[entry]);
+
+    let _guard = temp_env::set_var("HOME", dir.path().to_str().unwrap());
+
+    // Different bundle_id → no match
+    let snapshot = make_test_snapshot("com.microsoft.VSCode", "Visual Studio Code");
+    let decision = resolve_current_app_automation_from_memory(
+        "summarize this article",
+        &snapshot,
+        &[],
+        None,
+        None,
+    )
+    .expect("resolve should succeed");
+
+    assert_eq!(
+        decision.action, "generate_new",
+        "different bundle_id should generate_new; got action={}, reason={}",
+        decision.action, decision.reason
+    );
+    assert!(
+        decision.matched.is_none(),
+        "generate_new should have no matched entry"
+    );
+    assert!(
+        decision.replay.is_none(),
+        "generate_new should have no replay receipt"
+    );
+}
+
 #[test]
 fn serde_roundtrip_index_entry() {
     let recipe = make_test_recipe("com.apple.Safari", "summarize this article");
