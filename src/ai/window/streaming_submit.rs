@@ -109,6 +109,11 @@ impl AiApp {
             return;
         }
 
+        // Dismiss the mini composer hint strip after first successful send
+        if self.window_mode.is_mini() && !self.mini_composer_hint_dismissed {
+            self.mini_composer_hint_dismissed = true;
+        }
+
         // Clear previous generation stats so they don't persist across messages
         self.last_streaming_completed_at = None;
         self.last_streaming_duration = None;

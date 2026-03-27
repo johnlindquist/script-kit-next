@@ -1,5 +1,5 @@
 use super::*;
-use crate::theme::opacity::{OPACITY_HOVER, OPACITY_SELECTED};
+use crate::theme::opacity::{OPACITY_HOVER, OPACITY_MUTED, OPACITY_SELECTED, OPACITY_TEXT_MUTED};
 
 /// Pure helper: compute the effective max height for the mini history overlay
 /// given a window height. Clamps so the overlay never overflows below the window.
@@ -465,7 +465,7 @@ impl Render for AiApp {
             }))
             .child(if self.window_mode.is_mini() {
                 let muted_fg = cx.theme().muted_foreground;
-                let label_color = muted_fg.opacity(OPACITY_SELECTED);
+                let action_color = muted_fg.opacity(MINI_TITLEBAR_ACTION_OPACITY);
                 let has_messages = !self.current_messages.is_empty() || self.is_streaming;
                 let is_streaming = self.is_streaming;
                 div()
@@ -478,9 +478,10 @@ impl Render for AiApp {
                     .flex_row()
                     .items_center()
                     .justify_between()
+                    // Whisper: barely-there bottom border instead of full chrome
                     .border_b_1()
-                    .border_color(cx.theme().border)
-                    // Left: title + streaming dot + clickable model name
+                    .border_color(cx.theme().border.opacity(MINI_TITLEBAR_BORDER_OPACITY))
+                    // Left: title + streaming dot + plain model name
                     .child(
                         div()
                             .flex()
@@ -492,7 +493,13 @@ impl Render for AiApp {
                                 div()
                                     .id("ai-mini-title-label")
                                     .text_sm()
-                                    .font_weight(gpui::FontWeight::SEMIBOLD)
+                                    // Whisper: normal weight at reduced opacity
+                                    .font_weight(gpui::FontWeight::MEDIUM)
+                                    .text_color(
+                                        cx.theme()
+                                            .foreground
+                                            .opacity(MINI_TITLEBAR_TITLE_OPACITY),
+                                    )
                                     .overflow_hidden()
                                     .text_ellipsis()
                                     .flex_shrink_0()
@@ -527,11 +534,30 @@ impl Render for AiApp {
                                         ),
                                 )
                             })
-                            // Compact model chip — uses Button component for parity
-                            // with full mode's render_model_picker pattern.
-                            .child(self.render_mini_model_chip(cx)),
+                            // Whisper: plain muted model name text, no bordered pill
+                            .child({
+                                let model_name: SharedString = self
+                                    .selected_model
+                                    .as_ref()
+                                    .map(|m| SharedString::from(m.display_name.clone()))
+                                    .unwrap_or_else(|| "Select Model".into());
+                                div()
+                                    .id("ai-mini-model-text")
+                                    .text_xs()
+                                    .text_color(muted_fg.opacity(OPACITY_TEXT_MUTED))
+                                    .cursor_pointer()
+                                    .hover(|el| el.text_color(muted_fg.opacity(OPACITY_MUTED)))
+                                    .on_click(cx.listener(|this, _, _window, cx| {
+                                        this.cycle_model_from_source(
+                                            "mini_model_text_click",
+                                            cx,
+                                        );
+                                    }))
+                                    .child(model_name)
+                            }),
                     )
-                    // Right: icon buttons — Recent (⌘J), New (⌘N), Actions (⌘K) | Expand (⌘⇧M)
+                    // Right: icon buttons — Recent (⌘J), New (⌘N), Actions (⌘K), Expand (⌘⇧M)
+                    // Whisper: reduced resting opacity, no separator, expand is icon-only
                     .child(
                         div()
                             .flex()
@@ -550,7 +576,7 @@ impl Render for AiApp {
                                     .text_color(if self.showing_mini_history_overlay {
                                         cx.theme().foreground
                                     } else {
-                                        label_color
+                                        action_color
                                     })
                                     .when(self.showing_mini_history_overlay, |el| {
                                         el.bg(cx.theme().muted.opacity(OPACITY_SELECTED))
@@ -591,7 +617,7 @@ impl Render for AiApp {
                                     .flex()
                                     .items_center()
                                     .justify_center()
-                                    .text_color(label_color)
+                                    .text_color(action_color)
                                     .hover(|el| {
                                         el.bg(cx.theme().muted.opacity(OPACITY_HOVER))
                                             .text_color(cx.theme().foreground)
@@ -622,7 +648,7 @@ impl Render for AiApp {
                                     .flex()
                                     .items_center()
                                     .justify_center()
-                                    .text_color(label_color)
+                                    .text_color(action_color)
                                     .hover(|el| {
                                         el.bg(cx.theme().muted.opacity(OPACITY_HOVER))
                                             .text_color(cx.theme().foreground)
@@ -645,25 +671,17 @@ impl Render for AiApp {
                                             .size(ICON_SM),
                                     ),
                             )
-                            // Separator — 1px × SP_6 vertical divider
-                            .child(
-                                div()
-                                    .w(HAIRLINE)
-                                    .h(SP_6)
-                                    .bg(cx.theme().border.opacity(OPACITY_SELECTED)),
-                            )
-                            // Expand — text button (stands out as the mode-switch action)
+                            // Expand — icon-only, no separator (whisper: no chrome dividers)
                             .child(
                                 div()
                                     .id("ai-mini-expand")
-                                    .px(S2)
-                                    .py(SP_2)
+                                    .size(MINI_BTN_SIZE)
                                     .rounded(R_SM)
                                     .cursor_pointer()
                                     .flex()
                                     .items_center()
-                                    .text_xs()
-                                    .text_color(label_color)
+                                    .justify_center()
+                                    .text_color(action_color)
                                     .hover(|el| {
                                         el.bg(cx.theme().muted.opacity(OPACITY_HOVER))
                                             .text_color(cx.theme().foreground)
@@ -680,7 +698,13 @@ impl Render for AiApp {
                                     .on_click(cx.listener(|this, _, window, cx| {
                                         this.toggle_window_mode(window, cx);
                                     }))
-                                    .child("Expand"),
+                                    .child(
+                                        svg()
+                                            .external_path(
+                                                LocalIconName::ChevronRight.external_path(),
+                                            )
+                                            .size(ICON_SM),
+                                    ),
                             ),
                     )
                     .into_any_element()

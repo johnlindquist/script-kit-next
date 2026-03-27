@@ -271,6 +271,10 @@ pub struct AiApp {
     /// `prepare_outbound_user_message` compiler as the submit path so
     /// the preview can never drift from what is actually sent.
     pub(super) context_preflight: super::context_preflight::ContextPreflightState,
+
+    /// Whether the mini composer shortcut hint strip has been dismissed
+    /// (auto-dismissed after first successful send in mini mode).
+    pub(super) mini_composer_hint_dismissed: bool,
 }
 
 /// Machine-readable snapshot of AI window state for agentic tests and debugging.

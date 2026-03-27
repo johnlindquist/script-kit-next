@@ -336,6 +336,8 @@ impl AiApp {
         self.last_context_receipt = None;
         self.show_context_inspector = false;
         self.show_context_drawer = false;
+        // Reset mini composer hint strip so it reappears for the new conversation
+        self.mini_composer_hint_dismissed = false;
 
         let chat_id = self.create_chat(window, cx);
 

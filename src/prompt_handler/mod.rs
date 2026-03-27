@@ -1146,7 +1146,7 @@ impl ScriptListApp {
                             None,
                         )
                     }
-                    #[cfg(debug_assertions)]
+                    #[cfg(feature = "storybook")]
                     AppView::DesignExplorerView { .. } => (
                         "designExplorer".to_string(),
                         None,

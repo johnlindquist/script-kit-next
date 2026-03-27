@@ -76,6 +76,18 @@ pub fn get_script_context_actions(script: &ScriptInfo) -> Vec<Action> {
         .with_section("Actions"),
     );
 
+    actions.push(
+        Action::new(
+            "toggle_info",
+            "Show Info",
+            Some("Toggle detailed info about this item".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_shortcut("⌘I")
+        .with_icon(IconName::File)
+        .with_section("Actions"),
+    );
+
     if script.shortcut.is_some() {
         actions.push(
             Action::new(
@@ -586,5 +598,52 @@ mod tests {
             "agent actions should not be empty"
         );
         assert_all_actions_have_icons("agent", &agent_actions);
+    }
+
+    #[test]
+    fn test_script_context_actions_include_toggle_info_with_cmd_i() {
+        let script = ScriptInfo::new("TestScript", "/tmp/info-test.ts");
+        let actions = get_script_context_actions(&script);
+
+        let info_action = actions
+            .iter()
+            .find(|a| a.id == "toggle_info")
+            .expect("script context actions must include toggle_info");
+
+        assert_eq!(info_action.title, "Show Info");
+        assert_eq!(
+            info_action.shortcut.as_deref(),
+            Some("⌘I"),
+            "toggle_info action must have ⌘I shortcut for discoverability"
+        );
+        assert_eq!(
+            info_action.section.as_deref(),
+            Some("Actions"),
+            "toggle_info must appear in the Actions section"
+        );
+        assert!(
+            info_action.icon.is_some(),
+            "toggle_info must have an icon for visual consistency"
+        );
+    }
+
+    #[test]
+    fn test_toggle_info_appears_for_all_script_types() {
+        let script = ScriptInfo::new("Script", "/tmp/all-types-info.ts");
+        let builtin = ScriptInfo::builtin("Clipboard History");
+        let scriptlet = ScriptInfo::scriptlet("Scriptlet", "/tmp/all-types-info.md", None, None);
+        let agent = ScriptInfo::agent("Agent", "/tmp/all-types-info.agent.md", None, None);
+
+        for (label, actions) in [
+            ("script", get_script_context_actions(&script)),
+            ("builtin", get_script_context_actions(&builtin)),
+            ("scriptlet", get_script_context_actions(&scriptlet)),
+            ("agent", get_script_context_actions(&agent)),
+        ] {
+            assert!(
+                actions.iter().any(|a| a.id == "toggle_info"),
+                "toggle_info must be present in {label} context actions"
+            );
+        }
     }
 }

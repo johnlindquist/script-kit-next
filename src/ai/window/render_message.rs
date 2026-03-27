@@ -1,7 +1,8 @@
 use super::*;
 use crate::theme::opacity::{
-    OPACITY_HIDDEN, OPACITY_MESSAGE_ASSISTANT_BACKGROUND, OPACITY_MESSAGE_USER_BACKGROUND,
-    OPACITY_MUTED, OPACITY_SELECTED, OPACITY_STRONG, OPACITY_SUBTLE,
+    OPACITY_HIDDEN, OPACITY_HOVER, OPACITY_MESSAGE_ASSISTANT_BACKGROUND,
+    OPACITY_MESSAGE_USER_BACKGROUND, OPACITY_MUTED, OPACITY_SELECTED, OPACITY_STRONG,
+    OPACITY_SUBTLE, OPACITY_TEXT_MUTED,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -47,12 +48,22 @@ impl AiApp {
     ) -> impl IntoElement {
         let is_user = message.role == MessageRole::User;
         let is_system = message.role == MessageRole::System;
+        let is_mini = self.window_mode.is_mini();
         let cue = message_bubble_cue(message.role);
         let colors = theme::PromptColors::from_theme(&crate::theme::get_cached_theme());
 
+        // Mini mode uses whisper-level opacity; full mode keeps the original values.
+        let bubble_opacity = if is_mini {
+            match message.role {
+                MessageRole::User => MINI_MESSAGE_USER_BG_OPACITY,
+                MessageRole::Assistant | MessageRole::System => MINI_MESSAGE_ASSISTANT_BG_OPACITY,
+            }
+        } else {
+            cue.background_opacity
+        };
         let bubble_bg = match cue.background_tone {
-            MessageCueTone::Accent => cx.theme().accent.opacity(cue.background_opacity),
-            MessageCueTone::Muted => cx.theme().muted.opacity(cue.background_opacity),
+            MessageCueTone::Accent => cx.theme().accent.opacity(bubble_opacity),
+            MessageCueTone::Muted => cx.theme().muted.opacity(bubble_opacity),
         };
 
         // Collect cached thumbnails for this message's images
@@ -98,6 +109,16 @@ impl AiApp {
             "Assistant"
         };
 
+        // Pre-clone values for mini hover-reveal overlay (avoids borrow-after-move
+        // when the full-mode role-row closure consumes the originals).
+        let mini_full_timestamp = full_timestamp.clone();
+        let mini_timestamp = timestamp.clone();
+        let mini_msg_id = msg_id.clone();
+        let mini_msg_id_for_click = msg_id_for_click.clone();
+        let mini_content_for_copy = content_for_copy.clone();
+        let mini_msg_id_for_edit = msg_id_for_edit.clone();
+        let mini_content_for_edit = content_for_edit.clone();
+
         div()
             .id(SharedString::from(format!("msg-{}", msg_id)))
             .group("message")
@@ -106,8 +127,8 @@ impl AiApp {
             .w_full()
             .when(uses_continuation_spacing_after, |d| d.mb(S2))
             .when(!uses_continuation_spacing_after, |d| d.mb(MSG_GAP))
-            // Role label row - hidden for continuation messages from same sender
-            .when(!is_continuation, |el| {
+            // Role label row - hidden in mini mode and for continuation messages
+            .when(!is_mini && !is_continuation, |el| {
                 el.child(
                     div()
                         .flex()
@@ -237,19 +258,22 @@ impl AiApp {
                 )
             })
             .child(
-                // Message content — user messages get an accent left-border for
-                // visual differentiation (like iMessage/Claude.ai), assistant
-                // messages get a subtle muted left-border.
+                // Message content — mini: borderless floating bubble with whisper bg.
+                // Full: accent/muted left-border for visual differentiation.
                 div()
+                    .relative()
                     .w_full()
-                    .px(MSG_PX)
-                    .py(MSG_PY)
-                    .bg(bubble_bg)
-                    .border_l(px(3.0))
-                    .when(is_user, |d| d.border_color(cx.theme().accent))
-                    .when(!is_user, |d| {
-                        d.border_color(cx.theme().muted.opacity(OPACITY_SUBTLE))
+                    .when(is_mini, |d| d.px(MINI_MESSAGE_PX).py(MINI_MESSAGE_PY))
+                    .when(!is_mini, |d| {
+                        d.px(MSG_PX)
+                            .py(MSG_PY)
+                            .border_l(px(3.0))
+                            .when(is_user, |d| d.border_color(cx.theme().accent))
+                            .when(!is_user, |d| {
+                                d.border_color(cx.theme().muted.opacity(OPACITY_SUBTLE))
+                            })
                     })
+                    .bg(bubble_bg)
                     .when(cue.italic, |d| d.italic())
                     .when(has_images, |el| {
                         el.child(
@@ -276,6 +300,131 @@ impl AiApp {
                                             )
                                     }),
                             ),
+                        )
+                    })
+                    // Mini hover-reveal: timestamp + edit/copy icons appear on hover
+                    .when(is_mini, |el| {
+                        let tooltip_text = mini_full_timestamp;
+                        let ts = mini_timestamp;
+                        let copy_id = mini_msg_id.clone();
+                        let click_id = mini_msg_id_for_click;
+                        let copy_content = mini_content_for_copy;
+                        let edit_id = mini_msg_id_for_edit.clone();
+                        let edit_content = mini_content_for_edit;
+                        el.child(
+                            div()
+                                .absolute()
+                                .top(S1)
+                                .right(S2)
+                                .flex()
+                                .items_center()
+                                .gap(S1)
+                                .opacity(OPACITY_HIDDEN)
+                                .group_hover("message", |s| {
+                                    s.opacity(MINI_MESSAGE_META_OPACITY)
+                                })
+                                .child(
+                                    div()
+                                        .id(SharedString::from(format!(
+                                            "mini-ts-{}",
+                                            copy_id.clone()
+                                        )))
+                                        .text_xs()
+                                        .text_color(
+                                            cx.theme()
+                                                .muted_foreground
+                                                .opacity(OPACITY_TEXT_MUTED),
+                                        )
+                                        .tooltip(move |window, cx| {
+                                            Tooltip::new(tooltip_text.clone())
+                                                .build(window, cx)
+                                        })
+                                        .child(ts),
+                                )
+                                .when(is_user, |el| {
+                                    el.child(
+                                        div()
+                                            .id(SharedString::from(format!(
+                                                "mini-edit-{}",
+                                                edit_id.clone()
+                                            )))
+                                            .flex()
+                                            .items_center()
+                                            .justify_center()
+                                            .size(MINI_BTN_SIZE)
+                                            .rounded_full()
+                                            .cursor_pointer()
+                                            .hover(|s| {
+                                                s.bg(cx.theme().muted.opacity(OPACITY_HOVER))
+                                            })
+                                            .on_click(cx.listener(
+                                                move |this, _, window, cx| {
+                                                    this.start_editing_message(
+                                                        edit_id.clone(),
+                                                        edit_content.clone(),
+                                                        window,
+                                                        cx,
+                                                    );
+                                                },
+                                            ))
+                                            .child(
+                                                svg()
+                                                    .external_path(
+                                                        LocalIconName::Pencil.external_path(),
+                                                    )
+                                                    .size(ICON_XS)
+                                                    .text_color(
+                                                        cx.theme()
+                                                            .muted_foreground
+                                                            .opacity(OPACITY_TEXT_MUTED),
+                                                    ),
+                                            ),
+                                    )
+                                })
+                                .child(
+                                    div()
+                                        .id(SharedString::from(format!(
+                                            "mini-copy-{}",
+                                            copy_id
+                                        )))
+                                        .flex()
+                                        .items_center()
+                                        .justify_center()
+                                        .size(MINI_BTN_SIZE)
+                                        .rounded_full()
+                                        .cursor_pointer()
+                                        .hover(|s| {
+                                            s.bg(cx.theme().muted.opacity(OPACITY_HOVER))
+                                        })
+                                        .on_click(cx.listener(
+                                            move |this, _, _window, cx| {
+                                                this.copy_message(
+                                                    click_id.clone(),
+                                                    copy_content.clone(),
+                                                    cx,
+                                                );
+                                            },
+                                        ))
+                                        .child(
+                                            svg()
+                                                .external_path(
+                                                    if is_copied {
+                                                        LocalIconName::Check
+                                                    } else {
+                                                        LocalIconName::Copy
+                                                    }
+                                                    .external_path(),
+                                                )
+                                                .size(ICON_XS)
+                                                .text_color(if is_copied {
+                                                    cx.theme().success
+                                                } else {
+                                                    cx.theme()
+                                                        .muted_foreground
+                                                        .opacity(OPACITY_TEXT_MUTED)
+                                                }),
+                                        ),
+                                ),
                         )
                     })
                     .child({

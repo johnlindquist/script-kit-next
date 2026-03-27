@@ -1607,7 +1607,7 @@ impl ScriptListApp {
 
                 Self::builtin_success(dctx, "open_design_gallery")
             }
-            #[cfg(debug_assertions)]
+            #[cfg(feature = "storybook")]
             builtins::BuiltInFeature::DesignExplorer => {
                 tracing::info!(
                     category = "BUILTIN",

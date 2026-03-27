@@ -41,6 +41,61 @@ use super::types::{
 };
 use crate::prompts::PathInfo;
 
+// --- Storybook adoption: style struct and defaults ---
+// When the storybook feature is enabled, delegate to the storybook module.
+// When disabled, use hardcoded defaults (the "Current" variant).
+
+#[cfg(feature = "storybook")]
+fn actions_dialog_default_style() -> crate::storybook::actions_dialog_variations::ActionsDialogStyle
+{
+    crate::storybook::actions_dialog_variations::adopted_actions_dialog_style()
+}
+
+#[cfg(not(feature = "storybook"))]
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct ActionsDialogStyleFallback {
+    pub show_container_border: bool,
+    pub show_header: bool,
+    pub show_search_divider: bool,
+    pub show_icons: bool,
+    pub selection_opacity: f32,
+    pub hover_opacity: f32,
+    pub row_height: f32,
+    pub row_radius: f32,
+    pub shortcut_visible: bool,
+    pub mono_font: bool,
+    pub prefix_marker: Option<&'static str>,
+}
+
+#[cfg(not(feature = "storybook"))]
+fn actions_dialog_default_style() -> ActionsDialogStyleFallback {
+    ActionsDialogStyleFallback {
+        show_container_border: true,
+        show_header: true,
+        show_search_divider: true,
+        show_icons: false,
+        selection_opacity: 1.0,
+        hover_opacity: 1.0,
+        row_height: 30.0,
+        row_radius: 6.0,
+        shortcut_visible: true,
+        mono_font: false,
+        prefix_marker: None,
+    }
+}
+
+#[cfg(feature = "storybook")]
+fn actions_dialog_uses_inline_shortcuts(
+    style: &crate::storybook::actions_dialog_variations::ActionsDialogStyle,
+) -> bool {
+    crate::storybook::actions_dialog_variations::actions_dialog_style_uses_inline_shortcuts(style)
+}
+
+#[cfg(not(feature = "storybook"))]
+fn actions_dialog_uses_inline_shortcuts(_style: &ActionsDialogStyleFallback) -> bool {
+    false
+}
+
 /// Tracks whether the last user input was mouse or keyboard.
 /// Used to suppress hover highlighting during keyboard navigation.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -1510,7 +1565,7 @@ impl Focusable for ActionsDialog {
 // --- merged from dialog_part_04_rewire.rs ---
 impl Render for ActionsDialog {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let style = crate::storybook::actions_dialog_variations::adopted_actions_dialog_style();
+        let style = actions_dialog_default_style();
 
         // Get design tokens for the current design variant
         let tokens = get_tokens(self.design_variant);
@@ -2152,7 +2207,7 @@ impl Render for ActionsDialog {
                                         // Right side: keyboard shortcuts as keycaps
                                         if style.shortcut_visible {
                                             if let Some(ref shortcut) = action.shortcut {
-                                                if crate::storybook::actions_dialog_variations::actions_dialog_style_uses_inline_shortcuts(&style) {
+                                                if actions_dialog_uses_inline_shortcuts(&style) {
                                                     let mut shortcut_label = div()
                                                         .text_xs()
                                                         .text_color(shortcut_color)

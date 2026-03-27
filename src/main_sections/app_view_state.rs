@@ -113,8 +113,8 @@ enum AppView {
         filter: String,
         selected_index: usize,
     },
-    /// Showing the in-app storybook compare view for design exploration (debug only)
-    #[cfg(debug_assertions)]
+    /// Showing the in-app storybook compare view for design exploration
+    #[cfg(feature = "storybook")]
     DesignExplorerView {
         entity: Entity<script_kit_gpui::storybook::StoryBrowser>,
     },

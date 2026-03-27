@@ -1,7 +1,6 @@
 use super::*;
 use crate::theme::opacity::{
     OPACITY_ACCENT_MEDIUM, OPACITY_CARD_BG, OPACITY_STRONG, OPACITY_SUGGESTION_HOVER,
-    OPACITY_TEXT_MUTED,
 };
 
 /// Icon container size for suggestion cards (provides consistent hit area around the icon).
@@ -57,7 +56,7 @@ impl AiApp {
             return self.render_setup_card(cx).into_any_element();
         }
 
-        let suggestion_hover_bg = cx.theme().muted.opacity(OPACITY_SUGGESTION_HOVER);
+        let suggestion_hover_bg = cx.theme().muted.opacity(MINI_WELCOME_HOVER_OPACITY);
         let all_suggestions = script_kit_welcome_suggestions();
 
         info!(
@@ -76,15 +75,18 @@ impl AiApp {
             .flex_1()
             .gap(S3)
             .px(S4)
-            // Heading — compact, no subtitle
+            // Heading — whisper-quiet, no subtitle
             .child(
                 div()
                     .text_sm()
-                    .font_weight(gpui::FontWeight::MEDIUM)
-                    .text_color(cx.theme().muted_foreground.opacity(OPACITY_TEXT_MUTED))
+                    .text_color(
+                        cx.theme()
+                            .muted_foreground
+                            .opacity(MINI_WELCOME_HEADING_OPACITY),
+                    )
                     .child("Try a suggestion"),
             )
-            // Suggestion rows — single-line, compact
+            // Suggestion rows — single-line, whisper chrome
             .child(
                 div()
                     .flex()
@@ -128,14 +130,13 @@ impl AiApp {
                                         );
                                         this.submit_message(window, cx);
                                     }))
-                                    // Compact icon
+                                    // Compact icon — whisper-quiet accent
                                     .child(
                                         div()
                                             .flex()
                                             .items_center()
                                             .justify_center()
                                             .size(MINI_WELCOME_ICON_CONTAINER)
-                                            .rounded(SP_3)
                                             .flex_shrink_0()
                                             .child(
                                                 svg()
@@ -144,28 +145,36 @@ impl AiApp {
                                                     .text_color(
                                                         cx.theme()
                                                             .accent
-                                                            .opacity(OPACITY_ACCENT_MEDIUM),
+                                                            .opacity(MINI_WELCOME_ICON_OPACITY),
                                                     ),
                                             ),
                                     )
-                                    // Title only — no description in mini
+                                    // Title only — subdued foreground
                                     .child(
                                         div()
                                             .text_sm()
                                             .flex_1()
-                                            .text_color(cx.theme().foreground)
+                                            .text_color(
+                                                cx.theme()
+                                                    .foreground
+                                                    .opacity(MINI_WELCOME_TITLE_OPACITY),
+                                            )
                                             .child(title_s),
                                     )
-                                    // Keyboard shortcut badge
+                                    // Keyboard shortcut badge — barely-there
                                     .child(
                                         div()
                                             .text_xs()
                                             .px(SP_2)
                                             .py(SP_1)
                                             .rounded(SP_2)
-                                            .bg(cx.theme().muted.opacity(OPACITY_CARD_BG))
+                                            .bg(cx.theme()
+                                                .muted
+                                                .opacity(MINI_WELCOME_BADGE_BG_OPACITY))
                                             .text_color(
-                                                cx.theme().muted_foreground.opacity(OPACITY_STRONG),
+                                                cx.theme()
+                                                    .muted_foreground
+                                                    .opacity(MINI_WELCOME_BADGE_TEXT_OPACITY),
                                             )
                                             .flex_shrink_0()
                                             .child(SharedString::from(format!(

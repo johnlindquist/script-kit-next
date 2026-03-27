@@ -281,6 +281,7 @@ impl AiApp {
             show_context_inspector: false,
             show_context_drawer: false,
             context_preflight: super::context_preflight::ContextPreflightState::default(),
+            mini_composer_hint_dismissed: false,
         };
 
         let sidebar_chat_ids: Vec<ChatId> = app.chats.iter().map(|chat| chat.id).collect();

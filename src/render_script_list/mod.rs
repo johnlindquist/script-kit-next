@@ -723,6 +723,12 @@ impl ScriptListApp {
                             }
                             return;
                         }
+                        "i" => {
+                            // Cmd+I - Toggle Info Panel
+                            logging::log("KEY", "Shortcut Cmd+I -> toggle_info");
+                            this.handle_action("toggle_info".to_string(), window, cx);
+                            return;
+                        }
                         "e" => {
                             // Cmd+E - Edit Script
                             logging::log("KEY", "Shortcut Cmd+E -> edit_script");
@@ -993,15 +999,28 @@ impl ScriptListApp {
             });
 
         if is_mini {
-            // Mini mode: single column, no preview, no footer
-            main_div = main_div.child(
-                div()
-                    .flex_1()
-                    .min_h(px(0.))
-                    .w_full()
-                    .overflow_hidden()
-                    .child(div().w_full().h_full().min_h(px(0.)).child(list_element)),
-            );
+            // Mini mode: single column, toggle between list and info panel
+            if self.show_info_panel {
+                // Info panel replaces the list when toggled via Cmd+I
+                let info_panel = self.render_preview_panel(cx);
+                main_div = main_div.child(
+                    div()
+                        .flex_1()
+                        .min_h(px(0.))
+                        .w_full()
+                        .overflow_hidden()
+                        .child(div().w_full().h_full().min_h(px(0.)).child(info_panel)),
+                );
+            } else {
+                main_div = main_div.child(
+                    div()
+                        .flex_1()
+                        .min_h(px(0.))
+                        .w_full()
+                        .overflow_hidden()
+                        .child(div().w_full().h_full().min_h(px(0.)).child(list_element)),
+                );
+            }
 
             // Compact hint strip instead of footer — uses shared mini_layout tokens
             // and opacity-blended text for a softer, Raycast-like launcher feel.
@@ -1026,7 +1045,7 @@ impl ScriptListApp {
                         div()
                             .text_xs()
                             .text_color(rgba(hint_text_rgba))
-                            .child("↵ Run  ·  ⌘K Actions  ·  Tab AI"),
+                            .child("↵ Run  ·  ⌘I Info  ·  ⌘K Actions  ·  Tab AI"),
                     ),
             );
 
@@ -1055,65 +1074,64 @@ impl ScriptListApp {
             return main_div.into_any_element();
         }
 
-        // Main content area - 50/50 split: List on left, Preview on right
-        main_div = main_div
-            // Uses min_h(px(0.)) to prevent flex children from overflowing
-            .child(
-                div()
-                    .flex()
-                    .flex_row()
-                    .flex_1()
-                    .min_h(px(0.)) // Critical: allows flex container to shrink properly
-                    .w_full()
-                    .overflow_hidden()
-                    // Left side: Script list (50% width) - uses uniform_list for auto-scrolling
-                    .child(
+        // Main content area: list takes full width unless info panel is toggled (Cmd+I)
+        {
+            let content_row = div()
+                .flex()
+                .flex_row()
+                .flex_1()
+                .min_h(px(0.)) // Critical: allows flex container to shrink properly
+                .w_full()
+                .overflow_hidden()
+                // Left side: Script list — full width when info hidden, 50% when shown
+                .child(
+                    div()
+                        .when(self.show_info_panel, |d| d.w_1_2())
+                        .when(!self.show_info_panel, |d| d.w_full())
+                        .h_full()
+                        .min_h(px(0.))
+                        .child(list_element),
+                )
+                // Right side: Info panel (50% width), only rendered when toggled
+                .when(self.show_info_panel, |row| {
+                    let preview_start = std::time::Instant::now();
+                    let preview_panel = self.render_preview_panel(cx);
+                    let preview_elapsed = preview_start.elapsed();
+                    if state_changed {
+                        logging::log(
+                            "PREVIEW_PERF",
+                            &format!(
+                                "[PREVIEW_PANEL_DONE] filter='{}' took {:.2}ms",
+                                filter_for_log,
+                                preview_elapsed.as_secs_f64() * 1000.0
+                            ),
+                        );
+                    }
+                    row.child(
                         div()
-                            .w_1_2() // 50% width
-                            .h_full() // Take full height
-                            .min_h(px(0.)) // Allow shrinking
-                            .child(list_element),
-                    )
-                    // Right side: Preview panel (50% width) with actions overlay
-                    // Preview ALWAYS renders, actions panel overlays on top when visible
-                    .child({
-                        let preview_start = std::time::Instant::now();
-                        let preview_panel = self.render_preview_panel(cx);
-                        let preview_elapsed = preview_start.elapsed();
-                        // Log preview panel render time only when state changed (reduces cursor-blink spam)
-                        if state_changed {
-                            logging::log(
-                                "PREVIEW_PERF",
-                                &format!(
-                                    "[PREVIEW_PANEL_DONE] filter='{}' took {:.2}ms",
-                                    filter_for_log,
-                                    preview_elapsed.as_secs_f64() * 1000.0
-                                ),
-                            );
-                        }
-                        div()
-                            .relative() // Enable absolute positioning for overlay
+                            .relative()
                             .flex()
                             .flex_col()
-                            .w_1_2() // 50% width
-                            .h_full() // Take full height
-                            .min_h(px(0.)) // Allow shrinking
+                            .w_1_2()
+                            .h_full()
+                            .min_h(px(0.))
                             .overflow_hidden()
-                            // Execution Contract rail (above preview)
-                            .when_some(self.cached_main_window_preflight.clone(), |d, receipt| {
-                                d.child(
-                                    crate::main_window_preflight::render_main_window_preflight_receipt(
-                                        self,
-                                        &receipt,
-                                    ),
-                                )
-                            })
-                            // Preview panel ALWAYS renders
-                            // NOTE: Actions dialog is now rendered in a separate popup window
-                            // (see actions/window.rs) - no inline overlay needed here
-                            .child(div().flex_1().min_h(px(0.)).child(preview_panel))
-                    }),
-            );
+                            .when_some(
+                                self.cached_main_window_preflight.clone(),
+                                |d, receipt| {
+                                    d.child(
+                                        crate::main_window_preflight::render_main_window_preflight_receipt(
+                                            self,
+                                            &receipt,
+                                        ),
+                                    )
+                                },
+                            )
+                            .child(div().flex_1().min_h(px(0.)).child(preview_panel)),
+                    )
+                });
+            main_div = main_div.child(content_row);
+        }
 
         // Footer: Logo left | Run Script ↵ | divider | Actions ⌘K right
         // Raycast-style footer with Script Kit branding using reusable PromptFooter component
@@ -1122,40 +1140,63 @@ impl ScriptListApp {
             let handle_run = cx.entity().downgrade();
             let handle_actions = cx.entity().downgrade();
 
-            // Resolve footer config from persisted storybook selection (falls back to default).
-            let selected_footer_variant =
-                script_kit_gpui::storybook::load_selected_story_variant("footer-layout-variations");
-            let (spec, resolution) = script_kit_gpui::storybook::resolve_footer_selection_spec(
-                selected_footer_variant.as_deref(),
-            );
-            let mut footer_config = PromptFooterConfig::new()
-                .primary_label(spec.primary_label)
-                .primary_shortcut(spec.primary_shortcut)
-                .secondary_label(spec.secondary_label)
-                .secondary_shortcut(spec.secondary_shortcut)
-                .show_logo(spec.show_logo)
-                .show_primary(spec.show_primary)
-                .show_secondary(spec.show_secondary)
-                .show_info_label(spec.show_info_label);
-            if let Some(helper_text) = spec.helper_text {
-                footer_config = footer_config.helper_text(helper_text);
-            }
-            if let Some(info_label) = spec.info_label {
-                footer_config = footer_config.info_label(info_label);
-            }
+            // Resolve footer config — when the storybook feature is enabled,
+            // load the persisted design variant; otherwise use hardcoded defaults.
+            #[cfg(feature = "storybook")]
+            let mut footer_config = {
+                let selected_footer_variant =
+                    script_kit_gpui::storybook::load_selected_story_variant(
+                        "footer-layout-variations",
+                    );
+                let (spec, resolution) =
+                    script_kit_gpui::storybook::resolve_footer_selection_spec(
+                        selected_footer_variant.as_deref(),
+                    );
+                let mut fc = PromptFooterConfig::new()
+                    .primary_label(spec.primary_label)
+                    .primary_shortcut(spec.primary_shortcut)
+                    .secondary_label(spec.secondary_label)
+                    .secondary_shortcut(spec.secondary_shortcut)
+                    .show_logo(spec.show_logo)
+                    .show_primary(spec.show_primary)
+                    .show_secondary(spec.show_secondary)
+                    .show_info_label(spec.show_info_label);
+                if let Some(helper_text) = spec.helper_text {
+                    fc = fc.helper_text(helper_text);
+                }
+                if let Some(info_label) = spec.info_label {
+                    fc = fc.info_label(info_label);
+                }
+                if state_changed {
+                    tracing::info!(
+                        event = "script_list_footer_selection_resolved",
+                        requested_variant_id = resolution
+                            .requested_variant_id
+                            .as_deref()
+                            .unwrap_or(""),
+                        resolved_variant_id = resolution.resolved_variant_id.as_str(),
+                        fallback_used = resolution.fallback_used,
+                        "Resolved footer variant for live script list"
+                    );
+                }
+                // Stash slot texts for later use after footer is built
+                #[allow(unused_variables)]
+                let left_slot_text = spec.left_slot_text;
+                #[allow(unused_variables)]
+                let right_slot_text = spec.right_slot_text;
+                fc
+            };
 
-            if state_changed {
-                tracing::info!(
-                    event = "script_list_footer_selection_resolved",
-                    requested_variant_id = resolution
-                        .requested_variant_id
-                        .as_deref()
-                        .unwrap_or(""),
-                    resolved_variant_id = resolution.resolved_variant_id.as_str(),
-                    fallback_used = resolution.fallback_used,
-                    "Resolved footer variant for live script list"
-                );
-            }
+            #[cfg(not(feature = "storybook"))]
+            let mut footer_config = PromptFooterConfig::new()
+                .primary_label("Open Application")
+                .primary_shortcut("↵")
+                .secondary_label("Actions")
+                .secondary_shortcut("⌘K")
+                .show_logo(true)
+                .show_primary(true)
+                .show_secondary(true)
+                .show_info_label(false);
 
             footer_config = footer_config.primary_label(script_list_footer_primary_label());
 
@@ -1180,6 +1221,7 @@ impl ScriptListApp {
                 footer_config = footer_config.show_secondary(self.has_actions());
             }
 
+            #[allow(unused_mut)]
             let mut footer = PromptFooter::new(footer_config, footer_colors)
                 .on_primary_click(Box::new(move |_, _window, cx| {
                     if let Some(app) = handle_run.upgrade() {
@@ -1196,19 +1238,30 @@ impl ScriptListApp {
                     }
                 }));
 
-            if let Some(left_slot_text) = spec.left_slot_text {
-                footer =
-                    footer.left_slot(script_kit_gpui::storybook::render_footer_slot_text(
-                        left_slot_text,
-                        true,
-                    ));
-            }
-            if let Some(right_slot_text) = spec.right_slot_text {
-                footer =
-                    footer.right_slot(script_kit_gpui::storybook::render_footer_slot_text(
-                        right_slot_text,
-                        false,
-                    ));
+            // Slot text rendering is only available with storybook feature
+            #[cfg(feature = "storybook")]
+            {
+                let selected_footer_variant =
+                    script_kit_gpui::storybook::load_selected_story_variant(
+                        "footer-layout-variations",
+                    );
+                let (spec, _) = script_kit_gpui::storybook::resolve_footer_selection_spec(
+                    selected_footer_variant.as_deref(),
+                );
+                if let Some(left_slot_text) = spec.left_slot_text {
+                    footer =
+                        footer.left_slot(script_kit_gpui::storybook::render_footer_slot_text(
+                            left_slot_text,
+                            true,
+                        ));
+                }
+                if let Some(right_slot_text) = spec.right_slot_text {
+                    footer =
+                        footer.right_slot(script_kit_gpui::storybook::render_footer_slot_text(
+                            right_slot_text,
+                            false,
+                        ));
+                }
             }
 
             footer

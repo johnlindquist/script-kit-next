@@ -39,6 +39,7 @@
             last_output: None,
             focus_handle: cx.focus_handle(),
             show_logs: false,
+            show_info_panel: false,
             theme,
             config,
             // Scroll activity tracking: start with scrollbar hidden

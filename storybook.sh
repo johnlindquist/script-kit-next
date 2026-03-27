@@ -123,7 +123,7 @@ if [[ "$HOT_RELOAD" == true ]]; then
         -w src/theme \
         -w src/components \
         -c \
-        -x "run --bin storybook -- $STORYBOOK_ARGS"
+        -x "run --bin storybook --features storybook -- $STORYBOOK_ARGS"
 else
     # Single run mode
     echo -e "${GREEN}🎨 Building and running storybook...${NC}"
@@ -132,5 +132,5 @@ else
     fi
     echo ""
     
-    cargo run --bin storybook -- $STORYBOOK_ARGS
+    cargo run --bin storybook --features storybook -- $STORYBOOK_ARGS
 fi

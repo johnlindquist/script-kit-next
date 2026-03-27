@@ -183,9 +183,11 @@ pub mod scheduler;
 pub mod setup;
 
 // Storybook - Component preview system for development
+#[cfg(feature = "storybook")]
 pub mod storybook;
 
 // Stories - Component story definitions for the storybook
+#[cfg(feature = "storybook")]
 pub mod stories;
 
 // MCP Server - HTTP server for Model Context Protocol integration

@@ -78,7 +78,9 @@ mod selected_text;
 mod setup;
 mod shortcuts;
 mod stdin_commands;
+#[cfg(feature = "storybook")]
 mod stories;
+#[cfg(feature = "storybook")]
 mod storybook;
 mod syntax;
 mod term_prompt;

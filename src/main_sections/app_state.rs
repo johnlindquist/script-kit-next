@@ -49,6 +49,8 @@ struct ScriptListApp {
     last_output: Option<SharedString>,
     focus_handle: FocusHandle,
     show_logs: bool,
+    /// Whether the focused-info panel is visible (toggled via Cmd+I / "Show Info" action)
+    show_info_panel: bool,
     /// Theme wrapped in Arc for cheap cloning when passing to prompts/dialogs
     theme: std::sync::Arc<theme::Theme>,
     #[allow(dead_code)]

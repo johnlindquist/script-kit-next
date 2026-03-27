@@ -1,155 +1,69 @@
 {
   "version": 1,
-  "updatedAt": "2026-03-26T17:52:03.915Z",
+  "updatedAt": "2026-03-27T07:56:02.861Z",
   "agents": {
-    "storybook-contract-a1": {
-      "id": "storybook-contract-a1",
+    "adoption-system-a1": {
+      "id": "adoption-system-a1",
       "kind": "codex",
       "mode": "exec",
       "model": "openai/gpt-5.4",
-      "task": "Make the Storybook variant system renderable and persistable. This is a 3-file change scoped entirely to src/storybook/.\n\nOBJECTIVE: Extend the Story trait and StoryVariant struct so that variants can be rendered individually and selections can be persisted to disk. All existing Story implementations must continue to compile unchanged.\n\nCONCRETE CHANGES:\n\n1. src/storybook/story.rs — Replace the entire file contents with:\n   - Add StorySurface enum (Component, Footer, Input, Header, Shell, ActionDialog, TurnCard, FullPrompt) with Default=Component and a label() method\n   - Extend Story trait: add surface() -> StorySurface (default Component), add render_variant(&self, variant: &StoryVariant) -> AnyElement (default falls back to render())\n   - Add id: String field to StoryVariant, plus new(), default_named(), description(), with_prop() builder methods\n   - Add StoryVariant::stable_id() that returns id if non-empty, else slugifies name (lowercase, non-alphanumeric->dash, collapse consecutive dashes, trim), else 'default'\n   - Add unit test: stable_id_falls_back_to_slugified_name — 'Script Kit Branded' -> 'script-kit-branded'\n   - Keep the existing variants() default but change it to return vec![StoryVariant::default_named('default', 'Default')]\n\n2. src/storybook/selection.rs — Create new file:\n   - StorySelectionStore struct with selections: HashMap<String, String>, serde rename_all camelCase\n   - selected_variant(&self, story_id) -> Option<&str> and set_selected_variant(&mut self, story_id, variant_id)\n   - selection_store_path() -> PathBuf using crate::setup::get_kit_path().join('design-explorer-selections.json')\n   - load_story_selections() and save_story_selections() with anyhow::Context on all fs ops\n   - Unit test: story_selection_store_roundtrips — set a variant, serialize, deserialize, assert round-trip\n\n3. src/storybook/mod.rs — Add 'mod selection;' and pub use the new exports: load_story_selections, save_story_selections, StorySelectionStore, StorySurface\n\nKEY ANCHORS:\n- src/storybook/story.rs — current Story trait and StoryVariant (no id field, no surface, no render_variant)\n- src/storybook/mod.rs — current module exports (browser, layout, registry, story)\n- src/storybook/browser.rs — uses Story trait (must still compile after changes)\n- src/stories/ — 20+ Story implementations (must all still compile with new trait)\n- crate::setup::get_kit_path() — used for the selection store path\n- CLAUDE.md rules: use anyhow::Context on fallible ops, serde rename_all camelCase for protocol structs\n\nBACKWARD COMPAT: The new surface() and render_variant() methods have defaults, so existing stories that only implement id/name/category/render/variants will compile unchanged. The new StoryVariant::id field defaults to empty string, so existing StoryVariant::default() still works.\n\nVERIFICATION: cargo check && cargo clippy --all-targets -- -D warnings && cargo test",
-      "scope": "src/storybook/**",
+      "task": "Implement the storybook-to-live-app adoption system for the actions dialog. This is a Rust GPUI project.\n\nOBJECTIVE: Create a generic adoption layer so that selecting a design variation in the storybook immediately drives the live actions dialog rendering. Both the storybook preview and the live ActionsDialog::render() must call the SAME shared renderer with the SAME typed style.\n\nARCHITECTURE (from Oracle consultation):\n\n1. CREATE src/storybook/adoption.rs:\n   - VariationId trait: as_str(), name(), description(), from_stable_id()\n   - AdoptableSurface trait: associates Id, Spec, Live types + STORY_ID + DEFAULT_ID\n   - resolve_surface_live<S>(selected: Option<&str>) -> (S::Live, SurfaceSelectionResolution)\n   - adopted_surface_live<S>() -> S::Live (reads from load_selected_story_variant)\n   - SurfaceSelectionResolution struct (story_id, requested_variant_id, resolved_variant_id, fallback_used)\n\n2. CREATE src/storybook/actions_dialog_variations/mod.rs:\n   - ActionsDialogVariationId enum: Current, Whisper, GhostPills, Typewriter, SingleColumn, InlineKeys, SearchFocused, DotAccent (8 variants)\n   - Implement VariationId for ActionsDialogVariationId\n   - ActionsDialogStyle struct with typed fields:\n     - show_container_border: bool\n     - show_header: bool  \n     - show_search_divider: bool\n     - show_icons: bool\n     - selection_opacity: f32 (0.0-1.0)\n     - hover_opacity: f32\n     - row_height: f32\n     - row_radius: f32\n     - shortcut_visible: bool\n     - mono_font: bool\n     - prefix_marker: Option<&'static str>\n   - ActionsDialogVariationSpec { id, style }\n   - SPECS const array with all 8 variations\n   - Implement AdoptableSurface\n   - actions_dialog_story_variants() -> Vec<StoryVariant>\n   - adopted_actions_dialog_style() -> ActionsDialogStyle\n   - Current variant: seeded from existing constants in src/actions/constants.rs (POPUP_WIDTH=320, ACTION_ITEM_HEIGHT=30, SELECTION_RADIUS=6, etc.)\n   - Whisper: no borders, no header, selection_opacity=0.04, row_radius=6\n   - GhostPills: pill radius=16, border on selection, selection_opacity=0.12\n   - Typewriter: mono_font=true, prefix_marker=Some('>'), no icons\n   - SingleColumn: no shortcuts visible, no icons\n   - InlineKeys: shortcuts inline (not keycaps)\n   - SearchFocused: show_search_divider=true\n   - DotAccent: selection_opacity=0.0 (uses dot instead)\n\n3. CREATE src/storybook/actions_dialog_variations/tests.rs:\n   - ID uniqueness, round-trip, variant coverage, surface prop tests\n\n4. MODIFY src/storybook/mod.rs:\n   - Add pub mod adoption\n   - Add pub mod actions_dialog_variations\n   - Add pub use exports for new types\n\n5. MODIFY src/actions/dialog.rs:\n   - At the START of the render method, call adopted_actions_dialog_style() to get the active style\n   - Replace the 8 'Whisper:' commented-out border lines with conditional checks on style fields:\n     - if style.show_container_border { container.border_1().border_color(...) }\n     - if style.show_search_divider { ... }\n     - etc.\n   - Replace the halved selection_alpha with style.selection_opacity and style.hover_opacity\n   - Revert the _ prefixes on unused variables (they'll be used again in conditionals)\n   - Import adopted_actions_dialog_style from crate::storybook::actions_dialog_variations\n\n6. MODIFY src/stories/actions_mini_variations.rs:\n   - Import resolve_surface_live and the new types\n   - In render_variant(), resolve the style from the variant ID, then call the SAME render path\n   - Actually: for now, keep the mock renderers but add a comment that they should be replaced with the shared renderer once extracted\n\nKEY FILES:\n- src/storybook/selection.rs — existing persistence (load_selected_story_variant)\n- src/storybook/footer_variations/mod.rs — reference pattern for adoption\n- src/storybook/input_variations/mod.rs — reference pattern for adoption  \n- src/storybook/mod.rs — module registration\n- src/actions/dialog.rs — the live render target (~2400 lines, search for 'Whisper:' to find the 8 change sites)\n- src/actions/constants.rs — existing dimensional constants to seed Current variant\n- src/stories/actions_mini_variations.rs — storybook story\n\nCONSTRAINTS:\n- Rust GPUI project. Use gpui::* types.\n- Theme colors: crate::theme::get_cached_theme(), crate::ui_foundation::HexColorExt\n- DO NOT use .when() fluent builder (type inference issues) — use if/else with mut bindings\n- Run: cargo check && cargo clippy --lib -- -D warnings\n- Existing tests: cargo test --lib storybook\n- The dialog.rs render method is in an include!() flat namespace — NO top-level use statements in it. Use fully qualified paths or existing main.rs scope imports.\n\nSUCCESS CONDITION: cargo check passes, cargo clippy --lib -- -D warnings passes, tests pass. The adopted_actions_dialog_style() function returns Current by default (no storybook selection), and returns Whisper when 'whisper' is persisted in the selection store.",
+      "scope": "src/storybook/**,src/actions/dialog.rs,src/stories/actions_mini_variations.rs",
       "readonly": false,
       "status": "needs_split",
       "claims": [],
-      "createdAt": "2026-03-26T06:45:23.882Z",
-      "lastSeenAt": "2026-03-26T06:49:51.920Z",
+      "createdAt": "2026-03-27T07:34:58.025Z",
+      "lastSeenAt": "2026-03-27T07:56:02.861Z",
       "host": "Johns-MacBook-Pro.local",
-      "startSha": "ca569851874122363b240defecd5bdbf675af13e",
-      "notes": "[policy] tests failed",
+      "startSha": "6074d9c67d95ed979137929f266e4be32ed1f78e",
+      "notes": "[policy] commits touch files outside declared scope",
       "report": {
         "schema": "opex.agent_report.v1",
-        "agentId": "storybook-contract-a1",
-        "taskSummary": "Extended the storybook contract with story surfaces, per-variant rendering, stable variant IDs, and a persisted story selection store while preserving backward compatibility for existing stories.",
+        "agentId": "adoption-system-a1",
+        "taskSummary": "Implemented the generic storybook adoption layer for actions dialog variations, wired the live ActionsDialog renderer to the adopted typed style, and added coverage for persisted selection and variation resolution.",
         "tests": [
+          {
+            "cmd": "cargo test --lib storybook::actions_dialog_variations::tests::adopted_actions_dialog_style_reads_persisted_selection -- --nocapture",
+            "result": "pass"
+          },
+          {
+            "cmd": "cargo test --lib storybook",
+            "result": "pass"
+          },
           {
             "cmd": "cargo check",
             "result": "pass"
           },
           {
-            "cmd": "cargo clippy --all-targets -- -D warnings",
-            "result": "fail"
-          },
-          {
-            "cmd": "cargo test",
+            "cmd": "cargo clippy --lib -- -D warnings",
             "result": "pass"
-          },
-          {
-            "cmd": "cargo test story_selection_store_roundtrips stable_id_falls_back_to_slugified_name",
-            "result": "fail"
           }
         ],
         "changedFiles": [
-          "src/storybook/story.rs",
-          "src/storybook/selection.rs",
-          "src/storybook/mod.rs"
-        ],
-        "commitCount": 1,
-        "commitShas": [
-          "6447e231fd3a398634cf46a8792bc1631e614ddd"
-        ],
-        "commitFiles": [
+          "src/actions/dialog.rs",
+          "src/main.rs",
+          "src/stories/actions_mini_variations.rs",
+          "src/stories/mod.rs",
+          "src/storybook/actions_dialog_variations/mod.rs",
+          "src/storybook/actions_dialog_variations/tests.rs",
+          "src/storybook/adoption.rs",
           "src/storybook/mod.rs",
-          "src/storybook/selection.rs",
-          "src/storybook/story.rs"
-        ]
-      },
-      "claimed_at": {}
-    },
-    "list-shell-scaffold-a1": {
-      "id": "list-shell-scaffold-a1",
-      "kind": "codex",
-      "mode": "exec",
-      "model": "openai/gpt-5.4",
-      "task": "Add two new helpers to src/components/prompt_layout_shell.rs and their regression tests. This is a Rust GPUI project — read CLAUDE.md for conventions.\n\nOBJECTIVE: Add render_minimal_list_prompt_scaffold() and render_minimal_list_prompt_shell() to src/components/prompt_layout_shell.rs, plus source-regression tests in the existing prompt_layout_shell_tests module.\n\nCONCRETE STEPS:\n1. Read src/components/prompt_layout_shell.rs fully first.\n2. Insert these two functions directly AFTER the render_simple_prompt_shell() function (after line ~327, before render_simple_hint_strip):\n\n#[allow(dead_code)]\npub(crate) fn render_minimal_list_prompt_scaffold(\n    header: impl IntoElement,\n    content: impl IntoElement,\n    hints: impl crate::components::hint_strip::IntoHints,\n    leading: Option<AnyElement>,\n) -> Div {\n    div()\n        .w_full()\n        .h_full()\n        .flex()\n        .flex_col()\n        .child(\n            div()\n                .w_full()\n                .px(px(crate::ui::chrome::HEADER_PADDING_X))\n                .py(px(crate::ui::chrome::HEADER_PADDING_Y))\n                .flex()\n                .flex_row()\n                .items_center()\n                .child(header),\n        )\n        .child(crate::components::SectionDivider::new())\n        .child(\n            div()\n                .flex()\n                .flex_col()\n                .flex_1()\n                .min_h(px(0.))\n                .w_full()\n                .overflow_hidden()\n                .child(content),\n        )\n        .child(render_simple_hint_strip(hints, leading))\n}\n\n#[allow(dead_code)]\npub(crate) fn render_minimal_list_prompt_shell(\n    radius: f32,\n    vibrancy_bg: Option<Rgba>,\n    header: impl IntoElement,\n    content: impl IntoElement,\n    hints: impl crate::components::hint_strip::IntoHints,\n    leading: Option<AnyElement>,\n) -> Div {\n    render_simple_prompt_shell(\n        radius,\n        vibrancy_bg,\n        render_minimal_list_prompt_scaffold(header, content, hints, leading),\n        None,\n    )\n}\n\n3. Then add re-exports in src/components/mod.rs. Find the existing block:\npub(crate) use prompt_layout_shell::{\n    render_hint_strip_leading_text, render_simple_hint_strip, render_simple_prompt_shell,\n};\nAnd add render_minimal_list_prompt_scaffold and render_minimal_list_prompt_shell to that list.\n\n4. Add these two tests inside the existing #[cfg(test)] mod prompt_layout_shell_tests block (at the end, before the closing brace):\n\n    #[test]\n    fn render_minimal_list_prompt_scaffold_uses_shared_tokens_and_footer() {\n        let fn_start = SHELL_SOURCE\n            .find(\"fn render_minimal_list_prompt_scaffold(\")\n            .expect(\"function must exist\");\n        let fn_body = &SHELL_SOURCE[fn_start..];\n\n        assert!(\n            fn_body.contains(\"HEADER_PADDING_X\"),\n            \"shared list scaffold must own HEADER_PADDING_X\"\n        );\n        assert!(\n            fn_body.contains(\"HEADER_PADDING_Y\"),\n            \"shared list scaffold must own HEADER_PADDING_Y\"\n        );\n        assert!(\n            fn_body.contains(\"SectionDivider::new()\"),\n            \"shared list scaffold must own the divider\"\n        );\n        assert!(\n            fn_body.contains(\"render_simple_hint_strip(\"),\n            \"shared list scaffold must own the hint strip footer\"\n        );\n        assert!(\n            fn_body.contains(\"flex_1()\") && fn_body.contains(\"min_h(px(0.\"),\n            \"shared list scaffold must own the flex content contract\"\n        );\n    }\n\n    #[test]\n    fn render_minimal_list_prompt_shell_delegates_to_simple_shell() {\n        let fn_start = SHELL_SOURCE\n            .find(\"fn render_minimal_list_prompt_shell(\")\n            .expect(\"function must exist\");\n        let fn_body = &SHELL_SOURCE[fn_start..];\n\n        assert!(\n            fn_body.contains(\"render_simple_prompt_shell(\"),\n            \"shared list shell must delegate to render_simple_prompt_shell\"\n        );\n        assert!(\n            fn_body.contains(\"render_minimal_list_prompt_scaffold(\"),\n            \"shared list shell must wrap the scaffold\"\n        );\n    }\n\n5. Run verification: cargo check && cargo clippy --all-targets -- -D warnings && cargo test prompt_layout_shell\n\nKEY FILES:\n- src/components/prompt_layout_shell.rs — the file to edit (read it first)\n- src/components/mod.rs — add re-exports\n- src/ui/chrome/tokens.rs — HEADER_PADDING_X, HEADER_PADDING_Y constants\n- src/components/hint_strip.rs — IntoHints trait\n- src/components/section_divider.rs — SectionDivider::new()\n\nCONVENTIONS (from CLAUDE.md):\n- Use #[allow(dead_code)] on new helpers not yet called\n- pub(crate) visibility for cross-module internals\n- No unwrap() in production code (tests can use .expect())\n- cargo check && cargo clippy --all-targets -- -D warnings && cargo test must pass",
-      "scope": "src/components/prompt_layout_shell.rs,src/components/mod.rs",
-      "readonly": false,
-      "status": "done",
-      "claims": [],
-      "createdAt": "2026-03-26T11:35:58.471Z",
-      "lastSeenAt": "2026-03-26T11:38:49.636Z",
-      "host": "Johns-MacBook-Pro.local",
-      "startSha": "c7db22f72d0757bdc25cfbbfd22184aee24fccad",
-      "notes": "done. exit=0. final=.ai/logs/list-shell-scaffold-a1.final.md. See final message file.",
-      "report": {
-        "schema": "opex.agent_report.v1",
-        "agentId": "list-shell-scaffold-a1",
-        "taskSummary": "Added minimal list prompt scaffold/shell helpers, re-exported them, and added regression tests covering their shared layout contract and delegation.",
-        "tests": [
-          {
-            "cmd": "cargo check",
-            "result": "pass"
-          },
-          {
-            "cmd": "cargo clippy --all-targets -- -D warnings",
-            "result": "pass"
-          },
-          {
-            "cmd": "cargo test prompt_layout_shell",
-            "result": "pass"
-          }
-        ],
-        "changedFiles": [
-          "src/components/prompt_layout_shell.rs",
-          "src/components/mod.rs"
+          "src/storybook/selection.rs"
         ],
         "commitCount": 1,
         "commitShas": [
-          "35ee703565e502a238cb68b2cc466615231a8c97"
+          "ca3d5fe837749114ae87a20948bef7ae31dfc1a6"
         ],
         "commitFiles": [
-          "src/components/mod.rs",
-          "src/components/prompt_layout_shell.rs"
-        ]
-      },
-      "claimed_at": {}
-    },
-    "flash-fix-a1": {
-      "id": "flash-fix-a1",
-      "kind": "codex",
-      "mode": "exec",
-      "model": "openai/gpt-5.4",
-      "task": "Fix the window flash/stretch bug on hotkey activation. The root cause: show_main_window_helper in src/main_sections/window_visibility.rs makes the panel visible (orderFrontRegardless + makeKeyWindow) BEFORE the final view-specific size is applied, and the corrective resize is deferred via defer_resize_to_view(). This guarantees a bad first visible frame.\n\nTHE FIX (strict hidden-prep pipeline):\n1. Consume NEEDS_RESET FIRST, before computing any geometry.\n2. If reset needed, call view.reset_to_script_list(ctx) BEFORE computing bounds.\n3. Compute the FINAL target geometry from post-reset state using calculate_window_size_params() and height_for_view() (for Full mode) or mini sizing helpers (for Mini mode). Do NOT use initial_window_height() as the pre-show size.\n4. Apply that geometry via move_first_window_to_bounds() while the panel is still hidden.\n5. THEN call show_main_window_without_activation().\n6. Post-show: focus only (activate_window, focus, set focused_input/pending_focus). NO defer_resize_to_view in the show path.\n\nKEY FILES:\n- src/main_sections/window_visibility.rs — show_main_window_helper (PRIMARY TARGET)\n- src/platform/visibility_focus.rs — show_main_window_without_activation(), move_first_window_to_bounds()\n- src/main_sections/app_view_state.rs — calculate_window_size_params(), height_for_view(), reset_to_script_list()\n- src/app_impl/lifecycle_reset.rs — NEEDS_RESET atomic, reset logic\n\nIMPORTANT CONSTRAINTS (from CLAUDE.md):\n- include!() files (main_sections/, app_impl/) share main.rs scope: NO top-level use statements, NO mod declarations\n- Use fully qualified paths or existing main.rs scope imports in include!() files\n- After any render-affecting mutation: cx.notify()\n- Never unwrap() in production code — use ? or graceful handling\n- Verification: cargo check && cargo clippy --all-targets -- -D warnings && cargo test\n\nThe goal is: hidden state reset → hidden exact geometry → show panel → focus only. Remove defer_resize_to_view from the hotkey show path entirely. Keep deferred resize for interactive changes after the window is already visible.",
-      "scope": "src/main_sections/window_visibility.rs,src/platform/visibility_focus.rs,src/main_sections/app_view_state.rs,src/app_impl/lifecycle_reset.rs",
-      "readonly": false,
-      "status": "needs_split",
-      "claims": [],
-      "createdAt": "2026-03-26T17:42:42.370Z",
-      "lastSeenAt": "2026-03-26T17:52:03.915Z",
-      "host": "Johns-MacBook-Pro.local",
-      "startSha": "f8798129836f6b422c7af0741ac05d844dc633a9",
-      "notes": "[policy] tests failed",
-      "report": {
-        "schema": "opex.agent_report.v1",
-        "agentId": "flash-fix-a1",
-        "taskSummary": "Reworked the hotkey show path to prepare reset state and exact window geometry while hidden, then show and focus without deferred corrective resizing.",
-        "tests": [
-          {
-            "cmd": "cargo check",
-            "result": "pass"
-          },
-          {
-            "cmd": "cargo clippy --all-targets -- -D warnings",
-            "result": "fail"
-          },
-          {
-            "cmd": "cargo test",
-            "result": "fail"
-          },
-          {
-            "cmd": "cargo test --test source_audits mini_main_window::lifecycle_resets_restore_full_main_window_mode_on_close_and_go_back",
-            "result": "pass"
-          }
-        ],
-        "changedFiles": [
-          "src/main_sections/window_visibility.rs"
-        ],
-        "commitCount": 1,
-        "commitShas": [
-          "fa8c9055fbaad63fe84624ecb228f148acdc4105"
-        ],
-        "commitFiles": [
-          "src/main_sections/window_visibility.rs"
+          "src/actions/dialog.rs",
+          "src/main.rs",
+          "src/stories/actions_mini_variations.rs",
+          "src/stories/mod.rs",
+          "src/storybook/actions_dialog_variations/mod.rs",
+          "src/storybook/actions_dialog_variations/tests.rs",
+          "src/storybook/adoption.rs",
+          "src/storybook/mod.rs",
+          "src/storybook/selection.rs"
         ]
       },
       "claimed_at": {}
