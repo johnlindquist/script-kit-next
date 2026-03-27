@@ -9,7 +9,9 @@ const SHORTCUT_OPACITY: f32 = OPACITY_TEXT_MUTED * 0.6;
 
 impl AiApp {
     pub(super) fn render_message_actions(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        // Mini mode: single-line whisper hint strip instead of full button slab
+        // Mini mode: height-collapsed hint strip, revealed on hover of the
+        // "mini-last-assistant" group wrapper in render_messages.rs.
+        // No layout space is reserved when hidden.
         if self.window_mode.is_mini() {
             let has_assistant = self
                 .current_messages
@@ -22,18 +24,28 @@ impl AiApp {
             };
             return div()
                 .id("message-actions-mini")
-                .flex()
-                .items_center()
-                .pl(MINI_MESSAGE_PX)
-                .mt(S1)
-                .mb(S1)
-                .text_xs()
-                .text_color(
-                    cx.theme()
-                        .muted_foreground
-                        .opacity(MINI_MESSAGE_HINT_OPACITY),
+                .w_full()
+                .overflow_hidden()
+                .max_h(MINI_ACTION_HINT_COLLAPSED_H)
+                .opacity(0.)
+                .group_hover("mini-last-assistant", |s| {
+                    s.max_h(MINI_ACTION_HINT_REVEALED_H).opacity(1.0)
+                })
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .pl(MINI_MESSAGE_PX)
+                        .pt(SP_1)
+                        .pb(SP_1)
+                        .text_xs()
+                        .text_color(
+                            cx.theme()
+                                .muted_foreground
+                                .opacity(MINI_ACTION_HINT_REVEAL_OPACITY),
+                        )
+                        .child(hint),
                 )
-                .child(hint)
                 .into_any_element();
         }
 

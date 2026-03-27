@@ -82,6 +82,7 @@ impl AiApp {
         let msg_count = self.current_messages.len();
         let is_streaming = self.is_streaming;
         let has_error = self.streaming_error.is_some();
+        let is_mini = self.window_mode.is_mini();
 
         // Virtualized list: only renders visible messages + overdraw band.
         // Item indices: 0..msg_count = saved messages, msg_count = streaming/error row.
@@ -101,7 +102,16 @@ impl AiApp {
                             cx,
                         )
                         .into_any_element();
-                    if is_last_assistant {
+                    if is_last_assistant && is_mini {
+                        div()
+                            .group("mini-last-assistant")
+                            .flex()
+                            .flex_col()
+                            .w_full()
+                            .child(msg_el)
+                            .child(this.render_message_actions(cx))
+                            .into_any_element()
+                    } else if is_last_assistant {
                         div()
                             .flex()
                             .flex_col()
