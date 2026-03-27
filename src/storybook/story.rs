@@ -36,6 +36,7 @@ pub enum StorySurface {
     TurnCard,
     FullPrompt,
     MainMenu,
+    MiniAiChat,
 }
 
 impl StorySurface {
@@ -50,6 +51,7 @@ impl StorySurface {
             Self::TurnCard => "Turn Card",
             Self::FullPrompt => "Full Prompt",
             Self::MainMenu => "Main Menu",
+            Self::MiniAiChat => "Mini AI Chat",
         }
     }
 }

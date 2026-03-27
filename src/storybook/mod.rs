@@ -18,6 +18,8 @@ pub mod footer_variations;
 pub mod input_variations;
 mod layout;
 pub mod main_menu_variations;
+pub mod mini_ai_chat_presenter;
+pub mod mini_ai_chat_variations;
 mod registry;
 mod selection;
 mod story;
@@ -55,6 +57,15 @@ pub use layout::{code_block, story_container, story_divider, story_item, story_s
 pub use main_menu_variations::{
     main_menu_story_variants, render_main_menu_compare_thumbnail, render_main_menu_story_preview,
     MainMenuVariationId,
+};
+pub use mini_ai_chat_presenter::{
+    render_mini_ai_chat_presentation, MiniAiChatPresentationMessage, MiniAiChatPresentationModel,
+    MiniAiChatRole, MiniAiChatSuggestion,
+};
+pub use mini_ai_chat_variations::{
+    adopted_mini_ai_chat_style, mini_ai_chat_story_variants, resolve_mini_ai_chat_style,
+    MiniAiChatStyle, MiniAiChatSurface, MiniAiChatVariationId, MiniAiChatVariationSpec,
+    SPECS as MINI_AI_CHAT_VARIATION_SPECS,
 };
 pub use registry::{
     all_categories, all_stories, first_story_with_multiple_variants, stories_by_category,
