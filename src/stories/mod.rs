@@ -24,6 +24,7 @@ mod list_item_state_variations;
 mod list_item_stories;
 mod logo_centering_stories;
 mod main_menu_variations;
+mod mini_ai_chat_variations;
 mod path_prompt_stories;
 mod run_button_exploration;
 mod scrollbar_stories;
@@ -55,6 +56,7 @@ pub use list_item_state_variations::ListItemStateVariationsStory;
 pub use list_item_stories::ListItemStory;
 pub use logo_centering_stories::LogoCenteringStory;
 pub use main_menu_variations::MainMenuVariationsStory;
+pub use mini_ai_chat_variations::MiniAiChatVariationsStory;
 pub use path_prompt_stories::PathPromptStory;
 pub use run_button_exploration::RunButtonExplorationStory;
 pub use scrollbar_stories::ScrollbarStory;
@@ -87,6 +89,7 @@ static ALL_STORIES: LazyLock<Vec<StoryEntry>> = LazyLock::new(|| {
         StoryEntry::new(Box::new(InputDesignVariationsStory)),
         StoryEntry::new(Box::new(MainMenuVariationsStory)),
         StoryEntry::new(Box::new(ActionsMiniVariationsStory)),
+        StoryEntry::new(Box::new(MiniAiChatVariationsStory)),
         StoryEntry::new(Box::new(ActionsWindowStory)),
         // Prompts
         StoryEntry::new(Box::new(ArgPromptStory)),
