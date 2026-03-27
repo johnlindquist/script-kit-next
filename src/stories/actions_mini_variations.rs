@@ -7,8 +7,8 @@
 use gpui::*;
 
 use crate::storybook::{
-    actions_dialog_story_variants, render_actions_dialog_presentation, resolve_actions_dialog_style,
-    ActionsDialogPresentationAction, ActionsDialogPresentationItem,
+    actions_dialog_story_variants, render_actions_dialog_presentation,
+    resolve_actions_dialog_style, ActionsDialogPresentationAction, ActionsDialogPresentationItem,
     ActionsDialogPresentationModel, Story, StorySurface, StoryVariant,
 };
 
@@ -64,7 +64,7 @@ impl Story for ActionsMiniVariationsStory {
 fn storybook_actions_dialog_model() -> ActionsDialogPresentationModel {
     ActionsDialogPresentationModel {
         context_title: Some(SharedString::from("Actions")),
-        search_text: SharedString::new(),
+        search_text: SharedString::from(""),
         search_placeholder: SharedString::from("Search actions..."),
         cursor_visible: true,
         show_search: true,

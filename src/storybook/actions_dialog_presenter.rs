@@ -60,7 +60,7 @@ pub fn render_actions_dialog_presentation(
     style: ActionsDialogStyle,
     theme: &Theme,
 ) -> AnyElement {
-    let mono = crate::list_item::FONT_MONO;
+    let mono: SharedString = SharedString::from(crate::list_item::FONT_MONO);
 
     // Container
     let mut container = div().w_full().flex().flex_col();
@@ -101,7 +101,7 @@ pub fn render_actions_dialog_presentation(
 
     // Search input
     if model.show_search && model.search_at_top {
-        container = container.child(render_search_row(model, &style, theme, mono));
+        container = container.child(render_search_row(model, &style, theme, &mono));
     }
 
     // Search divider
@@ -143,7 +143,7 @@ pub fn render_actions_dialog_presentation(
                     action,
                     &style,
                     theme,
-                    mono,
+                    &mono,
                     is_selected,
                     is_hovered,
                 ));
@@ -165,7 +165,7 @@ pub fn render_actions_dialog_presentation(
                     .bg(theme.colors.ui.border.with_opacity(0.2)),
             );
         }
-        container = container.child(render_search_row(model, &style, theme, mono));
+        container = container.child(render_search_row(model, &style, theme, &mono));
     }
 
     container.into_any_element()
@@ -177,7 +177,7 @@ fn render_search_row(
     model: &ActionsDialogPresentationModel,
     style: &ActionsDialogStyle,
     theme: &Theme,
-    mono: &str,
+    mono: &SharedString,
 ) -> AnyElement {
     let mut row = div()
         .w_full()
@@ -194,7 +194,7 @@ fn render_search_row(
             .text_size(px(13.))
             .text_color(theme.colors.text.dimmed.to_rgb());
         if style.mono_font {
-            prefix = prefix.font_family(mono);
+            prefix = prefix.font_family(mono.clone());
         }
         row = row.child(prefix.child(SharedString::from(marker)));
     }
@@ -214,7 +214,7 @@ fn render_search_row(
 
     let mut text_el = div().text_size(px(13.)).text_color(text_color);
     if style.mono_font {
-        text_el = text_el.font_family(mono);
+        text_el = text_el.font_family(mono.clone());
     }
     row = row.child(text_el.child(display_text));
 
@@ -236,7 +236,7 @@ fn render_action_row(
     action: &ActionsDialogPresentationAction,
     style: &ActionsDialogStyle,
     theme: &Theme,
-    mono: &str,
+    mono: &SharedString,
     is_selected: bool,
     is_hovered: bool,
 ) -> AnyElement {
@@ -252,9 +252,17 @@ fn render_action_row(
 
     // Selection / hover background
     if is_selected && style.selection_opacity > 0.0 {
-        row = row.bg(theme.colors.accent.selected.with_opacity(style.selection_opacity));
+        row = row.bg(theme
+            .colors
+            .accent
+            .selected
+            .with_opacity(style.selection_opacity));
     } else if is_hovered && style.hover_opacity > 0.0 {
-        row = row.bg(theme.colors.accent.selected.with_opacity(style.hover_opacity));
+        row = row.bg(theme
+            .colors
+            .accent
+            .selected
+            .with_opacity(style.hover_opacity));
     }
 
     // Dot accent indicator (when selection_opacity is 0 and we're selected)
@@ -282,7 +290,7 @@ fn render_action_row(
         let indicator = if is_selected { "▸" } else { " " };
         let mut prefix = div().text_size(px(12.));
         if style.mono_font {
-            prefix = prefix.font_family(mono);
+            prefix = prefix.font_family(mono.clone());
         }
         prefix = prefix.text_color(if is_selected {
             theme.colors.text.primary.to_rgb()
@@ -314,7 +322,7 @@ fn render_action_row(
     // Title
     let mut title_el = div().flex_1().min_w(px(0.)).text_size(px(13.));
     if style.mono_font {
-        title_el = title_el.font_family(mono);
+        title_el = title_el.font_family(mono.clone());
     }
     title_el = title_el.text_color(if is_selected {
         theme.colors.text.primary.to_rgb()
@@ -354,7 +362,7 @@ fn render_action_row(
                     .text_size(px(11.))
                     .text_color(theme.colors.text.dimmed.with_opacity(0.4));
                 if style.mono_font {
-                    shortcut_el = shortcut_el.font_family(mono);
+                    shortcut_el = shortcut_el.font_family(mono.clone());
                 }
                 row = row.child(shortcut_el.child(shortcut.clone()));
             }
@@ -379,7 +387,7 @@ mod tests {
     fn sample_model() -> ActionsDialogPresentationModel {
         ActionsDialogPresentationModel {
             context_title: Some(SharedString::from("Actions")),
-            search_text: SharedString::new(),
+            search_text: SharedString::from(""),
             search_placeholder: SharedString::from("Search actions..."),
             cursor_visible: true,
             show_search: true,
