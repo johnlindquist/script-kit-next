@@ -3,6 +3,8 @@ use std::collections::HashMap;
 use std::fs;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
+#[cfg(test)]
+use std::sync::{LazyLock, Mutex};
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -21,6 +23,10 @@ pub struct StorySelectionWriteResult {
     pub selection_count: usize,
 }
 
+#[cfg(test)]
+static TEST_SELECTION_STORE_PATH: LazyLock<Mutex<Option<PathBuf>>> =
+    LazyLock::new(|| Mutex::new(None));
+
 impl StorySelectionStore {
     pub fn selected_variant(&self, story_id: &str) -> Option<&str> {
         self.selections.get(story_id).map(String::as_str)
@@ -36,7 +42,32 @@ impl StorySelectionStore {
 }
 
 pub(crate) fn selection_store_path() -> PathBuf {
+    #[cfg(test)]
+    {
+        if let Some(path) = TEST_SELECTION_STORE_PATH
+            .lock()
+            .expect("test selection store path mutex poisoned")
+            .clone()
+        {
+            return path;
+        }
+    }
+
     crate::setup::get_kit_path().join("design-explorer-selections.json")
+}
+
+#[cfg(test)]
+pub(crate) fn with_test_selection_store_path<T>(
+    path: impl Into<PathBuf>,
+    f: impl FnOnce() -> T,
+) -> T {
+    let mut guard = TEST_SELECTION_STORE_PATH
+        .lock()
+        .expect("test selection store path mutex poisoned");
+    let previous = guard.replace(path.into());
+    let result = f();
+    *guard = previous;
+    result
 }
 
 fn load_story_selections_from_path(path: &Path) -> Result<StorySelectionStore> {

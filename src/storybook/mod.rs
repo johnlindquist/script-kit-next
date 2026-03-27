@@ -9,6 +9,8 @@
 //! - [`story_container`], [`story_section`], etc. - Layout helpers
 //!
 
+pub mod actions_dialog_variations;
+pub mod adoption;
 mod browser;
 mod diagnostics;
 pub mod footer_variations;
@@ -19,6 +21,15 @@ mod registry;
 mod selection;
 mod story;
 
+pub use actions_dialog_variations::{
+    actions_dialog_story_variants, adopted_actions_dialog_style, resolve_actions_dialog_style,
+    ActionsDialogStyle, ActionsDialogSurface, ActionsDialogVariationId, ActionsDialogVariationSpec,
+    SPECS as ACTIONS_DIALOG_VARIATION_SPECS,
+};
+pub use adoption::{
+    adopted_surface_live, resolve_surface_live, AdoptableSurface, SurfaceSelectionResolution,
+    VariationId,
+};
 pub use browser::StoryBrowser;
 pub use diagnostics::{
     build_story_catalog_snapshot, load_story_catalog_snapshot, StoryCatalogEntry,

@@ -25,8 +25,8 @@ use super::builders::{
     get_scriptlet_context_actions_with_custom, ChatPromptInfo, ClipboardEntryInfo,
 };
 use super::constants::{
-    ACTION_ITEM_HEIGHT, ACTION_ROW_INSET, HEADER_HEIGHT, KEYCAP_HEIGHT, KEYCAP_MIN_WIDTH,
-    POPUP_MAX_HEIGHT, POPUP_WIDTH, SEARCH_INPUT_HEIGHT, SECTION_HEADER_HEIGHT, SELECTION_RADIUS,
+    ACTION_ROW_INSET, HEADER_HEIGHT, KEYCAP_HEIGHT, KEYCAP_MIN_WIDTH, POPUP_MAX_HEIGHT,
+    POPUP_WIDTH, SEARCH_INPUT_HEIGHT, SECTION_HEADER_HEIGHT, SELECTION_RADIUS,
 };
 use crate::file_search::FileInfo;
 use crate::scriptlets::Scriptlet;
@@ -1510,6 +1510,8 @@ impl Focusable for ActionsDialog {
 // --- merged from dialog_part_04_rewire.rs ---
 impl Render for ActionsDialog {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let style = crate::storybook::actions_dialog_variations::adopted_actions_dialog_style();
+
         // Get design tokens for the current design variant
         let tokens = get_tokens(self.design_variant);
         let colors = tokens.colors();
@@ -1560,7 +1562,7 @@ impl Render for ActionsDialog {
         let hint_text_color = dimmed_text;
         let input_text_color = primary_text;
 
-        let input_container = div()
+        let mut input_container = div()
             .w(px(POPUP_WIDTH)) // Match parent width exactly
             .min_w(px(POPUP_WIDTH))
             .max_w(px(POPUP_WIDTH))
@@ -1570,9 +1572,6 @@ impl Render for ActionsDialog {
             .overflow_hidden() // Prevent any content from causing shifts
             .px(px(spacing.item_padding_x))
             .py(px(spacing.item_padding_y + 2.0)) // Slightly more vertical padding
-            // No background - clean/transparent to match Raycast
-            .border_t_1() // Top separator line only
-            .border_color(separator_color)
             .flex()
             .flex_row()
             .items_center()
@@ -1593,7 +1592,22 @@ impl Render for ActionsDialog {
                     })
                     // Cursor at start when empty
                     .when(self.search_text.is_empty(), |d| {
-                        d.child(
+                        let mut content = d;
+                        if let Some(prefix_marker) = style.prefix_marker {
+                            content = content.child(
+                                div()
+                                    .mr(px(6.))
+                                    .text_color(hint_text_color)
+                                    .font_family(if style.mono_font {
+                                        crate::list_item::FONT_MONO
+                                    } else {
+                                        crate::list_item::FONT_SYSTEM_UI
+                                    })
+                                    .child(prefix_marker),
+                            );
+                        }
+
+                        content.child(
                             div()
                                 .w(px(2.))
                                 .h(px(16.))
@@ -1605,7 +1619,22 @@ impl Render for ActionsDialog {
                     .child(search_display.clone())
                     // Cursor at end when has text
                     .when(!self.search_text.is_empty(), |d| {
-                        d.child(
+                        let mut content = d;
+                        if let Some(prefix_marker) = style.prefix_marker {
+                            content = content.child(
+                                div()
+                                    .mr(px(6.))
+                                    .text_color(hint_text_color)
+                                    .font_family(if style.mono_font {
+                                        crate::list_item::FONT_MONO
+                                    } else {
+                                        crate::list_item::FONT_SYSTEM_UI
+                                    })
+                                    .child(prefix_marker),
+                            );
+                        }
+
+                        content.child(
                             div()
                                 .w(px(2.))
                                 .h(px(16.))
@@ -1615,6 +1644,9 @@ impl Render for ActionsDialog {
                         )
                     }),
             );
+        if style.show_search_divider {
+            input_container = input_container.border_t_1().border_color(separator_color);
+        }
 
         // Render action list using list() for variable-height items
         // Section headers are 22px, action items are 36px
@@ -1640,7 +1672,7 @@ impl Render for ActionsDialog {
                 }
             }
             let total_content_height = (header_count as f32 * SECTION_HEADER_HEIGHT)
-                + (item_count as f32 * ACTION_ITEM_HEIGHT);
+                + (item_count as f32 * style.row_height);
 
             // Keep scrollbar viewport aligned with actual list viewport by
             // excluding non-list chrome (search/header/footer) from max height.
@@ -1648,18 +1680,18 @@ impl Render for ActionsDialog {
                 !matches!(self.config.search_position, SearchPosition::Hidden) && !self.hide_search;
             let container_height = actions_dialog_scrollbar_viewport_height(
                 if is_empty {
-                    ACTION_ITEM_HEIGHT
+                    style.row_height
                 } else {
                     total_content_height
                 },
                 show_search,
-                self.shows_context_header(),
+                self.shows_context_header() && style.show_header,
                 self.config.show_footer,
             );
 
             // Estimate visible items based on average item height
             let avg_item_height = if is_empty {
-                ACTION_ITEM_HEIGHT
+                style.row_height
             } else {
                 total_content_height / self.grouped_items.len() as f32
             };
@@ -1715,14 +1747,19 @@ impl Render for ActionsDialog {
                                     rgba(hex_with_alpha(tokens.colors().border, 0x40))
                                 };
 
-                                div()
+                                let mut section_header = div()
                                     .id(ElementId::NamedInteger("section-header".into(), ix as u64))
                                     .h(px(SECTION_HEADER_HEIGHT))
                                     .w_full()
                                     .px(px(crate::actions::constants::ACTION_PADDING_X))
                                     .flex()
-                                    .items_center()
-                                    .when(ix > 0, |d| d.border_t_1().border_color(border_color))
+                                    .items_center();
+                                if style.show_header && ix > 0 {
+                                    section_header =
+                                        section_header.border_t_1().border_color(border_color);
+                                }
+
+                                section_header
                                     .child(
                                         div()
                                             .text_xs()
@@ -1769,12 +1806,18 @@ impl Render for ActionsDialog {
                                             secondary_text,
                                             dimmed_text,
                                         ) = if design_variant == DesignVariant::Default {
-                                            // Use theme opacity for both light and dark mode
-                                            // Light mode uses same derivation pattern as dark mode
+                                            // Whisper: halve selection/hover alpha for ultra-subtle highlight
                                             let theme_opacity = this.theme.get_opacity();
-                                            let selected_alpha =
-                                                (theme_opacity.selected * 255.0) as u32;
-                                            let hover_alpha = (theme_opacity.hover * 255.0) as u32;
+                                            let selected_alpha = ((theme_opacity.selected
+                                                * style.selection_opacity)
+                                                .clamp(0.0, 1.0)
+                                                * 255.0)
+                                                as u32;
+                                            let hover_alpha = ((theme_opacity.hover
+                                                * style.hover_opacity)
+                                                .clamp(0.0, 1.0)
+                                                * 255.0)
+                                                as u32;
                                             (
                                                 rgba(
                                                     (this.theme.colors.accent.selected_subtle << 8)
@@ -1789,10 +1832,18 @@ impl Render for ActionsDialog {
                                                 rgb(this.theme.colors.text.dimmed),
                                             )
                                         } else {
+                                            // Whisper: halve selection/hover alpha
                                             let theme_opacity = this.theme.get_opacity();
-                                            let selected_alpha =
-                                                (theme_opacity.selected * 255.0) as u32;
-                                            let hover_alpha = (theme_opacity.hover * 255.0) as u32;
+                                            let selected_alpha = ((theme_opacity.selected
+                                                * style.selection_opacity)
+                                                .clamp(0.0, 1.0)
+                                                * 255.0)
+                                                as u32;
+                                            let hover_alpha = ((theme_opacity.hover
+                                                * style.hover_opacity)
+                                                .clamp(0.0, 1.0)
+                                                * 255.0)
+                                                as u32;
                                             (
                                                 rgba(
                                                     (item_colors.background_selected << 8)
@@ -1945,11 +1996,19 @@ impl Render for ActionsDialog {
                                             },
                                         );
 
+                                        let selection_dot_color = if design_variant
+                                            == DesignVariant::Default
+                                        {
+                                            rgb(this.theme.colors.accent.selected)
+                                        } else {
+                                            rgb(item_colors.accent)
+                                        };
+
                                         // Inner row with pill-style selection
                                         let on_select = this.on_select.clone();
                                         let action_id_for_click = action.id.clone();
 
-                                        let inner_row = div()
+                                        let mut inner_row = div()
                                             .id(ElementId::NamedInteger(
                                                 "action-inner-row".into(),
                                                 ix as u64,
@@ -1960,7 +2019,7 @@ impl Render for ActionsDialog {
                                             .flex_row()
                                             .items_center()
                                             .px(px(item_spacing.item_padding_x))
-                                            .rounded(px(SELECTION_RADIUS))
+                                            .rounded(px(style.row_radius))
                                             .bg(if is_selected {
                                                 if is_destructive {
                                                     destructive_selected_bg
@@ -1977,13 +2036,55 @@ impl Render for ActionsDialog {
                                                 gpui::transparent_black().into()
                                             })
                                             .cursor_pointer();
+                                        let ghost_pill_border_threshold = SELECTION_RADIUS + 10.0;
+                                        if style.show_container_border
+                                            && style.row_radius >= ghost_pill_border_threshold
+                                            && is_selected
+                                        {
+                                            inner_row =
+                                                inner_row.border_1().border_color(keycap_border);
+                                        }
 
                                         // Content: optional icon + title + shortcuts
-                                        let show_icons = this.config.show_icons;
+                                        let show_icons = this.config.show_icons && style.show_icons;
                                         let action_icon = action.icon;
 
+                                        let left_gap = if style.prefix_marker.is_some() {
+                                            8.0
+                                        } else if show_icons {
+                                            12.0
+                                        } else {
+                                            8.0
+                                        };
                                         let mut left_side =
-                                            div().flex().flex_row().items_center().gap(px(12.0));
+                                            div().flex().flex_row().items_center().gap(px(left_gap));
+
+                                        if style.selection_opacity == 0.0 {
+                                            left_side = left_side.child(
+                                                div()
+                                                    .w(px(5.0))
+                                                    .h(px(5.0))
+                                                    .rounded(px(3.0))
+                                                    .bg(if is_selected {
+                                                        selection_dot_color
+                                                    } else {
+                                                        gpui::transparent_black().into()
+                                                    }),
+                                            );
+                                        }
+
+                                        if let Some(prefix_marker) = style.prefix_marker {
+                                            left_side = left_side.child(
+                                                div()
+                                                    .text_color(if is_selected {
+                                                        primary_text
+                                                    } else {
+                                                        dimmed_text
+                                                    })
+                                                    .font_family(crate::list_item::FONT_MONO)
+                                                    .child(prefix_marker),
+                                            );
+                                        }
 
                                         // Add icon if enabled and present
                                         if show_icons {
@@ -2006,32 +2107,36 @@ impl Render for ActionsDialog {
                                         // Add title + optional description stack
                                         let mut text_stack =
                                             div().flex().flex_col().justify_center().gap(px(1.0));
-                                        text_stack = text_stack.child(
-                                            div()
-                                                .text_color(title_color)
-                                                .text_sm()
-                                                .font_weight(if is_selected {
-                                                    gpui::FontWeight::MEDIUM
-                                                } else {
-                                                    gpui::FontWeight::NORMAL
-                                                })
-                                                .child(action.title.clone()),
-                                        );
+                                        let mut title = div()
+                                            .text_color(title_color)
+                                            .text_sm()
+                                            .font_weight(if is_selected {
+                                                gpui::FontWeight::MEDIUM
+                                            } else {
+                                                gpui::FontWeight::NORMAL
+                                            });
+                                        if style.mono_font {
+                                            title = title.font_family(crate::list_item::FONT_MONO);
+                                        }
+                                        text_stack = text_stack.child(title.child(action.title.clone()));
 
                                         if let Some(description) =
                                             action_subtitle_for_display(action)
                                         {
-                                            text_stack = text_stack.child(
-                                                div()
-                                                    .text_xs()
-                                                    .text_color(if is_selected {
-                                                        secondary_text
-                                                    } else {
-                                                        dimmed_text
-                                                    })
-                                                    .text_ellipsis()
-                                                    .child(description.to_string()),
-                                            );
+                                            let mut subtitle = div()
+                                                .text_xs()
+                                                .text_color(if is_selected {
+                                                    secondary_text
+                                                } else {
+                                                    dimmed_text
+                                                })
+                                                .text_ellipsis();
+                                            if style.mono_font {
+                                                subtitle =
+                                                    subtitle.font_family(crate::list_item::FONT_MONO);
+                                            }
+                                            text_stack =
+                                                text_stack.child(subtitle.child(description.to_string()));
                                         }
 
                                         left_side = left_side.child(text_stack);
@@ -2045,71 +2150,90 @@ impl Render for ActionsDialog {
                                             .child(left_side);
 
                                         // Right side: keyboard shortcuts as keycaps
-                                        if let Some(ref shortcut) = action.shortcut {
-                                            let keycaps =
-                                                ActionsDialog::parse_shortcut_keycaps(shortcut);
-                                            let mut keycap_row =
-                                                div().flex().flex_row().items_center().gap(px(3.));
-
-                                            for keycap in keycaps {
-                                                keycap_row = keycap_row.child(
-                                                    div()
-                                                        .min_w(px(KEYCAP_MIN_WIDTH))
-                                                        .h(px(KEYCAP_HEIGHT))
-                                                        .px(px(6.))
-                                                        .flex()
-                                                        .items_center()
-                                                        .justify_center()
-                                                        .bg(keycap_bg)
-                                                        .border_1()
-                                                        .border_color(keycap_border)
-                                                        .rounded(px(5.))
+                                        if style.shortcut_visible {
+                                            if let Some(ref shortcut) = action.shortcut {
+                                                if crate::storybook::actions_dialog_variations::actions_dialog_style_uses_inline_shortcuts(&style) {
+                                                    let mut shortcut_label = div()
                                                         .text_xs()
                                                         .text_color(shortcut_color)
-                                                        .child(keycap),
-                                                );
-                                            }
+                                                        .child(shortcut.clone());
+                                                    if style.mono_font {
+                                                        shortcut_label = shortcut_label
+                                                            .font_family(crate::list_item::FONT_MONO);
+                                                    }
+                                                    content = content.child(shortcut_label);
+                                                } else {
+                                                    let keycaps =
+                                                        ActionsDialog::parse_shortcut_keycaps(shortcut);
+                                                    let mut keycap_row = div()
+                                                        .flex()
+                                                        .flex_row()
+                                                        .items_center()
+                                                        .gap(px(3.));
 
-                                            content = content.child(keycap_row);
+                                                    for keycap in keycaps {
+                                                        keycap_row = keycap_row.child(
+                                                            div()
+                                                                .min_w(px(KEYCAP_MIN_WIDTH))
+                                                                .h(px(KEYCAP_HEIGHT))
+                                                                .px(px(6.))
+                                                                .flex()
+                                                                .items_center()
+                                                                .justify_center()
+                                                                .bg(keycap_bg)
+                                                                .border_1()
+                                                                .border_color(keycap_border)
+                                                                .rounded(px(5.))
+                                                                .text_xs()
+                                                                .text_color(shortcut_color)
+                                                                .child(keycap),
+                                                        );
+                                                    }
+
+                                                    content = content.child(keycap_row);
+                                                }
+                                            }
                                         }
 
-                                        div()
+                                        let mut action_row = div()
                                             .id(ElementId::NamedInteger(
                                                 "action-item".into(),
                                                 ix as u64,
                                             ))
-                                            .h(px(ACTION_ITEM_HEIGHT))
+                                            .h(px(style.row_height))
                                             .w_full()
                                             .px(px(ACTION_ROW_INSET))
                                             .py(px(2.0))
                                             .flex()
                                             .flex_col()
                                             .justify_center()
-                                            .when(show_section_separator, |d| {
-                                                d.border_t_1().border_color(section_separator_color)
-                                            })
                                             .on_hover(hover_handler)
                                             .on_mouse_down(
                                                 gpui::MouseButton::Left,
                                                 move |_, _, _| {
                                                     (on_select)(action_id_for_click.clone());
                                                 },
-                                            )
-                                            .child(inner_row.child(content))
-                                            .into_any_element()
+                                            );
+                                        if show_section_separator && style.show_container_border {
+                                            action_row = action_row
+                                                .border_t_1()
+                                                .border_color(section_separator_color);
+                                        }
+
+                                        action_row.child(inner_row.child(content)).into_any_element()
                                     } else {
                                         // Fallback for missing action
-                                        div().h(px(ACTION_ITEM_HEIGHT)).into_any_element()
+                                        div().h(px(style.row_height)).into_any_element()
                                     }
                                 } else {
                                     // Fallback for missing filtered index
-                                    div().h(px(ACTION_ITEM_HEIGHT)).into_any_element()
+                                    div().h(px(style.row_height)).into_any_element()
                                 }
                             }
                         }
                     } else {
                         // Fallback for out-of-bounds index
-                        div().h(px(ACTION_ITEM_HEIGHT)).into_any_element()
+                        div().h(px(style.row_height)).into_any_element()
                     }
                 })
             })
@@ -2139,7 +2263,7 @@ impl Render for ActionsDialog {
                             .top_0()
                             .left_0()
                             .w_full()
-                            .h(px(ACTION_ITEM_HEIGHT))
+                            .h(px(style.row_height))
                             .flex()
                             .items_center()
                             .px(px(spacing.item_padding_x))
@@ -2163,7 +2287,7 @@ impl Render for ActionsDialog {
         } else {
             0.0
         };
-        let header_height = if self.shows_context_header() {
+        let header_height = if self.shows_context_header() && style.show_header {
             HEADER_HEIGHT
         } else {
             0.0
@@ -2183,13 +2307,13 @@ impl Render for ActionsDialog {
 
         // When no actions, still need space for "No actions match" message
         let min_items_height = if action_item_count == 0 {
-            ACTION_ITEM_HEIGHT
+            style.row_height
         } else {
             0.0
         };
 
         // Calculate content height including both items and section headers
-        let content_height = (action_item_count as f32 * ACTION_ITEM_HEIGHT)
+        let content_height = (action_item_count as f32 * style.row_height)
             + (section_header_count as f32 * SECTION_HEADER_HEIGHT);
         let items_height = content_height
             .max(min_items_height)
@@ -2202,7 +2326,7 @@ impl Render for ActionsDialog {
         // - Smaller font (text_xs)
         // - Semibold weight
         // - Dimmed color (visually distinct from actionable items)
-        let header_container = if self.shows_context_header() {
+        let header_container = if self.shows_context_header() && style.show_header {
             self.context_title.as_ref().map(|title| {
                 let header_text = if self.design_variant == DesignVariant::Default {
                     rgb(self.theme.colors.text.dimmed)
@@ -2215,7 +2339,7 @@ impl Render for ActionsDialog {
                     rgba(hex_with_alpha(colors.border, 0x40))
                 };
 
-                div()
+                let mut header = div()
                     .w_full()
                     .h(px(HEADER_HEIGHT))
                     .px(px(crate::actions::constants::ACTION_PADDING_X)) // Match section header padding from list_item.rs
@@ -2223,16 +2347,18 @@ impl Render for ActionsDialog {
                     .pb(px(4.0)) // Bottom padding
                     .flex()
                     .flex_col()
-                    .justify_center()
-                    .border_b_1()
-                    .border_color(header_border)
-                    .child(
-                        div()
-                            .text_xs() // Smaller font like section headers
-                            .font_weight(gpui::FontWeight::SEMIBOLD) // Semibold like section headers
-                            .text_color(header_text)
-                            .child(title.clone()),
-                    )
+                    .justify_center();
+                if style.show_container_border {
+                    header = header.border_b_1().border_color(header_border);
+                }
+
+                header.child(
+                    div()
+                        .text_xs() // Smaller font like section headers
+                        .font_weight(gpui::FontWeight::SEMIBOLD) // Semibold like section headers
+                        .text_color(header_text)
+                        .child(title.clone()),
+                )
             })
         } else {
             None
@@ -2258,43 +2384,43 @@ impl Render for ActionsDialog {
                 rgba(hex_with_alpha(colors.border, 0x40))
             };
 
-            Some(
-                div()
-                    .w_full()
-                    .h(px(32.0))
-                    .px(px(16.0))
-                    .border_t_1()
-                    .border_color(footer_border)
-                    .flex()
-                    .items_center()
-                    .gap(px(16.0))
-                    .text_xs()
-                    .text_color(footer_text)
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap(px(4.0))
-                            .child("↑↓")
-                            .child("Navigate"),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap(px(4.0))
-                            .child("↵")
-                            .child("Select"),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap(px(4.0))
-                            .child("esc")
-                            .child("Close"),
-                    ),
-            )
+            let mut footer = div()
+                .w_full()
+                .h(px(32.0))
+                .px(px(16.0))
+                .flex()
+                .items_center()
+                .gap(px(16.0))
+                .text_xs()
+                .text_color(footer_text)
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(px(4.0))
+                        .child("↑↓")
+                        .child("Navigate"),
+                )
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(px(4.0))
+                        .child("↵")
+                        .child("Select"),
+                )
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(px(4.0))
+                        .child("esc")
+                        .child("Close"),
+                );
+            if style.show_container_border {
+                footer = footer.border_t_1().border_color(footer_border);
+            }
+            Some(footer)
         } else {
             None
         };
@@ -2302,8 +2428,8 @@ impl Render for ActionsDialog {
         // Top-positioned search input - clean Raycast-style matching the bottom search
         // No boxed input field, no ⌘K prefix - just text on a clean background with bottom separator
         let input_container_top = if search_at_top && show_search {
-            Some(
-                div()
+            Some({
+                let mut top_input = div()
                     .w(px(POPUP_WIDTH)) // Match parent width exactly
                     .min_w(px(POPUP_WIDTH))
                     .max_w(px(POPUP_WIDTH))
@@ -2313,9 +2439,6 @@ impl Render for ActionsDialog {
                     .overflow_hidden() // Prevent any content from causing shifts
                     .px(px(spacing.item_padding_x))
                     .py(px(spacing.item_padding_y + 2.0)) // Slightly more vertical padding
-                    // No background - clean/transparent to match Raycast
-                    .border_b_1() // Bottom separator line
-                    .border_color(separator_color)
                     .flex()
                     .flex_row()
                     .items_center()
@@ -2336,7 +2459,22 @@ impl Render for ActionsDialog {
                             })
                             // Cursor at start when empty
                             .when(self.search_text.is_empty(), |d| {
-                                d.child(
+                                let mut content = d;
+                                if let Some(prefix_marker) = style.prefix_marker {
+                                    content = content.child(
+                                        div()
+                                            .mr(px(6.))
+                                            .text_color(hint_text_color)
+                                            .font_family(if style.mono_font {
+                                                crate::list_item::FONT_MONO
+                                            } else {
+                                                crate::list_item::FONT_SYSTEM_UI
+                                            })
+                                            .child(prefix_marker),
+                                    );
+                                }
+
+                                content.child(
                                     div()
                                         .w(px(2.))
                                         .h(px(16.))
@@ -2348,7 +2486,22 @@ impl Render for ActionsDialog {
                             .child(search_display.clone())
                             // Cursor at end when has text
                             .when(!self.search_text.is_empty(), |d| {
-                                d.child(
+                                let mut content = d;
+                                if let Some(prefix_marker) = style.prefix_marker {
+                                    content = content.child(
+                                        div()
+                                            .mr(px(6.))
+                                            .text_color(hint_text_color)
+                                            .font_family(if style.mono_font {
+                                                crate::list_item::FONT_MONO
+                                            } else {
+                                                crate::list_item::FONT_SYSTEM_UI
+                                            })
+                                            .child(prefix_marker),
+                                    );
+                                }
+
+                                content.child(
                                     div()
                                         .w(px(2.))
                                         .h(px(16.))
@@ -2357,13 +2510,17 @@ impl Render for ActionsDialog {
                                         .when(self.cursor_visible, |d| d.bg(accent_color)),
                                 )
                             }),
-                    ),
-            )
+                    );
+                if style.show_search_divider {
+                    top_input = top_input.border_b_1().border_color(separator_color);
+                }
+                top_input
+            })
         } else {
             None
         };
 
-        div()
+        let mut container = div()
             .flex()
             .flex_col()
             .w(px(POPUP_WIDTH))
@@ -2371,26 +2528,32 @@ impl Render for ActionsDialog {
             .bg(main_bg) // Always apply background with vibrancy-aware opacity
             .rounded(px(visual.radius_lg))
             .shadow(Self::create_popup_shadow())
-            .border_1()
-            .border_color(container_border)
             .overflow_hidden()
             .text_color(container_text)
-            .key_context("actions_dialog")
-            // Only track focus if not delegated to parent (ActionsWindow sets skip_track_focus=true)
-            .when(!self.skip_track_focus, |d| {
-                d.track_focus(&self.focus_handle)
-            })
-            // NOTE: No on_key_down here - parent handles all keyboard input
-            // Search input at top (if config.search_position == Top)
-            .when_some(input_container_top, |d, input| d.child(input))
-            // Header row (if context_title is set)
-            .when_some(header_container, |d, header| d.child(header))
-            // Actions list
-            .child(actions_container)
-            // Search input at bottom (if config.search_position == Bottom)
-            .when(show_search && !search_at_top, |d| d.child(input_container))
-            // Footer with keyboard hints (if config.show_footer)
-            .when_some(footer_container, |d, footer| d.child(footer))
+            .text_color(container_text)
+            .key_context("actions_dialog");
+        if style.show_container_border {
+            container = container.border_1().border_color(container_border);
+        }
+        if !self.skip_track_focus {
+            container = container.track_focus(&self.focus_handle);
+        }
+
+        let mut container = container;
+        if let Some(input) = input_container_top {
+            container = container.child(input);
+        }
+        if let Some(header) = header_container {
+            container = container.child(header);
+        }
+        container = container.child(actions_container);
+        if show_search && !search_at_top {
+            container = container.child(input_container);
+        }
+        if let Some(footer) = footer_container {
+            container = container.child(footer);
+        }
+        container
     }
 }
 
