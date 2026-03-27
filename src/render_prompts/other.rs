@@ -379,12 +379,10 @@ impl ScriptListApp {
             }));
 
         // Handle Enter/Escape to dismiss
-        let handle_key = cx.listener(move |this, event: &gpui::KeyDownEvent, _window, cx| {
+        let handle_key = cx.listener(move |this, event: &gpui::KeyDownEvent, window, cx| {
             let key = event.keystroke.key.as_str();
             if crate::ui_foundation::is_key_escape(key) || key.eq_ignore_ascii_case("enter") {
-                this.current_view = AppView::ScriptList;
-                this.request_script_list_main_filter_focus(cx);
-                cx.notify();
+                this.go_back_or_close(window, cx);
             }
         });
 
@@ -405,12 +403,10 @@ impl ScriptListApp {
             )
             .child(
                 PromptFooter::new(footer_config, footer_colors)
-                    .on_primary_click(Box::new(move |_, _window, cx| {
+                    .on_primary_click(Box::new(move |_, window, cx| {
                         if let Some(app) = footer_entity.upgrade() {
                             app.update(cx, |this, cx| {
-                                this.current_view = AppView::ScriptList;
-                                this.request_script_list_main_filter_focus(cx);
-                                cx.notify();
+                                this.go_back_or_close(window, cx);
                             });
                         }
                     })),
