@@ -3,6 +3,7 @@
 //! This module contains all the story definitions for the storybook.
 //! Stories are manually registered in get_all_stories().
 
+mod actions_mini_variations;
 mod actions_window_stories;
 mod arg_prompt_stories;
 mod button_stories;
@@ -33,6 +34,7 @@ use crate::storybook::StoryEntry;
 use std::sync::LazyLock;
 
 // Re-export story types
+pub use actions_mini_variations::ActionsMiniVariationsStory;
 pub use actions_window_stories::ActionsWindowStory;
 pub use arg_prompt_stories::ArgPromptStory;
 pub use button_stories::ButtonStory;
@@ -84,6 +86,7 @@ static ALL_STORIES: LazyLock<Vec<StoryEntry>> = LazyLock::new(|| {
         StoryEntry::new(Box::new(FooterActionVariationsStory)),
         StoryEntry::new(Box::new(InputDesignVariationsStory)),
         StoryEntry::new(Box::new(MainMenuVariationsStory)),
+        StoryEntry::new(Box::new(ActionsMiniVariationsStory)),
         StoryEntry::new(Box::new(ActionsWindowStory)),
         // Prompts
         StoryEntry::new(Box::new(ArgPromptStory)),

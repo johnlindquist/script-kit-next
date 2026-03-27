@@ -8,7 +8,7 @@
 
 use gpui::{
     div, hsla, list, point, prelude::*, px, rgb, rgba, size, svg, uniform_list, AnyElement, App,
-    BoxShadow, Context, CursorStyle, ElementId, Entity, FocusHandle, Focusable, FontWeight,
+    BoxShadow, Context, CursorStyle, Div, ElementId, Entity, FocusHandle, Focusable, FontWeight,
     KeyDownEvent, ListAlignment, ListOffset, ListSizingBehavior, ListState, MouseMoveEvent, Render,
     ScrollStrategy, SharedString, Subscription, UniformListScrollHandle, Window,
     WindowBackgroundAppearance, WindowBounds, WindowHandle, WindowKind, WindowOptions,
@@ -78,6 +78,8 @@ mod selected_text;
 mod setup;
 mod shortcuts;
 mod stdin_commands;
+mod stories;
+mod storybook;
 mod syntax;
 mod term_prompt;
 mod terminal;
