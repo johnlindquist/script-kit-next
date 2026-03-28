@@ -86,6 +86,239 @@ pub fn build_tab_ai_user_prompt(intent: &str, context_json: &str) -> String {
     )
 }
 
+/// Schema version for `TabAiExecutionRecord`. Bump when adding/removing/renaming fields.
+pub const TAB_AI_EXECUTION_RECORD_SCHEMA_VERSION: u32 = 1;
+
+/// Record of a completed Tab AI execution — captures everything needed for
+/// save-offer, memory write-back, and temp-file cleanup.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TabAiExecutionRecord {
+    /// Schema version for forward compatibility.
+    pub schema_version: u32,
+    /// The user's original natural-language intent.
+    pub intent: String,
+    /// The TypeScript source the AI generated.
+    pub generated_source: String,
+    /// Path to the temp `.ts` file that was executed.
+    pub temp_script_path: String,
+    /// Slug derived from the AI response (used for save naming).
+    pub slug: String,
+    /// The `AppView` variant name at invocation time.
+    pub prompt_type: String,
+    /// Bundle ID of the frontmost app at invocation time, if captured.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bundle_id: Option<String>,
+    /// ISO-8601 timestamp when the script was executed.
+    pub executed_at: String,
+}
+
+impl TabAiExecutionRecord {
+    /// Build a record from parts — fully deterministic, no system calls.
+    pub fn from_parts(
+        intent: String,
+        generated_source: String,
+        temp_script_path: String,
+        slug: String,
+        prompt_type: String,
+        bundle_id: Option<String>,
+        executed_at: String,
+    ) -> Self {
+        Self {
+            schema_version: TAB_AI_EXECUTION_RECORD_SCHEMA_VERSION,
+            intent,
+            generated_source,
+            temp_script_path,
+            slug,
+            prompt_type,
+            bundle_id,
+            executed_at,
+        }
+    }
+}
+
+/// Schema version for `TabAiMemoryEntry`. Bump when adding/removing/renaming fields.
+pub const TAB_AI_MEMORY_ENTRY_SCHEMA_VERSION: u32 = 1;
+
+/// Lightweight entry persisted to the Tab AI memory index for future intent matching.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct TabAiMemoryEntry {
+    /// Schema version for forward compatibility.
+    pub schema_version: u32,
+    /// The user's original natural-language intent.
+    pub intent: String,
+    /// The TypeScript source the AI generated.
+    pub generated_source: String,
+    /// Slug derived from the AI response.
+    pub slug: String,
+    /// The `AppView` variant name at invocation time.
+    pub prompt_type: String,
+    /// Bundle ID of the frontmost app, if captured.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bundle_id: Option<String>,
+    /// ISO-8601 timestamp when the entry was written.
+    pub written_at: String,
+}
+
+/// Returns the file path for the Tab AI memory index.
+///
+/// Located at `~/.scriptkit/scripts/.tab-ai-memory.json`.
+pub fn tab_ai_memory_index_path() -> Result<std::path::PathBuf, String> {
+    let home = std::env::var("HOME")
+        .map_err(|_| "tab_ai_memory_index_path: HOME is not set".to_string())?;
+    Ok(std::path::Path::new(&home)
+        .join(".scriptkit")
+        .join("scripts")
+        .join(".tab-ai-memory.json"))
+}
+
+/// Read the Tab AI memory index from an explicit path.
+///
+/// Returns an empty `Vec` if the index file does not exist.
+pub fn read_tab_ai_memory_index_from_path(
+    path: &std::path::Path,
+) -> Result<Vec<TabAiMemoryEntry>, String> {
+    if !path.exists() {
+        return Ok(Vec::new());
+    }
+    let json = std::fs::read_to_string(path).map_err(|e| {
+        format!(
+            "tab_ai_memory_read_failed: path={} error={}",
+            path.display(),
+            e
+        )
+    })?;
+    serde_json::from_str(&json).map_err(|e| {
+        format!(
+            "tab_ai_memory_parse_failed: path={} error={}",
+            path.display(),
+            e
+        )
+    })
+}
+
+/// Read the Tab AI memory index from the default location.
+pub fn read_tab_ai_memory_index() -> Result<Vec<TabAiMemoryEntry>, String> {
+    let path = tab_ai_memory_index_path()?;
+    read_tab_ai_memory_index_from_path(&path)
+}
+
+/// Write a Tab AI memory entry to an explicit path.
+///
+/// Appends to the existing index (deduplicating by intent + bundle_id),
+/// then writes back to disk.  Returns the entry that was written.
+pub fn write_tab_ai_memory_entry_to_path(
+    record: &TabAiExecutionRecord,
+    path: &std::path::Path,
+) -> Result<TabAiMemoryEntry, String> {
+    let entry = TabAiMemoryEntry {
+        schema_version: TAB_AI_MEMORY_ENTRY_SCHEMA_VERSION,
+        intent: record.intent.clone(),
+        generated_source: record.generated_source.clone(),
+        slug: record.slug.clone(),
+        prompt_type: record.prompt_type.clone(),
+        bundle_id: record.bundle_id.clone(),
+        written_at: record.executed_at.clone(),
+    };
+
+    let mut entries = read_tab_ai_memory_index_from_path(path)?;
+
+    // Deduplicate: remove older entry with same intent + bundle_id
+    entries.retain(|existing| {
+        !(existing.intent == entry.intent && existing.bundle_id == entry.bundle_id)
+    });
+
+    entries.push(entry.clone());
+
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| {
+            format!(
+                "tab_ai_memory_dir_failed: path={} error={}",
+                parent.display(),
+                e
+            )
+        })?;
+    }
+
+    let json = serde_json::to_string_pretty(&entries).map_err(|e| {
+        format!("tab_ai_memory_serialize_failed: error={}", e)
+    })?;
+    std::fs::write(path, json).map_err(|e| {
+        format!(
+            "tab_ai_memory_write_failed: path={} error={}",
+            path.display(),
+            e
+        )
+    })?;
+
+    tracing::info!(
+        event = "tab_ai_memory_written",
+        intent = %record.intent,
+        slug = %record.slug,
+        prompt_type = %record.prompt_type,
+    );
+
+    Ok(entry)
+}
+
+/// Write a Tab AI memory entry to the default location.
+pub fn write_tab_ai_memory_entry(
+    record: &TabAiExecutionRecord,
+) -> Result<TabAiMemoryEntry, String> {
+    let path = tab_ai_memory_index_path()?;
+    write_tab_ai_memory_entry_to_path(record, &path)
+}
+
+/// Clean up a temporary script file created for Tab AI execution.
+///
+/// Returns `true` if the file was successfully removed (or already absent),
+/// `false` if removal failed.
+pub fn cleanup_tab_ai_temp_script(path: &str) -> bool {
+    let p = std::path::Path::new(path);
+    if !p.exists() {
+        tracing::info!(
+            event = "tab_ai_temp_cleanup_noop",
+            path = %path,
+            reason = "already_absent",
+        );
+        return true;
+    }
+    match std::fs::remove_file(p) {
+        Ok(()) => {
+            tracing::info!(
+                event = "tab_ai_temp_cleanup_success",
+                path = %path,
+            );
+            true
+        }
+        Err(e) => {
+            tracing::warn!(
+                event = "tab_ai_temp_cleanup_failed",
+                path = %path,
+                error = %e,
+            );
+            false
+        }
+    }
+}
+
+/// Decide whether to offer "Save as script?" after a successful Tab AI execution.
+///
+/// Currently always returns `true` for successful runs. Future heuristics
+/// could suppress the offer for trivial or duplicate scripts.
+pub fn should_offer_save(record: &TabAiExecutionRecord) -> bool {
+    // Non-empty source is the only requirement
+    let offer = !record.generated_source.trim().is_empty();
+    tracing::info!(
+        event = "tab_ai_save_offer_decision",
+        offer,
+        slug = %record.slug,
+        source_len = record.generated_source.len(),
+    );
+    offer
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -282,5 +515,120 @@ mod tests {
         );
         assert!(prompt.contains("Script Kit TypeScript"));
         assert!(prompt.contains("single fenced code block"));
+    }
+
+    // --- TabAiExecutionRecord tests ---
+
+    fn sample_execution_record() -> TabAiExecutionRecord {
+        TabAiExecutionRecord::from_parts(
+            "force quit Slack".to_string(),
+            "import '@anthropic-ai/sdk';\nawait exec('kill Slack');".to_string(),
+            "/tmp/scriptlet-abc123.ts".to_string(),
+            "force-quit-slack".to_string(),
+            "AppLauncher".to_string(),
+            Some("com.tinyspeck.slackmacgap".to_string()),
+            "2026-03-28T12:00:00Z".to_string(),
+        )
+    }
+
+    #[test]
+    fn tab_ai_execution_record_from_parts_sets_schema_version() {
+        let record = sample_execution_record();
+        assert_eq!(record.schema_version, TAB_AI_EXECUTION_RECORD_SCHEMA_VERSION);
+        assert_eq!(record.intent, "force quit Slack");
+        assert_eq!(record.slug, "force-quit-slack");
+        assert_eq!(record.prompt_type, "AppLauncher");
+    }
+
+    #[test]
+    fn tab_ai_execution_record_serde_roundtrip() {
+        let record = sample_execution_record();
+        let json = serde_json::to_string(&record).expect("serialize");
+        let parsed: TabAiExecutionRecord = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(parsed.schema_version, record.schema_version);
+        assert_eq!(parsed.intent, record.intent);
+        assert_eq!(parsed.slug, record.slug);
+        assert_eq!(parsed.bundle_id, record.bundle_id);
+    }
+
+    #[test]
+    fn tab_ai_execution_record_omits_none_bundle_id() {
+        let record = TabAiExecutionRecord::from_parts(
+            "test".to_string(),
+            "code".to_string(),
+            "/tmp/x.ts".to_string(),
+            "test".to_string(),
+            "ScriptList".to_string(),
+            None,
+            "2026-03-28T00:00:00Z".to_string(),
+        );
+        let json = serde_json::to_string(&record).expect("serialize");
+        assert!(!json.contains("bundleId"));
+    }
+
+    #[test]
+    fn should_offer_save_returns_true_for_non_empty_source() {
+        let record = sample_execution_record();
+        assert!(should_offer_save(&record));
+    }
+
+    #[test]
+    fn should_offer_save_returns_false_for_empty_source() {
+        let record = TabAiExecutionRecord::from_parts(
+            "test".to_string(),
+            "   ".to_string(),
+            "/tmp/x.ts".to_string(),
+            "test".to_string(),
+            "ScriptList".to_string(),
+            None,
+            "2026-03-28T00:00:00Z".to_string(),
+        );
+        assert!(!should_offer_save(&record));
+    }
+
+    #[test]
+    fn cleanup_tab_ai_temp_script_returns_true_for_absent_file() {
+        assert!(cleanup_tab_ai_temp_script("/tmp/nonexistent-tab-ai-test-12345.ts"));
+    }
+
+    #[test]
+    fn cleanup_tab_ai_temp_script_removes_existing_file() {
+        let dir = tempfile::tempdir().expect("create temp dir");
+        let path = dir.path().join("tab-ai-test-cleanup.ts");
+        std::fs::write(&path, "console.log('cleanup test')").expect("write test file");
+        assert!(path.exists());
+        assert!(cleanup_tab_ai_temp_script(path.to_str().expect("utf8")));
+        assert!(!path.exists());
+    }
+
+    #[test]
+    fn tab_ai_memory_entry_serde_roundtrip() {
+        let entry = TabAiMemoryEntry {
+            schema_version: TAB_AI_MEMORY_ENTRY_SCHEMA_VERSION,
+            intent: "copy url".to_string(),
+            generated_source: "await copy(browser.url)".to_string(),
+            slug: "copy-url".to_string(),
+            prompt_type: "ScriptList".to_string(),
+            bundle_id: Some("com.google.Chrome".to_string()),
+            written_at: "2026-03-28T00:00:00Z".to_string(),
+        };
+        let json = serde_json::to_string(&entry).expect("serialize");
+        let parsed: TabAiMemoryEntry = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(parsed, entry);
+    }
+
+    #[test]
+    fn tab_ai_memory_entry_omits_none_bundle_id() {
+        let entry = TabAiMemoryEntry {
+            schema_version: TAB_AI_MEMORY_ENTRY_SCHEMA_VERSION,
+            intent: "test".to_string(),
+            generated_source: "code".to_string(),
+            slug: "test".to_string(),
+            prompt_type: "ScriptList".to_string(),
+            bundle_id: None,
+            written_at: "2026-03-28T00:00:00Z".to_string(),
+        };
+        let json = serde_json::to_string(&entry).expect("serialize");
+        assert!(!json.contains("bundleId"));
     }
 }
