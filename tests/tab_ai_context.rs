@@ -4,7 +4,10 @@
 //! the AI model alongside the user's intent. Ensures schema stability,
 //! JSON field naming, and round-trip correctness.
 
-use script_kit_gpui::ai::{TabAiContextBlob, TabAiUiSnapshot, TAB_AI_CONTEXT_SCHEMA_VERSION};
+use script_kit_gpui::ai::{
+    TabAiClipboardContext, TabAiContextBlob, TabAiMemorySuggestion, TabAiUiSnapshot,
+    TAB_AI_CONTEXT_SCHEMA_VERSION,
+};
 use script_kit_gpui::context_snapshot::{AiContextSnapshot, BrowserContext, FrontmostAppContext};
 use script_kit_gpui::protocol::ElementInfo;
 
@@ -35,7 +38,12 @@ fn full_blob() -> TabAiContextBlob {
             ..Default::default()
         },
         vec!["recent-a".to_string(), "recent-b".to_string()],
-        Some("clipboard preview".to_string()),
+        Some(TabAiClipboardContext {
+            content_type: "text".to_string(),
+            preview: "clipboard preview".to_string(),
+            ocr_text: None,
+        }),
+        vec![],
         "2026-03-28T20:00:00Z".to_string(),
     )
 }
@@ -44,7 +52,7 @@ fn full_blob() -> TabAiContextBlob {
 fn schema_version_is_current() {
     let blob = full_blob();
     assert_eq!(blob.schema_version, TAB_AI_CONTEXT_SCHEMA_VERSION);
-    assert_eq!(blob.schema_version, 1, "bump tests when schema changes");
+    assert_eq!(blob.schema_version, 2, "bump tests when schema changes");
 }
 
 #[test]
@@ -60,7 +68,7 @@ fn json_field_names_are_camel_case() {
         "selectedSemanticId",
         "visibleElements",
         "recentInputs",
-        "clipboardPreview",
+        "contentType",
         "frontmostApp",
         "selectedText",
     ] {
@@ -76,7 +84,7 @@ fn json_field_names_are_camel_case() {
         "selected_semantic_id",
         "visible_elements",
         "recent_inputs",
-        "clipboard_preview",
+        "content_type",
         "frontmost_app",
         "selected_text",
     ] {
@@ -121,7 +129,7 @@ fn full_blob_round_trips_through_json() {
     );
     assert_eq!(parsed.recent_inputs, vec!["recent-a", "recent-b"]);
     assert_eq!(
-        parsed.clipboard_preview.as_deref(),
+        parsed.clipboard.as_ref().map(|c| c.preview.as_str()),
         Some("clipboard preview")
     );
 }
@@ -136,6 +144,7 @@ fn empty_optional_fields_omitted_from_json() {
         Default::default(),
         vec![],
         None,
+        vec![],
         "2026-03-28T00:00:00Z".to_string(),
     );
 
@@ -158,7 +167,11 @@ fn empty_optional_fields_omitted_from_json() {
         !json.contains("recentInputs"),
         "empty Vec should be omitted"
     );
-    assert!(!json.contains("clipboardPreview"), "None should be omitted");
+    assert!(!json.contains("clipboard"), "None should be omitted");
+    assert!(
+        !json.contains("priorAutomations"),
+        "empty Vec should be omitted"
+    );
 }
 
 #[test]
@@ -176,5 +189,92 @@ fn from_parts_populates_all_fields() {
     assert!(blob.desktop.selected_text.is_some());
     assert!(blob.desktop.browser.is_some());
     assert!(!blob.recent_inputs.is_empty());
-    assert!(blob.clipboard_preview.is_some());
+    assert!(blob.clipboard.is_some());
+}
+
+#[test]
+fn tab_ai_context_blob_serializes_clipboard_and_prior_automations() {
+    let blob = TabAiContextBlob::from_parts(
+        TabAiUiSnapshot {
+            prompt_type: "ClipboardHistory".to_string(),
+            input_text: Some("rename to kebab-case".to_string()),
+            focused_semantic_id: Some("choice:0:Quarterly Report Final.png".to_string()),
+            selected_semantic_id: Some("choice:0:Quarterly Report Final.png".to_string()),
+            visible_elements: Vec::new(),
+        },
+        AiContextSnapshot {
+            selected_text: Some("Quarterly Report Final".to_string()),
+            frontmost_app: Some(FrontmostAppContext {
+                pid: 42,
+                bundle_id: "com.apple.finder".to_string(),
+                name: "Finder".to_string(),
+            }),
+            ..Default::default()
+        },
+        vec!["rename file".to_string()],
+        Some(TabAiClipboardContext {
+            content_type: "image".to_string(),
+            preview: "Quarterly Report Final.png".to_string(),
+            ocr_text: Some("Quarterly Report Final.png".to_string()),
+        }),
+        vec![TabAiMemorySuggestion {
+            slug: "rename-file-kebab".to_string(),
+            app_name: "Finder".to_string(),
+            bundle_id: "com.apple.finder".to_string(),
+            raw_query: "rename file".to_string(),
+            effective_query: "rename selected file to kebab case".to_string(),
+            provider_id: "openai".to_string(),
+            model_id: "gpt-5".to_string(),
+            score: 0.91,
+        }],
+        "2026-03-28T07:27:22Z".to_string(),
+    );
+
+    let json = serde_json::to_value(&blob).expect("serialize tab ai context blob");
+    assert_eq!(json["schemaVersion"], 2);
+    assert_eq!(json["clipboard"]["ocrText"], "Quarterly Report Final.png");
+    assert_eq!(json["priorAutomations"][0]["slug"], "rename-file-kebab");
+    let score = json["priorAutomations"][0]["score"]
+        .as_f64()
+        .expect("score is a number");
+    assert!(
+        (score - 0.91).abs() < 0.001,
+        "score should be approximately 0.91, got {score}"
+    );
+}
+
+#[test]
+fn truncate_tab_ai_text_caps_long_strings() {
+    use script_kit_gpui::ai::truncate_tab_ai_text;
+
+    assert_eq!(truncate_tab_ai_text("short", 100), "short");
+    assert_eq!(truncate_tab_ai_text("", 10), "");
+    assert_eq!(truncate_tab_ai_text("anything", 0), "");
+
+    let long = "a".repeat(300);
+    let truncated = truncate_tab_ai_text(&long, 10);
+    assert!(truncated.ends_with('…'));
+    assert_eq!(truncated.chars().count(), 10);
+}
+
+#[test]
+fn truncate_tab_ai_text_handles_unicode() {
+    use script_kit_gpui::ai::truncate_tab_ai_text;
+
+    // Each emoji is one char
+    let emojis = "🎉🎊🎈🎁🎂";
+    let result = truncate_tab_ai_text(emojis, 3);
+    assert_eq!(result, "🎉🎊…");
+    assert_eq!(result.chars().count(), 3);
+}
+
+#[test]
+fn tab_ai_clipboard_context_omits_none_ocr_text() {
+    let clip = TabAiClipboardContext {
+        content_type: "text".to_string(),
+        preview: "hello".to_string(),
+        ocr_text: None,
+    };
+    let json = serde_json::to_string(&clip).unwrap();
+    assert!(!json.contains("ocrText"));
 }

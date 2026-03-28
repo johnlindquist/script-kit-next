@@ -388,6 +388,10 @@ struct TabAiOverlayState {
     intent: String,
     /// UI snapshot captured the moment Tab was pressed.
     ui_snapshot: crate::ai::TabAiUiSnapshot,
+    /// Cheap frontmost-app identifier captured when the overlay opens.
+    frontmost_bundle_id: Option<String>,
+    /// Best prior automation hint for the current app + intent.
+    memory_hint: Option<crate::ai::TabAiMemorySuggestion>,
     /// Whether the AI call is in-flight.
     running: bool,
     /// Error message from the last failed attempt, if any.

@@ -19,6 +19,7 @@ fn minimal_context() -> TabAiContextBlob {
         Default::default(),
         vec![],
         None,
+        vec![],
         "2026-03-28T00:00:00Z".to_string(),
     )
 }
@@ -48,7 +49,12 @@ fn rich_context() -> TabAiContextBlob {
             ..Default::default()
         },
         vec!["copy url".to_string(), "open finder".to_string()],
-        Some("clipboard text preview".to_string()),
+        Some(script_kit_gpui::ai::TabAiClipboardContext {
+            content_type: "text".to_string(),
+            preview: "clipboard text preview".to_string(),
+            ocr_text: None,
+        }),
+        vec![],
         "2026-03-28T12:00:00Z".to_string(),
     )
 }
@@ -67,7 +73,7 @@ fn prompt_contains_context_json_section() {
     let context_json = serde_json::to_string_pretty(&minimal_context()).unwrap();
     let prompt = build_tab_ai_user_prompt("test", &context_json);
 
-    assert!(prompt.contains("Current context JSON:"));
+    assert!(prompt.contains("Context JSON:"));
     assert!(prompt.contains("schemaVersion"));
 }
 
@@ -77,8 +83,8 @@ fn prompt_requests_fenced_code_block() {
     let prompt = build_tab_ai_user_prompt("test", &context_json);
 
     assert!(
-        prompt.contains("fenced code block"),
-        "Prompt must request a fenced code block for script extraction"
+        prompt.contains("fenced ```ts block"),
+        "Prompt must request a fenced ts code block for script extraction"
     );
 }
 
@@ -103,7 +109,7 @@ fn rich_context_serializes_all_fields() {
     assert!(json.contains("selectedSemanticId"));
     assert!(json.contains("visibleElements"));
     assert!(json.contains("recentInputs"));
-    assert!(json.contains("clipboardPreview"));
+    assert!(json.contains("contentType"));
     assert!(json.contains("frontmostApp"));
     assert!(json.contains("selectedText"));
 
@@ -143,7 +149,7 @@ fn context_blob_json_roundtrip() {
     assert_eq!(parsed.ui.input_text.as_deref(), Some("Slack"));
     assert_eq!(parsed.recent_inputs.len(), 2);
     assert_eq!(
-        parsed.clipboard_preview.as_deref(),
+        parsed.clipboard.as_ref().map(|c| c.preview.as_str()),
         Some("clipboard text preview")
     );
 }
@@ -159,7 +165,8 @@ fn minimal_context_omits_empty_optional_fields() {
     assert!(!json.contains("selectedSemanticId"));
     assert!(!json.contains("visibleElements"));
     assert!(!json.contains("recentInputs"));
-    assert!(!json.contains("clipboardPreview"));
+    assert!(!json.contains("clipboard"));
+    assert!(!json.contains("priorAutomations"));
 }
 
 /// Lock the `src/ai/mod.rs` re-export path: if a re-export breaks, this test
@@ -191,11 +198,12 @@ fn public_ai_exports_cover_tab_ai_prompt_and_context_types() {
         },
         vec!["force quit".to_string()],
         None,
+        vec![],
         "2026-03-28T00:00:00Z".to_string(),
     );
 
     assert!(prompt.contains("force quit"));
-    assert!(prompt.contains("single fenced code block"));
+    assert!(prompt.contains("fenced ```ts block"));
     assert_eq!(blob.schema_version, TAB_AI_CONTEXT_SCHEMA_VERSION);
     assert_eq!(blob.ui.prompt_type, "AppLauncher");
     assert_eq!(
@@ -215,4 +223,15 @@ fn multiline_intent_preserved_in_prompt() {
 
     assert!(prompt.contains("rename selection\nthen copy it"));
     assert!(prompt.contains("Script Kit TypeScript"));
+}
+
+#[test]
+fn build_tab_ai_user_prompt_mentions_clipboard_and_prior_automations() {
+    let prompt = build_tab_ai_user_prompt(
+        "copy just the url",
+        r#"{"clipboard":{"preview":"https://example.com"},"priorAutomations":[{"slug":"copy-url"}]}"#,
+    );
+    assert!(prompt.contains("clipboard.preview"));
+    assert!(prompt.contains("priorAutomations"));
+    assert!(prompt.contains("Return only a fenced ```ts block."));
 }
