@@ -488,7 +488,10 @@ mod execution_record_compat_tests {
         assert!(!record.intent.is_empty());
         assert!(!record.generated_source.is_empty());
         assert_eq!(record.context_warning_count, 0);
-        assert!(record.model_id.is_empty(), "v1 had no model_id — default should be empty string");
+        assert!(
+            record.model_id.is_empty(),
+            "v1 had no model_id — default should be empty string"
+        );
         assert!(
             record.provider_id.is_empty(),
             "v1 had no provider_id — default should be empty string"
