@@ -1198,9 +1198,19 @@ mod prompt_layout_shell_tests {
     }
 
     #[test]
-    fn file_search_source_matches_minimal_contract() {
+    fn file_search_source_matches_expanded_contract() {
         let source = include_str!("../render_builtins/file_search_layout.rs");
+        // Still uses the shared chrome infrastructure (SectionDivider, hint strip, header padding)
         assert_minimal_surface_source(source, "file_search_layout.rs", true);
+        // But now emits a hint audit with the universal three-key footer
+        assert!(
+            source.contains("emit_prompt_hint_audit("),
+            "file search layout should emit a prompt hint audit"
+        );
+        assert!(
+            source.contains("universal_prompt_hints()"),
+            "file search should use the canonical three-key footer"
+        );
     }
 
     /// Table-driven regression test covering all migrated minimal builtin surfaces.
@@ -1220,14 +1230,7 @@ mod prompt_layout_shell_tests {
         );
 
         // clipboard_history is now expanded (not minimal) — tested separately below.
-
-        // file_search: entry in file_search.rs, layout in file_search_layout.rs
-        assert_minimal_surface_file!(
-            "../render_builtins/file_search_layout.rs",
-            "../render_builtins/file_search.rs",
-            "file_search",
-            true
-        );
+        // file_search is now expanded (not minimal) — tested separately below.
     }
 
     #[test]
@@ -1261,15 +1264,15 @@ mod prompt_layout_shell_tests {
     }
 
     #[test]
-    fn file_search_emits_minimal_chrome_audit() {
+    fn file_search_declares_expanded_layout_mode() {
         let source = include_str!("../render_builtins/file_search.rs");
         assert!(
-            source.contains("PromptChromeAudit::minimal("),
-            "file_search.rs should emit a minimal chrome audit"
+            source.contains("PromptChromeAudit::expanded(\"file_search\""),
+            "file_search.rs should emit an expanded chrome audit"
         );
         assert!(
-            source.contains("\"file_search\""),
-            "file_search.rs should identify as file_search surface"
+            !source.contains("PromptChromeAudit::minimal("),
+            "file_search.rs should no longer emit a minimal chrome audit"
         );
     }
 

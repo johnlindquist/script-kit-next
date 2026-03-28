@@ -50,7 +50,7 @@ fn clipboard_history_uses_minimal_prompt_chrome() {
 }
 
 #[test]
-fn file_search_uses_minimal_prompt_chrome() {
+fn file_search_uses_shared_chrome_infrastructure() {
     assert_minimal_builtin_surface("file_search_layout", FILE_SEARCH_LAYOUT_SOURCE);
 }
 
