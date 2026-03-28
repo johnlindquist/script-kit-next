@@ -1186,8 +1186,7 @@ mod command_bar_config_tests {
 
     #[test]
     fn no_search_style_emits_hidden_headers_contract() {
-        let audit =
-            CommandBarChromeAudit::from_config("no_search", &CommandBarConfig::no_search());
+        let audit = CommandBarChromeAudit::from_config("no_search", &CommandBarConfig::no_search());
         assert_eq!(audit.search_position, "hidden");
         assert_eq!(audit.section_mode, "headers");
         assert_eq!(audit.anchor, "bottom");
@@ -1196,8 +1195,7 @@ mod command_bar_config_tests {
 
     #[test]
     fn notes_style_emits_top_headers_contract() {
-        let audit =
-            CommandBarChromeAudit::from_config("notes", &CommandBarConfig::notes_style());
+        let audit = CommandBarChromeAudit::from_config("notes", &CommandBarConfig::notes_style());
         assert_eq!(audit.search_position, "top");
         assert_eq!(audit.section_mode, "headers");
         assert_eq!(audit.anchor, "top");

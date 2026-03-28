@@ -15,8 +15,8 @@ impl ScriptListApp {
     /// Captures a UI snapshot at invocation time and shows the mini input.
     /// The underlying view remains visible and unchanged.
     pub(crate) fn open_tab_ai_overlay(&mut self, cx: &mut Context<Self>) {
-        // Already open — do nothing
-        if self.tab_ai_state.is_some() {
+        // Already open or save-offer visible — do nothing
+        if self.tab_ai_state.is_some() || self.tab_ai_save_offer_state.is_some() {
             return;
         }
 

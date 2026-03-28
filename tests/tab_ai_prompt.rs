@@ -170,10 +170,7 @@ fn public_ai_exports_cover_tab_ai_prompt_and_context_types() {
         AiContextSnapshot, BrowserContext, FrontmostAppContext,
     };
 
-    let prompt = build_tab_ai_user_prompt(
-        "force quit",
-        r#"{"ui":{"promptType":"AppLauncher"}}"#,
-    );
+    let prompt = build_tab_ai_user_prompt("force quit", r#"{"ui":{"promptType":"AppLauncher"}}"#);
 
     let blob = TabAiContextBlob::from_parts(
         TabAiUiSnapshot {
@@ -214,10 +211,7 @@ fn public_ai_exports_cover_tab_ai_prompt_and_context_types() {
 #[test]
 fn multiline_intent_preserved_in_prompt() {
     let context_json = serde_json::to_string(&minimal_context()).unwrap();
-    let prompt = build_tab_ai_user_prompt(
-        "rename selection\nthen copy it",
-        &context_json,
-    );
+    let prompt = build_tab_ai_user_prompt("rename selection\nthen copy it", &context_json);
 
     assert!(prompt.contains("rename selection\nthen copy it"));
     assert!(prompt.contains("Script Kit TypeScript"));

@@ -158,10 +158,7 @@ fn empty_optional_fields_omitted_from_json() {
         !json.contains("recentInputs"),
         "empty Vec should be omitted"
     );
-    assert!(
-        !json.contains("clipboardPreview"),
-        "None should be omitted"
-    );
+    assert!(!json.contains("clipboardPreview"), "None should be omitted");
 }
 
 #[test]

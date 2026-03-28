@@ -8,8 +8,6 @@ mod __render_prompts_other_docs {
 // Contains: select, env, drop, template prompts
 // This file is included via include!() macro in main.rs
 
-const WEBCAM_FOOTER_READY_STATUS_CONTEXT: &str = "camera ready, press Enter to capture";
-const WEBCAM_FOOTER_HIDE_PRIMARY_LABEL: &str = "Run Command";
 
 impl ScriptListApp {
     #[inline]
@@ -177,24 +175,16 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         crate::components::emit_prompt_chrome_audit(
-            &crate::components::PromptChromeAudit::exception(
+            &crate::components::PromptChromeAudit::minimal_list(
                 "template_prompt",
-                "multi_field_form_surface",
+                self.has_nonempty_sdk_actions(),
             ),
         );
         let render_context = PromptRenderContext::new(self.theme.as_ref(), self.current_design);
         let theme = render_context.theme;
-        let design_colors = render_context.design_colors;
         let design_spacing = render_context.design_spacing;
         let shell_radius = render_context.design_visual.radius_lg;
         let vibrancy_bg = get_vibrancy_background(theme);
-        let footer_colors = prompt_footer_colors_for_prompt(&design_colors, !theme.is_dark_mode());
-        let footer_config = prompt_footer_config_with_status(
-            "Submit",
-            false,
-            Some("Tab to move \u{2022} Enter to submit \u{2022} Esc to cancel".to_string()),
-            None,
-        );
 
         crate::components::prompt_shell_container(shell_radius, vibrancy_bg)
             .h(window_resize::layout::STANDARD_HEIGHT)
@@ -208,7 +198,10 @@ impl ScriptListApp {
                     .p(px(design_spacing.padding_xl))
                     .child(entity),
             )
-            .child(PromptFooter::new(footer_config, footer_colors))
+            .child(crate::components::render_simple_hint_strip(
+                crate::components::universal_prompt_hints(),
+                None,
+            ))
             .into_any_element()
     }
 
@@ -232,24 +225,16 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         crate::components::emit_prompt_chrome_audit(
-            &crate::components::PromptChromeAudit::exception(
+            &crate::components::PromptChromeAudit::minimal_list(
                 "naming_prompt",
-                "naming_flow_with_validation",
+                self.has_nonempty_sdk_actions(),
             ),
         );
         let render_context = PromptRenderContext::new(self.theme.as_ref(), self.current_design);
         let theme = render_context.theme;
-        let design_colors = render_context.design_colors;
         let design_spacing = render_context.design_spacing;
         let shell_radius = render_context.design_visual.radius_lg;
         let vibrancy_bg = get_vibrancy_background(theme);
-        let footer_colors = prompt_footer_colors_for_prompt(&design_colors, !theme.is_dark_mode());
-        let footer_config = prompt_footer_config_with_status(
-            "Create",
-            false,
-            Some("Enter to create \u{2022} Esc to cancel".to_string()),
-            None,
-        );
 
         crate::components::prompt_shell_container(shell_radius, vibrancy_bg)
             .h(window_resize::layout::STANDARD_HEIGHT)
@@ -263,7 +248,10 @@ impl ScriptListApp {
                     .p(px(design_spacing.padding_xl))
                     .child(entity),
             )
-            .child(PromptFooter::new(footer_config, footer_colors))
+            .child(crate::components::render_simple_hint_strip(
+                crate::components::universal_prompt_hints(),
+                None,
+            ))
             .into_any_element()
     }
 
@@ -275,12 +263,11 @@ impl ScriptListApp {
         crate::components::emit_prompt_chrome_audit(
             &crate::components::PromptChromeAudit::exception(
                 "webcam_prompt",
-                "media_capture_surface",
+                "media_capture_surface_with_hint_strip",
             ),
         );
         let render_context = PromptRenderContext::new(self.theme.as_ref(), self.current_design);
         let theme = render_context.theme;
-        let design_colors = render_context.design_colors;
         let shell_radius = render_context.design_visual.radius_lg;
         let handle_key = cx.listener(Self::other_prompt_shell_handle_key_webcam);
 
@@ -289,26 +276,6 @@ impl ScriptListApp {
 
         // Use explicit height from layout constants
         let content_height = window_resize::layout::STANDARD_HEIGHT;
-
-        // Footer colors and handlers for PromptFooter (same shared prompt footer pattern)
-        let footer_colors = prompt_footer_colors_for_prompt(&design_colors, !theme.is_dark_mode());
-
-        // Footer config: keep webcam footer focused on essential controls only.
-        let footer_config = prompt_footer_config_with_status(
-            "Capture Photo",
-            true,
-            Some(running_status_text(WEBCAM_FOOTER_READY_STATUS_CONTEXT)),
-            None,
-        )
-        .show_logo(false)
-        // Keep explicit label for source-based regression tests, then hide
-        // the primary button so webcam footer only shows status + Actions.
-        .primary_label("Capture Photo")
-        .primary_label(WEBCAM_FOOTER_HIDE_PRIMARY_LABEL);
-
-        // Create click handlers for footer
-        let handle_submit = cx.entity().downgrade();
-        let handle_actions = cx.entity().downgrade();
 
         div()
             .flex()
@@ -329,26 +296,11 @@ impl ScriptListApp {
                     .overflow_hidden()
                     .child(entity),
             )
-            // Footer with Capture button and Actions (same pattern as all other prompts)
-            .child(
-                PromptFooter::new(footer_config, footer_colors)
-                    .on_primary_click(Box::new(move |_, _window, cx| {
-                        if let Some(app) = handle_submit.upgrade() {
-                            app.update(cx, |this, cx| {
-                                if this.capture_webcam_photo(cx) {
-                                    this.hide_main_and_reset(cx);
-                                }
-                            });
-                        }
-                    }))
-                    .on_secondary_click(Box::new(move |_, window, cx| {
-                        if let Some(app) = handle_actions.upgrade() {
-                            app.update(cx, |this, cx| {
-                                this.toggle_webcam_actions(cx, window);
-                            });
-                        }
-                    })),
-            )
+            // Shared three-key hint strip footer
+            .child(crate::components::render_simple_hint_strip(
+                crate::components::universal_prompt_hints(),
+                None,
+            ))
             .into_any_element()
     }
 
@@ -358,27 +310,18 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         crate::components::emit_prompt_chrome_audit(
-            &crate::components::PromptChromeAudit::exception(
+            &crate::components::PromptChromeAudit::minimal_list(
                 "creation_feedback",
-                "post_creation_confirmation_surface",
+                self.has_nonempty_sdk_actions(),
             ),
         );
         let render_context = PromptRenderContext::new(self.theme.as_ref(), self.current_design);
         let theme = self.theme.clone();
-        let design_colors = render_context.design_colors;
         let design_spacing = render_context.design_spacing;
         let shell_radius = render_context.design_visual.radius_lg;
         let vibrancy_bg = get_vibrancy_background(render_context.theme);
-        let footer_colors = prompt_footer_colors_for_prompt(&design_colors, !render_context.theme.is_dark_mode());
-        let footer_config = prompt_footer_config_with_status(
-            "Done",
-            false,
-            Some("Enter or Esc to return".to_string()),
-            None,
-        );
 
         let entity = cx.entity().downgrade();
-        let footer_entity = cx.entity().downgrade();
 
         let panel = prompts::CreationFeedbackPanel::new(path, theme)
             .design_variant(self.current_design)
@@ -425,16 +368,10 @@ impl ScriptListApp {
                     .p(px(design_spacing.padding_xl))
                     .child(panel),
             )
-            .child(
-                PromptFooter::new(footer_config, footer_colors)
-                    .on_primary_click(Box::new(move |_, window, cx| {
-                        if let Some(app) = footer_entity.upgrade() {
-                            app.update(cx, |this, cx| {
-                                this.go_back_or_close(window, cx);
-                            });
-                        }
-                    })),
-            )
+            .child(crate::components::render_simple_hint_strip(
+                crate::components::universal_prompt_hints(),
+                None,
+            ))
             .into_any_element()
     }
 }
@@ -487,41 +424,41 @@ mod other_prompt_render_wrapper_tests {
     }
 
     #[test]
-    fn render_template_prompt_uses_form_style_shell() {
+    fn render_template_prompt_uses_hint_strip() {
         let body = fn_source("render_template_prompt");
         assert!(
-            body.contains("PromptFooter::new("),
-            "render_template_prompt should include a PromptFooter"
+            !body.contains("PromptFooter::new("),
+            "render_template_prompt should not use PromptFooter"
+        );
+        assert!(
+            body.contains("render_simple_hint_strip("),
+            "render_template_prompt should use the shared hint strip"
         );
         assert!(
             body.contains("window_resize::layout::STANDARD_HEIGHT"),
             "render_template_prompt should use STANDARD_HEIGHT"
         );
-        assert!(
-            !body.contains("render_simple_prompt_shell("),
-            "render_template_prompt should not delegate to render_simple_prompt_shell"
-        );
     }
 
     #[test]
-    fn render_naming_prompt_uses_form_style_shell() {
+    fn render_naming_prompt_uses_hint_strip() {
         let body = fn_source("render_naming_prompt");
         assert!(
-            body.contains("PromptFooter::new("),
-            "render_naming_prompt should include a PromptFooter"
+            !body.contains("PromptFooter::new("),
+            "render_naming_prompt should not use PromptFooter"
+        );
+        assert!(
+            body.contains("render_simple_hint_strip("),
+            "render_naming_prompt should use the shared hint strip"
         );
         assert!(
             body.contains("window_resize::layout::STANDARD_HEIGHT"),
             "render_naming_prompt should use STANDARD_HEIGHT"
         );
-        assert!(
-            !body.contains("render_simple_prompt_shell("),
-            "render_naming_prompt should not delegate to render_simple_prompt_shell"
-        );
     }
 
     #[test]
-    fn render_creation_feedback_uses_standard_height_shell() {
+    fn render_creation_feedback_uses_hint_strip() {
         let body = fn_source("render_creation_feedback");
         assert!(
             body.contains("window_resize::layout::STANDARD_HEIGHT"),
@@ -532,33 +469,82 @@ mod other_prompt_render_wrapper_tests {
             "render_creation_feedback should use prompt_shell_container"
         );
         assert!(
-            body.contains("PromptFooter::new("),
-            "render_creation_feedback should include a PromptFooter"
+            !body.contains("PromptFooter::new("),
+            "render_creation_feedback should not use PromptFooter"
         );
         assert!(
-            !body.contains("on_dismiss"),
-            "render_creation_feedback should not use on_dismiss (footer handles dismissal)"
+            body.contains("render_simple_hint_strip("),
+            "render_creation_feedback should use the shared hint strip"
         );
     }
 
     #[test]
-    fn webcam_footer_shows_status_and_actions_without_primary_capture_button() {
+    fn render_webcam_prompt_uses_hint_strip() {
         let body = fn_source("render_webcam_prompt");
         assert!(
-            body.contains("running_status_text(WEBCAM_FOOTER_READY_STATUS_CONTEXT)"),
-            "render_webcam_prompt should keep camera-ready status helper text in footer"
+            !body.contains("PromptFooter::new("),
+            "render_webcam_prompt should not use PromptFooter"
         );
         assert!(
-            body.contains(".primary_label(WEBCAM_FOOTER_HIDE_PRIMARY_LABEL)"),
-            "render_webcam_prompt should hide the primary capture button in the footer"
+            body.contains("render_simple_hint_strip("),
+            "render_webcam_prompt should use the shared hint strip"
+        );
+    }
+}
+
+#[cfg(test)]
+mod prompt_footer_regression_tests {
+    use std::fs;
+
+    #[test]
+    fn form_prompt_no_longer_uses_prompt_footer() {
+        let source = fs::read_to_string("src/render_prompts/form/render.rs")
+            .expect("Failed to read src/render_prompts/form/render.rs");
+        assert!(
+            source.contains("render_simple_hint_strip(")
+                || source.contains("render_minimal_list_prompt_shell("),
+            "form prompt should render the shared hint strip"
         );
         assert!(
-            body.contains("toggle_webcam_actions"),
-            "render_webcam_prompt should keep the footer Actions trigger wired"
+            !source.contains("PromptFooter::new("),
+            "form prompt should not keep PromptFooter after migration"
+        );
+    }
+
+    #[test]
+    fn term_prompt_no_longer_uses_prompt_footer() {
+        let source = fs::read_to_string("src/render_prompts/term.rs")
+            .expect("Failed to read src/render_prompts/term.rs");
+        assert!(
+            source.contains("render_simple_hint_strip("),
+            "term prompt should render the shared hint strip"
         );
         assert!(
-            !body.contains("Some(\"Webcam\".to_string())"),
-            "render_webcam_prompt should not include the redundant Webcam info label"
+            !source.contains("PromptFooter::new("),
+            "term prompt should not keep PromptFooter after migration"
         );
+    }
+
+    #[test]
+    fn other_rs_exceptions_are_spec_blessed_only() {
+        let source = fs::read_to_string("src/render_prompts/other.rs")
+            .expect("Failed to read src/render_prompts/other.rs");
+        assert!(
+            !source.contains("PromptFooter::new("),
+            "other.rs should not contain any PromptFooter::new after migration"
+        );
+        // Remaining exceptions must be spec-blessed surfaces (terminal, webcam media)
+        for line in source.lines() {
+            if line.contains("PromptChromeAudit::exception(") {
+                assert!(
+                    line.contains("webcam_prompt")
+                        || line.contains("terminal")
+                        || line.contains("editor")
+                        || line.contains("grid")
+                        || line.contains("expanded"),
+                    "non-blessed exception found in other.rs: {line}"
+                );
+            }
+        }
     }
 }

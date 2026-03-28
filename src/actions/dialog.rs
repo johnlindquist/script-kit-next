@@ -2135,7 +2135,6 @@ impl Render for ActionsDialog {
                                             .items_center()
                                             .gap(px(left_gap));
 
-
                                         if let Some(prefix_marker) = style.prefix_marker {
                                             left_side = left_side.child(
                                                 div()
@@ -2446,13 +2445,11 @@ impl Render for ActionsDialog {
 
         // Build footer with keyboard hints (if enabled)
         let footer_container = if self.config.show_footer {
-            Some(
-                div().w_full().child(crate::components::HintStrip::new(vec![
-                    "↵ Run".into(),
-                    "⌘K Actions".into(),
-                    "Tab AI".into(),
-                ])),
-            )
+            Some(div().w_full().child(crate::components::HintStrip::new(vec![
+                "↵ Run".into(),
+                "⌘K Actions".into(),
+                "Tab AI".into(),
+            ])))
         } else {
             None
         };
@@ -2617,7 +2614,7 @@ impl ActionsDialogChromeAudit {
         let style = actions_dialog_default_style();
         Self {
             container_mode: "sharp",
-            search_position: "bottom",
+            search_position: super::constants::ACTIONS_DIALOG_EXPECT_SEARCH_POSITION,
             shows_search_divider: style.show_search_divider,
             section_mode: "headers",
             row_radius: style.row_radius as u16,
@@ -2632,7 +2629,7 @@ impl ActionsDialogChromeAudit {
     ) -> Self {
         Self {
             container_mode: "sharp",
-            search_position: "bottom",
+            search_position: super::constants::ACTIONS_DIALOG_EXPECT_SEARCH_POSITION,
             shows_search_divider: style.show_search_divider,
             section_mode: "headers",
             row_radius: style.row_radius as u16,
@@ -2674,9 +2671,7 @@ impl std::fmt::Display for ActionsDialogRuntimeViolation {
 }
 
 #[inline]
-fn actions_dialog_search_position_name(
-    value: &super::types::SearchPosition,
-) -> &'static str {
+fn actions_dialog_search_position_name(value: &super::types::SearchPosition) -> &'static str {
     match value {
         super::types::SearchPosition::Top => "top",
         super::types::SearchPosition::Bottom => "bottom",
@@ -2685,9 +2680,7 @@ fn actions_dialog_search_position_name(
 }
 
 #[inline]
-fn actions_dialog_section_mode_name(
-    value: &super::types::SectionStyle,
-) -> &'static str {
+fn actions_dialog_section_mode_name(value: &super::types::SectionStyle) -> &'static str {
     match value {
         super::types::SectionStyle::Headers => "headers",
         super::types::SectionStyle::Separators => "separators",
@@ -2742,9 +2735,15 @@ impl ActionsDialogRuntimeAudit {
 
     pub(crate) fn validate(&self) -> Vec<ActionsDialogRuntimeViolation> {
         let mut violations = Vec::new();
-        if self.shows_search_divider
-            != super::constants::ACTIONS_DIALOG_EXPECT_SEARCH_DIVIDER
-        {
+        if self.search_position != super::constants::ACTIONS_DIALOG_EXPECT_SEARCH_POSITION {
+            violations.push(ActionsDialogRuntimeViolation {
+                surface: self.surface,
+                field: "search_position",
+                expected: super::constants::ACTIONS_DIALOG_EXPECT_SEARCH_POSITION,
+                actual: self.search_position,
+            });
+        }
+        if self.shows_search_divider != super::constants::ACTIONS_DIALOG_EXPECT_SEARCH_DIVIDER {
             violations.push(ActionsDialogRuntimeViolation {
                 surface: self.surface,
                 field: "shows_search_divider",
@@ -2760,9 +2759,16 @@ impl ActionsDialogRuntimeAudit {
                 actual: "separators",
             });
         }
+        if self.show_container_border != super::constants::ACTIONS_DIALOG_EXPECT_CONTAINER_BORDER {
+            violations.push(ActionsDialogRuntimeViolation {
+                surface: self.surface,
+                field: "show_container_border",
+                expected: "false",
+                actual: "true",
+            });
+        }
         if self.show_footer
-            && self.footer_hint_count
-                != super::constants::ACTIONS_DIALOG_EXPECT_FOOTER_HINT_COUNT
+            && self.footer_hint_count != super::constants::ACTIONS_DIALOG_EXPECT_FOOTER_HINT_COUNT
         {
             violations.push(ActionsDialogRuntimeViolation {
                 surface: self.surface,
@@ -2783,9 +2789,7 @@ fn seen_actions_dialog_runtime_audits(
     SEEN.get_or_init(|| std::sync::Mutex::new(std::collections::HashSet::new()))
 }
 
-fn mark_actions_dialog_runtime_audit_seen(
-    audit: &ActionsDialogRuntimeAudit,
-) -> bool {
+fn mark_actions_dialog_runtime_audit_seen(audit: &ActionsDialogRuntimeAudit) -> bool {
     let mut seen = seen_actions_dialog_runtime_audits()
         .lock()
         .unwrap_or_else(|poison| poison.into_inner());
@@ -3061,10 +3065,10 @@ mod tests {
 
     #[test]
     fn actions_dialog_runtime_audit_reflects_actual_config() {
-        use crate::actions::types::{
-            ActionsDialogConfig, AnchorPosition, SearchPosition,
-        };
-        let style = super::actions_dialog_default_style();
+        use crate::actions::types::{ActionsDialogConfig, AnchorPosition, SearchPosition};
+        let mut style = super::actions_dialog_default_style();
+        // Use spec-compliant style for a clean validation pass.
+        style.show_container_border = false;
         let audit = ActionsDialogRuntimeAudit::from_parts(
             "test_actions_dialog",
             &ActionsDialogConfig {
@@ -3087,11 +3091,10 @@ mod tests {
 
     #[test]
     fn actions_dialog_runtime_audit_flags_separator_and_divider_regressions() {
-        use crate::actions::types::{
-            ActionsDialogConfig, AnchorPosition, SearchPosition,
-        };
+        use crate::actions::types::{ActionsDialogConfig, AnchorPosition, SearchPosition};
         let mut style = super::actions_dialog_default_style();
         style.show_search_divider = true;
+        // Default style has show_container_border: true which is also off-spec.
         let audit = ActionsDialogRuntimeAudit::from_parts(
             "test_actions_dialog",
             &ActionsDialogConfig {
@@ -3107,5 +3110,145 @@ mod tests {
         let violations = audit.validate();
         assert!(violations.iter().any(|v| v.field == "shows_search_divider"));
         assert!(violations.iter().any(|v| v.field == "section_mode"));
+        assert!(violations
+            .iter()
+            .any(|v| v.field == "show_container_border"));
+    }
+}
+
+// ── Focused spec tests (cargo test actions_dialog_spec_tests --lib) ──────
+
+#[cfg(test)]
+mod actions_dialog_spec_tests {
+    use super::{ActionsDialogChromeAudit, ActionsDialogRuntimeAudit};
+
+    #[test]
+    fn live_defaults_match_impeccable_contract() {
+        let audit = ActionsDialogChromeAudit::from_live_defaults();
+        assert_eq!(audit.container_mode, "sharp");
+        assert_eq!(audit.search_position, "top");
+        assert!(!audit.shows_search_divider);
+        assert_eq!(audit.section_mode, "headers");
+        assert_eq!(audit.footer_hint_count, 3);
+    }
+
+    #[test]
+    fn runtime_audit_flags_bottom_search() {
+        let audit = ActionsDialogRuntimeAudit {
+            surface: "test_surface",
+            search_position: "bottom",
+            section_mode: "headers",
+            shows_search_divider: false,
+            show_footer: true,
+            show_icons: true,
+            show_container_border: false,
+            footer_hint_count: 3,
+        };
+        assert!(
+            audit
+                .validate()
+                .iter()
+                .any(|v| v.field == "search_position"),
+            "bottom search position should fail verification"
+        );
+    }
+
+    #[test]
+    fn runtime_audit_flags_visible_search_divider() {
+        let audit = ActionsDialogRuntimeAudit {
+            surface: "test_surface",
+            search_position: "top",
+            section_mode: "headers",
+            shows_search_divider: true,
+            show_footer: true,
+            show_icons: true,
+            show_container_border: false,
+            footer_hint_count: 3,
+        };
+        assert!(
+            audit
+                .validate()
+                .iter()
+                .any(|v| v.field == "shows_search_divider"),
+            "visible search divider should fail verification"
+        );
+    }
+
+    #[test]
+    fn runtime_audit_flags_separator_sections() {
+        let audit = ActionsDialogRuntimeAudit {
+            surface: "test_surface",
+            search_position: "top",
+            section_mode: "separators",
+            shows_search_divider: false,
+            show_footer: true,
+            show_icons: true,
+            show_container_border: false,
+            footer_hint_count: 3,
+        };
+        assert!(
+            audit.validate().iter().any(|v| v.field == "section_mode"),
+            "separator sections should fail verification"
+        );
+    }
+
+    #[test]
+    fn runtime_audit_flags_visible_container_border() {
+        let audit = ActionsDialogRuntimeAudit {
+            surface: "test_surface",
+            search_position: "top",
+            section_mode: "headers",
+            shows_search_divider: false,
+            show_footer: true,
+            show_icons: true,
+            show_container_border: true,
+            footer_hint_count: 3,
+        };
+        assert!(
+            audit
+                .validate()
+                .iter()
+                .any(|v| v.field == "show_container_border"),
+            "visible container border should fail verification"
+        );
+    }
+
+    #[test]
+    fn runtime_audit_flags_wrong_footer_hint_count() {
+        let audit = ActionsDialogRuntimeAudit {
+            surface: "test_surface",
+            search_position: "top",
+            section_mode: "headers",
+            shows_search_divider: false,
+            show_footer: true,
+            show_icons: true,
+            show_container_border: false,
+            footer_hint_count: 5,
+        };
+        assert!(
+            audit
+                .validate()
+                .iter()
+                .any(|v| v.field == "footer_hint_count"),
+            "footer hint count != 3 should fail verification"
+        );
+    }
+
+    #[test]
+    fn spec_compliant_audit_passes_clean() {
+        let audit = ActionsDialogRuntimeAudit {
+            surface: "test_surface",
+            search_position: "top",
+            section_mode: "headers",
+            shows_search_divider: false,
+            show_footer: true,
+            show_icons: true,
+            show_container_border: false,
+            footer_hint_count: 3,
+        };
+        assert!(
+            audit.validate().is_empty(),
+            "fully spec-compliant audit should produce zero violations"
+        );
     }
 }

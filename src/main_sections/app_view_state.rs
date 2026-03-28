@@ -296,6 +296,8 @@ enum ActionsDialogHost {
     ClipboardHistory,
     /// Actions in emoji picker (restore focus to emoji search input)
     EmojiPicker,
+    /// Actions in app launcher (restore focus to app launcher input)
+    AppLauncher,
     /// Actions in webcam prompt (restore focus to None - webcam has no input)
     WebcamPrompt,
 }

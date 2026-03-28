@@ -422,11 +422,7 @@ pub(crate) const UNIVERSAL_PROMPT_HINT_COUNT: usize = 3;
 #[allow(dead_code)]
 #[inline]
 pub(crate) fn universal_prompt_hints() -> Vec<SharedString> {
-    vec![
-        "↵ Run".into(),
-        "⌘K Actions".into(),
-        "Tab AI".into(),
-    ]
+    vec!["↵ Run".into(), "⌘K Actions".into(), "Tab AI".into()]
 }
 
 /// Machine-readable contract describing how a prompt surface resolves its chrome.
@@ -725,11 +721,15 @@ mod prompt_layout_shell_tests {
     }
 
     #[test]
-    fn template_prompt_uses_form_style_shell_in_other_rs() {
+    fn template_prompt_uses_hint_strip_in_other_rs() {
         let body = fn_source("render_template_prompt");
         assert!(
-            body.contains("PromptFooter::new("),
-            "render_template_prompt should use PromptFooter"
+            !body.contains("PromptFooter::new("),
+            "render_template_prompt should not use PromptFooter"
+        );
+        assert!(
+            body.contains("render_simple_hint_strip("),
+            "render_template_prompt should use the shared hint strip"
         );
         assert!(
             body.contains("STANDARD_HEIGHT"),
@@ -738,11 +738,15 @@ mod prompt_layout_shell_tests {
     }
 
     #[test]
-    fn naming_prompt_uses_form_style_shell_in_other_rs() {
+    fn naming_prompt_uses_hint_strip_in_other_rs() {
         let body = fn_source("render_naming_prompt");
         assert!(
-            body.contains("PromptFooter::new("),
-            "render_naming_prompt should use PromptFooter"
+            !body.contains("PromptFooter::new("),
+            "render_naming_prompt should not use PromptFooter"
+        );
+        assert!(
+            body.contains("render_simple_hint_strip("),
+            "render_naming_prompt should use the shared hint strip"
         );
         assert!(
             body.contains("STANDARD_HEIGHT"),
@@ -945,29 +949,29 @@ mod prompt_layout_shell_tests {
     }
 
     #[test]
-    fn exception_surfaces_in_other_rs_emit_chrome_audit() {
+    fn other_rs_surfaces_emit_chrome_audit() {
         let source = OTHER_RENDERERS_SOURCE;
-        // Template, naming, webcam, and creation_feedback prompts should emit audit logs
+        // All prompt surfaces in other.rs should emit audit logs
         assert!(
             source.contains("emit_prompt_chrome_audit("),
-            "other.rs should call emit_prompt_chrome_audit for exception surfaces"
+            "other.rs should call emit_prompt_chrome_audit"
         );
-        assert!(
-            source.contains("PromptChromeAudit::exception("),
-            "other.rs should use PromptChromeAudit::exception for rich-chrome surfaces"
-        );
-        // Verify all four exception surfaces in other.rs are classified
-        for surface in [
-            "template_prompt",
-            "naming_prompt",
-            "webcam_prompt",
-            "creation_feedback",
-        ] {
+        // Migrated surfaces use minimal_list
+        for surface in ["template_prompt", "naming_prompt", "creation_feedback"] {
             assert!(
                 source.contains(&format!("\"{}\"", surface)),
-                "other.rs should classify {surface} as an exception"
+                "other.rs should classify {surface}"
             );
         }
+        // Webcam remains as a spec-blessed exception (media capture surface)
+        assert!(
+            source.contains("PromptChromeAudit::exception("),
+            "other.rs should still have webcam as exception"
+        );
+        assert!(
+            source.contains("\"webcam_prompt\""),
+            "other.rs should classify webcam_prompt as exception"
+        );
     }
 
     #[test]
@@ -988,15 +992,15 @@ mod prompt_layout_shell_tests {
     }
 
     #[test]
-    fn form_prompt_emits_chrome_audit_exception() {
+    fn form_prompt_emits_chrome_audit_minimal_list() {
         let source = include_str!("../render_prompts/form/render.rs");
         assert!(
             source.contains("emit_prompt_chrome_audit("),
             "form/render.rs should call emit_prompt_chrome_audit"
         );
         assert!(
-            source.contains("PromptChromeAudit::exception("),
-            "form/render.rs should classify as exception"
+            source.contains("PromptChromeAudit::minimal_list("),
+            "form/render.rs should classify as minimal_list"
         );
         assert!(
             source.contains("\"form_prompt\""),
@@ -1300,8 +1304,12 @@ mod prompt_layout_shell_tests {
             "app_launcher should not keep a redundant launcher title row"
         );
         assert!(
-            render_code.contains("render_hint_strip_leading_text("),
-            "app count should live in the hint strip leading slot, not in header chrome"
+            !render_code.contains("render_hint_strip_leading_text("),
+            "app launcher footer should not render leading status text — use canonical three-key footer"
+        );
+        assert!(
+            render_code.contains("universal_prompt_hints()"),
+            "app launcher should use the shared three-key footer"
         );
     }
 

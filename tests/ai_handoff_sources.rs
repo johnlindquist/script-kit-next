@@ -139,28 +139,22 @@ fn builtin_execution_does_not_inline_ai_open_in_chat_arm() {
 }
 
 #[test]
-fn script_list_tab_fallback_uses_canonical_ai_handoff() {
+fn script_list_tab_fallback_routes_to_tab_ai_overlay() {
     let render_source = read_source("src/render_script_list/mod.rs");
-    let handler_source = read_action_sources();
     let tab_block = slice_from(&render_source, "key if sk_is_key_tab(key) => {");
-    let helper_block = slice_from(
-        &handler_source,
-        "pub(crate) fn open_ai_chat_from_main_window_query(",
-    );
 
+    // Tab fallback must route to Tab AI overlay, not the old inline AI chat
     assert!(
-        tab_block.contains("this.open_ai_chat_from_main_window_query(query, cx);"),
-        "ScriptList Tab fallback must delegate to a ScriptListApp handoff method"
+        tab_block.contains("open_tab_ai_overlay(cx)"),
+        "ScriptList Tab fallback must route to Tab AI overlay"
+    );
+    assert!(
+        !tab_block.contains("open_ai_chat_from_main_window_query"),
+        "ScriptList Tab fallback must not use the old inline AI chat path"
     );
     assert!(
         !tab_block.contains("ai::open_ai_window(") && !tab_block.contains("ai::set_ai_input("),
         "ScriptList Tab fallback must not open AI inline before hiding the main window"
-    );
-    assert!(
-        helper_block.contains("self.open_ai_window_after_main_hide(")
-            && helper_block.contains("DeferredAiWindowAction::SetInput")
-            && helper_block.contains("submit: false"),
-        "main-window AI query helper must use the canonical hide-then-deferred-open flow"
     );
 }
 

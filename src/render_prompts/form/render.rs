@@ -5,9 +5,9 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         crate::components::emit_prompt_chrome_audit(
-            &crate::components::PromptChromeAudit::exception(
+            &crate::components::PromptChromeAudit::minimal_list(
                 "form_prompt",
-                "multi_field_structured_form",
+                self.has_nonempty_sdk_actions(),
             ),
         );
         let render_context = PromptRenderContext::new(self.theme.as_ref(), self.current_design);
@@ -20,15 +20,8 @@ impl ScriptListApp {
         let actions_dialog_right = render_context.actions_dialog_right;
         let has_actions = self.has_nonempty_sdk_actions();
 
-        // Get prompt ID and field count from entity
-        let (prompt_id, field_count, focused_field_is_textarea) = {
-            let form_state = entity.read(cx);
-            (
-                form_state.id.clone(),
-                form_state.fields.len(),
-                focused_form_field_is_textarea(form_state),
-            )
-        };
+        // Get prompt ID from entity
+        let prompt_id = entity.read(cx).id.clone();
 
         // Clone entity for closures
         let entity_for_submit = entity.clone();
@@ -146,28 +139,11 @@ impl ScriptListApp {
                     // Render the form entity (contains all fields)
                     .child(entity.clone()),
             )
-            // Unified footer with PromptFooter component
-            .child({
-                let footer_colors = PromptFooterColors::from_theme(theme);
-                let footer_config = prompt_footer_config_with_status(
-                    "Continue",
-                    has_actions,
-                    Some(form_footer_status_text(focused_field_is_textarea)),
-                    Some(format!("{field_count} fields")),
-                );
-
-                let handle_actions = cx.entity().downgrade();
-
-                PromptFooter::new(footer_config, footer_colors).on_secondary_click(Box::new(
-                    move |_, window, cx| {
-                        if let Some(app) = handle_actions.upgrade() {
-                            app.update(cx, |this, cx| {
-                                this.toggle_arg_actions(cx, window);
-                            });
-                        }
-                    },
-                ))
-            })
+            // Shared three-key hint strip footer
+            .child(crate::components::render_simple_hint_strip(
+                crate::components::universal_prompt_hints(),
+                None,
+            ))
             // Actions dialog overlay
             .when_some(
                 render_actions_backdrop(

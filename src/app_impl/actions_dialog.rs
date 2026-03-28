@@ -261,7 +261,8 @@ impl ScriptListApp {
             ActionsDialogHost::MainList
             | ActionsDialogHost::FileSearch
             | ActionsDialogHost::ClipboardHistory
-            | ActionsDialogHost::EmojiPicker => FocusRequest::main_filter(),
+            | ActionsDialogHost::EmojiPicker
+            | ActionsDialogHost::AppLauncher => FocusRequest::main_filter(),
         };
 
         self.focus_coordinator.request(request);
@@ -453,6 +454,7 @@ mod close_actions_popup_regression_tests {
             "ActionsDialogHost::FileSearch",
             "ActionsDialogHost::ClipboardHistory",
             "ActionsDialogHost::EmojiPicker",
+            "ActionsDialogHost::AppLauncher",
             "FocusRequest::main_filter()",
         ] {
             assert!(

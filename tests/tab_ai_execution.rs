@@ -219,8 +219,7 @@ fn memory_write_back_produces_correct_entry() {
     assert!(index_path.exists(), "index file should exist on disk");
 
     // Read back and verify
-    let entries =
-        read_tab_ai_memory_index_from_path(&index_path).expect("read index");
+    let entries = read_tab_ai_memory_index_from_path(&index_path).expect("read index");
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0], entry);
 }
@@ -249,8 +248,7 @@ fn memory_write_back_deduplicates_by_intent_and_bundle_id() {
     let _ = write_tab_ai_memory_entry_to_path(&record2, &index_path).expect("write 2");
 
     // Read back — should have exactly 1 entry (deduped)
-    let entries =
-        read_tab_ai_memory_index_from_path(&index_path).expect("read index");
+    let entries = read_tab_ai_memory_index_from_path(&index_path).expect("read index");
     assert_eq!(entries.len(), 1, "duplicate should be removed");
     assert_eq!(entries[0].slug, "force-quit-slack-v2", "latest entry wins");
     assert_eq!(
@@ -280,8 +278,7 @@ fn memory_write_back_keeps_different_intents_separate() {
     );
     let _ = write_tab_ai_memory_entry_to_path(&record2, &index_path).expect("write 2");
 
-    let entries =
-        read_tab_ai_memory_index_from_path(&index_path).expect("read index");
+    let entries = read_tab_ai_memory_index_from_path(&index_path).expect("read index");
     assert_eq!(entries.len(), 2, "different intents should both persist");
 }
 
@@ -317,7 +314,10 @@ fn audit_receipt_appends_valid_jsonl() {
     let parsed: TabAiExecutionReceipt =
         serde_json::from_str(lines[0]).expect("valid JSON on line 1");
     assert_eq!(parsed.status, TabAiExecutionStatus::Dispatched);
-    assert_eq!(parsed.schema_version, TAB_AI_EXECUTION_RECEIPT_SCHEMA_VERSION);
+    assert_eq!(
+        parsed.schema_version,
+        TAB_AI_EXECUTION_RECEIPT_SCHEMA_VERSION
+    );
     assert_eq!(parsed.model_id, "gpt-4.1");
     assert_eq!(parsed.provider_id, "vercel");
 }
@@ -338,13 +338,8 @@ fn audit_receipt_append_only_preserves_prior_lines() {
     );
     append_tab_ai_execution_receipt_to_path(&r1, &path).expect("append 1");
 
-    let r2 = build_tab_ai_execution_receipt(
-        &record,
-        TabAiExecutionStatus::Succeeded,
-        true,
-        true,
-        None,
-    );
+    let r2 =
+        build_tab_ai_execution_receipt(&record, TabAiExecutionStatus::Succeeded, true, true, None);
     append_tab_ai_execution_receipt_to_path(&r2, &path).expect("append 2");
 
     let content = std::fs::read_to_string(&path).expect("read");
@@ -367,8 +362,7 @@ fn normalize_ws(source: &str) -> String {
 
 #[test]
 fn prompt_handler_completes_tab_ai_on_real_script_lifecycle_events() {
-    let source =
-        std::fs::read_to_string("src/prompt_handler/mod.rs").expect("read prompt_handler");
+    let source = std::fs::read_to_string("src/prompt_handler/mod.rs").expect("read prompt_handler");
     let normalized = normalize_ws(&source);
     assert!(
         normalized.contains("self.complete_tab_ai_execution(true, None, cx);"),
@@ -380,15 +374,15 @@ fn prompt_handler_completes_tab_ai_on_real_script_lifecycle_events() {
     );
     assert!(
         normalized.contains("if keep_tab_ai_save_offer_open {")
-            && normalized.contains("Tab AI save offer active after script exit - preserving main window"),
+            && normalized
+                .contains("Tab AI save offer active after script exit - preserving main window"),
         "ScriptExit must keep the window alive while the Tab AI save offer is open"
     );
 }
 
 #[test]
 fn tab_ai_success_opens_real_save_offer_overlay() {
-    let source =
-        std::fs::read_to_string("src/app_impl/tab_ai_mode.rs").expect("read tab_ai_mode");
+    let source = std::fs::read_to_string("src/app_impl/tab_ai_mode.rs").expect("read tab_ai_mode");
     let normalized = normalize_ws(&source);
     assert!(
         normalized.contains("self.open_tab_ai_save_offer(record, cx);"),
@@ -407,8 +401,9 @@ fn render_impl_layers_tab_ai_save_offer_overlay_above_main_content() {
         std::fs::read_to_string("src/main_sections/render_impl.rs").expect("read render_impl");
     let normalized = normalize_ws(&source);
     assert!(
-        normalized
-            .contains("let tab_ai_save_offer_overlay = self.render_tab_ai_save_offer_overlay(window, cx);"),
+        normalized.contains(
+            "let tab_ai_save_offer_overlay = self.render_tab_ai_save_offer_overlay(window, cx);"
+        ),
         "render_impl must build the save-offer overlay"
     );
     assert!(
@@ -448,4 +443,24 @@ fn public_exports_cover_all_post_execution_types() {
     assert_eq!(TAB_AI_EXECUTION_RECORD_SCHEMA_VERSION, 2);
     assert_eq!(TAB_AI_EXECUTION_RECEIPT_SCHEMA_VERSION, 1);
     assert_eq!(TAB_AI_MEMORY_ENTRY_SCHEMA_VERSION, 1);
+}
+
+// --- Prompt handler completion hooks (source audit) ---
+
+const PROMPT_HANDLER_SOURCE: &str = include_str!("../src/prompt_handler/mod.rs");
+
+#[test]
+fn prompt_handler_completes_tab_ai_on_script_error() {
+    assert!(
+        PROMPT_HANDLER_SOURCE.contains("complete_tab_ai_execution(false,"),
+        "ScriptError handler must complete failed Tab AI runs"
+    );
+}
+
+#[test]
+fn prompt_handler_completes_tab_ai_on_script_exit() {
+    assert!(
+        PROMPT_HANDLER_SOURCE.contains("complete_tab_ai_execution(true, None, cx)"),
+        "ScriptExit handler must complete successful Tab AI runs"
+    );
 }

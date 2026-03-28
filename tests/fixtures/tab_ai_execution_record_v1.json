@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "intent": "force quit Slack",
+  "generatedSource": "import '@anthropic-ai/sdk';\nawait exec('kill Slack');\nconsole.log('done');",
+  "tempScriptPath": "/tmp/scriptlet-abc123.ts",
+  "slug": "force-quit-slack",
+  "promptType": "AppLauncher",
+  "bundleId": "com.tinyspeck.slackmacgap",
+  "executedAt": "2026-03-28T12:00:00Z"
+}

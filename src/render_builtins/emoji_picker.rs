@@ -387,13 +387,17 @@ impl ScriptListApp {
                     .child(list_scrollbar),
             );
 
+        crate::components::emit_prompt_chrome_audit(
+            &crate::components::PromptChromeAudit::grid(
+                "render_builtins::emoji_picker",
+                true,
+            ),
+        );
+
         crate::components::render_minimal_list_prompt_scaffold(
             header,
             content,
-            vec![
-                gpui::SharedString::from("↵ Copy"),
-                gpui::SharedString::from("Esc Back"),
-            ],
+            crate::components::universal_prompt_hints(),
             None,
         )
         .rounded(px(design_visual.radius_lg))
@@ -420,6 +424,31 @@ mod emoji_picker_chrome_audit {
             source.matches(&legacy).count(),
             0,
             "emoji_picker should not use PromptFooter"
+        );
+    }
+}
+
+#[cfg(test)]
+mod emoji_picker_spec_tests {
+    fn read_source() -> String {
+        include_str!("emoji_picker.rs").to_string()
+    }
+
+    #[test]
+    fn emoji_picker_declares_grid_audit_and_canonical_footer() {
+        let source = read_source();
+        assert!(
+            source.contains("PromptChromeAudit::grid(")
+                && source.contains("\"render_builtins::emoji_picker\""),
+            "emoji picker should declare grid layout in runtime audit"
+        );
+        assert!(
+            source.contains("universal_prompt_hints()"),
+            "emoji picker should use the shared three-key footer"
+        );
+        assert!(
+            !source.contains("\"↵ Copy\"") && !source.contains("\"Esc Back\""),
+            "emoji picker should not keep custom footer labels"
         );
     }
 }

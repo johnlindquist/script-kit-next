@@ -184,6 +184,12 @@
                                 return;
                             }
 
+                            // Block Tab while the save-offer overlay is visible
+                            if this.tab_ai_save_offer_state.is_some() {
+                                cx.stop_propagation();
+                                return;
+                            }
+
                             // Universal Tab AI: open the mini natural-language overlay
                             // from any non-special surface (not FileSearch, not ChatPrompt setup)
                             if !has_shift && !this.show_actions_popup {

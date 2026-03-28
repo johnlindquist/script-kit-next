@@ -1088,22 +1088,18 @@ fn enforce_script_kit_conventions(script: &str, prompt: &str, slug: &str) -> Str
         ));
     }
 
-    // Replace legacy @johnlindquist/kit imports with @scriptkit/sdk
+    // Strip SDK import lines — the preload (--preload kit-sdk.ts) provides all
+    // globals, so import "@scriptkit/sdk" and import "@johnlindquist/kit" are
+    // dead code that crash because neither package is resolvable from temp dirs.
     let body = body
         .lines()
-        .map(|line| {
-            if line.trim().starts_with("import") && line.contains("@johnlindquist/kit") {
-                SCRIPT_KIT_SDK_IMPORT_STATEMENT
-            } else {
-                line
-            }
+        .filter(|line| {
+            let trimmed = line.trim();
+            !(trimmed.starts_with("import")
+                && (trimmed.contains("@scriptkit/sdk") || trimmed.contains("@johnlindquist/kit")))
         })
         .collect::<Vec<_>>()
         .join("\n");
-
-    if !has_kit_import(&body) {
-        prefix_lines.push(SCRIPT_KIT_SDK_IMPORT_STATEMENT.to_string());
-    }
 
     let mut sections = Vec::new();
 
@@ -1222,7 +1218,10 @@ print("hello")
 
         assert!(output.contains("// Name: Ask User Name"));
         assert!(output.contains("// Description: Ask for user name"));
-        assert!(output.contains("import \"@scriptkit/sdk\";"));
+        assert!(
+            !output.contains("import \"@scriptkit/sdk\";"),
+            "SDK import should be stripped (preload provides globals)"
+        );
         assert!(output.contains("await arg(\"Name?\");"));
     }
 
@@ -1248,8 +1247,8 @@ await div("ready");
         );
         assert_eq!(
             output.matches("import \"@scriptkit/sdk\";").count(),
-            1,
-            "should not duplicate existing import"
+            0,
+            "SDK import should be stripped (preload provides globals)"
         );
     }
 
@@ -1261,21 +1260,20 @@ await div("ready");
     }
 
     #[test]
-    fn test_enforce_conventions_replaces_legacy_johnlindquist_kit_import() {
+    fn test_enforce_conventions_strips_legacy_johnlindquist_kit_import() {
         let script = "// Name: Focus Notion\n// Description: Bring Notion to the front\n\nimport \"@johnlindquist/kit\";\n\nawait $`open -a \"Notion\"`;";
         let output = enforce_script_kit_conventions(script, "focus on this app", "focus-notion");
         assert!(
-            output.contains("import \"@scriptkit/sdk\";"),
-            "should replace legacy import with @scriptkit/sdk"
+            !output.contains("@johnlindquist/kit"),
+            "should strip legacy @johnlindquist/kit import"
         );
         assert!(
-            !output.contains("@johnlindquist/kit"),
-            "should not contain legacy @johnlindquist/kit import"
+            !output.contains("@scriptkit/sdk"),
+            "should not add @scriptkit/sdk import (preload provides globals)"
         );
-        assert_eq!(
-            output.matches("import \"@scriptkit/sdk\";").count(),
-            1,
-            "should have exactly one @scriptkit/sdk import"
+        assert!(
+            output.contains("open -a"),
+            "should preserve the actual script body"
         );
     }
 
@@ -1333,7 +1331,10 @@ await div("ready");
         assert_eq!(slug, "create-a-weather-checker");
         assert!(source.contains("// Name: Create A Weather Checker"));
         assert!(source.contains("// Description: Create a weather checker"));
-        assert!(source.contains("import \"@scriptkit/sdk\";"));
+        assert!(
+            !source.contains("import \"@scriptkit/sdk\";"),
+            "SDK import should be stripped (preload provides globals)"
+        );
         assert!(source.contains("await div(\"Sunny\");"));
     }
 
