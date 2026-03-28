@@ -117,6 +117,13 @@ impl ScriptListApp {
         entity: Entity<term_prompt::TermPrompt>,
         cx: &mut Context<Self>,
     ) -> AnyElement {
+        crate::components::emit_prompt_chrome_audit(
+            &crate::components::PromptChromeAudit::exception(
+                "render_prompts::term",
+                "terminal_with_close_and_commands_footer",
+            ),
+        );
+
         let render_context = PromptRenderContext::new(self.theme.as_ref(), self.current_design);
         let theme = render_context.theme;
         let actions_dialog_right = render_context.actions_dialog_right;

@@ -87,10 +87,21 @@ pub fn build_tab_ai_user_prompt(intent: &str, context_json: &str) -> String {
 }
 
 /// Schema version for `TabAiExecutionRecord`. Bump when adding/removing/renaming fields.
-pub const TAB_AI_EXECUTION_RECORD_SCHEMA_VERSION: u32 = 1;
+pub const TAB_AI_EXECUTION_RECORD_SCHEMA_VERSION: u32 = 2;
 
-/// Record of a completed Tab AI execution — captures everything needed for
-/// save-offer, memory write-back, and temp-file cleanup.
+/// Schema version for `TabAiExecutionReceipt`. Bump when adding/removing/renaming fields.
+pub const TAB_AI_EXECUTION_RECEIPT_SCHEMA_VERSION: u32 = 1;
+
+/// Execution lifecycle status for append-only audit receipts.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum TabAiExecutionStatus {
+    Dispatched,
+    Succeeded,
+    Failed,
+}
+
+/// Record captured at dispatch time and carried forward until completion.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TabAiExecutionRecord {
@@ -109,12 +120,19 @@ pub struct TabAiExecutionRecord {
     /// Bundle ID of the frontmost app at invocation time, if captured.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bundle_id: Option<String>,
+    /// AI model identifier used for generation.
+    pub model_id: String,
+    /// AI provider identifier used for generation.
+    pub provider_id: String,
+    /// Number of context-assembly warnings at build time.
+    pub context_warning_count: usize,
     /// ISO-8601 timestamp when the script was executed.
     pub executed_at: String,
 }
 
 impl TabAiExecutionRecord {
     /// Build a record from parts — fully deterministic, no system calls.
+    #[allow(clippy::too_many_arguments)]
     pub fn from_parts(
         intent: String,
         generated_source: String,
@@ -122,6 +140,9 @@ impl TabAiExecutionRecord {
         slug: String,
         prompt_type: String,
         bundle_id: Option<String>,
+        model_id: String,
+        provider_id: String,
+        context_warning_count: usize,
         executed_at: String,
     ) -> Self {
         Self {
@@ -132,9 +153,138 @@ impl TabAiExecutionRecord {
             slug,
             prompt_type,
             bundle_id,
+            model_id,
+            provider_id,
+            context_warning_count,
             executed_at,
         }
     }
+}
+
+/// Append-only audit receipt written on dispatch and again on completion.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct TabAiExecutionReceipt {
+    pub schema_version: u32,
+    pub status: TabAiExecutionStatus,
+    pub intent: String,
+    pub slug: String,
+    pub prompt_type: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bundle_id: Option<String>,
+    pub model_id: String,
+    pub provider_id: String,
+    pub temp_script_path: String,
+    pub context_warning_count: usize,
+    pub save_offer_eligible: bool,
+    pub memory_write_eligible: bool,
+    pub cleanup_attempted: bool,
+    pub cleanup_succeeded: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+    pub written_at: String,
+}
+
+/// Returns the file path for the Tab AI execution audit log.
+///
+/// Located at `~/.scriptkit/scripts/.tab-ai-executions.jsonl`.
+pub fn tab_ai_execution_audit_path() -> Result<std::path::PathBuf, String> {
+    let home = std::env::var("HOME")
+        .map_err(|_| "tab_ai_execution_audit_path: HOME is not set".to_string())?;
+    Ok(std::path::Path::new(&home)
+        .join(".scriptkit")
+        .join("scripts")
+        .join(".tab-ai-executions.jsonl"))
+}
+
+/// Build an audit receipt from a record and completion metadata.
+pub fn build_tab_ai_execution_receipt(
+    record: &TabAiExecutionRecord,
+    status: TabAiExecutionStatus,
+    cleanup_attempted: bool,
+    cleanup_succeeded: bool,
+    error: Option<String>,
+) -> TabAiExecutionReceipt {
+    let memory_write_eligible = matches!(status, TabAiExecutionStatus::Succeeded);
+    let save_offer_eligible = memory_write_eligible && should_offer_save(record);
+
+    TabAiExecutionReceipt {
+        schema_version: TAB_AI_EXECUTION_RECEIPT_SCHEMA_VERSION,
+        status,
+        intent: record.intent.clone(),
+        slug: record.slug.clone(),
+        prompt_type: record.prompt_type.clone(),
+        bundle_id: record.bundle_id.clone(),
+        model_id: record.model_id.clone(),
+        provider_id: record.provider_id.clone(),
+        temp_script_path: record.temp_script_path.clone(),
+        context_warning_count: record.context_warning_count,
+        save_offer_eligible,
+        memory_write_eligible,
+        cleanup_attempted,
+        cleanup_succeeded,
+        error,
+        written_at: chrono::Utc::now().to_rfc3339(),
+    }
+}
+
+/// Append a single audit receipt as one JSON line to the JSONL audit log.
+pub fn append_tab_ai_execution_receipt(
+    receipt: &TabAiExecutionReceipt,
+) -> Result<(), String> {
+    append_tab_ai_execution_receipt_to_path(receipt, &tab_ai_execution_audit_path()?)
+}
+
+/// Append a single audit receipt to a specific JSONL path (test-friendly).
+pub fn append_tab_ai_execution_receipt_to_path(
+    receipt: &TabAiExecutionReceipt,
+    path: &std::path::Path,
+) -> Result<(), String> {
+    use std::io::Write as _;
+
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| {
+            format!(
+                "tab_ai_execution_audit_dir_failed: path={} error={}",
+                parent.display(),
+                e
+            )
+        })?;
+    }
+
+    let line = serde_json::to_string(receipt)
+        .map_err(|e| format!("tab_ai_execution_audit_serialize_failed: error={}", e))?;
+
+    let mut file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+        .map_err(|e| {
+            format!(
+                "tab_ai_execution_audit_open_failed: path={} error={}",
+                path.display(),
+                e
+            )
+        })?;
+
+    writeln!(file, "{}", line).map_err(|e| {
+        format!(
+            "tab_ai_execution_audit_write_failed: path={} error={}",
+            path.display(),
+            e
+        )
+    })?;
+
+    tracing::info!(
+        event = "tab_ai_execution_audit_written",
+        status = ?receipt.status,
+        slug = %receipt.slug,
+        prompt_type = %receipt.prompt_type,
+        model_id = %receipt.model_id,
+        provider_id = %receipt.provider_id,
+    );
+
+    Ok(())
 }
 
 /// Schema version for `TabAiMemoryEntry`. Bump when adding/removing/renaming fields.
@@ -305,16 +455,22 @@ pub fn cleanup_tab_ai_temp_script(path: &str) -> bool {
 
 /// Decide whether to offer "Save as script?" after a successful Tab AI execution.
 ///
-/// Currently always returns `true` for successful runs. Future heuristics
-/// could suppress the offer for trivial or duplicate scripts.
+/// Requires at least 3 non-empty lines — trivial one-liners are not worth saving.
 pub fn should_offer_save(record: &TabAiExecutionRecord) -> bool {
-    // Non-empty source is the only requirement
-    let offer = !record.generated_source.trim().is_empty();
+    let non_empty_line_count = record
+        .generated_source
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .count();
+    let offer = non_empty_line_count >= 3;
     tracing::info!(
         event = "tab_ai_save_offer_decision",
         offer,
         slug = %record.slug,
+        model_id = %record.model_id,
+        provider_id = %record.provider_id,
         source_len = record.generated_source.len(),
+        context_warning_count = record.context_warning_count,
     );
     offer
 }
@@ -522,11 +678,14 @@ mod tests {
     fn sample_execution_record() -> TabAiExecutionRecord {
         TabAiExecutionRecord::from_parts(
             "force quit Slack".to_string(),
-            "import '@anthropic-ai/sdk';\nawait exec('kill Slack');".to_string(),
+            "import '@anthropic-ai/sdk';\nawait exec('kill Slack');\nconsole.log('done');".to_string(),
             "/tmp/scriptlet-abc123.ts".to_string(),
             "force-quit-slack".to_string(),
             "AppLauncher".to_string(),
             Some("com.tinyspeck.slackmacgap".to_string()),
+            "gpt-4.1".to_string(),
+            "vercel".to_string(),
+            0,
             "2026-03-28T12:00:00Z".to_string(),
         )
     }
@@ -560,6 +719,9 @@ mod tests {
             "test".to_string(),
             "ScriptList".to_string(),
             None,
+            "gpt-4.1".to_string(),
+            "vercel".to_string(),
+            0,
             "2026-03-28T00:00:00Z".to_string(),
         );
         let json = serde_json::to_string(&record).expect("serialize");
@@ -567,9 +729,27 @@ mod tests {
     }
 
     #[test]
-    fn should_offer_save_returns_true_for_non_empty_source() {
+    fn should_offer_save_returns_true_for_three_plus_lines() {
         let record = sample_execution_record();
+        // sample has 3 non-empty lines
         assert!(should_offer_save(&record));
+    }
+
+    #[test]
+    fn should_offer_save_returns_false_for_fewer_than_three_lines() {
+        let record = TabAiExecutionRecord::from_parts(
+            "test".to_string(),
+            "one\ntwo".to_string(),
+            "/tmp/x.ts".to_string(),
+            "test".to_string(),
+            "ScriptList".to_string(),
+            None,
+            "gpt-4.1".to_string(),
+            "vercel".to_string(),
+            0,
+            "2026-03-28T00:00:00Z".to_string(),
+        );
+        assert!(!should_offer_save(&record));
     }
 
     #[test]
@@ -581,9 +761,124 @@ mod tests {
             "test".to_string(),
             "ScriptList".to_string(),
             None,
+            "gpt-4.1".to_string(),
+            "vercel".to_string(),
+            0,
             "2026-03-28T00:00:00Z".to_string(),
         );
         assert!(!should_offer_save(&record));
+    }
+
+    // --- TabAiExecutionReceipt tests ---
+
+    #[test]
+    fn append_tab_ai_execution_receipt_writes_one_json_line() {
+        let dir = tempfile::tempdir().expect("create temp dir");
+        let path = dir.path().join(".tab-ai-executions.jsonl");
+
+        let record = sample_execution_record();
+        let receipt = build_tab_ai_execution_receipt(
+            &record,
+            TabAiExecutionStatus::Dispatched,
+            false,
+            false,
+            None,
+        );
+        append_tab_ai_execution_receipt_to_path(&receipt, &path).expect("append");
+
+        let content = std::fs::read_to_string(&path).expect("read");
+        let lines: Vec<&str> = content.lines().collect();
+        assert_eq!(lines.len(), 1, "exactly one line per receipt");
+
+        let parsed: TabAiExecutionReceipt =
+            serde_json::from_str(lines[0]).expect("valid JSON");
+        assert_eq!(parsed.status, TabAiExecutionStatus::Dispatched);
+        assert_eq!(parsed.slug, "force-quit-slack");
+        assert_eq!(parsed.model_id, "gpt-4.1");
+        assert_eq!(parsed.provider_id, "vercel");
+        assert!(!parsed.save_offer_eligible);
+        assert!(!parsed.memory_write_eligible);
+
+        // camelCase check
+        assert!(lines[0].contains("modelId"));
+        assert!(lines[0].contains("providerId"));
+        assert!(lines[0].contains("contextWarningCount"));
+        assert!(lines[0].contains("saveOfferEligible"));
+        assert!(!lines[0].contains("model_id"));
+        assert!(!lines[0].contains("provider_id"));
+    }
+
+    #[test]
+    fn append_receipt_is_append_only() {
+        let dir = tempfile::tempdir().expect("create temp dir");
+        let path = dir.path().join(".tab-ai-executions.jsonl");
+
+        let record = sample_execution_record();
+
+        let r1 = build_tab_ai_execution_receipt(
+            &record,
+            TabAiExecutionStatus::Dispatched,
+            false,
+            false,
+            None,
+        );
+        append_tab_ai_execution_receipt_to_path(&r1, &path).expect("append 1");
+
+        let r2 = build_tab_ai_execution_receipt(
+            &record,
+            TabAiExecutionStatus::Succeeded,
+            true,
+            true,
+            None,
+        );
+        append_tab_ai_execution_receipt_to_path(&r2, &path).expect("append 2");
+
+        let content = std::fs::read_to_string(&path).expect("read");
+        let lines: Vec<&str> = content.lines().collect();
+        assert_eq!(lines.len(), 2, "two receipts = two lines");
+
+        let p1: TabAiExecutionReceipt = serde_json::from_str(lines[0]).expect("parse line 1");
+        let p2: TabAiExecutionReceipt = serde_json::from_str(lines[1]).expect("parse line 2");
+        assert_eq!(p1.status, TabAiExecutionStatus::Dispatched);
+        assert_eq!(p2.status, TabAiExecutionStatus::Succeeded);
+        assert!(p2.save_offer_eligible);
+        assert!(p2.memory_write_eligible);
+    }
+
+    #[test]
+    fn build_receipt_sets_eligibility_based_on_status() {
+        let record = sample_execution_record();
+
+        let dispatched = build_tab_ai_execution_receipt(
+            &record,
+            TabAiExecutionStatus::Dispatched,
+            false,
+            false,
+            None,
+        );
+        assert!(!dispatched.memory_write_eligible);
+        assert!(!dispatched.save_offer_eligible);
+
+        let succeeded = build_tab_ai_execution_receipt(
+            &record,
+            TabAiExecutionStatus::Succeeded,
+            true,
+            true,
+            None,
+        );
+        assert!(succeeded.memory_write_eligible);
+        assert!(succeeded.save_offer_eligible);
+
+        let failed = build_tab_ai_execution_receipt(
+            &record,
+            TabAiExecutionStatus::Failed,
+            true,
+            true,
+            Some("exit code 1".to_string()),
+        );
+        assert!(!failed.memory_write_eligible);
+        assert!(!failed.save_offer_eligible);
+        assert_eq!(failed.error.as_deref(), Some("exit code 1"));
     }
 
     #[test]

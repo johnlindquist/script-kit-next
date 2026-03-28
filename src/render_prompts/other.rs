@@ -134,6 +134,12 @@ impl ScriptListApp {
         entity: Entity<SelectPrompt>,
         cx: &mut Context<Self>,
     ) -> AnyElement {
+        crate::components::emit_prompt_chrome_audit(
+            &crate::components::PromptChromeAudit::minimal_list(
+                "render_prompts::select",
+                self.has_nonempty_sdk_actions(),
+            ),
+        );
         self.render_wrapped_prompt_entity(entity, Self::other_prompt_shell_handle_key_default, cx)
     }
 
@@ -142,6 +148,12 @@ impl ScriptListApp {
         entity: Entity<EnvPrompt>,
         cx: &mut Context<Self>,
     ) -> AnyElement {
+        crate::components::emit_prompt_chrome_audit(
+            &crate::components::PromptChromeAudit::minimal_list(
+                "render_prompts::env",
+                self.has_nonempty_sdk_actions(),
+            ),
+        );
         self.render_wrapped_prompt_entity(entity, Self::other_prompt_shell_handle_key_default, cx)
     }
 
@@ -150,6 +162,12 @@ impl ScriptListApp {
         entity: Entity<DropPrompt>,
         cx: &mut Context<Self>,
     ) -> AnyElement {
+        crate::components::emit_prompt_chrome_audit(
+            &crate::components::PromptChromeAudit::minimal_list(
+                "render_prompts::drop",
+                self.has_nonempty_sdk_actions(),
+            ),
+        );
         self.render_wrapped_prompt_entity(entity, Self::other_prompt_shell_handle_key_default, cx)
     }
 
@@ -199,6 +217,12 @@ impl ScriptListApp {
         entity: Entity<prompts::ChatPrompt>,
         cx: &mut Context<Self>,
     ) -> AnyElement {
+        crate::components::emit_prompt_chrome_audit(
+            &crate::components::PromptChromeAudit::minimal_list(
+                "render_prompts::chat",
+                self.has_nonempty_sdk_actions(),
+            ),
+        );
         self.render_wrapped_prompt_entity(entity, Self::other_prompt_shell_handle_key_chat, cx)
     }
 

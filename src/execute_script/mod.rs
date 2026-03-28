@@ -2145,6 +2145,18 @@ impl ScriptListApp {
                         error = %e,
                         "Failed to start interactive session"
                     );
+                    if self
+                        .pending_tab_ai_execution
+                        .as_ref()
+                        .map(|record| record.temp_script_path == script_path_for_errors)
+                        .unwrap_or(false)
+                    {
+                        self.complete_tab_ai_execution(
+                            false,
+                            Some(format!("Tab AI script failed to start: {e}")),
+                            cx,
+                        );
+                    }
                     self.last_output = Some(SharedString::from(format!("✗ Error: {}", e)));
                     cx.notify();
                 }

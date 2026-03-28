@@ -79,7 +79,10 @@ pub use prompt_footer::{PromptFooter, PromptFooterColors, PromptFooterConfig};
 #[allow(unused_imports)]
 pub use prompt_header::{PromptHeader, PromptHeaderColors, PromptHeaderConfig};
 #[allow(unused_imports)]
-pub(crate) use prompt_layout_shell::{emit_prompt_chrome_audit, PromptChromeAudit};
+pub(crate) use prompt_layout_shell::{
+    emit_prompt_chrome_audit, universal_prompt_hints, PromptChromeAudit,
+    UNIVERSAL_PROMPT_HINT_COUNT,
+};
 #[allow(unused_imports)]
 pub(crate) use prompt_layout_shell::{
     prompt_detail_card, prompt_field_style, prompt_form_help, prompt_form_intro,

@@ -266,6 +266,8 @@ struct ScriptListApp {
     tab_ai_state: Option<TabAiOverlayState>,
     /// Tab AI background task (AI call + script execution)
     tab_ai_task: Option<gpui::Task<()>>,
+    /// Most recent Tab AI execution waiting for success/failure accounting.
+    pending_tab_ai_execution: Option<crate::ai::TabAiExecutionRecord>,
     /// Input history for shell-like up/down navigation through previous inputs
     input_history: input_history::InputHistory,
     /// Pending API key configuration - tracks which provider is being configured

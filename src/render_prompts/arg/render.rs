@@ -68,7 +68,6 @@ impl ScriptListApp {
         let theme = render_context.theme;
         let design_spacing = render_context.design_spacing;
         let design_typography = render_context.design_typography;
-        let design_visual = render_context.design_visual;
         let actions_dialog_top = render_context.actions_dialog_top;
         let actions_dialog_right = render_context.actions_dialog_right;
         let _filtered = self.filtered_arg_choices();
@@ -303,12 +302,19 @@ impl ScriptListApp {
 
         let leading: Option<gpui::AnyElement> = None;
 
+        crate::components::emit_prompt_chrome_audit(
+            &crate::components::PromptChromeAudit::minimal_list(
+                "render_prompts::arg",
+                has_actions,
+            ),
+        );
+
         crate::components::render_minimal_list_prompt_shell(
-            design_visual.radius_lg,
+            0.0,
             crate::ui_foundation::get_vibrancy_background(&self.theme),
             header,
             content,
-            arg_prompt_hints(has_actions),
+            crate::components::universal_prompt_hints(),
             leading,
         )
         .relative()

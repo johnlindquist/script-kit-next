@@ -415,14 +415,32 @@ pub(crate) fn render_hint_strip_leading_text(
         .into_any_element()
 }
 
+/// Number of footer hints the design spec mandates: `↵ Run`, `⌘K Actions`, `Tab AI`.
+pub(crate) const UNIVERSAL_PROMPT_HINT_COUNT: usize = 3;
+
+/// The canonical three-key footer hints from `.impeccable.md`.
+#[allow(dead_code)]
+#[inline]
+pub(crate) fn universal_prompt_hints() -> Vec<SharedString> {
+    vec![
+        "↵ Run".into(),
+        "⌘K Actions".into(),
+        "Tab AI".into(),
+    ]
+}
+
 /// Machine-readable contract describing how a prompt surface resolves its chrome.
 ///
 /// Emitted via [`emit_prompt_chrome_audit`] at surface-activation time (not per-frame)
 /// so that agents and structured-log consumers can verify which surfaces are minimal,
 /// which are intentional exceptions, and which have silently drifted.
+///
+/// The `layout_mode` field encodes the surface layout decision from `.impeccable.md`:
+/// `"mini"`, `"editor"`, `"expanded"`, `"grid"`, or `"custom"` (for exceptions).
 #[derive(Clone, Debug, PartialEq, Eq, Hash, serde::Serialize)]
 pub(crate) struct PromptChromeAudit {
     pub surface: &'static str,
+    pub layout_mode: &'static str,
     pub input_mode: &'static str,
     pub divider_mode: &'static str,
     pub footer_mode: &'static str,
@@ -436,7 +454,78 @@ pub(crate) struct PromptChromeAudit {
 
 #[allow(dead_code)]
 impl PromptChromeAudit {
-    /// Contract for a surface that follows the minimal chrome design language.
+    /// Contract for a mini list surface (name IS the content — script, app, process).
+    pub(crate) fn minimal_list(surface: &'static str, has_actions: bool) -> Self {
+        Self {
+            surface,
+            layout_mode: "mini",
+            input_mode: "bare",
+            divider_mode: "none",
+            footer_mode: "hint_strip",
+            header_padding_x: crate::ui::chrome::HEADER_PADDING_X as u16,
+            header_padding_y: crate::ui::chrome::HEADER_PADDING_Y as u16,
+            hint_count: UNIVERSAL_PROMPT_HINT_COUNT,
+            has_leading_status: false,
+            has_actions,
+            exception_reason: None,
+        }
+    }
+
+    /// Contract for an editor surface (justified exception — full editor area).
+    pub(crate) fn editor(surface: &'static str, has_actions: bool) -> Self {
+        Self {
+            surface,
+            layout_mode: "editor",
+            input_mode: "bare",
+            divider_mode: "none",
+            footer_mode: "hint_strip",
+            header_padding_x: crate::ui::chrome::HEADER_PADDING_X as u16,
+            header_padding_y: crate::ui::chrome::HEADER_PADDING_Y as u16,
+            hint_count: UNIVERSAL_PROMPT_HINT_COUNT,
+            has_leading_status: false,
+            has_actions,
+            exception_reason: None,
+        }
+    }
+
+    /// Contract for an expanded view surface (preview IS the decision — clipboard, files, themes).
+    pub(crate) fn expanded(surface: &'static str, has_actions: bool) -> Self {
+        Self {
+            surface,
+            layout_mode: "expanded",
+            input_mode: "bare",
+            divider_mode: "none",
+            footer_mode: "hint_strip",
+            header_padding_x: crate::ui::chrome::HEADER_PADDING_X as u16,
+            header_padding_y: crate::ui::chrome::HEADER_PADDING_Y as u16,
+            hint_count: UNIVERSAL_PROMPT_HINT_COUNT,
+            has_leading_status: false,
+            has_actions,
+            exception_reason: None,
+        }
+    }
+
+    /// Contract for a grid surface (visual scan content — emoji, icons).
+    pub(crate) fn grid(surface: &'static str, has_actions: bool) -> Self {
+        Self {
+            surface,
+            layout_mode: "grid",
+            input_mode: "bare",
+            divider_mode: "none",
+            footer_mode: "hint_strip",
+            header_padding_x: crate::ui::chrome::HEADER_PADDING_X as u16,
+            header_padding_y: crate::ui::chrome::HEADER_PADDING_Y as u16,
+            hint_count: UNIVERSAL_PROMPT_HINT_COUNT,
+            has_leading_status: false,
+            has_actions,
+            exception_reason: None,
+        }
+    }
+
+    /// Backward-compatible adapter for existing minimal callers.
+    ///
+    /// Accepts the legacy `hint_count` and `has_leading_status` parameters for
+    /// source compatibility. New call sites should prefer [`Self::minimal_list`].
     pub(crate) fn minimal(
         surface: &'static str,
         hint_count: usize,
@@ -445,6 +534,7 @@ impl PromptChromeAudit {
     ) -> Self {
         Self {
             surface,
+            layout_mode: "mini",
             input_mode: "bare",
             divider_mode: "none",
             footer_mode: "hint_strip",
@@ -461,6 +551,7 @@ impl PromptChromeAudit {
     pub(crate) fn exception(surface: &'static str, reason: &'static str) -> Self {
         Self {
             surface,
+            layout_mode: "custom",
             input_mode: "custom",
             divider_mode: "custom",
             footer_mode: "prompt_footer",
@@ -504,6 +595,7 @@ pub(crate) fn emit_prompt_chrome_audit(audit: &PromptChromeAudit) {
         target: "script_kit::prompt_chrome",
         event = "prompt_chrome_audit",
         surface = audit.surface,
+        layout_mode = audit.layout_mode,
         input_mode = audit.input_mode,
         divider_mode = audit.divider_mode,
         footer_mode = audit.footer_mode,
@@ -718,9 +810,10 @@ mod prompt_layout_shell_tests {
     // ── PromptChromeAudit contract tests ────────────────────────────────
 
     #[test]
-    fn prompt_chrome_audit_minimal_uses_shared_tokens() {
-        let audit = super::PromptChromeAudit::minimal("test_surface", 3, true, true);
+    fn prompt_chrome_audit_minimal_list_uses_shared_tokens() {
+        let audit = super::PromptChromeAudit::minimal_list("test_surface", true);
         assert_eq!(audit.surface, "test_surface");
+        assert_eq!(audit.layout_mode, "mini");
         assert_eq!(audit.input_mode, "bare");
         assert_eq!(audit.divider_mode, "none");
         assert_eq!(audit.footer_mode, "hint_strip");
@@ -732,16 +825,61 @@ mod prompt_layout_shell_tests {
             audit.header_padding_y,
             crate::ui::chrome::HEADER_PADDING_Y as u16
         );
-        assert_eq!(audit.hint_count, 3);
-        assert!(audit.has_leading_status);
+        assert_eq!(audit.hint_count, super::UNIVERSAL_PROMPT_HINT_COUNT);
+        assert!(!audit.has_leading_status);
         assert!(audit.has_actions);
         assert_eq!(audit.exception_reason, None);
+    }
+
+    #[test]
+    fn prompt_chrome_audit_editor_uses_editor_layout() {
+        let audit = super::PromptChromeAudit::editor("test_editor", true);
+        assert_eq!(audit.layout_mode, "editor");
+        assert_eq!(audit.input_mode, "bare");
+        assert_eq!(audit.footer_mode, "hint_strip");
+        assert_eq!(audit.hint_count, super::UNIVERSAL_PROMPT_HINT_COUNT);
+    }
+
+    #[test]
+    fn prompt_chrome_audit_expanded_uses_expanded_layout() {
+        let audit = super::PromptChromeAudit::expanded("test_expanded", false);
+        assert_eq!(audit.layout_mode, "expanded");
+        assert_eq!(audit.input_mode, "bare");
+        assert_eq!(audit.footer_mode, "hint_strip");
+        assert!(!audit.has_actions);
+    }
+
+    #[test]
+    fn prompt_chrome_audit_grid_uses_grid_layout() {
+        let audit = super::PromptChromeAudit::grid("test_grid", true);
+        assert_eq!(audit.layout_mode, "grid");
+        assert_eq!(audit.input_mode, "bare");
+        assert_eq!(audit.footer_mode, "hint_strip");
+    }
+
+    #[test]
+    fn prompt_chrome_audit_minimal_adapter_backward_compatible() {
+        // When called with the universal contract values, matches minimal_list.
+        let via_adapter = super::PromptChromeAudit::minimal(
+            "compat_surface",
+            super::UNIVERSAL_PROMPT_HINT_COUNT,
+            false,
+            true,
+        );
+        let direct = super::PromptChromeAudit::minimal_list("compat_surface", true);
+        assert_eq!(via_adapter, direct);
+
+        // Legacy callers with different hint_count still compile and set layout_mode.
+        let legacy = super::PromptChromeAudit::minimal("legacy_surface", 2, false, false);
+        assert_eq!(legacy.layout_mode, "mini");
+        assert_eq!(legacy.hint_count, 2);
     }
 
     #[test]
     fn prompt_chrome_audit_exception_records_reason() {
         let audit = super::PromptChromeAudit::exception("webcam_prompt", "media_capture_surface");
         assert_eq!(audit.surface, "webcam_prompt");
+        assert_eq!(audit.layout_mode, "custom");
         assert_eq!(audit.footer_mode, "prompt_footer");
         assert_eq!(audit.exception_reason, Some("media_capture_surface"));
         assert_eq!(audit.input_mode, "custom");
@@ -750,9 +888,18 @@ mod prompt_layout_shell_tests {
 
     #[test]
     fn prompt_chrome_audit_emit_does_not_panic() {
-        // Verify both variants can be emitted without panicking.
-        let minimal = super::PromptChromeAudit::minimal("smoke_minimal", 2, false, true);
+        // Verify all variants can be emitted without panicking.
+        let minimal = super::PromptChromeAudit::minimal_list("smoke_minimal_list", true);
         super::emit_prompt_chrome_audit(&minimal);
+
+        let editor = super::PromptChromeAudit::editor("smoke_editor", false);
+        super::emit_prompt_chrome_audit(&editor);
+
+        let expanded = super::PromptChromeAudit::expanded("smoke_expanded", true);
+        super::emit_prompt_chrome_audit(&expanded);
+
+        let grid = super::PromptChromeAudit::grid("smoke_grid", false);
+        super::emit_prompt_chrome_audit(&grid);
 
         let exception =
             super::PromptChromeAudit::exception("smoke_exception", "form_heavy_surface");
@@ -761,16 +908,40 @@ mod prompt_layout_shell_tests {
 
     #[test]
     fn prompt_chrome_audit_dedupes_identical_contracts() {
-        let audit = super::PromptChromeAudit::minimal("test_dedup_surface", 2, false, false);
+        let audit = super::PromptChromeAudit::minimal_list("test_dedup_surface_v2", false);
 
         // First insert is new → true
         assert!(super::mark_prompt_chrome_audit_seen(&audit));
         // Duplicate → false
         assert!(!super::mark_prompt_chrome_audit_seen(&audit));
 
-        // Changed contract (different hint_count and has_actions) → true
-        let changed = super::PromptChromeAudit::minimal("test_dedup_surface", 3, false, true);
+        // Changed contract (different has_actions) → true
+        let changed = super::PromptChromeAudit::minimal_list("test_dedup_surface_v2", true);
         assert!(super::mark_prompt_chrome_audit_seen(&changed));
+    }
+
+    #[test]
+    fn universal_prompt_hints_returns_exactly_three() {
+        let hints = super::universal_prompt_hints();
+        assert_eq!(hints.len(), super::UNIVERSAL_PROMPT_HINT_COUNT);
+        assert_eq!(hints[0].as_ref(), "↵ Run");
+        assert_eq!(hints[1].as_ref(), "⌘K Actions");
+        assert_eq!(hints[2].as_ref(), "Tab AI");
+    }
+
+    #[test]
+    fn prompt_chrome_audit_serializes_layout_mode() {
+        let audit = super::PromptChromeAudit::minimal_list("serialize_test", true);
+        let json = serde_json::to_string(&audit).expect("should serialize");
+        assert!(json.contains("\"layout_mode\":\"mini\""));
+
+        let editor = super::PromptChromeAudit::editor("serialize_editor", false);
+        let json = serde_json::to_string(&editor).expect("should serialize");
+        assert!(json.contains("\"layout_mode\":\"editor\""));
+
+        let exception = super::PromptChromeAudit::exception("serialize_exc", "reason");
+        let json = serde_json::to_string(&exception).expect("should serialize");
+        assert!(json.contains("\"layout_mode\":\"custom\""));
     }
 
     #[test]
@@ -800,19 +971,19 @@ mod prompt_layout_shell_tests {
     }
 
     #[test]
-    fn editor_prompt_emits_chrome_audit_exception() {
+    fn editor_prompt_emits_chrome_audit_editor_layout() {
         let source = include_str!("../render_prompts/editor.rs");
         assert!(
             source.contains("emit_prompt_chrome_audit("),
             "editor.rs should call emit_prompt_chrome_audit"
         );
         assert!(
-            source.contains("PromptChromeAudit::exception("),
-            "editor.rs should classify as exception"
+            source.contains("PromptChromeAudit::editor("),
+            "editor.rs should classify as editor layout mode"
         );
         assert!(
-            source.contains("\"editor_prompt\""),
-            "editor.rs should identify as editor_prompt surface"
+            source.contains("\"render_prompts::editor\""),
+            "editor.rs should identify as render_prompts::editor surface"
         );
     }
 

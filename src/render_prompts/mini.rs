@@ -33,11 +33,6 @@ impl ScriptListApp {
         let mini_padding_x: f32 = crate::window_resize::mini_layout::HEADER_PADDING_X;
         let mini_padding_y: f32 = crate::window_resize::mini_layout::HEADER_PADDING_Y;
 
-        // Filtered choices for selection (mini shows no list, but tracks selection for submit)
-        let filtered_choices = self.get_filtered_arg_choices_owned();
-        let has_choices = !choices.is_empty();
-        let filtered_count = filtered_choices.len();
-
         // Key handler - Enter submits, Escape dismisses, arrow keys navigate hidden selection
         let prompt_id = id.clone();
         let handle_key = cx.listener(
@@ -142,34 +137,12 @@ impl ScriptListApp {
             },
         );
 
-        // Status text for mini footer
-        let helper_text = if has_choices && filtered_count > 0 {
-            Some(crate::panel::running_status_message(&format!(
-                "{filtered_count} options · Enter to select"
-            )))
-        } else if !input_is_empty {
-            Some(crate::panel::running_status_message("Enter to submit"))
-        } else {
-            Some(crate::panel::running_status_message(
-                "type a value and press Enter",
-            ))
-        };
-
-        let footer_colors = PromptFooterColors::from_theme(theme);
-        let footer_config = PromptFooterConfig::new()
-            .primary_label("Submit")
-            .primary_shortcut("↵")
-            .show_secondary(false)
-            .show_logo(false);
-        let footer_config = if let Some(helper) = helper_text {
-            footer_config.helper_text(helper)
-        } else {
-            footer_config
-        };
-
-        // Create click handler for footer primary button
-        let prompt_id_for_primary = id;
-        let handle_primary = cx.entity().downgrade();
+        crate::components::emit_prompt_chrome_audit(
+            &crate::components::PromptChromeAudit::minimal_list(
+                "render_prompts::mini",
+                false,
+            ),
+        );
 
         div()
             .flex()
@@ -235,21 +208,11 @@ impl ScriptListApp {
                             })
                     }),
             )
-            // Compact footer (no actions button)
-            .child(
-                PromptFooter::new(footer_config, footer_colors).on_primary_click(Box::new(
-                    move |_, _window, cx| {
-                        if let Some(app) = handle_primary.upgrade() {
-                            app.update(cx, |this, cx| {
-                                this.submit_arg_prompt_from_current_state(
-                                    &prompt_id_for_primary,
-                                    cx,
-                                );
-                            });
-                        }
-                    },
-                )),
-            )
+            // Universal three-key hint strip footer
+            .child(crate::components::render_simple_hint_strip(
+                crate::components::universal_prompt_hints(),
+                None,
+            ))
             .into_any_element()
     }
 }
@@ -272,10 +235,42 @@ mod mini_prompt_render_tests {
 
     #[test]
     fn mini_prompt_has_no_list_display() {
-        // mini should not contain uniform_list
         assert!(
             !MINI_SOURCE.contains("uniform_list("),
             "mini prompt should not render a choice list"
+        );
+    }
+
+    #[test]
+    fn mini_prompt_uses_universal_hint_strip_footer() {
+        assert!(
+            MINI_SOURCE.contains("universal_prompt_hints()"),
+            "mini prompt should use the canonical three-key hint strip"
+        );
+        assert!(
+            MINI_SOURCE.contains("render_simple_hint_strip("),
+            "mini prompt should render a hint strip footer"
+        );
+        let render_fn_end = MINI_SOURCE
+            .find("#[cfg(test)]")
+            .unwrap_or(MINI_SOURCE.len());
+        let render_code = &MINI_SOURCE[..render_fn_end];
+        let needle = ["PromptFooter", "::new("].concat();
+        assert!(
+            !render_code.contains(&needle),
+            "mini prompt should not use PromptFooter"
+        );
+    }
+
+    #[test]
+    fn mini_prompt_emits_chrome_audit() {
+        assert!(
+            MINI_SOURCE.contains("emit_prompt_chrome_audit("),
+            "mini prompt should emit a chrome audit"
+        );
+        assert!(
+            MINI_SOURCE.contains("\"render_prompts::mini\""),
+            "mini prompt chrome audit should use correct surface name"
         );
     }
 
