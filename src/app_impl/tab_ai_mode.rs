@@ -213,8 +213,13 @@ impl ScriptListApp {
 
     /// Build a clipboard context summary from the most recent cached clipboard entry.
     /// Uses only cached data — no new clipboard reads or screenshot capture.
-    fn resolve_tab_ai_clipboard_context(&self) -> Option<crate::ai::TabAiClipboardContext> {
-        let entry = self.cached_clipboard_entries.first()?;
+    fn resolve_tab_ai_clipboard_context(
+        &self,
+        selected_index: Option<usize>,
+    ) -> Option<crate::ai::TabAiClipboardContext> {
+        let entry = selected_index
+            .and_then(|index| self.cached_clipboard_entries.get(index))
+            .or_else(|| self.cached_clipboard_entries.first())?;
 
         let preview = if entry.content_type.as_str() == "image" {
             entry
@@ -235,6 +240,339 @@ impl ScriptListApp {
                 .filter(|text| !text.trim().is_empty())
                 .map(|text| crate::ai::truncate_tab_ai_text(&text, 240)),
         })
+    }
+
+    fn tab_ai_target_from_element(
+        prompt_type: &str,
+        element: &crate::protocol::ElementInfo,
+    ) -> crate::ai::TabAiTargetContext {
+        crate::ai::TabAiTargetContext {
+            source: prompt_type.to_string(),
+            kind: format!("{:?}", element.element_type).to_lowercase(),
+            semantic_id: element.semantic_id.clone(),
+            label: element
+                .text
+                .clone()
+                .or_else(|| element.value.clone())
+                .unwrap_or_else(|| element.semantic_id.clone()),
+            metadata: Some(serde_json::json!({
+                "text": element.text.clone(),
+                "value": element.value.clone(),
+                "selected": element.selected,
+                "focused": element.focused,
+                "index": element.index,
+            })),
+        }
+    }
+
+    fn resolve_tab_ai_surface_targets(
+        &self,
+        ui: &crate::ai::TabAiUiSnapshot,
+    ) -> (
+        Option<crate::ai::TabAiTargetContext>,
+        Vec<crate::ai::TabAiTargetContext>,
+    ) {
+        match &self.current_view {
+            AppView::ClipboardHistoryView { selected_index, .. } => {
+                let focused_target =
+                    self.cached_clipboard_entries
+                        .get(*selected_index)
+                        .map(|entry| {
+                            let preview = if entry.content_type.as_str() == "image" {
+                                entry
+                                    .ocr_text
+                                    .clone()
+                                    .filter(|text| !text.trim().is_empty())
+                                    .unwrap_or_else(|| entry.display_preview())
+                            } else {
+                                entry.display_preview()
+                            };
+                            crate::ai::TabAiTargetContext {
+                                source: "ClipboardHistory".to_string(),
+                                kind: "clipboard_entry".to_string(),
+                                semantic_id: crate::protocol::generate_semantic_id(
+                                    "choice",
+                                    *selected_index,
+                                    &entry.text_preview,
+                                ),
+                                label: preview.clone(),
+                                metadata: Some(serde_json::json!({
+                                    "contentType": entry.content_type.as_str(),
+                                    "preview": preview,
+                                    "ocrText": entry.ocr_text.clone(),
+                                })),
+                            }
+                        });
+                let visible_targets = self
+                    .cached_clipboard_entries
+                    .iter()
+                    .take(5)
+                    .enumerate()
+                    .map(|(index, entry)| {
+                        let preview = if entry.content_type.as_str() == "image" {
+                            entry
+                                .ocr_text
+                                .clone()
+                                .filter(|text| !text.trim().is_empty())
+                                .unwrap_or_else(|| entry.display_preview())
+                        } else {
+                            entry.display_preview()
+                        };
+                        crate::ai::TabAiTargetContext {
+                            source: "ClipboardHistory".to_string(),
+                            kind: "clipboard_entry".to_string(),
+                            semantic_id: crate::protocol::generate_semantic_id(
+                                "choice",
+                                index,
+                                &entry.text_preview,
+                            ),
+                            label: preview.clone(),
+                            metadata: Some(serde_json::json!({
+                                "contentType": entry.content_type.as_str(),
+                                "preview": preview,
+                                "ocrText": entry.ocr_text.clone(),
+                            })),
+                        }
+                    })
+                    .collect();
+                (focused_target, visible_targets)
+            }
+            AppView::FileSearchView { selected_index, .. } => {
+                let focused_target = self.cached_file_results.get(*selected_index).map(|entry| {
+                    crate::ai::TabAiTargetContext {
+                        source: "FileSearch".to_string(),
+                        kind: if entry.file_type == crate::file_search::FileType::Directory {
+                            "directory".to_string()
+                        } else {
+                            "file".to_string()
+                        },
+                        semantic_id: crate::protocol::generate_semantic_id(
+                            "choice",
+                            *selected_index,
+                            &entry.name,
+                        ),
+                        label: entry.name.clone(),
+                        metadata: Some(serde_json::json!({
+                            "path": entry.path.clone(),
+                            "fileType": format!("{:?}", entry.file_type),
+                        })),
+                    }
+                });
+                let visible_targets = self
+                    .cached_file_results
+                    .iter()
+                    .take(5)
+                    .enumerate()
+                    .map(|(index, entry)| crate::ai::TabAiTargetContext {
+                        source: "FileSearch".to_string(),
+                        kind: if entry.file_type == crate::file_search::FileType::Directory {
+                            "directory".to_string()
+                        } else {
+                            "file".to_string()
+                        },
+                        semantic_id: crate::protocol::generate_semantic_id(
+                            "choice",
+                            index,
+                            &entry.name,
+                        ),
+                        label: entry.name.clone(),
+                        metadata: Some(serde_json::json!({
+                            "path": entry.path.clone(),
+                            "fileType": format!("{:?}", entry.file_type),
+                        })),
+                    })
+                    .collect();
+                (focused_target, visible_targets)
+            }
+            AppView::WindowSwitcherView { selected_index, .. } => {
+                let focused_target = self.cached_windows.get(*selected_index).map(|entry| {
+                    let label = format!("{} — {}", entry.app, entry.title);
+                    crate::ai::TabAiTargetContext {
+                        source: "WindowSwitcher".to_string(),
+                        kind: "window".to_string(),
+                        semantic_id: crate::protocol::generate_semantic_id(
+                            "choice",
+                            *selected_index,
+                            &label,
+                        ),
+                        label,
+                        metadata: Some(serde_json::json!({
+                            "app": entry.app.clone(),
+                            "title": entry.title.clone(),
+                        })),
+                    }
+                });
+                let visible_targets = self
+                    .cached_windows
+                    .iter()
+                    .take(5)
+                    .enumerate()
+                    .map(|(index, entry)| {
+                        let label = format!("{} — {}", entry.app, entry.title);
+                        crate::ai::TabAiTargetContext {
+                            source: "WindowSwitcher".to_string(),
+                            kind: "window".to_string(),
+                            semantic_id: crate::protocol::generate_semantic_id(
+                                "choice",
+                                index,
+                                &label,
+                            ),
+                            label,
+                            metadata: Some(serde_json::json!({
+                                "app": entry.app.clone(),
+                                "title": entry.title.clone(),
+                            })),
+                        }
+                    })
+                    .collect();
+                (focused_target, visible_targets)
+            }
+            AppView::AppLauncherView { selected_index, .. } => {
+                let focused_target = self.apps.get(*selected_index).map(|app| {
+                    crate::ai::TabAiTargetContext {
+                        source: "AppLauncher".to_string(),
+                        kind: "app".to_string(),
+                        semantic_id: crate::protocol::generate_semantic_id(
+                            "choice",
+                            *selected_index,
+                            &app.name,
+                        ),
+                        label: app.name.clone(),
+                        metadata: Some(serde_json::json!({
+                            "name": app.name.clone(),
+                        })),
+                    }
+                });
+                let visible_targets = self
+                    .apps
+                    .iter()
+                    .take(5)
+                    .enumerate()
+                    .map(|(index, app)| crate::ai::TabAiTargetContext {
+                        source: "AppLauncher".to_string(),
+                        kind: "app".to_string(),
+                        semantic_id: crate::protocol::generate_semantic_id(
+                            "choice",
+                            index,
+                            &app.name,
+                        ),
+                        label: app.name.clone(),
+                        metadata: Some(serde_json::json!({
+                            "name": app.name.clone(),
+                        })),
+                    })
+                    .collect();
+                (focused_target, visible_targets)
+            }
+            AppView::ProcessManagerView { selected_index, .. } => {
+                let focused_target =
+                    self.cached_processes.get(*selected_index).map(|process| {
+                        crate::ai::TabAiTargetContext {
+                            source: "ProcessManager".to_string(),
+                            kind: "process".to_string(),
+                            semantic_id: crate::protocol::generate_semantic_id(
+                                "choice",
+                                *selected_index,
+                                &process.script_path,
+                            ),
+                            label: process.script_path.clone(),
+                            metadata: Some(serde_json::json!({
+                                "scriptPath": process.script_path.clone(),
+                            })),
+                        }
+                    });
+                let visible_targets = self
+                    .cached_processes
+                    .iter()
+                    .take(5)
+                    .enumerate()
+                    .map(|(index, process)| crate::ai::TabAiTargetContext {
+                        source: "ProcessManager".to_string(),
+                        kind: "process".to_string(),
+                        semantic_id: crate::protocol::generate_semantic_id(
+                            "choice",
+                            index,
+                            &process.script_path,
+                        ),
+                        label: process.script_path.clone(),
+                        metadata: Some(serde_json::json!({
+                            "scriptPath": process.script_path.clone(),
+                        })),
+                    })
+                    .collect();
+                (focused_target, visible_targets)
+            }
+            AppView::CurrentAppCommandsView { selected_index, .. } => {
+                let focused_target = self
+                    .cached_current_app_entries
+                    .get(*selected_index)
+                    .map(|entry| crate::ai::TabAiTargetContext {
+                        source: "CurrentAppCommands".to_string(),
+                        kind: "menu_command".to_string(),
+                        semantic_id: crate::protocol::generate_semantic_id(
+                            "choice",
+                            *selected_index,
+                            &entry.name,
+                        ),
+                        label: entry.name.clone(),
+                        metadata: Some(serde_json::json!({
+                            "name": entry.name.clone(),
+                        })),
+                    });
+                let visible_targets = self
+                    .cached_current_app_entries
+                    .iter()
+                    .take(5)
+                    .enumerate()
+                    .map(|(index, entry)| crate::ai::TabAiTargetContext {
+                        source: "CurrentAppCommands".to_string(),
+                        kind: "menu_command".to_string(),
+                        semantic_id: crate::protocol::generate_semantic_id(
+                            "choice",
+                            index,
+                            &entry.name,
+                        ),
+                        label: entry.name.clone(),
+                        metadata: Some(serde_json::json!({
+                            "name": entry.name.clone(),
+                        })),
+                    })
+                    .collect();
+                (focused_target, visible_targets)
+            }
+            _ => {
+                let visible_targets: Vec<crate::ai::TabAiTargetContext> = ui
+                    .visible_elements
+                    .iter()
+                    .take(5)
+                    .map(|element| Self::tab_ai_target_from_element(&ui.prompt_type, element))
+                    .collect();
+
+                let focused_target = ui
+                    .selected_semantic_id
+                    .as_deref()
+                    .or(ui.focused_semantic_id.as_deref())
+                    .and_then(|semantic_id| {
+                        visible_targets
+                            .iter()
+                            .find(|target| target.semantic_id == semantic_id)
+                            .cloned()
+                            .or_else(|| {
+                                ui.visible_elements
+                                    .iter()
+                                    .find(|element| element.semantic_id == semantic_id)
+                                    .map(|element| {
+                                        Self::tab_ai_target_from_element(
+                                            &ui.prompt_type,
+                                            element,
+                                        )
+                                    })
+                            })
+                    });
+
+                (focused_target, visible_targets)
+            }
+        }
     }
 
     /// Capture a snapshot of the current UI state for context assembly.
@@ -327,8 +665,12 @@ impl ScriptListApp {
         // Recent input history (most recent first, bounded)
         let recent_inputs = self.input_history.recent_entries(5);
 
-        // Cached clipboard context (no new reads)
-        let clipboard = self.resolve_tab_ai_clipboard_context();
+        // Cached clipboard context — prefer selected item on clipboard surface
+        let clipboard_selected_index = match &self.current_view {
+            AppView::ClipboardHistoryView { selected_index, .. } => Some(*selected_index),
+            _ => None,
+        };
+        let clipboard = self.resolve_tab_ai_clipboard_context(clipboard_selected_index);
 
         // Prior automation suggestions (up to 3)
         let prior_automations = match crate::ai::resolve_tab_ai_memory_suggestions_with_outcome(
@@ -356,15 +698,22 @@ impl ScriptListApp {
 
         let timestamp = chrono::Utc::now().to_rfc3339();
 
-        // Capture counts before moving into from_parts
+        // Resolve surface targets
+        let (focused_target, visible_targets) = self.resolve_tab_ai_surface_targets(&ui);
+
+        // Capture counts before moving into from_parts_with_targets
         let visible_element_count = ui.visible_elements.len();
         let recent_input_count = recent_inputs.len();
         let has_clipboard = clipboard.is_some();
         let prior_automation_count = prior_automations.len();
         let has_bundle_id = bundle_id.is_some();
+        let has_focused_target = focused_target.is_some();
+        let visible_target_count = visible_targets.len();
 
-        let context = crate::ai::TabAiContextBlob::from_parts(
+        let context = crate::ai::TabAiContextBlob::from_parts_with_targets(
             ui,
+            focused_target,
+            visible_targets,
             desktop,
             recent_inputs,
             clipboard,
@@ -383,6 +732,8 @@ impl ScriptListApp {
             prior_automation_count,
             context_warning_count,
             has_bundle_id,
+            has_focused_target,
+            visible_target_count,
             "tab ai context built"
         );
 
@@ -794,6 +1145,21 @@ impl ScriptListApp {
 
         // Build context blob (returns bundle metadata + warning counts)
         let resolved_context = self.build_tab_ai_context(cx);
+
+        // Reject implicit-object intents when no stable target exists
+        if resolved_context.context.focused_target.is_none()
+            && crate::ai::tab_ai_intent_uses_implicit_target(&intent)
+        {
+            set_tab_ai_error(
+                &mut self.tab_ai_state,
+                "missing_implicit_target",
+                "No stable target is selected on this surface. Select an item or describe the target explicitly.",
+                "select_target_or_use_explicit_intent",
+            );
+            cx.notify();
+            return;
+        }
+
         let bundle_id = resolved_context.bundle_id.clone();
         let context_warning_count = resolved_context.context_warning_count;
         let context_json = match serde_json::to_string_pretty(&resolved_context.context) {

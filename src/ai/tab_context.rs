@@ -60,6 +60,27 @@ pub fn truncate_tab_ai_text(value: &str, limit: usize) -> String {
     }
 }
 
+/// Explicit target context resolved from the active surface.
+///
+/// When the user says "this", "it", or "selected", the model should use
+/// `focusedTarget` as the default subject instead of guessing from the UI
+/// snapshot.
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct TabAiTargetContext {
+    /// Surface that produced this target (e.g. "FileSearch", "ClipboardHistory").
+    pub source: String,
+    /// Kind of target (e.g. "file", "directory", "clipboard_entry", "app", "window").
+    pub kind: String,
+    /// Semantic ID matching the element collection scheme.
+    pub semantic_id: String,
+    /// Human-readable label for the target.
+    pub label: String,
+    /// Surface-specific metadata (path, bundleId, contentType, etc.).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<serde_json::Value>,
+}
+
 /// Complete context blob sent alongside the user's natural-language intent.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
@@ -70,6 +91,12 @@ pub struct TabAiContextBlob {
     pub timestamp: String,
     /// UI state at invocation time.
     pub ui: TabAiUiSnapshot,
+    /// The primary target the user is acting on (the "this" in "do this to that").
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub focused_target: Option<TabAiTargetContext>,
+    /// Top visible targets from the active surface (fallback when focusedTarget is absent).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub visible_targets: Vec<TabAiTargetContext>,
     /// Desktop context (frontmost app, selected text, browser URL).
     pub desktop: crate::context_snapshot::AiContextSnapshot,
     /// Recent input-history entries (most recent first).
@@ -84,11 +111,12 @@ pub struct TabAiContextBlob {
 }
 
 impl TabAiContextBlob {
-    /// Build a context blob from provided parts — no system calls, fully
-    /// deterministic.  Intended for tests and for callers that already hold
-    /// resolved data.
-    pub fn from_parts(
+    /// Build a context blob with explicit target information.
+    #[allow(clippy::too_many_arguments)]
+    pub fn from_parts_with_targets(
         ui: TabAiUiSnapshot,
+        focused_target: Option<TabAiTargetContext>,
+        visible_targets: Vec<TabAiTargetContext>,
         desktop: crate::context_snapshot::AiContextSnapshot,
         recent_inputs: Vec<String>,
         clipboard: Option<TabAiClipboardContext>,
@@ -99,18 +127,45 @@ impl TabAiContextBlob {
             schema_version: TAB_AI_CONTEXT_SCHEMA_VERSION,
             timestamp,
             ui,
+            focused_target,
+            visible_targets,
             desktop,
             recent_inputs,
             clipboard,
             prior_automations,
         }
     }
+
+    /// Build a context blob from provided parts — no system calls, fully
+    /// deterministic.  Intended for tests and for callers that already hold
+    /// resolved data.  Delegates to `from_parts_with_targets` with no targets.
+    pub fn from_parts(
+        ui: TabAiUiSnapshot,
+        desktop: crate::context_snapshot::AiContextSnapshot,
+        recent_inputs: Vec<String>,
+        clipboard: Option<TabAiClipboardContext>,
+        prior_automations: Vec<TabAiMemorySuggestion>,
+        timestamp: String,
+    ) -> Self {
+        Self::from_parts_with_targets(
+            ui,
+            None,
+            Vec::new(),
+            desktop,
+            recent_inputs,
+            clipboard,
+            prior_automations,
+            timestamp,
+        )
+    }
 }
 
 /// Build the user prompt sent to the AI model for Tab AI script generation.
 ///
 /// Combines the user's natural-language intent with a JSON context blob and
-/// instructions to return a fenced TypeScript code block.
+/// instructions to return a fenced TypeScript code block.  The prompt teaches
+/// the model to use `focusedTarget` as the default subject for implicit-object
+/// intents and to never invent a target when one is absent.
 pub fn build_tab_ai_user_prompt(intent: &str, context_json: &str) -> String {
     format!(
         "User intent:\n{intent}\n\n\
@@ -120,7 +175,10 @@ pub fn build_tab_ai_user_prompt(intent: &str, context_json: &str) -> String {
          ```\n\n\
          Write one valid Script Kit TypeScript script.\n\
          - Use the live context as the source of truth.\n\
-         - Prefer ui.selectedSemanticId / ui.focusedSemanticId and visibleElements for in-app targets.\n\
+         - focusedTarget is the default subject when the intent says \"this\", \"it\", \"selected\", or leaves the object implicit.\n\
+         - If focusedTarget.metadata contains identifiers (path, bundleId, pid, command, url), use those exact values instead of guessing from labels.\n\
+         - visibleTargets are fallbacks only when focusedTarget is absent or the intent clearly refers to multiple visible items.\n\
+         - If no focusedTarget exists, do not invent an implicit subject. Operate only on explicit data from the intent or desktop context.\n\
          - Prefer desktop.selectedText, desktop.browser.url, and desktop.frontmostApp for desktop targets.\n\
          - Use clipboard.preview or clipboard.ocrText when the request refers to copied or pasted content.\n\
          - Treat priorAutomations as hints only; borrow their shape if useful, but do not assume they are still correct if live context disagrees.\n\
@@ -129,6 +187,60 @@ pub fn build_tab_ai_user_prompt(intent: &str, context_json: &str) -> String {
         intent = intent.trim(),
         context_json = context_json,
     )
+}
+
+/// Check whether the user's intent uses implicit target pronouns.
+///
+/// Returns `true` when the intent contains words like "this", "it", "that",
+/// "selected", "current", or "focused" — tokens that imply the action targets
+/// whatever is currently focused/selected on screen.
+///
+/// Also covers a small set of object-elision commands that the Tab AI contract
+/// treats as acting on the current selection by default, such as
+/// "rename to kebab-case" or bare "force quit".
+pub fn tab_ai_intent_uses_implicit_target(intent: &str) -> bool {
+    let normalized_tokens: Vec<String> = intent
+        .chars()
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() {
+                ch.to_ascii_lowercase()
+            } else {
+                ' '
+            }
+        })
+        .collect::<String>()
+        .split_whitespace()
+        .map(ToString::to_string)
+        .collect();
+
+    let token_set: std::collections::BTreeSet<&str> = normalized_tokens
+        .iter()
+        .map(String::as_str)
+        .collect();
+
+    if token_set.contains("this")
+        || token_set.contains("it")
+        || token_set.contains("that")
+        || token_set.contains("selected")
+        || token_set.contains("current")
+        || token_set.contains("focused")
+    {
+        return true;
+    }
+
+    let first = normalized_tokens.first().map(String::as_str);
+    let second = normalized_tokens.get(1).map(String::as_str);
+    let third = normalized_tokens.get(2).map(String::as_str);
+
+    match (first, second, third) {
+        (Some("rename"), Some("to" | "as" | "into"), _)
+        | (Some("convert" | "change" | "transform" | "format"), Some("to" | "as" | "into"), _)
+        | (Some("force"), Some("quit"), None)
+        | (Some("quit" | "close" | "delete" | "remove" | "duplicate" | "kill"), None, None) => {
+            true
+        }
+        _ => false,
+    }
 }
 
 /// Schema version for `TabAiExecutionRecord`. Bump when adding/removing/renaming fields.
@@ -2208,5 +2320,118 @@ mod tab_ai_invocation_receipt_tests {
         assert!(r
             .degradation_reasons
             .contains(&TabAiDegradationReason::CollectorFallback));
+    }
+}
+
+#[cfg(test)]
+mod target_context_tests {
+    use super::*;
+
+    #[test]
+    fn tab_ai_context_blob_serializes_focused_target() {
+        let blob = TabAiContextBlob::from_parts_with_targets(
+            TabAiUiSnapshot {
+                prompt_type: "FileSearch".to_string(),
+                selected_semantic_id: Some("choice:0:report.md".to_string()),
+                ..Default::default()
+            },
+            Some(TabAiTargetContext {
+                source: "FileSearch".to_string(),
+                kind: "file".to_string(),
+                semantic_id: "choice:0:report.md".to_string(),
+                label: "report.md".to_string(),
+                metadata: Some(serde_json::json!({
+                    "path": "/tmp/report.md",
+                    "fileType": "File"
+                })),
+            }),
+            vec![],
+            crate::context_snapshot::AiContextSnapshot::default(),
+            vec![],
+            None,
+            vec![],
+            "2026-03-28T13:37:35Z".to_string(),
+        );
+        let json = serde_json::to_value(&blob).expect("serialize context blob");
+        assert_eq!(json["focusedTarget"]["kind"], "file");
+        assert_eq!(json["focusedTarget"]["metadata"]["path"], "/tmp/report.md");
+    }
+
+    #[test]
+    fn tab_ai_user_prompt_teaches_model_not_to_guess_target() {
+        let prompt = build_tab_ai_user_prompt(
+            "rename to kebab-case",
+            r#"{"focusedTarget":null,"ui":{"promptType":"ScriptList"}}"#,
+        );
+        assert!(prompt.contains("focusedTarget is the default subject"));
+        assert!(prompt.contains("do not invent an implicit subject"));
+    }
+
+    #[test]
+    fn implicit_target_detection_avoids_false_positive_on_split() {
+        assert!(tab_ai_intent_uses_implicit_target(
+            "rename this to kebab-case"
+        ));
+        assert!(tab_ai_intent_uses_implicit_target(
+            "rename to kebab-case"
+        ));
+        assert!(!tab_ai_intent_uses_implicit_target(
+            "rename report.md to kebab-case"
+        ));
+        assert!(!tab_ai_intent_uses_implicit_target("split lines"));
+        assert!(!tab_ai_intent_uses_implicit_target("copy url"));
+    }
+
+    #[test]
+    fn from_parts_without_targets_leaves_focused_target_none() {
+        let blob = TabAiContextBlob::from_parts(
+            TabAiUiSnapshot::default(),
+            crate::context_snapshot::AiContextSnapshot::default(),
+            vec![],
+            None,
+            vec![],
+            "2026-03-28T00:00:00Z".to_string(),
+        );
+        assert!(blob.focused_target.is_none());
+        assert!(blob.visible_targets.is_empty());
+    }
+
+    #[test]
+    fn focused_target_serializes_camel_case() {
+        let target = TabAiTargetContext {
+            source: "ClipboardHistory".to_string(),
+            kind: "clipboard_entry".to_string(),
+            semantic_id: "choice:2:link".to_string(),
+            label: "https://example.com".to_string(),
+            metadata: Some(serde_json::json!({"contentType": "text"})),
+        };
+        let json = serde_json::to_value(&target).expect("serialize");
+        assert_eq!(json["semanticId"], "choice:2:link");
+        assert_eq!(json["metadata"]["contentType"], "text");
+    }
+
+    #[test]
+    fn implicit_target_detection_recognizes_all_pronouns() {
+        assert!(tab_ai_intent_uses_implicit_target("open it"));
+        assert!(tab_ai_intent_uses_implicit_target("paste that here"));
+        assert!(tab_ai_intent_uses_implicit_target("copy selected text"));
+        assert!(tab_ai_intent_uses_implicit_target("show current status"));
+        assert!(tab_ai_intent_uses_implicit_target("close focused window"));
+        assert!(tab_ai_intent_uses_implicit_target("force quit"));
+    }
+
+    #[test]
+    fn visible_targets_omitted_when_empty() {
+        let blob = TabAiContextBlob::from_parts(
+            TabAiUiSnapshot::default(),
+            crate::context_snapshot::AiContextSnapshot::default(),
+            vec![],
+            None,
+            vec![],
+            "2026-03-28T00:00:00Z".to_string(),
+        );
+        let json = serde_json::to_string(&blob).expect("serialize");
+        assert!(!json.contains("visibleTargets"));
+        assert!(!json.contains("focusedTarget"));
     }
 }

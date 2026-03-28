@@ -1251,7 +1251,7 @@ fn build_tab_ai_context_emits_structured_log() {
     let fn_start = TAB_AI_SOURCE
         .find("fn build_tab_ai_context(")
         .expect("build_tab_ai_context must exist");
-    let fn_body = &TAB_AI_SOURCE[fn_start..fn_start + 3000.min(TAB_AI_SOURCE.len() - fn_start)];
+    let fn_body = &TAB_AI_SOURCE[fn_start..fn_start + 4000.min(TAB_AI_SOURCE.len() - fn_start)];
 
     assert!(
         fn_body.contains("tab_ai_context_built"),
