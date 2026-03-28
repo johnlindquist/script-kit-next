@@ -24,7 +24,8 @@ gpui = { path = "../gpui", default-features = false }
 gpui_macos = { path = "../gpui_macos", default-features = false }
 
 [target.'cfg(target_os = "windows")'.dependencies]
-gpui_windows = { git = "https://github.com/zed-industries/zed", rev = "8da83f8521d383c123d022455fac01f4f26ba0af", package = "gpui_windows", default-features = false }
+gpui_windows = { git = "https://github.com/zed-industries/zed", rev = "54a95e717d4ed1589c9b0e38648f65424defc74b", package = "gpui_windows", default-features = false }
+gpui = { path = "../gpui", features = ["windows-manifest"] }
 
 [target.'cfg(any(target_os = "linux", target_os = "freebsd"))'.dependencies]
-gpui_linux = { git = "https://github.com/zed-industries/zed", rev = "8da83f8521d383c123d022455fac01f4f26ba0af", package = "gpui_linux", default-features = false }
+gpui_linux = { git = "https://github.com/zed-industries/zed", rev = "54a95e717d4ed1589c9b0e38648f65424defc74b", package = "gpui_linux", default-features = false }

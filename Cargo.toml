@@ -150,6 +150,7 @@ gpui = { path = "vendor/gpui" }
 gpui_platform = { path = "vendor/gpui_platform" }
 gpui_macos = { path = "vendor/gpui_macos" }
 gpui_macros = { path = "vendor/gpui_macros" }
+gpui_util = { path = "vendor/gpui_util" }
 
 [features]
 default = ["ocr"]
