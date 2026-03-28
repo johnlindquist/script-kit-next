@@ -7,6 +7,11 @@
 /// Fully transparent — used for hover-reveal patterns where an element
 /// starts invisible and fades in on group hover.
 pub const OPACITY_HIDDEN: f32 = 0.0;
+/// Softer ghost-tier background opacity for barely-there fills (0.03–0.06 range).
+#[allow(dead_code)]
+pub const OPACITY_GHOST_SOFT: f32 = 0.03;
+/// Ghost-tier divider/surface opacity for whisper chrome (0.03–0.06 range).
+pub const OPACITY_GHOST: f32 = 0.06;
 /// Assistant bubble tint background.
 pub const OPACITY_MESSAGE_ASSISTANT_BACKGROUND: f32 = 0.10;
 /// User bubble tint background (kept for reference, now using inline 0.18 with muted tone).
@@ -64,6 +69,8 @@ mod tests {
     #[test]
     fn test_ai_legacy_opacity_values_remain_available_via_canonical_tokens() {
         assert_opacity_eq(OPACITY_HIDDEN, 0.0);
+        assert_opacity_eq(OPACITY_GHOST_SOFT, 0.03);
+        assert_opacity_eq(OPACITY_GHOST, 0.06);
         assert_opacity_eq(OPACITY_MESSAGE_ASSISTANT_BACKGROUND, 0.10);
         assert_opacity_eq(OPACITY_MESSAGE_USER_BACKGROUND, 0.18);
         assert_opacity_eq(OPACITY_MUTED, 0.30);

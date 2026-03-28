@@ -235,3 +235,117 @@ fn build_tab_ai_user_prompt_mentions_clipboard_and_prior_automations() {
     assert!(prompt.contains("priorAutomations"));
     assert!(prompt.contains("Return only a fenced ```ts block."));
 }
+
+// ── Source-level regression tests ─────────────────────────────────────
+//
+// These tests use `include_str!` to lock the Tab AI overlay source against
+// unintentional regressions in footer hints, placeholder copy, and
+// memory-hint rendering.
+
+/// The overlay source included once for all source-level assertions.
+const TAB_AI_SOURCE: &str = include_str!("../src/app_impl/tab_ai_mode.rs");
+
+#[test]
+fn tab_ai_overlay_uses_canonical_three_key_footer_contract() {
+    // Source uses \u{21B5} and \u{2318} escape sequences — match the raw text
+    assert!(
+        TAB_AI_SOURCE.contains(r#""\u{21B5} Run"#),
+        "tab ai overlay must expose the Run hint in the footer"
+    );
+    assert!(
+        TAB_AI_SOURCE.contains(r#""\u{2318}K Actions"#),
+        "tab ai overlay must expose the Actions hint in the footer"
+    );
+    assert!(
+        TAB_AI_SOURCE.contains("\"Tab AI\""),
+        "tab ai overlay must expose the Tab AI hint in the footer"
+    );
+}
+
+#[test]
+fn tab_ai_overlay_does_not_use_bespoke_esc_footer() {
+    assert!(
+        !TAB_AI_SOURCE.contains("\"Esc Cancel\""),
+        "tab ai overlay must not contain a bespoke Esc Cancel footer entry"
+    );
+}
+
+#[test]
+fn tab_ai_overlay_preserves_memory_hint_rendering() {
+    assert!(
+        TAB_AI_SOURCE.contains("Similar prior automation:"),
+        "visual cleanup must not silently remove memory-hint behavior"
+    );
+}
+
+#[test]
+fn tab_ai_overlay_idle_placeholder_matches_expected_copy() {
+    assert!(
+        TAB_AI_SOURCE.contains("\"What do you want to do?\""),
+        "idle placeholder must be 'What do you want to do?'"
+    );
+}
+
+#[test]
+fn tab_ai_overlay_running_placeholder_matches_expected_copy() {
+    assert!(
+        TAB_AI_SOURCE.contains("\"Generating...\""),
+        "running placeholder must be 'Generating...'"
+    );
+}
+
+#[test]
+fn tab_ai_save_offer_uses_named_opacity_constants() {
+    // The save-offer overlay must not use raw float literals for opacity
+    assert!(
+        !TAB_AI_SOURCE.contains("0.85,"),
+        "save-offer overlay should use OPACITY_NEAR_FULL, not raw 0.85"
+    );
+    assert!(
+        !TAB_AI_SOURCE.contains("0.4,"),
+        "save-offer overlay should use OPACITY_DISABLED, not raw 0.4"
+    );
+}
+
+#[test]
+fn tab_ai_save_offer_uses_shared_hint_strip() {
+    assert!(
+        TAB_AI_SOURCE.contains("HintStrip::new(vec!["),
+        "save-offer overlay must use the shared HintStrip component"
+    );
+    assert!(
+        TAB_AI_SOURCE.contains(r#""\u{21B5} Save"#),
+        "save-offer overlay must expose the Save hint via HintStrip"
+    );
+    assert!(
+        TAB_AI_SOURCE.contains(r#""Esc Dismiss""#),
+        "save-offer overlay must expose the Dismiss hint via HintStrip"
+    );
+}
+
+#[test]
+fn tab_ai_save_offer_is_not_floating_card() {
+    // The old floating card used a fixed width (420px) and centered layout
+    assert!(
+        !TAB_AI_SOURCE.contains("w(px(420.))"),
+        "save-offer overlay must not use the old 420px floating card width"
+    );
+    assert!(
+        !TAB_AI_SOURCE.contains("rounded_b("),
+        "save-offer overlay must not use bottom-rounded card corners"
+    );
+}
+
+#[test]
+fn tab_ai_save_offer_uses_ghost_opacity_divider() {
+    // The save-offer render path must reference OPACITY_GHOST for its divider
+    // (both the main overlay and save-offer overlay use it)
+    let save_offer_section = TAB_AI_SOURCE
+        .find("render_tab_ai_save_offer_overlay")
+        .expect("save-offer render function exists");
+    let save_offer_code = &TAB_AI_SOURCE[save_offer_section..];
+    assert!(
+        save_offer_code.contains("OPACITY_GHOST"),
+        "save-offer overlay must use OPACITY_GHOST for its divider"
+    );
+}

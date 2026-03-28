@@ -276,6 +276,48 @@ Composable context attachments for AI chat flows with deterministic resolution a
 - `tests/context_part_start_chat_flow.rs` — empty message + parts, message + parts, invalid parts, mixed success, order
 - `tests/context_part_submission_flow.rs` — mixed success tracking, full success prefix persistence
 
+### Tab AI — Context Chat with Script Execution
+
+Universal AI surface triggered by Tab from any view. Replaces the current view (like `ChatPrompt`) with a full-view inline chat that shows gathered context and can both converse and execute scripts.
+
+**Two entry paths, one destination:**
+- **Enter on fallback** — user types something with no matches, hits Enter on first fallback command → inline AI chat opens with filter text **auto-submitted** as first message. AI is already working.
+- **Tab on any item** — user presses Tab from any view → inline AI chat opens showing **context cards** (selected item, desktop state, etc.), input is empty. User types intent, then Enter.
+
+**Architecture:**
+- `AppView::TabAiChat` variant — full-view replacement, not an overlay
+- Follows `ChatPrompt` pattern: input at top, body in center (scrollable), footer at bottom
+- Context cards appear as initial chat body content (the "empty state" IS the context)
+- Enter always submits a chat message — AI decides whether to answer conversationally or generate+execute a script
+
+**Dual-mode AI agent:**
+- **Action mode** ("focus on this app", "rename to kebab-case") → generates Script Kit script, displays as code block in chat, executes inline, shows result
+- **Conversation mode** ("what does this app do?", "how many files?") → responds with text answer
+- System prompt: "If the user's message reads as a command (imperative verb), generate and execute a script. If it reads as a question, respond conversationally. When ambiguous, prefer action."
+
+**Context relevance hierarchy** (highest to lowest focus):
+1. Selected/highlighted item — implicit subject of any action verb
+2. Filter text — strong intent signal
+3. Visible items — what's on screen
+4. Desktop state — frontmost app, browser URL, window title
+5. Screenshot/OCR — visual context from focused app (progressive, async)
+6. Browser tabs — open tabs when frontmost is a browser (progressive, async)
+7. Clipboard preview — recent clipboard content
+8. Prior automations — similar scripts that worked before
+
+**Context cards design:** Whisper chrome — ghost-opacity bg, no borders, hint-opacity labels, present-opacity content. Ordered by relevance. The selected item is the most prominent card.
+
+**Key files:**
+- `src/app_impl/tab_ai_mode.rs` — Tab AI orchestration (to be refactored into full-view chat)
+- `src/app_impl/prompt_ai.rs` — `show_inline_ai_chat()` pattern reference
+- `src/prompts/chat/` — ChatPrompt architecture to follow
+- `src/ai/tab_context.rs` — context blob assembly
+- `src/context_snapshot/capture.rs` — desktop context providers
+
+**Script execution flow:** `prepare_script_from_ai_response()` → strip SDK imports → `create_interactive_temp_script()` → `execute_script_by_path()` → result appears as chat message
+
+**Design plan:** `.notes/20260327-175739-tab-ai-do-this-to-that.md`
+
 ## Consistency Rules (Non-Negotiable)
 
 These rules exist because mixed patterns break both human navigation and AI agent effectiveness.
