@@ -186,7 +186,7 @@ impl ScriptListApp {
     ) -> AnyElement {
         crate::components::emit_prompt_chrome_audit(
             &crate::components::PromptChromeAudit::minimal_list(
-                "template_prompt",
+                "render_prompts::template",
                 self.has_nonempty_sdk_actions(),
             ),
         );
@@ -218,14 +218,19 @@ impl ScriptListApp {
         entity: Entity<prompts::ChatPrompt>,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        crate::components::emit_prompt_chrome_audit(
-            &crate::components::PromptChromeAudit::minimal_list(
-                "render_prompts::chat",
-                self.has_nonempty_sdk_actions(),
-            ),
-        );
-        let hints = crate::components::universal_prompt_hints();
-        crate::components::emit_prompt_hint_audit("render_prompts::chat", &hints);
+        crate::components::emit_prompt_chrome_audit(&crate::components::PromptChromeAudit {
+            surface: "render_prompts::chat",
+            layout_mode: "mini",
+            input_mode: "bare",
+            divider_mode: "none",
+            footer_mode: "custom",
+            header_padding_x: crate::ui::chrome::HEADER_PADDING_X as u16,
+            header_padding_y: crate::ui::chrome::HEADER_PADDING_Y as u16,
+            hint_count: 0,
+            has_leading_status: false,
+            has_actions: self.has_nonempty_sdk_actions(),
+            exception_reason: Some("chat_prompt_owns_footer"),
+        });
 
         // Chat renders its own footer (mini hint strip or rich interactive footer),
         // so pass None to avoid a duplicate footer in the shell.
@@ -245,7 +250,7 @@ impl ScriptListApp {
     ) -> AnyElement {
         crate::components::emit_prompt_chrome_audit(
             &crate::components::PromptChromeAudit::minimal_list(
-                "naming_prompt",
+                "render_prompts::naming",
                 self.has_nonempty_sdk_actions(),
             ),
         );
@@ -279,7 +284,7 @@ impl ScriptListApp {
     ) -> AnyElement {
         crate::components::emit_prompt_chrome_audit(
             &crate::components::PromptChromeAudit::exception(
-                "webcam_prompt",
+                "render_prompts::webcam",
                 "media_capture_surface_with_hint_strip",
             ),
         );
@@ -446,11 +451,11 @@ mod other_prompt_render_wrapper_tests {
 
     #[test]
     fn wrapper_surfaces_emit_hint_audits() {
+        // Surfaces that emit universal hint audits (chat is excluded — it owns its footer)
         for (fn_name, surface) in [
             ("render_select_prompt", "render_prompts::select"),
             ("render_env_prompt", "render_prompts::env"),
             ("render_drop_prompt", "render_prompts::drop"),
-            ("render_chat_prompt", "render_prompts::chat"),
             ("render_template_prompt", "render_prompts::template"),
             ("render_naming_prompt", "render_prompts::naming"),
             ("render_webcam_prompt", "render_prompts::webcam"),
@@ -559,6 +564,78 @@ mod other_prompt_render_wrapper_tests {
 }
 
 #[cfg(test)]
+mod other_prompt_source_tests {
+    const SOURCE: &str = include_str!("other.rs");
+
+    fn fn_source(fn_name: &str) -> String {
+        let needle = format!("fn {fn_name}(");
+        let start = SOURCE.find(&needle).expect("function should exist");
+        let rest = &SOURCE[start..];
+        let end = rest[1..]
+            .find("\n    fn ")
+            .map(|ix| ix + 1)
+            .unwrap_or(rest.len());
+        rest[..end].to_string()
+    }
+
+    #[test]
+    fn template_prompt_uses_matching_surface_names_for_chrome_and_hint_audits() {
+        let body = fn_source("render_template_prompt");
+        assert!(
+            body.contains("\"render_prompts::template\""),
+            "template prompt should use the namespaced surface id in audit calls"
+        );
+        assert!(
+            !body.contains("\"template_prompt\""),
+            "template prompt should not use a second surface id spelling"
+        );
+    }
+
+    #[test]
+    fn naming_prompt_uses_matching_surface_names_for_chrome_and_hint_audits() {
+        let body = fn_source("render_naming_prompt");
+        assert!(
+            body.contains("\"render_prompts::naming\""),
+            "naming prompt should use the namespaced surface id in audit calls"
+        );
+        assert!(
+            !body.contains("\"naming_prompt\""),
+            "naming prompt should not use a second surface id spelling"
+        );
+    }
+
+    #[test]
+    fn webcam_prompt_uses_namespaced_surface_id() {
+        let body = fn_source("render_webcam_prompt");
+        assert!(
+            body.contains("\"render_prompts::webcam\""),
+            "webcam prompt should use the namespaced surface id"
+        );
+        assert!(
+            !body.contains("\"webcam_prompt\""),
+            "webcam prompt should not use a second surface id spelling"
+        );
+    }
+
+    #[test]
+    fn chat_prompt_wrapper_does_not_claim_universal_footer_hints() {
+        let body = fn_source("render_chat_prompt");
+        assert!(
+            !body.contains("emit_prompt_hint_audit("),
+            "chat wrapper should not emit a universal hint audit when chat owns its footer"
+        );
+        assert!(
+            body.contains("footer_mode: \"custom\""),
+            "chat wrapper should emit a truthful chrome audit for a custom footer"
+        );
+        assert!(
+            body.contains("exception_reason: Some(\"chat_prompt_owns_footer\")"),
+            "chat wrapper should document why it does not attach the shared footer"
+        );
+    }
+}
+
+#[cfg(test)]
 mod prompt_footer_regression_tests {
     use std::fs;
 
@@ -603,7 +680,7 @@ mod prompt_footer_regression_tests {
         for line in source.lines() {
             if line.contains("PromptChromeAudit::exception(") {
                 assert!(
-                    line.contains("webcam_prompt")
+                    line.contains("render_prompts::webcam")
                         || line.contains("terminal")
                         || line.contains("editor")
                         || line.contains("grid")

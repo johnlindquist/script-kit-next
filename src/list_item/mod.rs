@@ -1601,3 +1601,46 @@ pub fn render_section_header(
 // The LIST_ITEM_HEIGHT constant is 40.0 and the component is integration-tested
 // via the main application's script list and arg prompt rendering.
 // Unit tests for format_shortcut_display are in src/list_item_tests.rs.
+
+#[cfg(test)]
+mod render_section_header_source_tests {
+    const SOURCE: &str = include_str!("mod.rs");
+
+    fn render_section_header_source() -> String {
+        let start = SOURCE
+            .find("pub fn render_section_header(")
+            .expect("render_section_header should exist");
+        let rest = &SOURCE[start..];
+        let end = rest
+            .find("// Note: GPUI rendering tests omitted")
+            .expect("sentinel comment should exist after render_section_header");
+        rest[..end].to_string()
+    }
+
+    #[test]
+    fn section_headers_uppercase_labels() {
+        let body = render_section_header_source();
+        assert!(
+            body.contains("section_name.to_uppercase()"),
+            "section headers should uppercase labels per .impeccable.md"
+        );
+    }
+
+    #[test]
+    fn section_headers_do_not_render_separator_lines() {
+        let body = render_section_header_source();
+        assert!(
+            !body.contains("border_t_1"),
+            "section headers should rely on spacing, not separator lines"
+        );
+    }
+
+    #[test]
+    fn section_header_docs_do_not_reference_removed_top_border_behavior() {
+        let body = render_section_header_source();
+        assert!(
+            !body.contains("suppresses top border"),
+            "render_section_header docs should not describe removed separator behavior"
+        );
+    }
+}

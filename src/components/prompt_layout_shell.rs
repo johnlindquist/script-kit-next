@@ -879,6 +879,10 @@ mod prompt_layout_shell_tests {
             "render_chat_prompt should not use render_wrapped_prompt_entity (would add duplicate footer)"
         );
         assert!(
+            body.contains("entity, None)") || body.contains("entity,\n            None,"),
+            "render_chat_prompt should pass None footer to render_simple_prompt_shell"
+        );
+        assert!(
             body.contains("other_prompt_shell_handle_key_chat"),
             "render_chat_prompt should keep the chat-specific key handler"
         );
@@ -1132,8 +1136,13 @@ mod prompt_layout_shell_tests {
             source.contains("emit_prompt_chrome_audit("),
             "other.rs should call emit_prompt_chrome_audit"
         );
-        // Migrated surfaces use minimal_list
-        for surface in ["template_prompt", "naming_prompt", "creation_feedback"] {
+        // Migrated surfaces use namespaced IDs
+        for surface in [
+            "render_prompts::template",
+            "render_prompts::naming",
+            "render_prompts::webcam",
+            "creation_feedback",
+        ] {
             assert!(
                 source.contains(&format!("\"{}\"", surface)),
                 "other.rs should classify {surface}"
@@ -1145,8 +1154,8 @@ mod prompt_layout_shell_tests {
             "other.rs should still have webcam as exception"
         );
         assert!(
-            source.contains("\"webcam_prompt\""),
-            "other.rs should classify webcam_prompt as exception"
+            source.contains("\"render_prompts::webcam\""),
+            "other.rs should classify render_prompts::webcam as exception"
         );
     }
 
