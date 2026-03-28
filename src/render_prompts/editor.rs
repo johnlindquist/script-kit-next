@@ -8,30 +8,10 @@ mod __render_prompts_editor_docs {
 // This file is included via include!() macro in main.rs
 
 const EDITOR_PROMPT_KEY_CONTEXT: &str = "editor_prompt";
-const EDITOR_PROMPT_SHORTCUT_HINT_SUFFIX: &str = "⌘↵/⌘S submit · ⌘K actions";
 
 #[inline]
 fn is_editor_escape_key_variant(key: &str) -> bool {
     ui_foundation::is_key_escape(key)
-}
-
-#[inline]
-fn editor_footer_helper_text(snippet_helper_text: Option<&str>) -> String {
-    match snippet_helper_text {
-        Some(snippet_text) => format!("{snippet_text} · {EDITOR_PROMPT_SHORTCUT_HINT_SUFFIX}"),
-        None => running_status_text("review input, then press ⌘↵ or ⌘S (⌘K for actions)"),
-    }
-}
-
-#[inline]
-fn editor_footer_config(
-    has_actions: bool,
-    helper_text: Option<String>,
-    info_label: Option<String>,
-) -> PromptFooterConfig {
-    prompt_footer_config_with_status("Continue", has_actions, helper_text, info_label)
-        .primary_shortcut("⌘↵")
-        .secondary_shortcut("⌘K")
 }
 
 #[inline]
@@ -68,18 +48,19 @@ impl ScriptListApp {
         entity: Entity<EditorPrompt>,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        crate::components::emit_prompt_chrome_audit(
-            &crate::components::PromptChromeAudit::exception(
-                "editor_prompt",
-                "code_editor_with_snippet_navigation",
-            ),
-        );
         let render_context = PromptRenderContext::new(self.theme.as_ref(), self.current_design);
         let theme = render_context.theme;
         let design_visual = render_context.design_visual;
         let actions_dialog_top = render_context.actions_dialog_top;
         let actions_dialog_right = render_context.actions_dialog_right;
         let has_actions = self.has_nonempty_sdk_actions();
+
+        crate::components::emit_prompt_chrome_audit(
+            &crate::components::PromptChromeAudit::editor(
+                "render_prompts::editor",
+                has_actions,
+            ),
+        );
 
         // Sync suppress_keys with actions popup state so editor ignores keys when popup is open
         let show_actions = self.show_actions_popup;
@@ -183,45 +164,6 @@ impl ScriptListApp {
             },
         );
 
-        // Clone entity for footer submit button
-        let entity_for_footer = entity.clone();
-
-        // Get the prompt ID for submit
-        let prompt_id = entity.read(cx).id.clone();
-
-        // Extract editor state for footer display
-        let (snippet_helper_text, language_label) = {
-            let editor = entity.read(cx);
-            let language = editor.language().to_string();
-
-            // Build snippet indicator if in snippet mode
-            let snippet_text = editor.snippet_state().map(|state| {
-                let current = state.current_tabstop_idx + 1; // 1-based for display
-                let total = state.snippet.tabstops.len();
-
-                // Get the current tabstop's display name (placeholder or index)
-                let current_name = state
-                    .snippet
-                    .tabstops
-                    .get(state.current_tabstop_idx)
-                    .and_then(|ts| {
-                        ts.placeholder.clone().or_else(|| {
-                            ts.choices
-                                .as_ref()
-                                .and_then(|c: &Vec<String>| c.first().cloned())
-                        })
-                    })
-                    .unwrap_or_else(|| format!("${}", current));
-
-                format!(
-                    "Tab {} of {} · \"{}\" · Tab to continue, Esc to exit",
-                    current, total, current_name
-                )
-            });
-
-            (snippet_text, language)
-        };
-
         // NOTE: The EditorPrompt entity has its own track_focus and on_key_down in its render method.
         // We do NOT add track_focus here to avoid duplicate focus tracking on the same handle.
         //
@@ -249,53 +191,11 @@ impl ScriptListApp {
                     .overflow_hidden()
                     .child(entity),
             )
-            // Unified footer with Submit + Actions
-            .child({
-                let handle_submit = cx.entity().downgrade();
-                let handle_actions = cx.entity().downgrade();
-                let entity_weak = entity_for_footer.downgrade();
-                let prompt_id_for_submit = prompt_id.clone();
-
-                let footer_colors = PromptFooterColors::from_theme(theme);
-
-                // Snippet guidance stays first, with editor submit/actions hints appended.
-                let helper_text = Some(editor_footer_helper_text(snippet_helper_text.as_deref()));
-                let footer_config =
-                    editor_footer_config(has_actions, helper_text, Some(language_label.clone()));
-
-                let mut footer = PromptFooter::new(footer_config, footer_colors).on_primary_click(
-                    Box::new(move |_, _window, cx| {
-                        // Get editor content and submit
-                        if let Some(editor_entity) = entity_weak.upgrade() {
-                            let content = editor_entity.update(cx, |editor, cx| editor.content(cx));
-                            if let Some(app) = handle_submit.upgrade() {
-                                app.update(cx, |this, cx| {
-                                    logging::log("EDITOR", "Footer Submit button clicked");
-                                    this.submit_prompt_response(
-                                        prompt_id_for_submit.clone(),
-                                        Some(content),
-                                        cx,
-                                    );
-                                });
-                            }
-                        }
-                    }),
-                );
-
-                if has_actions {
-                    footer = footer.on_secondary_click(Box::new(move |_, window, cx| {
-                        if let Some(app) = handle_actions.upgrade() {
-                            app.update(cx, |this, cx| {
-                                this.toggle_arg_actions(cx, window);
-                            });
-                        }
-                    }));
-                }
-
-                // Footer as normal flex child (not absolute positioned)
-                // The flex_1 editor wrapper above takes remaining space
-                footer
-            })
+            // Universal three-key hint strip footer
+            .child(crate::components::render_simple_hint_strip(
+                crate::components::universal_prompt_hints(),
+                None,
+            ))
             // Actions dialog overlay
             .when_some(
                 render_actions_backdrop(
@@ -364,17 +264,16 @@ mod editor_prompt_tests {
     }
 
     #[test]
-    fn test_editor_footer_displays_cmd_enter_and_cmd_s_submit_hints() {
-        let helper = editor_footer_helper_text(None);
-        assert!(helper.contains("⌘↵"));
-        assert!(helper.contains("⌘S"));
-        assert!(helper.contains("⌘K"));
-
-        let config = editor_footer_config(true, Some(helper), Some("typescript".to_string()));
-        assert_eq!(config.primary_label, "Continue");
-        assert_eq!(config.primary_shortcut, "⌘↵");
-        assert_eq!(config.secondary_shortcut, "⌘K");
-        assert!(config.show_secondary);
+    fn test_editor_uses_universal_hint_strip_footer() {
+        const EDITOR_RENDER_SOURCE: &str = include_str!("editor.rs");
+        assert!(
+            EDITOR_RENDER_SOURCE.contains("universal_prompt_hints()"),
+            "editor prompt should use the canonical three-key hint strip"
+        );
+        assert!(
+            EDITOR_RENDER_SOURCE.contains("render_simple_hint_strip("),
+            "editor prompt should render a hint strip footer"
+        );
     }
 
     #[test]
@@ -405,11 +304,16 @@ mod editor_prompt_tests {
     }
 
     #[test]
-    fn test_editor_footer_appends_shortcut_hints_when_snippet_guidance_is_present() {
-        let helper =
-            editor_footer_helper_text(Some("Tab 1 of 2 · \"$1\" · Tab to continue, Esc to exit"));
-        assert!(helper.starts_with("Tab 1 of 2"));
-        assert!(helper.contains(EDITOR_PROMPT_SHORTCUT_HINT_SUFFIX));
+    fn test_editor_chrome_audit_uses_editor_layout_mode() {
+        const EDITOR_RENDER_SOURCE: &str = include_str!("editor.rs");
+        assert!(
+            EDITOR_RENDER_SOURCE.contains("PromptChromeAudit::editor("),
+            "editor prompt should emit an editor-type chrome audit"
+        );
+        assert!(
+            EDITOR_RENDER_SOURCE.contains("\"render_prompts::editor\""),
+            "editor chrome audit should use correct surface name"
+        );
     }
 
     #[test]

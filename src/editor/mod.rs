@@ -120,7 +120,8 @@ pub struct EditorPrompt {
     // Template/snippet state for tabstop navigation
     snippet_state: Option<SnippetState>,
 
-    // Language for syntax highlighting (displayed in footer)
+    // Language for syntax highlighting
+    #[allow(dead_code)]
     language: String,
 
     // GPUI
@@ -374,6 +375,7 @@ impl EditorPrompt {
     }
 
     /// Get the language
+    #[allow(dead_code)]
     pub fn language(&self) -> &str {
         &self.language
     }
@@ -390,7 +392,8 @@ impl EditorPrompt {
         self.snippet_state.is_some()
     }
 
-    /// Get a reference to the snippet state (for footer display)
+    /// Get a reference to the snippet state
+    #[allow(dead_code)]
     pub fn snippet_state(&self) -> Option<&SnippetState> {
         self.snippet_state.as_ref()
     }

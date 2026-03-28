@@ -1,5 +1,14 @@
 use super::*;
 
+/// Resolved context returned by `build_tab_ai_context`, carrying bundle metadata
+/// and warning counts alongside the serializable blob.
+#[derive(Debug, Clone)]
+struct TabAiResolvedContext {
+    context: crate::ai::TabAiContextBlob,
+    bundle_id: Option<String>,
+    context_warning_count: usize,
+}
+
 impl ScriptListApp {
     /// Open the Tab AI overlay from any surface.
     ///
@@ -69,10 +78,11 @@ impl ScriptListApp {
 
     /// Build the full context blob for AI submission.
     ///
-    /// Uses `TabAiContextBlob::from_parts(...)` so the runtime path and
-    /// deterministic test path share one constructor — any future field
-    /// change breaks in one place instead of two.
-    fn build_tab_ai_context(&self, _cx: &Context<Self>) -> crate::ai::TabAiContextBlob {
+    /// Returns a `TabAiResolvedContext` carrying bundle metadata and warning
+    /// counts alongside the serializable blob.  Uses
+    /// `TabAiContextBlob::from_parts(...)` so the runtime path and
+    /// deterministic test path share one constructor.
+    fn build_tab_ai_context(&self, _cx: &Context<Self>) -> TabAiResolvedContext {
         let ui = self
             .tab_ai_state
             .as_ref()
@@ -84,6 +94,13 @@ impl ScriptListApp {
             &crate::context_snapshot::CaptureContextOptions::recommendation(),
         );
 
+        let bundle_id = desktop
+            .frontmost_app
+            .as_ref()
+            .map(|app| app.bundle_id.clone());
+
+        let context_warning_count = desktop.warnings.len();
+
         // Recent input history (most recent first, bounded)
         let recent_inputs = self.input_history.recent_entries(5);
 
@@ -93,15 +110,21 @@ impl ScriptListApp {
             event = "tab_ai_context_built",
             prompt_type = %ui.prompt_type,
             visible_count = ui.visible_elements.len(),
+            has_bundle_id = bundle_id.is_some(),
+            context_warning_count,
         );
 
-        crate::ai::TabAiContextBlob::from_parts(
-            ui,
-            desktop,
-            recent_inputs,
-            None, // Phase 2: clipboard OCR
-            timestamp,
-        )
+        TabAiResolvedContext {
+            context: crate::ai::TabAiContextBlob::from_parts(
+                ui,
+                desktop,
+                recent_inputs,
+                None, // Phase 2: clipboard OCR
+                timestamp,
+            ),
+            bundle_id,
+            context_warning_count,
+        }
     }
 
     /// Return a human-readable name for the current `AppView` variant.
@@ -424,9 +447,11 @@ impl ScriptListApp {
         }
         cx.notify();
 
-        // Build context blob
-        let context = self.build_tab_ai_context(cx);
-        let context_json = match serde_json::to_string_pretty(&context) {
+        // Build context blob (returns bundle metadata + warning counts)
+        let resolved_context = self.build_tab_ai_context(cx);
+        let bundle_id = resolved_context.bundle_id.clone();
+        let context_warning_count = resolved_context.context_warning_count;
+        let context_json = match serde_json::to_string_pretty(&resolved_context.context) {
             Ok(json) => json,
             Err(e) => {
                 tracing::error!(event = "tab_ai_context_serialize_failed", error = %e);
@@ -462,7 +487,9 @@ impl ScriptListApp {
                 tracing::error!(event = "tab_ai_no_model");
                 if let Some(state) = &mut self.tab_ai_state {
                     state.running = false;
-                    state.error = Some("No AI model configured".into());
+                    state.error = Some(
+                        "No AI model configured. Open Settings \u{2192} AI and add a provider API key.".into(),
+                    );
                 }
                 cx.notify();
                 return;
@@ -481,7 +508,9 @@ impl ScriptListApp {
                 );
                 if let Some(state) = &mut self.tab_ai_state {
                     state.running = false;
-                    state.error = Some("No AI provider for selected model".into());
+                    state.error = Some(
+                        "No AI provider matched the selected model. Reopen Settings \u{2192} AI and reselect a model.".into(),
+                    );
                 }
                 cx.notify();
                 return;
@@ -489,11 +518,13 @@ impl ScriptListApp {
         };
 
         let model_id = selected_model.id.clone();
+        let provider_id = provider.provider_id().to_string();
 
         // Channel for worker thread → async GPUI task
         let (tx, rx) = async_channel::bounded::<Result<(String, String), String>>(1);
 
         // Blocking AI call on worker thread
+        let worker_model_id = model_id.clone();
         std::thread::spawn(move || {
             let messages = vec![
                 crate::ai::ProviderMessage::system(
@@ -502,7 +533,7 @@ impl ScriptListApp {
                 crate::ai::ProviderMessage::user(&user_prompt),
             ];
 
-            let result = match provider.send_message(&messages, &model_id) {
+            let result = match provider.send_message(&messages, &worker_model_id) {
                 Ok(raw_response) => {
                     let source = match crate::prompt_ai::extract_generated_script_source(
                         &raw_response,
@@ -511,7 +542,7 @@ impl ScriptListApp {
                         None => {
                             return {
                                 let _ = tx.send_blocking(Err(
-                                    "AI returned no extractable script code".to_string(),
+                                    "AI returned no runnable script. Retry with a clearer verb and target.".to_string(),
                                 ));
                             };
                         }
@@ -525,13 +556,18 @@ impl ScriptListApp {
                     Ok((slug, source))
                 }
                 Err(error) => Err(format!(
-                    "tab_ai_send_message model_id={model_id}: {error:#}"
+                    "tab_ai_send_message model_id={worker_model_id}: {error:#}"
                 )),
             };
 
             // Ignore send error — the receiver may have been dropped if overlay was closed
             let _ = tx.send_blocking(result);
         });
+
+        // Clone metadata for the async closure
+        let dispatch_model_id = model_id.clone();
+        let dispatch_provider_id = provider_id.clone();
+        let dispatch_bundle_id = bundle_id.clone();
 
         // Async GPUI task: await response, create temp file, execute
         let app_entity = cx.entity().downgrade();
@@ -585,10 +621,7 @@ impl ScriptListApp {
                                 this.tab_ai_task = None;
                                 cx.notify();
 
-                                // Execute the ephemeral script
-                                this.execute_script_by_path(&path_str, cx);
-
-                                // --- Post-dispatch bookkeeping ---
+                                // Build execution record with full metadata
                                 let record =
                                     crate::ai::TabAiExecutionRecord::from_parts(
                                         intent,
@@ -596,27 +629,43 @@ impl ScriptListApp {
                                         path_str.clone(),
                                         slug,
                                         prompt_type,
-                                        None, // Phase 2: wire bundle_id from desktop snapshot
+                                        dispatch_bundle_id,
+                                        dispatch_model_id.clone(),
+                                        dispatch_provider_id.clone(),
+                                        context_warning_count,
                                         chrono::Utc::now().to_rfc3339(),
                                     );
 
-                                // Do not remove the temp script here. `execute_script_by_path`
-                                // resolves and launches the file asynchronously by path, so
-                                // deleting it immediately can race the executor and cause
-                                // "script file not found" failures.
+                                // Store pending record — bookkeeping deferred until completion
+                                this.pending_tab_ai_execution = Some(record.clone());
 
-                                // 1. Memory write-back
-                                if let Err(e) =
-                                    crate::ai::write_tab_ai_memory_entry(&record)
-                                {
+                                // Write dispatched audit receipt
+                                if let Err(e) = crate::ai::append_tab_ai_execution_receipt(
+                                    &crate::ai::build_tab_ai_execution_receipt(
+                                        &record,
+                                        crate::ai::TabAiExecutionStatus::Dispatched,
+                                        false,
+                                        false,
+                                        None,
+                                    ),
+                                ) {
                                     tracing::warn!(
-                                        event = "tab_ai_memory_writeback_failed",
+                                        event = "tab_ai_execution_audit_write_failed",
                                         error = %e,
                                     );
                                 }
 
-                                // 2. Save-offer decision (logged; UI offer is Phase 2)
-                                let _offer = crate::ai::should_offer_save(&record);
+                                // Execute the ephemeral script
+                                this.execute_script_by_path(&path_str, cx);
+
+                                tracing::info!(
+                                    event = "tab_ai_post_execution_deferred",
+                                    slug = %record.slug,
+                                    prompt_type = %record.prompt_type,
+                                    model_id = %record.model_id,
+                                    provider_id = %record.provider_id,
+                                    "memory/save/cleanup deferred until actual completion",
+                                );
                             }
                             Err(e) => {
                                 tracing::error!(
@@ -646,6 +695,74 @@ impl ScriptListApp {
         });
 
         self.tab_ai_task = Some(task);
+    }
+
+    /// Complete the pending Tab AI execution after the script actually exits.
+    ///
+    /// Gates memory write-back, save-offer, and temp-file cleanup on real
+    /// completion status — never at dispatch time.
+    ///
+    /// Called from the prompt-handler `ScriptExit` / `ScriptError` paths
+    /// once the ephemeral process terminates. Uses `take()` on the pending
+    /// record so only the first caller does work — subsequent calls are no-ops.
+    pub(crate) fn complete_tab_ai_execution(
+        &mut self,
+        success: bool,
+        error: Option<String>,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(record) = self.pending_tab_ai_execution.take() else {
+            return;
+        };
+
+        let cleanup_attempted = true;
+        let cleanup_succeeded = crate::ai::cleanup_tab_ai_temp_script(&record.temp_script_path);
+
+        let status = if success {
+            crate::ai::TabAiExecutionStatus::Succeeded
+        } else {
+            crate::ai::TabAiExecutionStatus::Failed
+        };
+
+        let receipt = crate::ai::build_tab_ai_execution_receipt(
+            &record,
+            status,
+            cleanup_attempted,
+            cleanup_succeeded,
+            error.clone(),
+        );
+
+        if let Err(audit_error) = crate::ai::append_tab_ai_execution_receipt(&receipt) {
+            tracing::warn!(
+                event = "tab_ai_execution_audit_write_failed",
+                error = %audit_error,
+            );
+        }
+
+        if success {
+            if let Err(memory_error) = crate::ai::write_tab_ai_memory_entry(&record) {
+                tracing::warn!(
+                    event = "tab_ai_memory_writeback_failed",
+                    error = %memory_error,
+                );
+            }
+
+            if crate::ai::should_offer_save(&record) {
+                tracing::info!(
+                    event = "tab_ai_save_offer_ready",
+                    slug = %record.slug,
+                    prompt_type = %record.prompt_type,
+                );
+                // Phase 2: UI save prompt belongs here.
+            }
+        } else {
+            let message = error.unwrap_or_else(|| "Tab AI script failed".to_string());
+            self.toast_manager.push(
+                components::toast::Toast::error(message, &self.theme)
+                    .duration_ms(Some(TOAST_ERROR_MS)),
+            );
+            cx.notify();
+        }
     }
 }
 

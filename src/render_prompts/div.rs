@@ -52,11 +52,12 @@ impl ScriptListApp {
         // Use explicit height from layout constants
         let content_height = window_resize::layout::STANDARD_HEIGHT;
 
-        // Minimal chrome: hint strip footer instead of PromptFooter
-        let mut div_hints: Vec<SharedString> = vec![SharedString::from("↵ Continue")];
-        if has_actions {
-            div_hints.push(SharedString::from("⌘K Actions"));
-        }
+        crate::components::emit_prompt_chrome_audit(
+            &crate::components::PromptChromeAudit::minimal_list(
+                "render_prompts::div",
+                has_actions,
+            ),
+        );
 
         crate::components::prompt_shell_container(design_visual.radius_lg, vibrancy_bg)
             .h(content_height)
@@ -71,8 +72,11 @@ impl ScriptListApp {
                     .overflow_hidden()
                     .child(crate::components::prompt_shell_content(entity.clone())),
             )
-            // Minimal hint strip footer
-            .child(crate::components::render_simple_hint_strip(div_hints, None))
+            // Universal three-key hint strip footer
+            .child(crate::components::render_simple_hint_strip(
+                crate::components::universal_prompt_hints(),
+                None,
+            ))
             // Actions dialog overlay (when Cmd+K is pressed with SDK actions)
             .when_some(
                 render_actions_backdrop(
@@ -135,10 +139,14 @@ mod div_prompt_render_tests {
     }
 
     #[test]
-    fn div_prompt_uses_minimal_hint_strip_footer() {
+    fn div_prompt_uses_universal_hint_strip_footer() {
         assert!(
             DIV_RENDER_SOURCE.contains("render_simple_hint_strip("),
             "div prompt should render a minimal hint strip footer"
+        );
+        assert!(
+            DIV_RENDER_SOURCE.contains("universal_prompt_hints()"),
+            "div prompt should use the canonical three-key hint strip"
         );
         // Split string to avoid self-match in source audit
         let needle = ["PromptFooter", "::new("].concat();
@@ -153,6 +161,18 @@ mod div_prompt_render_tests {
         assert!(
             !render_code.contains("\"Script Output\""),
             "div prompt should not have a titled Script Output header"
+        );
+    }
+
+    #[test]
+    fn div_prompt_emits_chrome_audit() {
+        assert!(
+            DIV_RENDER_SOURCE.contains("emit_prompt_chrome_audit("),
+            "div prompt should emit a chrome audit"
+        );
+        assert!(
+            DIV_RENDER_SOURCE.contains("\"render_prompts::div\""),
+            "div prompt chrome audit should use correct surface name"
         );
     }
 }

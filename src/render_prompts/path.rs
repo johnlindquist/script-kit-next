@@ -180,6 +180,13 @@ impl ScriptListApp {
         entity: Entity<PathPrompt>,
         cx: &mut Context<Self>,
     ) -> AnyElement {
+        crate::components::emit_prompt_chrome_audit(
+            &crate::components::PromptChromeAudit::minimal_list(
+                "render_prompts::path",
+                self.has_nonempty_sdk_actions(),
+            ),
+        );
+
         // Use design tokens for GLOBAL theming
         let tokens = get_tokens(self.current_design);
         let design_spacing = tokens.spacing();

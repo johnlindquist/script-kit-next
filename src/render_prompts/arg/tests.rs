@@ -225,21 +225,33 @@ mod arg_prompt_render_tests {
     }
 
     #[test]
-    fn arg_prompt_hints_include_actions_when_available() {
-        let hints = arg_prompt_hints(true)
-            .into_iter()
-            .map(|hint| hint.to_string())
-            .collect::<Vec<_>>();
-        assert_eq!(hints, vec!["↵ Continue", "⌘K Actions", "Esc Back"]);
+    fn arg_prompt_uses_universal_hints() {
+        let render_source = include_str!("render.rs");
+        assert!(
+            render_source.contains("universal_prompt_hints()"),
+            "arg render should use universal_prompt_hints for the three-key footer"
+        );
+        assert!(
+            !render_source.contains("arg_prompt_hints("),
+            "arg render should no longer use custom arg_prompt_hints"
+        );
     }
 
     #[test]
-    fn arg_prompt_hints_omit_actions_when_unavailable() {
-        let hints = arg_prompt_hints(false)
-            .into_iter()
-            .map(|hint| hint.to_string())
-            .collect::<Vec<_>>();
-        assert_eq!(hints, vec!["↵ Continue", "Esc Back"]);
+    fn arg_prompt_emits_chrome_audit() {
+        let render_source = include_str!("render.rs");
+        assert!(
+            render_source.contains("PromptChromeAudit::minimal_list("),
+            "arg render should emit a minimal_list chrome audit"
+        );
+        assert!(
+            render_source.contains("\"render_prompts::arg\""),
+            "arg chrome audit should identify surface as render_prompts::arg"
+        );
+        assert!(
+            render_source.contains("emit_prompt_chrome_audit("),
+            "arg render should call emit_prompt_chrome_audit"
+        );
     }
 
     #[test]
@@ -248,10 +260,6 @@ mod arg_prompt_render_tests {
         assert!(
             render_source.contains("render_minimal_list_prompt_shell("),
             "arg render should delegate layout to the shared minimal list prompt shell"
-        );
-        assert!(
-            render_source.contains("arg_prompt_hints("),
-            "arg render should use arg_prompt_hints for hint text"
         );
         assert!(
             !render_source.contains("PromptFooter::new("),

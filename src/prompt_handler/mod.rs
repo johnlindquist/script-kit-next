@@ -518,6 +518,11 @@ impl ScriptListApp {
                     category = "VISIBILITY",
                     "=== ScriptExit message received ==="
                 );
+
+                // Complete pending Tab AI execution on clean exit.
+                // If ScriptError already consumed the record, this is a no-op.
+                self.complete_tab_ai_execution(true, None, cx);
+
                 let was_visible = script_kit_gpui::is_main_window_visible();
                 let script_hid_window = script_kit_gpui::script_requested_hide();
                 tracing::info!(
@@ -770,6 +775,14 @@ impl ScriptListApp {
                     toast_id = %toast_id,
                     "Toast created for script error"
                 );
+
+                // Complete pending Tab AI execution on failure.
+                // Consumes the record so the subsequent ScriptExit is a no-op.
+                let tab_ai_error_msg = format!(
+                    "Tab AI script exited with code {:?}: {}",
+                    exit_code, error_message
+                );
+                self.complete_tab_ai_execution(false, Some(tab_ai_error_msg), cx);
 
                 cx.notify();
             }

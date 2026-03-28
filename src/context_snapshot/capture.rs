@@ -209,11 +209,31 @@ pub fn capture_context_snapshot(options: &CaptureContextOptions) -> AiContextSna
         CaptureContextSeed::default()
     } else {
         CaptureContextSeed {
-            selected_text: capture_selected_text_live(),
-            frontmost_app: capture_frontmost_app_live(),
-            menu_bar_items: capture_menu_bar_live(),
-            browser: capture_browser_live(),
-            focused_window: capture_focused_window_live(),
+            selected_text: if options.include_selected_text {
+                capture_selected_text_live()
+            } else {
+                Ok(None)
+            },
+            frontmost_app: if options.include_frontmost_app {
+                capture_frontmost_app_live()
+            } else {
+                Ok(None)
+            },
+            menu_bar_items: if options.include_menu_bar {
+                capture_menu_bar_live()
+            } else {
+                Ok(Vec::new())
+            },
+            browser: if options.include_browser_url {
+                capture_browser_live()
+            } else {
+                Ok(None)
+            },
+            focused_window: if options.include_focused_window {
+                capture_focused_window_live()
+            } else {
+                Ok(None)
+            },
         }
     };
 

@@ -269,6 +269,7 @@ fn resolve_arg_tab_completion(
 }
 
 #[inline]
+#[cfg(test)]
 fn arg_prompt_hints(has_actions: bool) -> Vec<gpui::SharedString> {
     let mut hints = vec![
         gpui::SharedString::from("↵ Continue"),

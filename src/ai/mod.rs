@@ -55,10 +55,13 @@ pub(crate) mod window;
 // Re-export commonly used types
 pub use self::config::{DetectedKeys, ModelInfo, ProviderConfig};
 pub use self::tab_context::{
-    build_tab_ai_user_prompt, cleanup_tab_ai_temp_script, read_tab_ai_memory_index,
-    read_tab_ai_memory_index_from_path, should_offer_save, tab_ai_memory_index_path,
-    write_tab_ai_memory_entry, write_tab_ai_memory_entry_to_path, TabAiContextBlob,
-    TabAiExecutionRecord, TabAiMemoryEntry, TabAiUiSnapshot, TAB_AI_CONTEXT_SCHEMA_VERSION,
+    append_tab_ai_execution_receipt, append_tab_ai_execution_receipt_to_path,
+    build_tab_ai_execution_receipt, build_tab_ai_user_prompt, cleanup_tab_ai_temp_script,
+    read_tab_ai_memory_index, read_tab_ai_memory_index_from_path, should_offer_save,
+    tab_ai_execution_audit_path, tab_ai_memory_index_path, write_tab_ai_memory_entry,
+    write_tab_ai_memory_entry_to_path, TabAiContextBlob, TabAiExecutionReceipt,
+    TabAiExecutionRecord, TabAiExecutionStatus, TabAiMemoryEntry, TabAiUiSnapshot,
+    TAB_AI_CONTEXT_SCHEMA_VERSION, TAB_AI_EXECUTION_RECEIPT_SCHEMA_VERSION,
     TAB_AI_EXECUTION_RECORD_SCHEMA_VERSION, TAB_AI_MEMORY_ENTRY_SCHEMA_VERSION,
 };
 pub use self::current_app_automation_memory::{

@@ -6,10 +6,13 @@
 //! 3. Temp-file cleanup works on both present and absent paths
 //! 4. Execution records round-trip through JSON
 //! 5. Public re-exports cover all post-execution types
+//! 6. Append-only audit receipts write valid JSONL
 
 use script_kit_gpui::ai::{
+    append_tab_ai_execution_receipt_to_path, build_tab_ai_execution_receipt,
     cleanup_tab_ai_temp_script, read_tab_ai_memory_index_from_path, should_offer_save,
-    write_tab_ai_memory_entry_to_path, TabAiExecutionRecord, TabAiMemoryEntry,
+    write_tab_ai_memory_entry_to_path, TabAiExecutionReceipt, TabAiExecutionRecord,
+    TabAiExecutionStatus, TabAiMemoryEntry, TAB_AI_EXECUTION_RECEIPT_SCHEMA_VERSION,
     TAB_AI_EXECUTION_RECORD_SCHEMA_VERSION, TAB_AI_MEMORY_ENTRY_SCHEMA_VERSION,
 };
 
@@ -17,11 +20,14 @@ use script_kit_gpui::ai::{
 fn sample_record() -> TabAiExecutionRecord {
     TabAiExecutionRecord::from_parts(
         "force quit Slack".to_string(),
-        "import '@anthropic-ai/sdk';\nawait exec('kill Slack');".to_string(),
+        "import '@anthropic-ai/sdk';\nawait exec('kill Slack');\nconsole.log('done');".to_string(),
         "/tmp/scriptlet-tab-ai-test.ts".to_string(),
         "force-quit-slack".to_string(),
         "AppLauncher".to_string(),
         Some("com.tinyspeck.slackmacgap".to_string()),
+        "gpt-4.1".to_string(),
+        "vercel".to_string(),
+        0,
         "2026-03-28T12:00:00Z".to_string(),
     )
 }
@@ -60,6 +66,9 @@ fn execution_record_json_roundtrip() {
         parsed.bundle_id.as_deref(),
         Some("com.tinyspeck.slackmacgap")
     );
+    assert_eq!(parsed.model_id, "gpt-4.1");
+    assert_eq!(parsed.provider_id, "vercel");
+    assert_eq!(parsed.context_warning_count, 0);
     assert_eq!(parsed.executed_at, "2026-03-28T12:00:00Z");
 }
 
@@ -74,6 +83,9 @@ fn execution_record_camel_case_json_keys() {
     assert!(json.contains("promptType"));
     assert!(json.contains("bundleId"));
     assert!(json.contains("executedAt"));
+    assert!(json.contains("modelId"));
+    assert!(json.contains("providerId"));
+    assert!(json.contains("contextWarningCount"));
 
     // No snake_case leakage
     assert!(!json.contains("schema_version"));
@@ -82,6 +94,9 @@ fn execution_record_camel_case_json_keys() {
     assert!(!json.contains("prompt_type"));
     assert!(!json.contains("bundle_id"));
     assert!(!json.contains("executed_at"));
+    assert!(!json.contains("model_id"));
+    assert!(!json.contains("provider_id"));
+    assert!(!json.contains("context_warning_count"));
 }
 
 #[test]
@@ -93,6 +108,9 @@ fn execution_record_omits_none_bundle_id() {
         "test".to_string(),
         "ScriptList".to_string(),
         None,
+        "gpt-4.1".to_string(),
+        "vercel".to_string(),
+        0,
         "2026-03-28T00:00:00Z".to_string(),
     );
     let json = serde_json::to_string(&record).expect("serialize");
@@ -102,7 +120,7 @@ fn execution_record_omits_none_bundle_id() {
 // ── Save-Offer Decision ──
 
 #[test]
-fn save_offer_returns_true_for_non_empty_source() {
+fn save_offer_returns_true_for_three_plus_lines() {
     let record = sample_record();
     assert!(should_offer_save(&record));
 }
@@ -116,6 +134,9 @@ fn save_offer_returns_false_for_whitespace_only_source() {
         "test".to_string(),
         "ScriptList".to_string(),
         None,
+        "gpt-4.1".to_string(),
+        "vercel".to_string(),
+        0,
         "2026-03-28T00:00:00Z".to_string(),
     );
     assert!(!should_offer_save(&record));
@@ -130,6 +151,26 @@ fn save_offer_returns_false_for_empty_source() {
         "test".to_string(),
         "ScriptList".to_string(),
         None,
+        "gpt-4.1".to_string(),
+        "vercel".to_string(),
+        0,
+        "2026-03-28T00:00:00Z".to_string(),
+    );
+    assert!(!should_offer_save(&record));
+}
+
+#[test]
+fn save_offer_returns_false_for_fewer_than_three_lines() {
+    let record = TabAiExecutionRecord::from_parts(
+        "test".to_string(),
+        "line1\nline2".to_string(),
+        "/tmp/x.ts".to_string(),
+        "test".to_string(),
+        "ScriptList".to_string(),
+        None,
+        "gpt-4.1".to_string(),
+        "vercel".to_string(),
+        0,
         "2026-03-28T00:00:00Z".to_string(),
     );
     assert!(!should_offer_save(&record));
@@ -200,6 +241,9 @@ fn memory_write_back_deduplicates_by_intent_and_bundle_id() {
         "force-quit-slack-v2".to_string(),
         "AppLauncher".to_string(),
         Some("com.tinyspeck.slackmacgap".to_string()),
+        "gpt-4.1".to_string(),
+        "vercel".to_string(),
+        0,
         "2026-03-28T13:00:00Z".to_string(),
     );
     let _ = write_tab_ai_memory_entry_to_path(&record2, &index_path).expect("write 2");
@@ -229,6 +273,9 @@ fn memory_write_back_keeps_different_intents_separate() {
         "open-finder".to_string(),
         "ScriptList".to_string(),
         None,
+        "gpt-4.1".to_string(),
+        "vercel".to_string(),
+        0,
         "2026-03-28T13:00:00Z".to_string(),
     );
     let _ = write_tab_ai_memory_entry_to_path(&record2, &index_path).expect("write 2");
@@ -246,6 +293,72 @@ fn memory_read_returns_empty_for_nonexistent_path() {
     assert!(entries.is_empty());
 }
 
+// ── Audit Receipts ──
+
+#[test]
+fn audit_receipt_appends_valid_jsonl() {
+    let dir = tempfile::tempdir().expect("create temp dir");
+    let path = dir.path().join(".tab-ai-executions.jsonl");
+
+    let record = sample_record();
+    let receipt = build_tab_ai_execution_receipt(
+        &record,
+        TabAiExecutionStatus::Dispatched,
+        false,
+        false,
+        None,
+    );
+    append_tab_ai_execution_receipt_to_path(&receipt, &path).expect("append");
+
+    let content = std::fs::read_to_string(&path).expect("read");
+    let lines: Vec<&str> = content.lines().collect();
+    assert_eq!(lines.len(), 1, "exactly one line per receipt");
+
+    let parsed: TabAiExecutionReceipt =
+        serde_json::from_str(lines[0]).expect("valid JSON on line 1");
+    assert_eq!(parsed.status, TabAiExecutionStatus::Dispatched);
+    assert_eq!(parsed.schema_version, TAB_AI_EXECUTION_RECEIPT_SCHEMA_VERSION);
+    assert_eq!(parsed.model_id, "gpt-4.1");
+    assert_eq!(parsed.provider_id, "vercel");
+}
+
+#[test]
+fn audit_receipt_append_only_preserves_prior_lines() {
+    let dir = tempfile::tempdir().expect("create temp dir");
+    let path = dir.path().join(".tab-ai-executions.jsonl");
+
+    let record = sample_record();
+
+    let r1 = build_tab_ai_execution_receipt(
+        &record,
+        TabAiExecutionStatus::Dispatched,
+        false,
+        false,
+        None,
+    );
+    append_tab_ai_execution_receipt_to_path(&r1, &path).expect("append 1");
+
+    let r2 = build_tab_ai_execution_receipt(
+        &record,
+        TabAiExecutionStatus::Succeeded,
+        true,
+        true,
+        None,
+    );
+    append_tab_ai_execution_receipt_to_path(&r2, &path).expect("append 2");
+
+    let content = std::fs::read_to_string(&path).expect("read");
+    let lines: Vec<&str> = content.lines().collect();
+    assert_eq!(lines.len(), 2, "two receipts = two lines");
+
+    let p1: TabAiExecutionReceipt = serde_json::from_str(lines[0]).expect("parse line 1");
+    let p2: TabAiExecutionReceipt = serde_json::from_str(lines[1]).expect("parse line 2");
+    assert_eq!(p1.status, TabAiExecutionStatus::Dispatched);
+    assert_eq!(p2.status, TabAiExecutionStatus::Succeeded);
+    assert!(p2.memory_write_eligible);
+    assert!(p2.save_offer_eligible);
+}
+
 // ── Public Export Coverage ──
 
 #[test]
@@ -261,6 +374,9 @@ fn public_exports_cover_all_post_execution_types() {
         String::new(),
         None,
         String::new(),
+        String::new(),
+        0,
+        String::new(),
     );
     let _entry = TabAiMemoryEntry {
         schema_version: TAB_AI_MEMORY_ENTRY_SCHEMA_VERSION,
@@ -271,6 +387,7 @@ fn public_exports_cover_all_post_execution_types() {
         bundle_id: None,
         written_at: String::new(),
     };
-    assert_eq!(TAB_AI_EXECUTION_RECORD_SCHEMA_VERSION, 1);
+    assert_eq!(TAB_AI_EXECUTION_RECORD_SCHEMA_VERSION, 2);
+    assert_eq!(TAB_AI_EXECUTION_RECEIPT_SCHEMA_VERSION, 1);
     assert_eq!(TAB_AI_MEMORY_ENTRY_SCHEMA_VERSION, 1);
 }

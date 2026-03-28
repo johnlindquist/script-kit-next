@@ -29,6 +29,13 @@ impl ScriptListApp {
         let accent_color = theme.colors.accent.selected;
         let input_is_empty = self.arg_input.is_empty();
 
+        crate::components::emit_prompt_chrome_audit(
+            &crate::components::PromptChromeAudit::exception(
+                "render_prompts::micro",
+                "ultra_compact_no_footer",
+            ),
+        );
+
         // Micro uses minimal padding — tightest possible chrome
         let micro_padding_x: f32 = HEADER_PADDING_X * 0.5;
         let micro_padding_y: f32 = HEADER_PADDING_Y * 0.5;
