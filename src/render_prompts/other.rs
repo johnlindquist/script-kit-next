@@ -190,6 +190,8 @@ impl ScriptListApp {
                 self.has_nonempty_sdk_actions(),
             ),
         );
+        let hints = crate::components::universal_prompt_hints();
+        crate::components::emit_prompt_hint_audit("render_prompts::template", &hints);
         let render_context = PromptRenderContext::new(self.theme.as_ref(), self.current_design);
         let theme = render_context.theme;
         let design_spacing = render_context.design_spacing;
@@ -247,6 +249,8 @@ impl ScriptListApp {
                 self.has_nonempty_sdk_actions(),
             ),
         );
+        let hints = crate::components::universal_prompt_hints();
+        crate::components::emit_prompt_hint_audit("render_prompts::naming", &hints);
         let render_context = PromptRenderContext::new(self.theme.as_ref(), self.current_design);
         let theme = render_context.theme;
         let design_spacing = render_context.design_spacing;
@@ -279,6 +283,8 @@ impl ScriptListApp {
                 "media_capture_surface_with_hint_strip",
             ),
         );
+        let hints = crate::components::universal_prompt_hints();
+        crate::components::emit_prompt_hint_audit("render_prompts::webcam", &hints);
         let theme = PromptRenderContext::new(self.theme.as_ref(), self.current_design).theme;
         let handle_key = cx.listener(Self::other_prompt_shell_handle_key_webcam);
 
@@ -323,6 +329,8 @@ impl ScriptListApp {
                 self.has_nonempty_sdk_actions(),
             ),
         );
+        let hints = crate::components::universal_prompt_hints();
+        crate::components::emit_prompt_hint_audit("render_prompts::creation_feedback", &hints);
         let render_context = PromptRenderContext::new(self.theme.as_ref(), self.current_design);
         let theme = self.theme.clone();
         let design_spacing = render_context.design_spacing;
@@ -443,6 +451,10 @@ mod other_prompt_render_wrapper_tests {
             ("render_env_prompt", "render_prompts::env"),
             ("render_drop_prompt", "render_prompts::drop"),
             ("render_chat_prompt", "render_prompts::chat"),
+            ("render_template_prompt", "render_prompts::template"),
+            ("render_naming_prompt", "render_prompts::naming"),
+            ("render_webcam_prompt", "render_prompts::webcam"),
+            ("render_creation_feedback", "render_prompts::creation_feedback"),
         ] {
             let body = fn_source(fn_name);
             assert!(

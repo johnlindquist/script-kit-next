@@ -1507,29 +1507,29 @@ pub fn icon_from_png(png_data: &[u8]) -> Option<IconKind> {
 /// Render a section header for grouped lists (e.g., "Recent", "Main")
 ///
 /// Visual design for section headers:
-/// - Standard casing (not uppercase)
+/// - Uppercase whisper label for stronger scanability
 /// - 12px font (meets desktop minimum)
-/// - Semi-bold weight (SEMIBOLD for subtlety)
+/// - Normal weight so headers recede behind items
 /// - Dimmed color (subtle but readable)
 /// - 32px height (8px grid aligned)
 /// - Left-aligned with list item padding
-/// - Subtle background tint for visual grouping
+/// - No separators or background tint; spacing alone defines groups
 ///
 /// ## Technical Note: list() Height
 /// Uses GPUI's `list()` component which supports variable-height items.
 /// Section headers render at 32px, regular items at 40px.
 ///
 /// # Arguments
-/// * `label` - The section label (displayed as-is, standard casing)
+/// * `label` - The section label (displayed uppercase per whisper-chrome spec)
 /// * `icon` - Optional icon name (lucide icon, e.g., "settings")
 /// * `colors` - ListItemColors for theme-aware styling
-/// * `is_first` - Whether this is the first header in the list (suppresses top border)
+/// * `_is_first` - Reserved for existing call sites; unused because headers no longer draw separators
 ///
 pub fn render_section_header(
     label: &str,
     icon: Option<&str>,
     colors: ListItemColors,
-    is_first: bool,
+    _is_first: bool,
 ) -> impl IntoElement {
     // Section header at 32px (8px grid aligned, SECTION_HEADER_HEIGHT)
     // Used with GPUI's list() component which supports variable-height items.
@@ -1570,7 +1570,7 @@ pub fn render_section_header(
         }
     }
 
-    content = content.child(section_name.to_string());
+    content = content.child(section_name.to_uppercase());
 
     // Add count badge if present - rendered as a very subtle separate element
     if let Some(count) = count_text {
@@ -1594,15 +1594,7 @@ pub fn render_section_header(
         .flex_col()
         .justify_end(); // Align content to bottom for better visual anchoring
 
-    // Only show top separator on non-first headers — very subtle
-    let header = if is_first {
-        header
-    } else {
-        header
-            .border_t_1()
-            .border_color(rgba((colors.text_secondary << 8) | ALPHA_SEPARATOR))
-    };
-
+    // No separator lines — spacing alone defines groups per whisper-chrome spec
     header.child(content)
 }
 // Note: GPUI rendering tests omitted due to GPUI macro recursion limit issues.
