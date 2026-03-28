@@ -303,10 +303,7 @@ impl ScriptListApp {
             // preserve vibrancy/translucency compositing when rendered as an overlay.
             .child(div().flex_1().min_h(px(0.)).overflow_hidden().child(entity))
             // Shared three-key hint strip footer
-            .child(crate::components::render_simple_hint_strip(
-                crate::components::universal_prompt_hints(),
-                None,
-            ))
+            .child(crate::components::render_universal_prompt_hint_strip())
             // Actions dialog overlay
             .when_some(
                 render_actions_backdrop_bottom_anchored(
@@ -480,12 +477,8 @@ mod term_prompt_render_tests {
             "term prompt should no longer use exception chrome audit"
         );
         assert!(
-            TERM_RENDER_SOURCE.contains("universal_prompt_hints()"),
-            "term prompt should use universal three-key footer hints"
-        );
-        assert!(
-            TERM_RENDER_SOURCE.contains("render_simple_hint_strip("),
-            "term prompt should render the canonical hint strip footer"
+            TERM_RENDER_SOURCE.contains("render_universal_prompt_hint_strip()"),
+            "term prompt should use the canonical three-key hint strip footer"
         );
     }
 

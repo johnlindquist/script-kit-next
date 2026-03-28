@@ -870,6 +870,206 @@ pub fn resolve_tab_ai_memory_suggestions_from_path(
     )
 }
 
+// ---------------------------------------------------------------------------
+// Tab AI invocation receipt — machine-readable richness/degradation signal
+// ---------------------------------------------------------------------------
+
+/// Schema version for `TabAiInvocationReceipt`. Bump when adding/removing/renaming fields.
+pub const TAB_AI_INVOCATION_RECEIPT_SCHEMA_VERSION: u32 = 1;
+
+/// Tri-state field status used in invocation receipts.
+///
+/// - `Captured` — data was successfully extracted from the surface.
+/// - `Degraded` — the surface structurally supports the data but it could not
+///   be extracted (e.g. panel-only element collection, terminal input).
+/// - `Unavailable` — the surface has no concept of this data (e.g. webcam has
+///   no input text).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum TabAiFieldStatus {
+    Captured,
+    Degraded,
+    Unavailable,
+}
+
+impl std::fmt::Display for TabAiFieldStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Captured => f.write_str("captured"),
+            Self::Degraded => f.write_str("degraded"),
+            Self::Unavailable => f.write_str("unavailable"),
+        }
+    }
+}
+
+/// Stable, machine-readable reason code explaining why a field is degraded or
+/// unavailable.  These are enumerated so downstream consumers (tests, agents,
+/// dashboards) can match on them without parsing free-form strings.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TabAiDegradationReason {
+    /// `collect_visible_elements` returned only `panel:*` placeholders.
+    PanelOnlyElements,
+    /// `collect_visible_elements` returned zero elements and no warnings.
+    NoSemanticElements,
+    /// No focused or selected semantic ID was found.
+    MissingFocusTarget,
+    /// `current_input_text()` returned `None` on a surface that structurally
+    /// supports input (e.g. terminal where content exists but is not
+    /// user-typed text).
+    InputNotExtractable,
+    /// The surface has no user-editable text concept at all (e.g. webcam,
+    /// drop zone).
+    InputNotApplicable,
+}
+
+impl std::fmt::Display for TabAiDegradationReason {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::PanelOnlyElements => f.write_str("panel_only_elements"),
+            Self::NoSemanticElements => f.write_str("no_semantic_elements"),
+            Self::MissingFocusTarget => f.write_str("missing_focus_target"),
+            Self::InputNotExtractable => f.write_str("input_not_extractable"),
+            Self::InputNotApplicable => f.write_str("input_not_applicable"),
+        }
+    }
+}
+
+/// Machine-readable receipt emitted on every Tab AI invocation.
+///
+/// Identifies the prompt/view type and whether UI context was rich or
+/// degraded, with explicit reasons for each degradation.  Designed to be
+/// inspectable in tests and parseable from structured logs without human
+/// interpretation of free-form strings.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct TabAiInvocationReceipt {
+    /// Schema version for forward compatibility.
+    pub schema_version: u32,
+    /// `AppView` variant name at invocation time.
+    pub prompt_type: String,
+    /// Tri-state status for input text extraction.
+    pub input_status: TabAiFieldStatus,
+    /// Tri-state status for focus/selection target.
+    pub focus_status: TabAiFieldStatus,
+    /// Tri-state status for semantic element collection.
+    pub elements_status: TabAiFieldStatus,
+    /// Number of semantic elements collected.
+    pub element_count: usize,
+    /// Number of element-collection warnings.
+    pub warning_count: usize,
+    /// Whether any focused or selected semantic ID was captured.
+    pub has_focus_target: bool,
+    /// Whether input text was captured.
+    pub has_input_text: bool,
+    /// Machine-readable reason codes for any degraded or unavailable fields.
+    /// Empty when all fields are `Captured`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub degradation_reasons: Vec<TabAiDegradationReason>,
+    /// Overall richness: `true` when all three statuses are `Captured`.
+    pub rich: bool,
+}
+
+impl TabAiInvocationReceipt {
+    /// Build a receipt from snapshot extraction results.
+    ///
+    /// `input_status_str` / `focus_status_str` are the tri-state strings
+    /// already computed in `snapshot_tab_ai_ui` ("captured", "degraded",
+    /// "unavailable").  `warnings` are from `ElementCollectionOutcome`.
+    pub fn from_snapshot(
+        prompt_type: &str,
+        input_text: &Option<String>,
+        focused_id: &Option<String>,
+        selected_id: &Option<String>,
+        element_count: usize,
+        warnings: &[String],
+    ) -> Self {
+        // --- input_status ---
+        let input_status = if input_text.is_some() {
+            TabAiFieldStatus::Captured
+        } else {
+            // Check if the surface structurally lacks input
+            // Names must match what `app_view_name()` returns at runtime.
+            let no_input_surfaces = [
+                "DivPrompt",
+                "DropPrompt",
+                "Webcam",
+                "CreationFeedback",
+                "ActionsDialog",
+                "Settings",
+                "InstalledKits",
+            ];
+            if no_input_surfaces.contains(&prompt_type) {
+                TabAiFieldStatus::Unavailable
+            } else {
+                TabAiFieldStatus::Degraded
+            }
+        };
+
+        // --- focus_status ---
+        let has_focus_target = focused_id.is_some() || selected_id.is_some();
+        let focus_status = if has_focus_target {
+            TabAiFieldStatus::Captured
+        } else if warnings.is_empty() {
+            TabAiFieldStatus::Unavailable
+        } else {
+            TabAiFieldStatus::Degraded
+        };
+
+        // --- elements_status ---
+        let has_panel_only_warning =
+            warnings.iter().any(|w| w.starts_with("panel_only_"));
+        let elements_status = if element_count > 0 && !has_panel_only_warning {
+            TabAiFieldStatus::Captured
+        } else if has_panel_only_warning {
+            TabAiFieldStatus::Degraded
+        } else if element_count == 0 && warnings.is_empty() {
+            TabAiFieldStatus::Unavailable
+        } else {
+            TabAiFieldStatus::Degraded
+        };
+
+        // --- degradation_reasons ---
+        let mut degradation_reasons = Vec::new();
+        if has_panel_only_warning {
+            degradation_reasons.push(TabAiDegradationReason::PanelOnlyElements);
+        }
+        if element_count == 0 && warnings.is_empty() {
+            degradation_reasons.push(TabAiDegradationReason::NoSemanticElements);
+        }
+        if !has_focus_target && (focus_status != TabAiFieldStatus::Unavailable) {
+            degradation_reasons.push(TabAiDegradationReason::MissingFocusTarget);
+        }
+        match input_status {
+            TabAiFieldStatus::Degraded => {
+                degradation_reasons.push(TabAiDegradationReason::InputNotExtractable);
+            }
+            TabAiFieldStatus::Unavailable => {
+                degradation_reasons.push(TabAiDegradationReason::InputNotApplicable);
+            }
+            TabAiFieldStatus::Captured => {}
+        }
+
+        let rich = input_status == TabAiFieldStatus::Captured
+            && focus_status == TabAiFieldStatus::Captured
+            && elements_status == TabAiFieldStatus::Captured;
+
+        Self {
+            schema_version: TAB_AI_INVOCATION_RECEIPT_SCHEMA_VERSION,
+            prompt_type: prompt_type.to_string(),
+            input_status,
+            focus_status,
+            elements_status,
+            element_count,
+            warning_count: warnings.len(),
+            has_focus_target,
+            has_input_text: input_text.is_some(),
+            degradation_reasons,
+            rich,
+        }
+    }
+}
+
 #[cfg(test)]
 mod execution_record_compat_tests {
     use super::*;

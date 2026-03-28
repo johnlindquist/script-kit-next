@@ -7,6 +7,7 @@ struct TabAiResolvedContext {
     context: crate::ai::TabAiContextBlob,
     bundle_id: Option<String>,
     context_warning_count: usize,
+    invocation_receipt: crate::ai::TabAiInvocationReceipt,
 }
 
 /// Shared helper that sets the Tab AI error state, clears `running`, and emits
@@ -45,7 +46,14 @@ impl ScriptListApp {
             return;
         }
 
-        let ui_snapshot = self.snapshot_tab_ai_ui(cx);
+        let (ui_snapshot, invocation_receipt) = self.snapshot_tab_ai_ui(cx);
+
+        // Emit the receipt as a standalone structured log line for agent/test consumption
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "tab_ai_invocation_receipt",
+            receipt_json = %serde_json::to_string(&invocation_receipt).unwrap_or_default(),
+        );
 
         // Cheap frontmost-app capture — no screenshots, no selected text
         let frontmost_bundle_id = crate::context_snapshot::capture_context_snapshot(
@@ -73,6 +81,7 @@ impl ScriptListApp {
             memory_hint: None,
             running: false,
             error: None,
+            invocation_receipt,
         });
 
         // Close actions popup if open
@@ -162,22 +171,59 @@ impl ScriptListApp {
     }
 
     /// Capture a snapshot of the current UI state for context assembly.
+    ///
+    /// Returns the snapshot and a machine-readable invocation receipt that
+    /// identifies whether UI context was rich or degraded with explicit
+    /// reason codes.
     #[allow(dead_code)]
-    fn snapshot_tab_ai_ui(&self, cx: &Context<Self>) -> crate::ai::TabAiUiSnapshot {
+    fn snapshot_tab_ai_ui(
+        &self,
+        cx: &Context<Self>,
+    ) -> (crate::ai::TabAiUiSnapshot, crate::ai::TabAiInvocationReceipt) {
         let prompt_type = self.app_view_name();
 
         // Collect visible elements (capped to keep token cost low)
         let outcome = self.collect_visible_elements(12, cx);
 
-        let input_text = self.current_input_text();
+        let input_text = self.current_input_text(cx);
+        let focused_id = outcome.focused_semantic_id();
+        let selected_id = outcome.selected_semantic_id();
 
-        crate::ai::TabAiUiSnapshot {
+        // Build the machine-readable invocation receipt
+        let receipt = crate::ai::TabAiInvocationReceipt::from_snapshot(
+            &prompt_type,
+            &input_text,
+            &focused_id,
+            &selected_id,
+            outcome.elements.len(),
+            &outcome.warnings,
+        );
+
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "tab_ai_snapshot_captured",
+            prompt_type = %prompt_type,
+            input_status = %receipt.input_status,
+            focus_status = %receipt.focus_status,
+            elements_status = %receipt.elements_status,
+            has_input_text = receipt.has_input_text,
+            has_focus_target = receipt.has_focus_target,
+            element_count = receipt.element_count,
+            warning_count = receipt.warning_count,
+            rich = receipt.rich,
+            degradation_reasons = ?receipt.degradation_reasons,
+            "tab ai snapshot captured"
+        );
+
+        let snapshot = crate::ai::TabAiUiSnapshot {
             prompt_type,
             input_text,
-            focused_semantic_id: outcome.focused_semantic_id(),
-            selected_semantic_id: outcome.selected_semantic_id(),
+            focused_semantic_id: focused_id,
+            selected_semantic_id: selected_id,
             visible_elements: outcome.elements,
-        }
+        };
+
+        (snapshot, receipt)
     }
 
     /// Build the full context blob for AI submission.
@@ -273,10 +319,26 @@ impl ScriptListApp {
             "tab ai context built"
         );
 
+        let invocation_receipt = self
+            .tab_ai_state
+            .as_ref()
+            .map(|s| s.invocation_receipt.clone())
+            .unwrap_or_else(|| {
+                crate::ai::TabAiInvocationReceipt::from_snapshot(
+                    &context.ui.prompt_type,
+                    &context.ui.input_text,
+                    &context.ui.focused_semantic_id,
+                    &context.ui.selected_semantic_id,
+                    context.ui.visible_elements.len(),
+                    &[],
+                )
+            });
+
         TabAiResolvedContext {
             context,
             bundle_id,
             context_warning_count,
+            invocation_receipt,
         }
     }
 
@@ -325,27 +387,23 @@ impl ScriptListApp {
     }
 
     /// Return the current input text from whichever view is active.
+    ///
+    /// Returns `Some(text)` when the view has user-editable text that is
+    /// non-empty, `None` otherwise.  Entity-based prompts are read via
+    /// `entity.read(cx)` so this method requires a context reference.
     #[allow(dead_code)]
-    fn current_input_text(&self) -> Option<String> {
+    fn current_input_text(&self, cx: &Context<Self>) -> Option<String> {
+        let non_empty = |s: String| if s.is_empty() { None } else { Some(s) };
+
         match &self.current_view {
-            AppView::ScriptList => {
-                let text = self.filter_text.clone();
-                if text.is_empty() {
-                    None
-                } else {
-                    Some(text)
-                }
-            }
+            AppView::ScriptList => non_empty(self.filter_text.clone()),
+
             AppView::ArgPrompt { .. }
             | AppView::MiniPrompt { .. }
             | AppView::MicroPrompt { .. } => {
-                let text = self.arg_input.text().to_string();
-                if text.is_empty() {
-                    None
-                } else {
-                    Some(text)
-                }
+                non_empty(self.arg_input.text().to_string())
             }
+
             AppView::ClipboardHistoryView { filter, .. }
             | AppView::AppLauncherView { filter, .. }
             | AppView::WindowSwitcherView { filter, .. }
@@ -355,21 +413,89 @@ impl ScriptListApp {
             | AppView::SearchAiPresetsView { filter, .. }
             | AppView::FavoritesBrowseView { filter, .. }
             | AppView::CurrentAppCommandsView { filter, .. }
-            | AppView::DesignGalleryView { filter, .. } => {
-                if filter.is_empty() {
-                    None
+            | AppView::DesignGalleryView { filter, .. } => non_empty(filter.clone()),
+
+            AppView::FileSearchView { query, .. } => non_empty(query.clone()),
+
+            AppView::BrowseKitsView { query, .. } => non_empty(query.clone()),
+
+            // --- Entity-based prompts ---
+
+            AppView::EditorPrompt { entity, .. } => {
+                entity.read_with(cx, |editor, app| {
+                    non_empty(editor.content_from_app(app))
+                })
+            }
+            AppView::ScratchPadView { entity, .. } => {
+                entity.read_with(cx, |editor, app| {
+                    non_empty(editor.content_from_app(app))
+                })
+            }
+            AppView::ChatPrompt { entity, .. } => {
+                non_empty(entity.read(cx).input.text().to_string())
+            }
+            AppView::PathPrompt { entity, .. } => {
+                let p = entity.read(cx);
+                // Prefer active filter text; fall back to current directory path
+                non_empty(p.filter_text.clone())
+                    .or_else(|| non_empty(p.current_path.clone()))
+            }
+            AppView::EnvPrompt { entity, .. } => {
+                let p = entity.read(cx);
+                // Return the user-entered value (masked text is still useful
+                // for "is something typed?" without revealing secrets)
+                if p.secret {
+                    // For secret fields, report presence but not content
+                    let text = p.input_text();
+                    if text.is_empty() { None } else { Some("[secret]".to_string()) }
                 } else {
-                    Some(filter.clone())
+                    non_empty(p.input_text().to_string())
                 }
             }
-            AppView::FileSearchView { query, .. } => {
-                if query.is_empty() {
-                    None
-                } else {
-                    Some(query.clone())
+            AppView::SelectPrompt { entity, .. } => {
+                non_empty(entity.read(cx).filter_text.clone())
+            }
+            AppView::NamingPrompt { entity, .. } => {
+                non_empty(entity.read(cx).friendly_name.clone())
+            }
+            AppView::TemplatePrompt { entity, .. } => {
+                let p = entity.read(cx);
+                // Return the value of the currently focused template input
+                p.values.get(p.current_input).and_then(|v| non_empty(v.clone()))
+            }
+            AppView::CreateAiPresetView { name, system_prompt, model, active_field } => {
+                // Return whichever field is active
+                match active_field {
+                    0 => non_empty(name.clone()),
+                    1 => non_empty(system_prompt.clone()),
+                    2 => non_empty(model.clone()),
+                    _ => non_empty(name.clone()),
                 }
             }
-            _ => None,
+
+            // --- Views with no meaningful user-editable text ---
+            // DivPrompt: script-rendered HTML, no user input
+            // FormPrompt: multi-field form — field values are in elements,
+            //   not a single "input text" (use visible_elements instead)
+            // TermPrompt/QuickTerminal: terminal content, not user text input
+            // DropPrompt: file drop zone, no typed text
+            // WebcamView: camera feed, no text
+            // CreationFeedback: read-only confirmation
+            // ActionsDialog: transient overlay, not a primary surface
+            // SettingsView/InstalledKitsView: navigation-only, no free text
+            AppView::DivPrompt { .. }
+            | AppView::FormPrompt { .. }
+            | AppView::TermPrompt { .. }
+            | AppView::QuickTerminalView { .. }
+            | AppView::DropPrompt { .. }
+            | AppView::WebcamView { .. }
+            | AppView::CreationFeedback { .. }
+            | AppView::ActionsDialog
+            | AppView::SettingsView { .. }
+            | AppView::InstalledKitsView { .. } => None,
+
+            #[cfg(feature = "storybook")]
+            AppView::DesignExplorerView { .. } => None,
         }
     }
 
@@ -616,6 +742,18 @@ impl ScriptListApp {
                 return;
             }
         };
+
+        // Emit the invocation receipt at submit time for observability
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "tab_ai_submit_receipt",
+            prompt_type = %resolved_context.invocation_receipt.prompt_type,
+            rich = resolved_context.invocation_receipt.rich,
+            input_status = %resolved_context.invocation_receipt.input_status,
+            focus_status = %resolved_context.invocation_receipt.focus_status,
+            elements_status = %resolved_context.invocation_receipt.elements_status,
+            degradation_reasons = ?resolved_context.invocation_receipt.degradation_reasons,
+        );
 
         // Build the prompt
         let user_prompt = build_tab_ai_user_prompt(&intent, &context_json);

@@ -10,11 +10,10 @@ mod __render_prompts_other_docs {
 
 
 impl ScriptListApp {
+    /// Zero-radius shell for whisper chrome (sharp edges per .impeccable.md).
     #[inline]
-    fn other_prompt_shell_radius_lg(&self) -> f32 {
-        PromptRenderContext::new(self.theme.as_ref(), self.current_design)
-            .design_visual
-            .radius_lg
+    fn other_prompt_shell_radius(&self) -> f32 {
+        0.0
     }
 
     #[inline]
@@ -118,7 +117,7 @@ impl ScriptListApp {
         key_handler: impl Fn(&mut Self, &gpui::KeyDownEvent, &mut Window, &mut Context<Self>) + 'static,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let shell_radius = self.other_prompt_shell_radius_lg();
+        let shell_radius = self.other_prompt_shell_radius();
         let handle_key = cx.listener(key_handler);
         let vibrancy_bg = get_vibrancy_background(&self.theme);
 
@@ -183,10 +182,9 @@ impl ScriptListApp {
         let render_context = PromptRenderContext::new(self.theme.as_ref(), self.current_design);
         let theme = render_context.theme;
         let design_spacing = render_context.design_spacing;
-        let shell_radius = render_context.design_visual.radius_lg;
         let vibrancy_bg = get_vibrancy_background(theme);
 
-        crate::components::prompt_shell_container(shell_radius, vibrancy_bg)
+        crate::components::prompt_shell_container(0.0, vibrancy_bg)
             .h(window_resize::layout::STANDARD_HEIGHT)
             .on_key_down(cx.listener(Self::other_prompt_shell_handle_key_default))
             .child(
@@ -198,10 +196,7 @@ impl ScriptListApp {
                     .p(px(design_spacing.padding_xl))
                     .child(entity),
             )
-            .child(crate::components::render_simple_hint_strip(
-                crate::components::universal_prompt_hints(),
-                None,
-            ))
+            .child(crate::components::render_universal_prompt_hint_strip())
             .into_any_element()
     }
 
@@ -233,10 +228,9 @@ impl ScriptListApp {
         let render_context = PromptRenderContext::new(self.theme.as_ref(), self.current_design);
         let theme = render_context.theme;
         let design_spacing = render_context.design_spacing;
-        let shell_radius = render_context.design_visual.radius_lg;
         let vibrancy_bg = get_vibrancy_background(theme);
 
-        crate::components::prompt_shell_container(shell_radius, vibrancy_bg)
+        crate::components::prompt_shell_container(0.0, vibrancy_bg)
             .h(window_resize::layout::STANDARD_HEIGHT)
             .on_key_down(cx.listener(Self::other_prompt_shell_handle_key_default))
             .child(
@@ -248,10 +242,7 @@ impl ScriptListApp {
                     .p(px(design_spacing.padding_xl))
                     .child(entity),
             )
-            .child(crate::components::render_simple_hint_strip(
-                crate::components::universal_prompt_hints(),
-                None,
-            ))
+            .child(crate::components::render_universal_prompt_hint_strip())
             .into_any_element()
     }
 
@@ -266,9 +257,7 @@ impl ScriptListApp {
                 "media_capture_surface_with_hint_strip",
             ),
         );
-        let render_context = PromptRenderContext::new(self.theme.as_ref(), self.current_design);
-        let theme = render_context.theme;
-        let shell_radius = render_context.design_visual.radius_lg;
+        let theme = PromptRenderContext::new(self.theme.as_ref(), self.current_design).theme;
         let handle_key = cx.listener(Self::other_prompt_shell_handle_key_webcam);
 
         // VIBRANCY: Use foundation helper - returns None when vibrancy enabled (let Root handle bg)
@@ -284,7 +273,7 @@ impl ScriptListApp {
             .w_full()
             .h(content_height)
             .overflow_hidden()
-            .rounded(px(shell_radius))
+            .rounded(px(0.0))
             .track_focus(&self.focus_handle)
             .on_key_down(handle_key)
             // Content area - flex-1 to fill remaining space above footer
@@ -297,10 +286,7 @@ impl ScriptListApp {
                     .child(entity),
             )
             // Shared three-key hint strip footer
-            .child(crate::components::render_simple_hint_strip(
-                crate::components::universal_prompt_hints(),
-                None,
-            ))
+            .child(crate::components::render_universal_prompt_hint_strip())
             .into_any_element()
     }
 
@@ -318,7 +304,6 @@ impl ScriptListApp {
         let render_context = PromptRenderContext::new(self.theme.as_ref(), self.current_design);
         let theme = self.theme.clone();
         let design_spacing = render_context.design_spacing;
-        let shell_radius = render_context.design_visual.radius_lg;
         let vibrancy_bg = get_vibrancy_background(render_context.theme);
 
         let entity = cx.entity().downgrade();
@@ -353,7 +338,7 @@ impl ScriptListApp {
             }
         });
 
-        crate::components::prompt_shell_container(shell_radius, vibrancy_bg)
+        crate::components::prompt_shell_container(0.0, vibrancy_bg)
             .id("creation-feedback-shell")
             .h(window_resize::layout::STANDARD_HEIGHT)
             .key_context("CreationFeedback")
@@ -368,10 +353,7 @@ impl ScriptListApp {
                     .p(px(design_spacing.padding_xl))
                     .child(panel),
             )
-            .child(crate::components::render_simple_hint_strip(
-                crate::components::universal_prompt_hints(),
-                None,
-            ))
+            .child(crate::components::render_universal_prompt_hint_strip())
             .into_any_element()
     }
 }
@@ -431,7 +413,7 @@ mod other_prompt_render_wrapper_tests {
             "render_template_prompt should not use PromptFooter"
         );
         assert!(
-            body.contains("render_simple_hint_strip("),
+            body.contains("render_universal_prompt_hint_strip("),
             "render_template_prompt should use the shared hint strip"
         );
         assert!(
@@ -448,7 +430,7 @@ mod other_prompt_render_wrapper_tests {
             "render_naming_prompt should not use PromptFooter"
         );
         assert!(
-            body.contains("render_simple_hint_strip("),
+            body.contains("render_universal_prompt_hint_strip("),
             "render_naming_prompt should use the shared hint strip"
         );
         assert!(
@@ -473,7 +455,7 @@ mod other_prompt_render_wrapper_tests {
             "render_creation_feedback should not use PromptFooter"
         );
         assert!(
-            body.contains("render_simple_hint_strip("),
+            body.contains("render_universal_prompt_hint_strip("),
             "render_creation_feedback should use the shared hint strip"
         );
     }
@@ -486,7 +468,7 @@ mod other_prompt_render_wrapper_tests {
             "render_webcam_prompt should not use PromptFooter"
         );
         assert!(
-            body.contains("render_simple_hint_strip("),
+            body.contains("render_universal_prompt_hint_strip("),
             "render_webcam_prompt should use the shared hint strip"
         );
     }

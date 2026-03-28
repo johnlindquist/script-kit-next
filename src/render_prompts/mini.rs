@@ -22,7 +22,6 @@ impl ScriptListApp {
         let render_context = PromptRenderContext::new(self.theme.as_ref(), self.current_design);
         let theme = render_context.theme;
         let design_typography = render_context.design_typography;
-        let design_visual = render_context.design_visual;
 
         let text_primary = theme.colors.text.primary;
         let text_muted = theme.colors.text.muted;
@@ -144,76 +143,77 @@ impl ScriptListApp {
             ),
         );
 
-        div()
-            .flex()
-            .flex_col()
+        // Build header (compact input row with reduced padding)
+        let header = div()
             .w_full()
-            .h_full()
-            .rounded(px(design_visual.radius_lg))
-            .text_color(rgb(text_primary))
-            .font_family(design_typography.font_family)
-            .key_context("mini_prompt")
-            .track_focus(&self.focus_handle)
-            .on_key_down(handle_key)
-            // Compact input row with reduced padding
-            .child(
+            .px(px(mini_padding_x))
+            .py(px(mini_padding_y))
+            .flex()
+            .flex_row()
+            .items_center()
+            .child({
+                let input_height = CURSOR_HEIGHT_LG + (CURSOR_MARGIN_Y * 2.0);
                 div()
-                    .w_full()
-                    .px(px(mini_padding_x))
-                    .py(px(mini_padding_y))
+                    .flex_1()
                     .flex()
                     .flex_row()
                     .items_center()
-                    .child({
-                        let input_height = CURSOR_HEIGHT_LG + (CURSOR_MARGIN_Y * 2.0);
-                        div()
-                            .flex_1()
-                            .flex()
-                            .flex_row()
-                            .items_center()
-                            .h(px(input_height))
-                            .text_size(px(design_typography.font_size_lg))
-                            .text_color(if input_is_empty {
-                                rgb(text_muted)
-                            } else {
-                                rgb(text_primary)
-                            })
-                            .when(input_is_empty, |d: gpui::Div| {
-                                let is_cursor_visible = self.focused_input
-                                    == FocusedInput::ArgPrompt
-                                    && self.cursor_visible;
-                                d.child(
+                    .h(px(input_height))
+                    .text_size(px(design_typography.font_size_lg))
+                    .text_color(if input_is_empty {
+                        rgb(text_muted)
+                    } else {
+                        rgb(text_primary)
+                    })
+                    .when(input_is_empty, |d: gpui::Div| {
+                        let is_cursor_visible = self.focused_input
+                            == FocusedInput::ArgPrompt
+                            && self.cursor_visible;
+                        d.child(
+                            div()
+                                .flex()
+                                .flex_row()
+                                .items_center()
+                                .child(
                                     div()
-                                        .flex()
-                                        .flex_row()
-                                        .items_center()
-                                        .child(
-                                            div()
-                                                .w(px(CURSOR_WIDTH))
-                                                .h(px(CURSOR_HEIGHT_LG))
-                                                .when(is_cursor_visible, |d: gpui::Div| {
-                                                    d.bg(rgb(text_primary))
-                                                }),
-                                        )
-                                        .child(
-                                            div()
-                                                .ml(px(-(CURSOR_WIDTH)))
-                                                .text_color(rgb(text_muted))
-                                                .child(placeholder),
-                                        ),
+                                        .w(px(CURSOR_WIDTH))
+                                        .h(px(CURSOR_HEIGHT_LG))
+                                        .when(is_cursor_visible, |d: gpui::Div| {
+                                            d.bg(rgb(text_primary))
+                                        }),
                                 )
-                            })
-                            .when(!input_is_empty, |d: gpui::Div| {
-                                d.child(self.render_arg_input_text(text_primary, accent_color))
-                            })
-                    }),
-            )
-            // Universal three-key hint strip footer
-            .child(crate::components::render_simple_hint_strip(
-                crate::components::universal_prompt_hints(),
-                None,
-            ))
-            .into_any_element()
+                                .child(
+                                    div()
+                                        .ml(px(-(CURSOR_WIDTH)))
+                                        .text_color(rgb(text_muted))
+                                        .child(placeholder),
+                                ),
+                        )
+                    })
+                    .when(!input_is_empty, |d: gpui::Div| {
+                        d.child(self.render_arg_input_text(text_primary, accent_color))
+                    })
+            });
+
+        // Mini prompt has no list content
+        let content = div();
+        let leading: Option<gpui::AnyElement> = None;
+
+        // Use the same shared shell as arg/render.rs
+        crate::components::render_minimal_list_prompt_shell(
+            0.0,
+            crate::ui_foundation::get_vibrancy_background(&self.theme),
+            header,
+            content,
+            crate::components::universal_prompt_hints(),
+            leading,
+        )
+        .text_color(rgb(text_primary))
+        .font_family(design_typography.font_family)
+        .key_context("mini_prompt")
+        .track_focus(&self.focus_handle)
+        .on_key_down(handle_key)
+        .into_any_element()
     }
 }
 
@@ -242,14 +242,14 @@ mod mini_prompt_render_tests {
     }
 
     #[test]
-    fn mini_prompt_uses_universal_hint_strip_footer() {
+    fn mini_prompt_uses_shared_shell_with_universal_hints() {
+        assert!(
+            MINI_SOURCE.contains("render_minimal_list_prompt_shell("),
+            "mini prompt should use the shared prompt shell from arg/render.rs"
+        );
         assert!(
             MINI_SOURCE.contains("universal_prompt_hints()"),
             "mini prompt should use the canonical three-key hint strip"
-        );
-        assert!(
-            MINI_SOURCE.contains("render_simple_hint_strip("),
-            "mini prompt should render a hint strip footer"
         );
         let render_fn_end = MINI_SOURCE
             .find("#[cfg(test)]")
@@ -259,6 +259,19 @@ mod mini_prompt_render_tests {
         assert!(
             !render_code.contains(&needle),
             "mini prompt should not use PromptFooter"
+        );
+    }
+
+    #[test]
+    fn mini_prompt_uses_zero_radius_shell() {
+        // The shared shell is called with 0.0 radius — no visible rounding
+        assert!(
+            !MINI_SOURCE.contains("design_visual.radius_lg"),
+            "mini prompt should not use radius_lg for shell rounding"
+        );
+        assert!(
+            !MINI_SOURCE.contains("shell_radius"),
+            "mini prompt should not use shell_radius for shell rounding"
         );
     }
 

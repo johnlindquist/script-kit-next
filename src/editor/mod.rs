@@ -15,7 +15,7 @@ use crate::logging;
 use crate::snippet::ParsedSnippet;
 use crate::theme::Theme;
 use gpui::{
-    div, prelude::*, px, rgb, Context, Entity, FocusHandle, Focusable, IntoElement, Render,
+    div, prelude::*, px, rgb, App, Context, Entity, FocusHandle, Focusable, IntoElement, Render,
     SharedString, Styled, Subscription, Window,
 };
 #[cfg(test)]
@@ -362,6 +362,14 @@ impl EditorPrompt {
 
     /// Get the current content as a String
     pub fn content(&self, cx: &Context<Self>) -> String {
+        self.content_from_app(cx)
+    }
+
+    /// Get the current content using an `&App` reference.
+    ///
+    /// Useful when the caller has a parent `Context<T>` (which derefs to
+    /// `App`) rather than a `Context<EditorPrompt>`.
+    pub fn content_from_app(&self, cx: &App) -> String {
         self.editor_state
             .as_ref()
             .map(|state| state.read(cx).value().to_string())
