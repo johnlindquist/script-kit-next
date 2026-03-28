@@ -375,7 +375,7 @@ impl ScriptListApp {
         // PathPrompt entity has its own track_focus and on_key_down in its render method.
         // We add an outer key handler to intercept events when actions are showing.
         crate::components::prompt_shell_container(
-            design_visual.radius_lg,
+            0.0,
             crate::ui_foundation::get_vibrancy_background(&self.theme),
         )
         .key_context("path_prompt_container")

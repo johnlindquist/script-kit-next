@@ -396,6 +396,8 @@ struct TabAiOverlayState {
     running: bool,
     /// Error message from the last failed attempt, if any.
     error: Option<SharedString>,
+    /// Machine-readable richness/degradation receipt captured at open time.
+    invocation_receipt: crate::ai::TabAiInvocationReceipt,
 }
 
 /// State for the Tab AI save-offer overlay, shown after a successful ephemeral

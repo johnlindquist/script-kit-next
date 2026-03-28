@@ -810,8 +810,8 @@ mod prompt_layout_shell_tests {
             "render_template_prompt should not use PromptFooter"
         );
         assert!(
-            body.contains("render_simple_hint_strip("),
-            "render_template_prompt should use the shared hint strip"
+            body.contains("render_universal_prompt_hint_strip("),
+            "render_template_prompt should use the universal hint strip"
         );
         assert!(
             body.contains("STANDARD_HEIGHT"),
@@ -827,8 +827,8 @@ mod prompt_layout_shell_tests {
             "render_naming_prompt should not use PromptFooter"
         );
         assert!(
-            body.contains("render_simple_hint_strip("),
-            "render_naming_prompt should use the shared hint strip"
+            body.contains("render_universal_prompt_hint_strip("),
+            "render_naming_prompt should use the universal hint strip"
         );
         assert!(
             body.contains("STANDARD_HEIGHT"),

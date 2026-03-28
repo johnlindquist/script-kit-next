@@ -50,7 +50,6 @@ impl ScriptListApp {
     ) -> AnyElement {
         let render_context = PromptRenderContext::new(self.theme.as_ref(), self.current_design);
         let theme = render_context.theme;
-        let design_visual = render_context.design_visual;
         let actions_dialog_top = render_context.actions_dialog_top;
         let actions_dialog_right = render_context.actions_dialog_right;
         let has_actions = self.has_nonempty_sdk_actions();
@@ -179,7 +178,7 @@ impl ScriptListApp {
             .w_full()
             .h(content_height) // Explicit 700px height (window height for editor view)
             .overflow_hidden() // Clip content to rounded corners
-            .rounded(px(design_visual.radius_lg))
+            .rounded(px(0.0))
             .key_context(EDITOR_PROMPT_KEY_CONTEXT)
             .on_key_down(handle_key)
             // Editor entity fills remaining space (flex_1)
@@ -192,10 +191,7 @@ impl ScriptListApp {
                     .child(entity),
             )
             // Universal three-key hint strip footer
-            .child(crate::components::render_simple_hint_strip(
-                crate::components::universal_prompt_hints(),
-                None,
-            ))
+            .child(crate::components::render_universal_prompt_hint_strip())
             // Actions dialog overlay
             .when_some(
                 render_actions_backdrop(
@@ -267,12 +263,8 @@ mod editor_prompt_tests {
     fn test_editor_uses_universal_hint_strip_footer() {
         const EDITOR_RENDER_SOURCE: &str = include_str!("editor.rs");
         assert!(
-            EDITOR_RENDER_SOURCE.contains("universal_prompt_hints()"),
+            EDITOR_RENDER_SOURCE.contains("render_universal_prompt_hint_strip()"),
             "editor prompt should use the canonical three-key hint strip"
-        );
-        assert!(
-            EDITOR_RENDER_SOURCE.contains("render_simple_hint_strip("),
-            "editor prompt should render a hint strip footer"
         );
     }
 
