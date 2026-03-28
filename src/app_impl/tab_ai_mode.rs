@@ -332,6 +332,7 @@ impl ScriptListApp {
         let intent_text: SharedString = state.intent.clone().into();
         let is_running = state.running;
         let error_msg = state.error.clone();
+        let memory_hint = state.memory_hint.clone();
 
         // Placeholder text depends on running state
         let placeholder: SharedString = if is_running {
@@ -354,12 +355,11 @@ impl ScriptListApp {
         let error_color = gpui::rgb(theme.colors.ui.error);
         let divider_rgba = gpui::rgba(crate::ui_foundation::hex_to_rgba_with_opacity(
             theme.colors.text.primary,
-            0.06,
+            crate::theme::opacity::OPACITY_GHOST,
         ));
 
-        // Hint strip constants (match main window footer: 14px horizontal, 8px vertical)
-        let hint_px: f32 = 14.0;
-        let hint_py: f32 = 8.0;
+        // Hint strip horizontal padding (matches main window footer)
+        let hint_px: f32 = crate::window_resize::mini_layout::HINT_STRIP_PADDING_X;
 
         // Build the overlay — full-width inline panel, not a floating card
         let overlay = div()
@@ -417,23 +417,29 @@ impl ScriptListApp {
                         .child(msg),
                 )
             })
+            // Memory hint — show similar prior automation when available
+            .when_some(memory_hint, |d, hint| {
+                d.child(
+                    div()
+                        .w_full()
+                        .px(px(hint_px))
+                        .pb(px(4.))
+                        .text_xs()
+                        .text_color(text_hint)
+                        .child(SharedString::from(format!(
+                            "Similar prior automation: {} \u{2014} {} ({:.2})",
+                            hint.slug, hint.effective_query, hint.score
+                        ))),
+                )
+            })
             // Spacer pushes footer to bottom
             .child(div().flex_1())
-            // Footer hint strip — matches main window three-key pattern
-            .child(
-                div()
-                    .w_full()
-                    .px(px(hint_px))
-                    .py(px(hint_py))
-                    .border_t(px(1.))
-                    .border_color(divider_rgba)
-                    .flex()
-                    .flex_row()
-                    .justify_end()
-                    .text_xs()
-                    .text_color(text_hint)
-                    .child("\u{21B5} Run  \u{00B7}  \u{2318}K Actions  \u{00B7}  Tab AI"),
-            )
+            // Footer — canonical three-key hint strip via shared component
+            .child(components::HintStrip::new(vec![
+                "\u{21B5} Run".into(),
+                "\u{2318}K Actions".into(),
+                "Tab AI".into(),
+            ]))
             // Keyboard handling
             .on_key_down(cx.listener(Self::handle_tab_ai_key_down));
 
@@ -1004,24 +1010,26 @@ impl ScriptListApp {
             window.focus(&self.focus_handle, cx);
         }
 
-        let accent = gpui::rgb(theme.colors.accent.selected);
+        // Whisper chrome colors — same tokens as the main Tab AI overlay
         let bg_scrim = gpui::rgba(crate::ui_foundation::hex_to_rgba_with_opacity(
             theme.colors.background.main,
-            0.85,
-        ));
-        let card_bg = gpui::rgba(crate::ui_foundation::hex_to_rgba_with_opacity(
-            theme.colors.background.main,
-            0.6,
+            crate::theme::opacity::OPACITY_NEAR_FULL,
         ));
         let text_primary = gpui::rgb(theme.colors.text.primary);
-        let text_hint = gpui::rgba(crate::ui_foundation::hex_to_rgba_with_opacity(
-            theme.colors.text.primary,
-            0.4,
-        ));
         let error_color = gpui::rgb(theme.colors.ui.error);
+        let divider_rgba = gpui::rgba(crate::ui_foundation::hex_to_rgba_with_opacity(
+            theme.colors.text.primary,
+            crate::theme::opacity::OPACITY_GHOST,
+        ));
+
+        let hint_px: f32 = crate::window_resize::mini_layout::HINT_STRIP_PADDING_X;
 
         let message: SharedString = format!("Save as {}.ts?", state.filename_stem).into();
 
+        // Full-width inline panel — matches main Tab AI overlay chrome,
+        // not a floating card. Footer uses HintStrip with save-specific
+        // hints (justified exception: this is a confirmation dialog, not
+        // the primary input surface).
         let overlay = div()
             .id("tab-ai-save-offer")
             .absolute()
@@ -1029,57 +1037,44 @@ impl ScriptListApp {
             .track_focus(&self.focus_handle)
             .flex()
             .flex_col()
-            .items_center()
-            .justify_center()
             .bg(bg_scrim)
+            // Message row — bare text, no card, no accent bar
             .child(
                 div()
-                    .id("tab-ai-save-card")
-                    .w(px(420.))
-                    .flex()
-                    .flex_col()
-                    .gap_1()
-                    .child(div().w_full().h(px(2.)).bg(accent))
+                    .w_full()
+                    .px(px(hint_px))
+                    .py(px(10.))
                     .child(
                         div()
-                            .w_full()
-                            .px(px(12.))
-                            .py(px(8.))
-                            .bg(card_bg)
-                            .rounded_b(px(8.))
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .font_family(crate::list_item::FONT_MONO)
-                                    .text_color(text_primary)
-                                    .child(message),
-                            ),
-                    )
-                    .when_some(state.error.clone(), |d, msg| {
-                        d.child(
-                            div()
-                                .w_full()
-                                .px(px(12.))
-                                .py(px(4.))
-                                .text_xs()
-                                .text_color(error_color)
-                                .child(msg),
-                        )
-                    })
-                    .child(
-                        div()
-                            .w_full()
-                            .px(px(12.))
-                            .py(px(4.))
-                            .flex()
-                            .flex_row()
-                            .justify_between()
-                            .text_xs()
-                            .text_color(text_hint)
-                            .child("↵ Save")
-                            .child("Esc Dismiss"),
+                            .text_sm()
+                            .font_family(crate::list_item::FONT_MONO)
+                            .text_color(text_primary)
+                            .child(message),
                     ),
             )
+            // Hairline divider — ghost opacity
+            .child(div().w_full().h(px(1.)).bg(divider_rgba))
+            // Error message if present — below divider, minimal
+            .when_some(state.error.clone(), |d, msg| {
+                d.child(
+                    div()
+                        .w_full()
+                        .px(px(hint_px))
+                        .py(px(4.))
+                        .text_xs()
+                        .text_color(error_color)
+                        .child(msg),
+                )
+            })
+            // Spacer pushes footer to bottom
+            .child(div().flex_1())
+            // Footer — save-specific hint strip via shared component
+            // (justified exception: confirmation dialog uses ↵ Save / Esc Dismiss
+            // instead of the canonical three-key strip)
+            .child(components::HintStrip::new(vec![
+                "\u{21B5} Save".into(),
+                "Esc Dismiss".into(),
+            ]))
             .on_key_down(cx.listener(Self::handle_tab_ai_save_offer_key_down));
 
         Some(overlay.into_any_element())
@@ -1147,6 +1142,55 @@ mod tests {
         assert!(prompt.contains("slack"));
         assert!(prompt.contains("choice:0:slack"));
         assert!(prompt.contains("recent1"));
+    }
+
+    #[test]
+    fn tab_ai_overlay_uses_canonical_three_key_footer_contract() {
+        const TAB_AI_SOURCE: &str = include_str!("tab_ai_mode.rs");
+        assert!(
+            TAB_AI_SOURCE.contains(r#""\u{21B5} Run"#),
+            "tab ai overlay should expose the Run hint"
+        );
+        assert!(
+            TAB_AI_SOURCE.contains(r#""\u{2318}K Actions"#),
+            "tab ai overlay should expose the Actions hint"
+        );
+        assert!(
+            TAB_AI_SOURCE.contains("\"Tab AI\""),
+            "tab ai overlay should expose the AI hint"
+        );
+        assert!(
+            !TAB_AI_SOURCE.contains("\"Esc Cancel\""),
+            "tab ai overlay should not use a bespoke Esc footer anymore"
+        );
+    }
+
+    #[test]
+    fn tab_ai_overlay_preserves_memory_hint_rendering() {
+        const TAB_AI_SOURCE: &str = include_str!("tab_ai_mode.rs");
+        assert!(
+            TAB_AI_SOURCE.contains("Similar prior automation:"),
+            "visual cleanup must not silently remove memory-hint behavior"
+        );
+    }
+
+    #[test]
+    fn tab_ai_overlay_uses_named_opacity_constants() {
+        const TAB_AI_SOURCE: &str = include_str!("tab_ai_mode.rs");
+        // The render function should reference OPACITY_GHOST, not raw 0.06
+        assert!(
+            TAB_AI_SOURCE.contains("OPACITY_GHOST"),
+            "tab ai overlay should use named ghost opacity constant"
+        );
+    }
+
+    #[test]
+    fn tab_ai_overlay_uses_shared_hint_strip_component() {
+        const TAB_AI_SOURCE: &str = include_str!("tab_ai_mode.rs");
+        assert!(
+            TAB_AI_SOURCE.contains("HintStrip::new"),
+            "tab ai overlay should use the shared HintStrip component"
+        );
     }
 
     #[test]
