@@ -537,6 +537,48 @@ pub struct TabAiMemorySuggestion {
     pub score: f32,
 }
 
+/// The reason a memory resolution produced (or failed to produce) suggestions.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum TabAiMemoryResolutionReason {
+    MissingBundleId,
+    EmptyQuery,
+    ZeroLimit,
+    IndexMissing,
+    NoCandidatesForBundle,
+    BelowThreshold,
+    Matched,
+}
+
+/// Machine-readable outcome metadata from a memory resolution attempt.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct TabAiMemoryResolutionOutcome {
+    pub query: String,
+    pub normalized_query: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bundle_id: Option<String>,
+    pub limit: usize,
+    pub threshold: f32,
+    pub candidate_count: usize,
+    pub match_count: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub top_score: Option<f32>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub matched_slugs: Vec<String>,
+    pub reason: TabAiMemoryResolutionReason,
+    pub index_path: String,
+}
+
+/// Full resolution result: suggestions plus machine-readable outcome metadata.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct TabAiMemoryResolution {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub suggestions: Vec<TabAiMemorySuggestion>,
+    pub outcome: TabAiMemoryResolutionOutcome,
+}
+
 const TAB_AI_MEMORY_SUGGESTION_MIN_SCORE: f32 = 0.35;
 
 fn normalize_tab_ai_match_text(input: &str) -> String {
@@ -608,13 +650,55 @@ fn score_tab_ai_memory_candidate(query: &str, entry: &TabAiMemoryEntry) -> f32 {
     (overlap * 0.80) + contains_bonus
 }
 
-/// Resolve Tab AI memory suggestions from the default memory index location.
-pub fn resolve_tab_ai_memory_suggestions(
+/// Emit the structured log event for a memory resolution outcome.
+fn log_tab_ai_memory_resolution(outcome: &TabAiMemoryResolutionOutcome) {
+    tracing::info!(
+        event = "tab_ai_memory_resolution",
+        query = %outcome.query,
+        normalized_query = %outcome.normalized_query,
+        bundle_id = ?outcome.bundle_id,
+        limit = outcome.limit,
+        threshold = outcome.threshold,
+        candidate_count = outcome.candidate_count,
+        match_count = outcome.match_count,
+        top_score = ?outcome.top_score,
+        reason = ?outcome.reason,
+        matched_slugs = ?outcome.matched_slugs,
+        index_path = %outcome.index_path,
+    );
+}
+
+/// Build the initial outcome template shared by all resolution paths.
+fn base_resolution_outcome(
+    query: &str,
+    normalized_query: &str,
+    bundle_id: Option<String>,
+    limit: usize,
+    index_path: &std::path::Path,
+) -> TabAiMemoryResolutionOutcome {
+    TabAiMemoryResolutionOutcome {
+        query: query.to_string(),
+        normalized_query: normalized_query.to_string(),
+        bundle_id,
+        limit,
+        threshold: TAB_AI_MEMORY_SUGGESTION_MIN_SCORE,
+        candidate_count: 0,
+        match_count: 0,
+        top_score: None,
+        matched_slugs: Vec::new(),
+        reason: TabAiMemoryResolutionReason::Matched,
+        index_path: index_path.display().to_string(),
+    }
+}
+
+/// Canonical, outcome-aware resolver for Tab AI memory suggestions.
+/// This is the machine-readable surface callers and tests should prefer.
+pub fn resolve_tab_ai_memory_suggestions_with_outcome(
     raw_query: &str,
     bundle_id: Option<&str>,
     limit: usize,
-) -> Result<Vec<TabAiMemorySuggestion>, String> {
-    resolve_tab_ai_memory_suggestions_from_path(
+) -> Result<TabAiMemoryResolution, String> {
+    resolve_tab_ai_memory_suggestions_with_outcome_from_path(
         raw_query,
         bundle_id,
         limit,
@@ -622,26 +706,72 @@ pub fn resolve_tab_ai_memory_suggestions(
     )
 }
 
-/// Resolve Tab AI memory suggestions from a specific memory index path.
-pub fn resolve_tab_ai_memory_suggestions_from_path(
+/// Outcome-aware resolver against an explicit index path.
+pub fn resolve_tab_ai_memory_suggestions_with_outcome_from_path(
     raw_query: &str,
     bundle_id: Option<&str>,
     limit: usize,
     path: &std::path::Path,
-) -> Result<Vec<TabAiMemorySuggestion>, String> {
-    let query = raw_query.trim();
+) -> Result<TabAiMemoryResolution, String> {
+    let query = raw_query.trim().to_string();
+    let normalized_query = normalize_tab_ai_match_text(&query);
+    let bundle_id_clean = bundle_id
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToString::to_string);
 
-    let Some(bundle_id) = bundle_id.map(str::trim).filter(|value| !value.is_empty()) else {
-        return Ok(Vec::new());
-    };
+    let mut outcome = base_resolution_outcome(
+        &query,
+        &normalized_query,
+        bundle_id_clean.clone(),
+        limit,
+        path,
+    );
 
-    if query.is_empty() || limit == 0 {
-        return Ok(Vec::new());
+    // --- Early-exit branches with explicit reasons ---
+
+    if bundle_id_clean.is_none() {
+        outcome.reason = TabAiMemoryResolutionReason::MissingBundleId;
+        log_tab_ai_memory_resolution(&outcome);
+        return Ok(TabAiMemoryResolution {
+            suggestions: Vec::new(),
+            outcome,
+        });
     }
 
-    let bundle_id_norm = normalize_tab_ai_match_text(bundle_id);
+    if query.is_empty() {
+        outcome.reason = TabAiMemoryResolutionReason::EmptyQuery;
+        log_tab_ai_memory_resolution(&outcome);
+        return Ok(TabAiMemoryResolution {
+            suggestions: Vec::new(),
+            outcome,
+        });
+    }
 
-    let mut matches: Vec<TabAiMemorySuggestion> = read_tab_ai_memory_index_from_path(path)?
+    if limit == 0 {
+        outcome.reason = TabAiMemoryResolutionReason::ZeroLimit;
+        log_tab_ai_memory_resolution(&outcome);
+        return Ok(TabAiMemoryResolution {
+            suggestions: Vec::new(),
+            outcome,
+        });
+    }
+
+    if !path.exists() {
+        outcome.reason = TabAiMemoryResolutionReason::IndexMissing;
+        log_tab_ai_memory_resolution(&outcome);
+        return Ok(TabAiMemoryResolution {
+            suggestions: Vec::new(),
+            outcome,
+        });
+    }
+
+    // --- Read and filter candidates ---
+
+    let bundle_id_norm =
+        normalize_tab_ai_match_text(bundle_id_clean.as_deref().unwrap_or_default());
+
+    let bundle_entries: Vec<TabAiMemoryEntry> = read_tab_ai_memory_index_from_path(path)?
         .into_iter()
         .filter(|entry| {
             entry
@@ -650,8 +780,25 @@ pub fn resolve_tab_ai_memory_suggestions_from_path(
                 .map(|value| normalize_tab_ai_match_text(value) == bundle_id_norm)
                 .unwrap_or(false)
         })
+        .collect();
+
+    outcome.candidate_count = bundle_entries.len();
+
+    if bundle_entries.is_empty() {
+        outcome.reason = TabAiMemoryResolutionReason::NoCandidatesForBundle;
+        log_tab_ai_memory_resolution(&outcome);
+        return Ok(TabAiMemoryResolution {
+            suggestions: Vec::new(),
+            outcome,
+        });
+    }
+
+    // --- Score and rank ---
+
+    let mut matches: Vec<TabAiMemorySuggestion> = bundle_entries
+        .into_iter()
         .filter_map(|entry| {
-            let score = score_tab_ai_memory_candidate(query, &entry);
+            let score = score_tab_ai_memory_candidate(&query, &entry);
             if score < TAB_AI_MEMORY_SUGGESTION_MIN_SCORE {
                 return None;
             }
@@ -675,16 +822,52 @@ pub fn resolve_tab_ai_memory_suggestions_from_path(
             .then_with(|| left.slug.cmp(&right.slug))
     });
 
+    if matches.is_empty() {
+        outcome.reason = TabAiMemoryResolutionReason::BelowThreshold;
+        log_tab_ai_memory_resolution(&outcome);
+        return Ok(TabAiMemoryResolution {
+            suggestions: Vec::new(),
+            outcome,
+        });
+    }
+
     matches.truncate(limit);
 
-    tracing::info!(
-        event = "tab_ai_memory_suggestions_resolved",
-        query = %query,
-        bundle_id = %bundle_id,
-        match_count = matches.len(),
-    );
+    outcome.reason = TabAiMemoryResolutionReason::Matched;
+    outcome.match_count = matches.len();
+    outcome.top_score = matches.first().map(|item| item.score);
+    outcome.matched_slugs = matches.iter().map(|item| item.slug.clone()).collect();
 
-    Ok(matches)
+    log_tab_ai_memory_resolution(&outcome);
+
+    Ok(TabAiMemoryResolution {
+        suggestions: matches,
+        outcome,
+    })
+}
+
+/// Back-compat wrapper: existing callers can keep asking for just the suggestions.
+pub fn resolve_tab_ai_memory_suggestions(
+    raw_query: &str,
+    bundle_id: Option<&str>,
+    limit: usize,
+) -> Result<Vec<TabAiMemorySuggestion>, String> {
+    Ok(resolve_tab_ai_memory_suggestions_with_outcome(raw_query, bundle_id, limit)?.suggestions)
+}
+
+/// Back-compat wrapper against an explicit path.
+pub fn resolve_tab_ai_memory_suggestions_from_path(
+    raw_query: &str,
+    bundle_id: Option<&str>,
+    limit: usize,
+    path: &std::path::Path,
+) -> Result<Vec<TabAiMemorySuggestion>, String> {
+    Ok(
+        resolve_tab_ai_memory_suggestions_with_outcome_from_path(
+            raw_query, bundle_id, limit, path,
+        )?
+        .suggestions,
+    )
 }
 
 #[cfg(test)]
@@ -1242,8 +1425,7 @@ mod tab_ai_memory_suggestion_tests {
             "force-quit-current-app",
             "2026-03-28T00:00:00Z",
         )];
-        std::fs::write(&path, serde_json::to_string_pretty(&entries).expect("ser"))
-            .expect("write");
+        std::fs::write(&path, serde_json::to_string_pretty(&entries).expect("ser")).expect("write");
 
         let results = resolve_tab_ai_memory_suggestions_from_path(
             "force quit app",
@@ -1277,8 +1459,7 @@ mod tab_ai_memory_suggestion_tests {
                 "2026-03-28T00:00:01Z",
             ),
         ];
-        std::fs::write(&path, serde_json::to_string_pretty(&entries).expect("ser"))
-            .expect("write");
+        std::fs::write(&path, serde_json::to_string_pretty(&entries).expect("ser")).expect("write");
 
         let results = resolve_tab_ai_memory_suggestions_from_path(
             "copy url",
@@ -1311,8 +1492,7 @@ mod tab_ai_memory_suggestion_tests {
                 "2026-03-28T00:00:01Z",
             ),
         ];
-        std::fs::write(&path, serde_json::to_string_pretty(&entries).expect("ser"))
-            .expect("write");
+        std::fs::write(&path, serde_json::to_string_pretty(&entries).expect("ser")).expect("write");
 
         let results = resolve_tab_ai_memory_suggestions_from_path(
             "force quit app",
@@ -1325,5 +1505,222 @@ mod tab_ai_memory_suggestion_tests {
         assert_eq!(results.len(), 2);
         assert_eq!(results[0].slug, "exact-match");
         assert!(results[0].score >= results[1].score);
+    }
+}
+
+#[cfg(test)]
+mod tab_ai_memory_resolution_tests {
+    use super::*;
+
+    #[test]
+    fn tab_ai_memory_resolution_reports_missing_bundle_id() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("tab-ai-memory.json");
+
+        let resolution = resolve_tab_ai_memory_suggestions_with_outcome_from_path(
+            "force quit slack",
+            None,
+            3,
+            &path,
+        )
+        .expect("resolve");
+
+        assert!(resolution.suggestions.is_empty());
+        assert_eq!(
+            resolution.outcome.reason,
+            TabAiMemoryResolutionReason::MissingBundleId
+        );
+        assert_eq!(resolution.outcome.candidate_count, 0);
+        assert_eq!(resolution.outcome.match_count, 0);
+        assert!(resolution.outcome.top_score.is_none());
+        assert!(resolution.outcome.matched_slugs.is_empty());
+    }
+
+    #[test]
+    fn tab_ai_memory_resolution_reports_empty_query() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("tab-ai-memory.json");
+
+        let resolution = resolve_tab_ai_memory_suggestions_with_outcome_from_path(
+            "   ",
+            Some("com.tinyspeck.slackmacgap"),
+            3,
+            &path,
+        )
+        .expect("resolve");
+
+        assert!(resolution.suggestions.is_empty());
+        assert_eq!(
+            resolution.outcome.reason,
+            TabAiMemoryResolutionReason::EmptyQuery
+        );
+    }
+
+    #[test]
+    fn tab_ai_memory_resolution_reports_zero_limit() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("tab-ai-memory.json");
+
+        let resolution = resolve_tab_ai_memory_suggestions_with_outcome_from_path(
+            "force quit",
+            Some("com.tinyspeck.slackmacgap"),
+            0,
+            &path,
+        )
+        .expect("resolve");
+
+        assert!(resolution.suggestions.is_empty());
+        assert_eq!(
+            resolution.outcome.reason,
+            TabAiMemoryResolutionReason::ZeroLimit
+        );
+    }
+
+    #[test]
+    fn tab_ai_memory_resolution_reports_index_missing() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("missing.json");
+
+        let resolution = resolve_tab_ai_memory_suggestions_with_outcome_from_path(
+            "force quit slack",
+            Some("com.tinyspeck.slackmacgap"),
+            3,
+            &path,
+        )
+        .expect("resolve");
+
+        assert!(resolution.suggestions.is_empty());
+        assert_eq!(
+            resolution.outcome.reason,
+            TabAiMemoryResolutionReason::IndexMissing
+        );
+        assert!(resolution.outcome.index_path.contains("missing.json"));
+    }
+
+    #[test]
+    fn tab_ai_memory_resolution_reports_no_candidates_for_bundle() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("tab-ai-memory.json");
+        let entries = vec![TabAiMemoryEntry {
+            schema_version: TAB_AI_MEMORY_ENTRY_SCHEMA_VERSION,
+            intent: "force quit".to_string(),
+            generated_source: "import \"@scriptkit/sdk\";\n".to_string(),
+            slug: "force-quit".to_string(),
+            prompt_type: "ScriptList".to_string(),
+            bundle_id: Some("com.apple.Safari".to_string()),
+            written_at: "2026-03-28T00:00:00Z".to_string(),
+        }];
+        std::fs::write(&path, serde_json::to_string_pretty(&entries).expect("ser")).expect("write");
+
+        let resolution = resolve_tab_ai_memory_suggestions_with_outcome_from_path(
+            "force quit",
+            Some("com.tinyspeck.slackmacgap"),
+            3,
+            &path,
+        )
+        .expect("resolve");
+
+        assert!(resolution.suggestions.is_empty());
+        assert_eq!(
+            resolution.outcome.reason,
+            TabAiMemoryResolutionReason::NoCandidatesForBundle
+        );
+        assert_eq!(resolution.outcome.candidate_count, 0);
+    }
+
+    #[test]
+    fn tab_ai_memory_resolution_prefers_recent_high_score_matches() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("tab-ai-memory.json");
+
+        // Both intents share enough tokens with the query "force quit app"
+        // to score above the 0.35 threshold.
+        let older = TabAiExecutionRecord::from_parts(
+            "force quit current app".to_string(),
+            "import \"@scriptkit/sdk\";\nawait notify(\"old\");\n".to_string(),
+            "/tmp/old.ts".to_string(),
+            "force-quit-old".to_string(),
+            "ScriptList".to_string(),
+            Some("com.tinyspeck.slackmacgap".to_string()),
+            "model-a".to_string(),
+            "provider-a".to_string(),
+            0,
+            "2026-03-28T00:00:00Z".to_string(),
+        );
+        let newer = TabAiExecutionRecord::from_parts(
+            "force quit app".to_string(),
+            "import \"@scriptkit/sdk\";\nawait notify(\"new\");\n".to_string(),
+            "/tmp/new.ts".to_string(),
+            "force-quit-new".to_string(),
+            "ScriptList".to_string(),
+            Some("com.tinyspeck.slackmacgap".to_string()),
+            "model-a".to_string(),
+            "provider-a".to_string(),
+            0,
+            "2026-03-28T01:00:00Z".to_string(),
+        );
+
+        write_tab_ai_memory_entry_to_path(&older, &path).expect("write older");
+        write_tab_ai_memory_entry_to_path(&newer, &path).expect("write newer");
+
+        let resolution = resolve_tab_ai_memory_suggestions_with_outcome_from_path(
+            "force quit app",
+            Some("com.tinyspeck.slackmacgap"),
+            3,
+            &path,
+        )
+        .expect("resolve");
+
+        assert_eq!(
+            resolution.outcome.reason,
+            TabAiMemoryResolutionReason::Matched
+        );
+        assert_eq!(resolution.outcome.match_count, 2);
+        assert_eq!(resolution.outcome.top_score, Some(1.0));
+        // Exact match "force quit app" scores 1.0, should be first
+        assert_eq!(
+            resolution.suggestions.first().map(|s| s.slug.as_str()),
+            Some("force-quit-new")
+        );
+        assert_eq!(resolution.outcome.candidate_count, 2);
+        assert!(!resolution.outcome.matched_slugs.is_empty());
+    }
+
+    #[test]
+    fn tab_ai_memory_write_dedupes_same_intent_and_bundle() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("tab-ai-memory.json");
+
+        let first = TabAiExecutionRecord::from_parts(
+            "copy url".to_string(),
+            "import \"@scriptkit/sdk\";\nawait notify(\"a\");\n".to_string(),
+            "/tmp/one.ts".to_string(),
+            "copy-url-one".to_string(),
+            "ScriptList".to_string(),
+            Some("com.google.Chrome".to_string()),
+            "model-a".to_string(),
+            "provider-a".to_string(),
+            0,
+            "2026-03-28T00:00:00Z".to_string(),
+        );
+        let second = TabAiExecutionRecord::from_parts(
+            "copy url".to_string(),
+            "import \"@scriptkit/sdk\";\nawait notify(\"b\");\n".to_string(),
+            "/tmp/two.ts".to_string(),
+            "copy-url-two".to_string(),
+            "ScriptList".to_string(),
+            Some("com.google.Chrome".to_string()),
+            "model-a".to_string(),
+            "provider-a".to_string(),
+            0,
+            "2026-03-28T01:00:00Z".to_string(),
+        );
+
+        write_tab_ai_memory_entry_to_path(&first, &path).expect("write first");
+        write_tab_ai_memory_entry_to_path(&second, &path).expect("write second");
+
+        let entries = read_tab_ai_memory_index_from_path(&path).expect("read");
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].slug, "copy-url-two");
     }
 }
