@@ -18,7 +18,7 @@ fn builtin_needs_main_window_for_command_id(identifier: &str) -> bool {
 }
 
 #[derive(Clone, Copy, Debug)]
-enum InteractiveTempFileMode {
+pub(crate) enum InteractiveTempFileMode {
     Executable,
     InterpreterFed,
 }
@@ -57,7 +57,7 @@ fn apply_interactive_temp_permissions(
     })
 }
 
-fn create_interactive_temp_script(
+pub(crate) fn create_interactive_temp_script(
     content: &str,
     suffix: &str,
     mode: InteractiveTempFileMode,

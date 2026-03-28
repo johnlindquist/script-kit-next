@@ -569,4 +569,44 @@ mod tests {
         // User requirement: store at least 100 recent entries
         assert_eq!(MAX_ENTRIES, 100);
     }
+
+    #[test]
+    fn test_recent_entries_bounded() {
+        let (mut history, path) = create_test_history();
+        history.add_entry("a");
+        history.add_entry("b");
+        history.add_entry("c");
+        history.add_entry("d");
+        history.add_entry("e");
+        history.add_entry("f");
+
+        // Most recent first, bounded to 3
+        let recent = history.recent_entries(3);
+        assert_eq!(recent, vec!["f", "e", "d"]);
+
+        // Limit larger than entries returns all
+        let all = history.recent_entries(100);
+        assert_eq!(all.len(), 6);
+
+        // Zero limit returns empty
+        let none = history.recent_entries(0);
+        assert!(none.is_empty());
+
+        cleanup_temp_file(&path);
+    }
+
+    #[test]
+    fn test_recent_entries_does_not_modify_state() {
+        let (mut history, path) = create_test_history();
+        history.add_entry("first");
+        history.add_entry("second");
+        history.navigate_up(); // Start navigating
+
+        let _recent = history.recent_entries(5);
+
+        // Navigation state should be unchanged
+        assert_eq!(history.current_index(), Some(0));
+
+        cleanup_temp_file(&path);
+    }
 }

@@ -54,7 +54,9 @@ pub(crate) mod window;
 
 // Re-export commonly used types
 pub use self::config::{DetectedKeys, ModelInfo, ProviderConfig};
-pub use self::tab_context::{TabAiContextBlob, TabAiUiSnapshot, TAB_AI_CONTEXT_SCHEMA_VERSION};
+pub use self::tab_context::{
+    build_tab_ai_user_prompt, TabAiContextBlob, TabAiUiSnapshot, TAB_AI_CONTEXT_SCHEMA_VERSION,
+};
 pub use self::current_app_automation_memory::{
     current_app_automation_memory_index_path, read_current_app_automation_memory_index,
     resolve_current_app_automation_from_memory, upsert_current_app_automation_memory_from_receipt,
