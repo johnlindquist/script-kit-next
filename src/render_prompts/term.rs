@@ -469,6 +469,27 @@ mod term_prompt_render_tests {
     }
 
     #[test]
+    fn test_term_chrome_audit_uses_editor_layout_mode() {
+        const TERM_RENDER_SOURCE: &str = include_str!("term.rs");
+        assert!(
+            TERM_RENDER_SOURCE.contains("PromptChromeAudit::editor("),
+            "term prompt should emit an editor-type chrome audit, not an exception"
+        );
+        assert!(
+            !TERM_RENDER_SOURCE.contains("PromptChromeAudit::exception("),
+            "term prompt should no longer use exception chrome audit"
+        );
+        assert!(
+            TERM_RENDER_SOURCE.contains("universal_prompt_hints()"),
+            "term prompt should use universal three-key footer hints"
+        );
+        assert!(
+            TERM_RENDER_SOURCE.contains("render_simple_hint_strip("),
+            "term prompt should render the canonical hint strip footer"
+        );
+    }
+
+    #[test]
     fn test_term_prompt_actions_toggle_shortcut_matches_cmd_shift_k() {
         assert!(is_term_prompt_actions_toggle_shortcut(true, true, "k"));
         assert!(is_term_prompt_actions_toggle_shortcut(true, true, "K"));

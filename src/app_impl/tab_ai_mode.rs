@@ -332,34 +332,36 @@ impl ScriptListApp {
         let intent_text: SharedString = state.intent.clone().into();
         let is_running = state.running;
         let error_msg = state.error.clone();
-        let memory_hint = state.memory_hint.clone();
 
         // Placeholder text depends on running state
         let placeholder: SharedString = if is_running {
-            "Generating script...".into()
+            "Generating...".into()
         } else {
             "What do you want to do?".into()
         };
 
-        // Gold accent bar color
+        // Whisper chrome colors — ghost-opacity surfaces, content at full weight
         let accent = gpui::rgb(theme.colors.accent.selected);
-        // Colors derived from theme hex values
-        let bg_scrim = gpui::rgba(
-            crate::ui_foundation::hex_to_rgba_with_opacity(theme.colors.background.main, 0.85),
-        );
-        let card_bg = gpui::rgba(
-            crate::ui_foundation::hex_to_rgba_with_opacity(theme.colors.background.main, 0.6),
-        );
+        let bg_scrim = gpui::rgba(crate::ui_foundation::hex_to_rgba_with_opacity(
+            theme.colors.background.main,
+            crate::theme::opacity::OPACITY_NEAR_FULL,
+        ));
         let text_primary = gpui::rgb(theme.colors.text.primary);
-        let text_hint = gpui::rgba(
-            crate::ui_foundation::hex_to_rgba_with_opacity(theme.colors.text.primary, 0.4),
-        );
-        let text_muted = gpui::rgba(
-            crate::ui_foundation::hex_to_rgba_with_opacity(theme.colors.text.primary, 0.5),
-        );
+        let text_hint = gpui::rgba(crate::ui_foundation::hex_to_rgba_with_opacity(
+            theme.colors.text.primary,
+            crate::theme::opacity::OPACITY_DISABLED,
+        ));
         let error_color = gpui::rgb(theme.colors.ui.error);
+        let divider_rgba = gpui::rgba(crate::ui_foundation::hex_to_rgba_with_opacity(
+            theme.colors.text.primary,
+            0.06,
+        ));
 
-        // Build the overlay element
+        // Hint strip constants (match main window footer: 14px horizontal, 8px vertical)
+        let hint_px: f32 = 14.0;
+        let hint_py: f32 = 8.0;
+
+        // Build the overlay — full-width inline panel, not a floating card
         let overlay = div()
             .id("tab-ai-overlay")
             .absolute()
@@ -367,100 +369,72 @@ impl ScriptListApp {
             .track_focus(&self.focus_handle)
             .flex()
             .flex_col()
-            .items_center()
-            .justify_center()
             .bg(bg_scrim)
+            // Input row — bare input, no border, matches main filter style
             .child(
                 div()
-                    .id("tab-ai-card")
-                    .w(px(420.))
+                    .w_full()
+                    .px(px(hint_px))
+                    .py(px(10.))
                     .flex()
-                    .flex_col()
-                    .gap_1()
-                    // Gold top accent bar
-                    .child(div().w_full().h(px(2.)).bg(accent))
-                    // Input row
+                    .flex_row()
+                    .items_center()
+                    .gap_2()
+                    // Intent text or placeholder — bare, no box
                     .child(
                         div()
-                            .w_full()
-                            .px(px(12.))
-                            .py(px(8.))
-                            .bg(card_bg)
-                            .rounded_b(px(8.))
-                            .child(
-                                div()
-                                    .w_full()
-                                    .flex()
-                                    .flex_row()
-                                    .items_center()
-                                    .gap_2()
-                                    // Tab glyph
-                                    .child(div().text_sm().text_color(accent).child("⇥"))
-                                    // Intent text or placeholder
-                                    .child(
-                                        div()
-                                            .flex_1()
-                                            .text_sm()
-                                            .font_family(crate::list_item::FONT_MONO)
-                                            .when(intent_text.is_empty(), |d| {
-                                                d.text_color(text_hint).child(placeholder)
-                                            })
-                                            .when(!intent_text.is_empty(), |d| {
-                                                d.text_color(text_primary)
-                                                    .child(intent_text.clone())
-                                            }),
-                                    )
-                                    // Spinner when running
-                                    .when(is_running, |d| {
-                                        d.child(
-                                            div().text_sm().text_color(text_muted).child("⏳"),
-                                        )
-                                    }),
-                            ),
+                            .flex_1()
+                            .text_size(gpui::rems(1.125))
+                            .font_family(crate::list_item::FONT_MONO)
+                            .when(intent_text.is_empty(), |d| {
+                                d.text_color(text_hint).child(placeholder)
+                            })
+                            .when(!intent_text.is_empty(), |d| {
+                                d.text_color(text_primary)
+                                    .child(intent_text.clone())
+                            }),
                     )
-                    // Prior automation hint row
-                    .when_some(memory_hint, |d, hint| {
-                        d.child(
-                            div()
-                                .w_full()
-                                .px(px(12.))
-                                .py(px(4.))
-                                .text_xs()
-                                .text_color(text_muted)
-                                .child(format!(
-                                    "Similar prior automation: {} \u{2014} {} ({:.2})",
-                                    hint.slug, hint.effective_query, hint.score
-                                )),
-                        )
+                    // Gold cursor indicator when empty
+                    .when(intent_text.is_empty() && !is_running, |d| {
+                        d.child(div().w(px(2.)).h(px(18.)).bg(accent))
                     })
-                    // Error message if present
-                    .when_some(error_msg, |d, msg| {
-                        d.child(
-                            div()
-                            .w_full()
-                            .px(px(12.))
-                            .py(px(4.))
-                            .text_xs()
-                            .text_color(error_color)
-                            .child(msg),
-                        )
-                    })
-                    // Hint strip
-                    .child(
-                        div()
-                            .w_full()
-                            .px(px(12.))
-                            .py(px(4.))
-                            .flex()
-                            .flex_row()
-                            .justify_between()
-                            .text_xs()
-                            .text_color(text_hint)
-                            .child("↵ Run")
-                            .child("Esc Cancel"),
-                    ),
+                    // Subtle spinner when running
+                    .when(is_running, |d| {
+                        d.child(div().text_sm().text_color(accent).child("\u{25CF}"))
+                    }),
             )
-            // Keyboard handling: capture keys for this overlay
+            // Hairline divider — ghost opacity
+            .child(div().w_full().h(px(1.)).bg(divider_rgba))
+            // Error message if present — below divider, minimal
+            .when_some(error_msg, |d, msg| {
+                d.child(
+                    div()
+                        .w_full()
+                        .px(px(hint_px))
+                        .py(px(4.))
+                        .text_xs()
+                        .text_color(error_color)
+                        .child(msg),
+                )
+            })
+            // Spacer pushes footer to bottom
+            .child(div().flex_1())
+            // Footer hint strip — matches main window three-key pattern
+            .child(
+                div()
+                    .w_full()
+                    .px(px(hint_px))
+                    .py(px(hint_py))
+                    .border_t(px(1.))
+                    .border_color(divider_rgba)
+                    .flex()
+                    .flex_row()
+                    .justify_end()
+                    .text_xs()
+                    .text_color(text_hint)
+                    .child("\u{21B5} Run  \u{00B7}  \u{2318}K Actions  \u{00B7}  Tab AI"),
+            )
+            // Keyboard handling
             .on_key_down(cx.listener(Self::handle_tab_ai_key_down));
 
         Some(overlay.into_any_element())
