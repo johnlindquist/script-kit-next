@@ -52,6 +52,16 @@ impl ScriptListApp {
         tracing::info!(
             target: "script_kit::tab_ai",
             event = "tab_ai_invocation_receipt",
+            prompt_type = %invocation_receipt.prompt_type,
+            input_status = %invocation_receipt.input_status,
+            focus_status = %invocation_receipt.focus_status,
+            elements_status = %invocation_receipt.elements_status,
+            has_input_text = invocation_receipt.has_input_text,
+            has_focus_target = invocation_receipt.has_focus_target,
+            element_count = invocation_receipt.element_count,
+            warning_count = invocation_receipt.warning_count,
+            rich = invocation_receipt.rich,
+            degradation_reasons = ?invocation_receipt.degradation_reasons,
             receipt_json = %serde_json::to_string(&invocation_receipt).unwrap_or_default(),
         );
 
@@ -1001,26 +1011,23 @@ impl ScriptListApp {
                                 );
                             }
                             Err(e) => {
-                                tracing::error!(
-                                    event = "tab_ai_temp_file_failed",
-                                    error = %e,
+                                set_tab_ai_error(
+                                    &mut this.tab_ai_state,
+                                    "temp_script_create_failed",
+                                    format!("Failed to create temp script: {e}"),
+                                    "check_temp_dir_permissions",
                                 );
-                                if let Some(state) = &mut this.tab_ai_state {
-                                    state.running = false;
-                                    state.error = Some(
-                                        format!("Failed to create temp script: {e}").into(),
-                                    );
-                                }
                                 cx.notify();
                             }
                         }
                     }
                     Err(e) => {
-                        tracing::error!(event = "tab_ai_execute_failed", error = %e);
-                        if let Some(state) = &mut this.tab_ai_state {
-                            state.running = false;
-                            state.error = Some(SharedString::from(e));
-                        }
+                        set_tab_ai_error(
+                            &mut this.tab_ai_state,
+                            "ai_execution_failed",
+                            e,
+                            "retry_with_clearer_intent_or_check_provider_logs",
+                        );
                         cx.notify();
                     }
                 });

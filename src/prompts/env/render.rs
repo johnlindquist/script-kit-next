@@ -265,25 +265,9 @@ impl Render for EnvPrompt {
                                 ),
                         )
                     }),
-            )
-            // Footer — minimal chrome hint strip with storage context
-            .child({
-                let primary_hint = if self.exists_in_keyring {
-                    "↵ Update"
-                } else {
-                    "↵ Save"
-                };
-                let hints = vec![
-                    gpui::SharedString::from(primary_hint),
-                    gpui::SharedString::from("Esc Cancel"),
-                ];
-                let leading = crate::components::render_hint_strip_leading_text(
-                    env_storage_hint_text(self.secret),
-                    text_primary,
-                );
-
-                crate::components::render_simple_hint_strip(hints, Some(leading))
-            });
+            );
+            // Footer is owned by the outer wrapper shell (render_prompts::other.rs)
+            // which provides the canonical three-key hint strip.
 
         FocusablePrompt::new(container)
             .key_context("env_prompt")
