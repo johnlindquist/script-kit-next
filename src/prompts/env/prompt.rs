@@ -85,6 +85,10 @@ impl EnvPrompt {
         env_prompt_correlation_id(&self.id, &self.key)
     }
 
+    pub fn input_text(&self) -> &str {
+        self.input.text()
+    }
+
     /// Returns true if the script provided contextual prompt or title text,
     /// indicating the UI should always be shown even if the value exists.
     pub fn has_prompt_or_title(&self) -> bool {
