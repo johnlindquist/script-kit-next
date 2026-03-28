@@ -1,5 +1,5 @@
 use crate::ui_foundation::{
-    is_key_down, is_key_enter, is_key_escape, is_key_space, is_key_up,
+    is_key_down, is_key_enter, is_key_escape, is_key_space, is_key_up, is_platform_modifier,
 };
 
 impl ScriptListApp {
@@ -104,7 +104,9 @@ impl ScriptListApp {
         let state = handle.0.borrow();
         let scroll_offset = crate::components::scrollbar::preferred_scroll_offset(
             state.base_handle.logical_scroll_top().0,
-            state.deferred_scroll_to_item.map(|deferred| deferred.item_index),
+            state
+                .deferred_scroll_to_item
+                .map(|deferred| deferred.item_index),
             state.last_item_size.is_some(),
             total_items,
         );

@@ -99,7 +99,7 @@ impl ScriptListApp {
                 }
 
                 let key = event.keystroke.key.as_str();
-                let has_cmd = event.keystroke.modifiers.platform;
+                let has_cmd = is_platform_modifier(&event.keystroke.modifiers);
 
                 // ESC: Clear filter first if present, otherwise go back/close
                 if is_key_escape(key) && !this.show_actions_popup {

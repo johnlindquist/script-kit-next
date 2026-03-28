@@ -53,7 +53,7 @@ impl ScriptListApp {
                 }
 
                 let key = event.keystroke.key.as_str();
-                let has_cmd = event.keystroke.modifiers.platform;
+                let has_cmd = is_platform_modifier(&event.keystroke.modifiers);
 
                 // ESC: Clear filter first if present, otherwise go back/close
                 if is_key_escape(key) && !this.show_actions_popup {
@@ -157,7 +157,6 @@ impl ScriptListApp {
         let text_muted = self.theme.colors.text.muted;
         let text_dimmed = self.theme.colors.text.dimmed;
 
-
         // Build virtualized list
         let list_element: AnyElement = if filtered_len == 0 {
             div()
@@ -192,7 +191,8 @@ impl ScriptListApp {
                         .map(|ix| {
                             if let Some((_, window_info)) = windows_for_closure.get(ix) {
                                 let is_selected = ix == selected;
-                                let is_hovered = hovered == Some(ix) && current_input_mode == InputMode::Mouse;
+                                let is_hovered =
+                                    hovered == Some(ix) && current_input_mode == InputMode::Mouse;
 
                                 // Format: "AppName: Window Title"
                                 let name = format!("{}: {}", window_info.app, window_info.title);
@@ -209,57 +209,64 @@ impl ScriptListApp {
                                 // Click handler: select on click, focus window on double-click
                                 let click_entity = click_entity_handle.clone();
                                 let win_id = window_info.id;
-                                let click_handler = move |event: &gpui::ClickEvent,
-                                                           _window: &mut Window,
-                                                           cx: &mut gpui::App| {
-                                    if let Some(app) = click_entity.upgrade() {
-                                        app.update(cx, |this, cx| {
-                                            if let AppView::WindowSwitcherView {
-                                                selected_index, ..
-                                            } = &mut this.current_view
-                                            {
-                                                *selected_index = ix;
-                                            }
-                                            cx.notify();
+                                let click_handler =
+                                    move |event: &gpui::ClickEvent,
+                                          _window: &mut Window,
+                                          cx: &mut gpui::App| {
+                                        if let Some(app) = click_entity.upgrade() {
+                                            app.update(cx, |this, cx| {
+                                                if let AppView::WindowSwitcherView {
+                                                    selected_index,
+                                                    ..
+                                                } = &mut this.current_view
+                                                {
+                                                    *selected_index = ix;
+                                                }
+                                                cx.notify();
 
-                                            // Double-click: focus window
-                                            if let gpui::ClickEvent::Mouse(mouse_event) = event {
-                                                if mouse_event.down.click_count == 2 {
-                                                    logging::log(
-                                                        "UI",
-                                                        &format!(
-                                                            "Double-click focusing window {}",
-                                                            win_id
-                                                        ),
-                                                    );
-                                                    if window_control::focus_window(win_id).is_ok()
-                                                    {
-                                                        this.hide_main_and_reset(cx);
+                                                // Double-click: focus window
+                                                if let gpui::ClickEvent::Mouse(mouse_event) = event
+                                                {
+                                                    if mouse_event.down.click_count == 2 {
+                                                        logging::log(
+                                                            "UI",
+                                                            &format!(
+                                                                "Double-click focusing window {}",
+                                                                win_id
+                                                            ),
+                                                        );
+                                                        if window_control::focus_window(win_id)
+                                                            .is_ok()
+                                                        {
+                                                            this.hide_main_and_reset(cx);
+                                                        }
                                                     }
                                                 }
-                                            }
-                                        });
-                                    }
-                                };
+                                            });
+                                        }
+                                    };
 
                                 // Hover handler for mouse tracking
                                 let hover_entity = hover_entity_handle.clone();
-                                let hover_handler = move |is_hovered: &bool, _window: &mut Window, cx: &mut gpui::App| {
-                                    if let Some(app) = hover_entity.upgrade() {
-                                        app.update(cx, |this, cx| {
-                                            if *is_hovered {
-                                                this.input_mode = InputMode::Mouse;
-                                                if this.hovered_index != Some(ix) {
-                                                    this.hovered_index = Some(ix);
+                                let hover_handler =
+                                    move |is_hovered: &bool,
+                                          _window: &mut Window,
+                                          cx: &mut gpui::App| {
+                                        if let Some(app) = hover_entity.upgrade() {
+                                            app.update(cx, |this, cx| {
+                                                if *is_hovered {
+                                                    this.input_mode = InputMode::Mouse;
+                                                    if this.hovered_index != Some(ix) {
+                                                        this.hovered_index = Some(ix);
+                                                        cx.notify();
+                                                    }
+                                                } else if this.hovered_index == Some(ix) {
+                                                    this.hovered_index = None;
                                                     cx.notify();
                                                 }
-                                            } else if this.hovered_index == Some(ix) {
-                                                this.hovered_index = None;
-                                                cx.notify();
-                                            }
-                                        });
-                                    }
-                                };
+                                            });
+                                        }
+                                    };
 
                                 div()
                                     .id(ix)
@@ -282,7 +289,9 @@ impl ScriptListApp {
                                             .description_opt(Some(description))
                                             .selected(is_selected)
                                             .hovered(is_hovered)
-                                            .with_hover_effect(current_input_mode == InputMode::Mouse)
+                                            .with_hover_effect(
+                                                current_input_mode == InputMode::Mouse,
+                                            )
                                             .with_accent_bar(true),
                                     )
                             } else {

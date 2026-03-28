@@ -37,7 +37,14 @@ fn editor_footer_config(
 #[inline]
 fn editor_reserved_shortcut_reason(key: &str, modifiers: &gpui::Modifiers) -> Option<&'static str> {
     // Keep native editor bindings in control of text editing, navigation, and submit.
-    if !modifiers.platform || modifiers.control || modifiers.alt {
+    // Only reserve shortcuts when the platform modifier (Cmd on macOS, Ctrl on Windows)
+    // is pressed alone — no Alt, and no extra modifiers beyond the platform key.
+    // On macOS: bail if Cmd is not pressed, or if Ctrl or Alt are also held.
+    // On Windows: bail if Ctrl is not pressed, or if Alt is also held.
+    if !ui_foundation::is_platform_modifier(modifiers) || modifiers.alt {
+        return None;
+    }
+    if cfg!(target_os = "macos") && modifiers.control {
         return None;
     }
 
@@ -114,7 +121,7 @@ impl ScriptListApp {
                     },
                     |this, event, window, cx| {
                         let key_str = event.keystroke.key.to_lowercase();
-                        let has_cmd = event.keystroke.modifiers.platform;
+                        let has_cmd = ui_foundation::is_platform_modifier(&event.keystroke.modifiers);
 
                         // For ScratchPadView (built-in utility): ESC returns to main menu or closes window
                         // This is different from EditorPrompt (SDK prompt) which doesn't respond to ESC
@@ -135,7 +142,7 @@ impl ScriptListApp {
                         false
                     },
                     |key, _key_char, modifiers| {
-                        modifiers.platform && ui_foundation::is_key_k(key) && has_actions_for_handler
+                        ui_foundation::is_platform_modifier(modifiers) && ui_foundation::is_key_k(key) && has_actions_for_handler
                     },
                     |this, window, cx| {
                         let correlation_id = logging::current_correlation_id();
@@ -306,8 +313,7 @@ impl ScriptListApp {
                     ActionsBackdropConfig {
                         backdrop_id: "editor-actions-backdrop",
                         close_host: ActionsDialogHost::EditorPrompt,
-                        backdrop_log_message:
-                            "Editor actions backdrop clicked - dismissing dialog",
+                        backdrop_log_message: "Editor actions backdrop clicked - dismissing dialog",
                         show_pointer_cursor: true,
                     },
                     cx,

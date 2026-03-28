@@ -14,7 +14,7 @@ impl ScriptListApp {
         }
 
         let key_str = event.keystroke.key.as_str();
-        let has_cmd = event.keystroke.modifiers.platform;
+        let has_cmd = crate::ui_foundation::is_platform_modifier(&event.keystroke.modifiers);
         let has_shift = event.keystroke.modifiers.shift;
 
         // Cmd+W always closes window
@@ -98,7 +98,12 @@ impl ScriptListApp {
     /// Position: Bottom-center (85% down screen)
     /// Duration: 2000ms default, configurable
     /// Shape: Pill (40px tall, variable width)
-    pub(crate) fn show_hud(&mut self, text: String, duration_ms: Option<u64>, cx: &mut Context<Self>) {
+    pub(crate) fn show_hud(
+        &mut self,
+        text: String,
+        duration_ms: Option<u64>,
+        cx: &mut Context<Self>,
+    ) {
         // Delegate to the HUD manager which creates a separate floating window
         // This ensures the HUD is visible even when the main app window is hidden
         hud_manager::show_hud(text, duration_ms, cx);

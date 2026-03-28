@@ -86,7 +86,7 @@ impl ScriptListApp {
 
                 let key = event.keystroke.key.as_str();
                 let key_char = event.keystroke.key_char.as_deref();
-                let has_cmd = event.keystroke.modifiers.platform;
+                let has_cmd = is_platform_modifier(&event.keystroke.modifiers);
                 let modifiers = &event.keystroke.modifiers;
 
                 // Route keys to actions dialog first if it's open

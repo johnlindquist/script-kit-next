@@ -49,7 +49,7 @@ impl ScriptListApp {
                 }
 
                 let key = event.keystroke.key.as_str();
-                let has_cmd = event.keystroke.modifiers.platform;
+                let has_cmd = is_platform_modifier(&event.keystroke.modifiers);
 
                 // ESC: Clear filter first if present, otherwise go back/close
                 if is_key_escape(key) && !this.show_actions_popup {
@@ -153,7 +153,6 @@ impl ScriptListApp {
         let text_primary = self.theme.colors.text.primary;
         let text_muted = self.theme.colors.text.muted;
 
-
         // Build virtualized list
         let list_element: AnyElement = if filtered_len == 0 {
             div()
@@ -188,7 +187,8 @@ impl ScriptListApp {
                         .map(|ix| {
                             if let Some((_, app)) = apps_for_closure.get(ix) {
                                 let is_selected = ix == selected;
-                                let is_hovered = hovered == Some(ix) && current_input_mode == InputMode::Mouse;
+                                let is_hovered =
+                                    hovered == Some(ix) && current_input_mode == InputMode::Mouse;
 
                                 // Format app path for description
                                 let path_str = app.path.to_string_lossy();
@@ -207,73 +207,79 @@ impl ScriptListApp {
                                 // Click handler: select on click, launch on double-click
                                 let click_entity = click_entity_handle.clone();
                                 let app_info = app.clone();
-                                let click_handler = move |event: &gpui::ClickEvent,
-                                                           _window: &mut Window,
-                                                           cx: &mut gpui::App| {
-                                    if let Some(app_entity) = click_entity.upgrade() {
-                                        let app_info = app_info.clone();
-                                        app_entity.update(cx, |this, cx| {
-                                            if let AppView::AppLauncherView {
-                                                selected_index, ..
-                                            } = &mut this.current_view
-                                            {
-                                                *selected_index = ix;
-                                            }
-                                            cx.notify();
+                                let click_handler =
+                                    move |event: &gpui::ClickEvent,
+                                          _window: &mut Window,
+                                          cx: &mut gpui::App| {
+                                        if let Some(app_entity) = click_entity.upgrade() {
+                                            let app_info = app_info.clone();
+                                            app_entity.update(cx, |this, cx| {
+                                                if let AppView::AppLauncherView {
+                                                    selected_index,
+                                                    ..
+                                                } = &mut this.current_view
+                                                {
+                                                    *selected_index = ix;
+                                                }
+                                                cx.notify();
 
-                                            // Double-click: launch app
-                                            if let gpui::ClickEvent::Mouse(mouse_event) = event {
-                                                if mouse_event.down.click_count == 2 {
-                                                    logging::log(
-                                                        "UI",
-                                                        &format!(
-                                                            "Double-click launching app: {}",
-                                                            app_info.name
-                                                        ),
-                                                    );
-                                                    if app_launcher::launch_application(&app_info)
+                                                // Double-click: launch app
+                                                if let gpui::ClickEvent::Mouse(mouse_event) = event
+                                                {
+                                                    if mouse_event.down.click_count == 2 {
+                                                        logging::log(
+                                                            "UI",
+                                                            &format!(
+                                                                "Double-click launching app: {}",
+                                                                app_info.name
+                                                            ),
+                                                        );
+                                                        if app_launcher::launch_application(
+                                                            &app_info,
+                                                        )
                                                         .is_ok()
-                                                    {
-                                                        this.hide_main_and_reset(cx);
+                                                        {
+                                                            this.hide_main_and_reset(cx);
+                                                        }
                                                     }
                                                 }
-                                            }
-                                        });
-                                    }
-                                };
+                                            });
+                                        }
+                                    };
 
                                 // Hover handler for mouse tracking
                                 let hover_entity = hover_entity_handle.clone();
-                                let hover_handler = move |is_hovered: &bool, _window: &mut Window, cx: &mut gpui::App| {
-                                    if let Some(app) = hover_entity.upgrade() {
-                                        app.update(cx, |this, cx| {
-                                            if *is_hovered {
-                                                this.input_mode = InputMode::Mouse;
-                                                if this.hovered_index != Some(ix) {
-                                                    this.hovered_index = Some(ix);
+                                let hover_handler =
+                                    move |is_hovered: &bool,
+                                          _window: &mut Window,
+                                          cx: &mut gpui::App| {
+                                        if let Some(app) = hover_entity.upgrade() {
+                                            app.update(cx, |this, cx| {
+                                                if *is_hovered {
+                                                    this.input_mode = InputMode::Mouse;
+                                                    if this.hovered_index != Some(ix) {
+                                                        this.hovered_index = Some(ix);
+                                                        cx.notify();
+                                                    }
+                                                } else if this.hovered_index == Some(ix) {
+                                                    this.hovered_index = None;
                                                     cx.notify();
                                                 }
-                                            } else if this.hovered_index == Some(ix) {
-                                                this.hovered_index = None;
-                                                cx.notify();
-                                            }
-                                        });
-                                    }
-                                };
+                                            });
+                                        }
+                                    };
 
                                 div()
                                     .id(ix)
                                     .cursor_pointer()
                                     .tooltip(|window, cx| {
-                                        gpui_component::tooltip::Tooltip::new(
-                                            "Launch selected app",
-                                        )
-                                        .key_binding(
-                                            gpui::Keystroke::parse("enter")
-                                                .ok()
-                                                .map(gpui_component::kbd::Kbd::new),
-                                        )
-                                        .build(window, cx)
+                                        gpui_component::tooltip::Tooltip::new("Launch selected app")
+                                            .key_binding(
+                                                gpui::Keystroke::parse("enter")
+                                                    .ok()
+                                                    .map(gpui_component::kbd::Kbd::new),
+                                            )
+                                            .build(window, cx)
                                     })
                                     .on_click(click_handler)
                                     .on_hover(hover_handler)
@@ -283,7 +289,9 @@ impl ScriptListApp {
                                             .description_opt(description)
                                             .selected(is_selected)
                                             .hovered(is_hovered)
-                                            .with_hover_effect(current_input_mode == InputMode::Mouse)
+                                            .with_hover_effect(
+                                                current_input_mode == InputMode::Mouse,
+                                            )
                                             .with_accent_bar(true),
                                     )
                             } else {

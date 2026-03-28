@@ -119,7 +119,11 @@ pub(crate) fn handle_prompt_key_preamble_default(
         cx,
         cfg,
         |_, _, _, _| false,
-        |key, _, modifiers| modifiers.platform && ui_foundation::is_key_k(key) && has_actions,
+        |key, _, modifiers| {
+            ui_foundation::is_platform_modifier(modifiers)
+                && ui_foundation::is_key_k(key)
+                && has_actions
+        },
         |app, window, cx| {
             logging::log(
                 "KEY",

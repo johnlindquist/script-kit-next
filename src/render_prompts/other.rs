@@ -35,7 +35,7 @@ impl ScriptListApp {
         self.hide_mouse_cursor(cx);
 
         let key = event.keystroke.key.as_str();
-        let has_cmd = event.keystroke.modifiers.platform;
+        let has_cmd = ui_foundation::is_platform_modifier(&event.keystroke.modifiers);
 
         if has_cmd && crate::ui_foundation::is_key_k(key) && self.sdk_actions.is_some() {
             self.toggle_arg_actions(cx, window);
@@ -59,7 +59,7 @@ impl ScriptListApp {
 
         let key = event.keystroke.key.as_str();
         let key_char = event.keystroke.key_char.as_deref();
-        let has_cmd = event.keystroke.modifiers.platform;
+        let has_cmd = ui_foundation::is_platform_modifier(&event.keystroke.modifiers);
         let modifiers = &event.keystroke.modifiers;
 
         // Check for Cmd+K to toggle actions popup
@@ -345,7 +345,8 @@ impl ScriptListApp {
         let design_spacing = render_context.design_spacing;
         let shell_radius = render_context.design_visual.radius_lg;
         let vibrancy_bg = get_vibrancy_background(render_context.theme);
-        let footer_colors = prompt_footer_colors_for_prompt(&design_colors, !render_context.theme.is_dark_mode());
+        let footer_colors =
+            prompt_footer_colors_for_prompt(&design_colors, !render_context.theme.is_dark_mode());
         let footer_config = prompt_footer_config_with_status(
             "Done",
             false,
@@ -402,14 +403,15 @@ impl ScriptListApp {
                     .child(panel),
             )
             .child(
-                PromptFooter::new(footer_config, footer_colors)
-                    .on_primary_click(Box::new(move |_, window, cx| {
+                PromptFooter::new(footer_config, footer_colors).on_primary_click(Box::new(
+                    move |_, window, cx| {
                         if let Some(app) = footer_entity.upgrade() {
                             app.update(cx, |this, cx| {
                                 this.go_back_or_close(window, cx);
                             });
                         }
-                    })),
+                    },
+                )),
             )
             .into_any_element()
     }

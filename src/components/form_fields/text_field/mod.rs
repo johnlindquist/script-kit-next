@@ -1,6 +1,7 @@
 use gpui::*;
 
 use crate::protocol::Field;
+use crate::ui_foundation::is_platform_modifier;
 
 use super::helpers::{byte_idx_from_char_idx, char_len, drain_char_range, slice_by_char_range};
 use super::{form_field_type_allows_candidate_value, FormFieldColors, FormFieldState};
@@ -329,7 +330,7 @@ impl FormTextField {
     /// Unified key handler with selection and clipboard support
     pub fn handle_key_event(&mut self, event: &KeyDownEvent, cx: &mut Context<Self>) {
         let key = event.keystroke.key.as_str();
-        let cmd = event.keystroke.modifiers.platform;
+        let cmd = is_platform_modifier(&event.keystroke.modifiers);
         let shift = event.keystroke.modifiers.shift;
 
         // Select all

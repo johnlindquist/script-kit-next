@@ -277,7 +277,7 @@ impl ScriptListApp {
                   cx: &mut Context<Self>| {
                 this.hide_mouse_cursor(cx);
                 let key = event.keystroke.key.as_str();
-                let has_cmd = event.keystroke.modifiers.platform;
+                let has_cmd = is_platform_modifier(&event.keystroke.modifiers);
 
                 // Escape: clear filter first if present, otherwise restore original and close
                 if is_key_escape(key) && !this.show_actions_popup {

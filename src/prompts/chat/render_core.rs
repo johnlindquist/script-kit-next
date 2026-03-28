@@ -361,7 +361,7 @@ impl Render for ChatPrompt {
             // Note: Actions menu keyboard navigation is handled by ActionsDialog window
             // We just need to handle ⌘K to open it via callback
 
-            match resolve_chat_input_key_action(key, modifiers.platform, modifiers.shift) {
+            match resolve_chat_input_key_action(key, crate::ui_foundation::is_platform_modifier(modifiers), modifiers.shift) {
                 ChatInputKeyAction::Escape => {
                     // Escape - stop streaming if active, otherwise close chat
                     if this.is_streaming() {
@@ -408,7 +408,7 @@ impl Render for ChatPrompt {
                     let handled = this.input.handle_key(
                         key_lower.as_str(),
                         key_char,
-                        modifiers.platform, // Cmd key on macOS
+                        crate::ui_foundation::is_platform_modifier(modifiers),
                         modifiers.alt,
                         modifiers.shift,
                         cx,

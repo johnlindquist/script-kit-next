@@ -14,6 +14,8 @@ use serde::{Deserialize, Serialize};
 use std::fmt;
 use thiserror::Error;
 
+use crate::ui_foundation::is_platform_modifier;
+
 /// Errors that can occur when parsing a shortcut string.
 #[derive(Error, Debug, Clone, PartialEq, Eq)]
 pub enum ShortcutParseError {
@@ -267,7 +269,7 @@ impl Shortcut {
     pub fn matches_keystroke(&self, keystroke: &gpui::Keystroke) -> bool {
         let canonical = canonicalize_key(&keystroke.key.to_lowercase());
         canonical == self.key
-            && keystroke.modifiers.platform == self.modifiers.cmd
+            && is_platform_modifier(&keystroke.modifiers) == self.modifiers.cmd
             && keystroke.modifiers.control == self.modifiers.ctrl
             && keystroke.modifiers.alt == self.modifiers.alt
             && keystroke.modifiers.shift == self.modifiers.shift

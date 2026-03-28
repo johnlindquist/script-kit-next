@@ -22,7 +22,7 @@
                 }
 
                 let key = event.keystroke.key.as_str();
-                let has_cmd = event.keystroke.modifiers.platform;
+                let has_cmd = crate::ui_foundation::is_platform_modifier(&event.keystroke.modifiers);
                 let has_shift = event.keystroke.modifiers.shift;
                 let key_char = event.keystroke.key_char.as_deref();
 

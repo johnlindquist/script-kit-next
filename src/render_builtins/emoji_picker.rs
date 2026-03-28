@@ -129,7 +129,7 @@ impl ScriptListApp {
 
                 let key = event.keystroke.key.as_str();
                 let key_char = event.keystroke.key_char.as_deref();
-                let has_cmd = event.keystroke.modifiers.platform;
+                let has_cmd = is_platform_modifier(&event.keystroke.modifiers);
                 let modifiers = &event.keystroke.modifiers;
 
                 match this.route_key_to_actions_dialog(
@@ -340,11 +340,8 @@ impl ScriptListApp {
             .into_any_element()
         };
 
-        let list_scrollbar = self.builtin_uniform_list_scrollbar(
-            &self.emoji_scroll_handle,
-            rows.len(),
-            8,
-        );
+        let list_scrollbar =
+            self.builtin_uniform_list_scrollbar(&self.emoji_scroll_handle, rows.len(), 8);
 
         let header = div()
             .w_full()

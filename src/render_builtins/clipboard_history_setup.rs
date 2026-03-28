@@ -1,5 +1,6 @@
         use crate::ui_foundation::{
             is_key_down, is_key_enter, is_key_escape, is_key_space, is_key_up,
+            is_platform_modifier,
         };
 
         // Use theme for all colors - consistent with main menu
@@ -73,7 +74,7 @@
 
                 let key = event.keystroke.key.as_str();
                 let key_char = event.keystroke.key_char.as_deref();
-                let has_cmd = event.keystroke.modifiers.platform;
+                let has_cmd = is_platform_modifier(&event.keystroke.modifiers);
                 let modifiers = &event.keystroke.modifiers;
 
                 // Route keys to actions dialog first if it's open

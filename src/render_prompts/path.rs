@@ -222,7 +222,7 @@ impl ScriptListApp {
 
                 let key = event.keystroke.key.as_str();
                 let key_str = key.to_lowercase();
-                let has_cmd = event.keystroke.modifiers.platform;
+                let has_cmd = ui_foundation::is_platform_modifier(&event.keystroke.modifiers);
                 let modifiers = &event.keystroke.modifiers;
                 let correlation_id = logging::current_correlation_id();
 
@@ -374,20 +374,20 @@ impl ScriptListApp {
         .key_context("path_prompt_container")
         .on_key_down(handle_key)
         .child(div().size_full().child(entity))
-            // Actions dialog overlays on top (upper-right corner, below the header bar)
-            .when_some(actions_dialog, |d, dialog| {
-                d.child(
-                    div()
-                        .absolute()
-                        .inset_0()
-                        .flex()
-                        .justify_end()
-                        .pt(px(actions_dialog_top))
-                        .pr(px(actions_dialog_right))
-                        .child(dialog),
-                )
-            })
-            .into_any_element()
+        // Actions dialog overlays on top (upper-right corner, below the header bar)
+        .when_some(actions_dialog, |d, dialog| {
+            d.child(
+                div()
+                    .absolute()
+                    .inset_0()
+                    .flex()
+                    .justify_end()
+                    .pt(px(actions_dialog_top))
+                    .pr(px(actions_dialog_right))
+                    .child(dialog),
+            )
+        })
+        .into_any_element()
     }
 }
 

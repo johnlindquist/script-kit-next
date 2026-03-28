@@ -13,7 +13,7 @@
 //! To add a new global shortcut, add a variant to `FocusablePromptInterceptedKey` and
 //! match it in `match_focusable_prompt_intercepted_key`.
 
-use crate::ui_foundation::is_key_escape;
+use crate::ui_foundation::{is_key_escape, is_platform_modifier};
 use gpui::{prelude::*, Context, Div, FocusHandle, Stateful, Window};
 
 #[derive(Clone)]
@@ -116,7 +116,7 @@ impl FocusablePromptConfigured {
                   cx: &mut Context<T>| {
                 let intercepted_key = match_focusable_prompt_intercepted_key(
                     event.keystroke.key.as_str(),
-                    event.keystroke.modifiers.platform,
+                    is_platform_modifier(&event.keystroke.modifiers),
                 );
 
                 if let Some(intercepted_key) = intercepted_key {

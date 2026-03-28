@@ -659,7 +659,7 @@ impl ScriptListApp {
                 }
 
                 let key_str = event.keystroke.key.as_str();
-                let has_cmd = event.keystroke.modifiers.platform;
+                let has_cmd = is_platform_modifier(&event.keystroke.modifiers);
 
                 // Check SDK action shortcuts FIRST (before built-in shortcuts)
                 // This allows scripts to override default shortcuts via setActions()

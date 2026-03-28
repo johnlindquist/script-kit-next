@@ -313,7 +313,7 @@ impl Render for EnvPrompt {
                     let handled = this.input.handle_key(
                         key,
                         key_char,
-                        modifiers.platform, // On macOS, platform = Cmd key
+                        crate::ui_foundation::is_platform_modifier(modifiers),
                         modifiers.alt,
                         modifiers.shift,
                         cx,

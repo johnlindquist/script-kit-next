@@ -1,7 +1,7 @@
 use super::*;
 use crate::ui_foundation::{
     is_key_backspace, is_key_delete, is_key_down, is_key_enter, is_key_escape, is_key_tab,
-    is_key_up,
+    is_key_up, is_platform_modifier,
 };
 
 #[inline]
@@ -158,7 +158,7 @@ impl NotesApp {
                             }
                         }
                     }
-                    if modifiers.platform && key.eq_ignore_ascii_case("k") {
+                    if is_platform_modifier(modifiers) && key.eq_ignore_ascii_case("k") {
                         self.close_actions_panel(window, cx);
                         cx.stop_propagation();
                         return;
@@ -169,7 +169,9 @@ impl NotesApp {
         }
 
         if self.show_actions_panel && self.actions_panel.is_some() {
-            if is_key_escape(key) || (modifiers.platform && key.eq_ignore_ascii_case("k")) {
+            if is_key_escape(key)
+                || (is_platform_modifier(modifiers) && key.eq_ignore_ascii_case("k"))
+            {
                 self.close_actions_panel(window, cx);
                 cx.stop_propagation();
                 return;
@@ -252,7 +254,7 @@ impl NotesApp {
                             }
                         }
                     }
-                    if modifiers.platform && key.eq_ignore_ascii_case("p") {
+                    if is_platform_modifier(modifiers) && key.eq_ignore_ascii_case("p") {
                         self.close_browse_panel(window, cx);
                         cx.stop_propagation();
                         return;
@@ -306,7 +308,7 @@ impl NotesApp {
             return;
         }
 
-        if modifiers.alt && !modifiers.platform {
+        if modifiers.alt && !is_platform_modifier(modifiers) {
             match key {
                 key if is_key_up(key) => {
                     if modifiers.shift {
@@ -336,7 +338,7 @@ impl NotesApp {
             return;
         }
 
-        if modifiers.platform {
+        if is_platform_modifier(modifiers) {
             match key {
                 key if key.eq_ignore_ascii_case("k") => {
                     if self.command_bar.is_open() || self.show_actions_panel {

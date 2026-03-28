@@ -7,6 +7,7 @@ use global_hotkey::hotkey::{Code, Modifiers};
 use itertools::Itertools;
 
 use crate::logging;
+use crate::ui_foundation::is_platform_modifier;
 
 /// Parse a shortcut string into (Modifiers, Code) for global_hotkey crate.
 ///
@@ -163,7 +164,7 @@ pub fn keystroke_to_shortcut(key: &str, modifiers: &gpui::Modifiers) -> String {
     if modifiers.alt {
         parts.push("alt");
     }
-    if modifiers.platform {
+    if is_platform_modifier(modifiers) {
         parts.push("cmd");
     }
     if modifiers.control {

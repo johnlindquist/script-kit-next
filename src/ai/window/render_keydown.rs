@@ -1,20 +1,20 @@
 use super::*;
 use crate::ui_foundation::{
     is_key_backspace, is_key_delete, is_key_down, is_key_enter, is_key_escape, is_key_k,
-    is_key_tab, is_key_up,
+    is_key_tab, is_key_up, is_platform_modifier,
 };
 
 pub(super) fn is_context_inspector_shortcut(key: &str, modifiers: &gpui::Modifiers) -> bool {
-    modifiers.platform && modifiers.alt && !modifiers.shift && !modifiers.control && key == "i"
+    is_platform_modifier(modifiers) && modifiers.alt && !modifiers.shift && key == "i"
 }
 
 /// Cmd+Shift+A opens the context palette (keyboard-first attach flow).
 pub(super) fn is_context_palette_shortcut(key: &str, modifiers: &gpui::Modifiers) -> bool {
-    modifiers.platform && modifiers.shift && !modifiers.alt && !modifiers.control && key == "a"
+    is_platform_modifier(modifiers) && modifiers.shift && !modifiers.alt && key == "a"
 }
 
 pub(super) fn is_mini_history_shortcut(key: &str, modifiers: &gpui::Modifiers) -> bool {
-    modifiers.platform && !modifiers.shift && !modifiers.alt && !modifiers.control && key == "j"
+    is_platform_modifier(modifiers) && !modifiers.shift && !modifiers.alt && key == "j"
 }
 
 /// Classifies a keystroke for context-picker dispatch. Platform shortcuts (Cmd+*,
@@ -38,7 +38,7 @@ enum ContextPickerKeyRoute {
 
 fn context_picker_key_route(
     key: &str,
-    platform: bool,
+    platform_mod: bool,
     control: bool,
     alt: bool,
 ) -> ContextPickerKeyRoute {
@@ -47,14 +47,14 @@ fn context_picker_key_route(
         k if is_key_down(k) => ContextPickerKeyRoute::Next,
         k if is_key_enter(k) || is_key_tab(k) => ContextPickerKeyRoute::Accept,
         k if is_key_escape(k) => ContextPickerKeyRoute::Close,
-        _ if !platform && !control && !alt => ContextPickerKeyRoute::PropagateToInput,
+        _ if !platform_mod && !control && !alt => ContextPickerKeyRoute::PropagateToInput,
         _ => ContextPickerKeyRoute::Fallthrough,
     }
 }
 
-/// Returns true when the keystroke is the global focus-search shortcut (Cmd+Shift+F).
-fn is_global_focus_search_shortcut(key: &str, platform: bool, shift: bool) -> bool {
-    platform && shift && key == "f"
+/// Returns true when the keystroke is the global focus-search shortcut (Cmd+Shift+F / Ctrl+Shift+F).
+fn is_global_focus_search_shortcut(key: &str, platform_mod: bool, shift: bool) -> bool {
+    platform_mod && shift && key == "f"
 }
 
 impl AiApp {
@@ -121,7 +121,7 @@ impl AiApp {
         if self.is_context_picker_open() {
             match context_picker_key_route(
                 key,
-                modifiers.platform,
+                is_platform_modifier(modifiers),
                 modifiers.control,
                 modifiers.alt,
             ) {
@@ -165,7 +165,7 @@ impl AiApp {
         // Cmd+Shift+F: always focus search — preempts all modal guards below.
         // This must run before command_bar / new_chat_command_bar / presets_dropdown
         // early-returns so the shortcut is never swallowed by an open popup.
-        if modifiers.platform && modifiers.shift && key == "f" {
+        if is_platform_modifier(modifiers) && modifiers.shift && key == "f" {
             super::telemetry::log_ai_shortcut_decision(
                 "cmd_shift_f",
                 self.window_mode,
@@ -319,10 +319,9 @@ impl AiApp {
         }
 
         // Cmd+1-4: submit welcome suggestion cards (only when welcome screen is visible)
-        if modifiers.platform
+        if is_platform_modifier(modifiers)
             && !modifiers.shift
             && !modifiers.alt
-            && !modifiers.control
             && self.current_messages.is_empty()
             && !self.is_streaming
             && !self.available_models.is_empty()
@@ -358,7 +357,7 @@ impl AiApp {
         }
 
         // platform modifier = Cmd on macOS, Ctrl on Windows/Linux
-        if modifiers.platform {
+        if is_platform_modifier(modifiers) {
             match key {
                 k if self.window_mode.is_mini() && is_mini_history_shortcut(k, modifiers) => {
                     self.toggle_mini_history_overlay("shortcut_cmd_j", window, cx);

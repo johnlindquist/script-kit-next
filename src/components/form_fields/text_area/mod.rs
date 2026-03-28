@@ -3,7 +3,7 @@ use gpui::*;
 use crate::protocol::Field;
 use crate::ui_foundation::{
     is_key_backspace, is_key_delete, is_key_down, is_key_enter, is_key_left, is_key_right,
-    is_key_up,
+    is_key_up, is_platform_modifier,
 };
 
 use super::helpers::{byte_idx_from_char_idx, char_len, drain_char_range, slice_by_char_range};
@@ -355,7 +355,7 @@ impl FormTextArea {
     /// Handle key down events (legacy, kept for render callback)
     fn handle_key_down(&mut self, event: &KeyDownEvent, cx: &mut Context<Self>) {
         let key = event.keystroke.key.as_str();
-        let cmd = event.keystroke.modifiers.platform;
+        let cmd = is_platform_modifier(&event.keystroke.modifiers);
         let shift = event.keystroke.modifiers.shift;
 
         // Select all
@@ -435,7 +435,7 @@ impl FormTextArea {
     /// and printable character input.
     pub fn handle_key_event(&mut self, event: &KeyDownEvent, cx: &mut Context<Self>) {
         let key = event.keystroke.key.as_str();
-        let cmd = event.keystroke.modifiers.platform;
+        let cmd = is_platform_modifier(&event.keystroke.modifiers);
         let shift = event.keystroke.modifiers.shift;
 
         // Select all

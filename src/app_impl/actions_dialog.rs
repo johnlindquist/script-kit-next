@@ -22,11 +22,12 @@ impl ScriptListApp {
 
         // Use allocation-free key helpers from ui_foundation
         use crate::ui_foundation::{
-            is_key_backspace, is_key_down, is_key_enter, is_key_escape, is_key_up, printable_char,
+            is_key_backspace, is_key_down, is_key_enter, is_key_escape, is_key_up,
+            is_platform_modifier, printable_char,
         };
 
         // Cmd+K toggles the popup closed through the shared close path
-        if modifiers.platform
+        if is_platform_modifier(modifiers)
             && !modifiers.shift
             && !modifiers.control
             && !modifiers.alt
@@ -129,7 +130,7 @@ impl ScriptListApp {
 
         // Check for printable character input (only when no modifiers are held)
         // This prevents Cmd+E from being treated as typing 'e' into the search
-        if !modifiers.platform && !modifiers.control && !modifiers.alt {
+        if !is_platform_modifier(modifiers) && !modifiers.control && !modifiers.alt {
             if let Some(ch) = printable_char(key_char) {
                 dialog.update(cx, |d, cx| d.handle_char(ch, cx));
                 crate::actions::notify_actions_window(cx);

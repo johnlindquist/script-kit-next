@@ -1,4 +1,4 @@
-        use crate::ui_foundation::{is_key_down, is_key_enter, is_key_escape, is_key_up};
+        use crate::ui_foundation::{is_key_down, is_key_enter, is_key_escape, is_key_up, is_platform_modifier};
 
         let tokens = get_tokens(self.current_design);
         let design_spacing = tokens.spacing();
@@ -76,7 +76,7 @@
                   cx: &mut Context<Self>| {
                 this.hide_mouse_cursor(cx);
                 let key = event.keystroke.key.as_str();
-                let has_cmd = event.keystroke.modifiers.platform;
+                let has_cmd = is_platform_modifier(&event.keystroke.modifiers);
 
                 // Escape: clear filter first if present, otherwise restore original and close
                 if is_key_escape(key) && !this.show_actions_popup {

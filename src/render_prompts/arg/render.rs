@@ -105,7 +105,7 @@ impl ScriptListApp {
 
                 let key = event.keystroke.key.as_str();
                 let key_char = event.keystroke.key_char.as_deref();
-                let has_cmd = event.keystroke.modifiers.platform;
+                let has_cmd = ui_foundation::is_platform_modifier(&event.keystroke.modifiers);
                 let modifiers = &event.keystroke.modifiers;
                 let key_lower = key.to_lowercase();
 
@@ -165,7 +165,7 @@ impl ScriptListApp {
                 let handled = this.arg_input.handle_key(
                     &key_lower,
                     key_char,
-                    modifiers.platform, // Cmd key on macOS
+                    ui_foundation::is_platform_modifier(modifiers),
                     modifiers.alt,
                     modifiers.shift,
                     cx,
@@ -299,9 +299,7 @@ impl ScriptListApp {
         };
 
         let leading = arg_prompt_leading_status(has_choices, filtered_choices_len, input_is_empty)
-            .map(|status| {
-                crate::components::render_hint_strip_leading_text(status, text_primary)
-            });
+            .map(|status| crate::components::render_hint_strip_leading_text(status, text_primary));
 
         crate::components::render_minimal_list_prompt_shell(
             design_visual.radius_lg,

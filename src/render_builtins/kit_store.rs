@@ -465,7 +465,7 @@ impl ScriptListApp {
                 this.hide_mouse_cursor(cx);
 
                 let key = event.keystroke.key.as_str();
-                let has_cmd = event.keystroke.modifiers.platform;
+                let has_cmd = is_platform_modifier(&event.keystroke.modifiers);
 
                 if has_cmd && key.eq_ignore_ascii_case("w") {
                     this.close_and_reset_window(cx);
@@ -888,7 +888,7 @@ impl ScriptListApp {
                 this.hide_mouse_cursor(cx);
 
                 let key = event.keystroke.key.as_str();
-                let has_cmd = event.keystroke.modifiers.platform;
+                let has_cmd = is_platform_modifier(&event.keystroke.modifiers);
 
                 if is_key_escape(key) {
                     this.go_back_or_close(window, cx);

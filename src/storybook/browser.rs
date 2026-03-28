@@ -19,6 +19,7 @@ use crate::storybook::{
     save_story_selections, selection_store_path, stories_by_surface, StoryEntry,
     StorySelectionStore, StorySurface, StoryVariant,
 };
+use crate::ui_foundation::is_platform_modifier;
 
 /// Preview mode for the story browser
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -930,7 +931,7 @@ impl StoryBrowser {
         let modifiers = &event.keystroke.modifiers;
 
         // Cmd+Shift+S for screenshot
-        if key == "s" && modifiers.platform && modifiers.shift {
+        if key == "s" && is_platform_modifier(modifiers) && modifiers.shift {
             self.capture_screenshot(window, cx);
             cx.stop_propagation();
             return;

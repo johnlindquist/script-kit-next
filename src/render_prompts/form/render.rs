@@ -63,7 +63,7 @@ impl ScriptListApp {
 
                 let key = event.keystroke.key.as_str();
                 let has_shift = event.keystroke.modifiers.shift;
-                let has_cmd = event.keystroke.modifiers.platform;
+                let has_cmd = ui_foundation::is_platform_modifier(&event.keystroke.modifiers);
 
                 // Handle form-level keys (Enter, Escape, Tab) at this level
                 // Forward all other keys to the focused form field for text input

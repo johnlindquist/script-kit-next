@@ -160,7 +160,7 @@ impl ScriptListApp {
                     },
                     |this, event, window, cx| {
                         let key = event.keystroke.key.as_str();
-                        let has_cmd = event.keystroke.modifiers.platform;
+                        let has_cmd = ui_foundation::is_platform_modifier(&event.keystroke.modifiers);
                         let has_shift = event.keystroke.modifiers.shift;
                         let is_quick_terminal =
                             matches!(this.current_view, AppView::QuickTerminalView { .. });
@@ -219,7 +219,7 @@ impl ScriptListApp {
                     },
                     |key, _key_char, modifiers| {
                         is_term_prompt_actions_toggle_shortcut(
-                            modifiers.platform,
+                            ui_foundation::is_platform_modifier(modifiers),
                             modifiers.shift,
                             key,
                         ) && has_actions_for_toggle
@@ -417,9 +417,8 @@ mod term_prompt_render_tests {
             "term root container should not clip overflow before key handling, so overlay vibrancy can composite correctly"
         );
         assert!(
-            TERM_RENDER_SOURCE.contains(
-                ".child(div().flex_1().min_h(px(0.)).overflow_hidden().child(entity))"
-            ),
+            TERM_RENDER_SOURCE
+                .contains(".child(div().flex_1().min_h(px(0.)).overflow_hidden().child(entity))"),
             "term render should keep overflow clipping scoped to the terminal content child"
         );
     }

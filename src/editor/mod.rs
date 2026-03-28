@@ -14,6 +14,7 @@ use crate::config::Config;
 use crate::logging;
 use crate::snippet::ParsedSnippet;
 use crate::theme::Theme;
+use crate::ui_foundation::is_platform_modifier;
 use gpui::{
     div, prelude::*, px, rgb, Context, Entity, FocusHandle, Focusable, IntoElement, Render,
     SharedString, Styled, Subscription, Window,
@@ -990,7 +991,7 @@ impl Render for EditorPrompt {
             }
 
             let key = event.keystroke.key.to_lowercase();
-            let cmd = event.keystroke.modifiers.platform;
+            let cmd = is_platform_modifier(&event.keystroke.modifiers);
             let shift = event.keystroke.modifiers.shift;
 
             // Debug logging for key events

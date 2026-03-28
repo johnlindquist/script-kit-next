@@ -21,7 +21,7 @@
                 let has_shift = event.keystroke.modifiers.shift;
                 // Check for Tab key (no cmd/alt/ctrl modifiers, but shift is allowed)
                 if is_tab_key
-                    && !event.keystroke.modifiers.platform
+                    && !crate::ui_foundation::is_platform_modifier(&event.keystroke.modifiers)
                     && !event.keystroke.modifiers.alt
                     && !event.keystroke.modifiers.control
                 {

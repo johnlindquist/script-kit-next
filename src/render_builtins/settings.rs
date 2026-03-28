@@ -146,11 +146,7 @@ impl ScriptListApp {
     }
 
     /// Render the settings hub view with categorized configuration options.
-    fn render_settings(
-        &mut self,
-        selected_index: usize,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
+    fn render_settings(&mut self, selected_index: usize, cx: &mut Context<Self>) -> AnyElement {
         crate::components::emit_prompt_chrome_audit(
             &crate::components::PromptChromeAudit::exception(
                 "settings",
@@ -179,7 +175,7 @@ impl ScriptListApp {
                 this.hide_mouse_cursor(cx);
 
                 let key = event.keystroke.key.as_str();
-                let has_cmd = event.keystroke.modifiers.platform;
+                let has_cmd = is_platform_modifier(&event.keystroke.modifiers);
 
                 // ESC: go back/close
                 if is_key_escape(key) {
@@ -207,9 +203,7 @@ impl ScriptListApp {
 
                 if is_key_up(key) {
                     if current_selected > 0 {
-                        if let AppView::SettingsView { selected_index } =
-                            &mut this.current_view
-                        {
+                        if let AppView::SettingsView { selected_index } = &mut this.current_view {
                             *selected_index = current_selected - 1;
                         }
                         cx.notify();
@@ -217,9 +211,7 @@ impl ScriptListApp {
                     cx.stop_propagation();
                 } else if is_key_down(key) {
                     if current_selected < settings_count.saturating_sub(1) {
-                        if let AppView::SettingsView { selected_index } =
-                            &mut this.current_view
-                        {
+                        if let AppView::SettingsView { selected_index } = &mut this.current_view {
                             *selected_index = current_selected + 1;
                         }
                         cx.notify();
@@ -247,8 +239,7 @@ impl ScriptListApp {
             .enumerate()
             .map(|(ix, item)| {
                 let is_selected = ix == selected_index;
-                let is_hovered =
-                    hovered == Some(ix) && current_input_mode == InputMode::Mouse;
+                let is_hovered = hovered == Some(ix) && current_input_mode == InputMode::Mouse;
                 let action = item.action.clone();
                 let entity_click = entity.clone();
                 let entity_hover = entity.clone();
@@ -322,16 +313,11 @@ impl ScriptListApp {
                             .text_size(px(design_typography.font_size_xl))
                             .child("Settings"),
                     )
-                    .child(
-                        div()
-                            .text_sm()
-                            .text_color(rgb(text_dimmed))
-                            .child(format!(
-                                "{} option{}",
-                                item_count,
-                                if item_count == 1 { "" } else { "s" }
-                            )),
-                    ),
+                    .child(div().text_sm().text_color(rgb(text_dimmed)).child(format!(
+                        "{} option{}",
+                        item_count,
+                        if item_count == 1 { "" } else { "s" }
+                    ))),
             )
             // Divider
             .child(

@@ -612,7 +612,7 @@ impl ScriptListApp {
                 let has_shift = event.keystroke.modifiers.shift;
                 // Check for Tab key (no cmd/alt/ctrl modifiers, but shift is allowed)
                 if is_tab_key
-                    && !event.keystroke.modifiers.platform
+                    && !crate::ui_foundation::is_platform_modifier(&event.keystroke.modifiers)
                     && !event.keystroke.modifiers.alt
                     && !event.keystroke.modifiers.control
                 {
@@ -817,7 +817,7 @@ impl ScriptListApp {
                 let is_down = crate::ui_foundation::is_key_down(key);
                 let is_left = crate::ui_foundation::is_key_left(key);
                 let is_right = crate::ui_foundation::is_key_right(key);
-                let no_direction_modifiers = !event.keystroke.modifiers.platform
+                let no_direction_modifiers = !crate::ui_foundation::is_platform_modifier(&event.keystroke.modifiers)
                     && !event.keystroke.modifiers.alt
                     && !event.keystroke.modifiers.control;
 
@@ -1271,7 +1271,7 @@ impl ScriptListApp {
                 }
 
                 let key = event.keystroke.key.as_str();
-                let has_platform_mod = event.keystroke.modifiers.platform; // Cmd on macOS
+                let has_platform_mod = crate::ui_foundation::is_platform_modifier(&event.keystroke.modifiers); // Cmd on macOS, Ctrl on Windows/Linux
 
                 // Home key or Cmd+Up → jump to first item
                 // End key or Cmd+Down → jump to last item
@@ -1339,7 +1339,7 @@ impl ScriptListApp {
                 }
 
                 let key = event.keystroke.key.as_str();
-                let has_cmd = event.keystroke.modifiers.platform;
+                let has_cmd = crate::ui_foundation::is_platform_modifier(&event.keystroke.modifiers);
                 let has_shift = event.keystroke.modifiers.shift;
                 let key_char = event.keystroke.key_char.as_deref();
 

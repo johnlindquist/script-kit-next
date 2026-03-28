@@ -14,7 +14,6 @@ impl ScriptListApp {
         let text_primary = self.theme.colors.text.primary;
         let text_dimmed = self.theme.colors.text.dimmed;
 
-
         // Filter entries from cached data
         let (filtered_entries, _) =
             builtins::filter_menu_bar_entries(&self.cached_current_app_entries, &filter);
@@ -33,7 +32,7 @@ impl ScriptListApp {
                 }
 
                 let key = event.keystroke.key.as_str();
-                let has_cmd = event.keystroke.modifiers.platform;
+                let has_cmd = is_platform_modifier(&event.keystroke.modifiers);
 
                 // ESC: Clear filter first if present, otherwise go back/close
                 if is_key_escape(key) && !this.show_actions_popup {
@@ -67,8 +66,10 @@ impl ScriptListApp {
                 };
 
                 // Compute filtered list
-                let (filtered, _) =
-                    builtins::filter_menu_bar_entries(&this.cached_current_app_entries, &current_filter);
+                let (filtered, _) = builtins::filter_menu_bar_entries(
+                    &this.cached_current_app_entries,
+                    &current_filter,
+                );
                 let current_filtered_len = filtered.len();
 
                 if is_key_up(key) {
@@ -155,22 +156,23 @@ impl ScriptListApp {
                                 let description = entry.description.clone();
 
                                 let click_entity = click_entity_handle.clone();
-                                let click_handler = move |_event: &gpui::ClickEvent,
-                                                          _window: &mut Window,
-                                                          cx: &mut gpui::App| {
-                                    if let Some(app) = click_entity.upgrade() {
-                                        app.update(cx, |this, cx| {
-                                            if let AppView::CurrentAppCommandsView {
-                                                selected_index,
-                                                ..
-                                            } = &mut this.current_view
-                                            {
-                                                *selected_index = ix;
-                                            }
-                                            cx.notify();
-                                        });
-                                    }
-                                };
+                                let click_handler =
+                                    move |_event: &gpui::ClickEvent,
+                                          _window: &mut Window,
+                                          cx: &mut gpui::App| {
+                                        if let Some(app) = click_entity.upgrade() {
+                                            app.update(cx, |this, cx| {
+                                                if let AppView::CurrentAppCommandsView {
+                                                    selected_index,
+                                                    ..
+                                                } = &mut this.current_view
+                                                {
+                                                    *selected_index = ix;
+                                                }
+                                                cx.notify();
+                                            });
+                                        }
+                                    };
 
                                 let hover_entity = hover_entity_handle.clone();
                                 let hover_handler =
@@ -241,16 +243,11 @@ impl ScriptListApp {
                         .focus_bordered(false),
                 ),
             )
-            .child(
-                div()
-                    .text_sm()
-                    .text_color(rgb(text_dimmed))
-                    .child(format!(
-                        "{} command{}",
-                        total_count,
-                        if total_count == 1 { "" } else { "s" }
-                    )),
-            );
+            .child(div().text_sm().text_color(rgb(text_dimmed)).child(format!(
+                "{} command{}",
+                total_count,
+                if total_count == 1 { "" } else { "s" }
+            )));
 
         let content = div()
             .flex_1()

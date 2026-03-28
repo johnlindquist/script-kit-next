@@ -29,7 +29,7 @@
                 // Left/right included for EmojiPickerView grid navigation;
                 // other views fall through to _ => {} so Input handles them normally.
                 if (is_up || is_down || is_left || is_right)
-                    && !event.keystroke.modifiers.platform
+                    && !crate::ui_foundation::is_platform_modifier(&event.keystroke.modifiers)
                     && !event.keystroke.modifiers.alt
                     && !event.keystroke.modifiers.control
                 {
@@ -613,7 +613,7 @@
                 }
 
                 let key = event.keystroke.key.as_str();
-                let has_platform_mod = event.keystroke.modifiers.platform; // Cmd on macOS
+                let has_platform_mod = crate::ui_foundation::is_platform_modifier(&event.keystroke.modifiers); // Cmd on macOS, Ctrl on Windows/Linux
 
                 // Home key or Cmd+Up → jump to first item
                 // End key or Cmd+Down → jump to last item

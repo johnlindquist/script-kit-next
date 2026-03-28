@@ -690,6 +690,23 @@ pub fn is_key_space(key: &str) -> bool {
 pub fn is_key_k(key: &str) -> bool {
     key.eq_ignore_ascii_case("k")
 }
+/// Check if the "platform action" modifier is pressed.
+///
+/// On macOS this is `Cmd` (`modifiers.platform`).
+/// On Windows/Linux this is `Ctrl` (`modifiers.control`), because GPUI maps
+/// `modifiers.platform` to the Windows/Super key — not Ctrl.
+///
+/// Use this everywhere the code means "the OS-standard shortcut modifier"
+/// (Cmd+W, Cmd+C, Cmd+V, etc.) so shortcuts work correctly on all platforms.
+#[inline]
+pub fn is_platform_modifier(modifiers: &gpui::Modifiers) -> bool {
+    if cfg!(target_os = "macos") {
+        modifiers.platform
+    } else {
+        modifiers.control
+    }
+}
+
 /// Extract printable character from a KeyDownEvent's key_char field.
 ///
 /// Returns Some(char) if the key_char contains a non-control character,

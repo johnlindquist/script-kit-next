@@ -343,7 +343,8 @@ impl Render for SelectPrompt {
                 },
                 |this, event, _window, cx| {
                     let key_str = event.keystroke.key.as_str();
-                    let has_ctrl = event.keystroke.modifiers.platform; // Cmd on macOS, Ctrl on others
+                    let has_ctrl =
+                        crate::ui_foundation::is_platform_modifier(&event.keystroke.modifiers);
                     let is_up = is_key_up(key_str);
                     let is_down = is_key_down(key_str);
                     let is_space = is_key_space(key_str);

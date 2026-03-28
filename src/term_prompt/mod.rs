@@ -7,6 +7,7 @@
 use crate::config::Config;
 use crate::list_item::FONT_MONO;
 use crate::prompts::SubmitCallback;
+use crate::ui_foundation::is_platform_modifier;
 use crate::terminal::{
     CellAttributes, TerminalAction, TerminalContent, TerminalEvent, TerminalHandle,
 };
@@ -856,7 +857,7 @@ impl Render for TermPrompt {
 
                 let key_str = event.keystroke.key.to_lowercase();
                 let has_ctrl = event.keystroke.modifiers.control;
-                let has_meta = event.keystroke.modifiers.platform;
+                let has_meta = is_platform_modifier(&event.keystroke.modifiers);
                 let has_shift = event.keystroke.modifiers.shift;
 
                 // Escape always cancels
