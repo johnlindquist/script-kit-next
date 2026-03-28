@@ -68,6 +68,10 @@ impl ScriptListApp {
     }
 
     /// Build the full context blob for AI submission.
+    ///
+    /// Uses `TabAiContextBlob::from_parts(...)` so the runtime path and
+    /// deterministic test path share one constructor — any future field
+    /// change breaks in one place instead of two.
     fn build_tab_ai_context(&self, _cx: &Context<Self>) -> crate::ai::TabAiContextBlob {
         let ui = self
             .tab_ai_state
@@ -91,14 +95,13 @@ impl ScriptListApp {
             visible_count = ui.visible_elements.len(),
         );
 
-        crate::ai::TabAiContextBlob {
-            schema_version: crate::ai::TAB_AI_CONTEXT_SCHEMA_VERSION,
-            timestamp,
+        crate::ai::TabAiContextBlob::from_parts(
             ui,
             desktop,
             recent_inputs,
-            clipboard_preview: None, // Phase 2: clipboard OCR
-        }
+            None, // Phase 2: clipboard OCR
+            timestamp,
+        )
     }
 
     /// Return a human-readable name for the current `AppView` variant.

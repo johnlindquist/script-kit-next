@@ -151,6 +151,217 @@ fn selectable_index_at_or_after(rows: &[GroupedActionItem], start: usize) -> Opt
     (clamped..rows.len()).find(|&ix| is_selectable_row(&rows[ix]))
 }
 
+// --- Chrome contract audit ------------------------------------------------
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize)]
+pub(crate) struct CommandBarChromeAudit {
+    pub surface: &'static str,
+    pub search_position: &'static str,
+    pub section_mode: &'static str,
+    pub anchor: &'static str,
+    pub show_icons: bool,
+    pub show_footer: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub(crate) struct CommandBarChromeViolation {
+    pub surface: &'static str,
+    pub field: &'static str,
+    pub expected: &'static str,
+    pub actual: &'static str,
+}
+
+impl std::fmt::Display for CommandBarChromeViolation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "surface={} field={} expected={} actual={}",
+            self.surface, self.field, self.expected, self.actual
+        )
+    }
+}
+
+#[inline]
+fn command_bar_search_position_name(position: &SearchPosition) -> &'static str {
+    match position {
+        SearchPosition::Top => "top",
+        SearchPosition::Bottom => "bottom",
+        SearchPosition::Hidden => "hidden",
+    }
+}
+
+#[inline]
+fn command_bar_section_style_name(section_style: &SectionStyle) -> &'static str {
+    match section_style {
+        SectionStyle::Headers => "headers",
+        SectionStyle::Separators => "separators",
+        SectionStyle::None => "none",
+    }
+}
+
+#[inline]
+fn command_bar_anchor_name(anchor: &AnchorPosition) -> &'static str {
+    match anchor {
+        AnchorPosition::Top => "top",
+        AnchorPosition::Bottom => "bottom",
+    }
+}
+
+#[inline]
+fn push_command_bar_violation_if_mismatch(
+    violations: &mut Vec<CommandBarChromeViolation>,
+    surface: &'static str,
+    field: &'static str,
+    expected: &'static str,
+    actual: &'static str,
+) {
+    if expected != actual {
+        violations.push(CommandBarChromeViolation {
+            surface,
+            field,
+            expected,
+            actual,
+        });
+    }
+}
+
+impl CommandBarChromeAudit {
+    pub(crate) fn from_config(surface: &'static str, config: &CommandBarConfig) -> Self {
+        Self {
+            surface,
+            search_position: command_bar_search_position_name(
+                &config.dialog_config.search_position,
+            ),
+            section_mode: command_bar_section_style_name(&config.dialog_config.section_style),
+            anchor: command_bar_anchor_name(&config.dialog_config.anchor),
+            show_icons: config.dialog_config.show_icons,
+            show_footer: config.dialog_config.show_footer,
+        }
+    }
+
+    pub(crate) fn validate(&self) -> Vec<CommandBarChromeViolation> {
+        let mut violations = Vec::new();
+        match self.surface {
+            "main_menu" => {
+                push_command_bar_violation_if_mismatch(
+                    &mut violations,
+                    self.surface,
+                    "search_position",
+                    "bottom",
+                    self.search_position,
+                );
+                push_command_bar_violation_if_mismatch(
+                    &mut violations,
+                    self.surface,
+                    "section_mode",
+                    super::constants::ACTIONS_DIALOG_EXPECT_SECTION_MODE,
+                    self.section_mode,
+                );
+                push_command_bar_violation_if_mismatch(
+                    &mut violations,
+                    self.surface,
+                    "anchor",
+                    "bottom",
+                    self.anchor,
+                );
+            }
+            "no_search" => {
+                push_command_bar_violation_if_mismatch(
+                    &mut violations,
+                    self.surface,
+                    "search_position",
+                    "hidden",
+                    self.search_position,
+                );
+                push_command_bar_violation_if_mismatch(
+                    &mut violations,
+                    self.surface,
+                    "section_mode",
+                    super::constants::ACTIONS_DIALOG_EXPECT_SECTION_MODE,
+                    self.section_mode,
+                );
+                push_command_bar_violation_if_mismatch(
+                    &mut violations,
+                    self.surface,
+                    "anchor",
+                    "bottom",
+                    self.anchor,
+                );
+            }
+            "notes" => {
+                push_command_bar_violation_if_mismatch(
+                    &mut violations,
+                    self.surface,
+                    "search_position",
+                    "top",
+                    self.search_position,
+                );
+                push_command_bar_violation_if_mismatch(
+                    &mut violations,
+                    self.surface,
+                    "section_mode",
+                    super::constants::ACTIONS_DIALOG_EXPECT_SECTION_MODE,
+                    self.section_mode,
+                );
+                push_command_bar_violation_if_mismatch(
+                    &mut violations,
+                    self.surface,
+                    "anchor",
+                    "top",
+                    self.anchor,
+                );
+            }
+            _ => {}
+        }
+        violations
+    }
+}
+
+fn seen_command_bar_chrome_audits(
+) -> &'static std::sync::Mutex<std::collections::HashSet<CommandBarChromeAudit>> {
+    static SEEN: std::sync::OnceLock<
+        std::sync::Mutex<std::collections::HashSet<CommandBarChromeAudit>>,
+    > = std::sync::OnceLock::new();
+    SEEN.get_or_init(|| std::sync::Mutex::new(std::collections::HashSet::new()))
+}
+
+fn mark_command_bar_chrome_audit_seen(audit: &CommandBarChromeAudit) -> bool {
+    let mut seen = seen_command_bar_chrome_audits()
+        .lock()
+        .unwrap_or_else(|poison| poison.into_inner());
+    seen.insert(audit.clone())
+}
+
+fn emit_command_bar_chrome_audit(surface: &'static str, config: &CommandBarConfig) {
+    let audit = CommandBarChromeAudit::from_config(surface, config);
+    if !mark_command_bar_chrome_audit_seen(&audit) {
+        return;
+    }
+    tracing::info!(
+        target: "script_kit::actions_chrome",
+        event = "command_bar_chrome_audit",
+        surface = audit.surface,
+        search_position = audit.search_position,
+        section_mode = audit.section_mode,
+        anchor = audit.anchor,
+        show_icons = audit.show_icons,
+        show_footer = audit.show_footer,
+        "command bar chrome audit"
+    );
+    for violation in audit.validate() {
+        tracing::warn!(
+            target: "script_kit::actions_chrome",
+            event = "command_bar_chrome_contract_violation",
+            surface = violation.surface,
+            field = violation.field,
+            expected = violation.expected,
+            actual = violation.actual,
+            message = %violation,
+            "command bar chrome contract violation"
+        );
+    }
+}
+
 /// Configuration presets for common CommandBar use cases
 #[derive(Debug, Clone)]
 #[allow(dead_code)] // Public API - fields used by consumers
@@ -180,7 +391,7 @@ impl Default for CommandBarConfig {
 impl CommandBarConfig {
     /// Create config for main menu style (search at bottom, headers)
     pub fn main_menu_style() -> Self {
-        Self {
+        let config = Self {
             dialog_config: ActionsDialogConfig {
                 search_position: SearchPosition::Bottom,
                 section_style: SectionStyle::Headers,
@@ -188,7 +399,9 @@ impl CommandBarConfig {
                 ..ActionsDialogConfig::default()
             },
             ..Default::default()
-        }
+        };
+        emit_command_bar_chrome_audit("main_menu", &config);
+        config
     }
 
     /// Create config for AI chat style (search at top, headers, icons)
@@ -207,7 +420,7 @@ impl CommandBarConfig {
 
     /// Create config with search hidden (external search handling)
     pub fn no_search() -> Self {
-        Self {
+        let config = Self {
             dialog_config: ActionsDialogConfig {
                 search_position: SearchPosition::Hidden,
                 section_style: SectionStyle::Headers,
@@ -215,12 +428,14 @@ impl CommandBarConfig {
                 ..ActionsDialogConfig::default()
             },
             ..Default::default()
-        }
+        };
+        emit_command_bar_chrome_audit("no_search", &config);
+        config
     }
 
     /// Create config for Notes window style (search at top, headers, icons)
     pub fn notes_style() -> Self {
-        Self {
+        let config = Self {
             dialog_config: ActionsDialogConfig {
                 search_position: SearchPosition::Top,
                 section_style: SectionStyle::Headers,
@@ -229,7 +444,9 @@ impl CommandBarConfig {
                 ..ActionsDialogConfig::default()
             },
             ..Default::default()
-        }
+        };
+        emit_command_bar_chrome_audit("notes", &config);
+        config
     }
 }
 
@@ -955,6 +1172,36 @@ mod command_bar_config_tests {
             !CommandBarConfig::notes_style().dialog_config.show_footer,
             "notes_style must hide footer for minimal chrome"
         );
+    }
+
+    #[test]
+    fn main_menu_style_emits_headers_contract() {
+        let audit =
+            CommandBarChromeAudit::from_config("main_menu", &CommandBarConfig::main_menu_style());
+        assert_eq!(audit.search_position, "bottom");
+        assert_eq!(audit.section_mode, "headers");
+        assert_eq!(audit.anchor, "bottom");
+        assert!(audit.validate().is_empty());
+    }
+
+    #[test]
+    fn no_search_style_emits_hidden_headers_contract() {
+        let audit =
+            CommandBarChromeAudit::from_config("no_search", &CommandBarConfig::no_search());
+        assert_eq!(audit.search_position, "hidden");
+        assert_eq!(audit.section_mode, "headers");
+        assert_eq!(audit.anchor, "bottom");
+        assert!(audit.validate().is_empty());
+    }
+
+    #[test]
+    fn notes_style_emits_top_headers_contract() {
+        let audit =
+            CommandBarChromeAudit::from_config("notes", &CommandBarConfig::notes_style());
+        assert_eq!(audit.search_position, "top");
+        assert_eq!(audit.section_mode, "headers");
+        assert_eq!(audit.anchor, "top");
+        assert!(audit.validate().is_empty());
     }
 
     #[test]

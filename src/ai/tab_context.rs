@@ -243,4 +243,44 @@ mod tests {
     fn tab_ai_context_schema_version_is_one() {
         assert_eq!(TAB_AI_CONTEXT_SCHEMA_VERSION, 1);
     }
+
+    #[test]
+    fn tab_ai_context_blob_omits_empty_optional_fields() {
+        let blob = TabAiContextBlob::from_parts(
+            TabAiUiSnapshot {
+                prompt_type: "ScriptList".to_string(),
+                ..Default::default()
+            },
+            Default::default(),
+            vec![],
+            None,
+            "2026-03-28T00:00:00Z".to_string(),
+        );
+        let json = serde_json::to_string(&blob).expect("serialize");
+        assert!(json.contains("\"schemaVersion\":1"));
+        assert!(
+            !json.contains("recentInputs"),
+            "empty Vec should be omitted"
+        );
+        assert!(
+            !json.contains("clipboardPreview"),
+            "None should be omitted"
+        );
+    }
+
+    #[test]
+    fn tab_ai_user_prompt_preserves_multiline_intent_and_contract() {
+        let prompt = build_tab_ai_user_prompt(
+            "rename selection\nthen copy it",
+            r#"{"ui":{"promptType":"ScriptList"}}"#,
+        );
+        assert!(prompt.contains("User intent:\nrename selection\nthen copy it"));
+        assert!(
+            prompt.contains(
+                "Current context JSON:\n{\"ui\":{\"promptType\":\"ScriptList\"}}"
+            )
+        );
+        assert!(prompt.contains("Script Kit TypeScript"));
+        assert!(prompt.contains("single fenced code block"));
+    }
 }
