@@ -297,6 +297,7 @@ pub fn activate_main_window() {
 
 /// Content for the macOS share sheet.
 #[derive(Debug)]
+#[allow(dead_code)]
 pub enum ShareSheetItem {
     Text(String),
     ImagePng(Vec<u8>),

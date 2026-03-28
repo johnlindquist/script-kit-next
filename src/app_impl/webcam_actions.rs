@@ -1,6 +1,7 @@
 use super::*;
 
 impl ScriptListApp {
+    #[allow(dead_code)]
     pub(crate) fn webcam_photo_directory() -> std::path::PathBuf {
         if let Some(home) = dirs::home_dir() {
             let desktop = home.join("Desktop");
@@ -71,7 +72,10 @@ impl ScriptListApp {
                 .checked_mul(height)
                 .and_then(|pixels| pixels.checked_mul(3))
                 .ok_or_else(|| {
-                    format!("Webcam RGB buffer size overflow (width={} height={})", width, height)
+                    format!(
+                        "Webcam RGB buffer size overflow (width={} height={})",
+                        width, height
+                    )
                 })?;
 
             // SAFETY: y_plane_ptr is non-null (checked above), and y_plane_len = y_stride * height is within the locked buffer.
@@ -113,12 +117,7 @@ impl ScriptListApp {
             let png_height = u32::try_from(height)
                 .map_err(|_| format!("Webcam frame height out of range: {}", height))?;
             encoder
-                .write_image(
-                    &rgb,
-                    png_width,
-                    png_height,
-                    image::ColorType::Rgb8.into(),
-                )
+                .write_image(&rgb, png_width, png_height, image::ColorType::Rgb8.into())
                 .map_err(|e| format!("Failed to encode webcam frame: {}", e))?;
 
             Ok(png_data)
@@ -126,7 +125,10 @@ impl ScriptListApp {
 
         let unlock_status = pixel_buffer.unlock_base_address(lock_flags);
         if unlock_status != core_video::r#return::kCVReturnSuccess {
-            tracing::error!(status = unlock_status, "Failed to unlock webcam frame after capture");
+            tracing::error!(
+                status = unlock_status,
+                "Failed to unlock webcam frame after capture"
+            );
         }
 
         result

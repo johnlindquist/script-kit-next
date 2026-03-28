@@ -838,6 +838,7 @@ impl ScriptListApp {
         .detach();
     }
 
+    #[allow(dead_code)]
     fn system_action_feedback_message(
         &self,
         action_type: &builtins::SystemActionType,
@@ -1040,6 +1041,7 @@ impl ScriptListApp {
 
     /// Shared result handler for system actions — shows HUD on success, Toast on error.
     /// Returns a `DispatchOutcome` for structured logging at the call boundary.
+    #[allow(dead_code)]
     fn handle_system_action_result(
         &mut self,
         result: Result<(), String>,
@@ -1355,6 +1357,7 @@ impl ScriptListApp {
     /// Same UX contract as [`open_builtin_filterable_view`] but pre-fills the
     /// filter input instead of clearing it. Used by `DoInCurrentApp` to open
     /// the command palette with the user's query already typed.
+    #[allow(dead_code)]
     fn open_builtin_filterable_view_with_filter(
         &mut self,
         view: AppView,

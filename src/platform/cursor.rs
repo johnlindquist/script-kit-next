@@ -328,6 +328,7 @@ pub fn install_cursor_tracking() {
 }
 
 #[cfg(not(target_os = "macos"))]
+#[allow(dead_code)]
 pub fn install_cursor_tracking() {
     // No-op on non-macOS platforms.
 }

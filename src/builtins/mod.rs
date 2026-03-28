@@ -76,6 +76,7 @@ pub enum SystemActionType {
 ///
 /// `dark_mode_enabled` should be populated only for `ToggleDarkMode` after
 /// querying current system state.
+#[allow(dead_code)]
 pub fn system_action_hud_message(
     action_type: SystemActionType,
     dark_mode_enabled: Option<bool>,
@@ -174,6 +175,7 @@ pub enum SettingsCommandType {
 }
 /// Utility command types for quick access tools
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)]
 pub enum UtilityCommandType {
     /// Open the main launcher in compact mini-window mode
     MiniMainWindow,
@@ -1635,6 +1637,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
 ///
 /// Returns normalized forms including the lowercased original, a compact form
 /// (`cmdt`), a spaced form (`cmd t`), and a chord form (`cmd+t`).
+#[allow(dead_code)]
 pub fn shortcut_search_tokens(display: &str) -> Vec<String> {
     let display_lower = display.to_lowercase();
     let mut chord_parts: Vec<String> = Vec::new();

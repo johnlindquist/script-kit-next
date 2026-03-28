@@ -4,6 +4,7 @@
 ///
 /// AppleScript uses double-quoted strings; backslashes and double quotes must
 /// be escaped before interpolating untrusted values.
+#[cfg(target_os = "macos")]
 pub fn escape_applescript_string(input: &str) -> String {
     input
         .replace('\\', "\\\\")

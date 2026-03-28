@@ -52,6 +52,7 @@ pub fn run_osascript(script: &str, context: &str) -> anyhow::Result<String> {
 }
 
 #[cfg(not(target_os = "macos"))]
+#[allow(dead_code)]
 pub fn run_osascript(_script: &str, context: &str) -> anyhow::Result<String> {
     anyhow::bail!(
         "platform_run_osascript_failed: stage=unsupported_platform context={} platform={}",

@@ -137,6 +137,7 @@ pub unsafe fn configure_actions_popup_window(window: id, is_dark: bool) {
 }
 
 #[cfg(not(target_os = "macos"))]
+#[allow(dead_code)]
 pub fn configure_actions_popup_window(_window: *mut std::ffi::c_void, _is_dark: bool) {
     // No-op on non-macOS platforms
 }
@@ -153,6 +154,7 @@ pub unsafe fn configure_confirm_popup_window(window: id, is_dark: bool) {
 }
 
 #[cfg(not(target_os = "macos"))]
+#[allow(dead_code)]
 pub fn configure_confirm_popup_window(_window: *mut std::ffi::c_void, _is_dark: bool) {
     // No-op on non-macOS platforms
 }
@@ -195,6 +197,7 @@ pub unsafe fn configure_secondary_window_vibrancy(window: id, window_name: &str,
 }
 
 #[cfg(not(target_os = "macos"))]
+#[allow(dead_code)]
 pub fn configure_secondary_window_vibrancy(
     _window: *mut std::ffi::c_void,
     _window_name: &str,
