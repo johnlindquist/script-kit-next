@@ -117,10 +117,12 @@ impl ScriptListApp {
         entity: Entity<term_prompt::TermPrompt>,
         cx: &mut Context<Self>,
     ) -> AnyElement {
+        let has_actions = self.has_nonempty_sdk_actions();
+
         crate::components::emit_prompt_chrome_audit(
-            &crate::components::PromptChromeAudit::exception(
+            &crate::components::PromptChromeAudit::editor(
                 "render_prompts::term",
-                "terminal_surface_with_hint_strip",
+                has_actions,
             ),
         );
 
@@ -130,7 +132,6 @@ impl ScriptListApp {
         let actions_dialog_bottom = window_resize::layout::FOOTER_HEIGHT
             + render_context.design_spacing.padding_sm
             - render_context.design_visual.border_thin;
-        let has_actions = self.has_nonempty_sdk_actions();
         let actions_mode = term_prompt_actions_mode(has_actions);
 
         // Sync suppress_keys with actions popup state so terminal ignores keys when popup is open

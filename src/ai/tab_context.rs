@@ -9,7 +9,7 @@
 use serde::{Deserialize, Serialize};
 
 /// Schema version for `TabAiContextBlob`. Bump when adding/removing/renaming fields.
-pub const TAB_AI_CONTEXT_SCHEMA_VERSION: u32 = 1;
+pub const TAB_AI_CONTEXT_SCHEMA_VERSION: u32 = 2;
 
 /// Snapshot of the Script Kit UI state at the moment Tab AI was invoked.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -31,6 +31,35 @@ pub struct TabAiUiSnapshot {
     pub visible_elements: Vec<crate::protocol::ElementInfo>,
 }
 
+/// Clipboard content summary for Tab AI context.
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct TabAiClipboardContext {
+    /// MIME-like content type (e.g. "text", "image").
+    pub content_type: String,
+    /// Truncated preview of the clipboard content.
+    pub preview: String,
+    /// OCR text extracted from clipboard image, if available.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ocr_text: Option<String>,
+}
+
+/// Truncate a string to at most `limit` characters, appending `…` if truncated.
+///
+/// Returns an empty string when `limit` is zero.
+pub fn truncate_tab_ai_text(value: &str, limit: usize) -> String {
+    if limit == 0 {
+        return String::new();
+    }
+    let char_count = value.chars().count();
+    if char_count <= limit {
+        value.to_string()
+    } else {
+        let prefix: String = value.chars().take(limit.saturating_sub(1)).collect();
+        format!("{prefix}…")
+    }
+}
+
 /// Complete context blob sent alongside the user's natural-language intent.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
@@ -46,9 +75,12 @@ pub struct TabAiContextBlob {
     /// Recent input-history entries (most recent first).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub recent_inputs: Vec<String>,
-    /// Preview of the current clipboard text (truncated).
+    /// Structured clipboard context (content type, preview, optional OCR).
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub clipboard_preview: Option<String>,
+    pub clipboard: Option<TabAiClipboardContext>,
+    /// Prior automation suggestions from the current-app memory index.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub prior_automations: Vec<super::current_app_automation_memory::TabAiMemorySuggestion>,
 }
 
 impl TabAiContextBlob {
@@ -59,7 +91,8 @@ impl TabAiContextBlob {
         ui: TabAiUiSnapshot,
         desktop: crate::context_snapshot::AiContextSnapshot,
         recent_inputs: Vec<String>,
-        clipboard_preview: Option<String>,
+        clipboard: Option<TabAiClipboardContext>,
+        prior_automations: Vec<super::current_app_automation_memory::TabAiMemorySuggestion>,
         timestamp: String,
     ) -> Self {
         Self {
@@ -68,7 +101,8 @@ impl TabAiContextBlob {
             ui,
             desktop,
             recent_inputs,
-            clipboard_preview,
+            clipboard,
+            prior_automations,
         }
     }
 }
@@ -80,9 +114,20 @@ impl TabAiContextBlob {
 pub fn build_tab_ai_user_prompt(intent: &str, context_json: &str) -> String {
     format!(
         "User intent:\n{intent}\n\n\
-         Current context JSON:\n{context_json}\n\n\
-         Generate a minimal Script Kit TypeScript script that acts immediately on this context. \
-         Return only runnable code in a single fenced code block."
+         Context JSON:\n\
+         ```json\n\
+         {context_json}\n\
+         ```\n\n\
+         Write one valid Script Kit TypeScript script.\n\
+         - Use the live context as the source of truth.\n\
+         - Prefer ui.selectedSemanticId / ui.focusedSemanticId and visibleElements for in-app targets.\n\
+         - Prefer desktop.selectedText, desktop.browser.url, and desktop.frontmostApp for desktop targets.\n\
+         - Use clipboard.preview or clipboard.ocrText when the request refers to copied or pasted content.\n\
+         - Treat priorAutomations as hints only; borrow their shape if useful, but do not assume they are still correct if live context disagrees.\n\
+         - Keep the script short and directly executable.\n\
+         - Return only a fenced ```ts block.\n",
+        intent = intent.trim(),
+        context_json = context_json,
     )
 }
 
@@ -580,7 +625,8 @@ mod tests {
         let recent_inputs = vec!["copy url".to_string(), "open finder".to_string()];
         let ts = "2026-03-28T12:00:00Z".to_string();
 
-        let blob = TabAiContextBlob::from_parts(ui, desktop, recent_inputs, None, ts.clone());
+        let blob =
+            TabAiContextBlob::from_parts(ui, desktop, recent_inputs, None, vec![], ts.clone());
 
         assert_eq!(blob.schema_version, TAB_AI_CONTEXT_SCHEMA_VERSION);
         assert_eq!(blob.timestamp, ts);
@@ -592,7 +638,7 @@ mod tests {
             Some("Slack")
         );
         assert_eq!(blob.recent_inputs.len(), 2);
-        assert!(blob.clipboard_preview.is_none());
+        assert!(blob.clipboard.is_none());
     }
 
     #[test]
@@ -608,7 +654,12 @@ mod tests {
             ui,
             Default::default(),
             vec!["recent".to_string()],
-            Some("clipboard text".to_string()),
+            Some(TabAiClipboardContext {
+                content_type: "text".to_string(),
+                preview: "clipboard text".to_string(),
+                ocr_text: None,
+            }),
+            vec![],
             "2026-03-28T00:00:00Z".to_string(),
         );
         let json = serde_json::to_string(&blob).expect("serialize");
@@ -619,13 +670,14 @@ mod tests {
         assert!(json.contains("inputText"));
         assert!(json.contains("focusedSemanticId"));
         assert!(json.contains("recentInputs"));
-        assert!(json.contains("clipboardPreview"));
+        assert!(json.contains("contentType"));
 
         // Verify snake_case is NOT present
         assert!(!json.contains("schema_version"));
         assert!(!json.contains("prompt_type"));
         assert!(!json.contains("input_text"));
         assert!(!json.contains("recent_inputs"));
+        assert!(!json.contains("content_type"));
     }
 
     #[test]
@@ -658,7 +710,12 @@ mod tests {
             ui,
             desktop,
             vec!["cmd1".to_string(), "cmd2".to_string(), "cmd3".to_string()],
-            Some("clipboard preview".to_string()),
+            Some(TabAiClipboardContext {
+                content_type: "text".to_string(),
+                preview: "clipboard preview".to_string(),
+                ocr_text: None,
+            }),
+            vec![],
             "2026-03-28T18:30:00Z".to_string(),
         );
 
@@ -678,14 +735,14 @@ mod tests {
         );
         assert_eq!(parsed.recent_inputs.len(), 3);
         assert_eq!(
-            parsed.clipboard_preview.as_deref(),
+            parsed.clipboard.as_ref().map(|c| c.preview.as_str()),
             Some("clipboard preview")
         );
     }
 
     #[test]
-    fn tab_ai_context_schema_version_is_one() {
-        assert_eq!(TAB_AI_CONTEXT_SCHEMA_VERSION, 1);
+    fn tab_ai_context_schema_version_is_two() {
+        assert_eq!(TAB_AI_CONTEXT_SCHEMA_VERSION, 2);
     }
 
     #[test]
@@ -698,15 +755,20 @@ mod tests {
             Default::default(),
             vec![],
             None,
+            vec![],
             "2026-03-28T00:00:00Z".to_string(),
         );
         let json = serde_json::to_string(&blob).expect("serialize");
-        assert!(json.contains("\"schemaVersion\":1"));
+        assert!(json.contains("\"schemaVersion\":2"));
         assert!(
             !json.contains("recentInputs"),
             "empty Vec should be omitted"
         );
-        assert!(!json.contains("clipboardPreview"), "None should be omitted");
+        assert!(!json.contains("clipboard"), "None should be omitted");
+        assert!(
+            !json.contains("priorAutomations"),
+            "empty Vec should be omitted"
+        );
     }
 
     #[test]
@@ -716,9 +778,10 @@ mod tests {
             r#"{"ui":{"promptType":"ScriptList"}}"#,
         );
         assert!(prompt.contains("User intent:\nrename selection\nthen copy it"));
-        assert!(prompt.contains("Current context JSON:\n{\"ui\":{\"promptType\":\"ScriptList\"}}"));
+        assert!(prompt.contains("Context JSON:"));
+        assert!(prompt.contains(r#"{"ui":{"promptType":"ScriptList"}}"#));
         assert!(prompt.contains("Script Kit TypeScript"));
-        assert!(prompt.contains("single fenced code block"));
+        assert!(prompt.contains("fenced ```ts block"));
     }
 
     // --- TabAiExecutionRecord tests ---

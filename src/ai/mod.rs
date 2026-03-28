@@ -56,8 +56,9 @@ pub(crate) mod window;
 pub use self::config::{DetectedKeys, ModelInfo, ProviderConfig};
 pub use self::current_app_automation_memory::{
     current_app_automation_memory_index_path, read_current_app_automation_memory_index,
-    resolve_current_app_automation_from_memory, upsert_current_app_automation_memory_from_receipt,
-    CurrentAppAutomationMemoryDecision, CurrentAppAutomationMemoryIndexEntry,
+    resolve_current_app_automation_from_memory, resolve_tab_ai_memory_suggestions,
+    upsert_current_app_automation_memory_from_receipt, CurrentAppAutomationMemoryDecision,
+    CurrentAppAutomationMemoryIndexEntry, TabAiMemorySuggestion,
 };
 pub use self::message_parts::{
     file_path_parts, merge_context_parts, prepare_user_message_with_receipt,
@@ -89,11 +90,12 @@ pub use self::tab_context::{
     append_tab_ai_execution_receipt, append_tab_ai_execution_receipt_to_path,
     build_tab_ai_execution_receipt, build_tab_ai_user_prompt, cleanup_tab_ai_temp_script,
     read_tab_ai_memory_index, read_tab_ai_memory_index_from_path, should_offer_save,
-    tab_ai_execution_audit_path, tab_ai_memory_index_path, write_tab_ai_memory_entry,
-    write_tab_ai_memory_entry_to_path, TabAiContextBlob, TabAiExecutionReceipt,
-    TabAiExecutionRecord, TabAiExecutionStatus, TabAiMemoryEntry, TabAiUiSnapshot,
-    TAB_AI_CONTEXT_SCHEMA_VERSION, TAB_AI_EXECUTION_RECEIPT_SCHEMA_VERSION,
-    TAB_AI_EXECUTION_RECORD_SCHEMA_VERSION, TAB_AI_MEMORY_ENTRY_SCHEMA_VERSION,
+    tab_ai_execution_audit_path, tab_ai_memory_index_path, truncate_tab_ai_text,
+    write_tab_ai_memory_entry, write_tab_ai_memory_entry_to_path, TabAiClipboardContext,
+    TabAiContextBlob, TabAiExecutionReceipt, TabAiExecutionRecord, TabAiExecutionStatus,
+    TabAiMemoryEntry, TabAiUiSnapshot, TAB_AI_CONTEXT_SCHEMA_VERSION,
+    TAB_AI_EXECUTION_RECEIPT_SCHEMA_VERSION, TAB_AI_EXECUTION_RECORD_SCHEMA_VERSION,
+    TAB_AI_MEMORY_ENTRY_SCHEMA_VERSION,
 };
 pub use self::window::{
     add_ai_attachment, apply_ai_preset, close_ai_window, get_ai_window_state, is_ai_window,

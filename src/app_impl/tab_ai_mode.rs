@@ -21,14 +21,31 @@ impl ScriptListApp {
         }
 
         let ui_snapshot = self.snapshot_tab_ai_ui(cx);
+
+        // Cheap frontmost-app capture — no screenshots, no selected text
+        let frontmost_bundle_id = crate::context_snapshot::capture_context_snapshot(
+            &crate::context_snapshot::CaptureContextOptions {
+                include_selected_text: false,
+                include_frontmost_app: true,
+                include_menu_bar: false,
+                include_browser_url: false,
+                include_focused_window: false,
+            },
+        )
+        .frontmost_app
+        .map(|app| app.bundle_id);
+
         tracing::info!(
             event = "tab_ai_open",
             prompt_type = %ui_snapshot.prompt_type,
+            has_frontmost_bundle_id = frontmost_bundle_id.is_some(),
         );
 
         self.tab_ai_state = Some(TabAiOverlayState {
             intent: String::new(),
             ui_snapshot,
+            frontmost_bundle_id,
+            memory_hint: None,
             running: false,
             error: None,
         });
@@ -55,6 +72,57 @@ impl ScriptListApp {
     #[allow(dead_code)] // Will be used by key interceptors in future phases
     pub(crate) fn is_tab_ai_overlay_open(&self) -> bool {
         self.tab_ai_state.is_some()
+    }
+
+    /// Refresh the memory hint based on the current intent and frontmost bundle id.
+    /// Degrades to `None` with a warning log on failure — never aborts the overlay.
+    fn refresh_tab_ai_memory_hint(&mut self) {
+        let (intent, bundle_id) = match self.tab_ai_state.as_ref() {
+            Some(state) => (state.intent.trim().to_string(), state.frontmost_bundle_id.clone()),
+            None => return,
+        };
+
+        let memory_hint = match crate::ai::resolve_tab_ai_memory_suggestions(
+            &intent,
+            bundle_id.as_deref(),
+            1,
+        ) {
+            Ok(suggestions) => suggestions.into_iter().next(),
+            Err(error) => {
+                tracing::warn!(event = "tab_ai_memory_hint_failed", error = %error);
+                None
+            }
+        };
+
+        if let Some(state) = &mut self.tab_ai_state {
+            state.memory_hint = memory_hint;
+        }
+    }
+
+    /// Build a clipboard context summary from the most recent cached clipboard entry.
+    /// Uses only cached data — no new clipboard reads or screenshot capture.
+    fn resolve_tab_ai_clipboard_context(&self) -> Option<crate::ai::TabAiClipboardContext> {
+        let entry = self.cached_clipboard_entries.first()?;
+
+        let preview = if entry.content_type.as_str() == "image" {
+            entry
+                .ocr_text
+                .clone()
+                .filter(|text| !text.trim().is_empty())
+                .unwrap_or_else(|| entry.display_preview())
+        } else {
+            entry.display_preview()
+        };
+
+        Some(crate::ai::TabAiClipboardContext {
+            content_type: entry.content_type.as_str().to_string(),
+            preview: crate::ai::truncate_tab_ai_text(&preview, 240),
+            ocr_text: entry
+                .ocr_text
+                .clone()
+                .filter(|text| !text.trim().is_empty())
+                .map(|text| crate::ai::truncate_tab_ai_text(&text, 240)),
+        })
     }
 
     /// Capture a snapshot of the current UI state for context assembly.
@@ -89,6 +157,12 @@ impl ScriptListApp {
             .map(|s| s.ui_snapshot.clone())
             .unwrap_or_default();
 
+        let intent_for_lookup = self
+            .tab_ai_state
+            .as_ref()
+            .map(|s| s.intent.clone())
+            .unwrap_or_default();
+
         // Desktop context — use the lightweight recommendation profile
         let desktop = crate::context_snapshot::capture_context_snapshot(
             &crate::context_snapshot::CaptureContextOptions::recommendation(),
@@ -104,6 +178,22 @@ impl ScriptListApp {
         // Recent input history (most recent first, bounded)
         let recent_inputs = self.input_history.recent_entries(5);
 
+        // Cached clipboard context (no new reads)
+        let clipboard = self.resolve_tab_ai_clipboard_context();
+
+        // Prior automation suggestions (up to 3)
+        let prior_automations = match crate::ai::resolve_tab_ai_memory_suggestions(
+            &intent_for_lookup,
+            bundle_id.as_deref(),
+            3,
+        ) {
+            Ok(entries) => entries,
+            Err(error) => {
+                tracing::warn!(event = "tab_ai_prior_automation_lookup_failed", error = %error);
+                Vec::new()
+            }
+        };
+
         let timestamp = chrono::Utc::now().to_rfc3339();
 
         tracing::info!(
@@ -111,6 +201,8 @@ impl ScriptListApp {
             prompt_type = %ui.prompt_type,
             visible_count = ui.visible_elements.len(),
             has_bundle_id = bundle_id.is_some(),
+            has_clipboard = clipboard.is_some(),
+            prior_automation_count = prior_automations.len(),
             context_warning_count,
         );
 
@@ -119,7 +211,8 @@ impl ScriptListApp {
                 ui,
                 desktop,
                 recent_inputs,
-                None, // Phase 2: clipboard OCR
+                clipboard,
+                prior_automations,
                 timestamp,
             ),
             bundle_id,
@@ -239,6 +332,7 @@ impl ScriptListApp {
         let intent_text: SharedString = state.intent.clone().into();
         let is_running = state.running;
         let error_msg = state.error.clone();
+        let memory_hint = state.memory_hint.clone();
 
         // Placeholder text depends on running state
         let placeholder: SharedString = if is_running {
@@ -324,6 +418,21 @@ impl ScriptListApp {
                                     }),
                             ),
                     )
+                    // Prior automation hint row
+                    .when_some(memory_hint, |d, hint| {
+                        d.child(
+                            div()
+                                .w_full()
+                                .px(px(12.))
+                                .py(px(4.))
+                                .text_xs()
+                                .text_color(text_muted)
+                                .child(format!(
+                                    "Similar prior automation: {} \u{2014} {} ({:.2})",
+                                    hint.slug, hint.effective_query, hint.score
+                                )),
+                        )
+                    })
                     // Error message if present
                     .when_some(error_msg, |d, msg| {
                         d.child(
@@ -386,6 +495,7 @@ impl ScriptListApp {
             if let Some(state) = &mut self.tab_ai_state {
                 if !state.running {
                     state.intent.pop();
+                    self.refresh_tab_ai_memory_hint();
                     cx.notify();
                 }
             }
@@ -403,6 +513,7 @@ impl ScriptListApp {
                 if !state.running {
                     state.intent.push_str(&event.keystroke.key);
                     state.error = None; // Clear error on new input
+                    self.refresh_tab_ai_memory_hint();
                     cx.notify();
                 }
             }
@@ -416,6 +527,7 @@ impl ScriptListApp {
                 if !state.running {
                     state.intent.push(' ');
                     state.error = None;
+                    self.refresh_tab_ai_memory_hint();
                     cx.notify();
                 }
             }
@@ -1049,6 +1161,7 @@ mod tests {
             Default::default(),
             vec!["recent1".to_string()],
             None,
+            vec![],
             "2026-03-28T00:00:00Z".to_string(),
         ))
         .expect("serialize");
