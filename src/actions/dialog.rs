@@ -2718,7 +2718,11 @@ impl ActionsDialogExpectedContract {
 
 #[inline]
 fn actions_dialog_bool_name(value: bool) -> &'static str {
-    if value { "true" } else { "false" }
+    if value {
+        "true"
+    } else {
+        "false"
+    }
 }
 
 impl ActionsDialogRuntimeAudit {
@@ -3340,19 +3344,15 @@ mod actions_dialog_spec_tests {
         };
         let violations = audit.validate_against(&ActionsDialogExpectedContract::impeccable());
         assert!(
-            violations
-                .iter()
-                .any(|v| v.field == "search_position"
-                    && v.expected == "top"
-                    && v.actual == "bottom"),
+            violations.iter().any(|v| v.field == "search_position"
+                && v.expected == "top"
+                && v.actual == "bottom"),
             "expected a search_position violation"
         );
         assert!(
-            violations
-                .iter()
-                .any(|v| v.field == "show_container_border"
-                    && v.expected == "false"
-                    && v.actual == "true"),
+            violations.iter().any(|v| v.field == "show_container_border"
+                && v.expected == "false"
+                && v.actual == "true"),
             "expected a show_container_border violation"
         );
     }

@@ -1,5 +1,7 @@
 use script_kit_gpui::ai::{
-    resolve_tab_ai_memory_suggestions_from_path, TabAiMemoryEntry, TabAiMemorySuggestion,
+    read_tab_ai_memory_index_from_path, resolve_tab_ai_memory_suggestions_from_path,
+    resolve_tab_ai_memory_suggestions_with_outcome_from_path, write_tab_ai_memory_entry_to_path,
+    TabAiExecutionRecord, TabAiMemoryEntry, TabAiMemoryResolutionReason, TabAiMemorySuggestion,
     TAB_AI_MEMORY_ENTRY_SCHEMA_VERSION,
 };
 
@@ -69,9 +71,8 @@ fn returns_empty_when_bundle_id_is_none() {
 fn returns_empty_when_bundle_id_is_blank() {
     let dir = tempfile::tempdir().expect("tempdir");
     let path = dir.path().join(".tab-ai-memory.json");
-    let result =
-        resolve_tab_ai_memory_suggestions_from_path("copy url", Some("  "), 5, &path)
-            .expect("should succeed");
+    let result = resolve_tab_ai_memory_suggestions_from_path("copy url", Some("  "), 5, &path)
+        .expect("should succeed");
     assert!(result.is_empty());
 }
 
@@ -79,13 +80,9 @@ fn returns_empty_when_bundle_id_is_blank() {
 fn returns_empty_when_limit_is_zero() {
     let dir = tempfile::tempdir().expect("tempdir");
     let path = dir.path().join(".tab-ai-memory.json");
-    let result = resolve_tab_ai_memory_suggestions_from_path(
-        "copy url",
-        Some("com.apple.Safari"),
-        0,
-        &path,
-    )
-    .expect("should succeed");
+    let result =
+        resolve_tab_ai_memory_suggestions_from_path("copy url", Some("com.apple.Safari"), 0, &path)
+            .expect("should succeed");
     assert!(result.is_empty());
 }
 
@@ -143,13 +140,9 @@ fn resolve_tab_ai_memory_suggestions_filters_by_bundle_id() {
     ];
     write_memory(&path, &entries);
 
-    let results = resolve_tab_ai_memory_suggestions_from_path(
-        "copy url",
-        Some("com.apple.Safari"),
-        3,
-        &path,
-    )
-    .expect("resolve suggestions");
+    let results =
+        resolve_tab_ai_memory_suggestions_from_path("copy url", Some("com.apple.Safari"), 3, &path)
+            .expect("resolve suggestions");
 
     assert_eq!(results.len(), 1);
     assert_eq!(results[0].slug, "copy-browser-url");
@@ -270,13 +263,9 @@ fn truncated_to_limit() {
         .collect();
     write_memory(&path, &entries);
 
-    let results = resolve_tab_ai_memory_suggestions_from_path(
-        "copy url",
-        Some("com.apple.Safari"),
-        2,
-        &path,
-    )
-    .expect("should succeed");
+    let results =
+        resolve_tab_ai_memory_suggestions_from_path("copy url", Some("com.apple.Safari"), 2, &path)
+            .expect("should succeed");
 
     assert!(
         results.len() <= 2,
@@ -356,13 +345,173 @@ fn returns_empty_when_no_index_file_exists() {
     let dir = tempfile::tempdir().expect("tempdir");
     let path = dir.path().join("nonexistent.json");
 
-    let results = resolve_tab_ai_memory_suggestions_from_path(
-        "copy url",
-        Some("com.apple.Safari"),
-        5,
-        &path,
-    )
-    .expect("should succeed");
+    let results =
+        resolve_tab_ai_memory_suggestions_from_path("copy url", Some("com.apple.Safari"), 5, &path)
+            .expect("should succeed");
 
     assert!(results.is_empty(), "no index file should return empty vec");
+}
+
+// ---------------------------------------------------------------------------
+// Tests: outcome-aware resolver regression (deterministic reason values)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn outcome_reports_missing_bundle_id_reason() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join(".tab-ai-memory.json");
+
+    let resolution = resolve_tab_ai_memory_suggestions_with_outcome_from_path(
+        "force quit slack",
+        None,
+        3,
+        &path,
+    )
+    .expect("resolve");
+
+    assert!(resolution.suggestions.is_empty());
+    assert_eq!(
+        resolution.outcome.reason,
+        TabAiMemoryResolutionReason::MissingBundleId
+    );
+    assert_eq!(resolution.outcome.candidate_count, 0);
+    assert_eq!(resolution.outcome.match_count, 0);
+    assert!(resolution.outcome.top_score.is_none());
+    assert!(resolution.outcome.matched_slugs.is_empty());
+}
+
+#[test]
+fn outcome_reports_index_missing_reason() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("nonexistent.json");
+
+    let resolution = resolve_tab_ai_memory_suggestions_with_outcome_from_path(
+        "force quit slack",
+        Some("com.tinyspeck.slackmacgap"),
+        3,
+        &path,
+    )
+    .expect("resolve");
+
+    assert!(resolution.suggestions.is_empty());
+    assert_eq!(
+        resolution.outcome.reason,
+        TabAiMemoryResolutionReason::IndexMissing
+    );
+    assert!(resolution.outcome.index_path.contains("nonexistent.json"));
+}
+
+#[test]
+fn outcome_prefers_recent_high_score_matches_with_ordering() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join(".tab-ai-memory.json");
+
+    // Use intents that both share enough tokens with "force quit app" to be above threshold.
+    let older = TabAiExecutionRecord::from_parts(
+        "force quit current app".to_string(),
+        "import \"@scriptkit/sdk\";\nawait notify(\"old\");\n".to_string(),
+        "/tmp/old.ts".to_string(),
+        "force-quit-old".to_string(),
+        "ScriptList".to_string(),
+        Some("com.tinyspeck.slackmacgap".to_string()),
+        "model-a".to_string(),
+        "provider-a".to_string(),
+        0,
+        "2026-03-28T00:00:00Z".to_string(),
+    );
+    let newer = TabAiExecutionRecord::from_parts(
+        "force quit app".to_string(),
+        "import \"@scriptkit/sdk\";\nawait notify(\"new\");\n".to_string(),
+        "/tmp/new.ts".to_string(),
+        "force-quit-new".to_string(),
+        "ScriptList".to_string(),
+        Some("com.tinyspeck.slackmacgap".to_string()),
+        "model-a".to_string(),
+        "provider-a".to_string(),
+        0,
+        "2026-03-28T01:00:00Z".to_string(),
+    );
+
+    write_tab_ai_memory_entry_to_path(&older, &path).expect("write older");
+    write_tab_ai_memory_entry_to_path(&newer, &path).expect("write newer");
+
+    let resolution = resolve_tab_ai_memory_suggestions_with_outcome_from_path(
+        "force quit app",
+        Some("com.tinyspeck.slackmacgap"),
+        3,
+        &path,
+    )
+    .expect("resolve");
+
+    assert_eq!(
+        resolution.outcome.reason,
+        TabAiMemoryResolutionReason::Matched
+    );
+    // The exact match "force quit app" scores 1.0 and must be first
+    assert_eq!(resolution.outcome.top_score, Some(1.0));
+    assert_eq!(
+        resolution.suggestions.first().map(|s| s.slug.as_str()),
+        Some("force-quit-new")
+    );
+    // Both entries should match (the older one shares tokens with the query)
+    assert_eq!(resolution.outcome.match_count, 2);
+    assert_eq!(resolution.outcome.candidate_count, 2);
+    // matched_slugs must list slugs in score-descending order
+    assert_eq!(resolution.outcome.matched_slugs[0], "force-quit-new");
+}
+
+#[test]
+fn outcome_write_dedupes_same_intent_and_bundle() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join(".tab-ai-memory.json");
+
+    let first = TabAiExecutionRecord::from_parts(
+        "copy url".to_string(),
+        "import \"@scriptkit/sdk\";\nawait notify(\"a\");\n".to_string(),
+        "/tmp/one.ts".to_string(),
+        "copy-url-one".to_string(),
+        "ScriptList".to_string(),
+        Some("com.google.Chrome".to_string()),
+        "model-a".to_string(),
+        "provider-a".to_string(),
+        0,
+        "2026-03-28T00:00:00Z".to_string(),
+    );
+    let second = TabAiExecutionRecord::from_parts(
+        "copy url".to_string(),
+        "import \"@scriptkit/sdk\";\nawait notify(\"b\");\n".to_string(),
+        "/tmp/two.ts".to_string(),
+        "copy-url-two".to_string(),
+        "ScriptList".to_string(),
+        Some("com.google.Chrome".to_string()),
+        "model-a".to_string(),
+        "provider-a".to_string(),
+        0,
+        "2026-03-28T01:00:00Z".to_string(),
+    );
+
+    write_tab_ai_memory_entry_to_path(&first, &path).expect("write first");
+    write_tab_ai_memory_entry_to_path(&second, &path).expect("write second");
+
+    // Only the latest entry for the same intent+bundle_id pair survives
+    let entries = read_tab_ai_memory_index_from_path(&path).expect("read");
+    assert_eq!(entries.len(), 1, "dedupe should keep only one entry");
+    assert_eq!(entries[0].slug, "copy-url-two");
+
+    // Resolver also confirms matched state
+    let resolution = resolve_tab_ai_memory_suggestions_with_outcome_from_path(
+        "copy url",
+        Some("com.google.Chrome"),
+        3,
+        &path,
+    )
+    .expect("resolve");
+
+    assert_eq!(
+        resolution.outcome.reason,
+        TabAiMemoryResolutionReason::Matched
+    );
+    assert_eq!(resolution.outcome.match_count, 1);
+    assert_eq!(resolution.outcome.top_score, Some(1.0));
+    assert_eq!(resolution.suggestions[0].slug, "copy-url-two");
 }

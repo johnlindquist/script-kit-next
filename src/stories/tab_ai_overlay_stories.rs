@@ -7,7 +7,9 @@
 
 use gpui::*;
 
-use crate::storybook::{story_container, story_item, story_section, Story, StorySurface, StoryVariant};
+use crate::storybook::{
+    story_container, story_item, story_section, Story, StorySurface, StoryVariant,
+};
 
 pub struct TabAiOverlayStory;
 
@@ -32,14 +34,12 @@ impl Story for TabAiOverlayStory {
         let theme = crate::theme::get_cached_theme();
 
         story_container()
-            .child(
-                story_section("Tab AI Overlay — Visual States").children(
-                    self.variants().iter().map(|v| {
-                        let kind = TabAiOverlayKind::from_variant_id(&v.stable_id());
-                        story_item(&v.name, render_overlay_kind(&theme, &kind))
-                    }),
-                ),
-            )
+            .child(story_section("Tab AI Overlay — Visual States").children(
+                self.variants().iter().map(|v| {
+                    let kind = TabAiOverlayKind::from_variant_id(&v.stable_id());
+                    story_item(&v.name, render_overlay_kind(&theme, &kind))
+                }),
+            ))
             .into_any_element()
     }
 
@@ -102,7 +102,10 @@ impl TabAiOverlayKind {
                 intent: "force quit this app".into(),
                 placeholder: "What do you want to do?".into(),
                 is_running: false,
-                error: Some("No AI model configured. Open Settings \u{2192} AI and add a provider API key.".into()),
+                error: Some(
+                    "No AI model configured. Open Settings \u{2192} AI and add a provider API key."
+                        .into(),
+                ),
                 memory_hint: None,
             }),
             "memory-hint" => Self::Main(TabAiMainState {
@@ -110,7 +113,9 @@ impl TabAiOverlayKind {
                 placeholder: "What do you want to do?".into(),
                 is_running: false,
                 error: None,
-                memory_hint: Some("Similar prior automation: focus-slack \u{2014} focus on slack (0.92)".into()),
+                memory_hint: Some(
+                    "Similar prior automation: focus-slack \u{2014} focus on slack (0.92)".into(),
+                ),
             }),
             "save-offer" => Self::SaveOffer(TabAiSaveOfferVisualState {
                 filename_stem: "focus-slack".into(),
@@ -133,10 +138,7 @@ impl TabAiOverlayKind {
 }
 
 /// Dispatch to the correct renderer based on overlay kind.
-fn render_overlay_kind(
-    theme: &crate::theme::Theme,
-    kind: &TabAiOverlayKind,
-) -> Div {
+fn render_overlay_kind(theme: &crate::theme::Theme, kind: &TabAiOverlayKind) -> Div {
     match kind {
         TabAiOverlayKind::Main(state) => render_tab_ai_main_preview(theme, state),
         TabAiOverlayKind::SaveOffer(state) => render_tab_ai_save_offer_preview(theme, state),
@@ -147,10 +149,7 @@ fn render_overlay_kind(
 ///
 /// Uses the same shared primitives (HintStrip, opacity tokens, FONT_MONO)
 /// as the production `render_tab_ai_overlay` in `src/app_impl/tab_ai_mode.rs`.
-fn render_tab_ai_main_preview(
-    theme: &crate::theme::Theme,
-    state: &TabAiMainState,
-) -> Div {
+fn render_tab_ai_main_preview(theme: &crate::theme::Theme, state: &TabAiMainState) -> Div {
     let accent = gpui::rgb(theme.colors.accent.selected);
     let bg_scrim = gpui::rgba(crate::ui_foundation::hex_to_rgba_with_opacity(
         theme.colors.background.main,
@@ -291,17 +290,13 @@ fn render_tab_ai_save_offer_preview(
         .overflow_hidden()
         // Message row — bare text, no card, no accent bar
         .child(
-            div()
-                .w_full()
-                .px(px(hint_px))
-                .py(px(10.))
-                .child(
-                    div()
-                        .text_sm()
-                        .font_family(crate::list_item::FONT_MONO)
-                        .text_color(text_primary)
-                        .child(message),
-                ),
+            div().w_full().px(px(hint_px)).py(px(10.)).child(
+                div()
+                    .text_sm()
+                    .font_family(crate::list_item::FONT_MONO)
+                    .text_color(text_primary)
+                    .child(message),
+            ),
         )
         // Hairline divider — ghost opacity
         .child(div().w_full().h(px(1.)).bg(divider_rgba));
@@ -358,6 +353,9 @@ mod tests {
     #[test]
     fn tab_ai_overlay_story_is_comparable() {
         let story = TabAiOverlayStory;
-        assert!(story.variants().len() > 1, "must be comparable (>1 variant)");
+        assert!(
+            story.variants().len() > 1,
+            "must be comparable (>1 variant)"
+        );
     }
 }
