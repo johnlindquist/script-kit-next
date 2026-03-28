@@ -91,13 +91,70 @@ impl ScriptListApp {
         cx.notify();
     }
 
+    /// Return the correct `FocusTarget` for the originating surface so that
+    /// closing the Tab AI overlay restores focus to the right place.
+    fn tab_ai_return_focus_target(&self) -> FocusTarget {
+        match &self.current_view {
+            AppView::ScriptList
+            | AppView::ClipboardHistoryView { .. }
+            | AppView::AppLauncherView { .. }
+            | AppView::WindowSwitcherView { .. }
+            | AppView::FileSearchView { .. }
+            | AppView::ThemeChooserView { .. }
+            | AppView::EmojiPickerView { .. }
+            | AppView::BrowseKitsView { .. }
+            | AppView::InstalledKitsView { .. }
+            | AppView::ProcessManagerView { .. }
+            | AppView::SearchAiPresetsView { .. }
+            | AppView::CreateAiPresetView { .. }
+            | AppView::SettingsView { .. }
+            | AppView::FavoritesBrowseView { .. }
+            | AppView::CurrentAppCommandsView { .. }
+            | AppView::DesignGalleryView { .. }
+            | AppView::CreationFeedback { .. }
+            | AppView::ActionsDialog => FocusTarget::MainFilter,
+
+            AppView::ArgPrompt { .. }
+            | AppView::MiniPrompt { .. }
+            | AppView::MicroPrompt { .. }
+            | AppView::DivPrompt { .. }
+            | AppView::WebcamView { .. } => FocusTarget::AppRoot,
+
+            AppView::FormPrompt { .. } => FocusTarget::FormPrompt,
+
+            AppView::EditorPrompt { .. } | AppView::ScratchPadView { .. } => {
+                FocusTarget::EditorPrompt
+            }
+
+            AppView::SelectPrompt { .. } => FocusTarget::SelectPrompt,
+            AppView::PathPrompt { .. } => FocusTarget::PathPrompt,
+            AppView::EnvPrompt { .. } => FocusTarget::EnvPrompt,
+            AppView::DropPrompt { .. } => FocusTarget::DropPrompt,
+            AppView::TemplatePrompt { .. } => FocusTarget::TemplatePrompt,
+
+            AppView::TermPrompt { .. } | AppView::QuickTerminalView { .. } => {
+                FocusTarget::TermPrompt
+            }
+
+            AppView::ChatPrompt { .. } => FocusTarget::ChatPrompt,
+            AppView::NamingPrompt { .. } => FocusTarget::NamingPrompt,
+
+            #[cfg(feature = "storybook")]
+            AppView::DesignExplorerView { .. } => FocusTarget::AppRoot,
+        }
+    }
+
     /// Close the Tab AI overlay and restore focus.
     pub(crate) fn close_tab_ai_overlay(&mut self, cx: &mut Context<Self>) {
         if self.tab_ai_state.is_some() {
-            tracing::info!(event = "tab_ai_close");
+            let target = self.tab_ai_return_focus_target();
+            tracing::info!(
+                event = "tab_ai_close",
+                focus_target = %format!("{target:?}"),
+            );
             self.tab_ai_state = None;
             self.tab_ai_task = None;
-            self.pending_focus = Some(FocusTarget::MainFilter);
+            self.pending_focus = Some(target);
             cx.notify();
         }
     }

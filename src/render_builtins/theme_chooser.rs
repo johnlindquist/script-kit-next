@@ -1272,14 +1272,11 @@ impl ScriptListApp {
                 )
                 // Reset button
                 .child(reset_button)
-                // ── Preview section ────────────────────────────────────
+                // ── Preview section (spacing-only separation per spec) ──
                 .child(
                     div()
                         .w_full()
-                        .mt(px(4.0))
-                        .pt(px(8.0))
-                        .border_t_1()
-                        .border_color(border_rgba)
+                        .mt(px(8.0))
                         .child(
                             div()
                                 .text_xs()
@@ -1460,59 +1457,11 @@ impl ScriptListApp {
                         ),
                 );
 
-        // ── Footer with keyboard shortcuts ─────────────────────────
-        let shortcut = |key: &str, label: &str| {
-            div()
-                .flex()
-                .flex_row()
-                .gap(px(4.0))
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(rgb(text_secondary))
-                        .child(key.to_string()),
-                )
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(rgb(text_dimmed))
-                        .child(label.to_string()),
-                )
-        };
-        let footer_border = rgba((ui_border << 8) | ALPHA_FOOTER_BORDER);
-        let footer = div()
-            .w_full()
-            .px(px(design_spacing.padding_lg))
-            .py(px(design_spacing.padding_sm))
-            .border_t_1()
-            .border_color(footer_border)
-            .flex()
-            .flex_col()
-            .gap(px(2.0))
-            .child(
-                div()
-                    .flex()
-                    .flex_row()
-                    .justify_center()
-                    .gap(px(12.0))
-                    .child(shortcut("↑↓", "Preview"))
-                    .child(shortcut("Enter", "Apply"))
-                    .child(shortcut("Esc", "Cancel"))
-                    .child(shortcut("PgUp/Dn", "Jump"))
-                    .child(shortcut("Type", "Search")),
-            )
-            .child(
-                div()
-                    .flex()
-                    .flex_row()
-                    .justify_center()
-                    .gap(px(12.0))
-                    .child(shortcut("⌘[]", "Accent"))
-                    .child(shortcut("⌘-/=", "Opacity"))
-                    .child(shortcut("⌘B", "Vibrancy"))
-                    .child(shortcut("⌘M", "Material"))
-                    .child(shortcut("⌘R", "Reset")),
-            );
+        // ── Footer: canonical three-key hint strip per .impeccable.md ──
+        let footer = crate::components::prompt_layout_shell::render_simple_hint_strip(
+            crate::components::prompt_layout_shell::universal_prompt_hints(),
+            None,
+        );
 
         // ── Empty state when filter has no matches ─────────────────
         if filtered_count == 0 {
@@ -1577,6 +1526,57 @@ impl ScriptListApp {
             )
             .child(footer)
             .into_any_element()
+    }
+}
+
+#[cfg(test)]
+mod theme_chooser_chrome_audit {
+    #[test]
+    fn theme_chooser_uses_canonical_hint_strip_footer() {
+        let source = include_str!("theme_chooser.rs");
+        assert!(
+            source.contains("universal_prompt_hints()"),
+            "theme_chooser should use universal_prompt_hints for its footer"
+        );
+        assert!(
+            source.contains("render_simple_hint_strip("),
+            "theme_chooser should use render_simple_hint_strip"
+        );
+    }
+
+    #[test]
+    fn theme_chooser_has_no_legacy_multi_shortcut_footer() {
+        let source = include_str!("theme_chooser.rs");
+        // The old footer had two rows of shortcuts centered with justify_center
+        // and individual shortcut labels like "Preview", "Apply", "Cancel" etc.
+        // The canonical footer only has three keys: Run, Actions, Tab AI.
+        assert!(
+            !source.contains(r#".child(shortcut("⌘[]", "Accent"))"#),
+            "theme_chooser should not have legacy multi-shortcut footer"
+        );
+    }
+
+    #[test]
+    fn theme_chooser_preview_has_no_decorative_section_dividers() {
+        let source = include_str!("theme_chooser.rs");
+        // The PREVIEW section header should use spacing-only separation,
+        // not a border_t_1 divider.
+        let preview_section_start = source.find("spacing-only separation per spec");
+        assert!(
+            preview_section_start.is_some(),
+            "theme_chooser preview section should use spacing-only separation"
+        );
+    }
+
+    #[test]
+    fn theme_chooser_has_no_prompt_footer() {
+        let source = include_str!("theme_chooser.rs");
+        let legacy = "Prompt".to_owned() + "Footer::new(";
+        assert_eq!(
+            source.matches(&legacy).count(),
+            0,
+            "theme_chooser should not use PromptFooter"
+        );
     }
 }
 

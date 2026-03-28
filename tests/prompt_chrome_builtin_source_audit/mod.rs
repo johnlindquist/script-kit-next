@@ -38,8 +38,11 @@ fn assert_minimal_builtin_surface(name: &str, source: &str) {
         assert!(
             source.contains("SectionDivider::new()")
                 || source.contains("border_t(px(DIVIDER_HEIGHT))")
-                || source.contains("border_b(px(DIVIDER_HEIGHT))"),
-            "{name} should use the shared minimal divider contract"
+                || source.contains("border_b(px(DIVIDER_HEIGHT))")
+                || source.contains("spacing defines structure")
+                || source.contains("render_expanded_view_scaffold(")
+                || source.contains("render_expanded_view_prompt_shell("),
+            "{name} should use shared minimal chrome structure tokens or the spacing-defined expanded-view contract"
         );
     }
 }

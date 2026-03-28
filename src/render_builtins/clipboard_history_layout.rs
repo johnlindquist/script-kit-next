@@ -17,7 +17,7 @@
             // Removed: .shadow(box_shadows) - shadows on transparent elements block vibrancy
             .w_full()
             .h_full()
-            .rounded(px(design_visual.radius_lg))
+            // Sharp edges per .impeccable.md (no rounded corners on main containers)
             .text_color(rgb(text_primary))
             .font_family(design_typography.font_family)
             .key_context("clipboard_history")
@@ -54,8 +54,7 @@
                             .child(format!("{} entries", self.cached_clipboard_entries.len())),
                     ),
             )
-            // Divider
-            .child(crate::components::SectionDivider::new())
+            // Whisper chrome: spacing defines structure, no explicit divider
             // Main content area - 50/50 split: List on left, Preview on right
             .child(
                 div()
