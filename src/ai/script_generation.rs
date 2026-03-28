@@ -1088,6 +1088,19 @@ fn enforce_script_kit_conventions(script: &str, prompt: &str, slug: &str) -> Str
         ));
     }
 
+    // Replace legacy @johnlindquist/kit imports with @scriptkit/sdk
+    let body = body
+        .lines()
+        .map(|line| {
+            if line.trim().starts_with("import") && line.contains("@johnlindquist/kit") {
+                SCRIPT_KIT_SDK_IMPORT_STATEMENT
+            } else {
+                line
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+
     if !has_kit_import(&body) {
         prefix_lines.push(SCRIPT_KIT_SDK_IMPORT_STATEMENT.to_string());
     }
@@ -1245,6 +1258,25 @@ await div("ready");
         assert!(has_kit_import("import \"@scriptkit/sdk\";"));
         assert!(has_kit_import("import '@scriptkit/sdk'"));
         assert!(!has_kit_import("import \"@johnlindquist/kit\";"));
+    }
+
+    #[test]
+    fn test_enforce_conventions_replaces_legacy_johnlindquist_kit_import() {
+        let script = "// Name: Focus Notion\n// Description: Bring Notion to the front\n\nimport \"@johnlindquist/kit\";\n\nawait $`open -a \"Notion\"`;";
+        let output = enforce_script_kit_conventions(script, "focus on this app", "focus-notion");
+        assert!(
+            output.contains("import \"@scriptkit/sdk\";"),
+            "should replace legacy import with @scriptkit/sdk"
+        );
+        assert!(
+            !output.contains("@johnlindquist/kit"),
+            "should not contain legacy @johnlindquist/kit import"
+        );
+        assert_eq!(
+            output.matches("import \"@scriptkit/sdk\";").count(),
+            1,
+            "should have exactly one @scriptkit/sdk import"
+        );
     }
 
     #[test]
