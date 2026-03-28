@@ -867,9 +867,16 @@ mod prompt_layout_shell_tests {
     #[test]
     fn chat_prompt_uses_simple_prompt_shell_in_other_rs() {
         let body = fn_source("render_chat_prompt");
+        // Chat renders its own footer (mini hint strip or rich interactive footer),
+        // so it uses render_simple_prompt_shell directly with None footer
+        // instead of render_wrapped_prompt_entity (which always adds a footer).
         assert!(
-            body.contains("render_wrapped_prompt_entity("),
-            "render_chat_prompt should delegate to render_wrapped_prompt_entity"
+            body.contains("render_simple_prompt_shell("),
+            "render_chat_prompt should use the shared shell directly"
+        );
+        assert!(
+            !body.contains("render_wrapped_prompt_entity("),
+            "render_chat_prompt should not use render_wrapped_prompt_entity (would add duplicate footer)"
         );
         assert!(
             body.contains("other_prompt_shell_handle_key_chat"),
