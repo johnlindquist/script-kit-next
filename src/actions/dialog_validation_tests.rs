@@ -22,8 +22,8 @@ use super::builders::{
     NewChatModelInfo, NewChatPresetInfo, NoteSwitcherNoteInfo, NotesInfo,
 };
 use super::constants::{
-    ACTION_ITEM_HEIGHT, ACTION_ROW_INSET, HEADER_HEIGHT, KEYCAP_HEIGHT, KEYCAP_MIN_WIDTH,
-    POPUP_MAX_HEIGHT, POPUP_WIDTH, SEARCH_INPUT_HEIGHT, SECTION_HEADER_HEIGHT, SELECTION_RADIUS,
+    ACTION_ITEM_HEIGHT, ACTION_ROW_INSET, HEADER_HEIGHT, POPUP_MAX_HEIGHT, POPUP_WIDTH,
+    SEARCH_INPUT_HEIGHT, SECTION_HEADER_HEIGHT,
 };
 use super::dialog::{build_grouped_items_static, coerce_action_selection, GroupedActionItem};
 use super::types::{
@@ -520,9 +520,6 @@ fn test_constants_positive_and_reasonable() {
     assert!(val(HEADER_HEIGHT) > 0.0 && val(HEADER_HEIGHT) < 100.0);
     assert!(val(SECTION_HEADER_HEIGHT) > 0.0 && val(SECTION_HEADER_HEIGHT) < 100.0);
     assert!(val(ACTION_ROW_INSET) >= 0.0 && val(ACTION_ROW_INSET) < 50.0);
-    assert!(val(SELECTION_RADIUS) >= 0.0 && val(SELECTION_RADIUS) < 50.0);
-    assert!(val(KEYCAP_MIN_WIDTH) > 0.0 && val(KEYCAP_MIN_WIDTH) < 100.0);
-    assert!(val(KEYCAP_HEIGHT) > 0.0 && val(KEYCAP_HEIGHT) < 100.0);
 }
 
 #[test]
@@ -555,7 +552,7 @@ fn test_section_header_shorter_than_action_item() {
 fn test_command_bar_config_default_values() {
     let config = CommandBarConfig::default();
     assert_eq!(config.dialog_config.search_position, SearchPosition::Bottom);
-    assert_eq!(config.dialog_config.section_style, SectionStyle::Separators);
+    assert_eq!(config.dialog_config.section_style, SectionStyle::Headers);
     assert_eq!(config.dialog_config.anchor, AnchorPosition::Bottom);
     assert!(!config.dialog_config.show_icons);
     assert!(!config.dialog_config.show_footer);
@@ -578,7 +575,7 @@ fn test_command_bar_config_ai_style_values() {
 fn test_command_bar_config_main_menu_style() {
     let config = CommandBarConfig::main_menu_style();
     assert_eq!(config.dialog_config.search_position, SearchPosition::Bottom);
-    assert_eq!(config.dialog_config.section_style, SectionStyle::Separators);
+    assert_eq!(config.dialog_config.section_style, SectionStyle::Headers);
     assert_eq!(config.dialog_config.anchor, AnchorPosition::Bottom);
     assert!(!config.dialog_config.show_icons);
     assert!(!config.dialog_config.show_footer);
@@ -1674,7 +1671,7 @@ fn test_search_position_default() {
 
 #[test]
 fn test_section_style_default() {
-    assert_eq!(SectionStyle::default(), SectionStyle::Separators);
+    assert_eq!(SectionStyle::default(), SectionStyle::Headers);
 }
 
 #[test]
@@ -1686,7 +1683,7 @@ fn test_anchor_position_default() {
 fn test_actions_dialog_config_default() {
     let config = ActionsDialogConfig::default();
     assert_eq!(config.search_position, SearchPosition::Bottom);
-    assert_eq!(config.section_style, SectionStyle::Separators);
+    assert_eq!(config.section_style, SectionStyle::Headers);
     assert_eq!(config.anchor, AnchorPosition::Bottom);
     assert!(!config.show_icons);
     assert!(!config.show_footer);

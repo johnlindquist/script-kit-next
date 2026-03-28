@@ -33,17 +33,10 @@ pub const SECTION_HEADER_HEIGHT: f32 = 20.0;
 /// Horizontal inset for action rows (creates rounded pill appearance)
 pub const ACTION_ROW_INSET: f32 = 4.0;
 
-/// Corner radius for selected row background (legacy pill style, kept for test assertions)
-#[allow(dead_code)]
-pub const SELECTION_RADIUS: f32 = 6.0;
-
-/// Minimum width for keycap badges (legacy dimensions, kept for test assertions)
-#[allow(dead_code)]
-pub const KEYCAP_MIN_WIDTH: f32 = 20.0;
-
-/// Height for keycap badges (legacy dimensions, kept for test assertions)
-#[allow(dead_code)]
-pub const KEYCAP_HEIGHT: f32 = 20.0;
+// Removed obsolete legacy constants (no longer referenced by live code):
+// - SELECTION_RADIUS (legacy pill-style row radius — live dialog uses storybook style.row_radius)
+// - KEYCAP_MIN_WIDTH (legacy keycap badge width — live dialog renders keycaps inline)
+// - KEYCAP_HEIGHT (legacy keycap badge height — same)
 
 #[cfg(test)]
 mod tests {

@@ -268,6 +268,14 @@ impl InputHistory {
         &self.entries
     }
 
+    /// Return the most recent `limit` entries (most recent first).
+    ///
+    /// This is the deterministic bounded accessor used by the Tab AI context
+    /// builder. It does not modify navigation state or storage semantics.
+    pub fn recent_entries(&self, limit: usize) -> Vec<String> {
+        self.entries.iter().take(limit).cloned().collect()
+    }
+
     /// Clear all entries
     #[allow(dead_code)]
     pub fn clear(&mut self) {

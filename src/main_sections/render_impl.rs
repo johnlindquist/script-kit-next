@@ -430,6 +430,9 @@ impl Render for ScriptListApp {
         // Build alias input overlay if state is set
         let alias_input_overlay = self.render_alias_input_overlay(window, cx);
 
+        // Build Tab AI overlay if state is set
+        let tab_ai_overlay = self.render_tab_ai_overlay(window, cx);
+
         // Log render timing for filter perf analysis - always log for "gr" filters
         let render_elapsed = render_start.elapsed();
         if filter_snapshot.starts_with("gr") {
@@ -523,6 +526,10 @@ impl Render for ScriptListApp {
                     })
                     // Alias input overlay (on top of main content when entering alias)
                     .when_some(alias_input_overlay, |container, overlay| {
+                        container.child(overlay)
+                    })
+                    // Tab AI overlay (on top of main content when Tab AI is active)
+                    .when_some(tab_ai_overlay, |container, overlay| {
                         container.child(overlay)
                     })
                     .when_some(grid_config, |container, config| {

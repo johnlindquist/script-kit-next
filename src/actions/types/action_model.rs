@@ -107,10 +107,11 @@ pub enum SearchPosition {
 #[allow(dead_code)] // Public API - will be used by AI window integration
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SectionStyle {
-    /// Show text headers for sections (AI chat style)
-    Headers,
-    /// Show subtle separators between categories (main menu style)
+    /// Show text headers for sections — spacing alone defines groups per .impeccable.md
     #[default]
+    Headers,
+    /// Legacy: inline separators between categories (deprecated — no production caller should use this)
+    #[allow(dead_code)]
     Separators,
     /// No section indicators
     None,

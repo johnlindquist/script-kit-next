@@ -16,7 +16,7 @@
 
 mod builders;
 mod command_bar;
-mod constants;
+pub(crate) mod constants;
 mod dialog;
 mod types;
 mod window;

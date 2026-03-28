@@ -202,8 +202,8 @@ mod from_dialog_builtin_action_validation_tests_11 {
     fn cat04_builtin_has_exactly_4_actions() {
         let b = ScriptInfo::builtin("Test");
         let actions = get_script_context_actions(&b);
-        // run_script, add_shortcut, add_alias, copy_deeplink
-        assert_eq!(actions.len(), 4, "Builtin should have 4 actions");
+        // run_script, toggle_info, add_shortcut, add_alias, copy_deeplink
+        assert_eq!(actions.len(), 5, "Builtin should have 5 actions");
     }
     
     #[test]
@@ -1822,7 +1822,7 @@ mod from_dialog_builtin_action_validation_tests_12 {
         fn cat01_command_bar_default_dialog_config() {
             let cfg = ActionsDialogConfig::default();
             assert_eq!(cfg.search_position, SearchPosition::Bottom);
-            assert_eq!(cfg.section_style, SectionStyle::Separators);
+            assert_eq!(cfg.section_style, SectionStyle::Headers);
             assert_eq!(cfg.anchor, AnchorPosition::Bottom);
             assert!(!cfg.show_icons);
             assert!(!cfg.show_footer);
@@ -1845,7 +1845,7 @@ mod from_dialog_builtin_action_validation_tests_12 {
         fn cat01_command_bar_main_menu_style_dialog_config() {
             let cfg = super::super::command_bar::CommandBarConfig::main_menu_style();
             assert_eq!(cfg.dialog_config.search_position, SearchPosition::Bottom);
-            assert_eq!(cfg.dialog_config.section_style, SectionStyle::Separators);
+            assert_eq!(cfg.dialog_config.section_style, SectionStyle::Headers);
             assert_eq!(cfg.dialog_config.anchor, AnchorPosition::Bottom);
             assert!(!cfg.dialog_config.show_icons);
             assert!(!cfg.dialog_config.show_footer);
@@ -1855,7 +1855,7 @@ mod from_dialog_builtin_action_validation_tests_12 {
         fn cat01_command_bar_no_search_dialog_config() {
             let cfg = super::super::command_bar::CommandBarConfig::no_search();
             assert_eq!(cfg.dialog_config.search_position, SearchPosition::Hidden);
-            assert_eq!(cfg.dialog_config.section_style, SectionStyle::Separators);
+            assert_eq!(cfg.dialog_config.section_style, SectionStyle::Headers);
             assert_eq!(cfg.dialog_config.anchor, AnchorPosition::Bottom);
             assert!(!cfg.dialog_config.show_icons);
             assert!(!cfg.dialog_config.show_footer);
@@ -1865,7 +1865,7 @@ mod from_dialog_builtin_action_validation_tests_12 {
         fn cat01_command_bar_notes_style_dialog_config() {
             let cfg = super::super::command_bar::CommandBarConfig::notes_style();
             assert_eq!(cfg.dialog_config.search_position, SearchPosition::Top);
-            assert_eq!(cfg.dialog_config.section_style, SectionStyle::Separators);
+            assert_eq!(cfg.dialog_config.section_style, SectionStyle::Headers);
             assert_eq!(cfg.dialog_config.anchor, AnchorPosition::Top);
             assert!(cfg.dialog_config.show_icons);
             assert!(!cfg.dialog_config.show_footer);
@@ -6993,7 +6993,7 @@ mod from_dialog_builtin_action_validation_tests_14 {
         #[test]
         fn cat18_notes_style_separators() {
             let cfg = CommandBarConfig::notes_style();
-            assert_eq!(cfg.dialog_config.section_style, SectionStyle::Separators);
+            assert_eq!(cfg.dialog_config.section_style, SectionStyle::Headers);
         }
     
         #[test]
@@ -7033,7 +7033,7 @@ mod from_dialog_builtin_action_validation_tests_14 {
         fn cat18_main_menu_search_at_bottom() {
             let cfg = CommandBarConfig::main_menu_style();
             assert_eq!(cfg.dialog_config.search_position, SearchPosition::Bottom);
-            assert_eq!(cfg.dialog_config.section_style, SectionStyle::Separators);
+            assert_eq!(cfg.dialog_config.section_style, SectionStyle::Headers);
         }
     
         #[test]
@@ -8535,7 +8535,7 @@ mod from_dialog_builtin_action_validation_tests_15 {
             let ai = CommandBarConfig::ai_style();
             // AI style uses Headers, default uses Separators
             assert_eq!(ai.dialog_config.section_style, SectionStyle::Headers);
-            assert_eq!(def.dialog_config.section_style, SectionStyle::Separators);
+            assert_eq!(def.dialog_config.section_style, SectionStyle::Headers);
         }
     
         #[test]
@@ -9557,18 +9557,18 @@ mod from_dialog_builtin_action_validation_tests_15 {
         fn cat27_no_shortcut_no_alias_count() {
             let s = ScriptInfo::new("test", "/p");
             let actions = get_script_context_actions(&s);
-            // + toggle_favorite was added for script/scriptlet/agent items with path
+            // + toggle_info + toggle_favorite was added for script/scriptlet/agent items with path
             // + delete_script was added for is_script=true items
-            assert_eq!(actions.len(), 11);
+            assert_eq!(actions.len(), 12);
         }
-    
+
         #[test]
         fn cat27_with_shortcut_count() {
             let s = ScriptInfo::with_shortcut("test", "/p", Some("cmd+t".into()));
             let actions = get_script_context_actions(&s);
-            assert_eq!(actions.len(), 12);
+            assert_eq!(actions.len(), 13);
         }
-    
+
         #[test]
         fn cat27_with_both_count() {
             let s = ScriptInfo::with_shortcut_and_alias(
@@ -9578,15 +9578,15 @@ mod from_dialog_builtin_action_validation_tests_15 {
                 Some("ts".into()),
             );
             let actions = get_script_context_actions(&s);
-            assert_eq!(actions.len(), 13);
+            assert_eq!(actions.len(), 14);
         }
 
         #[test]
         fn cat27_frecency_adds_one() {
             let s = ScriptInfo::new("test", "/p").with_frecency(true, Some("/f".into()));
             let actions = get_script_context_actions(&s);
-            // 11 + 1 (reset_ranking) = 12
-            assert_eq!(actions.len(), 12);
+            // 12 + 1 (reset_ranking) = 13
+            assert_eq!(actions.len(), 13);
         }
 
         // =========================================================================
@@ -11823,20 +11823,20 @@ mod from_dialog_builtin_action_validation_tests_17 {
         fn cat01_script_new_no_shortcut_no_alias_count() {
             let script = ScriptInfo::new("test", "/path/test.ts");
             let actions = get_script_context_actions(&script);
-            // run, add_shortcut, add_alias, edit_script, view_logs, toggle_favorite,
-            // reveal_in_finder, copy_path, copy_content, copy_deeplink, delete_script = 11
-            assert_eq!(actions.len(), 11);
+            // run, toggle_info, add_shortcut, add_alias, edit_script, view_logs, toggle_favorite,
+            // reveal_in_finder, copy_path, copy_content, copy_deeplink, delete_script = 12
+            assert_eq!(actions.len(), 12);
         }
-    
+
         #[test]
         fn cat01_script_with_shortcut_count() {
             let script = ScriptInfo::with_shortcut("test", "/path/test.ts", Some("cmd+t".into()));
             let actions = get_script_context_actions(&script);
-            // run, update_shortcut, remove_shortcut, add_alias, edit_script, view_logs,
-            // toggle_favorite, reveal_in_finder, copy_path, copy_content, copy_deeplink, delete_script = 12
-            assert_eq!(actions.len(), 12);
+            // run, toggle_info, update_shortcut, remove_shortcut, add_alias, edit_script, view_logs,
+            // toggle_favorite, reveal_in_finder, copy_path, copy_content, copy_deeplink, delete_script = 13
+            assert_eq!(actions.len(), 13);
         }
-    
+
         #[test]
         fn cat01_script_with_shortcut_and_alias_count() {
             let script = ScriptInfo::with_shortcut_and_alias(
@@ -11846,35 +11846,35 @@ mod from_dialog_builtin_action_validation_tests_17 {
                 Some("ts".into()),
             );
             let actions = get_script_context_actions(&script);
-            // run, update_shortcut, remove_shortcut, update_alias, remove_alias, edit_script,
-            // view_logs, toggle_favorite, reveal_in_finder, copy_path, copy_content, copy_deeplink, delete_script = 13
-            assert_eq!(actions.len(), 13);
+            // run, toggle_info, update_shortcut, remove_shortcut, update_alias, remove_alias, edit_script,
+            // view_logs, toggle_favorite, reveal_in_finder, copy_path, copy_content, copy_deeplink, delete_script = 14
+            assert_eq!(actions.len(), 14);
         }
-    
+
         #[test]
         fn cat01_builtin_no_shortcut_count() {
             let builtin = ScriptInfo::builtin("Clipboard History");
             let actions = get_script_context_actions(&builtin);
-            // run, add_shortcut, add_alias, copy_deeplink = 4
-            assert_eq!(actions.len(), 4);
+            // run, toggle_info, add_shortcut, add_alias, copy_deeplink = 5
+            assert_eq!(actions.len(), 5);
         }
-    
+
         #[test]
         fn cat01_scriptlet_no_shortcut_count() {
             let scriptlet = ScriptInfo::scriptlet("Open URL", "/path/url.md", None, None);
             let actions = get_script_context_actions(&scriptlet);
-            // run, add_shortcut, add_alias, edit_scriptlet, toggle_favorite, reveal_scriptlet_in_finder,
-            // copy_scriptlet_path, copy_content, copy_deeplink = 9
-            assert_eq!(actions.len(), 9);
+            // run, toggle_info, add_shortcut, add_alias, edit_scriptlet, toggle_favorite, reveal_scriptlet_in_finder,
+            // copy_scriptlet_path, copy_content, copy_deeplink = 10
+            assert_eq!(actions.len(), 10);
         }
-    
+
         #[test]
         fn cat01_script_with_frecency_adds_reset_ranking() {
             let script = ScriptInfo::new("test", "/path/test.ts")
                 .with_frecency(true, Some("/path/test.ts".into()));
             let actions = get_script_context_actions(&script);
-            // base 11 + reset_ranking = 12
-            assert_eq!(actions.len(), 12);
+            // base 12 + reset_ranking = 13
+            assert_eq!(actions.len(), 13);
         }
 
         // ================================================================
@@ -13003,7 +13003,7 @@ mod from_dialog_builtin_action_validation_tests_17 {
             let config = CommandBarConfig::notes_style();
             assert!(matches!(
                 config.dialog_config.section_style,
-                SectionStyle::Separators
+                SectionStyle::Headers
             ));
         }
     
@@ -14646,7 +14646,7 @@ mod from_dialog_builtin_action_validation_tests_18 {
         #[test]
         fn cat19_main_menu_separators() {
             let config = CommandBarConfig::main_menu_style();
-            assert_eq!(config.dialog_config.section_style, SectionStyle::Separators);
+            assert_eq!(config.dialog_config.section_style, SectionStyle::Headers);
         }
     
         #[test]
@@ -14714,7 +14714,7 @@ mod from_dialog_builtin_action_validation_tests_18 {
         #[test]
         fn cat21_no_search_separators() {
             let config = CommandBarConfig::no_search();
-            assert_eq!(config.dialog_config.section_style, SectionStyle::Separators);
+            assert_eq!(config.dialog_config.section_style, SectionStyle::Headers);
         }
     
         #[test]
@@ -18277,7 +18277,7 @@ mod from_dialog_builtin_action_validation_tests_20 {
             let config = CommandBarConfig::notes_style();
             assert!(matches!(
                 config.dialog_config.section_style,
-                SectionStyle::Separators
+                SectionStyle::Headers
             ));
             assert!(config.dialog_config.show_icons);
             assert!(!config.dialog_config.show_footer);

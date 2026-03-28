@@ -1278,7 +1278,7 @@ fn new_chat_models_has_settings_icon() {
 fn command_bar_default_config() {
     let config = CommandBarConfig::default();
     assert_eq!(config.dialog_config.search_position, SearchPosition::Bottom);
-    assert_eq!(config.dialog_config.section_style, SectionStyle::Separators);
+    assert_eq!(config.dialog_config.section_style, SectionStyle::Headers);
     assert_eq!(config.dialog_config.anchor, AnchorPosition::Bottom);
     assert!(!config.dialog_config.show_icons);
     assert!(!config.dialog_config.show_footer);
@@ -1301,7 +1301,7 @@ fn command_bar_ai_style() {
 fn command_bar_notes_style() {
     let config = CommandBarConfig::notes_style();
     assert_eq!(config.dialog_config.search_position, SearchPosition::Top);
-    assert_eq!(config.dialog_config.section_style, SectionStyle::Separators);
+    assert_eq!(config.dialog_config.section_style, SectionStyle::Headers);
     assert_eq!(config.dialog_config.anchor, AnchorPosition::Top);
     assert!(config.dialog_config.show_icons);
     assert!(!config.dialog_config.show_footer);
@@ -1317,7 +1317,7 @@ fn command_bar_no_search() {
 fn command_bar_main_menu_style() {
     let config = CommandBarConfig::main_menu_style();
     assert_eq!(config.dialog_config.search_position, SearchPosition::Bottom);
-    assert_eq!(config.dialog_config.section_style, SectionStyle::Separators);
+    assert_eq!(config.dialog_config.section_style, SectionStyle::Headers);
     assert!(!config.dialog_config.show_icons);
     assert!(!config.dialog_config.show_footer);
 }
@@ -1693,7 +1693,7 @@ fn path_context_no_duplicate_ids() {
 #[test]
 fn enum_defaults() {
     assert_eq!(SearchPosition::default(), SearchPosition::Bottom);
-    assert_eq!(SectionStyle::default(), SectionStyle::Separators);
+    assert_eq!(SectionStyle::default(), SectionStyle::Headers);
     assert_eq!(AnchorPosition::default(), AnchorPosition::Bottom);
 }
 
@@ -1701,7 +1701,7 @@ fn enum_defaults() {
 fn actions_dialog_config_default() {
     let config = ActionsDialogConfig::default();
     assert_eq!(config.search_position, SearchPosition::Bottom);
-    assert_eq!(config.section_style, SectionStyle::Separators);
+    assert_eq!(config.section_style, SectionStyle::Headers);
     assert_eq!(config.anchor, AnchorPosition::Bottom);
     assert!(!config.show_icons);
     assert!(!config.show_footer);

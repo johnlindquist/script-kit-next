@@ -65,14 +65,11 @@ pub fn render_actions_dialog_presentation(
     // Container
     let mut container = div().w_full().flex().flex_col();
 
-    // Border
+    // Sharp container — matches live dialog (no rounded corners)
     if style.show_container_border {
         container = container
-            .rounded(px(10.))
             .border_1()
             .border_color(theme.colors.ui.border.with_opacity(0.3));
-    } else {
-        container = container.rounded(px(10.));
     }
 
     container = container.bg(theme.colors.background.main.to_rgb());
@@ -104,15 +101,7 @@ pub fn render_actions_dialog_presentation(
         container = container.child(render_search_row(model, &style, theme, &mono));
     }
 
-    // Search divider
-    if model.show_search && model.search_at_top && style.show_search_divider {
-        container = container.child(
-            div()
-                .w_full()
-                .h(px(1.))
-                .bg(theme.colors.ui.border.with_opacity(0.2)),
-        );
-    }
+    // No search divider — bare input per .impeccable.md spec
 
     // Action rows
     let mut action_index: usize = 0;
@@ -155,17 +144,20 @@ pub fn render_actions_dialog_presentation(
 
     container = container.child(items_container.children(item_elements));
 
-    // Bottom search (when search is not at top)
+    // Bottom search (when search is not at top) — no divider
     if model.show_search && !model.search_at_top {
-        if style.show_search_divider {
-            container = container.child(
-                div()
-                    .w_full()
-                    .h(px(1.))
-                    .bg(theme.colors.ui.border.with_opacity(0.2)),
-            );
-        }
         container = container.child(render_search_row(model, &style, theme, &mono));
+    }
+
+    // Three-key hint strip footer — matches live dialog exactly
+    if model.show_footer {
+        container = container.child(
+            div().w_full().child(crate::components::HintStrip::new(vec![
+                "↵ Run".into(),
+                "⌘K Actions".into(),
+                "Tab AI".into(),
+            ])),
+        );
     }
 
     container.into_any_element()
@@ -240,17 +232,26 @@ fn render_action_row(
     is_selected: bool,
     is_hovered: bool,
 ) -> AnyElement {
+    // Gold accent bar width matching live dialog constant
+    let accent_bar_w = crate::actions::constants::ACCENT_BAR_WIDTH;
+
     let mut row = div()
         .w_full()
         .h(px(style.row_height))
-        .px(px(12.))
-        .rounded(px(style.row_radius))
+        .px(px(crate::actions::constants::ACTION_ROW_INSET))
         .flex()
         .flex_row()
         .items_center()
-        .gap(px(8.));
+        .gap(px(8.))
+        // Gold left accent bar — visible only on selected row
+        .border_l(px(accent_bar_w))
+        .border_color(if is_selected {
+            theme.colors.accent.selected.to_rgb()
+        } else {
+            gpui::transparent_black()
+        });
 
-    // Selection / hover background
+    // Ghost background for selection / hover
     if is_selected && style.selection_opacity > 0.0 {
         row = row.bg(theme
             .colors
@@ -263,26 +264,6 @@ fn render_action_row(
             .accent
             .selected
             .with_opacity(style.hover_opacity));
-    }
-
-    // Dot accent indicator (when selection_opacity is 0 and we're selected)
-    if is_selected && style.selection_opacity == 0.0 {
-        row = row.child(
-            div()
-                .w(px(5.))
-                .h(px(5.))
-                .rounded(px(3.))
-                .bg(theme.colors.accent.selected.to_rgb()),
-        );
-    } else if style.selection_opacity == 0.0 {
-        // Spacer for alignment when dot-accent variant but not selected
-        row = row.child(
-            div()
-                .w(px(5.))
-                .h(px(5.))
-                .rounded(px(3.))
-                .bg(gpui::transparent_black()),
-        );
     }
 
     // Prefix marker
@@ -327,11 +308,7 @@ fn render_action_row(
     title_el = title_el.text_color(if is_selected {
         theme.colors.text.primary.to_rgb()
     } else {
-        if action.is_destructive {
-            theme.colors.text.secondary.to_rgb()
-        } else {
-            theme.colors.text.secondary.to_rgb()
-        }
+        theme.colors.text.secondary.to_rgb()
     });
     if style.shortcut_visible && uses_inline_shortcuts(style) {
         // Inline keys mode: title + shortcut in same flex row
@@ -464,7 +441,8 @@ mod tests {
         assert_eq!(resolution.resolved_variant_id, "current");
         assert!(style.show_container_border);
         assert!(style.show_header);
-        assert!(style.show_search_divider);
+        // Live dialog defaults to no search divider — bare input per spec
+        assert!(!style.show_search_divider);
         assert_eq!(style.row_height, 30.0);
         assert_eq!(style.row_radius, 6.0);
     }
