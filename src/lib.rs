@@ -7,6 +7,7 @@
 //! This library provides the core functionality for executing scripts
 //! with bidirectional JSONL communication.
 
+
 // Actions - Reusable action dialog component
 // Provides ActionsDialog with configurable layout for script actions, AI command bar, etc.
 pub mod actions;

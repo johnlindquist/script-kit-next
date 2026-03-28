@@ -121,11 +121,17 @@ impl Render for ScriptListApp {
 
             // Close popups when the main window regains focus (user clicked on it)
             if confirm::is_confirm_window_open() {
-                logging::log("FOCUS", "Main window regained focus - closing confirm popup");
+                logging::log(
+                    "FOCUS",
+                    "Main window regained focus - closing confirm popup",
+                );
                 confirm::route_key_to_confirm_popup("escape", cx);
             }
             if actions::is_actions_window_open() {
-                logging::log("FOCUS", "Main window regained focus - closing actions popup");
+                logging::log(
+                    "FOCUS",
+                    "Main window regained focus - closing actions popup",
+                );
                 actions::close_actions_window(cx);
                 self.show_actions_popup = false;
                 self.actions_dialog = None;
@@ -365,9 +371,7 @@ impl Render for ScriptListApp {
             } => self
                 .render_create_ai_preset(name, system_prompt, model, active_field, cx)
                 .into_any_element(),
-            AppView::SettingsView { selected_index } => {
-                self.render_settings(selected_index, cx)
-            }
+            AppView::SettingsView { selected_index } => self.render_settings(selected_index, cx),
             AppView::FavoritesBrowseView {
                 filter,
                 selected_index,
@@ -466,9 +470,24 @@ impl Render for ScriptListApp {
             // Route keys to confirm popup when it's open (Escape/Enter/Tab).
             // This must be at the outermost level to intercept before any
             // view-specific handlers.
-            .capture_key_down(cx.listener(|_this, event: &KeyDownEvent, _window, cx| {
+            .capture_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
                 let key = event.keystroke.key.as_str();
                 if confirm::route_key_to_confirm_popup(key, cx) {
+                    cx.stop_propagation();
+                    return;
+                }
+                // Universal Escape handler — works for ALL current and future AppView
+                // variants without needing per-view match arms in keystroke interceptors.
+                //
+                // Previously, Escape was handled per-view inside cx.intercept_keystrokes()
+                // callbacks (startup.rs), which meant any view not explicitly listed there
+                // would silently swallow Escape. This single capture_key_down on the root
+                // render element catches Escape for every view uniformly.
+                //
+                // go_back_or_close() navigates back to the script list if we came from the
+                // main menu, or hides the window otherwise.
+                if crate::ui_foundation::is_key_escape(key) {
+                    this.go_back_or_close(window, cx);
                     cx.stop_propagation();
                 }
             }))

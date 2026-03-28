@@ -16,8 +16,7 @@ impl ScriptListApp {
         let text_muted = self.theme.colors.text.muted;
 
         // Load favorites and resolve to script/scriptlet names
-        let favorites = script_kit_gpui::favorites::load_favorites()
-            .unwrap_or_default();
+        let favorites = script_kit_gpui::favorites::load_favorites().unwrap_or_default();
 
         let resolved: Vec<(String, String)> = favorites
             .script_ids
@@ -75,33 +74,35 @@ impl ScriptListApp {
         let list_items: Vec<AnyElement> = filtered
             .iter()
             .enumerate()
-            .map(|(display_idx, (_original_idx, fav_id, name, description))| {
-                let is_selected = display_idx == selected_index;
-                let fav_id_owned = fav_id.to_string();
-                let entity_clone = entity.clone();
+            .map(
+                |(display_idx, (_original_idx, fav_id, name, description))| {
+                    let is_selected = display_idx == selected_index;
+                    let fav_id_owned = fav_id.to_string();
+                    let entity_clone = entity.clone();
 
-                div()
-                    .id(display_idx)
-                    .cursor_pointer()
-                    .on_click(move |_event, window, cx| {
-                        if let Some(app) = entity_clone.upgrade() {
-                            app.update(cx, |this, cx| {
-                                this.run_favorite(&fav_id_owned, window, cx);
-                            });
-                        }
-                    })
-                    .child(
-                        ListItem::new(name.to_string(), list_colors)
-                            .description_opt(if description.is_empty() {
-                                None
-                            } else {
-                                Some(description.to_string())
-                            })
-                            .selected(is_selected)
-                            .with_accent_bar(is_selected),
-                    )
-                    .into_any_element()
-            })
+                    div()
+                        .id(display_idx)
+                        .cursor_pointer()
+                        .on_click(move |_event, window, cx| {
+                            if let Some(app) = entity_clone.upgrade() {
+                                app.update(cx, |this, cx| {
+                                    this.run_favorite(&fav_id_owned, window, cx);
+                                });
+                            }
+                        })
+                        .child(
+                            ListItem::new(name.to_string(), list_colors)
+                                .description_opt(if description.is_empty() {
+                                    None
+                                } else {
+                                    Some(description.to_string())
+                                })
+                                .selected(is_selected)
+                                .with_accent_bar(is_selected),
+                        )
+                        .into_any_element()
+                },
+            )
             .collect();
 
         let list_element: AnyElement = if count == 0 {
@@ -234,9 +235,9 @@ impl ScriptListApp {
             ref mut selected_index,
         } = self.current_view
         {
+            tracing::debug!(key = key, "[FAVORITES] handle_favorites_browse_key called");
             if crate::ui_foundation::is_key_enter(key) {
-                let favorites = script_kit_gpui::favorites::load_favorites()
-                    .unwrap_or_default();
+                let favorites = script_kit_gpui::favorites::load_favorites().unwrap_or_default();
                 let filter_lower = filter.to_lowercase();
                 let filtered: Vec<&String> = if filter.is_empty() {
                     favorites.script_ids.iter().collect()
@@ -255,8 +256,7 @@ impl ScriptListApp {
                 self.go_back_or_close(window, cx);
             } else if key.eq_ignore_ascii_case("d") && self.filter_text.is_empty() {
                 // Remove selected favorite
-                let favorites = script_kit_gpui::favorites::load_favorites()
-                    .unwrap_or_default();
+                let favorites = script_kit_gpui::favorites::load_favorites().unwrap_or_default();
                 let filtered: Vec<&String> = favorites.script_ids.iter().collect();
                 if let Some(id) = filtered.get(*selected_index) {
                     let id_owned = (*id).clone();
@@ -284,18 +284,14 @@ impl ScriptListApp {
                                 action = "favorite_remove_failed",
                                 "Failed to remove favorite"
                             );
-                            self.show_error_toast(
-                                format!("Failed to remove favorite: {}", e),
-                                cx,
-                            );
+                            self.show_error_toast(format!("Failed to remove favorite: {}", e), cx);
                         }
                     }
                     cx.notify();
                 }
             } else if key.eq_ignore_ascii_case("u") && self.filter_text.is_empty() {
                 // Move selected favorite up
-                let favorites = script_kit_gpui::favorites::load_favorites()
-                    .unwrap_or_default();
+                let favorites = script_kit_gpui::favorites::load_favorites().unwrap_or_default();
                 if let Some(id) = favorites.script_ids.get(*selected_index) {
                     let id_owned = id.clone();
                     if *selected_index > 0 {
@@ -318,8 +314,7 @@ impl ScriptListApp {
                 }
             } else if key.eq_ignore_ascii_case("j") && self.filter_text.is_empty() {
                 // Move selected favorite down
-                let favorites = script_kit_gpui::favorites::load_favorites()
-                    .unwrap_or_default();
+                let favorites = script_kit_gpui::favorites::load_favorites().unwrap_or_default();
                 if let Some(id) = favorites.script_ids.get(*selected_index) {
                     let id_owned = id.clone();
                     if *selected_index + 1 < favorites.script_ids.len() {
