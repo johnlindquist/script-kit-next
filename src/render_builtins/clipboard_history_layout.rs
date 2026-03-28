@@ -2,7 +2,6 @@
         let selected_entry = filtered_entries
             .get(selected_index)
             .map(|(_, e)| (*e).clone());
-        let has_entry = selected_entry.is_some();
         let preview_panel = self.render_clipboard_preview_panel(
             &selected_entry,
             &image_cache,

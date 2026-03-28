@@ -535,25 +535,15 @@ impl ScriptListApp {
 
             let result = match provider.send_message(&messages, &worker_model_id) {
                 Ok(raw_response) => {
-                    let source = match crate::prompt_ai::extract_generated_script_source(
-                        &raw_response,
-                    ) {
-                        Some(source) => source,
-                        None => {
-                            return {
-                                let _ = tx.send_blocking(Err(
-                                    "AI returned no runnable script. Retry with a clearer verb and target.".to_string(),
-                                ));
-                            };
-                        }
-                    };
-                    let slug = crate::ai::script_generation::prepare_script_from_ai_response(
+                    match crate::ai::script_generation::prepare_script_from_ai_response(
                         &user_prompt,
                         &raw_response,
-                    )
-                    .map(|(slug, _)| slug)
-                    .unwrap_or_else(|_| "tab-ai-script".to_string());
-                    Ok((slug, source))
+                    ) {
+                        Ok((slug, source)) => Ok((slug, source)),
+                        Err(_) => Err(
+                            "AI returned no runnable script. Retry with a clearer verb and target.".to_string(),
+                        ),
+                    }
                 }
                 Err(error) => Err(format!(
                     "tab_ai_send_message model_id={worker_model_id}: {error:#}"

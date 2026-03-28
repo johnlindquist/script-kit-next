@@ -260,7 +260,6 @@ impl Render for SelectPrompt {
                                             .id(display_idx)
                                             .w_full()
                                             .h(px(LIST_ITEM_HEIGHT))
-                                            .rounded(px(8.0))
                                             .bg(row_bg)
                                             .cursor_pointer()
                                             .on_hover(hover_handler)
@@ -310,18 +309,8 @@ impl Render for SelectPrompt {
             .px(px(8.0))
             .child(choices_content);
 
-        let hints: Vec<SharedString> = if self.multiple {
-            vec![
-                SharedString::from("↵ Select"),
-                SharedString::from("⌘Space Toggle"),
-                SharedString::from("Esc Back"),
-            ]
-        } else {
-            vec![
-                SharedString::from("↵ Select"),
-                SharedString::from("Esc Back"),
-            ]
-        };
+        let hints = crate::components::universal_prompt_hints();
+        crate::components::emit_prompt_hint_audit("prompts::select", &hints);
 
         let container =
             crate::components::render_minimal_list_prompt_scaffold(header, content, hints, None)
