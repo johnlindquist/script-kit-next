@@ -121,9 +121,14 @@ impl ScriptListApp {
         let handle_key = cx.listener(key_handler);
         let vibrancy_bg = get_vibrancy_background(&self.theme);
 
-        crate::components::render_simple_prompt_shell(shell_radius, vibrancy_bg, entity, None)
-            .on_key_down(handle_key)
-            .into_any_element()
+        crate::components::render_simple_prompt_shell(
+            shell_radius,
+            vibrancy_bg,
+            entity,
+            Some(crate::components::render_universal_prompt_hint_strip()),
+        )
+        .on_key_down(handle_key)
+        .into_any_element()
     }
 
     fn render_select_prompt(
@@ -137,6 +142,8 @@ impl ScriptListApp {
                 self.has_nonempty_sdk_actions(),
             ),
         );
+        let hints = crate::components::universal_prompt_hints();
+        crate::components::emit_prompt_hint_audit("render_prompts::select", &hints);
         self.render_wrapped_prompt_entity(entity, Self::other_prompt_shell_handle_key_default, cx)
     }
 
@@ -151,6 +158,8 @@ impl ScriptListApp {
                 self.has_nonempty_sdk_actions(),
             ),
         );
+        let hints = crate::components::universal_prompt_hints();
+        crate::components::emit_prompt_hint_audit("render_prompts::env", &hints);
         self.render_wrapped_prompt_entity(entity, Self::other_prompt_shell_handle_key_default, cx)
     }
 
@@ -165,6 +174,8 @@ impl ScriptListApp {
                 self.has_nonempty_sdk_actions(),
             ),
         );
+        let hints = crate::components::universal_prompt_hints();
+        crate::components::emit_prompt_hint_audit("render_prompts::drop", &hints);
         self.render_wrapped_prompt_entity(entity, Self::other_prompt_shell_handle_key_default, cx)
     }
 
@@ -211,7 +222,18 @@ impl ScriptListApp {
                 self.has_nonempty_sdk_actions(),
             ),
         );
-        self.render_wrapped_prompt_entity(entity, Self::other_prompt_shell_handle_key_chat, cx)
+        let hints = crate::components::universal_prompt_hints();
+        crate::components::emit_prompt_hint_audit("render_prompts::chat", &hints);
+
+        // Chat renders its own footer (mini hint strip or rich interactive footer),
+        // so pass None to avoid a duplicate footer in the shell.
+        let shell_radius = self.other_prompt_shell_radius();
+        let handle_key = cx.listener(Self::other_prompt_shell_handle_key_chat);
+        let vibrancy_bg = get_vibrancy_background(&self.theme);
+
+        crate::components::render_simple_prompt_shell(shell_radius, vibrancy_bg, entity, None)
+            .on_key_down(handle_key)
+            .into_any_element()
     }
 
     fn render_naming_prompt(
@@ -374,11 +396,12 @@ mod other_prompt_render_wrapper_tests {
 
     #[test]
     fn simple_prompt_wrappers_skip_unused_shell_allocations() {
+        // Chat is excluded: it uses render_simple_prompt_shell directly (no wrapper footer)
+        // because it renders its own footer (mini hint strip or rich interactive footer).
         for fn_name in [
             "render_select_prompt",
             "render_env_prompt",
             "render_drop_prompt",
-            "render_chat_prompt",
         ] {
             let body = fn_source(fn_name);
             assert!(
@@ -397,11 +420,60 @@ mod other_prompt_render_wrapper_tests {
     }
 
     #[test]
+    fn chat_prompt_wrapper_omits_footer_to_avoid_duplicate() {
+        let body = fn_source("render_chat_prompt");
+        assert!(
+            body.contains("render_simple_prompt_shell("),
+            "render_chat_prompt should use the shared shell directly"
+        );
+        assert!(
+            body.contains(", None)"),
+            "render_chat_prompt should pass None for footer (chat renders its own)"
+        );
+        assert!(
+            !body.contains("render_wrapped_prompt_entity("),
+            "render_chat_prompt should not use render_wrapped_prompt_entity (which adds a footer)"
+        );
+    }
+
+    #[test]
+    fn wrapper_surfaces_emit_hint_audits() {
+        for (fn_name, surface) in [
+            ("render_select_prompt", "render_prompts::select"),
+            ("render_env_prompt", "render_prompts::env"),
+            ("render_drop_prompt", "render_prompts::drop"),
+            ("render_chat_prompt", "render_prompts::chat"),
+        ] {
+            let body = fn_source(fn_name);
+            assert!(
+                body.contains("emit_prompt_hint_audit("),
+                "{fn_name} should emit a prompt hint audit at the wrapper level"
+            );
+            assert!(
+                body.contains(&format!("\"{}\"", surface)),
+                "{fn_name} should emit hint audit with surface name \"{surface}\""
+            );
+            assert!(
+                body.contains("universal_prompt_hints()"),
+                "{fn_name} should use universal_prompt_hints() for the hint audit"
+            );
+        }
+    }
+
+    #[test]
     fn render_wrapped_prompt_entity_calls_shared_shell_helper() {
         let body = fn_source("render_wrapped_prompt_entity");
         assert!(
             body.contains("crate::components::render_simple_prompt_shell("),
             "render_wrapped_prompt_entity must call the shared component helper explicitly"
+        );
+        assert!(
+            body.contains("render_universal_prompt_hint_strip()"),
+            "render_wrapped_prompt_entity must supply the canonical three-key hint strip footer"
+        );
+        assert!(
+            !body.contains(", None)"),
+            "render_wrapped_prompt_entity must not pass None for the footer parameter"
         );
     }
 

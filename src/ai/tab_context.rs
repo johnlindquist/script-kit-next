@@ -910,6 +910,9 @@ impl std::fmt::Display for TabAiFieldStatus {
 pub enum TabAiDegradationReason {
     /// `collect_visible_elements` returned only `panel:*` placeholders.
     PanelOnlyElements,
+    /// `collect_visible_elements` used the `current_view` fallback collector
+    /// instead of a view-specific one.
+    CollectorFallback,
     /// `collect_visible_elements` returned zero elements and no warnings.
     NoSemanticElements,
     /// No focused or selected semantic ID was found.
@@ -927,6 +930,7 @@ impl std::fmt::Display for TabAiDegradationReason {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::PanelOnlyElements => f.write_str("panel_only_elements"),
+            Self::CollectorFallback => f.write_str("collector_fallback"),
             Self::NoSemanticElements => f.write_str("no_semantic_elements"),
             Self::MissingFocusTarget => f.write_str("missing_focus_target"),
             Self::InputNotExtractable => f.write_str("input_not_extractable"),
@@ -994,12 +998,18 @@ fn tab_ai_input_semantics(prompt_type: &str) -> TabAiInputSemantics {
     }
 }
 
-/// Returns `true` when any warning indicates the element collector fell back
-/// to a generic panel placeholder rather than producing real semantic elements.
-fn has_degraded_element_warning(warnings: &[String]) -> bool {
-    warnings.iter().any(|warning| {
-        warning.starts_with("panel_only_") || warning == "collector_used_current_view_fallback"
-    })
+/// Returns `true` when any warning starts with `panel_only_`.
+fn has_panel_only_warning(warnings: &[String]) -> bool {
+    warnings
+        .iter()
+        .any(|warning| warning.starts_with("panel_only_"))
+}
+
+/// Returns `true` when warnings include `collector_used_current_view_fallback`.
+fn has_collector_fallback_warning(warnings: &[String]) -> bool {
+    warnings
+        .iter()
+        .any(|warning| warning == "collector_used_current_view_fallback")
 }
 
 impl TabAiInvocationReceipt {
@@ -1038,11 +1048,17 @@ impl TabAiInvocationReceipt {
 
         // --- elements_status ---
         let has_focus_target = focused_id.is_some() || selected_id.is_some();
-        let degraded_elements = has_degraded_element_warning(warnings);
-        let elements_status = if element_count == 0 {
-            TabAiFieldStatus::Unavailable
-        } else if degraded_elements {
+        let has_panel_only = has_panel_only_warning(warnings);
+        let has_collector_fallback = has_collector_fallback_warning(warnings);
+        let degraded_elements = has_panel_only || has_collector_fallback;
+
+        // Warnings win over element_count==0: a fallback or panel-only surface
+        // is degraded (structurally supports elements but couldn't fully
+        // extract), not unavailable.
+        let elements_status = if degraded_elements {
             TabAiFieldStatus::Degraded
+        } else if element_count == 0 {
+            TabAiFieldStatus::Unavailable
         } else {
             TabAiFieldStatus::Captured
         };
@@ -1058,8 +1074,11 @@ impl TabAiInvocationReceipt {
 
         // --- degradation_reasons ---
         let mut degradation_reasons = Vec::new();
-        if degraded_elements {
+        if has_panel_only {
             degradation_reasons.push(TabAiDegradationReason::PanelOnlyElements);
+        }
+        if has_collector_fallback {
+            degradation_reasons.push(TabAiDegradationReason::CollectorFallback);
         }
         if element_count == 0 {
             degradation_reasons.push(TabAiDegradationReason::NoSemanticElements);
@@ -2032,7 +2051,7 @@ mod tab_ai_invocation_receipt_tests {
         assert_eq!(r.focus_status, TabAiFieldStatus::Degraded);
         assert!(r
             .degradation_reasons
-            .contains(&TabAiDegradationReason::PanelOnlyElements));
+            .contains(&TabAiDegradationReason::CollectorFallback));
         assert!(r
             .degradation_reasons
             .contains(&TabAiDegradationReason::MissingFocusTarget));
@@ -2070,6 +2089,124 @@ mod tab_ai_invocation_receipt_tests {
         assert!(json.contains("\"inputStatus\":\"captured\""));
         assert!(json.contains("\"elementsStatus\":\"degraded\""));
         assert!(json
-            .contains("\"degradationReasons\":[\"panel_only_elements\",\"missing_focus_target\"]"));
+            .contains("\"degradationReasons\":[\"collector_fallback\",\"missing_focus_target\"]"));
+    }
+
+    #[test]
+    fn receipt_marks_empty_script_list_input_as_captured() {
+        let r = receipt(
+            "ScriptList",
+            None,
+            Some("input:filter"),
+            Some("choice:0:slack"),
+            3,
+            &[],
+        );
+        assert_eq!(r.input_status, TabAiFieldStatus::Captured);
+        assert!(!r.has_input_text);
+        assert!(r.rich);
+        assert!(r.degradation_reasons.is_empty());
+    }
+
+    #[test]
+    fn receipt_marks_quick_terminal_missing_input_as_degraded() {
+        let r = receipt(
+            "QuickTerminal",
+            None,
+            None,
+            None,
+            1,
+            &["panel_only_quick_terminal"],
+        );
+        assert_eq!(r.input_status, TabAiFieldStatus::Degraded);
+        assert_eq!(r.focus_status, TabAiFieldStatus::Degraded);
+        assert_eq!(r.elements_status, TabAiFieldStatus::Degraded);
+        assert!(r
+            .degradation_reasons
+            .contains(&TabAiDegradationReason::InputNotExtractable));
+        assert!(r
+            .degradation_reasons
+            .contains(&TabAiDegradationReason::PanelOnlyElements));
+        assert!(r
+            .degradation_reasons
+            .contains(&TabAiDegradationReason::MissingFocusTarget));
+        assert!(!r.rich);
+    }
+
+    #[test]
+    fn receipt_marks_actions_dialog_input_as_unavailable() {
+        let r = receipt(
+            "ActionsDialog",
+            None,
+            None,
+            None,
+            1,
+            &["panel_only_actions_dialog"],
+        );
+        assert_eq!(r.input_status, TabAiFieldStatus::Unavailable);
+        assert!(r
+            .degradation_reasons
+            .contains(&TabAiDegradationReason::InputNotApplicable));
+    }
+
+    #[test]
+    fn receipt_marks_collector_fallback_explicitly() {
+        let r = receipt(
+            "FuturePrompt",
+            Some("query"),
+            None,
+            None,
+            1,
+            &["collector_used_current_view_fallback"],
+        );
+        assert_eq!(r.elements_status, TabAiFieldStatus::Degraded);
+        assert!(r
+            .degradation_reasons
+            .contains(&TabAiDegradationReason::CollectorFallback));
+    }
+
+    #[test]
+    fn receipt_marks_collector_fallback_degraded_even_with_zero_elements() {
+        let r = receipt(
+            "FuturePrompt",
+            Some("query"),
+            None,
+            None,
+            0,
+            &["collector_used_current_view_fallback"],
+        );
+        assert_eq!(
+            r.elements_status,
+            TabAiFieldStatus::Degraded,
+            "warnings should win over element_count==0"
+        );
+        assert!(r
+            .degradation_reasons
+            .contains(&TabAiDegradationReason::CollectorFallback));
+        assert!(r
+            .degradation_reasons
+            .contains(&TabAiDegradationReason::NoSemanticElements));
+    }
+
+    #[test]
+    fn receipt_emits_both_panel_only_and_collector_fallback_independently() {
+        let r = receipt(
+            "FuturePrompt",
+            Some("query"),
+            None,
+            None,
+            1,
+            &[
+                "panel_only_future_prompt",
+                "collector_used_current_view_fallback",
+            ],
+        );
+        assert_eq!(r.elements_status, TabAiFieldStatus::Degraded);
+        assert!(r
+            .degradation_reasons
+            .contains(&TabAiDegradationReason::PanelOnlyElements));
+        assert!(r
+            .degradation_reasons
+            .contains(&TabAiDegradationReason::CollectorFallback));
     }
 }

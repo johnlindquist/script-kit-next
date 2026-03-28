@@ -100,23 +100,26 @@ mod tests {
     }
 
     #[test]
-    fn env_prompt_render_uses_hint_strip_not_prompt_footer() {
+    fn env_prompt_render_delegates_footer_to_wrapper() {
         let source = include_str!("render.rs");
+        // Footer is owned by the outer wrapper shell (render_prompts::other.rs),
+        // so the inner prompt must NOT render its own footer.
         assert!(
-            source.contains("render_simple_hint_strip("),
-            "env render should use render_simple_hint_strip for minimal chrome footer"
-        );
-        assert!(
-            source.contains("env_storage_hint_text("),
-            "env render should preserve storage hint text in the hint strip leading slot"
+            !source.contains("render_simple_hint_strip("),
+            "env render should not render its own hint strip (wrapper owns the footer)"
         );
         assert!(
             !source.contains("PromptFooter::new("),
-            "env render should no longer use PromptFooter"
+            "env render should not use PromptFooter"
         );
         assert!(
             !source.contains("PromptFooterColors"),
             "env render should not reference PromptFooterColors"
+        );
+        // Storage hint text still appears in the prompt body (inline context).
+        assert!(
+            source.contains("env_storage_hint_text("),
+            "env render should still show storage hint text in the body"
         );
     }
 }
