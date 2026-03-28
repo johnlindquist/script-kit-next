@@ -33,10 +33,14 @@ pub const SECTION_HEADER_HEIGHT: f32 = 20.0;
 /// Horizontal inset for action rows (creates rounded pill appearance)
 pub const ACTION_ROW_INSET: f32 = 4.0;
 
-// Removed obsolete legacy constants (no longer referenced by live code):
-// - SELECTION_RADIUS (legacy pill-style row radius — live dialog uses storybook style.row_radius)
-// - KEYCAP_MIN_WIDTH (legacy keycap badge width — live dialog renders keycaps inline)
-// - KEYCAP_HEIGHT (legacy keycap badge height — same)
+/// `.impeccable.md` contract: actions dialog groups are spacing-defined headers.
+pub const ACTIONS_DIALOG_EXPECT_SECTION_MODE: &str = "headers";
+
+/// `.impeccable.md` contract: the search input stays bare, so no divider.
+pub const ACTIONS_DIALOG_EXPECT_SEARCH_DIVIDER: bool = false;
+
+/// `.impeccable.md` contract: when footer hints are shown, there are exactly 3.
+pub const ACTIONS_DIALOG_EXPECT_FOOTER_HINT_COUNT: u8 = 3;
 
 #[cfg(test)]
 mod tests {
@@ -66,5 +70,13 @@ mod tests {
     fn test_action_padding_constants() {
         assert_eq!(ACTION_PADDING_X, 12.0);
         assert_eq!(ACTION_PADDING_TOP, 8.0);
+    }
+
+    #[test]
+    fn test_actions_dialog_contract_constants_match_impeccable() {
+        assert_eq!(ACTIONS_DIALOG_EXPECT_SECTION_MODE, "headers");
+        let divider = ACTIONS_DIALOG_EXPECT_SEARCH_DIVIDER;
+        assert!(!divider);
+        assert_eq!(ACTIONS_DIALOG_EXPECT_FOOTER_HINT_COUNT, 3);
     }
 }

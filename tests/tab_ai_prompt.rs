@@ -161,3 +161,64 @@ fn minimal_context_omits_empty_optional_fields() {
     assert!(!json.contains("recentInputs"));
     assert!(!json.contains("clipboardPreview"));
 }
+
+/// Lock the `src/ai/mod.rs` re-export path: if a re-export breaks, this test
+/// fails immediately — no need to run the full binary to discover the gap.
+#[test]
+fn public_ai_exports_cover_tab_ai_prompt_and_context_types() {
+    use script_kit_gpui::context_snapshot::{
+        AiContextSnapshot, BrowserContext, FrontmostAppContext,
+    };
+
+    let prompt = build_tab_ai_user_prompt(
+        "force quit",
+        r#"{"ui":{"promptType":"AppLauncher"}}"#,
+    );
+
+    let blob = TabAiContextBlob::from_parts(
+        TabAiUiSnapshot {
+            prompt_type: "AppLauncher".to_string(),
+            input_text: Some("Slack".to_string()),
+            ..Default::default()
+        },
+        AiContextSnapshot {
+            frontmost_app: Some(FrontmostAppContext {
+                name: "Slack".to_string(),
+                bundle_id: "com.tinyspeck.slackmacgap".to_string(),
+                pid: 1234,
+            }),
+            browser: Some(BrowserContext {
+                url: "https://example.com".to_string(),
+            }),
+            ..Default::default()
+        },
+        vec!["force quit".to_string()],
+        None,
+        "2026-03-28T00:00:00Z".to_string(),
+    );
+
+    assert!(prompt.contains("force quit"));
+    assert!(prompt.contains("single fenced code block"));
+    assert_eq!(blob.schema_version, TAB_AI_CONTEXT_SCHEMA_VERSION);
+    assert_eq!(blob.ui.prompt_type, "AppLauncher");
+    assert_eq!(
+        blob.desktop
+            .frontmost_app
+            .as_ref()
+            .map(|app| app.name.as_str()),
+        Some("Slack")
+    );
+}
+
+/// Multiline intent must flow through the prompt unchanged.
+#[test]
+fn multiline_intent_preserved_in_prompt() {
+    let context_json = serde_json::to_string(&minimal_context()).unwrap();
+    let prompt = build_tab_ai_user_prompt(
+        "rename selection\nthen copy it",
+        &context_json,
+    );
+
+    assert!(prompt.contains("rename selection\nthen copy it"));
+    assert!(prompt.contains("Script Kit TypeScript"));
+}

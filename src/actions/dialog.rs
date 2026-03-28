@@ -53,7 +53,7 @@ fn actions_dialog_default_style() -> crate::storybook::actions_dialog_variations
 
 #[cfg(not(feature = "storybook"))]
 #[derive(Debug, Clone, Copy, PartialEq)]
-struct ActionsDialogStyleFallback {
+pub(super) struct ActionsDialogStyleFallback {
     pub show_container_border: bool,
     pub show_header: bool,
     pub show_search_divider: bool,
@@ -2438,6 +2438,12 @@ impl Render for ActionsDialog {
         // VIBRANCY: Background is handled in get_container_colors():
         // Inline popups use 85% opacity floor (no real blur layer), opaque uses 95%.
 
+        emit_actions_dialog_runtime_audit(&ActionsDialogRuntimeAudit::from_parts(
+            "actions_dialog",
+            &self.config,
+            &style,
+        ));
+
         // Build footer with keyboard hints (if enabled)
         let footer_container = if self.config.show_footer {
             Some(
@@ -2635,6 +2641,188 @@ impl ActionsDialogChromeAudit {
     }
 }
 
+// --- Runtime chrome contract audit -----------------------------------------
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize)]
+pub(crate) struct ActionsDialogRuntimeAudit {
+    pub surface: &'static str,
+    pub search_position: &'static str,
+    pub section_mode: &'static str,
+    pub shows_search_divider: bool,
+    pub show_footer: bool,
+    pub show_icons: bool,
+    pub show_container_border: bool,
+    pub footer_hint_count: u8,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub(crate) struct ActionsDialogRuntimeViolation {
+    pub surface: &'static str,
+    pub field: &'static str,
+    pub expected: &'static str,
+    pub actual: &'static str,
+}
+
+impl std::fmt::Display for ActionsDialogRuntimeViolation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "surface={} field={} expected={} actual={}",
+            self.surface, self.field, self.expected, self.actual
+        )
+    }
+}
+
+#[inline]
+fn actions_dialog_search_position_name(
+    value: &super::types::SearchPosition,
+) -> &'static str {
+    match value {
+        super::types::SearchPosition::Top => "top",
+        super::types::SearchPosition::Bottom => "bottom",
+        super::types::SearchPosition::Hidden => "hidden",
+    }
+}
+
+#[inline]
+fn actions_dialog_section_mode_name(
+    value: &super::types::SectionStyle,
+) -> &'static str {
+    match value {
+        super::types::SectionStyle::Headers => "headers",
+        super::types::SectionStyle::Separators => "separators",
+        super::types::SectionStyle::None => "none",
+    }
+}
+
+impl ActionsDialogRuntimeAudit {
+    #[cfg(not(feature = "storybook"))]
+    pub(crate) fn from_parts(
+        surface: &'static str,
+        config: &super::types::ActionsDialogConfig,
+        style: &ActionsDialogStyleFallback,
+    ) -> Self {
+        Self {
+            surface,
+            search_position: actions_dialog_search_position_name(&config.search_position),
+            section_mode: actions_dialog_section_mode_name(&config.section_style),
+            shows_search_divider: style.show_search_divider,
+            show_footer: config.show_footer,
+            show_icons: config.show_icons,
+            show_container_border: style.show_container_border,
+            footer_hint_count: if config.show_footer {
+                super::constants::ACTIONS_DIALOG_EXPECT_FOOTER_HINT_COUNT
+            } else {
+                0
+            },
+        }
+    }
+
+    #[cfg(feature = "storybook")]
+    pub(crate) fn from_parts(
+        surface: &'static str,
+        config: &super::types::ActionsDialogConfig,
+        style: &crate::storybook::actions_dialog_variations::ActionsDialogStyle,
+    ) -> Self {
+        Self {
+            surface,
+            search_position: actions_dialog_search_position_name(&config.search_position),
+            section_mode: actions_dialog_section_mode_name(&config.section_style),
+            shows_search_divider: style.show_search_divider,
+            show_footer: config.show_footer,
+            show_icons: config.show_icons,
+            show_container_border: style.show_container_border,
+            footer_hint_count: if config.show_footer {
+                super::constants::ACTIONS_DIALOG_EXPECT_FOOTER_HINT_COUNT
+            } else {
+                0
+            },
+        }
+    }
+
+    pub(crate) fn validate(&self) -> Vec<ActionsDialogRuntimeViolation> {
+        let mut violations = Vec::new();
+        if self.shows_search_divider
+            != super::constants::ACTIONS_DIALOG_EXPECT_SEARCH_DIVIDER
+        {
+            violations.push(ActionsDialogRuntimeViolation {
+                surface: self.surface,
+                field: "shows_search_divider",
+                expected: "false",
+                actual: "true",
+            });
+        }
+        if self.section_mode == "separators" {
+            violations.push(ActionsDialogRuntimeViolation {
+                surface: self.surface,
+                field: "section_mode",
+                expected: "headers_or_none",
+                actual: "separators",
+            });
+        }
+        if self.show_footer
+            && self.footer_hint_count
+                != super::constants::ACTIONS_DIALOG_EXPECT_FOOTER_HINT_COUNT
+        {
+            violations.push(ActionsDialogRuntimeViolation {
+                surface: self.surface,
+                field: "footer_hint_count",
+                expected: "3",
+                actual: "not_3",
+            });
+        }
+        violations
+    }
+}
+
+fn seen_actions_dialog_runtime_audits(
+) -> &'static std::sync::Mutex<std::collections::HashSet<ActionsDialogRuntimeAudit>> {
+    static SEEN: std::sync::OnceLock<
+        std::sync::Mutex<std::collections::HashSet<ActionsDialogRuntimeAudit>>,
+    > = std::sync::OnceLock::new();
+    SEEN.get_or_init(|| std::sync::Mutex::new(std::collections::HashSet::new()))
+}
+
+fn mark_actions_dialog_runtime_audit_seen(
+    audit: &ActionsDialogRuntimeAudit,
+) -> bool {
+    let mut seen = seen_actions_dialog_runtime_audits()
+        .lock()
+        .unwrap_or_else(|poison| poison.into_inner());
+    seen.insert(audit.clone())
+}
+
+fn emit_actions_dialog_runtime_audit(audit: &ActionsDialogRuntimeAudit) {
+    if !mark_actions_dialog_runtime_audit_seen(audit) {
+        return;
+    }
+    tracing::info!(
+        target: "script_kit::actions_chrome",
+        event = "actions_dialog_runtime_audit",
+        surface = audit.surface,
+        search_position = audit.search_position,
+        section_mode = audit.section_mode,
+        shows_search_divider = audit.shows_search_divider,
+        show_footer = audit.show_footer,
+        show_icons = audit.show_icons,
+        show_container_border = audit.show_container_border,
+        footer_hint_count = audit.footer_hint_count,
+        "actions dialog runtime audit"
+    );
+    for violation in audit.validate() {
+        tracing::warn!(
+            target: "script_kit::actions_chrome",
+            event = "actions_dialog_runtime_contract_violation",
+            surface = violation.surface,
+            field = violation.field,
+            expected = violation.expected,
+            actual = violation.actual,
+            message = %violation,
+            "actions dialog runtime contract violation"
+        );
+    }
+}
+
 // --- merged from part_05.rs ---
 
 #[cfg(test)]
@@ -2642,7 +2830,7 @@ mod tests {
     use super::{
         action_subtitle_for_display, actions_dialog_scrollbar_viewport_height,
         is_destructive_action, should_render_section_separator, ActionsDialog,
-        ActionsDialogChromeAudit,
+        ActionsDialogChromeAudit, ActionsDialogRuntimeAudit,
     };
     use crate::actions::types::{Action, ActionCategory, SectionStyle};
 
@@ -2867,5 +3055,57 @@ mod tests {
             SectionStyle::Headers,
             "ActionsDialogConfig default must be SectionStyle::Headers"
         );
+    }
+
+    // ── Runtime audit tests ────────────────────────────────────────────
+
+    #[test]
+    fn actions_dialog_runtime_audit_reflects_actual_config() {
+        use crate::actions::types::{
+            ActionsDialogConfig, AnchorPosition, SearchPosition,
+        };
+        let style = super::actions_dialog_default_style();
+        let audit = ActionsDialogRuntimeAudit::from_parts(
+            "test_actions_dialog",
+            &ActionsDialogConfig {
+                search_position: SearchPosition::Top,
+                section_style: SectionStyle::Headers,
+                anchor: AnchorPosition::Top,
+                show_icons: true,
+                show_footer: false,
+                ..ActionsDialogConfig::default()
+            },
+            &style,
+        );
+        assert_eq!(audit.search_position, "top");
+        assert_eq!(audit.section_mode, "headers");
+        assert!(audit.show_icons);
+        assert!(!audit.show_footer);
+        assert!(!audit.shows_search_divider);
+        assert!(audit.validate().is_empty());
+    }
+
+    #[test]
+    fn actions_dialog_runtime_audit_flags_separator_and_divider_regressions() {
+        use crate::actions::types::{
+            ActionsDialogConfig, AnchorPosition, SearchPosition,
+        };
+        let mut style = super::actions_dialog_default_style();
+        style.show_search_divider = true;
+        let audit = ActionsDialogRuntimeAudit::from_parts(
+            "test_actions_dialog",
+            &ActionsDialogConfig {
+                search_position: SearchPosition::Top,
+                section_style: SectionStyle::Separators,
+                anchor: AnchorPosition::Top,
+                show_icons: true,
+                show_footer: false,
+                ..ActionsDialogConfig::default()
+            },
+            &style,
+        );
+        let violations = audit.validate();
+        assert!(violations.iter().any(|v| v.field == "shows_search_divider"));
+        assert!(violations.iter().any(|v| v.field == "section_mode"));
     }
 }
