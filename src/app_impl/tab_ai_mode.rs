@@ -9,6 +9,31 @@ struct TabAiResolvedContext {
     context_warning_count: usize,
 }
 
+/// Shared helper that sets the Tab AI error state, clears `running`, and emits
+/// a structured `tab_ai_error_state_set` event with stable `kind` and
+/// `remediation` fields.  All submit-path early returns route through this
+/// instead of duplicating the state mutation.
+fn set_tab_ai_error(
+    state: &mut Option<TabAiOverlayState>,
+    kind: &'static str,
+    message: impl Into<SharedString>,
+    remediation: &'static str,
+) {
+    let message = message.into();
+    tracing::warn!(
+        target: "script_kit::tab_ai",
+        event = "tab_ai_error_state_set",
+        kind,
+        remediation,
+        message = %message,
+        "tab ai error state set"
+    );
+    if let Some(state) = state.as_mut() {
+        state.running = false;
+        state.error = Some(message);
+    }
+}
+
 impl ScriptListApp {
     /// Open the Tab AI overlay from any surface.
     ///
@@ -218,25 +243,38 @@ impl ScriptListApp {
 
         let timestamp = chrono::Utc::now().to_rfc3339();
 
+        // Capture counts before moving into from_parts
+        let visible_element_count = ui.visible_elements.len();
+        let recent_input_count = recent_inputs.len();
+        let has_clipboard = clipboard.is_some();
+        let prior_automation_count = prior_automations.len();
+        let has_bundle_id = bundle_id.is_some();
+
+        let context = crate::ai::TabAiContextBlob::from_parts(
+            ui,
+            desktop,
+            recent_inputs,
+            clipboard,
+            prior_automations,
+            timestamp,
+        );
+
         tracing::info!(
+            target: "script_kit::tab_ai",
             event = "tab_ai_context_built",
-            prompt_type = %ui.prompt_type,
-            visible_count = ui.visible_elements.len(),
-            has_bundle_id = bundle_id.is_some(),
-            has_clipboard = clipboard.is_some(),
-            prior_automation_count = prior_automations.len(),
+            schema_version = context.schema_version,
+            prompt_type = %context.ui.prompt_type,
+            visible_element_count,
+            recent_input_count,
+            has_clipboard,
+            prior_automation_count,
             context_warning_count,
+            has_bundle_id,
+            "tab ai context built"
         );
 
         TabAiResolvedContext {
-            context: crate::ai::TabAiContextBlob::from_parts(
-                ui,
-                desktop,
-                recent_inputs,
-                clipboard,
-                prior_automations,
-                timestamp,
-            ),
+            context,
             bundle_id,
             context_warning_count,
         }
@@ -568,11 +606,12 @@ impl ScriptListApp {
         let context_json = match serde_json::to_string_pretty(&resolved_context.context) {
             Ok(json) => json,
             Err(e) => {
-                tracing::error!(event = "tab_ai_context_serialize_failed", error = %e);
-                if let Some(state) = &mut self.tab_ai_state {
-                    state.running = false;
-                    state.error = Some(format!("Context error: {}", e).into());
-                }
+                set_tab_ai_error(
+                    &mut self.tab_ai_state,
+                    "context_serialize_failed",
+                    format!("Context error: {}", e),
+                    "fix_context_serialization",
+                );
                 cx.notify();
                 return;
             }
@@ -598,13 +637,12 @@ impl ScriptListApp {
         let selected_model = match crate::prompt_ai::select_default_ai_script_model(&registry) {
             Some(m) => m,
             None => {
-                tracing::error!(event = "tab_ai_no_model");
-                if let Some(state) = &mut self.tab_ai_state {
-                    state.running = false;
-                    state.error = Some(
-                        "No AI model configured. Open Settings \u{2192} AI and add a provider API key.".into(),
-                    );
-                }
+                set_tab_ai_error(
+                    &mut self.tab_ai_state,
+                    "no_model_configured",
+                    "No AI model configured. Open Settings \u{2192} AI and add a provider API key.",
+                    "configure_ai_provider",
+                );
                 cx.notify();
                 return;
             }
@@ -616,16 +654,12 @@ impl ScriptListApp {
         {
             Some(p) => p,
             None => {
-                tracing::error!(
-                    event = "tab_ai_no_provider",
-                    model_id = %selected_model.id,
+                set_tab_ai_error(
+                    &mut self.tab_ai_state,
+                    "no_provider_matched",
+                    "No AI provider matched the selected model. Reopen Settings \u{2192} AI and reselect a model.",
+                    "reselect_model_or_provider",
                 );
-                if let Some(state) = &mut self.tab_ai_state {
-                    state.running = false;
-                    state.error = Some(
-                        "No AI provider matched the selected model. Reopen Settings \u{2192} AI and reselect a model.".into(),
-                    );
-                }
                 cx.notify();
                 return;
             }

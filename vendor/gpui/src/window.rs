@@ -1260,9 +1260,7 @@ impl Window {
                     cx.foreground_executor()
                         .spawn(async move {
                             handle
-                                .update(&mut retry_cx, |_, window, cx| {
-                                    window.bounds_changed(cx)
-                                })
+                                .update(&mut retry_cx, |_, window, cx| window.bounds_changed(cx))
                                 .log_err();
                         })
                         .detach();
@@ -1280,9 +1278,7 @@ impl Window {
                     cx.foreground_executor()
                         .spawn(async move {
                             handle
-                                .update(&mut retry_cx, |_, window, cx| {
-                                    window.bounds_changed(cx)
-                                })
+                                .update(&mut retry_cx, |_, window, cx| window.bounds_changed(cx))
                                 .log_err();
                         })
                         .detach();
