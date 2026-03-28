@@ -81,8 +81,8 @@ pub use prompt_header::{PromptHeader, PromptHeaderColors, PromptHeaderConfig};
 #[allow(unused_imports)]
 pub(crate) use prompt_layout_shell::{
     emit_prompt_chrome_audit, emit_prompt_hint_audit, is_universal_prompt_hints,
-    render_universal_prompt_hint_strip, universal_prompt_hints, PromptChromeAudit,
-    PromptHintAudit, UNIVERSAL_PROMPT_HINT_COUNT,
+    render_universal_prompt_hint_strip, universal_prompt_hints, PromptChromeAudit, PromptHintAudit,
+    UNIVERSAL_PROMPT_HINT_COUNT,
 };
 #[allow(unused_imports)]
 pub(crate) use prompt_layout_shell::{
