@@ -34,7 +34,6 @@
 
 pub(crate) mod config;
 pub(crate) mod context_contract;
-pub(crate) mod tab_context;
 #[cfg(test)]
 mod context_contract_integration_tests;
 pub(crate) mod context_mentions;
@@ -50,20 +49,11 @@ pub(crate) mod script_generation;
 pub(crate) mod sdk_handlers;
 pub(crate) mod session;
 pub(crate) mod storage;
+pub(crate) mod tab_context;
 pub(crate) mod window;
 
 // Re-export commonly used types
 pub use self::config::{DetectedKeys, ModelInfo, ProviderConfig};
-pub use self::tab_context::{
-    append_tab_ai_execution_receipt, append_tab_ai_execution_receipt_to_path,
-    build_tab_ai_execution_receipt, build_tab_ai_user_prompt, cleanup_tab_ai_temp_script,
-    read_tab_ai_memory_index, read_tab_ai_memory_index_from_path, should_offer_save,
-    tab_ai_execution_audit_path, tab_ai_memory_index_path, write_tab_ai_memory_entry,
-    write_tab_ai_memory_entry_to_path, TabAiContextBlob, TabAiExecutionReceipt,
-    TabAiExecutionRecord, TabAiExecutionStatus, TabAiMemoryEntry, TabAiUiSnapshot,
-    TAB_AI_CONTEXT_SCHEMA_VERSION, TAB_AI_EXECUTION_RECEIPT_SCHEMA_VERSION,
-    TAB_AI_EXECUTION_RECORD_SCHEMA_VERSION, TAB_AI_MEMORY_ENTRY_SCHEMA_VERSION,
-};
 pub use self::current_app_automation_memory::{
     current_app_automation_memory_index_path, read_current_app_automation_memory_index,
     resolve_current_app_automation_from_memory, upsert_current_app_automation_memory_from_receipt,
@@ -94,6 +84,16 @@ pub use self::storage::{
     clear_all_chats, create_chat, delete_chat, get_all_chats, get_chat, get_chat_messages,
     get_deleted_chats, get_last_message_preparation_audit, init_ai_db, insert_mock_data,
     save_message, save_message_preparation_audit, search_chats, update_chat_title,
+};
+pub use self::tab_context::{
+    append_tab_ai_execution_receipt, append_tab_ai_execution_receipt_to_path,
+    build_tab_ai_execution_receipt, build_tab_ai_user_prompt, cleanup_tab_ai_temp_script,
+    read_tab_ai_memory_index, read_tab_ai_memory_index_from_path, should_offer_save,
+    tab_ai_execution_audit_path, tab_ai_memory_index_path, write_tab_ai_memory_entry,
+    write_tab_ai_memory_entry_to_path, TabAiContextBlob, TabAiExecutionReceipt,
+    TabAiExecutionRecord, TabAiExecutionStatus, TabAiMemoryEntry, TabAiUiSnapshot,
+    TAB_AI_CONTEXT_SCHEMA_VERSION, TAB_AI_EXECUTION_RECEIPT_SCHEMA_VERSION,
+    TAB_AI_EXECUTION_RECORD_SCHEMA_VERSION, TAB_AI_MEMORY_ENTRY_SCHEMA_VERSION,
 };
 pub use self::window::{
     add_ai_attachment, apply_ai_preset, close_ai_window, get_ai_window_state, is_ai_window,

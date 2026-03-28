@@ -42,6 +42,12 @@ pub const ACTIONS_DIALOG_EXPECT_SEARCH_DIVIDER: bool = false;
 /// `.impeccable.md` contract: when footer hints are shown, there are exactly 3.
 pub const ACTIONS_DIALOG_EXPECT_FOOTER_HINT_COUNT: u8 = 3;
 
+/// `.impeccable.md` contract: search input belongs at the top of the dialog.
+pub const ACTIONS_DIALOG_EXPECT_SEARCH_POSITION: &str = "top";
+
+/// `.impeccable.md` contract: no visible container border (whisper chrome).
+pub const ACTIONS_DIALOG_EXPECT_CONTAINER_BORDER: bool = false;
+
 #[cfg(test)]
 mod tests {
     use super::*;

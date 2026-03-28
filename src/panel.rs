@@ -36,9 +36,11 @@ pub const PROMPT_INPUT_FIELD_HEIGHT: f32 = 44.0;
 pub const WINDOW_VISIBLE_EDGE_MARGIN: f64 = 4.0;
 
 /// Shared status prefix for prompts shown while a script is actively running.
+#[allow(dead_code)]
 pub const SCRIPT_RUNNING_STATUS_PREFIX: &str = "Script running";
 
 /// Build a concise running status message used in prompt headers/footers.
+#[allow(dead_code)]
 pub fn running_status_message(context: &str) -> String {
     format!("{SCRIPT_RUNNING_STATUS_PREFIX} · {context}")
 }

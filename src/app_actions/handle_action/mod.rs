@@ -193,23 +193,6 @@ impl ScriptListApp {
         );
     }
 
-    pub(crate) fn open_ai_chat_from_main_window_query(
-        &mut self,
-        query: String,
-        cx: &mut Context<Self>,
-    ) {
-        let trace_id = format!("main_window_ai_chat:{}", uuid::Uuid::new_v4());
-        self.open_ai_window_after_main_hide(
-            "MainWindowTabFallback",
-            &trace_id,
-            DeferredAiWindowAction::SetInput {
-                text: query,
-                submit: false,
-            },
-            cx,
-        );
-    }
-
     fn open_ai_window_after_already_hidden(
         &mut self,
         source_action: &str,

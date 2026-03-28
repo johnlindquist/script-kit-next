@@ -7,6 +7,9 @@
 //! 4. Shift+Tab still routes to script generation, not Tab AI
 
 const TAB_SOURCE: &str = include_str!("../src/app_impl/startup_new_tab.rs");
+const TAB_AI_MODE_SOURCE: &str = include_str!("../src/app_impl/tab_ai_mode.rs");
+const RENDER_IMPL_SOURCE: &str = include_str!("../src/main_sections/render_impl.rs");
+const SCRIPT_LIST_SOURCE: &str = include_str!("../src/render_script_list/mod.rs");
 
 #[test]
 fn tab_ai_routing_universal_tab_calls_open_overlay() {
@@ -74,5 +77,47 @@ fn tab_ai_routing_shift_tab_uses_script_generation() {
     assert!(
         shift_tab_pos < overlay_pos,
         "Shift+Tab script generation must come before universal Tab AI route"
+    );
+}
+
+// --- Save-offer overlay rendering ---
+
+#[test]
+fn render_impl_renders_tab_ai_save_offer_overlay() {
+    assert!(
+        RENDER_IMPL_SOURCE.contains("render_tab_ai_save_offer_overlay"),
+        "render_impl.rs must build the Tab AI save-offer overlay"
+    );
+    assert!(
+        RENDER_IMPL_SOURCE.contains("tab_ai_save_offer_overlay"),
+        "render_impl.rs must compose the Tab AI save-offer overlay into the overlay stack"
+    );
+}
+
+// --- Tab re-entry guard ---
+
+#[test]
+fn startup_tab_interceptor_blocks_reentry_when_save_offer_is_open() {
+    assert!(
+        TAB_SOURCE.contains("tab_ai_save_offer_state.is_some()"),
+        "startup_new_tab.rs must block Tab reentry while the save-offer overlay is visible"
+    );
+}
+
+#[test]
+fn open_tab_ai_overlay_guards_save_offer_state() {
+    assert!(
+        TAB_AI_MODE_SOURCE.contains("self.tab_ai_save_offer_state.is_some()"),
+        "open_tab_ai_overlay must guard against opening while save-offer is visible"
+    );
+}
+
+// --- ScriptList fallback ---
+
+#[test]
+fn script_list_tab_fallback_no_longer_opens_inline_ai_chat() {
+    assert!(
+        !SCRIPT_LIST_SOURCE.contains("open_ai_chat_from_main_window_query"),
+        "ScriptList Tab fallback must not reopen the old inline AI chat path"
     );
 }

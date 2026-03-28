@@ -143,11 +143,13 @@ fn render_actions_backdrop_bottom_anchored(
     )
 }
 
+#[allow(dead_code)]
 #[inline]
 fn running_status_text(context: &str) -> String {
     crate::panel::running_status_message(context)
 }
 
+#[allow(dead_code)]
 #[inline]
 fn prompt_footer_colors_for_prompt(
     design_colors: &crate::designs::DesignColors,
@@ -156,6 +158,7 @@ fn prompt_footer_colors_for_prompt(
     PromptFooterColors::from_design(design_colors)
 }
 
+#[allow(dead_code)]
 #[inline]
 fn prompt_footer_config_with_status(
     primary_label: &str,

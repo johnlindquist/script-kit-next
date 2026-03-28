@@ -151,13 +151,11 @@ pub fn render_actions_dialog_presentation(
 
     // Three-key hint strip footer — matches live dialog exactly
     if model.show_footer {
-        container = container.child(
-            div().w_full().child(crate::components::HintStrip::new(vec![
-                "↵ Run".into(),
-                "⌘K Actions".into(),
-                "Tab AI".into(),
-            ])),
-        );
+        container = container.child(div().w_full().child(crate::components::HintStrip::new(vec![
+            "↵ Run".into(),
+            "⌘K Actions".into(),
+            "Tab AI".into(),
+        ])));
     }
 
     container.into_any_element()

@@ -844,13 +844,12 @@ impl ScriptListApp {
                             this.close_and_reset_window(cx);
                         }
                     }
-                    // Tab key: Send query to AI chat if filter has text
-                    // Note: This is a fallback - primary Tab handling is in app_impl.rs via intercept_keystrokes
+                    // Tab key: consumed by intercept_keystrokes in startup_new_tab.rs.
+                    // This fallback only fires if the interceptor somehow misses;
+                    // route to Tab AI overlay instead of the old inline chat.
                     key if sk_is_key_tab(key) => {
-                        if !this.filter_text.is_empty() {
-                            let query = this.filter_text.clone();
-                            this.open_ai_chat_from_main_window_query(query, cx);
-                        }
+                        this.open_tab_ai_overlay(cx);
+                        cx.stop_propagation();
                     }
                     _ => {}
                 }

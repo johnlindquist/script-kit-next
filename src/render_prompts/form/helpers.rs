@@ -32,6 +32,7 @@ fn focused_form_field_is_textarea(form: &FormPromptState) -> bool {
         .is_some_and(|field_type| field_type.eq_ignore_ascii_case("textarea"))
 }
 
+#[allow(dead_code)]
 #[inline]
 fn form_footer_status_text(focused_field_is_textarea: bool) -> String {
     if focused_field_is_textarea {

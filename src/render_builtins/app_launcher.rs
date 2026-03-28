@@ -49,7 +49,28 @@ impl ScriptListApp {
                 }
 
                 let key = event.keystroke.key.as_str();
+                let key_char = event.keystroke.key_char.as_deref();
                 let has_cmd = event.keystroke.modifiers.platform;
+                let modifiers = &event.keystroke.modifiers;
+
+                // Route to actions dialog first (Cmd+K, etc.)
+                match this.route_key_to_actions_dialog(
+                    key,
+                    key_char,
+                    modifiers,
+                    ActionsDialogHost::AppLauncher,
+                    window,
+                    cx,
+                ) {
+                    ActionsRoute::NotHandled => {}
+                    ActionsRoute::Handled => {
+                        return;
+                    }
+                    ActionsRoute::Execute { action_id } => {
+                        this.handle_action(action_id, window, cx);
+                        return;
+                    }
+                }
 
                 // ESC: Clear filter first if present, otherwise go back/close
                 if is_key_escape(key) && !this.show_actions_popup {
@@ -365,22 +386,20 @@ impl ScriptListApp {
                     .child(list_scrollbar),
             );
 
-        let leading = Some(crate::components::render_hint_strip_leading_text(
-            format!("{} apps", self.apps.len()),
-            text_primary,
-        ));
+        crate::components::emit_prompt_chrome_audit(
+            &crate::components::PromptChromeAudit::minimal_list(
+                "render_builtins::app_launcher",
+                true,
+            ),
+        );
 
         crate::components::render_minimal_list_prompt_shell(
             design_visual.radius_lg,
             crate::ui_foundation::get_vibrancy_background(&self.theme),
             header,
             content,
-            vec![
-                gpui::SharedString::from("↵ Launch"),
-                gpui::SharedString::from("⌘K Actions"),
-                gpui::SharedString::from("Esc Back"),
-            ],
-            leading,
+            crate::components::universal_prompt_hints(),
+            None,
         )
         .text_color(rgb(text_primary))
         .font_family(design_typography.font_family)
@@ -433,16 +452,50 @@ mod app_launcher_chrome_audit {
             "app_launcher should not keep a redundant launcher title row"
         );
     }
+}
+
+#[cfg(test)]
+mod app_launcher_chrome_tests {
+    fn read_source() -> String {
+        include_str!("app_launcher.rs").to_string()
+    }
 
     #[test]
-    fn app_launcher_uses_hint_strip_leading_for_app_count() {
-        let source = include_str!("app_launcher.rs");
-        let render_fn_end = source.find("#[cfg(test)]").unwrap_or(source.len());
-        let render_code = &source[..render_fn_end];
-
+    fn app_launcher_uses_canonical_footer_and_no_leading_status() {
+        let source = read_source();
         assert!(
-            render_code.contains("render_hint_strip_leading_text("),
-            "app count should live in the hint strip leading slot, not in header chrome"
+            source.contains("universal_prompt_hints()"),
+            "app launcher should use the shared three-key footer"
+        );
+        assert!(
+            !source.contains("render_hint_strip_leading_text("),
+            "app launcher footer should not render leading status text"
+        );
+        assert!(
+            !source.contains("\"↵ Launch\"") && !source.contains("\"Esc Back\""),
+            "app launcher should not keep custom footer labels"
+        );
+    }
+
+    #[test]
+    fn app_launcher_declares_runtime_chrome_audit() {
+        let source = read_source();
+        assert!(
+            source.contains("emit_prompt_chrome_audit(")
+                && source.contains("PromptChromeAudit::minimal_list(")
+                && source.contains("\"render_builtins::app_launcher\""),
+            "app launcher should emit a minimal-list runtime audit"
+        );
+    }
+
+    #[test]
+    fn app_launcher_wires_actions_if_it_advertises_actions() {
+        let source = read_source();
+        assert!(
+            source.contains("route_key_to_actions_dialog(")
+                || source.contains("handle_prompt_key_preamble_default(")
+                || !source.contains("⌘K Actions"),
+            "app launcher should not advertise Actions without wiring Cmd+K"
         );
     }
 }

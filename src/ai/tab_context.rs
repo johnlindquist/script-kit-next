@@ -121,10 +121,13 @@ pub struct TabAiExecutionRecord {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bundle_id: Option<String>,
     /// AI model identifier used for generation.
+    #[serde(default)]
     pub model_id: String,
     /// AI provider identifier used for generation.
+    #[serde(default)]
     pub provider_id: String,
     /// Number of context-assembly warnings at build time.
+    #[serde(default)]
     pub context_warning_count: usize,
     /// ISO-8601 timestamp when the script was executed.
     pub executed_at: String,
@@ -229,9 +232,7 @@ pub fn build_tab_ai_execution_receipt(
 }
 
 /// Append a single audit receipt as one JSON line to the JSONL audit log.
-pub fn append_tab_ai_execution_receipt(
-    receipt: &TabAiExecutionReceipt,
-) -> Result<(), String> {
+pub fn append_tab_ai_execution_receipt(receipt: &TabAiExecutionReceipt) -> Result<(), String> {
     append_tab_ai_execution_receipt_to_path(receipt, &tab_ai_execution_audit_path()?)
 }
 
@@ -391,9 +392,8 @@ pub fn write_tab_ai_memory_entry_to_path(
         })?;
     }
 
-    let json = serde_json::to_string_pretty(&entries).map_err(|e| {
-        format!("tab_ai_memory_serialize_failed: error={}", e)
-    })?;
+    let json = serde_json::to_string_pretty(&entries)
+        .map_err(|e| format!("tab_ai_memory_serialize_failed: error={}", e))?;
     std::fs::write(path, json).map_err(|e| {
         format!(
             "tab_ai_memory_write_failed: path={} error={}",
@@ -476,6 +476,56 @@ pub fn should_offer_save(record: &TabAiExecutionRecord) -> bool {
 }
 
 #[cfg(test)]
+mod execution_record_compat_tests {
+    use super::*;
+
+    #[test]
+    fn legacy_v1_execution_record_fixture_still_deserializes() {
+        let json = std::fs::read_to_string("tests/fixtures/tab_ai_execution_record_v1.json")
+            .expect("missing tests/fixtures/tab_ai_execution_record_v1.json");
+        let record: TabAiExecutionRecord =
+            serde_json::from_str(&json).expect("legacy v1 record should deserialize");
+        assert!(!record.intent.is_empty());
+        assert!(!record.generated_source.is_empty());
+        assert_eq!(record.context_warning_count, 0);
+        assert!(record.model_id.is_empty(), "v1 had no model_id — default should be empty string");
+        assert!(
+            record.provider_id.is_empty(),
+            "v1 had no provider_id — default should be empty string"
+        );
+
+        tracing::info!(
+            event = "execution_record_compat_test_passed",
+            schema_version = record.schema_version,
+            intent = %record.intent,
+            context_warning_count = record.context_warning_count,
+        );
+    }
+
+    #[test]
+    fn v2_record_with_all_fields_still_deserializes() {
+        let json = r#"{
+            "schemaVersion": 2,
+            "intent": "open browser",
+            "generatedSource": "line1\nline2\nline3",
+            "tempScriptPath": "/tmp/test.ts",
+            "slug": "open-browser",
+            "promptType": "ScriptList",
+            "modelId": "gpt-4.1",
+            "providerId": "vercel",
+            "contextWarningCount": 2,
+            "executedAt": "2026-03-28T00:00:00Z"
+        }"#;
+        let record: TabAiExecutionRecord =
+            serde_json::from_str(json).expect("v2 record should deserialize");
+        assert_eq!(record.schema_version, 2);
+        assert_eq!(record.model_id, "gpt-4.1");
+        assert_eq!(record.provider_id, "vercel");
+        assert_eq!(record.context_warning_count, 2);
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
 
@@ -513,10 +563,7 @@ mod tests {
             focused_semantic_id: Some("input:filter".to_string()),
             selected_semantic_id: Some("choice:0:slack".to_string()),
             visible_elements: vec![crate::protocol::ElementInfo::choice(
-                0,
-                "Slack",
-                "slack",
-                true,
+                0, "Slack", "slack", true,
             )],
         };
         let desktop = crate::context_snapshot::AiContextSnapshot {
@@ -530,8 +577,7 @@ mod tests {
         let recent_inputs = vec!["copy url".to_string(), "open finder".to_string()];
         let ts = "2026-03-28T12:00:00Z".to_string();
 
-        let blob =
-            TabAiContextBlob::from_parts(ui, desktop, recent_inputs, None, ts.clone());
+        let blob = TabAiContextBlob::from_parts(ui, desktop, recent_inputs, None, ts.clone());
 
         assert_eq!(blob.schema_version, TAB_AI_CONTEXT_SCHEMA_VERSION);
         assert_eq!(blob.timestamp, ts);
@@ -619,13 +665,19 @@ mod tests {
         assert_eq!(parsed.schema_version, TAB_AI_CONTEXT_SCHEMA_VERSION);
         assert_eq!(parsed.ui.prompt_type, "ClipboardHistory");
         assert_eq!(parsed.ui.visible_elements.len(), 4);
-        assert_eq!(parsed.desktop.selected_text.as_deref(), Some("selected words"));
+        assert_eq!(
+            parsed.desktop.selected_text.as_deref(),
+            Some("selected words")
+        );
         assert_eq!(
             parsed.desktop.browser.as_ref().map(|b| b.url.as_str()),
             Some("https://example.com")
         );
         assert_eq!(parsed.recent_inputs.len(), 3);
-        assert_eq!(parsed.clipboard_preview.as_deref(), Some("clipboard preview"));
+        assert_eq!(
+            parsed.clipboard_preview.as_deref(),
+            Some("clipboard preview")
+        );
     }
 
     #[test]
@@ -651,10 +703,7 @@ mod tests {
             !json.contains("recentInputs"),
             "empty Vec should be omitted"
         );
-        assert!(
-            !json.contains("clipboardPreview"),
-            "None should be omitted"
-        );
+        assert!(!json.contains("clipboardPreview"), "None should be omitted");
     }
 
     #[test]
@@ -664,11 +713,7 @@ mod tests {
             r#"{"ui":{"promptType":"ScriptList"}}"#,
         );
         assert!(prompt.contains("User intent:\nrename selection\nthen copy it"));
-        assert!(
-            prompt.contains(
-                "Current context JSON:\n{\"ui\":{\"promptType\":\"ScriptList\"}}"
-            )
-        );
+        assert!(prompt.contains("Current context JSON:\n{\"ui\":{\"promptType\":\"ScriptList\"}}"));
         assert!(prompt.contains("Script Kit TypeScript"));
         assert!(prompt.contains("single fenced code block"));
     }
@@ -678,7 +723,8 @@ mod tests {
     fn sample_execution_record() -> TabAiExecutionRecord {
         TabAiExecutionRecord::from_parts(
             "force quit Slack".to_string(),
-            "import '@anthropic-ai/sdk';\nawait exec('kill Slack');\nconsole.log('done');".to_string(),
+            "import '@anthropic-ai/sdk';\nawait exec('kill Slack');\nconsole.log('done');"
+                .to_string(),
             "/tmp/scriptlet-abc123.ts".to_string(),
             "force-quit-slack".to_string(),
             "AppLauncher".to_string(),
@@ -693,7 +739,10 @@ mod tests {
     #[test]
     fn tab_ai_execution_record_from_parts_sets_schema_version() {
         let record = sample_execution_record();
-        assert_eq!(record.schema_version, TAB_AI_EXECUTION_RECORD_SCHEMA_VERSION);
+        assert_eq!(
+            record.schema_version,
+            TAB_AI_EXECUTION_RECORD_SCHEMA_VERSION
+        );
         assert_eq!(record.intent, "force quit Slack");
         assert_eq!(record.slug, "force-quit-slack");
         assert_eq!(record.prompt_type, "AppLauncher");
@@ -790,8 +839,7 @@ mod tests {
         let lines: Vec<&str> = content.lines().collect();
         assert_eq!(lines.len(), 1, "exactly one line per receipt");
 
-        let parsed: TabAiExecutionReceipt =
-            serde_json::from_str(lines[0]).expect("valid JSON");
+        let parsed: TabAiExecutionReceipt = serde_json::from_str(lines[0]).expect("valid JSON");
         assert_eq!(parsed.status, TabAiExecutionStatus::Dispatched);
         assert_eq!(parsed.slug, "force-quit-slack");
         assert_eq!(parsed.model_id, "gpt-4.1");
@@ -883,7 +931,9 @@ mod tests {
 
     #[test]
     fn cleanup_tab_ai_temp_script_returns_true_for_absent_file() {
-        assert!(cleanup_tab_ai_temp_script("/tmp/nonexistent-tab-ai-test-12345.ts"));
+        assert!(cleanup_tab_ai_temp_script(
+            "/tmp/nonexistent-tab-ai-test-12345.ts"
+        ));
     }
 
     #[test]

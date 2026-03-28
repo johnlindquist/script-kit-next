@@ -120,7 +120,7 @@ impl ScriptListApp {
         crate::components::emit_prompt_chrome_audit(
             &crate::components::PromptChromeAudit::exception(
                 "render_prompts::term",
-                "terminal_with_close_and_commands_footer",
+                "terminal_surface_with_hint_strip",
             ),
         );
 
@@ -280,21 +280,6 @@ impl ScriptListApp {
             },
         );
 
-        // Footer colors for the terminal prompt - use theme for consistent styling
-        let footer_colors = PromptFooterColors::from_theme(theme);
-
-        // Footer configuration - Terminal uses "Close" as primary action (Cmd+W)
-        // and Actions as secondary (Cmd+Shift+K) when actions are available
-        let footer_config = PromptFooterConfig::new()
-            .primary_label("Close")
-            .primary_shortcut("⌘W")
-            .secondary_shortcut(crate::actions_toggle::TERM_PROMPT_ACTIONS_TOGGLE_SHORTCUT)
-            .show_secondary(true);
-
-        // Handlers for footer buttons
-        let handle_close = cx.entity().downgrade();
-        let handle_actions = cx.entity().downgrade();
-        let actions_mode_for_footer = actions_mode;
         // Terminal actions open as a separate vibrancy popup window, so the
         // inline backdrop is not needed (the dialog renders in its own window).
         let show_inline_actions_backdrop = false;
@@ -316,28 +301,11 @@ impl ScriptListApp {
             // Keep overflow clipping scoped to terminal output so the actions popup can
             // preserve vibrancy/translucency compositing when rendered as an overlay.
             .child(div().flex_1().min_h(px(0.)).overflow_hidden().child(entity))
-            // Footer at the bottom
-            .child(
-                PromptFooter::new(footer_config, footer_colors)
-                    .on_primary_click(Box::new(move |_, _window, cx| {
-                        if let Some(app) = handle_close.upgrade() {
-                            app.update(cx, |this, cx| {
-                                this.close_and_reset_window(cx);
-                            });
-                        }
-                    }))
-                    .on_secondary_click(Box::new(move |_, window, cx| {
-                        if let Some(app) = handle_actions.upgrade() {
-                            app.update(cx, |this, cx| {
-                                this.toggle_term_prompt_actions(
-                                    actions_mode_for_footer,
-                                    cx,
-                                    window,
-                                );
-                            });
-                        }
-                    })),
-            )
+            // Shared three-key hint strip footer
+            .child(crate::components::render_simple_hint_strip(
+                crate::components::universal_prompt_hints(),
+                None,
+            ))
             // Actions dialog overlay
             .when_some(
                 render_actions_backdrop_bottom_anchored(
