@@ -78,9 +78,9 @@ pub struct TabAiContextBlob {
     /// Structured clipboard context (content type, preview, optional OCR).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub clipboard: Option<TabAiClipboardContext>,
-    /// Prior automation suggestions from the current-app memory index.
+    /// Prior automation suggestions from the Tab AI memory index.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub prior_automations: Vec<super::current_app_automation_memory::TabAiMemorySuggestion>,
+    pub prior_automations: Vec<TabAiMemorySuggestion>,
 }
 
 impl TabAiContextBlob {
@@ -92,7 +92,7 @@ impl TabAiContextBlob {
         desktop: crate::context_snapshot::AiContextSnapshot,
         recent_inputs: Vec<String>,
         clipboard: Option<TabAiClipboardContext>,
-        prior_automations: Vec<super::current_app_automation_memory::TabAiMemorySuggestion>,
+        prior_automations: Vec<TabAiMemorySuggestion>,
         timestamp: String,
     ) -> Self {
         Self {
@@ -518,6 +518,173 @@ pub fn should_offer_save(record: &TabAiExecutionRecord) -> bool {
         context_warning_count = record.context_warning_count,
     );
     offer
+}
+
+// ---------------------------------------------------------------------------
+// Tab AI memory suggestion resolver
+// ---------------------------------------------------------------------------
+
+/// A suggestion surfaced from the Tab AI memory index for the current intent.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct TabAiMemorySuggestion {
+    pub slug: String,
+    pub bundle_id: String,
+    pub raw_query: String,
+    pub effective_query: String,
+    pub prompt_type: String,
+    pub written_at: String,
+    pub score: f32,
+}
+
+const TAB_AI_MEMORY_SUGGESTION_MIN_SCORE: f32 = 0.35;
+
+fn normalize_tab_ai_match_text(input: &str) -> String {
+    let mut normalized = String::with_capacity(input.len());
+    let mut last_was_space = false;
+
+    for ch in input.chars() {
+        let ch = if ch == '\u{2192}' { ' ' } else { ch };
+
+        if ch.is_ascii_alphanumeric() {
+            normalized.push(ch.to_ascii_lowercase());
+            last_was_space = false;
+        } else if !last_was_space {
+            normalized.push(' ');
+            last_was_space = true;
+        }
+    }
+
+    normalized.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+fn tab_ai_token_set(input: &str) -> std::collections::BTreeSet<String> {
+    normalize_tab_ai_match_text(input)
+        .split_whitespace()
+        .map(ToString::to_string)
+        .collect()
+}
+
+fn tab_ai_jaccard_similarity(left: &str, right: &str) -> f32 {
+    let left_set = tab_ai_token_set(left);
+    let right_set = tab_ai_token_set(right);
+
+    if left_set.is_empty() || right_set.is_empty() {
+        return 0.0;
+    }
+
+    let intersection = left_set.intersection(&right_set).count() as f32;
+    let union = left_set.union(&right_set).count() as f32;
+
+    if union == 0.0 {
+        0.0
+    } else {
+        intersection / union
+    }
+}
+
+fn score_tab_ai_memory_candidate(query: &str, entry: &TabAiMemoryEntry) -> f32 {
+    let query_norm = normalize_tab_ai_match_text(query);
+    let intent_norm = normalize_tab_ai_match_text(&entry.intent);
+
+    if query_norm.is_empty() || intent_norm.is_empty() {
+        return 0.0;
+    }
+
+    if query_norm == intent_norm {
+        return 1.0;
+    }
+
+    let overlap = tab_ai_jaccard_similarity(&query_norm, &intent_norm);
+
+    // Small bonus when one normalized phrase contains the other.
+    // This keeps "force quit app" and "force quit current app" related.
+    let contains_bonus = if intent_norm.contains(&query_norm) || query_norm.contains(&intent_norm) {
+        0.20
+    } else {
+        0.0
+    };
+
+    (overlap * 0.80) + contains_bonus
+}
+
+/// Resolve Tab AI memory suggestions from the default memory index location.
+pub fn resolve_tab_ai_memory_suggestions(
+    raw_query: &str,
+    bundle_id: Option<&str>,
+    limit: usize,
+) -> Result<Vec<TabAiMemorySuggestion>, String> {
+    resolve_tab_ai_memory_suggestions_from_path(
+        raw_query,
+        bundle_id,
+        limit,
+        &tab_ai_memory_index_path()?,
+    )
+}
+
+/// Resolve Tab AI memory suggestions from a specific memory index path.
+pub fn resolve_tab_ai_memory_suggestions_from_path(
+    raw_query: &str,
+    bundle_id: Option<&str>,
+    limit: usize,
+    path: &std::path::Path,
+) -> Result<Vec<TabAiMemorySuggestion>, String> {
+    let query = raw_query.trim();
+
+    let Some(bundle_id) = bundle_id.map(str::trim).filter(|value| !value.is_empty()) else {
+        return Ok(Vec::new());
+    };
+
+    if query.is_empty() || limit == 0 {
+        return Ok(Vec::new());
+    }
+
+    let bundle_id_norm = normalize_tab_ai_match_text(bundle_id);
+
+    let mut matches: Vec<TabAiMemorySuggestion> = read_tab_ai_memory_index_from_path(path)?
+        .into_iter()
+        .filter(|entry| {
+            entry
+                .bundle_id
+                .as_ref()
+                .map(|value| normalize_tab_ai_match_text(value) == bundle_id_norm)
+                .unwrap_or(false)
+        })
+        .filter_map(|entry| {
+            let score = score_tab_ai_memory_candidate(query, &entry);
+            if score < TAB_AI_MEMORY_SUGGESTION_MIN_SCORE {
+                return None;
+            }
+            Some(TabAiMemorySuggestion {
+                slug: entry.slug,
+                bundle_id: entry.bundle_id.unwrap_or_default(),
+                raw_query: entry.intent.clone(),
+                effective_query: entry.intent,
+                prompt_type: entry.prompt_type,
+                written_at: entry.written_at,
+                score,
+            })
+        })
+        .collect();
+
+    matches.sort_by(|left, right| {
+        right
+            .score
+            .total_cmp(&left.score)
+            .then_with(|| right.written_at.cmp(&left.written_at))
+            .then_with(|| left.slug.cmp(&right.slug))
+    });
+
+    matches.truncate(limit);
+
+    tracing::info!(
+        event = "tab_ai_memory_suggestions_resolved",
+        query = %query,
+        bundle_id = %bundle_id,
+        match_count = matches.len(),
+    );
+
+    Ok(matches)
 }
 
 #[cfg(test)]
@@ -1041,5 +1208,122 @@ mod tests {
         };
         let json = serde_json::to_string(&entry).expect("serialize");
         assert!(!json.contains("bundleId"));
+    }
+}
+
+#[cfg(test)]
+mod tab_ai_memory_suggestion_tests {
+    use super::*;
+
+    fn memory_entry(
+        intent: &str,
+        bundle_id: Option<&str>,
+        slug: &str,
+        written_at: &str,
+    ) -> TabAiMemoryEntry {
+        TabAiMemoryEntry {
+            schema_version: TAB_AI_MEMORY_ENTRY_SCHEMA_VERSION,
+            intent: intent.to_string(),
+            generated_source: "import \"@scriptkit/sdk\";\nawait hide();\n".to_string(),
+            slug: slug.to_string(),
+            prompt_type: "AppLauncher".to_string(),
+            bundle_id: bundle_id.map(str::to_string),
+            written_at: written_at.to_string(),
+        }
+    }
+
+    #[test]
+    fn resolve_tab_ai_memory_suggestions_returns_similar_non_exact_match() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join(".tab-ai-memory.json");
+        let entries = vec![memory_entry(
+            "force quit current app",
+            Some("com.apple.Safari"),
+            "force-quit-current-app",
+            "2026-03-28T00:00:00Z",
+        )];
+        std::fs::write(&path, serde_json::to_string_pretty(&entries).expect("ser"))
+            .expect("write");
+
+        let results = resolve_tab_ai_memory_suggestions_from_path(
+            "force quit app",
+            Some("com.apple.Safari"),
+            3,
+            &path,
+        )
+        .expect("resolve suggestions");
+
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].slug, "force-quit-current-app");
+        assert_eq!(results[0].effective_query, "force quit current app");
+        assert!(results[0].score >= TAB_AI_MEMORY_SUGGESTION_MIN_SCORE);
+    }
+
+    #[test]
+    fn resolve_tab_ai_memory_suggestions_filters_by_bundle_id() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join(".tab-ai-memory.json");
+        let entries = vec![
+            memory_entry(
+                "copy browser url",
+                Some("com.apple.Safari"),
+                "copy-browser-url",
+                "2026-03-28T00:00:00Z",
+            ),
+            memory_entry(
+                "copy browser url",
+                Some("com.tinyspeck.slackmacgap"),
+                "copy-browser-url-slack",
+                "2026-03-28T00:00:01Z",
+            ),
+        ];
+        std::fs::write(&path, serde_json::to_string_pretty(&entries).expect("ser"))
+            .expect("write");
+
+        let results = resolve_tab_ai_memory_suggestions_from_path(
+            "copy url",
+            Some("com.apple.Safari"),
+            3,
+            &path,
+        )
+        .expect("resolve suggestions");
+
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].slug, "copy-browser-url");
+        assert_eq!(results[0].bundle_id, "com.apple.Safari");
+    }
+
+    #[test]
+    fn resolve_tab_ai_memory_suggestions_prefers_exact_match_then_recency() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join(".tab-ai-memory.json");
+        let entries = vec![
+            memory_entry(
+                "force quit current app",
+                Some("com.apple.Safari"),
+                "older-similar",
+                "2026-03-28T00:00:00Z",
+            ),
+            memory_entry(
+                "force quit app",
+                Some("com.apple.Safari"),
+                "exact-match",
+                "2026-03-28T00:00:01Z",
+            ),
+        ];
+        std::fs::write(&path, serde_json::to_string_pretty(&entries).expect("ser"))
+            .expect("write");
+
+        let results = resolve_tab_ai_memory_suggestions_from_path(
+            "force quit app",
+            Some("com.apple.Safari"),
+            3,
+            &path,
+        )
+        .expect("resolve suggestions");
+
+        assert_eq!(results.len(), 2);
+        assert_eq!(results[0].slug, "exact-match");
+        assert!(results[0].score >= results[1].score);
     }
 }
