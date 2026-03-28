@@ -17,7 +17,6 @@ use gpui_component::button::ButtonVariant;
 
 use crate::{
     list_item::FONT_MONO,
-    platform,
     theme::get_cached_theme,
     ui_foundation::{is_key_enter, is_key_escape, is_key_left, is_key_tab, HexColorExt},
 };
@@ -35,6 +34,7 @@ const CONFIRM_BODY_MAX_LINES: usize = 10;
 const CONFIRM_LIFECYCLE_POLL_MS: u64 = 120;
 const CONFIRM_RADIUS: f32 = 14.0;
 /// NSWindowOrderingMode::NSWindowAbove — place child above parent.
+#[cfg(target_os = "macos")]
 const NS_WINDOW_ABOVE: i64 = 1;
 
 static CONFIRM_WINDOW: OnceLock<Mutex<Option<WindowHandle<ConfirmPopupWindow>>>> = OnceLock::new();
@@ -389,10 +389,14 @@ pub(crate) fn open_confirm_popup_window(
         "open_confirm_popup_window: window created successfully"
     );
 
+    #[cfg(target_os = "macos")]
     // Capture expected frame for NSWindow matching in the deferred callback
     let expected_w: f32 = bounds.size.width.into();
+    #[cfg(target_os = "macos")]
     let expected_h: f32 = bounds.size.height.into();
+    #[cfg(target_os = "macos")]
     let expected_x: f32 = bounds.origin.x.into();
+    #[cfg(target_os = "macos")]
     let expected_y: f32 = bounds.origin.y.into();
 
     #[cfg(target_os = "macos")]

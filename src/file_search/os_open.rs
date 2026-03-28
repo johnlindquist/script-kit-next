@@ -1,3 +1,4 @@
+#[cfg(target_os = "macos")]
 use std::path::Path;
 
 #[cfg(any(test, target_os = "windows"))]
@@ -88,6 +89,7 @@ pub fn reveal_in_finder(path: &str) -> Result<(), String> {
     }
 }
 
+#[cfg(target_os = "macos")]
 pub(crate) fn terminal_working_directory(path: &str, is_dir: bool) -> String {
     if is_dir {
         return path.to_string();
@@ -110,12 +112,11 @@ pub(crate) fn terminal_working_directory(path: &str, is_dir: bool) -> String {
 ///
 /// Returns the resolved working directory used to launch the terminal.
 pub fn open_in_terminal(path: &str, is_dir: bool) -> Result<String, String> {
-    let dir_path = terminal_working_directory(path, is_dir);
-
     #[cfg(target_os = "macos")]
     {
         use std::process::Command;
 
+        let dir_path = terminal_working_directory(path, is_dir);
         let escaped_dir_path = crate::utils::escape_applescript_string(&dir_path);
         let script = format!(
             r#"tell application "Terminal"
@@ -179,10 +180,9 @@ pub fn move_to_trash(path: &str) -> Result<(), String> {
 /// Preview a file using Quick Look (macOS)
 #[allow(dead_code)]
 pub fn quick_look(path: &str) -> Result<(), String> {
-    use std::process::Command;
-
     #[cfg(target_os = "macos")]
     {
+        use std::process::Command;
         Command::new("qlmanage")
             .args(["-p", path])
             .spawn()
@@ -200,10 +200,9 @@ pub fn quick_look(path: &str) -> Result<(), String> {
 /// Show the "Open With" dialog for a file (macOS)
 #[allow(dead_code)]
 pub fn open_with(path: &str) -> Result<(), String> {
-    use std::process::Command;
-
     #[cfg(target_os = "macos")]
     {
+        use std::process::Command;
         // Use AppleScript to trigger the "Open With" menu
         let script = format!(
             r#"tell application "Finder"
@@ -230,10 +229,9 @@ pub fn open_with(path: &str) -> Result<(), String> {
 /// Show the Get Info window for a file in Finder (macOS)
 #[allow(dead_code)]
 pub fn show_info(path: &str) -> Result<(), String> {
-    use std::process::Command;
-
     #[cfg(target_os = "macos")]
     {
+        use std::process::Command;
         // Use AppleScript to open the Get Info window
         let script = format!(
             r#"tell application "Finder"

@@ -60,7 +60,7 @@ fn apply_interactive_temp_permissions(
 fn create_interactive_temp_script(
     content: &str,
     suffix: &str,
-    mode: InteractiveTempFileMode,
+    #[cfg_attr(not(unix), allow(unused_variables))] mode: InteractiveTempFileMode,
 ) -> Result<PathBuf, String> {
     let mut temp_file = tempfile::Builder::new()
         .prefix("scriptlet-")

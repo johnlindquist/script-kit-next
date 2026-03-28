@@ -895,6 +895,7 @@ fn log_actions_popup_placement(stage: &'static str, receipt: &ActionsPopupPlacem
 ///
 /// For bottom-anchored positions the origin stays fixed (bottom edge is pinned).
 /// For top-anchored positions the top edge stays fixed, so origin.y shifts.
+#[allow(dead_code)]
 fn resized_actions_window_origin_y(
     current_origin_y: f64,
     current_height: f64,
@@ -987,7 +988,7 @@ pub fn open_actions_window(
 
     // Load theme for vibrancy settings
     let theme = get_cached_theme();
-    let is_dark_vibrancy = theme.should_use_dark_vibrancy();
+    let _is_dark_vibrancy = theme.should_use_dark_vibrancy();
     let window_background = if theme.is_vibrancy_enabled() {
         gpui::WindowBackgroundAppearance::Blurred
     } else {
@@ -1230,7 +1231,7 @@ pub fn notify_actions_window(cx: &mut App) {
 
 // --- merged from part_03.rs ---
 
-const ACTIONS_WINDOW_RESIZE_ANIMATE: bool = false;
+const _ACTIONS_WINDOW_RESIZE_ANIMATE: bool = false;
 
 /// Resize the actions window directly using the window reference
 /// Use this from defer callbacks where we already have access to the window
@@ -1257,7 +1258,7 @@ pub fn resize_actions_window_direct(
 
     let current_bounds = window.bounds();
     let current_height_f32: f32 = current_bounds.size.height.into();
-    let current_width_f32: f32 = current_bounds.size.width.into();
+    let _current_width_f32: f32 = current_bounds.size.width.into();
 
     let position = get_actions_window_position();
     log_actions_popup_resize(
@@ -1403,7 +1404,7 @@ pub fn resize_actions_window(cx: &mut App, dialog_entity: &Entity<ActionsDialog>
         let update_result = handle.update(cx, |_this, window, cx| {
             let current_bounds = window.bounds();
             let current_height_f32: f32 = current_bounds.size.height.into();
-            let current_width_f32: f32 = current_bounds.size.width.into();
+            let _current_width_f32: f32 = current_bounds.size.width.into();
 
             let position = get_actions_window_position();
             log_actions_popup_resize("resize_requested", position, current_bounds, new_height_f32);

@@ -14,7 +14,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs::{self, File, OpenOptions};
-use std::io::{ErrorKind, Read, Write};
+use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::sync::{LazyLock, RwLock};
 use sysinfo::{Pid, System};
@@ -42,7 +42,9 @@ pub struct ProcessManager {
     active_pids_path: PathBuf,
 }
 impl ProcessManager {
+    #[cfg(unix)]
     const DIR_PERMISSIONS: u32 = 0o700;
+    #[cfg(unix)]
     const FILE_PERMISSIONS: u32 = 0o600;
 
     /// Create a new ProcessManager with default paths
@@ -327,6 +329,7 @@ impl ProcessManager {
     /// Sends SIGTERM to the process group on Unix, allowing cleanup.
     /// Returns Ok(()) on success, Err with message on failure.
     /// Timeout in seconds before escalating from SIGTERM to SIGKILL.
+    #[cfg(unix)]
     const SIGKILL_TIMEOUT_SECS: u64 = 5;
 
     pub fn terminate_process(&self, pid: u32) -> Result<(), String> {

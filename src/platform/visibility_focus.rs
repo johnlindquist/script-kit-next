@@ -57,8 +57,10 @@ fn hide_main_window() {
 }
 
 #[cfg(not(target_os = "macos"))]
+#[allow(dead_code)]
 fn hide_main_window() {
-    // No-op on non-macOS platforms
+    // On non-macOS, window hiding is done via GPUI in defer_hide_main_window.
+    // This standalone function is kept as a no-op; the real hide happens through cx.
 }
 
 /// Hide the main window, deferring the ObjC call to the next event-loop tick.
@@ -70,8 +72,19 @@ fn hide_main_window() {
 /// the closure runs, all current `RefCell` borrows have been released, so the
 /// macOS `window_did_change_key_status` callback can safely re-enter GPUI.
 pub fn defer_hide_main_window(cx: &mut gpui::App) {
-    cx.spawn(async move |_cx: &mut gpui::AsyncApp| {
+    cx.spawn(async move |cx: &mut gpui::AsyncApp| {
+        // On macOS, use the ObjC-based hide (orderOut: on NSWindow).
+        #[cfg(target_os = "macos")]
         hide_main_window();
+
+        // On non-macOS (Windows/Linux), use GPUI's app-level hide to
+        // hide the main window since we don't have a raw HWND wired up yet.
+        #[cfg(not(target_os = "macos"))]
+        {
+            let _ = cx.update(|cx| {
+                cx.hide();
+            });
+        }
     })
     .detach();
 }
@@ -126,12 +139,112 @@ pub fn show_main_window_without_activation() {
     }
 }
 
+// ── Windows HWND-based show/hide ──────────────────────────────────────────
+// We capture the HWND the first time the window is hidden (at that point the
+// foreground window IS our app window). Subsequent show/hide use the stored
+// handle so we never accidentally touch GPUI's internal helper windows.
+
+#[cfg(target_os = "windows")]
+static WIN32_MAIN_HWND: std::sync::OnceLock<std::sync::atomic::AtomicIsize> =
+    std::sync::OnceLock::new();
+
+/// Store the HWND of the main application window.
+/// Extracts the real HWND from GPUI's window handle via raw_window_handle.
+#[cfg(target_os = "windows")]
+pub fn win32_capture_main_hwnd_from_gpui(cx: &mut gpui::App) {
+    use raw_window_handle::HasWindowHandle;
+
+    if let Some(handle) = crate::get_main_window_handle() {
+        let result = cx.update_window(handle, |_view, window, _cx| {
+            if let Ok(wh) = window.window_handle() {
+                match wh.as_raw() {
+                    raw_window_handle::RawWindowHandle::Win32(h) => {
+                        let hwnd = h.hwnd.get() as isize;
+                        let atom = WIN32_MAIN_HWND.get_or_init(|| {
+                            std::sync::atomic::AtomicIsize::new(0)
+                        });
+                        atom.store(hwnd, std::sync::atomic::Ordering::Relaxed);
+                        logging::log(
+                            "VISIBILITY",
+                            &format!("Windows: captured GPUI main HWND {:#x}", hwnd),
+                        );
+                    }
+                    _ => {
+                        logging::log("VISIBILITY", "Windows: unexpected raw window handle type");
+                    }
+                }
+            }
+        });
+        if let Err(e) = result {
+            logging::log(
+                "VISIBILITY",
+                &format!("Windows: update_window failed: {}", e),
+            );
+        }
+    } else {
+        logging::log("VISIBILITY", "Windows: no MAIN_WINDOW_HANDLE set, cannot capture HWND");
+    }
+}
+
+/// Get the stored main HWND (returns 0 if not captured yet).
+#[cfg(target_os = "windows")]
+fn win32_get_main_hwnd() -> isize {
+    WIN32_MAIN_HWND
+        .get()
+        .map(|a| a.load(std::sync::atomic::Ordering::Relaxed))
+        .unwrap_or(0)
+}
+
+/// Show the main application window and bring it to the foreground.
+#[cfg(target_os = "windows")]
+pub fn win32_show_app_window() {
+    extern "system" {
+        fn ShowWindow(hwnd: isize, cmd_show: i32) -> i32;
+        fn SetForegroundWindow(hwnd: isize) -> i32;
+    }
+    const SW_SHOW: i32 = 5;
+    let hwnd = win32_get_main_hwnd();
+    if hwnd != 0 {
+        unsafe {
+            ShowWindow(hwnd, SW_SHOW);
+            SetForegroundWindow(hwnd);
+        }
+        logging::log("VISIBILITY", "Windows: ShowWindow(SW_SHOW) + SetForegroundWindow");
+    } else {
+        logging::log("VISIBILITY", "Windows: no stored HWND, cannot show");
+    }
+}
+
+/// Hide the main application window.
+#[cfg(target_os = "windows")]
+pub fn win32_hide_app_window() {
+    extern "system" {
+        fn ShowWindow(hwnd: isize, cmd_show: i32) -> i32;
+    }
+    const SW_HIDE: i32 = 0;
+    let hwnd = win32_get_main_hwnd();
+    if hwnd != 0 {
+        unsafe { ShowWindow(hwnd, SW_HIDE); }
+        logging::log("VISIBILITY", "Windows: ShowWindow(SW_HIDE)");
+    } else {
+        logging::log("VISIBILITY", "Windows: no stored HWND, cannot hide");
+    }
+}
+
 #[cfg(not(target_os = "macos"))]
 pub fn show_main_window_without_activation() {
-    logging::log(
-        "PANEL",
-        "show_main_window_without_activation: Not implemented on this platform",
-    );
+    #[cfg(target_os = "windows")]
+    {
+        logging::log("PANEL", "Windows: showing window via ShowWindow");
+        win32_show_app_window();
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    {
+        logging::log(
+            "PANEL",
+            "show_main_window_without_activation: Not implemented on this platform",
+        );
+    }
 }
 
 /// Activate the main window and bring it to front.

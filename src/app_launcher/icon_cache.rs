@@ -1,14 +1,15 @@
 // ============================================================================
 // Legacy filesystem cache (kept for backward compat during migration)
 // ============================================================================
-
 /// Get the icon cache directory path (~/.scriptkit/cache/app-icons/)
+#[allow(dead_code)]
 fn get_icon_cache_dir() -> Option<PathBuf> {
     let kit = PathBuf::from(shellexpand::tilde("~/.scriptkit").as_ref());
     Some(kit.join("cache").join("app-icons"))
 }
 
 /// Generate a unique cache key from an app path using a hash
+#[allow(dead_code)]
 fn hash_path(path: &Path) -> String {
     let mut hasher = DefaultHasher::new();
     path.hash(&mut hasher);

@@ -4,6 +4,14 @@ version = "0.1.0"
 edition = "2021"
 default-run = "script-kit-gpui"
 
+[lints.rust]
+unused_imports = "deny"
+unused_variables = "deny"
+# dead_code is warn (not deny) because many macOS-only functions are
+# legitimately unused on Windows during the port. Promote to deny once
+# the Windows feature set is complete.
+dead_code = "warn"
+
 [lib]
 name = "script_kit_gpui"
 path = "src/lib.rs"

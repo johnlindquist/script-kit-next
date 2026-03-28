@@ -1,3 +1,4 @@
+#[cfg(target_os = "macos")]
 use crate::logging;
 use crate::windows::DisplayBounds;
 use gpui::{point, px, Bounds, Pixels, Size};
