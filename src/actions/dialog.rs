@@ -25,8 +25,8 @@ use super::builders::{
     get_scriptlet_context_actions_with_custom, ChatPromptInfo, ClipboardEntryInfo,
 };
 use super::constants::{
-    ACTION_ROW_INSET, HEADER_HEIGHT, KEYCAP_HEIGHT, KEYCAP_MIN_WIDTH, POPUP_MAX_HEIGHT,
-    POPUP_WIDTH, SEARCH_INPUT_HEIGHT, SECTION_HEADER_HEIGHT, SELECTION_RADIUS,
+    ACTION_ROW_INSET, HEADER_HEIGHT, POPUP_MAX_HEIGHT, POPUP_WIDTH, SEARCH_INPUT_HEIGHT,
+    SECTION_HEADER_HEIGHT,
 };
 use crate::file_search::FileInfo;
 use crate::scriptlets::Scriptlet;
@@ -1851,25 +1851,13 @@ impl Render for ActionsDialog {
                                     let tokens = get_tokens(this.design_variant);
                                     rgb(tokens.colors().text_dimmed)
                                 };
-                                let border_color = if this.design_variant == DesignVariant::Default
-                                {
-                                    rgba(hex_with_alpha(this.theme.colors.ui.border, 0x40))
-                                } else {
-                                    let tokens = get_tokens(this.design_variant);
-                                    rgba(hex_with_alpha(tokens.colors().border, 0x40))
-                                };
-
-                                let mut section_header = div()
+                                let section_header = div()
                                     .id(ElementId::NamedInteger("section-header".into(), ix as u64))
                                     .h(px(SECTION_HEADER_HEIGHT))
                                     .w_full()
                                     .px(px(crate::actions::constants::ACTION_PADDING_X))
                                     .flex()
                                     .items_center();
-                                if style.show_header && ix > 0 {
-                                    section_header =
-                                        section_header.border_t_1().border_color(border_color);
-                                }
 
                                 section_header
                                     .child(
@@ -1889,16 +1877,6 @@ impl Render for ActionsDialog {
                                         // Only show hover effect when in Mouse mode to prevent dual-highlight
                                         let is_hovered = current_hovered == Some(ix)
                                             && current_input_mode == InputMode::Mouse;
-                                        let filter_ix = *filter_idx;
-                                        let show_section_separator = matches!(
-                                            this.config.section_style,
-                                            SectionStyle::Separators
-                                        )
-                                            && should_render_section_separator(
-                                                &this.actions,
-                                                &this.filtered_actions,
-                                                filter_ix,
-                                            );
                                         let is_destructive = is_destructive_action(action);
 
                                         // Get tokens for styling
@@ -2001,13 +1979,6 @@ impl Render for ActionsDialog {
                                                     if is_dark_mode { 0x2E } else { 0x1F },
                                                 ))
                                             };
-                                        let section_separator_color = if design_variant
-                                            == DesignVariant::Default
-                                        {
-                                            rgba(hex_with_alpha(this.theme.colors.ui.border, 0x60))
-                                        } else {
-                                            rgba(hex_with_alpha(item_colors.border, 0x60))
-                                        };
 
                                         // Title color: bright when selected, secondary when not
                                         let title_color = if is_selected {
@@ -2119,7 +2090,7 @@ impl Render for ActionsDialog {
                                         let on_select = this.on_select.clone();
                                         let action_id_for_click = action.id.clone();
 
-                                        let mut inner_row = div()
+                                        let inner_row = div()
                                             .id(ElementId::NamedInteger(
                                                 "action-inner-row".into(),
                                                 ix as u64,
@@ -2130,7 +2101,6 @@ impl Render for ActionsDialog {
                                             .flex_row()
                                             .items_center()
                                             .px(px(item_spacing.item_padding_x))
-                                            .rounded(px(style.row_radius))
                                             .bg(if is_selected {
                                                 if is_destructive {
                                                     destructive_selected_bg
@@ -2147,14 +2117,6 @@ impl Render for ActionsDialog {
                                                 gpui::transparent_black().into()
                                             })
                                             .cursor_pointer();
-                                        let ghost_pill_border_threshold = SELECTION_RADIUS + 10.0;
-                                        if style.show_container_border
-                                            && style.row_radius >= ghost_pill_border_threshold
-                                            && is_selected
-                                        {
-                                            inner_row =
-                                                inner_row.border_1().border_color(keycap_border);
-                                        }
 
                                         // Content: optional icon + title + shortcuts
                                         let show_icons = this.config.show_icons && style.show_icons;
@@ -2173,17 +2135,6 @@ impl Render for ActionsDialog {
                                             .items_center()
                                             .gap(px(left_gap));
 
-                                        if style.selection_opacity == 0.0 {
-                                            left_side = left_side.child(
-                                                div().w(px(5.0)).h(px(5.0)).rounded(px(3.0)).bg(
-                                                    if is_selected {
-                                                        selection_dot_color
-                                                    } else {
-                                                        gpui::transparent_black().into()
-                                                    },
-                                                ),
-                                            );
-                                        }
 
                                         if let Some(prefix_marker) = style.prefix_marker {
                                             left_side = left_side.child(
@@ -2291,16 +2242,16 @@ impl Render for ActionsDialog {
                                                     for keycap in keycaps {
                                                         keycap_row = keycap_row.child(
                                                             div()
-                                                                .min_w(px(KEYCAP_MIN_WIDTH))
-                                                                .h(px(KEYCAP_HEIGHT))
-                                                                .px(px(6.))
+                                                                .min_w(px(14.0))
+                                                                .h(px(18.0))
+                                                                .px(px(4.))
                                                                 .flex()
                                                                 .items_center()
                                                                 .justify_center()
                                                                 .bg(keycap_bg)
                                                                 .border_1()
                                                                 .border_color(keycap_border)
-                                                                .rounded(px(5.))
+                                                                .rounded(px(3.))
                                                                 .text_xs()
                                                                 .text_color(shortcut_color)
                                                                 .child(keycap),
@@ -2312,7 +2263,7 @@ impl Render for ActionsDialog {
                                             }
                                         }
 
-                                        let mut action_row = div()
+                                        let action_row = div()
                                             .id(ElementId::NamedInteger(
                                                 "action-item".into(),
                                                 ix as u64,
@@ -2324,6 +2275,16 @@ impl Render for ActionsDialog {
                                             .flex()
                                             .flex_col()
                                             .justify_center()
+                                            .border_l(px(ACCENT_BAR_WIDTH))
+                                            .border_color(if is_selected {
+                                                if is_destructive {
+                                                    destructive_text
+                                                } else {
+                                                    selection_dot_color
+                                                }
+                                            } else {
+                                                gpui::transparent_black().into()
+                                            })
                                             .on_hover(hover_handler)
                                             .on_mouse_down(
                                                 gpui::MouseButton::Left,
@@ -2331,11 +2292,6 @@ impl Render for ActionsDialog {
                                                     (on_select)(action_id_for_click.clone());
                                                 },
                                             );
-                                        if show_section_separator && style.show_container_border {
-                                            action_row = action_row
-                                                .border_t_1()
-                                                .border_color(section_separator_color);
-                                        }
 
                                         action_row
                                             .child(inner_row.child(content))
@@ -2452,24 +2408,16 @@ impl Render for ActionsDialog {
                 } else {
                     rgb(colors.text_dimmed)
                 };
-                let header_border = if self.design_variant == DesignVariant::Default {
-                    rgba(hex_with_alpha(self.theme.colors.ui.border, 0x40))
-                } else {
-                    rgba(hex_with_alpha(colors.border, 0x40))
-                };
 
-                let mut header = div()
+                let header = div()
                     .w_full()
                     .h(px(HEADER_HEIGHT))
-                    .px(px(crate::actions::constants::ACTION_PADDING_X)) // Match section header padding from list_item.rs
-                    .pt(px(crate::actions::constants::ACTION_PADDING_TOP)) // Top padding for visual separation
-                    .pb(px(4.0)) // Bottom padding
+                    .px(px(crate::actions::constants::ACTION_PADDING_X))
+                    .pt(px(crate::actions::constants::ACTION_PADDING_TOP))
+                    .pb(px(4.0))
                     .flex()
                     .flex_col()
                     .justify_center();
-                if style.show_container_border {
-                    header = header.border_b_1().border_color(header_border);
-                }
 
                 header.child(
                     div()
@@ -2492,54 +2440,13 @@ impl Render for ActionsDialog {
 
         // Build footer with keyboard hints (if enabled)
         let footer_container = if self.config.show_footer {
-            let footer_text = if self.design_variant == DesignVariant::Default {
-                rgb(self.theme.colors.text.dimmed)
-            } else {
-                rgb(colors.text_dimmed)
-            };
-            let footer_border = if self.design_variant == DesignVariant::Default {
-                rgba(hex_with_alpha(self.theme.colors.ui.border, 0x40))
-            } else {
-                rgba(hex_with_alpha(colors.border, 0x40))
-            };
-
-            let mut footer = div()
-                .w_full()
-                .h(px(32.0))
-                .px(px(16.0))
-                .flex()
-                .items_center()
-                .gap(px(16.0))
-                .text_xs()
-                .text_color(footer_text)
-                .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap(px(4.0))
-                        .child("↑↓")
-                        .child("Navigate"),
-                )
-                .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap(px(4.0))
-                        .child("↵")
-                        .child("Select"),
-                )
-                .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap(px(4.0))
-                        .child("esc")
-                        .child("Close"),
-                );
-            if style.show_container_border {
-                footer = footer.border_t_1().border_color(footer_border);
-            }
-            Some(footer)
+            Some(
+                div().w_full().child(crate::components::HintStrip::new(vec![
+                    "↵ Run".into(),
+                    "⌘K Actions".into(),
+                    "Tab AI".into(),
+                ])),
+            )
         } else {
             None
         };
@@ -2645,8 +2552,7 @@ impl Render for ActionsDialog {
             .w(px(POPUP_WIDTH))
             .h(px(total_height)) // Use calculated height including footer
             .bg(main_bg) // Always apply background with vibrancy-aware opacity
-            .rounded(px(visual.radius_lg))
-            .shadow(Self::create_popup_shadow())
+            .rounded(px(0.0))
             .overflow_hidden()
             .text_color(container_text)
             .text_color(container_text)

@@ -102,7 +102,7 @@ impl Default for PromptContainerConfig {
     fn default() -> Self {
         Self {
             rounded_corners: 12.0,
-            show_divider: true,
+            show_divider: false,
             hint_text: None,
             background_opacity: 0xE8,
             divider_margin: 16.0,
