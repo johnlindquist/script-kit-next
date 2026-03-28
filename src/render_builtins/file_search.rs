@@ -503,7 +503,7 @@ impl ScriptListApp {
         // Skeleton loading: show placeholder rows while loading and no results yet
         let list_element = if is_loading && filtered_len == 0 {
             // Loading with no results yet - show static skeleton rows
-            let skeleton_bg = rgba((ui_border << 8) | 0x30); // ~18% opacity
+            let skeleton_bg = rgba(crate::ui_foundation::hex_to_rgba_with_opacity(ui_border, crate::theme::opacity::OPACITY_SUBTLE));
 
             // Render 6 skeleton rows
             div()
@@ -673,7 +673,7 @@ impl ScriptListApp {
                                             .h(px(32.))
                                             .rounded(px(6.))
                                             .overflow_hidden()
-                                            .bg(rgba((ui_border << 8) | 0x24))
+                                            .bg(rgba(crate::ui_foundation::hex_to_rgba_with_opacity(ui_border, crate::theme::opacity::OPACITY_SUBTLE)))
                                             .flex_shrink_0()
                                             .child(
                                                 gpui::img(std::path::PathBuf::from(
@@ -845,20 +845,11 @@ impl ScriptListApp {
                         .flex()
                         .flex_col()
                         .pb(px(design_spacing.padding_md))
-                        .child(
-                            div()
-                                .text_xs()
-                                .text_color(rgb(text_muted))
-                                .pb(px(design_spacing.padding_xs / 2.0))
-                                .child("Preview"),
-                        )
+                        // Chromeless preview: no header label, no card wrapper
                         .child(
                             div()
                                 .w_full()
                                 .min_h(px(FILE_SEARCH_PREVIEW_THUMBNAIL_MAX_SIDE_PX + 24.0))
-                                .p(px(design_spacing.padding_sm))
-                                .rounded(px(design_visual.radius_md))
-                                .bg(rgba((ui_border << 8) | 0x24))
                                 .flex()
                                 .items_center()
                                 .justify_center()
@@ -899,61 +890,21 @@ impl ScriptListApp {
                     .gap(px(design_spacing.gap_md))
                     .overflow_y_hidden()
                     .when_some(thumbnail_section, |container, section| container.child(section))
-                    // Name + type badge
+                    // Name (chromeless — no type badge pill)
                     .child(
                         div()
-                            .flex()
-                            .flex_row()
-                            .items_center()
-                            .gap(px(design_spacing.gap_sm))
-                            .child(
-                                div()
-                                    .text_lg()
-                                    .font_weight(gpui::FontWeight::SEMIBOLD)
-                                    .text_color(rgb(text_primary))
-                                    .child(file.name.clone()),
-                            )
-                            .child(
-                                div()
-                                    .px(px(6.0))
-                                    .py(px(2.0))
-                                    .rounded(px(4.0))
-                                    .bg(rgba((ui_border << 8) | 0x24))
-                                    .text_xs()
-                                    .text_color(rgb(text_muted))
-                                    .child(file_type_str.to_string()),
-                            ),
-                    )
-                    // Path label
-                    .child(
-                        div()
-                            .text_xs()
+                            .text_lg()
                             .font_weight(gpui::FontWeight::SEMIBOLD)
-                            .text_color(rgb(text_muted))
-                            .child("Path"),
+                            .text_color(rgb(text_primary))
+                            .child(file.name.clone()),
                     )
-                    // Scrollable path
+                    // Scrollable path (no section label — content is self-evident)
                     .child(crate::components::prompt_scroll_value_with_id(
                         "file-search-preview-path",
                         file.path.clone(),
                         rgb(text_dimmed),
                     ))
-                    // Divider
-                    .child(
-                        div()
-                            .w_full()
-                            .h(px(design_visual.border_thin))
-                            .bg(rgba((ui_border << 8) | 0x24)),
-                    )
-                    // Details label
-                    .child(
-                        div()
-                            .text_xs()
-                            .font_weight(gpui::FontWeight::SEMIBOLD)
-                            .text_color(rgb(text_muted))
-                            .child("Details"),
-                    )
-                    // Meta rows
+                    // Meta rows (no divider, no section label — spacing defines groups)
                     .child(
                         div()
                             .flex()
@@ -1013,7 +964,7 @@ impl ScriptListApp {
             .flex_col()
             // Removed: .bg(rgba(bg_with_alpha)) - let vibrancy show through from Root
             // Removed: .shadow(box_shadows) - shadows on transparent elements block vibrancy
-            .rounded(px(design_visual.radius_lg))
+            // Sharp edges per .impeccable.md (no rounded corners on main containers)
             // Header with search input - styled to match main menu exactly
             // Uses shared header constants (HEADER_PADDING_X/Y, CURSOR_HEIGHT_LG) for visual consistency.
             // The right-side element uses same py(4px) padding as main menu's "Ask AI" button
@@ -1063,8 +1014,7 @@ impl ScriptListApp {
                             ),
                     )
             })
-            // Divider
-            .child(crate::components::SectionDivider::new())
+            // Whisper chrome: spacing defines structure, no explicit divider
             // Main content: loading state OR empty state OR 50/50 split
             .child(if is_loading && filtered_len == 0 {
                 // Loading state: full-width centered (no split, clean appearance)
@@ -1117,7 +1067,7 @@ impl ScriptListApp {
                             .h_full()
                             .overflow_hidden()
                             .border_r(px(design_visual.border_thin))
-                            .border_color(rgba((ui_border << 8) | 0x40))
+                            .border_color(rgba(crate::ui_foundation::hex_to_rgba_with_opacity(ui_border, crate::theme::opacity::OPACITY_GHOST)))
                             .child(
                                 div()
                                     .relative()
@@ -1136,12 +1086,12 @@ impl ScriptListApp {
                             .child(preview_content),
                     )
             })
-            // Footer — minimal hint strip
+            // Footer — canonical three-key hint strip per .impeccable.md
             .child(crate::components::render_simple_hint_strip(
                 vec![
-                    gpui::SharedString::from("↵ Open"),
+                    gpui::SharedString::from("↵ Run"),
                     gpui::SharedString::from("⌘K Actions"),
-                    gpui::SharedString::from("Esc Back"),
+                    gpui::SharedString::from("Tab AI"),
                 ],
                 None,
             ))
@@ -1235,16 +1185,55 @@ mod file_search_chrome_audit {
             source.contains("render_simple_hint_strip("),
             "file_search should use render_simple_hint_strip"
         );
-        assert!(
-            source.contains("SectionDivider::new()"),
-            "file_search should use SectionDivider"
-        );
         // Count occurrences of the legacy footer pattern — only the test assertion itself should match
         let legacy = "Prompt".to_owned() + "Footer::new(";
         let count = source.matches(&legacy).count();
         assert_eq!(
             count, 0,
             "file_search should not use PromptFooter (found {count} occurrences)"
+        );
+    }
+
+    #[test]
+    fn file_search_has_no_section_divider() {
+        let source = include_str!("file_search.rs");
+        // SectionDivider is legacy chrome — spacing defines structure per .impeccable.md
+        let divider_pattern = "SectionDivider::new()";
+        let count = source.matches(divider_pattern).count();
+        assert_eq!(
+            count, 0,
+            "file_search should not use SectionDivider (found {count} occurrences)"
+        );
+    }
+
+    #[test]
+    fn file_search_has_no_hardcoded_alpha_fills() {
+        let source = include_str!("file_search.rs");
+        // No hardcoded alpha byte patterns like `| 0x24)` or `| 0x40)` — use opacity tokens
+        assert!(
+            !source.contains("| 0x24)"),
+            "file_search should not contain hardcoded alpha fill 0x24"
+        );
+        assert!(
+            !source.contains("| 0x40)"),
+            "file_search should not contain hardcoded alpha fill 0x40"
+        );
+    }
+
+    #[test]
+    fn file_search_footer_matches_canonical_three_key_pattern() {
+        let source = include_str!("file_search.rs");
+        assert!(
+            source.contains(r#""↵ Run""#),
+            "footer should contain ↵ Run"
+        );
+        assert!(
+            source.contains(r#""⌘K Actions""#),
+            "footer should contain ⌘K Actions"
+        );
+        assert!(
+            source.contains(r#""Tab AI""#),
+            "footer should contain Tab AI"
         );
     }
 }

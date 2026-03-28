@@ -378,6 +378,93 @@ pub(crate) fn render_minimal_list_prompt_shell(
     )
 }
 
+/// Shared scaffold for expanded-view surfaces (list + preview split).
+///
+/// Composes a header row, a chromeless 50/50 split content area (list left,
+/// preview right), and the canonical three-key hint strip footer via
+/// [`universal_prompt_hints`]. No `SectionDivider`, no rounded preview wrapper,
+/// no hardcoded opacity literals — all chrome defers to the caller's content.
+///
+/// `header` is the full-width header element (typically an input row).
+/// `list_pane` is the left half (mini-style list).
+/// `preview_pane` is the right half (chromeless preview slot).
+#[allow(dead_code)]
+pub(crate) fn render_expanded_view_scaffold(
+    header: impl IntoElement,
+    list_pane: impl IntoElement,
+    preview_pane: impl IntoElement,
+) -> Div {
+    let hints = universal_prompt_hints();
+
+    div()
+        .w_full()
+        .h_full()
+        .flex()
+        .flex_col()
+        // Header row with shared padding
+        .child(
+            div()
+                .w_full()
+                .px(px(crate::ui::chrome::HEADER_PADDING_X))
+                .py(px(crate::ui::chrome::HEADER_PADDING_Y))
+                .flex()
+                .flex_row()
+                .items_center()
+                .child(header),
+        )
+        // 50/50 split content area — no divider, no wrapper chrome
+        .child(
+            div()
+                .flex()
+                .flex_row()
+                .flex_1()
+                .min_h(px(0.))
+                .w_full()
+                .overflow_hidden()
+                // Left: mini-style list pane
+                .child(
+                    div()
+                        .flex_1()
+                        .h_full()
+                        .min_h(px(0.))
+                        .overflow_hidden()
+                        .child(list_pane),
+                )
+                // Right: chromeless preview slot
+                .child(
+                    div()
+                        .flex_1()
+                        .h_full()
+                        .min_h(px(0.))
+                        .overflow_hidden()
+                        .child(preview_pane),
+                ),
+        )
+        // Footer — canonical three-key hint strip
+        .child(render_simple_hint_strip(hints, None))
+}
+
+/// Expanded-view scaffold wrapped in the shared prompt shell container.
+///
+/// Same as [`render_expanded_view_scaffold`] but wrapped in
+/// `prompt_shell_container` for surfaces that need rounded corners and
+/// vibrancy background.
+#[allow(dead_code)]
+pub(crate) fn render_expanded_view_prompt_shell(
+    radius: f32,
+    vibrancy_bg: Option<Rgba>,
+    header: impl IntoElement,
+    list_pane: impl IntoElement,
+    preview_pane: impl IntoElement,
+) -> Div {
+    render_simple_prompt_shell(
+        radius,
+        vibrancy_bg,
+        render_expanded_view_scaffold(header, list_pane, preview_pane),
+        None,
+    )
+}
+
 /// Build a hint-strip footer with optional leading status text.
 ///
 /// Wraps `HintStrip::new(hints)` and optionally attaches a leading element
@@ -1188,12 +1275,39 @@ mod prompt_layout_shell_tests {
     #[test]
     fn clipboard_history_source_matches_expanded_contract() {
         let source = include_str!("../render_builtins/clipboard_history_layout.rs");
-        // Still uses the shared chrome infrastructure (SectionDivider, hint strip, header padding)
-        assert_minimal_surface_source(source, "clipboard_history_layout.rs", true);
-        // But now emits a hint audit with the universal three-key footer
+        // Expanded-view contract: no SectionDivider (spacing defines structure per .impeccable.md)
+        assert!(
+            !source.contains("SectionDivider::new()"),
+            "clipboard_history_layout.rs should not use SectionDivider (whisper chrome: spacing defines structure)"
+        );
+        // Uses shared header padding tokens
+        assert!(
+            source.contains("HEADER_PADDING_X"),
+            "clipboard_history_layout.rs should use chrome HEADER_PADDING_X"
+        );
+        assert!(
+            source.contains("HEADER_PADDING_Y"),
+            "clipboard_history_layout.rs should use chrome HEADER_PADDING_Y"
+        );
+        // Canonical hint strip footer
+        assert!(
+            source.contains("render_simple_hint_strip("),
+            "clipboard_history_layout.rs should render a minimal hint strip footer"
+        );
+        // No PromptFooter after migration
+        assert!(
+            !source.contains("PromptFooter::new("),
+            "clipboard_history_layout.rs should not construct PromptFooter after migration"
+        );
+        // Emits hint audit with the universal three-key footer
         assert!(
             source.contains("emit_prompt_hint_audit("),
             "clipboard history layout should emit a prompt hint audit"
+        );
+        // Sharp edges — no rounded corners on main container
+        assert!(
+            !source.contains(".rounded(px(design_visual.radius_lg))"),
+            "clipboard_history_layout.rs should not use rounded corners on main container"
         );
     }
 
@@ -1527,6 +1641,83 @@ mod prompt_layout_shell_tests {
         assert!(
             render_code.contains(".on_key_down(handle_key)"),
             "path prompt outer wrapper should keep the keyboard handler"
+        );
+    }
+
+    // ── Expanded-view scaffold source-audit tests ──────────────────
+
+    #[test]
+    fn expanded_view_scaffold_source_uses_universal_hints_and_shared_header() {
+        let source = include_str!("prompt_layout_shell.rs");
+
+        // Find the render_expanded_view_scaffold function body
+        let fn_start = source
+            .find("fn render_expanded_view_scaffold(")
+            .expect("render_expanded_view_scaffold must exist");
+        let fn_body = &source[fn_start..fn_start + 2000];
+
+        assert!(
+            fn_body.contains("universal_prompt_hints()"),
+            "expanded scaffold must use universal_prompt_hints for footer"
+        );
+        assert!(
+            fn_body.contains("HEADER_PADDING_X"),
+            "expanded scaffold must use shared HEADER_PADDING_X"
+        );
+        assert!(
+            fn_body.contains("HEADER_PADDING_Y"),
+            "expanded scaffold must use shared HEADER_PADDING_Y"
+        );
+        assert!(
+            fn_body.contains("render_simple_hint_strip("),
+            "expanded scaffold must render footer via render_simple_hint_strip"
+        );
+        assert!(
+            !fn_body.contains("SectionDivider"),
+            "expanded scaffold must NOT use SectionDivider"
+        );
+        assert!(
+            !fn_body.contains("rounded("),
+            "expanded scaffold must NOT add rounded preview wrapper chrome"
+        );
+    }
+
+    #[test]
+    fn expanded_view_scaffold_has_no_hardcoded_opacity_literals() {
+        let source = include_str!("prompt_layout_shell.rs");
+        let fn_start = source
+            .find("fn render_expanded_view_scaffold(")
+            .expect("render_expanded_view_scaffold must exist");
+        let fn_end_marker = source[fn_start..]
+            .find("\n/// ")
+            .map(|pos| fn_start + pos)
+            .unwrap_or(fn_start + 1500);
+        let fn_body = &source[fn_start..fn_end_marker];
+
+        // No magic opacity floats (0.03, 0.06, 0.40, 0.55, 0.60, 0.75, 0.85)
+        for magic in &["0.03", "0.06", "0.40", "0.55", "0.60", "0.75", "0.85"] {
+            assert!(
+                !fn_body.contains(magic),
+                "expanded scaffold must not contain hardcoded opacity {magic}"
+            );
+        }
+    }
+
+    #[test]
+    fn expanded_view_prompt_shell_delegates_to_simple_prompt_shell() {
+        let source = include_str!("prompt_layout_shell.rs");
+        let fn_start = source
+            .find("fn render_expanded_view_prompt_shell(")
+            .expect("render_expanded_view_prompt_shell must exist");
+        let fn_body = &source[fn_start..fn_start + 600];
+
+        assert!(
+            fn_body.contains("render_simple_prompt_shell("),
+            "expanded shell must delegate to render_simple_prompt_shell"
+        );
+        assert!(
+            fn_body.contains("render_expanded_view_scaffold("),
+            "expanded shell must compose the scaffold"
         );
     }
 }

@@ -970,12 +970,45 @@ pub struct TabAiInvocationReceipt {
     pub rich: bool,
 }
 
+/// Classifies how a surface treats its input field for receipt purposes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TabAiInputSemantics {
+    /// Empty input is valid (e.g. ScriptList with no filter typed yet).
+    CapturableEvenWhenEmpty,
+    /// Input exists structurally but `current_input_text()` may return `None`
+    /// for non-user-typed content (e.g. terminal buffer).
+    DegradedWhenMissing,
+    /// Surface has no user-editable text concept at all.
+    NotApplicable,
+}
+
+/// Classify a prompt type's input semantics.
+///
+/// Names must match what `app_view_name()` returns at runtime.
+fn tab_ai_input_semantics(prompt_type: &str) -> TabAiInputSemantics {
+    match prompt_type {
+        "DivPrompt" | "DropPrompt" | "Webcam" | "CreationFeedback" | "ActionsDialog"
+        | "Settings" | "InstalledKits" => TabAiInputSemantics::NotApplicable,
+        "FormPrompt" | "TermPrompt" | "QuickTerminal" => TabAiInputSemantics::DegradedWhenMissing,
+        _ => TabAiInputSemantics::CapturableEvenWhenEmpty,
+    }
+}
+
+/// Returns `true` when any warning indicates the element collector fell back
+/// to a generic panel placeholder rather than producing real semantic elements.
+fn has_degraded_element_warning(warnings: &[String]) -> bool {
+    warnings.iter().any(|warning| {
+        warning.starts_with("panel_only_") || warning == "collector_used_current_view_fallback"
+    })
+}
+
 impl TabAiInvocationReceipt {
     /// Build a receipt from snapshot extraction results.
     ///
-    /// `input_status_str` / `focus_status_str` are the tri-state strings
-    /// already computed in `snapshot_tab_ai_ui` ("captured", "degraded",
-    /// "unavailable").  `warnings` are from `ElementCollectionOutcome`.
+    /// `input_text` is the value from `current_input_text()` — `None` means
+    /// the extractor returned nothing (which is valid on surfaces where empty
+    /// input is the default state).  `warnings` are from
+    /// `ElementCollectionOutcome`.
     pub fn from_snapshot(
         prompt_type: &str,
         input_text: &Option<String>,
@@ -984,60 +1017,54 @@ impl TabAiInvocationReceipt {
         element_count: usize,
         warnings: &[String],
     ) -> Self {
-        // --- input_status ---
-        let input_status = if input_text.is_some() {
-            TabAiFieldStatus::Captured
-        } else {
-            // Check if the surface structurally lacks input
-            // Names must match what `app_view_name()` returns at runtime.
-            let no_input_surfaces = [
-                "DivPrompt",
-                "DropPrompt",
-                "Webcam",
-                "CreationFeedback",
-                "ActionsDialog",
-                "Settings",
-                "InstalledKits",
-            ];
-            if no_input_surfaces.contains(&prompt_type) {
-                TabAiFieldStatus::Unavailable
-            } else {
-                TabAiFieldStatus::Degraded
-            }
-        };
+        let input_was_extracted = input_text.is_some();
+        let has_input_text = input_text
+            .as_ref()
+            .map(|text| !text.trim().is_empty())
+            .unwrap_or(false);
 
-        // --- focus_status ---
-        let has_focus_target = focused_id.is_some() || selected_id.is_some();
-        let focus_status = if has_focus_target {
-            TabAiFieldStatus::Captured
-        } else if warnings.is_empty() {
-            TabAiFieldStatus::Unavailable
-        } else {
-            TabAiFieldStatus::Degraded
+        // --- input_status ---
+        let input_status = match tab_ai_input_semantics(prompt_type) {
+            TabAiInputSemantics::CapturableEvenWhenEmpty => TabAiFieldStatus::Captured,
+            TabAiInputSemantics::DegradedWhenMissing => {
+                if input_was_extracted {
+                    TabAiFieldStatus::Captured
+                } else {
+                    TabAiFieldStatus::Degraded
+                }
+            }
+            TabAiInputSemantics::NotApplicable => TabAiFieldStatus::Unavailable,
         };
 
         // --- elements_status ---
-        let has_panel_only_warning =
-            warnings.iter().any(|w| w.starts_with("panel_only_"));
-        let elements_status = if element_count > 0 && !has_panel_only_warning {
-            TabAiFieldStatus::Captured
-        } else if has_panel_only_warning {
-            TabAiFieldStatus::Degraded
-        } else if element_count == 0 && warnings.is_empty() {
+        let has_focus_target = focused_id.is_some() || selected_id.is_some();
+        let degraded_elements = has_degraded_element_warning(warnings);
+        let elements_status = if element_count == 0 {
             TabAiFieldStatus::Unavailable
-        } else {
+        } else if degraded_elements {
             TabAiFieldStatus::Degraded
+        } else {
+            TabAiFieldStatus::Captured
+        };
+
+        // --- focus_status ---
+        let focus_status = if has_focus_target {
+            TabAiFieldStatus::Captured
+        } else if degraded_elements {
+            TabAiFieldStatus::Degraded
+        } else {
+            TabAiFieldStatus::Unavailable
         };
 
         // --- degradation_reasons ---
         let mut degradation_reasons = Vec::new();
-        if has_panel_only_warning {
+        if degraded_elements {
             degradation_reasons.push(TabAiDegradationReason::PanelOnlyElements);
         }
-        if element_count == 0 && warnings.is_empty() {
+        if element_count == 0 {
             degradation_reasons.push(TabAiDegradationReason::NoSemanticElements);
         }
-        if !has_focus_target && (focus_status != TabAiFieldStatus::Unavailable) {
+        if !has_focus_target && focus_status == TabAiFieldStatus::Degraded {
             degradation_reasons.push(TabAiDegradationReason::MissingFocusTarget);
         }
         match input_status {
@@ -1063,7 +1090,7 @@ impl TabAiInvocationReceipt {
             element_count,
             warning_count: warnings.len(),
             has_focus_target,
-            has_input_text: input_text.is_some(),
+            has_input_text,
             degradation_reasons,
             rich,
         }
@@ -1922,5 +1949,127 @@ mod tab_ai_memory_resolution_tests {
         let entries = read_tab_ai_memory_index_from_path(&path).expect("read");
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].slug, "copy-url-two");
+    }
+}
+
+#[cfg(test)]
+mod tab_ai_invocation_receipt_tests {
+    use super::*;
+
+    fn receipt(
+        prompt_type: &str,
+        input_text: Option<&str>,
+        focused_id: Option<&str>,
+        selected_id: Option<&str>,
+        element_count: usize,
+        warnings: &[&str],
+    ) -> TabAiInvocationReceipt {
+        let input_text = input_text.map(ToString::to_string);
+        let focused_id = focused_id.map(ToString::to_string);
+        let selected_id = selected_id.map(ToString::to_string);
+        let warnings = warnings
+            .iter()
+            .map(|w| (*w).to_string())
+            .collect::<Vec<_>>();
+        TabAiInvocationReceipt::from_snapshot(
+            prompt_type,
+            &input_text,
+            &focused_id,
+            &selected_id,
+            element_count,
+            &warnings,
+        )
+    }
+
+    #[test]
+    fn script_list_with_empty_filter_is_still_rich_when_focus_and_elements_exist() {
+        let r = receipt(
+            "ScriptList",
+            None,
+            Some("input:filter"),
+            Some("choice:0:slack"),
+            3,
+            &[],
+        );
+        assert_eq!(r.input_status, TabAiFieldStatus::Captured);
+        assert_eq!(r.focus_status, TabAiFieldStatus::Captured);
+        assert_eq!(r.elements_status, TabAiFieldStatus::Captured);
+        assert!(!r.has_input_text);
+        assert!(r.has_focus_target);
+        assert!(r.degradation_reasons.is_empty());
+        assert!(r.rich);
+    }
+
+    #[test]
+    fn term_prompt_without_linear_text_is_degraded() {
+        let r = receipt(
+            "TermPrompt",
+            None,
+            None,
+            None,
+            1,
+            &["panel_only_term_prompt"],
+        );
+        assert_eq!(r.input_status, TabAiFieldStatus::Degraded);
+        assert!(r
+            .degradation_reasons
+            .contains(&TabAiDegradationReason::InputNotExtractable));
+        assert!(!r.rich);
+    }
+
+    #[test]
+    fn current_view_fallback_is_never_reported_as_captured_elements() {
+        let r = receipt(
+            "SearchAiPresets",
+            Some("claude"),
+            None,
+            None,
+            1,
+            &["collector_used_current_view_fallback"],
+        );
+        assert_eq!(r.input_status, TabAiFieldStatus::Captured);
+        assert_eq!(r.elements_status, TabAiFieldStatus::Degraded);
+        assert_eq!(r.focus_status, TabAiFieldStatus::Degraded);
+        assert!(r
+            .degradation_reasons
+            .contains(&TabAiDegradationReason::PanelOnlyElements));
+        assert!(r
+            .degradation_reasons
+            .contains(&TabAiDegradationReason::MissingFocusTarget));
+        assert!(!r.rich);
+    }
+
+    #[test]
+    fn settings_surface_reports_input_not_applicable() {
+        let r = receipt(
+            "Settings",
+            None,
+            None,
+            None,
+            1,
+            &["collector_used_current_view_fallback"],
+        );
+        assert_eq!(r.input_status, TabAiFieldStatus::Unavailable);
+        assert!(r
+            .degradation_reasons
+            .contains(&TabAiDegradationReason::InputNotApplicable));
+        assert!(!r.rich);
+    }
+
+    #[test]
+    fn receipt_serializes_machine_readable_statuses() {
+        let r = receipt(
+            "SearchAiPresets",
+            Some("claude"),
+            None,
+            None,
+            1,
+            &["collector_used_current_view_fallback"],
+        );
+        let json = serde_json::to_string(&r).expect("receipt should serialize");
+        assert!(json.contains("\"inputStatus\":\"captured\""));
+        assert!(json.contains("\"elementsStatus\":\"degraded\""));
+        assert!(json
+            .contains("\"degradationReasons\":[\"panel_only_elements\",\"missing_focus_target\"]"));
     }
 }

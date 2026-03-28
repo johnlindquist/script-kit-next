@@ -367,10 +367,7 @@ impl ScriptListApp {
         crate::components::render_minimal_list_prompt_scaffold(
             header,
             content,
-            vec![
-                gpui::SharedString::from("↵ Switch"),
-                gpui::SharedString::from("Esc Back"),
-            ],
+            crate::components::prompt_layout_shell::universal_prompt_hints(),
             None,
         )
         .rounded(px(design_visual.radius_lg))
@@ -397,6 +394,20 @@ mod window_switcher_chrome_audit {
             source.matches(&legacy).count(),
             0,
             "window_switcher should not use PromptFooter"
+        );
+    }
+
+    #[test]
+    fn window_switcher_uses_canonical_three_key_hints() {
+        let source = include_str!("window_switcher.rs");
+        assert!(
+            source.contains("universal_prompt_hints()"),
+            "window_switcher should use universal_prompt_hints for canonical three-key footer"
+        );
+        // Must not have the old custom hints
+        assert!(
+            !source.contains(r#"SharedString::from("↵ Switch")"#),
+            "window_switcher should not use custom hint labels"
         );
     }
 }
