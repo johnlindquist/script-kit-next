@@ -268,6 +268,8 @@ struct ScriptListApp {
     tab_ai_task: Option<gpui::Task<()>>,
     /// Most recent Tab AI execution waiting for success/failure accounting.
     pending_tab_ai_execution: Option<crate::ai::TabAiExecutionRecord>,
+    /// Tab AI save-offer overlay state — when Some, prompts to persist the last successful ephemeral script.
+    tab_ai_save_offer_state: Option<TabAiSaveOfferState>,
     /// Input history for shell-like up/down navigation through previous inputs
     input_history: input_history::InputHistory,
     /// Pending API key configuration - tracks which provider is being configured

@@ -433,6 +433,9 @@ impl Render for ScriptListApp {
         // Build Tab AI overlay if state is set
         let tab_ai_overlay = self.render_tab_ai_overlay(window, cx);
 
+        // Build Tab AI save-offer overlay if a successful run is awaiting save decision
+        let tab_ai_save_offer_overlay = self.render_tab_ai_save_offer_overlay(window, cx);
+
         // Log render timing for filter perf analysis - always log for "gr" filters
         let render_elapsed = render_start.elapsed();
         if filter_snapshot.starts_with("gr") {
@@ -530,6 +533,10 @@ impl Render for ScriptListApp {
                     })
                     // Tab AI overlay (on top of main content when Tab AI is active)
                     .when_some(tab_ai_overlay, |container, overlay| {
+                        container.child(overlay)
+                    })
+                    // Tab AI save-offer overlay (on top after successful Tab AI execution)
+                    .when_some(tab_ai_save_offer_overlay, |container, overlay| {
                         container.child(overlay)
                     })
                     .when_some(grid_config, |container, config| {

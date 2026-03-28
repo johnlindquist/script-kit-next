@@ -539,6 +539,27 @@ impl ScriptListApp {
                     "SCRIPT_REQUESTED_HIDE reset to: false"
                 );
 
+                let keep_tab_ai_save_offer_open = self.tab_ai_save_offer_state.is_some();
+
+                if keep_tab_ai_save_offer_open {
+                    tracing::info!(
+                        category = "VISIBILITY",
+                        "Tab AI save offer active after script exit - preserving main window"
+                    );
+                    self.reset_to_script_list(cx);
+                    resize_to_view_sync(ViewType::ScriptList, 0);
+
+                    if script_hid_window {
+                        tracing::info!(
+                            category = "VISIBILITY",
+                            "Script had hidden window - requesting show main window for Tab AI save offer"
+                        );
+                        script_kit_gpui::request_show_main_window();
+                    }
+
+                    return;
+                }
+
                 // Set flag so next hotkey show will reset to script list
                 NEEDS_RESET.store(true, Ordering::SeqCst);
                 tracing::info!(category = "VISIBILITY", "NEEDS_RESET set to: true");
