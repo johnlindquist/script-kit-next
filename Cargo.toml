@@ -127,6 +127,12 @@ ureq = { version = "3", default-features = false, features = ["json", "rustls"] 
 which = "8.0.0"
 hex = "0.4.3"
 
+# ACP (Agent Client Protocol) — standardized editor ↔ AI-agent communication
+agent-client-protocol = "0.10.3"
+async-trait = "0.1"
+tokio = { version = "1", features = ["rt", "sync", "time", "process", "io-util"] }
+tokio-util = { version = "0.7", features = ["compat"] }
+
 # Secure temporary file creation (moved from dev-dependencies for production use)
 tempfile = "3"
 tree-sitter = "0.25"

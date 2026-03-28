@@ -180,6 +180,26 @@ fn capture_browser_live() -> Result<Option<BrowserContext>, String> {
 }
 
 fn capture_focused_window_live() -> Result<Option<FocusedWindowContext>, String> {
+    if let Some(app) = crate::frontmost_app_tracker::get_last_real_app() {
+        if let Some(title) = app.window_title {
+            let title = title.trim().to_string();
+            if !title.is_empty() {
+                tracing::info!(
+                    pid = app.pid,
+                    bundle_id = %app.bundle_id,
+                    title = %title,
+                    "context_snapshot: captured focused window from tracker cache"
+                );
+                return Ok(Some(FocusedWindowContext {
+                    title,
+                    width: 0,
+                    height: 0,
+                    used_fallback: false,
+                }));
+            }
+        }
+    }
+
     match crate::platform::capture_focused_window_screenshot() {
         Ok(capture) => {
             tracing::info!(

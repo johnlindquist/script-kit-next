@@ -79,7 +79,6 @@ pub(crate) fn resolve_tool_badge(result: &SearchResult, is_filtering: bool) -> O
 /// * `is_selected` - Whether this item is currently selected (full focus styling)
 /// * `is_hovered` - Whether this item is currently hovered (subtle visual feedback)
 /// * `list_colors` - Pre-computed theme colors for the default design
-/// * `enable_hover_effect` - Whether to enable instant hover effects (false during keyboard navigation)
 /// * `filter_text` - Current search filter text (empty when not filtering; used for fuzzy match highlighting)
 ///
 /// # Returns
@@ -92,7 +91,6 @@ pub fn render_design_item(
     is_selected: bool,
     is_hovered: bool,
     list_colors: ListItemColors,
-    enable_hover_effect: bool,
     filter_text: &str,
 ) -> AnyElement {
     // NOTE: Removed per-item DEBUG log that was causing log spam.
@@ -295,7 +293,6 @@ pub fn render_design_item(
                 .selected(is_selected)
                 .hovered(is_hovered)
                 .with_accent_bar(true)
-                .with_hover_effect(enable_hover_effect)
                 .highlight_indices_opt(highlight_indices)
                 .description_highlight_indices_opt(description_highlight_indices)
                 .type_tag_opt(type_tag)

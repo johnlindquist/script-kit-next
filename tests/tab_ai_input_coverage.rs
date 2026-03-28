@@ -253,7 +253,10 @@ fn receipt_rich_when_all_captured() {
     assert_eq!(receipt.focus_status, TabAiFieldStatus::Captured);
     assert_eq!(receipt.elements_status, TabAiFieldStatus::Captured);
     assert!(receipt.degradation_reasons.is_empty());
-    assert_eq!(receipt.schema_version, TAB_AI_INVOCATION_RECEIPT_SCHEMA_VERSION);
+    assert_eq!(
+        receipt.schema_version,
+        TAB_AI_INVOCATION_RECEIPT_SCHEMA_VERSION
+    );
 }
 
 #[test]
@@ -279,14 +282,7 @@ fn receipt_degraded_when_panel_only() {
 #[test]
 fn receipt_input_unavailable_for_no_input_surface() {
     // Use "Webcam" — the name app_view_name() returns at runtime
-    let receipt = TabAiInvocationReceipt::from_snapshot(
-        "Webcam",
-        &None,
-        &None,
-        &None,
-        0,
-        &[],
-    );
+    let receipt = TabAiInvocationReceipt::from_snapshot("Webcam", &None, &None, &None, 0, &[]);
     assert_eq!(receipt.input_status, TabAiFieldStatus::Unavailable);
     assert!(receipt
         .degradation_reasons
@@ -296,14 +292,7 @@ fn receipt_input_unavailable_for_no_input_surface() {
 #[test]
 fn receipt_input_degraded_for_terminal() {
     // TermPrompt is not in the no-input list, so missing input is degraded
-    let receipt = TabAiInvocationReceipt::from_snapshot(
-        "TermPrompt",
-        &None,
-        &None,
-        &None,
-        0,
-        &[],
-    );
+    let receipt = TabAiInvocationReceipt::from_snapshot("TermPrompt", &None, &None, &None, 0, &[]);
     assert_eq!(receipt.input_status, TabAiFieldStatus::Degraded);
     assert!(receipt
         .degradation_reasons
@@ -346,7 +335,10 @@ fn receipt_json_includes_degradation_reasons_when_present() {
     assert!(!reasons.is_empty());
     // Check all reasons are strings (machine-readable)
     for reason in reasons {
-        assert!(reason.is_string(), "degradation reason must be a string, got: {reason}");
+        assert!(
+            reason.is_string(),
+            "degradation reason must be a string, got: {reason}"
+        );
     }
 }
 
@@ -361,8 +353,7 @@ fn receipt_roundtrips_through_serde() {
         &[],
     );
     let json = serde_json::to_string(&receipt).expect("serialize");
-    let deserialized: TabAiInvocationReceipt =
-        serde_json::from_str(&json).expect("deserialize");
+    let deserialized: TabAiInvocationReceipt = serde_json::from_str(&json).expect("deserialize");
     assert_eq!(receipt, deserialized);
 }
 
@@ -608,7 +599,8 @@ fn tab_ai_context_quality_editor_prompt_with_content() {
     assert_eq!(r.focus_status, TabAiFieldStatus::Unavailable);
     assert!(!r.rich, "EditorPrompt without tabstops is not fully rich");
     assert!(
-        !r.degradation_reasons.contains(&TabAiDegradationReason::MissingFocusTarget),
+        !r.degradation_reasons
+            .contains(&TabAiDegradationReason::MissingFocusTarget),
         "MissingFocusTarget requires Degraded, not Unavailable"
     );
 }
@@ -731,9 +723,15 @@ fn tab_ai_context_quality_div_prompt_is_degraded() {
     assert_eq!(r.input_status, TabAiFieldStatus::Unavailable);
     assert_eq!(r.focus_status, TabAiFieldStatus::Degraded);
     assert_eq!(r.elements_status, TabAiFieldStatus::Degraded);
-    assert!(r.degradation_reasons.contains(&TabAiDegradationReason::PanelOnlyElements));
-    assert!(r.degradation_reasons.contains(&TabAiDegradationReason::InputNotApplicable));
-    assert!(r.degradation_reasons.contains(&TabAiDegradationReason::MissingFocusTarget));
+    assert!(r
+        .degradation_reasons
+        .contains(&TabAiDegradationReason::PanelOnlyElements));
+    assert!(r
+        .degradation_reasons
+        .contains(&TabAiDegradationReason::InputNotApplicable));
+    assert!(r
+        .degradation_reasons
+        .contains(&TabAiDegradationReason::MissingFocusTarget));
 }
 
 /// WebcamView: camera feed with no text — panel-only.
@@ -744,8 +742,12 @@ fn tab_ai_context_quality_webcam_is_degraded() {
     assert_eq!(r.prompt_type, "Webcam");
     assert!(!r.rich);
     assert_eq!(r.input_status, TabAiFieldStatus::Unavailable);
-    assert!(r.degradation_reasons.contains(&TabAiDegradationReason::PanelOnlyElements));
-    assert!(r.degradation_reasons.contains(&TabAiDegradationReason::InputNotApplicable));
+    assert!(r
+        .degradation_reasons
+        .contains(&TabAiDegradationReason::PanelOnlyElements));
+    assert!(r
+        .degradation_reasons
+        .contains(&TabAiDegradationReason::InputNotApplicable));
 }
 
 /// ActionsDialog: always panel-only.
@@ -765,7 +767,9 @@ fn tab_ai_context_quality_theme_chooser_is_degraded() {
     assert_eq!(r.prompt_type, "ThemeChooser");
     assert!(!r.rich);
     assert_eq!(r.elements_status, TabAiFieldStatus::Degraded);
-    assert!(r.degradation_reasons.contains(&TabAiDegradationReason::PanelOnlyElements));
+    assert!(r
+        .degradation_reasons
+        .contains(&TabAiDegradationReason::PanelOnlyElements));
 }
 
 /// CreationFeedback: read-only confirmation, panel-only.
@@ -781,35 +785,25 @@ fn tab_ai_context_quality_creation_feedback_is_degraded() {
 /// Uses "Settings" — the name app_view_name() returns at runtime.
 #[test]
 fn tab_ai_context_quality_settings_is_unavailable() {
-    let r = TabAiInvocationReceipt::from_snapshot(
-        "Settings",
-        &None,
-        &None,
-        &None,
-        0,
-        &[],
-    );
+    let r = TabAiInvocationReceipt::from_snapshot("Settings", &None, &None, &None, 0, &[]);
     assert_eq!(r.prompt_type, "Settings");
     assert!(!r.rich);
     assert_eq!(r.input_status, TabAiFieldStatus::Unavailable);
     assert_eq!(r.focus_status, TabAiFieldStatus::Unavailable);
     assert_eq!(r.elements_status, TabAiFieldStatus::Unavailable);
-    assert!(r.degradation_reasons.contains(&TabAiDegradationReason::InputNotApplicable));
-    assert!(r.degradation_reasons.contains(&TabAiDegradationReason::NoSemanticElements));
+    assert!(r
+        .degradation_reasons
+        .contains(&TabAiDegradationReason::InputNotApplicable));
+    assert!(r
+        .degradation_reasons
+        .contains(&TabAiDegradationReason::NoSemanticElements));
 }
 
 /// InstalledKitsView: no elements, no input.
 /// Uses "InstalledKits" — the name app_view_name() returns at runtime.
 #[test]
 fn tab_ai_context_quality_installed_kits_is_unavailable() {
-    let r = TabAiInvocationReceipt::from_snapshot(
-        "InstalledKits",
-        &None,
-        &None,
-        &None,
-        0,
-        &[],
-    );
+    let r = TabAiInvocationReceipt::from_snapshot("InstalledKits", &None, &None, &None, 0, &[]);
     assert_eq!(r.prompt_type, "InstalledKits");
     assert!(!r.rich);
     assert_eq!(r.input_status, TabAiFieldStatus::Unavailable);
@@ -834,7 +828,9 @@ fn tab_ai_context_quality_term_prompt_input_degraded() {
     );
     assert_eq!(r.prompt_type, "TermPrompt");
     assert_eq!(r.input_status, TabAiFieldStatus::Degraded);
-    assert!(r.degradation_reasons.contains(&TabAiDegradationReason::InputNotExtractable));
+    assert!(r
+        .degradation_reasons
+        .contains(&TabAiDegradationReason::InputNotExtractable));
     // Elements are captured (terminal lines are real content)
     assert_eq!(r.elements_status, TabAiFieldStatus::Captured);
 }
@@ -842,17 +838,12 @@ fn tab_ai_context_quality_term_prompt_input_degraded() {
 /// QuickTerminalView: similar to TermPrompt — terminal content, no typed input.
 #[test]
 fn tab_ai_context_quality_quick_terminal_input_degraded() {
-    let r = TabAiInvocationReceipt::from_snapshot(
-        "QuickTerminal",
-        &None,
-        &None,
-        &None,
-        8,
-        &[],
-    );
+    let r = TabAiInvocationReceipt::from_snapshot("QuickTerminal", &None, &None, &None, 8, &[]);
     assert_eq!(r.prompt_type, "QuickTerminal");
     assert_eq!(r.input_status, TabAiFieldStatus::Degraded);
-    assert!(r.degradation_reasons.contains(&TabAiDegradationReason::InputNotExtractable));
+    assert!(r
+        .degradation_reasons
+        .contains(&TabAiDegradationReason::InputNotExtractable));
     assert_eq!(r.elements_status, TabAiFieldStatus::Captured);
 }
 
@@ -885,7 +876,9 @@ fn tab_ai_context_quality_form_prompt_panel_fallback() {
     let r = panel_only_receipt("FormPrompt", "panel_only_form_prompt");
     assert!(!r.rich);
     assert_eq!(r.elements_status, TabAiFieldStatus::Degraded);
-    assert!(r.degradation_reasons.contains(&TabAiDegradationReason::PanelOnlyElements));
+    assert!(r
+        .degradation_reasons
+        .contains(&TabAiDegradationReason::PanelOnlyElements));
 }
 
 // ---------------------------------------------------------------------------
@@ -907,7 +900,9 @@ fn tab_ai_context_quality_drop_prompt_with_files() {
     assert_eq!(r.input_status, TabAiFieldStatus::Unavailable);
     assert_eq!(r.elements_status, TabAiFieldStatus::Captured);
     assert!(r.has_focus_target);
-    assert!(r.degradation_reasons.contains(&TabAiDegradationReason::InputNotApplicable));
+    assert!(r
+        .degradation_reasons
+        .contains(&TabAiDegradationReason::InputNotApplicable));
 }
 
 // ---------------------------------------------------------------------------
@@ -1029,10 +1024,7 @@ fn tab_ai_receipt_matches_blob_quality_for_rich_surfaces() {
             ],
         };
 
-        assert!(
-            receipt.rich,
-            "{surface} receipt must be rich"
-        );
+        assert!(receipt.rich, "{surface} receipt must be rich");
         assert!(
             snap.input_text.is_some(),
             "{surface} snapshot must have input_text"
@@ -1063,16 +1055,15 @@ fn tab_ai_receipt_matches_blob_quality_for_degraded_surfaces() {
 
     for (surface, warning) in &degraded_surfaces {
         let receipt = panel_only_receipt(surface, warning);
-        assert!(
-            !receipt.rich,
-            "{surface} receipt must NOT be rich"
-        );
+        assert!(!receipt.rich, "{surface} receipt must NOT be rich");
         assert!(
             !receipt.degradation_reasons.is_empty(),
             "{surface} receipt must have degradation_reasons"
         );
         assert!(
-            receipt.degradation_reasons.contains(&TabAiDegradationReason::PanelOnlyElements),
+            receipt
+                .degradation_reasons
+                .contains(&TabAiDegradationReason::PanelOnlyElements),
             "{surface} must report PanelOnlyElements degradation"
         );
     }
@@ -1139,8 +1130,7 @@ fn app_view_name_covers_all_known_surfaces() {
 // real element constructors, not just panel placeholders
 // ---------------------------------------------------------------------------
 
-const COLLECT_ELEMENTS_SOURCE: &str =
-    include_str!("../src/app_layout/collect_elements.rs");
+const COLLECT_ELEMENTS_SOURCE: &str = include_str!("../src/app_layout/collect_elements.rs");
 
 /// Rich list surfaces must use collect_named_rows or collect_choice_view_elements,
 /// not fall through to panel placeholders.
@@ -1163,8 +1153,8 @@ fn collect_elements_rich_list_surfaces_use_real_collectors() {
             .find(&view_pattern)
             .unwrap_or_else(|| panic!("collect_visible_elements must handle {view_pattern}"));
         // Check that the next ~500 chars reference the expected collector
-        let arm_body = &COLLECT_ELEMENTS_SOURCE
-            [pos..pos + 800.min(COLLECT_ELEMENTS_SOURCE.len() - pos)];
+        let arm_body =
+            &COLLECT_ELEMENTS_SOURCE[pos..pos + 800.min(COLLECT_ELEMENTS_SOURCE.len() - pos)];
         assert!(
             arm_body.contains(collector),
             "{view} should use {collector}, not a panel placeholder"
@@ -1182,8 +1172,8 @@ fn collect_elements_choice_surfaces_use_choice_collector() {
         let pos = COLLECT_ELEMENTS_SOURCE
             .find(&view_pattern)
             .unwrap_or_else(|| panic!("collect_visible_elements must handle {view_pattern}"));
-        let arm_body = &COLLECT_ELEMENTS_SOURCE
-            [pos..pos + 300.min(COLLECT_ELEMENTS_SOURCE.len() - pos)];
+        let arm_body =
+            &COLLECT_ELEMENTS_SOURCE[pos..pos + 300.min(COLLECT_ELEMENTS_SOURCE.len() - pos)];
         assert!(
             arm_body.contains("collect_choice_view_elements"),
             "{view} should use collect_choice_view_elements"
@@ -1214,8 +1204,8 @@ fn collect_elements_entity_prompts_use_finalize_surface_outcome() {
         let pos = COLLECT_ELEMENTS_SOURCE
             .find(&view_pattern)
             .unwrap_or_else(|| panic!("collect_visible_elements must handle {view_pattern}"));
-        let arm_body = &COLLECT_ELEMENTS_SOURCE
-            [pos..pos + 800.min(COLLECT_ELEMENTS_SOURCE.len() - pos)];
+        let arm_body =
+            &COLLECT_ELEMENTS_SOURCE[pos..pos + 800.min(COLLECT_ELEMENTS_SOURCE.len() - pos)];
         assert!(
             arm_body.contains("finalize_surface_outcome"),
             "{view} should use finalize_surface_outcome for rich-vs-degraded fallback"
@@ -1280,7 +1270,8 @@ fn tab_ai_receipt_schema_version_is_stable() {
 #[test]
 fn tab_ai_context_schema_version_is_stable() {
     assert_eq!(
-        script_kit_gpui::ai::TAB_AI_CONTEXT_SCHEMA_VERSION, 2,
+        script_kit_gpui::ai::TAB_AI_CONTEXT_SCHEMA_VERSION,
+        2,
         "Context blob schema version changed — update downstream consumers"
     );
 }

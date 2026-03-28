@@ -93,6 +93,7 @@ impl ChatPrompt {
         self.ensure_conversation_turns_cache();
         let item_count = self.conversation_turns_cache.len();
         if item_count == 0 {
+            self.turns_list_state.set_follow_tail(false);
             return;
         }
 
@@ -106,43 +107,21 @@ impl ChatPrompt {
             self.user_has_scrolled_up = false;
         }
 
-        if !self.user_has_scrolled_up {
-            tracing::debug!(
-                target: "script_kit::chat_scroll",
-                event = "scroll_to_bottom",
-                reason = "auto_follow",
-                item_count,
-            );
-            self.turns_list_state.scroll_to(ListOffset {
-                item_ix: item_count - 1,
-                offset_in_item: px(1_000_000.),
-            });
-        } else {
-            tracing::debug!(
-                target: "script_kit::chat_scroll",
-                event = "scroll_to_bottom_skipped",
-                reason = "manual_mode",
-                item_count,
-            );
-        }
+        self.turns_list_state
+            .set_follow_tail(!self.user_has_scrolled_up);
     }
 
     pub(super) fn force_scroll_turns_to_bottom(&mut self) {
         self.user_has_scrolled_up = false;
         self.ensure_conversation_turns_cache();
         let item_count = self.conversation_turns_cache.len();
-        if item_count > 0 {
-            tracing::debug!(
-                target: "script_kit::chat_scroll",
-                event = "scroll_to_bottom",
-                reason = "force",
-                item_count,
-            );
-            self.turns_list_state.scroll_to(ListOffset {
-                item_ix: item_count - 1,
-                offset_in_item: px(1_000_000.),
-            });
-        }
+        tracing::debug!(
+            target: "script_kit::chat_scroll",
+            event = "scroll_to_bottom",
+            reason = "force",
+            item_count,
+        );
+        self.turns_list_state.set_follow_tail(item_count > 0);
     }
 
     pub fn add_message(&mut self, message: ChatPromptMessage, cx: &mut Context<Self>) {

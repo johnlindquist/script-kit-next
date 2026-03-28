@@ -62,14 +62,6 @@ fn build_highlighted_text(
     Some(StyledText::new(text.to_string()).with_highlights(all_highlights))
 }
 
-fn ai_sidebar_row_hover_enabled(input_mode: InputMode, is_selected: bool) -> bool {
-    !is_selected && input_mode == InputMode::Mouse
-}
-
-fn ai_sidebar_delete_hover_enabled(input_mode: InputMode) -> bool {
-    input_mode == InputMode::Mouse
-}
-
 impl AiApp {
     pub(super) fn render_sidebar_group_header(
         &self,
@@ -150,8 +142,9 @@ impl AiApp {
 
         let muted_fg = cx.theme().muted_foreground;
         let is_renaming = self.renaming_chat_id == Some(chat_id);
-        let is_mouse_mode = ai_sidebar_delete_hover_enabled(self.input_mode);
-        let row_hover_enabled = ai_sidebar_row_hover_enabled(self.input_mode, is_selected);
+        // GPUI's hover() already suppresses highlights during keyboard modality
+        // via HitboxId::is_hovered() checking Window::last_input_was_keyboard().
+        // We only skip hover style on selected rows (they already have a bg).
         div()
             .id(SharedString::from(format!("chat-{}", chat_id)))
             .group("chat-item")
@@ -166,7 +159,7 @@ impl AiApp {
             .rounded(R_MD)
             .cursor_pointer()
             .when(is_selected, |d| d.bg(selected_bg))
-            .when(row_hover_enabled, |d| d.hover(|d| d.bg(hover_bg)))
+            .when(!is_selected, |d| d.hover(|d| d.bg(hover_bg)))
             .on_click(
                 cx.listener(move |this, event: &gpui::ClickEvent, window, cx| {
                     if event.click_count() == 2 {
@@ -238,10 +231,8 @@ impl AiApp {
                                 .bg(cx.theme().danger.opacity(OPACITY_SUBTLE))
                                 .text_xs()
                                 .text_color(cx.theme().danger)
-                                .when(is_mouse_mode, |d| {
-                                    d.hover(|s| {
-                                        s.bg(cx.theme().danger.opacity(OPACITY_DANGER_HOVER))
-                                    })
+                                .hover(|s| {
+                                    s.bg(cx.theme().danger.opacity(OPACITY_DANGER_HOVER))
                                 })
                                 .on_mouse_down(
                                     gpui::MouseButton::Left,
@@ -262,13 +253,12 @@ impl AiApp {
                                 .flex_shrink_0()
                                 .cursor_pointer()
                                 .opacity(OPACITY_HIDDEN)
-                                .when(is_mouse_mode, |d| {
-                                    d.group_hover("chat-item", |s| s.opacity(1.0)).hover(|s| {
-                                        s.bg(cx
-                                            .theme()
-                                            .danger
-                                            .opacity(OPACITY_MESSAGE_USER_BACKGROUND))
-                                    })
+                                .group_hover("chat-item", |s| s.opacity(1.0))
+                                .hover(|s| {
+                                    s.bg(cx
+                                        .theme()
+                                        .danger
+                                        .opacity(OPACITY_MESSAGE_USER_BACKGROUND))
                                 })
                                 .on_mouse_down(
                                     gpui::MouseButton::Left,
@@ -580,19 +570,6 @@ mod tests {
 
         assert_eq!(assistant_role, MessageRole::Assistant);
         assert_eq!(user_role, MessageRole::User);
-    }
-
-    #[test]
-    fn test_ai_sidebar_row_hover_enabled_only_for_unselected_rows_in_mouse_mode() {
-        assert!(ai_sidebar_row_hover_enabled(InputMode::Mouse, false));
-        assert!(!ai_sidebar_row_hover_enabled(InputMode::Mouse, true));
-        assert!(!ai_sidebar_row_hover_enabled(InputMode::Keyboard, false));
-    }
-
-    #[test]
-    fn test_ai_sidebar_delete_hover_enabled_only_in_mouse_mode() {
-        assert!(ai_sidebar_delete_hover_enabled(InputMode::Mouse));
-        assert!(!ai_sidebar_delete_hover_enabled(InputMode::Keyboard));
     }
 
     #[test]

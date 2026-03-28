@@ -272,7 +272,6 @@ impl ScriptListApp {
         let text_primary = self.theme.colors.text.primary;
         #[allow(unused_variables)]
         let text_muted = self.theme.colors.text.muted;
-        let text_dimmed = self.theme.colors.text.dimmed;
 
 
         // Build virtualized list
@@ -349,7 +348,6 @@ impl ScriptListApp {
                                     .description_opt(Some(relative_time))
                                     .selected(is_selected)
                                     .hovered(is_hovered)
-                                    .with_hover_effect(current_input_mode == InputMode::Mouse)
                                     .with_accent_bar(true);
 
                                 // Add thumbnail for images, text icon for text entries
@@ -475,93 +473,47 @@ impl ScriptListApp {
             &design_visual,
         );
 
-        div()
-            .flex()
-            .flex_col()
-            // Removed: .bg(rgba(bg_with_alpha)) - let vibrancy show through from Root
-            // Removed: .shadow(box_shadows) - shadows on transparent elements block vibrancy
+        // Emit hint audit for the expanded-view footer
+        let hints = crate::components::universal_prompt_hints();
+        crate::components::emit_prompt_hint_audit("clipboard_history", &hints);
+
+        tracing::info!(
+            surface = "clipboard_history",
+            layout_mode = "expanded",
+            divider_chrome_removed = true,
+            header_status_text_removed = true,
+            "clipboard_history: expanded-view shell migration checkpoint"
+        );
+
+        // Header: bare input only — no extra status text, no divider
+        let header_element = div().flex_1().flex().flex_row().items_center().child(
+            Input::new(&self.gpui_input_state)
+                .w_full()
+                .h(px(28.))
+                .px(px(0.))
+                .py(px(0.))
+                .with_size(Size::Size(px(design_typography.font_size_xl)))
+                .appearance(false)
+                .bordered(false)
+                .focus_bordered(false),
+        );
+
+        // List pane with scrollbar overlay
+        let list_pane = div()
+            .relative()
             .w_full()
             .h_full()
-            .rounded(px(design_visual.radius_lg))
+            .py(px(design_spacing.padding_xs))
+            .child(list_element)
+            .child(list_scrollbar);
+
+        // Assemble via shared expanded-view scaffold
+        crate::components::render_expanded_view_scaffold(header_element, list_pane, preview_panel)
             .text_color(rgb(text_primary))
             .font_family(design_typography.font_family)
             .key_context("clipboard_history")
             .track_focus(&self.focus_handle)
             .on_key_down(handle_key)
-            // Header with input - uses shared gpui_input_state for consistent cursor/selection
-            .child(
-                div()
-                    .w_full()
-                    .px(px(crate::ui::chrome::HEADER_PADDING_X))
-                    .py(px(crate::ui::chrome::HEADER_PADDING_Y))
-                    .flex()
-                    .flex_row()
-                    .items_center()
-                    .gap_3()
-                    // Search input - shared component with main menu
-                    .child(
-                        div().flex_1().flex().flex_row().items_center().child(
-                            Input::new(&self.gpui_input_state)
-                                .w_full()
-                                .h(px(28.))
-                                .px(px(0.))
-                                .py(px(0.))
-                                .with_size(Size::Size(px(design_typography.font_size_xl)))
-                                .appearance(false)
-                                .bordered(false)
-                                .focus_bordered(false),
-                        ),
-                    )
-                    .child(
-                        div()
-                            .text_sm()
-                            .text_color(rgb(text_dimmed))
-                            .child(format!("{} entries", self.cached_clipboard_entries.len())),
-                    ),
-            )
-            // Divider
-            .child(crate::components::SectionDivider::new())
-            // Main content area - 50/50 split: List on left, Preview on right
-            .child(
-                div()
-                    .flex()
-                    .flex_row()
-                    .flex_1()
-                    .min_h(px(0.))
-                    .w_full()
-                    .overflow_hidden()
-                    // Left side: Clipboard list (50% width)
-                    .child(
-                        div()
-                            .w_1_2()
-                            .h_full()
-                            .min_h(px(0.))
-                            .py(px(design_spacing.padding_xs))
-                            .child(
-                                div()
-                                    .relative()
-                                    .w_full()
-                                    .h_full()
-                                    .child(list_element)
-                                    .child(list_scrollbar),
-                            ),
-                    )
-                    // Right side: Preview panel (50% width)
-                    .child(
-                        div()
-                            .w_1_2()
-                            .h_full()
-                            .min_h(px(0.))
-                            .overflow_hidden()
-                            .child(preview_panel),
-                    ),
-            )
-            // Footer — canonical three-key hint strip
-            .child({
-                let hints = crate::components::universal_prompt_hints();
-                crate::components::emit_prompt_hint_audit("clipboard_history", &hints);
-                crate::components::render_simple_hint_strip(hints, None)
-            })
             .into_any_element()
 
     }
@@ -570,41 +522,53 @@ impl ScriptListApp {
 #[cfg(test)]
 mod clipboard_chrome_audit {
     #[test]
-    fn clipboard_history_uses_universal_chrome_footer() {
+    fn clipboard_history_uses_shared_expanded_view_shell() {
         let source = include_str!("clipboard.rs");
+
+        // Must route through the shared expanded-view scaffold
         assert!(
-            source.contains("universal_prompt_hints()"),
-            "clipboard should use the canonical three-key footer"
+            source.contains("render_expanded_view_scaffold("),
+            "clipboard must use the shared expanded-view scaffold"
         );
+
+        // Must emit expanded layout audit
         assert!(
-            source.contains("render_simple_hint_strip("),
-            "clipboard should use render_simple_hint_strip"
+            source.contains("PromptChromeAudit::expanded(\"clipboard_history\""),
+            "clipboard must declare expanded layout mode"
         );
+
+        // Must NOT have hand-rolled divider chrome (split string to avoid self-match)
+        let divider_call = "SectionDivider".to_owned() + "::new()";
         assert!(
-            source.contains("SectionDivider::new()"),
-            "clipboard should use SectionDivider"
+            !source.contains(&divider_call),
+            "clipboard must not use SectionDivider — expanded shell has no divider"
         );
+
+        // Must NOT have extra header status text (split to avoid self-match)
+        let entries_label = "{} ".to_owned() + "entries";
+        assert!(
+            !source.contains(&entries_label),
+            "clipboard must not show extra entries count header label"
+        );
+
+        // Must NOT use legacy PromptFooter
         let legacy = "Prompt".to_owned() + "Footer::new(";
         assert_eq!(
             source.matches(&legacy).count(),
             0,
-            "clipboard should not use PromptFooter"
+            "clipboard must not use PromptFooter"
         );
-        assert!(
-            source.contains("HEADER_PADDING_X"),
-            "clipboard should use chrome token HEADER_PADDING_X"
-        );
-        assert!(
-            source.contains("HEADER_PADDING_Y"),
-            "clipboard should use chrome token HEADER_PADDING_Y"
-        );
-        assert!(
-            source.contains("PromptChromeAudit::expanded(\"clipboard_history\""),
-            "clipboard should declare expanded layout mode"
-        );
+
+        // Must NOT hardcode paste-specific footer
         assert!(
             !source.contains("SharedString::from(\"↵ Paste\")"),
-            "clipboard should not hardcode paste-specific footer"
+            "clipboard must not hardcode paste-specific footer"
+        );
+
+        // Must emit hint audit
+        assert!(
+            source.contains("emit_prompt_hint_audit(\"clipboard_history\""),
+            "clipboard must emit hint audit for observability"
         );
     }
 }

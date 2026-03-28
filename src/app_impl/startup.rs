@@ -780,10 +780,22 @@ impl ScriptListApp {
                                 return;
                             }
 
-                            // Universal Tab AI: open the mini natural-language overlay
+                            // Block Tab while the Tab AI chat is already open
+                            if matches!(this.current_view, AppView::TabAiChat { .. }) {
+                                cx.stop_propagation();
+                                return;
+                            }
+
+                            // Block Tab while the save-offer overlay is visible
+                            if this.tab_ai_save_offer_state.is_some() {
+                                cx.stop_propagation();
+                                return;
+                            }
+
+                            // Universal Tab AI: open the full-view chat
                             // from any non-special surface (not FileSearch, not ChatPrompt setup)
                             if !has_shift && !this.show_actions_popup {
-                                this.open_tab_ai_overlay(cx);
+                                this.open_tab_ai_chat(cx);
                                 cx.stop_propagation();
                             }
                         });

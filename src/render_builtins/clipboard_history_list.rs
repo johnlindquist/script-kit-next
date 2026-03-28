@@ -80,7 +80,6 @@
                                     .description_opt(Some(relative_time))
                                     .selected(is_selected)
                                     .hovered(is_hovered)
-                                    .with_hover_effect(current_input_mode == InputMode::Mouse)
                                     .with_accent_bar(true);
 
                                 // Add thumbnail for images, text icon for text entries

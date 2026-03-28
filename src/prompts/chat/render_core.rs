@@ -573,6 +573,13 @@ impl Render for ChatPrompt {
                                     at_bottom_after,
                                     cx,
                                 );
+
+                                // Mirror the scroll-follow decision into GPUI's
+                                // native follow-tail so the list auto-scrolls on
+                                // content growth without manual bottom-anchoring.
+                                let has_turns = !this.conversation_turns_cache.is_empty();
+                                this.turns_list_state
+                                    .set_follow_tail(has_turns && !this.user_has_scrolled_up);
                             })
                             .ok();
                         })

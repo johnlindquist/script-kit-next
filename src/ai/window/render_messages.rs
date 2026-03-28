@@ -36,15 +36,8 @@ impl AiApp {
             let last = item_count - 1;
             self.messages_list_state.splice(last..item_count, 1);
         }
-        // Only auto-scroll if user hasn't scrolled up.
-        // Use scroll_to with a large offset_in_item to reach the actual bottom
-        // of the last (growing) item, not just "reveal" it.
-        if item_count > 0 && !self.user_has_scrolled_up {
-            self.messages_list_state.scroll_to(ListOffset {
-                item_ix: item_count - 1,
-                offset_in_item: px(1_000_000.),
-            });
-        }
+        self.messages_list_state
+            .set_follow_tail(!self.user_has_scrolled_up && item_count > 0);
     }
 
     /// Force scroll to the bottom, regardless of user_has_scrolled_up.
@@ -61,12 +54,7 @@ impl AiApp {
             let last = item_count - 1;
             self.messages_list_state.splice(last..item_count, 1);
         }
-        if item_count > 0 {
-            self.messages_list_state.scroll_to(ListOffset {
-                item_ix: item_count - 1,
-                offset_in_item: px(1_000_000.),
-            });
-        }
+        self.messages_list_state.set_follow_tail(item_count > 0);
     }
 
     /// Total item count for the messages list: messages + optional streaming row.
@@ -150,21 +138,20 @@ impl AiApp {
                 cx.listener(move |this, event: &ScrollWheelEvent, _window, cx| {
                     let delta_y = event.delta.pixel_delta(px(1.0)).y;
                     if delta_y > S0 {
-                        // Scrolling up - only notify when state actually changes
-                        // (avoids redundant re-renders during momentum scroll)
+                        // Scrolling up pauses follow-tail.
                         if !this.user_has_scrolled_up {
                             this.user_has_scrolled_up = true;
+                            this.messages_list_state.set_follow_tail(false);
                             cx.notify();
                         }
                     } else if delta_y < S0 {
-                        // Scrolling down - check if at true bottom to resume auto-scroll.
-                        // `logical_scroll_top` gives the topmost visible item index, so
-                        // reaching the last item means we're at bottom.
+                        // Scrolling down: resume follow-tail once back at the bottom.
                         let scroll_top = this.messages_list_state.logical_scroll_top();
                         let item_count = this.messages_list_item_count();
                         let at_bottom = is_messages_list_at_bottom(item_count, scroll_top.item_ix);
                         if at_bottom && this.user_has_scrolled_up {
                             this.user_has_scrolled_up = false;
+                            this.messages_list_state.set_follow_tail(item_count > 0);
                             cx.notify();
                         }
                     }

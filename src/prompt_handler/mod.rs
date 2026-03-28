@@ -1416,6 +1416,19 @@ impl ScriptListApp {
                         *selected_index as i32,
                         None,
                     ),
+                    AppView::TabAiChat { entity } => {
+                        let intent = entity.read(cx).current_intent();
+                        (
+                            "tabAiChat".to_string(),
+                            None,
+                            None,
+                            intent,
+                            0,
+                            0,
+                            0,
+                            None,
+                        )
+                    }
                 };
 
                 // Focus state: we use focused_input as a proxy since we don't have Window access here.

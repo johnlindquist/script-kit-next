@@ -86,6 +86,7 @@ impl ScriptListApp {
                 | AppView::CreateAiPresetView { .. }
                 | AppView::ProcessManagerView { .. }
                 | AppView::CurrentAppCommandsView { .. }
+                | AppView::TabAiChat { .. }
         )
     }
 

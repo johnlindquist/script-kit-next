@@ -13,7 +13,7 @@ Rust (GPUI app shell) + TypeScript (bun script runner) + SDK. Backwards-compatib
 Every code change must pass before reporting success:
 
 ```bash
-cargo check && cargo clippy --all-targets -- -D warnings && cargo test
+cargo check && cargo clippy --lib -- -D warnings && cargo nextest run --lib
 ```
 
 After the gate passes, verify the change actually works:
@@ -27,9 +27,9 @@ After the gate passes, verify the change actually works:
 |--------|---------|
 | Check | `cargo check` |
 | Format check | `cargo fmt --check` |
-| Lint | `cargo clippy --all-targets -- -D warnings` |
-| Test | `cargo test` |
-| Test (CI) | `cargo nextest run` |
+| Lint | `cargo clippy --lib -- -D warnings` |
+| Test | `cargo nextest run --lib` |
+| Test (CI) | `cargo nextest run --profile ci` |
 | Test (system) | `cargo test --features system-tests` |
 | Test (slow) | `cargo test --features slow-tests` |
 | Run | `echo '{"type":"show"}' \| SCRIPT_KIT_AI_LOG=1 ./target/debug/script-kit-gpui 2>&1` |
@@ -278,43 +278,59 @@ Composable context attachments for AI chat flows with deterministic resolution a
 
 ### Tab AI — Context Chat with Script Execution
 
-Universal AI surface triggered by Tab from any view. Replaces the current view (like `ChatPrompt`) with a full-view inline chat that shows gathered context and can both converse and execute scripts.
+Universal AI surface triggered by Tab from any view. Two modes: an overlay (legacy, retained for migration) and a full-view `TabAiChat` entity that replaces the current view.
 
 **Two entry paths, one destination:**
-- **Enter on fallback** — user types something with no matches, hits Enter on first fallback command → inline AI chat opens with filter text **auto-submitted** as first message. AI is already working.
+- **Enter on fallback** — user types something with no matches, hits Enter on first fallback command → inline AI chat opens with filter text **auto-submitted** as first message.
 - **Tab on any item** — user presses Tab from any view → inline AI chat opens showing **context cards** (selected item, desktop state, etc.), input is empty. User types intent, then Enter.
 
 **Architecture:**
-- `AppView::TabAiChat` variant — full-view replacement, not an overlay
-- Follows `ChatPrompt` pattern: input at top, body in center (scrollable), footer at bottom
-- Context cards appear as initial chat body content (the "empty state" IS the context)
-- Enter always submits a chat message — AI decides whether to answer conversationally or generate+execute a script
+- `AppView::TabAiChat` variant — full-view replacement (primary path via `open_tab_ai_chat()`)
+- `TabAiOverlayState` — legacy overlay path (retained, `open_tab_ai_overlay()`)
+- Context assembly: `build_tab_ai_context()` → `TabAiResolvedContext` (blob + bundle_id + warning count + invocation receipt)
+- Target resolution: `resolve_tab_ai_surface_targets()` extracts focused/visible targets per surface (ClipboardHistory, FileSearch, WindowSwitcher, etc.)
 
-**Dual-mode AI agent:**
-- **Action mode** ("focus on this app", "rename to kebab-case") → generates Script Kit script, displays as code block in chat, executes inline, shows result
-- **Conversation mode** ("what does this app do?", "how many files?") → responds with text answer
-- System prompt: "If the user's message reads as a command (imperative verb), generate and execute a script. If it reads as a question, respond conversationally. When ambiguous, prefer action."
+**Schema-versioned types** (all in `src/ai/tab_context.rs`, bump version constants when changing fields):
 
-**Context relevance hierarchy** (highest to lowest focus):
-1. Selected/highlighted item — implicit subject of any action verb
-2. Filter text — strong intent signal
-3. Visible items — what's on screen
-4. Desktop state — frontmost app, browser URL, window title
-5. Screenshot/OCR — visual context from focused app (progressive, async)
-6. Browser tabs — open tabs when frontmost is a browser (progressive, async)
-7. Clipboard preview — recent clipboard content
-8. Prior automations — similar scripts that worked before
+| Type | Purpose |
+|------|---------|
+| `TabAiContextBlob` (v2) | Top-level context sent to AI: UI snapshot + desktop snapshot + targets + clipboard + memory |
+| `TabAiTargetContext` | Source, kind, semantic_id, label, metadata for a resolved target |
+| `TabAiTargetAudit` (v1) | Structured log of target resolution with `from_targets()` / `emit()` |
+| `TabAiUiSnapshot` | Prompt type, input text, focused/selected semantic IDs, visible elements |
+| `TabAiExecutionRecord` (v1) | Intent, generated script, target bundle_id, timestamps |
+| `TabAiExecutionReceipt` (v1) | Post-execution audit: record + status + output + duration |
+| `TabAiInvocationReceipt` (v1) | Per-field capture status (`TabAiFieldStatus`) + degradation reasons |
+| `TabAiMemoryResolution` | Suggestions + `TabAiMemoryResolutionOutcome` (candidate/match counts, reason) |
+| `TabAiMemoryEntry` (v1) | Persisted memory: intent, script, target bundle_id, outcome |
+| `TabAiFieldStatus` | Enum: `Unavailable`, `Degraded`, `Captured` — per-field telemetry |
+| `TabAiDegradationReason` | Enum: `PanelOnlyWarning`, `CollectorFallback`, `MissingInput`, etc. |
 
-**Context cards design:** Whisper chrome — ghost-opacity bg, no borders, hint-opacity labels, present-opacity content. Ordered by relevance. The selected item is the most prominent card.
+**Execution pipeline:**
+1. `submit_tab_ai_chat()` — assembles context, calls AI, generates script
+2. `prepare_script_from_ai_response()` → strip SDK imports → `create_interactive_temp_script()` → `execute_script_by_path()`
+3. `complete_tab_ai_execution()` — builds `TabAiExecutionReceipt`, appends to JSONL audit trail
+4. `open_tab_ai_save_offer()` — conditional save UI based on `should_offer_save()`
+
+**Memory system:**
+- `write_tab_ai_memory_entry()` — persists successful automations
+- `resolve_tab_ai_memory_suggestions()` — finds prior automations matching current context
+- `resolve_tab_ai_memory_suggestions_with_outcome()` — outcome-aware variant returning `TabAiMemoryResolution`
+- `refresh_tab_ai_memory_hint()` — updates memory hint display with candidate/match counts
 
 **Key files:**
-- `src/app_impl/tab_ai_mode.rs` — Tab AI orchestration (to be refactored into full-view chat)
-- `src/app_impl/prompt_ai.rs` — `show_inline_ai_chat()` pattern reference
-- `src/prompts/chat/` — ChatPrompt architecture to follow
-- `src/ai/tab_context.rs` — context blob assembly
+- `src/ai/tab_context.rs` — all Tab AI types, context assembly, memory I/O, execution receipts
+- `src/ai/mod.rs` — re-exports (lines 89–105)
+- `src/app_impl/tab_ai_mode.rs` — orchestration: context building, submission, target resolution, save flow, overlay + chat paths
 - `src/context_snapshot/capture.rs` — desktop context providers
 
-**Script execution flow:** `prepare_script_from_ai_response()` → strip SDK imports → `create_interactive_temp_script()` → `execute_script_by_path()` → result appears as chat message
+**Integration tests:**
+- `tests/tab_ai_context.rs` — context blob assembly and schema
+- `tests/tab_ai_execution.rs` — execution receipt pipeline
+- `tests/tab_ai_memory.rs` — memory write/read/resolution
+- `tests/tab_ai_routing.rs` — entry path routing
+- `tests/tab_ai_prompt.rs` — user prompt construction
+- `tests/tab_ai_input_coverage.rs` — input edge cases
 
 **Design plan:** `.notes/20260327-175739-tab-ai-do-this-to-that.md`
 

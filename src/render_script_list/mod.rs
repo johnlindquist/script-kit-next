@@ -467,8 +467,6 @@ impl ScriptListApp {
                                     } else if let Some(result) = flat_results_clone.get(*result_idx)
                                     {
                                         item_name = result.name();
-                                        // Enable hover effects only when in Mouse mode
-                                        let enable_hover = current_input_mode == InputMode::Mouse;
                                         render_design_item(
                                             current_design,
                                             result,
@@ -476,7 +474,6 @@ impl ScriptListApp {
                                             is_selected,
                                             is_hovered,
                                             theme_colors,
-                                            enable_hover,
                                             &filter_for_highlight,
                                         )
                                     } else {

@@ -56,7 +56,7 @@ impl AiApp {
         let muted_fg = cx.theme().muted_foreground;
         let success = cx.theme().success;
         let muted_bg = cx.theme().muted;
-        let mouse_mode = self.input_mode == InputMode::Mouse;
+        // GPUI's hover() already suppresses highlights during keyboard modality.
 
         // Show "Generated in Xs · ~N words" until the next message is sent.
         // The label persists so users can reference generation speed context.
@@ -127,7 +127,7 @@ impl AiApp {
                     .gap(S2)
                     // Regenerate
                     .child(
-                        action_btn_base("regenerate-btn", muted_fg, muted_bg, mouse_mode)
+                        action_btn_base("regenerate-btn", muted_fg, muted_bg)
                             .child(action_icon(
                                 LocalIconName::Refresh,
                                 muted_fg.opacity(OPACITY_ICON_MUTED),
@@ -143,7 +143,7 @@ impl AiApp {
                     )
                     // Copy ⌘⇧C
                     .child(if is_copied {
-                        action_btn_base("copy-response-btn", muted_fg, muted_bg, mouse_mode)
+                        action_btn_base("copy-response-btn", muted_fg, muted_bg)
                             .text_color(success.opacity(OPACITY_STRONG))
                             .child(action_icon(
                                 LocalIconName::Check,
@@ -155,7 +155,7 @@ impl AiApp {
                                 this.copy_last_assistant_response(cx);
                             }))
                     } else {
-                        action_btn_base("copy-response-btn", muted_fg, muted_bg, mouse_mode)
+                        action_btn_base("copy-response-btn", muted_fg, muted_bg)
                             .child(action_icon(
                                 LocalIconName::Copy,
                                 muted_fg.opacity(OPACITY_SELECTED),
@@ -172,7 +172,7 @@ impl AiApp {
                     })
                     // Export .md ⌘⇧E
                     .child(if is_exported {
-                        action_btn_base("export-btn", muted_fg, muted_bg, mouse_mode)
+                        action_btn_base("export-btn", muted_fg, muted_bg)
                             .text_color(success.opacity(OPACITY_STRONG))
                             .child(action_icon(
                                 LocalIconName::Check,
@@ -184,7 +184,7 @@ impl AiApp {
                                 this.export_chat_to_clipboard(cx);
                             }))
                     } else {
-                        action_btn_base("export-btn", muted_fg, muted_bg, mouse_mode)
+                        action_btn_base("export-btn", muted_fg, muted_bg)
                             .child(action_icon(
                                 LocalIconName::ArrowDown,
                                 muted_fg.opacity(OPACITY_ICON_MUTED),
@@ -206,7 +206,7 @@ impl AiApp {
                     .gap(S2)
                     // New Chat ⌘N
                     .child(
-                        action_btn_base("new-chat-btn", muted_fg, muted_bg, mouse_mode)
+                        action_btn_base("new-chat-btn", muted_fg, muted_bg)
                             .child(action_icon(
                                 LocalIconName::Plus,
                                 muted_fg.opacity(OPACITY_ICON_MUTED),
@@ -220,7 +220,7 @@ impl AiApp {
                     )
                     // Search Chats ⌘⇧F
                     .child(
-                        action_btn_base("search-chats-btn", muted_fg, muted_bg, mouse_mode)
+                        action_btn_base("search-chats-btn", muted_fg, muted_bg)
                             .child(action_icon(
                                 LocalIconName::MagnifyingGlass,
                                 muted_fg.opacity(OPACITY_ICON_MUTED),
@@ -263,11 +263,12 @@ impl AiApp {
 }
 
 /// Base styled div for action strip buttons.
+/// Hover styles are always applied — GPUI's modality-aware `is_hovered()` automatically
+/// suppresses hover during keyboard navigation.
 fn action_btn_base(
     id: &'static str,
     muted_fg: gpui::Hsla,
     muted_bg: gpui::Hsla,
-    mouse_mode: bool,
 ) -> Stateful<Div> {
     div()
         .id(id)
@@ -280,9 +281,7 @@ fn action_btn_base(
         .cursor_pointer()
         .text_xs()
         .text_color(muted_fg.opacity(OPACITY_TEXT_MUTED))
-        .when(mouse_mode, |d| {
-            d.hover(|s| s.bg(muted_bg.opacity(OPACITY_HOVER)).text_color(muted_fg))
-        })
+        .hover(|s| s.bg(muted_bg.opacity(OPACITY_HOVER)).text_color(muted_fg))
 }
 
 /// Small SVG icon for action buttons.
