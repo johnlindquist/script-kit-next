@@ -8,12 +8,7 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         crate::components::emit_prompt_chrome_audit(
-            &crate::components::PromptChromeAudit::minimal(
-                "clipboard_history",
-                3,     // hints: "↵ Paste", "⌘K Actions", "Esc Back"
-                false, // no leading status text
-                true,  // has actions hint
-            ),
+            &crate::components::PromptChromeAudit::expanded("clipboard_history", true),
         );
         // Use theme for all colors - consistent with main menu
         let tokens = get_tokens(self.current_design);

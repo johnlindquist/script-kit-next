@@ -85,4 +85,12 @@ mod tests {
         assert!(!divider);
         assert_eq!(ACTIONS_DIALOG_EXPECT_FOOTER_HINT_COUNT, 3);
     }
+
+    #[test]
+    fn actions_dialog_contract_constants_match_impeccable_spec() {
+        assert_eq!(ACTIONS_DIALOG_EXPECT_SEARCH_POSITION, "top");
+        // Use a let-binding to avoid clippy::assertions_on_constants
+        let border = ACTIONS_DIALOG_EXPECT_CONTAINER_BORDER;
+        assert!(!border);
+    }
 }

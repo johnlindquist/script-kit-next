@@ -425,6 +425,88 @@ pub(crate) fn universal_prompt_hints() -> Vec<SharedString> {
     vec!["↵ Run".into(), "⌘K Actions".into(), "Tab AI".into()]
 }
 
+/// Zero-argument renderer for the canonical three-key footer.
+#[allow(dead_code)]
+#[inline]
+pub(crate) fn render_universal_prompt_hint_strip() -> AnyElement {
+    render_simple_hint_strip(universal_prompt_hints(), None)
+}
+
+/// Returns `true` only when `hints` matches the canonical three-key set in exact order.
+#[allow(dead_code)]
+#[inline]
+pub(crate) fn is_universal_prompt_hints(hints: &[SharedString]) -> bool {
+    let expected = universal_prompt_hints();
+    if hints.len() != expected.len() {
+        return false;
+    }
+    hints
+        .iter()
+        .zip(expected.iter())
+        .all(|(a, b)| a.as_ref() == b.as_ref())
+}
+
+/// Structured audit record for a prompt surface's footer hints.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, serde::Serialize)]
+pub(crate) struct PromptHintAudit {
+    pub surface: &'static str,
+    pub hint_count: usize,
+    pub hints_joined: String,
+    pub is_universal: bool,
+}
+
+fn seen_prompt_hint_audits() -> &'static Mutex<HashSet<PromptHintAudit>> {
+    static SEEN: OnceLock<Mutex<HashSet<PromptHintAudit>>> = OnceLock::new();
+    SEEN.get_or_init(|| Mutex::new(HashSet::new()))
+}
+
+fn mark_prompt_hint_audit_seen(audit: &PromptHintAudit) -> bool {
+    let mut seen = seen_prompt_hint_audits()
+        .lock()
+        .unwrap_or_else(|poison| poison.into_inner());
+    seen.insert(audit.clone())
+}
+
+/// Emit a structured log line describing the footer hints for a prompt surface.
+///
+/// Emits a warning when the footer diverges from the canonical three-key contract.
+/// Identical audits are emitted at most once per process.
+#[allow(dead_code)]
+pub(crate) fn emit_prompt_hint_audit(surface: &'static str, hints: &[SharedString]) {
+    let actual: Vec<String> = hints.iter().map(|h| h.to_string()).collect();
+    let audit = PromptHintAudit {
+        surface,
+        hint_count: actual.len(),
+        hints_joined: actual.join(" | "),
+        is_universal: is_universal_prompt_hints(hints),
+    };
+
+    if !mark_prompt_hint_audit_seen(&audit) {
+        return;
+    }
+
+    tracing::info!(
+        target: "script_kit::prompt_chrome",
+        event = "prompt_hint_audit",
+        surface = audit.surface,
+        hint_count = audit.hint_count,
+        hints = %audit.hints_joined,
+        is_universal = audit.is_universal,
+        "prompt hint audit"
+    );
+
+    if !audit.is_universal {
+        tracing::warn!(
+            target: "script_kit::prompt_chrome",
+            event = "prompt_hint_contract_violation",
+            surface = audit.surface,
+            expected = "↵ Run | ⌘K Actions | Tab AI",
+            actual = %audit.hints_joined,
+            "prompt footer diverged from universal three-key contract"
+        );
+    }
+}
+
 /// Machine-readable contract describing how a prompt surface resolves its chrome.
 ///
 /// Emitted via [`emit_prompt_chrome_audit`] at surface-activation time (not per-frame)
@@ -1104,9 +1186,15 @@ mod prompt_layout_shell_tests {
     }
 
     #[test]
-    fn clipboard_history_source_matches_minimal_contract() {
+    fn clipboard_history_source_matches_expanded_contract() {
         let source = include_str!("../render_builtins/clipboard_history_layout.rs");
+        // Still uses the shared chrome infrastructure (SectionDivider, hint strip, header padding)
         assert_minimal_surface_source(source, "clipboard_history_layout.rs", true);
+        // But now emits a hint audit with the universal three-key footer
+        assert!(
+            source.contains("emit_prompt_hint_audit("),
+            "clipboard history layout should emit a prompt hint audit"
+        );
     }
 
     #[test]
@@ -1131,13 +1219,7 @@ mod prompt_layout_shell_tests {
             true
         );
 
-        // clipboard_history: entry in clipboard.rs, layout in clipboard_history_layout.rs
-        assert_minimal_surface_file!(
-            "../render_builtins/clipboard_history_layout.rs",
-            "../render_builtins/clipboard.rs",
-            "clipboard_history",
-            true
-        );
+        // clipboard_history is now expanded (not minimal) — tested separately below.
 
         // file_search: entry in file_search.rs, layout in file_search_layout.rs
         assert_minimal_surface_file!(
@@ -1149,15 +1231,32 @@ mod prompt_layout_shell_tests {
     }
 
     #[test]
-    fn clipboard_history_emits_minimal_chrome_audit() {
+    fn clipboard_history_declares_expanded_layout_mode() {
         let source = include_str!("../render_builtins/clipboard.rs");
         assert!(
-            source.contains("PromptChromeAudit::minimal("),
-            "clipboard.rs should emit a minimal chrome audit"
+            source.contains("PromptChromeAudit::expanded(\"clipboard_history\""),
+            "clipboard_history should emit an expanded chrome audit"
         );
         assert!(
-            source.contains("\"clipboard_history\""),
-            "clipboard.rs should identify as clipboard_history surface"
+            !source.contains("PromptChromeAudit::minimal("),
+            "clipboard.rs should no longer emit a minimal chrome audit"
+        );
+    }
+
+    #[test]
+    fn clipboard_history_uses_universal_hint_strip() {
+        let layout_source = include_str!("../render_builtins/clipboard_history_layout.rs");
+        assert!(
+            layout_source.contains("universal_prompt_hints()"),
+            "clipboard history should use the canonical three-key footer"
+        );
+        assert!(
+            !layout_source.contains("SharedString::from(\"↵ Paste\")"),
+            "clipboard history should not hardcode a paste-specific footer label"
+        );
+        assert!(
+            !layout_source.contains("SharedString::from(\"Esc Back\")"),
+            "clipboard history should not hardcode an escape-only footer label"
         );
     }
 
@@ -1338,6 +1437,26 @@ mod prompt_layout_shell_tests {
             !source.contains("PromptHeader::new("),
             "path prompt entity should not use legacy PromptHeader"
         );
+    }
+
+    #[test]
+    fn universal_prompt_hints_match_only_the_canonical_three_key_set() {
+        let canonical = super::universal_prompt_hints();
+        assert!(super::is_universal_prompt_hints(&canonical));
+
+        let non_canonical = vec![
+            gpui::SharedString::from("↵ Paste"),
+            gpui::SharedString::from("⌘K Actions"),
+            gpui::SharedString::from("Esc Back"),
+        ];
+        assert!(!super::is_universal_prompt_hints(&non_canonical));
+
+        // Wrong length
+        let too_short = vec![gpui::SharedString::from("↵ Run")];
+        assert!(!super::is_universal_prompt_hints(&too_short));
+
+        // Empty
+        assert!(!super::is_universal_prompt_hints(&[]));
     }
 
     #[test]

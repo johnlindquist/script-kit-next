@@ -85,15 +85,10 @@
                             .child(preview_panel),
                     ),
             )
-            // Footer — minimal hint strip
+            // Footer — canonical three-key hint strip
             .child({
-                let mut hints = vec![
-                    gpui::SharedString::from("↵ Paste"),
-                ];
-                if has_entry {
-                    hints.push(gpui::SharedString::from("⌘K Actions"));
-                }
-                hints.push(gpui::SharedString::from("Esc Back"));
+                let hints = crate::components::universal_prompt_hints();
+                crate::components::emit_prompt_hint_audit("clipboard_history", &hints);
                 crate::components::render_simple_hint_strip(hints, None)
             })
             .into_any_element()
