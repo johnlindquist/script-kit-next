@@ -359,6 +359,64 @@ fn audit_receipt_append_only_preserves_prior_lines() {
     assert!(p2.save_offer_eligible);
 }
 
+// ── Source Contract Scans ──
+
+fn normalize_ws(source: &str) -> String {
+    source.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+#[test]
+fn prompt_handler_completes_tab_ai_on_real_script_lifecycle_events() {
+    let source =
+        std::fs::read_to_string("src/prompt_handler/mod.rs").expect("read prompt_handler");
+    let normalized = normalize_ws(&source);
+    assert!(
+        normalized.contains("self.complete_tab_ai_execution(true, None, cx);"),
+        "ScriptExit must finalize successful Tab AI runs"
+    );
+    assert!(
+        normalized.contains("self.complete_tab_ai_execution(false,"),
+        "ScriptError must finalize failed Tab AI runs"
+    );
+    assert!(
+        normalized.contains("if keep_tab_ai_save_offer_open {")
+            && normalized.contains("Tab AI save offer active after script exit - preserving main window"),
+        "ScriptExit must keep the window alive while the Tab AI save offer is open"
+    );
+}
+
+#[test]
+fn tab_ai_success_opens_real_save_offer_overlay() {
+    let source =
+        std::fs::read_to_string("src/app_impl/tab_ai_mode.rs").expect("read tab_ai_mode");
+    let normalized = normalize_ws(&source);
+    assert!(
+        normalized.contains("self.open_tab_ai_save_offer(record, cx);"),
+        "successful Tab AI runs should surface a real save offer UI"
+    );
+    assert!(
+        normalized.contains("pub(crate) fn render_tab_ai_save_offer_overlay")
+            && normalized.contains(".id(\"tab-ai-save-offer\")"),
+        "save offer overlay must be renderable and keyboard-driven"
+    );
+}
+
+#[test]
+fn render_impl_layers_tab_ai_save_offer_overlay_above_main_content() {
+    let source =
+        std::fs::read_to_string("src/main_sections/render_impl.rs").expect("read render_impl");
+    let normalized = normalize_ws(&source);
+    assert!(
+        normalized
+            .contains("let tab_ai_save_offer_overlay = self.render_tab_ai_save_offer_overlay(window, cx);"),
+        "render_impl must build the save-offer overlay"
+    );
+    assert!(
+        normalized.contains("tab_ai_save_offer_overlay"),
+        "render_impl must layer the save-offer overlay above main content"
+    );
+}
+
 // ── Public Export Coverage ──
 
 #[test]

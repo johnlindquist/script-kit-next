@@ -391,3 +391,15 @@ struct TabAiOverlayState {
     /// Error message from the last failed attempt, if any.
     error: Option<SharedString>,
 }
+
+/// State for the Tab AI save-offer overlay, shown after a successful ephemeral
+/// script execution when the user is prompted to persist the script.
+#[derive(Debug, Clone)]
+struct TabAiSaveOfferState {
+    /// The execution record for the completed Tab AI run.
+    record: crate::ai::TabAiExecutionRecord,
+    /// Derived filename stem (e.g. "force-quit-this-app").
+    filename_stem: String,
+    /// Error message if save attempt failed, shown inline in the overlay.
+    error: Option<SharedString>,
+}

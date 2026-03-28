@@ -749,11 +749,11 @@ impl ScriptListApp {
 
             if crate::ai::should_offer_save(&record) {
                 tracing::info!(
-                    event = "tab_ai_save_offer_ready",
+                    event = "tab_ai_save_offer_open",
                     slug = %record.slug,
                     prompt_type = %record.prompt_type,
                 );
-                // Phase 2: UI save prompt belongs here.
+                self.open_tab_ai_save_offer(record, cx);
             }
         } else {
             let message = error.unwrap_or_else(|| "Tab AI script failed".to_string());
@@ -763,6 +763,250 @@ impl ScriptListApp {
             );
             cx.notify();
         }
+    }
+    // ── Tab AI save-offer overlay ──────────────────────────────────────
+
+    fn tab_ai_default_save_name(record: &crate::ai::TabAiExecutionRecord) -> String {
+        let derived = super::prompt_ai::derive_script_name_from_description(&record.intent);
+        if derived == "ai-generated-script" || derived.is_empty() {
+            record.slug.clone()
+        } else {
+            derived
+        }
+    }
+
+    fn open_tab_ai_save_offer(
+        &mut self,
+        record: crate::ai::TabAiExecutionRecord,
+        cx: &mut Context<Self>,
+    ) {
+        let filename_stem = Self::tab_ai_default_save_name(&record);
+        tracing::info!(
+            event = "tab_ai_save_offer_state_set",
+            filename_stem = %filename_stem,
+        );
+        self.tab_ai_save_offer_state = Some(TabAiSaveOfferState {
+            record,
+            filename_stem,
+            error: None,
+        });
+        cx.notify();
+    }
+
+    fn close_tab_ai_save_offer(&mut self, cx: &mut Context<Self>) {
+        if self.tab_ai_save_offer_state.take().is_some() {
+            tracing::info!(event = "tab_ai_save_offer_dismissed");
+            self.pending_focus = Some(FocusTarget::MainFilter);
+            cx.notify();
+        }
+    }
+
+    fn save_tab_ai_script(&mut self, cx: &mut Context<Self>) {
+        let Some(state) = self.tab_ai_save_offer_state.clone() else {
+            return;
+        };
+
+        let created_path = match crate::script_creation::create_new_script(&state.filename_stem) {
+            Ok(path) => path,
+            Err(error) => {
+                tracing::warn!(
+                    event = "tab_ai_save_create_failed",
+                    error = %error,
+                    filename_stem = %state.filename_stem,
+                );
+                if let Some(save_state) = &mut self.tab_ai_save_offer_state {
+                    save_state.error =
+                        Some(format!("Failed to create script: {error}").into());
+                }
+                cx.notify();
+                return;
+            }
+        };
+
+        if let Err(error) = std::fs::write(&created_path, &state.record.generated_source) {
+            tracing::warn!(
+                event = "tab_ai_save_write_failed",
+                error = %error,
+                path = %created_path.display(),
+            );
+            if let Some(save_state) = &mut self.tab_ai_save_offer_state {
+                save_state.error =
+                    Some(format!("Failed to write script: {error}").into());
+            }
+            cx.notify();
+            return;
+        }
+
+        tracing::info!(
+            event = "tab_ai_script_saved",
+            filename_stem = %state.filename_stem,
+            path = %created_path.display(),
+        );
+
+        let created_file_path = if created_path.is_absolute() {
+            created_path.clone()
+        } else {
+            match std::env::current_dir() {
+                Ok(cwd) => cwd.join(&created_path),
+                Err(_) => created_path.clone(),
+            }
+        };
+
+        let editor_error =
+            crate::script_creation::open_in_editor(&created_path, &self.config).err();
+
+        self.tab_ai_save_offer_state = None;
+
+        match editor_error {
+            Some(error) => {
+                tracing::warn!(
+                    event = "tab_ai_save_editor_open_failed",
+                    error = %error,
+                );
+                self.toast_manager.push(
+                    components::toast::Toast::error(
+                        format!("Saved script but failed to open editor: {error}"),
+                        &self.theme,
+                    )
+                    .duration_ms(Some(TOAST_ERROR_MS)),
+                );
+            }
+            None => {
+                self.toast_manager.push(
+                    components::toast::Toast::success(
+                        format!(
+                            "Saved '{}' and opened in editor",
+                            state.filename_stem
+                        ),
+                        &self.theme,
+                    )
+                    .duration_ms(Some(TOAST_SUCCESS_MS)),
+                );
+            }
+        }
+
+        self.current_view = AppView::CreationFeedback {
+            path: created_file_path,
+        };
+        self.opened_from_main_menu = true;
+        cx.notify();
+    }
+
+    fn handle_tab_ai_save_offer_key_down(
+        &mut self,
+        event: &KeyDownEvent,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let key = event.keystroke.key.as_str();
+
+        if crate::ui_foundation::is_key_escape(key) {
+            self.close_tab_ai_save_offer(cx);
+            cx.stop_propagation();
+            return;
+        }
+
+        if crate::ui_foundation::is_key_enter(key) {
+            self.save_tab_ai_script(cx);
+            cx.stop_propagation();
+            return;
+        }
+
+        cx.propagate();
+    }
+
+    pub(crate) fn render_tab_ai_save_offer_overlay(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Option<gpui::AnyElement> {
+        let state = self.tab_ai_save_offer_state.as_ref()?;
+        let theme = crate::theme::get_cached_theme();
+
+        // Ensure the main focus handle is focused so key events route here
+        if !self.focus_handle.is_focused(window) {
+            window.focus(&self.focus_handle, cx);
+        }
+
+        let accent = gpui::rgb(theme.colors.accent.selected);
+        let bg_scrim = gpui::rgba(crate::ui_foundation::hex_to_rgba_with_opacity(
+            theme.colors.background.main,
+            0.85,
+        ));
+        let card_bg = gpui::rgba(crate::ui_foundation::hex_to_rgba_with_opacity(
+            theme.colors.background.main,
+            0.6,
+        ));
+        let text_primary = gpui::rgb(theme.colors.text.primary);
+        let text_hint = gpui::rgba(crate::ui_foundation::hex_to_rgba_with_opacity(
+            theme.colors.text.primary,
+            0.4,
+        ));
+        let error_color = gpui::rgb(theme.colors.ui.error);
+
+        let message: SharedString = format!("Save as {}.ts?", state.filename_stem).into();
+
+        let overlay = div()
+            .id("tab-ai-save-offer")
+            .absolute()
+            .inset_0()
+            .track_focus(&self.focus_handle)
+            .flex()
+            .flex_col()
+            .items_center()
+            .justify_center()
+            .bg(bg_scrim)
+            .child(
+                div()
+                    .id("tab-ai-save-card")
+                    .w(px(420.))
+                    .flex()
+                    .flex_col()
+                    .gap_1()
+                    .child(div().w_full().h(px(2.)).bg(accent))
+                    .child(
+                        div()
+                            .w_full()
+                            .px(px(12.))
+                            .py(px(8.))
+                            .bg(card_bg)
+                            .rounded_b(px(8.))
+                            .child(
+                                div()
+                                    .text_sm()
+                                    .font_family(crate::list_item::FONT_MONO)
+                                    .text_color(text_primary)
+                                    .child(message),
+                            ),
+                    )
+                    .when_some(state.error.clone(), |d, msg| {
+                        d.child(
+                            div()
+                                .w_full()
+                                .px(px(12.))
+                                .py(px(4.))
+                                .text_xs()
+                                .text_color(error_color)
+                                .child(msg),
+                        )
+                    })
+                    .child(
+                        div()
+                            .w_full()
+                            .px(px(12.))
+                            .py(px(4.))
+                            .flex()
+                            .flex_row()
+                            .justify_between()
+                            .text_xs()
+                            .text_color(text_hint)
+                            .child("↵ Save")
+                            .child("Esc Dismiss"),
+                    ),
+            )
+            .on_key_down(cx.listener(Self::handle_tab_ai_save_offer_key_down));
+
+        Some(overlay.into_any_element())
     }
 }
 
@@ -826,5 +1070,46 @@ mod tests {
         assert!(prompt.contains("slack"));
         assert!(prompt.contains("choice:0:slack"));
         assert!(prompt.contains("recent1"));
+    }
+
+    #[test]
+    fn tab_ai_default_save_name_falls_back_to_slug_when_intent_is_generic() {
+        let record = crate::ai::TabAiExecutionRecord::from_parts(
+            "".to_string(),
+            "import \"@scriptkit/sdk\";\nawait notify(\"ok\");\n".to_string(),
+            "/tmp/tab-ai.ts".to_string(),
+            "tab-ai-script".to_string(),
+            "ScriptList".to_string(),
+            None,
+            "vercel/test-model".to_string(),
+            "vercel".to_string(),
+            0,
+            "2026-03-28T00:00:00Z".to_string(),
+        );
+        assert_eq!(
+            ScriptListApp::tab_ai_default_save_name(&record),
+            "tab-ai-script"
+        );
+    }
+
+    #[test]
+    fn tab_ai_default_save_name_derives_from_intent_when_meaningful() {
+        let record = crate::ai::TabAiExecutionRecord::from_parts(
+            "force quit this app".to_string(),
+            "code".to_string(),
+            "/tmp/tab-ai.ts".to_string(),
+            "force-quit-this-app".to_string(),
+            "ScriptList".to_string(),
+            None,
+            "gpt-4.1".to_string(),
+            "vercel".to_string(),
+            0,
+            "2026-03-28T00:00:00Z".to_string(),
+        );
+        let name = ScriptListApp::tab_ai_default_save_name(&record);
+        assert!(
+            name.contains("force") && name.contains("quit"),
+            "Should derive from intent, got: {name}"
+        );
     }
 }
