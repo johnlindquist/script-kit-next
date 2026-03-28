@@ -8,6 +8,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::ai::GeneratedScriptReceipt;
 use crate::builtins::BuiltInEntry;
+#[cfg(target_os = "macos")]
 use crate::menu_bar::current_app_commands::{
     build_replay_current_app_recipe_receipt, CurrentAppCommandRecipe, FrontmostMenuSnapshot,
     ReplayCurrentAppRecipeReceipt,

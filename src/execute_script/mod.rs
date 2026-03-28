@@ -434,10 +434,18 @@ impl ScriptListApp {
                     // Writer thread - handles sending responses to script
                     std::thread::spawn(move || {
                         use std::io::Write;
-                        use std::os::unix::io::AsRawFd;
 
-                        // Log the stdin file descriptor for debugging
-                        let fd = stdin.as_raw_fd();
+                        // Log the stdin file descriptor/handle for debugging
+                        #[cfg(unix)]
+                        let fd: i32 = {
+                            use std::os::unix::io::AsRawFd;
+                            stdin.as_raw_fd()
+                        };
+                        #[cfg(not(unix))]
+                        let fd: i32 = {
+                            use std::os::windows::io::AsRawHandle;
+                            stdin.as_raw_handle() as i32
+                        };
                         tracing::info!(category = "EXEC", fd, "Writer thread started");
 
                         // Check if fd is a valid pipe
@@ -478,7 +486,9 @@ impl ScriptListApp {
                                     let bytes = format!("{}\n", json);
                                     let bytes_len = bytes.len();
 
-                                    // Check fd validity before write
+                                    // Check fd validity before write (Unix only)
+                                    #[cfg(unix)]
+                                    {
                                     let fcntl_result = unsafe { libc::fcntl(fd, libc::F_GETFD) };
                                     tracing::info!(
                                         category = "EXEC",
@@ -486,6 +496,7 @@ impl ScriptListApp {
                                         fcntl_result,
                                         "Pre-write fcntl(F_GETFD) completed"
                                     );
+                                    }
 
                                     match stdin.write_all(bytes.as_bytes()) {
                                         Ok(()) => {

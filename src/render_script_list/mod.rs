@@ -617,17 +617,33 @@ impl ScriptListApp {
                   event: &gpui::KeyDownEvent,
                   window: &mut Window,
                   cx: &mut Context<Self>| {
-                if event.keystroke.modifiers.platform {
-                    tracing::debug!(
-                        event = "script_list.key_down",
-                        key = %event.keystroke.key,
-                        cmd = true,
-                        shift = event.keystroke.modifiers.shift,
-                        mini_mode = (this.main_window_mode == MainWindowMode::Mini),
-                        "script_list key_down: cmd+{}",
-                        event.keystroke.key,
-                    );
+                // Log ALL key events for debugging (controlled by SCRIPT_KIT_AI_LOG)
+                tracing::info!(
+                    event = "script_list.key_down",
+                    key = %event.keystroke.key,
+                    platform = event.keystroke.modifiers.platform,
+                    control = event.keystroke.modifiers.control,
+                    shift = event.keystroke.modifiers.shift,
+                    alt = event.keystroke.modifiers.alt,
+                    "KEY: {} (platform={}, ctrl={}, shift={}, alt={})",
+                    event.keystroke.key,
+                    event.keystroke.modifiers.platform,
+                    event.keystroke.modifiers.control,
+                    event.keystroke.modifiers.shift,
+                    event.keystroke.modifiers.alt,
+                );
+
+                // Ctrl+W on Windows/Linux should close the window (same as Cmd+W on macOS)
+                #[cfg(not(target_os = "macos"))]
+                if event.keystroke.modifiers.control
+                    && event.keystroke.key.as_str().eq_ignore_ascii_case("w")
+                {
+                    tracing::info!(event = "script_list.ctrl_w", "Ctrl+W: closing window");
+                    this.close_and_reset_window(cx);
+                    cx.stop_propagation();
+                    return;
                 }
+
                 // Hide cursor while typing - automatically shows when mouse moves
                 this.hide_mouse_cursor(cx);
 
@@ -836,11 +852,20 @@ impl ScriptListApp {
                         }
                     }
                     key if sk_is_key_escape(key) => {
+                        tracing::info!(
+                            event = "script_list.escape",
+                            filter_empty = this.filter_text.is_empty(),
+                            "ESCAPE pressed"
+                        );
                         // Clear filter first if there's text, otherwise close window
                         if !this.filter_text.is_empty() {
                             this.clear_filter(window, cx);
                         } else {
                             // Filter is empty - close window
+                            tracing::info!(
+                                event = "script_list.close_and_reset",
+                                "Calling close_and_reset_window"
+                            );
                             this.close_and_reset_window(cx);
                         }
                     }
@@ -1025,8 +1050,8 @@ impl ScriptListApp {
             // Compact hint strip instead of footer — uses shared mini_layout tokens
             // and opacity-blended text for a softer, Raycast-like launcher feel.
             let hint_text_hex = self.theme.colors.text.primary;
-            let hint_opacity_byte = (crate::window_resize::mini_layout::HINT_TEXT_OPACITY * 255.0)
-                .round() as u32;
+            let hint_opacity_byte =
+                (crate::window_resize::mini_layout::HINT_TEXT_OPACITY * 255.0).round() as u32;
             let hint_text_rgba = (hint_text_hex << 8) | hint_opacity_byte;
             main_div = main_div.child(
                 div()
@@ -1148,10 +1173,9 @@ impl ScriptListApp {
                     script_kit_gpui::storybook::load_selected_story_variant(
                         "footer-layout-variations",
                     );
-                let (spec, resolution) =
-                    script_kit_gpui::storybook::resolve_footer_selection_spec(
-                        selected_footer_variant.as_deref(),
-                    );
+                let (spec, resolution) = script_kit_gpui::storybook::resolve_footer_selection_spec(
+                    selected_footer_variant.as_deref(),
+                );
                 let mut fc = PromptFooterConfig::new()
                     .primary_label(spec.primary_label)
                     .primary_shortcut(spec.primary_shortcut)
@@ -1170,10 +1194,8 @@ impl ScriptListApp {
                 if state_changed {
                     tracing::info!(
                         event = "script_list_footer_selection_resolved",
-                        requested_variant_id = resolution
-                            .requested_variant_id
-                            .as_deref()
-                            .unwrap_or(""),
+                        requested_variant_id =
+                            resolution.requested_variant_id.as_deref().unwrap_or(""),
                         resolved_variant_id = resolution.resolved_variant_id.as_str(),
                         fallback_used = resolution.fallback_used,
                         "Resolved footer variant for live script list"
@@ -1249,18 +1271,15 @@ impl ScriptListApp {
                     selected_footer_variant.as_deref(),
                 );
                 if let Some(left_slot_text) = spec.left_slot_text {
-                    footer =
-                        footer.left_slot(script_kit_gpui::storybook::render_footer_slot_text(
-                            left_slot_text,
-                            true,
-                        ));
+                    footer = footer.left_slot(script_kit_gpui::storybook::render_footer_slot_text(
+                        left_slot_text,
+                        true,
+                    ));
                 }
                 if let Some(right_slot_text) = spec.right_slot_text {
-                    footer =
-                        footer.right_slot(script_kit_gpui::storybook::render_footer_slot_text(
-                            right_slot_text,
-                            false,
-                        ));
+                    footer = footer.right_slot(
+                        script_kit_gpui::storybook::render_footer_slot_text(right_slot_text, false),
+                    );
                 }
             }
 

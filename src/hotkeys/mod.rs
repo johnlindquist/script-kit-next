@@ -246,6 +246,16 @@ fn parse_hotkey_config(hk: &config::HotkeyConfig) -> Option<(Modifiers, Code)> {
         "KeyX" => Code::KeyX,
         "KeyY" => Code::KeyY,
         "KeyZ" => Code::KeyZ,
+        "Quote" => Code::Quote,
+        "Backquote" => Code::Backquote,
+        "BracketLeft" => Code::BracketLeft,
+        "BracketRight" => Code::BracketRight,
+        "Backslash" => Code::Backslash,
+        "Comma" => Code::Comma,
+        "Period" => Code::Period,
+        "Slash" => Code::Slash,
+        "Minus" => Code::Minus,
+        "Equal" => Code::Equal,
         "F1" => Code::F1,
         "F2" => Code::F2,
         "F3" => Code::F3,
@@ -265,7 +275,7 @@ fn parse_hotkey_config(hk: &config::HotkeyConfig) -> Option<(Modifiers, Code)> {
     for modifier in &hk.modifiers {
         match modifier.as_str() {
             "meta" => modifiers |= Modifiers::META,
-            "ctrl" => modifiers |= Modifiers::CONTROL,
+            "ctrl" | "control" => modifiers |= Modifiers::CONTROL,
             "alt" => modifiers |= Modifiers::ALT,
             "shift" => modifiers |= Modifiers::SHIFT,
             _ => {}
@@ -1323,7 +1333,44 @@ pub(crate) fn start_hotkey_listener(config: config::Config) {
         let receiver = GlobalHotKeyEvent::receiver();
 
         loop {
-            if let Ok(event) = receiver.recv() {
+            // On Windows, global_hotkey uses RegisterHotKey which delivers WM_HOTKEY
+            // via the thread's message queue. We MUST pump messages for events to arrive.
+            #[cfg(target_os = "windows")]
+            {
+                #[repr(C)]
+                struct MSG {
+                    hwnd: *mut std::ffi::c_void,
+                    message: u32,
+                    w_param: usize,
+                    l_param: isize,
+                    time: u32,
+                    pt_x: i32,
+                    pt_y: i32,
+                }
+                extern "system" {
+                    fn PeekMessageW(
+                        msg: *mut MSG,
+                        hwnd: *mut std::ffi::c_void,
+                        filter_min: u32,
+                        filter_max: u32,
+                        remove: u32,
+                    ) -> i32;
+                    fn TranslateMessage(msg: *const MSG) -> i32;
+                    fn DispatchMessageW(msg: *const MSG) -> isize;
+                }
+                const PM_REMOVE: u32 = 0x0001;
+                unsafe {
+                    let mut msg = std::mem::zeroed::<MSG>();
+                    while PeekMessageW(&mut msg, std::ptr::null_mut(), 0, 0, PM_REMOVE) != 0 {
+                        TranslateMessage(&msg);
+                        DispatchMessageW(&msg);
+                    }
+                }
+            }
+
+            // Use try_recv + short sleep instead of blocking recv so the
+            // Windows message pump above runs regularly.
+            if let Ok(event) = receiver.try_recv() {
                 if event.state != HotKeyState::Pressed {
                     continue;
                 }
@@ -1439,6 +1486,9 @@ pub(crate) fn start_hotkey_listener(config: config::Config) {
                         logging::log("HOTKEY", &format!("Unknown hotkey event id={}", event.id));
                     }
                 }
+            } else {
+                // No event ready — sleep briefly to avoid busy-spinning
+                std::thread::sleep(std::time::Duration::from_millis(10));
             }
         }
     });

@@ -15,6 +15,9 @@
 //! On non-macOS platforms, these functions are no-ops, allowing cross-platform code
 //! to call them without conditional compilation at the call site.
 
+#[cfg(target_os = "windows")]
+use gpui::AppContext as _;
+
 mod display;
 
 include!("app_window_management.rs");

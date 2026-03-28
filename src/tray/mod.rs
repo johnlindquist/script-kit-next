@@ -5,6 +5,7 @@
 //! light/dark mode adaptation.
 
 // --- merged from part_000.rs ---
+#[cfg(target_os = "macos")]
 use crate::login_item;
 use anyhow::{bail, Context, Result};
 use tray_icon::{

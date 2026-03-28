@@ -37,6 +37,7 @@ pub(crate) mod context_contract;
 #[cfg(test)]
 mod context_contract_integration_tests;
 pub(crate) mod context_mentions;
+#[cfg(target_os = "macos")]
 pub(crate) mod current_app_automation_memory;
 pub mod message_parts;
 pub(crate) mod model;
@@ -53,6 +54,7 @@ pub(crate) mod window;
 
 // Re-export commonly used types
 pub use self::config::{DetectedKeys, ModelInfo, ProviderConfig};
+#[cfg(target_os = "macos")]
 pub use self::current_app_automation_memory::{
     current_app_automation_memory_index_path, read_current_app_automation_memory_index,
     resolve_current_app_automation_from_memory, upsert_current_app_automation_memory_from_receipt,

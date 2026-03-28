@@ -264,21 +264,33 @@ fn paste_worker_sender() -> &'static std::sync::mpsc::SyncSender<String> {
                     // Step 2: pre-paste delay (let the window hide).
                     std::thread::sleep(PRE_PASTE_DELAY);
 
-                    // Step 3: simulate Cmd+V.
-                    if let Err(e) = crate::selected_text::simulate_paste_with_cg() {
-                        tracing::error!(
+                    // Step 3: simulate Cmd+V (macOS) / Ctrl+V (Windows).
+                    #[cfg(target_os = "macos")]
+                    {
+                        if let Err(e) = crate::selected_text::simulate_paste_with_cg() {
+                            tracing::error!(
+                                action = "paste_sequential",
+                                event = "worker_paste_error",
+                                entry_id = %entry_id,
+                                error = %e,
+                                "Failed to simulate paste in paste worker"
+                            );
+                        } else {
+                            info!(
+                                action = "paste_sequential",
+                                event = "worker_paste_success",
+                                entry_id = %entry_id,
+                                "Paste simulation completed"
+                            );
+                        }
+                    }
+                    #[cfg(not(target_os = "macos"))]
+                    {
+                        tracing::warn!(
                             action = "paste_sequential",
-                            event = "worker_paste_error",
+                            event = "worker_paste_unsupported",
                             entry_id = %entry_id,
-                            error = %e,
-                            "Failed to simulate paste in paste worker"
-                        );
-                    } else {
-                        info!(
-                            action = "paste_sequential",
-                            event = "worker_paste_success",
-                            entry_id = %entry_id,
-                            "Paste simulation completed"
+                            "Paste simulation not yet implemented on this platform"
                         );
                     }
 

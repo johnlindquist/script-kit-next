@@ -1,6 +1,20 @@
-use crate::{FontId, Pixels, SharedString, TextRun, TextSystem, px};
+use crate::{px, FontId, Pixels, SharedString, TextRun, TextSystem};
 use collections::HashMap;
 use std::{borrow::Cow, iter, sync::Arc};
+
+/// Stable polyfill for `str::ceil_char_boundary` (nightly-only as of Rust 1.90).
+/// Returns the smallest index >= `index` that is a valid UTF-8 char boundary.
+fn stable_ceil_char_boundary(s: &str, index: usize) -> usize {
+    if index > s.len() {
+        s.len()
+    } else {
+        let upper_bound = Ord::min(index + 4, s.len());
+        s[index..upper_bound]
+            .char_indices()
+            .next()
+            .map_or(upper_bound, |(pos, _)| index + pos)
+    }
+}
 
 /// Determines whether to truncate text from the start or end.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -199,7 +213,7 @@ impl LineWrapper {
             let result = match truncate_from {
                 TruncateFrom::Start => SharedString::from(format!(
                     "{truncation_affix}{}",
-                    &line[line.ceil_char_boundary(truncate_ix + 1)..]
+                    &line[stable_ceil_char_boundary(&line, truncate_ix + 1)..]
                 )),
                 TruncateFrom::End => {
                     SharedString::from(format!("{}{truncation_affix}", &line[..truncate_ix]))
@@ -378,7 +392,7 @@ impl Boundary {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Font, FontFeatures, FontStyle, FontWeight, TestAppContext, TestDispatcher, font};
+    use crate::{font, Font, FontFeatures, FontStyle, FontWeight, TestAppContext, TestDispatcher};
     #[cfg(target_os = "macos")]
     use crate::{TextRun, WindowTextSystem, WrapBoundary};
 

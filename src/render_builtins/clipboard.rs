@@ -250,13 +250,20 @@ impl ScriptListApp {
                                     // Simulate Cmd+V paste after a brief delay to let focus return
                                     std::thread::spawn(|| {
                                         std::thread::sleep(std::time::Duration::from_millis(100));
-                                        if let Err(e) = selected_text::simulate_paste_with_cg() {
-                                            logging::log(
-                                                "ERROR",
-                                                &format!("Failed to simulate paste: {}", e),
-                                            );
-                                        } else {
-                                            logging::log("EXEC", "Simulated Cmd+V paste");
+                                        #[cfg(target_os = "macos")]
+                                        {
+                                            if let Err(e) = selected_text::simulate_paste_with_cg() {
+                                                logging::log(
+                                                    "ERROR",
+                                                    &format!("Failed to simulate paste: {}", e),
+                                                );
+                                            } else {
+                                                logging::log("EXEC", "Simulated Cmd+V paste");
+                                            }
+                                        }
+                                        #[cfg(not(target_os = "macos"))]
+                                        {
+                                            tracing::warn!("clipboard paste simulation is not yet supported on this platform");
                                         }
                                     });
                                 }
@@ -271,14 +278,12 @@ impl ScriptListApp {
             },
         );
 
-
         // Pre-compute colors - use theme for consistency with main menu
         let list_colors = ListItemColors::from_theme(&self.theme);
         let text_primary = self.theme.colors.text.primary;
         #[allow(unused_variables)]
         let text_muted = self.theme.colors.text.muted;
         let text_dimmed = self.theme.colors.text.dimmed;
-
 
         // Build virtualized list
         let list_element: AnyElement = if filtered_len == 0 {
@@ -406,7 +411,14 @@ impl ScriptListApp {
                                                                     100,
                                                                 ),
                                                             );
-                                                            let _ = selected_text::simulate_paste_with_cg();
+                                                            #[cfg(target_os = "macos")]
+                                                            {
+                                                                let _ = selected_text::simulate_paste_with_cg();
+                                                            }
+                                                            #[cfg(not(target_os = "macos"))]
+                                                            {
+                                                                tracing::warn!("clipboard paste simulation is not yet supported on this platform");
+                                                            }
                                                         });
                                                     }
                                                 }
@@ -572,7 +584,6 @@ impl ScriptListApp {
                 crate::components::render_simple_hint_strip(hints, None)
             })
             .into_any_element()
-
     }
 }
 

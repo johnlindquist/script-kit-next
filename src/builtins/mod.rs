@@ -16,7 +16,9 @@
 //!
 
 use crate::config::BuiltInConfig;
+#[cfg(target_os = "macos")]
 use crate::menu_bar::current_app_commands::GENERATE_SCRIPT_FROM_CURRENT_APP_LABEL;
+#[cfg(target_os = "macos")]
 use crate::menu_bar::MenuBarItem;
 use tracing::debug;
 // ============================================================================
@@ -946,6 +948,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             "🧠",
         ));
 
+        #[cfg(target_os = "macos")]
         entries.push(BuiltInEntry::new_with_icon(
             "builtin-generate-script-from-current-app",
             GENERATE_SCRIPT_FROM_CURRENT_APP_LABEL,
@@ -1368,6 +1371,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             "square-stop",
         ));
 
+        #[cfg(target_os = "macos")]
         entries.push(BuiltInEntry::new_with_icon(
             "builtin-do-in-current-app",
             crate::menu_bar::current_app_commands::DO_IN_CURRENT_APP_LABEL,
@@ -1401,6 +1405,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             "🎯",
         ));
 
+        #[cfg(target_os = "macos")]
         entries.push(BuiltInEntry::new_with_icon(
             "builtin-turn-this-into-a-command",
             crate::menu_bar::current_app_commands::TURN_THIS_INTO_A_COMMAND_LABEL,
@@ -1489,6 +1494,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             "🧪",
         ));
 
+        #[cfg(target_os = "macos")]
         entries.push(BuiltInEntry::new_with_icon(
             "builtin-verify-current-app-recipe",
             crate::menu_bar::current_app_commands::VERIFY_CURRENT_APP_RECIPE_LABEL,
@@ -1511,6 +1517,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             "🔬",
         ));
 
+        #[cfg(target_os = "macos")]
         entries.push(BuiltInEntry::new_with_icon(
             "builtin-replay-current-app-recipe",
             crate::menu_bar::current_app_commands::REPLAY_CURRENT_APP_RECIPE_LABEL,
@@ -1742,6 +1749,7 @@ pub fn filter_menu_bar_entries<'a>(
 ///
 /// # Returns
 /// A vector of `BuiltInEntry` items that can be added to search results
+#[cfg(target_os = "macos")]
 #[allow(dead_code)] // Will be used when menu bar integration is complete
 pub fn menu_bar_items_to_entries(
     items: &[MenuBarItem],
@@ -1764,6 +1772,7 @@ pub fn menu_bar_items_to_entries(
     entries
 }
 /// Recursively flatten a menu item and its children into entries
+#[cfg(target_os = "macos")]
 #[allow(dead_code)] // Will be used when menu bar integration is complete
 fn flatten_menu_item(
     item: &MenuBarItem,
@@ -1826,6 +1835,7 @@ fn flatten_menu_item(
     }
 }
 /// Get an appropriate icon for a top-level menu
+#[cfg(target_os = "macos")]
 #[allow(dead_code)] // Will be used when menu bar integration is complete
 fn get_menu_icon(top_menu: &str) -> &'static str {
     match top_menu.to_lowercase().as_str() {

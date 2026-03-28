@@ -46,14 +46,21 @@ impl ScriptListApp {
     fn spawn_clipboard_paste_simulation(&self) {
         std::thread::spawn(|| {
             std::thread::sleep(std::time::Duration::from_millis(100));
-            if let Err(e) = selected_text::simulate_paste_with_cg() {
-                tracing::error!(error = %e, "failed to simulate paste");
-            } else {
-                tracing::info!(
-                    category = "UI",
-                    event = "clipboard_paste_success",
-                    "simulated Cmd+V paste"
-                );
+            #[cfg(target_os = "macos")]
+            {
+                if let Err(e) = selected_text::simulate_paste_with_cg() {
+                    tracing::error!(error = %e, "failed to simulate paste");
+                } else {
+                    tracing::info!(
+                        category = "UI",
+                        event = "clipboard_paste_success",
+                        "simulated Cmd+V paste"
+                    );
+                }
+            }
+            #[cfg(not(target_os = "macos"))]
+            {
+                tracing::warn!("clipboard paste simulation is not yet supported on this platform");
             }
         });
     }

@@ -46,6 +46,7 @@ mod agents;
 mod ai;
 mod aliases;
 pub mod calculator;
+#[cfg(target_os = "macos")]
 mod camera;
 mod components;
 mod config;

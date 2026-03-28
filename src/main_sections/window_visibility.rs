@@ -236,6 +236,10 @@ fn show_main_window_helper(
                 });
 
                 logging::log("VISIBILITY", "Main window shown and focused");
+
+                // On Windows, capture the HWND so we can show/hide via Win32 later.
+                #[cfg(target_os = "windows")]
+                platform::win32_capture_main_hwnd_from_gpui(cx);
             });
         }
     })
@@ -325,6 +329,13 @@ fn hide_main_window_helper(app_entity: Entity<ScriptListApp>, cx: &mut App) {
     } else {
         logging::log("VISIBILITY", "Using cx.hide() - no secondary windows");
         cx.hide();
+    }
+
+    // On Windows, cx.hide() is a no-op in GPUI. Use Win32 ShowWindow(SW_HIDE).
+    #[cfg(target_os = "windows")]
+    {
+        logging::log("VISIBILITY", "Windows: hiding via win32_hide_app_window");
+        platform::win32_hide_app_window();
     }
 
     logging::log("VISIBILITY", "Main window hidden");

@@ -69,7 +69,7 @@ impl Render for WebcamPrompt {
                 div()
                     .text_sm()
                     .text_color(rgb(colors.text_secondary))
-                    .child(self.state_label()),
+                    .child(self.state_label().to_string()),
             )
     }
 }
