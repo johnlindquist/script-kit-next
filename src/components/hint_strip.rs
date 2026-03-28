@@ -5,7 +5,6 @@ use gpui::{
     Window,
 };
 
-use crate::components::SectionDivider;
 use crate::list_item::FONT_MONO;
 use crate::ui::chrome::{
     alpha_from_opacity, HINT_STRIP_HEIGHT, HINT_STRIP_PADDING_X, HINT_STRIP_PADDING_Y,
@@ -72,46 +71,38 @@ impl RenderOnce for HintStrip {
     fn render(self, _window: &mut Window, _cx: &mut App) -> impl IntoElement {
         let theme = crate::theme::get_cached_theme();
         let text_rgba = text_color_with_opacity(theme.colors.text.primary, HINT_TEXT_OPACITY);
-        let joined_hints = if self.hints.is_empty() {
-            SharedString::from("")
+        let joined_hints: SharedString = if self.hints.is_empty() {
+            "".into()
         } else {
             self.hints
                 .into_iter()
                 .map(|hint| hint.to_string())
                 .collect::<Vec<_>>()
-                .join("  ·  ")
+                .join(" · ")
                 .into()
         };
 
-        div()
+        let mut row = div()
             .w_full()
+            .h(px(HINT_STRIP_HEIGHT))
+            .px(px(HINT_STRIP_PADDING_X))
+            .py(px(HINT_STRIP_PADDING_Y))
             .flex()
-            .flex_col()
-            .child(SectionDivider::new())
-            .child(
-                div()
-                    .w_full()
-                    .h(px(HINT_STRIP_HEIGHT))
-                    .px(px(HINT_STRIP_PADDING_X))
-                    .py(px(HINT_STRIP_PADDING_Y))
-                    .flex()
-                    .flex_row()
-                    .items_center()
-                    .gap(px(HINT_STRIP_CONTENT_GAP))
-                    .child(
-                        self.leading
-                            .unwrap_or_else(|| div().min_w(px(0.0)).into_any_element()),
-                    )
-                    .child(div().flex_1())
-                    .justify_end()
-                    .child(
-                        div()
-                            .text_xs()
-                            .font_family(FONT_MONO)
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(rgba(text_rgba))
-                            .child(joined_hints),
-                    ),
-            )
+            .flex_row()
+            .items_center()
+            .gap(px(HINT_STRIP_CONTENT_GAP));
+
+        if let Some(leading) = self.leading {
+            row = row.child(leading);
+        }
+
+        row.child(div().flex_1()).child(
+            div()
+                .text_xs()
+                .font_family(FONT_MONO)
+                .font_weight(FontWeight::MEDIUM)
+                .text_color(rgba(text_rgba))
+                .child(joined_hints),
+        )
     }
 }

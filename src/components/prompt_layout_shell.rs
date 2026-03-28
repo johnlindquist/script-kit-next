@@ -348,7 +348,6 @@ pub(crate) fn render_minimal_list_prompt_scaffold(
                 .items_center()
                 .child(header),
         )
-        .child(crate::components::SectionDivider::new())
         .child(
             div()
                 .flex()
@@ -447,7 +446,7 @@ impl PromptChromeAudit {
         Self {
             surface,
             input_mode: "bare",
-            divider_mode: "section_divider",
+            divider_mode: "none",
             footer_mode: "hint_strip",
             header_padding_x: crate::ui::chrome::HEADER_PADDING_X as u16,
             header_padding_y: crate::ui::chrome::HEADER_PADDING_Y as u16,
@@ -723,7 +722,7 @@ mod prompt_layout_shell_tests {
         let audit = super::PromptChromeAudit::minimal("test_surface", 3, true, true);
         assert_eq!(audit.surface, "test_surface");
         assert_eq!(audit.input_mode, "bare");
-        assert_eq!(audit.divider_mode, "section_divider");
+        assert_eq!(audit.divider_mode, "none");
         assert_eq!(audit.footer_mode, "hint_strip");
         assert_eq!(
             audit.header_padding_x,
@@ -1014,10 +1013,6 @@ mod prompt_layout_shell_tests {
         assert!(
             fn_body.contains("HEADER_PADDING_Y"),
             "shared list scaffold must own HEADER_PADDING_Y"
-        );
-        assert!(
-            fn_body.contains("SectionDivider::new()"),
-            "shared list scaffold must own the divider"
         );
         assert!(
             fn_body.contains("render_simple_hint_strip("),
