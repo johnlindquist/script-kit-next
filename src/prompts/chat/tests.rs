@@ -89,8 +89,9 @@ mod tests {
             "Render core should use shared horizontal padding constants"
         );
         assert!(
-            CHAT_RENDER_CORE_SOURCE.contains("HINT_STRIP_HEIGHT"),
-            "Mini footer should use shared chrome hint strip tokens"
+            CHAT_RENDER_CORE_SOURCE.contains("render_simple_hint_strip(")
+                && CHAT_RENDER_CORE_SOURCE.contains("universal_prompt_hints()"),
+            "Mini footer should delegate to the shared universal hint strip"
         );
         assert!(
             CHAT_RENDER_INPUT_SOURCE.contains("CHAT_LAYOUT_INPUT_BG_FOCUSED_ALPHA")

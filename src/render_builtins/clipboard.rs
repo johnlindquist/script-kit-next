@@ -467,7 +467,6 @@ impl ScriptListApp {
         let selected_entry = filtered_entries
             .get(selected_index)
             .map(|(_, e)| (*e).clone());
-        let has_entry = selected_entry.is_some();
         let preview_panel = self.render_clipboard_preview_panel(
             &selected_entry,
             &image_cache,
@@ -557,13 +556,10 @@ impl ScriptListApp {
                             .child(preview_panel),
                     ),
             )
-            // Footer — minimal hint strip
+            // Footer — canonical three-key hint strip
             .child({
-                let mut hints = vec![gpui::SharedString::from("↵ Paste")];
-                if has_entry {
-                    hints.push(gpui::SharedString::from("⌘K Actions"));
-                }
-                hints.push(gpui::SharedString::from("Esc Back"));
+                let hints = crate::components::universal_prompt_hints();
+                crate::components::emit_prompt_hint_audit("clipboard_history", &hints);
                 crate::components::render_simple_hint_strip(hints, None)
             })
             .into_any_element()
@@ -574,8 +570,12 @@ impl ScriptListApp {
 #[cfg(test)]
 mod clipboard_chrome_audit {
     #[test]
-    fn clipboard_history_uses_minimal_chrome_footer() {
+    fn clipboard_history_uses_universal_chrome_footer() {
         let source = include_str!("clipboard.rs");
+        assert!(
+            source.contains("universal_prompt_hints()"),
+            "clipboard should use the canonical three-key footer"
+        );
         assert!(
             source.contains("render_simple_hint_strip("),
             "clipboard should use render_simple_hint_strip"
@@ -597,6 +597,14 @@ mod clipboard_chrome_audit {
         assert!(
             source.contains("HEADER_PADDING_Y"),
             "clipboard should use chrome token HEADER_PADDING_Y"
+        );
+        assert!(
+            source.contains("PromptChromeAudit::expanded(\"clipboard_history\""),
+            "clipboard should declare expanded layout mode"
+        );
+        assert!(
+            !source.contains("SharedString::from(\"↵ Paste\")"),
+            "clipboard should not hardcode paste-specific footer"
         );
     }
 }

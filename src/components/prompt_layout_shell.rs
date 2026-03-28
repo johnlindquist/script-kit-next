@@ -1460,6 +1460,54 @@ mod prompt_layout_shell_tests {
     }
 
     #[test]
+    fn select_prompt_uses_universal_hint_strip() {
+        let source = include_str!("../prompts/select/render.rs");
+        let render_fn_end = source.find("#[cfg(test)]").unwrap_or(source.len());
+        let render_code = &source[..render_fn_end];
+
+        assert!(
+            render_code.contains("universal_prompt_hints()"),
+            "select prompt should use the canonical three-key footer"
+        );
+        assert!(
+            render_code.contains("emit_prompt_hint_audit("),
+            "select prompt should emit a prompt hint audit"
+        );
+        assert!(
+            !render_code.contains("SharedString::from(\"↵ Select\")"),
+            "select prompt should not hardcode a select-specific footer label"
+        );
+        assert!(
+            !render_code.contains("SharedString::from(\"⌘Space Toggle\")"),
+            "select prompt should not hardcode a toggle-specific footer label"
+        );
+        assert!(
+            !render_code.contains("SharedString::from(\"Esc Back\")"),
+            "select prompt should not hardcode an escape-only footer label"
+        );
+    }
+
+    #[test]
+    fn mini_chat_uses_universal_hint_strip() {
+        let source = include_str!("../prompts/chat/render_core.rs");
+        let render_code = &source[..source.find("#[cfg(test)]").unwrap_or(source.len())];
+
+        assert!(
+            render_code.contains("render_simple_hint_strip(")
+                && render_code.contains("universal_prompt_hints()"),
+            "mini chat should use the shared universal hint strip"
+        );
+        assert!(
+            render_code.contains("emit_prompt_hint_audit(\"prompts::chat::mini\""),
+            "mini chat should emit a prompt hint audit for prompts::chat::mini"
+        );
+        assert!(
+            !render_code.contains("\"↵ Send  ·  ⌘K Actions  ·  Esc Back\""),
+            "mini chat should not hardcode a send/back footer string"
+        );
+    }
+
+    #[test]
     fn path_prompt_outer_wrapper_uses_shared_shell_container() {
         let source = include_str!("../render_prompts/path.rs");
         let render_fn_end = source.find("#[cfg(test)]").unwrap_or(source.len());

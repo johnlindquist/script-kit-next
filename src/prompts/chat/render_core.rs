@@ -3,10 +3,7 @@ use crate::components::prompt_footer::{
     PromptFooter, PromptFooterConfig, PROMPT_FOOTER_BUTTON_ACTIVE_OPACITY,
     PROMPT_FOOTER_BUTTON_HOVER_OPACITY,
 };
-use crate::ui::chrome::{
-    alpha_from_opacity, DIVIDER_HEIGHT, DIVIDER_OPACITY, HINT_STRIP_HEIGHT, HINT_STRIP_PADDING_X,
-    HINT_STRIP_PADDING_Y, HINT_TEXT_OPACITY,
-};
+use crate::ui::chrome::{alpha_from_opacity, DIVIDER_HEIGHT, DIVIDER_OPACITY};
 
 #[derive(Clone, Copy)]
 enum ChatFooterButtonAction {
@@ -82,37 +79,9 @@ impl ChatPrompt {
     }
 
     fn render_mini_hint_strip(&self) -> impl IntoElement {
-        let hint_text_hex = self.theme.colors.text.primary;
-        let hint_opacity_byte = alpha_from_opacity(HINT_TEXT_OPACITY);
-        let hint_text_rgba = (hint_text_hex << 8) | hint_opacity_byte;
-
-        let divider_rgba = (self.theme.colors.ui.border << 8) | alpha_from_opacity(DIVIDER_OPACITY);
-
-        let hint_text = if self.is_streaming() {
-            "Esc Stop  ·  ⌘K Actions"
-        } else if self.script_generation_mode {
-            "↵ Send  ·  ⌘K Actions  ·  Esc Back  ·  ⌘↵ Save+Run"
-        } else {
-            "↵ Send  ·  ⌘K Actions  ·  Esc Back"
-        };
-
-        div()
-            .w_full()
-            .h(px(HINT_STRIP_HEIGHT))
-            .px(px(HINT_STRIP_PADDING_X))
-            .py(px(HINT_STRIP_PADDING_Y))
-            .flex()
-            .flex_row()
-            .items_center()
-            .justify_end()
-            .border_t(px(DIVIDER_HEIGHT))
-            .border_color(rgba(divider_rgba))
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(rgba(hint_text_rgba))
-                    .child(hint_text),
-            )
+        let hints = crate::components::universal_prompt_hints();
+        crate::components::emit_prompt_hint_audit("prompts::chat::mini", &hints);
+        crate::components::render_simple_hint_strip(hints, None)
     }
 
     fn render_rich_footer(&self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -701,20 +670,24 @@ mod chat_footer_button_click_handler_tests {
             "Chat footer should branch on mini_mode"
         );
         assert!(
-            CHAT_RENDER_CORE_SOURCE.contains("HINT_STRIP_HEIGHT"),
-            "Mini hint strip should use shared chrome tokens"
+            CHAT_RENDER_CORE_SOURCE.contains("universal_prompt_hints()"),
+            "Mini hint strip should use the shared universal prompt hints"
+        );
+        assert!(
+            CHAT_RENDER_CORE_SOURCE.contains("render_simple_hint_strip("),
+            "Mini hint strip should delegate to the shared hint strip renderer"
+        );
+        assert!(
+            CHAT_RENDER_CORE_SOURCE.contains("emit_prompt_hint_audit(\"prompts::chat::mini\""),
+            "Mini hint strip should emit a prompt hint audit"
         );
         assert!(
             CHAT_RENDER_CORE_SOURCE.contains("PromptFooter::new"),
             "Rich footer should use PromptFooter component"
         );
         assert!(
-            CHAT_RENDER_CORE_SOURCE.contains("Esc Stop"),
-            "Mini hint strip should show streaming shortcuts"
-        );
-        assert!(
-            CHAT_RENDER_CORE_SOURCE.contains("↵ Send  ·  ⌘K Actions  ·  Esc Back"),
-            "Mini hint strip should show default chat shortcuts"
+            !CHAT_RENDER_CORE_SOURCE.contains("\"↵ Send  ·  ⌘K Actions  ·  Esc Back\""),
+            "Mini hint strip should not hardcode footer strings"
         );
     }
 }
