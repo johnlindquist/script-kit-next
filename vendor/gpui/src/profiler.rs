@@ -74,8 +74,9 @@ pub struct SerializedLocation {
 
 impl From<&core::panic::Location<'static>> for SerializedLocation {
     fn from(value: &core::panic::Location<'static>) -> Self {
+        let file_str: String = value.file().to_string();
         SerializedLocation {
-            file: value.file().into(),
+            file: file_str.into(),
             line: value.line(),
             column: value.column(),
         }

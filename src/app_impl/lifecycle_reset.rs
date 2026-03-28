@@ -182,7 +182,16 @@ impl ScriptListApp {
             platform::defer_hide_main_window(cx);
         } else {
             logging::log("VISIBILITY", "Using cx.hide() - no secondary windows");
+            // cx.hide() is a no-op on Windows, so we also call platform-specific hide
             cx.hide();
+        }
+
+        // On Windows, cx.hide() and defer_hide_main_window are both no-ops in GPUI.
+        // Use Win32 ShowWindow(SW_HIDE) via our centralized helper.
+        #[cfg(target_os = "windows")]
+        {
+            logging::log("VISIBILITY", "Windows: hiding via win32_hide_app_window");
+            platform::win32_hide_app_window();
         }
         logging::log("VISIBILITY", "=== Window closed ===");
     }

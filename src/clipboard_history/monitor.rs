@@ -234,7 +234,10 @@ fn capture_clipboard_content(
         return;
     }
 
+    #[cfg(target_os = "macos")]
     let source_bundle_id = crate::frontmost_app_tracker::get_last_real_app_bundle_id();
+    #[cfg(not(target_os = "macos"))]
+    let source_bundle_id: Option<String> = None;
     if should_skip_clipboard_capture(source_bundle_id.as_deref()) {
         debug!(
             source_bundle_id = %source_bundle_id.as_deref().unwrap_or("unknown"),

@@ -156,7 +156,7 @@ impl ScriptListApp {
         };
         #[cfg(not(target_os = "macos"))]
         let (menu_bar_items, menu_bar_bundle_id): (
-            Vec<menu_bar::MenuBarItem>,
+            Vec<scripts::MenuBarItem>,
             Option<String>,
         ) = (Vec::new(), None);
 
@@ -359,7 +359,6 @@ impl ScriptListApp {
         self.preview_cache_path = None;
         self.preview_cache_lines.clear();
     }
-
 }
 
 #[cfg(test)]
@@ -386,8 +385,11 @@ mod tests {
         ];
         let flat_results = Vec::new();
 
-        let (grouped, flat) =
-            prepend_inline_calculator_group(grouped_items, flat_results, Some(&calculator_result()));
+        let (grouped, flat) = prepend_inline_calculator_group(
+            grouped_items,
+            flat_results,
+            Some(&calculator_result()),
+        );
 
         assert!(matches!(
             grouped.first(),
@@ -398,7 +400,10 @@ mod tests {
             grouped.get(1),
             Some(GroupedListItem::Item(INLINE_CALCULATOR_RESULT_INDEX))
         ));
-        assert!(matches!(grouped.get(2), Some(GroupedListItem::SectionHeader(_, _))));
+        assert!(matches!(
+            grouped.get(2),
+            Some(GroupedListItem::SectionHeader(_, _))
+        ));
         assert!(matches!(grouped.get(3), Some(GroupedListItem::Item(0))));
         assert!(matches!(grouped.get(4), Some(GroupedListItem::Item(1))));
         assert!(flat.is_empty());

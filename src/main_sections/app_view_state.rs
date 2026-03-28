@@ -191,9 +191,7 @@ enum AppView {
     },
     /// Showing settings hub with configuration panels
     /// Lists categories: API Keys, Theme, Window Positions, Feature Toggles, Hotkeys
-    SettingsView {
-        selected_index: usize,
-    },
+    SettingsView { selected_index: usize },
     /// Browsing favorites with search/filter
     /// Supports Enter to run, D to remove, U/J to reorder, Esc to go back
     FavoritesBrowseView {
@@ -202,6 +200,7 @@ enum AppView {
     },
     /// Showing menu bar commands from the frontmost application
     /// Data comes from cached_current_app_entries populated on open
+    #[allow(dead_code)]
     CurrentAppCommandsView {
         filter: String,
         selected_index: usize,
@@ -333,9 +332,7 @@ enum FileSearchThumbnailPreviewState {
     /// No thumbnail should be rendered (no selection or non-image selection).
     Idle,
     /// Thumbnail load is in-flight for this path.
-    Loading {
-        path: String,
-    },
+    Loading { path: String },
     /// Thumbnail loaded successfully with decoded image and dimensions.
     Ready {
         path: String,
@@ -344,10 +341,7 @@ enum FileSearchThumbnailPreviewState {
         height: u32,
     },
     /// Thumbnail not available for this path (size/format/decode constraints).
-    Unavailable {
-        path: String,
-        message: String,
-    },
+    Unavailable { path: String, message: String },
 }
 
 /// State for the inline shortcut recorder overlay.

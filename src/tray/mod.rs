@@ -5,6 +5,7 @@
 //! light/dark mode adaptation.
 
 // --- merged from part_000.rs ---
+#[cfg(target_os = "macos")]
 use crate::login_item;
 use anyhow::{bail, Context, Result};
 use tray_icon::{
@@ -139,8 +140,9 @@ impl TrayMenuAction {
 /// Manages the system tray icon and menu
 pub struct TrayManager {
     #[allow(dead_code)]
-    tray_icon: TrayIcon,
+    tray_icon: Option<TrayIcon>,
     /// The "Launch at Login" checkbox, stored for updating its checked state
+    #[allow(dead_code)]
     launch_at_login_item: CheckMenuItem,
 }
 impl TrayManager {
@@ -155,7 +157,7 @@ impl TrayManager {
         let icon = Self::create_icon_from_svg()?;
         let (menu, launch_at_login_item) = Self::create_menu()?;
 
-        let mut builder = TrayIconBuilder::new()
+        let builder = TrayIconBuilder::new()
             .with_icon(icon)
             .with_tooltip("Script Kit")
             .with_menu(menu);
@@ -169,7 +171,7 @@ impl TrayManager {
         let tray_icon = builder.build().context("Failed to create tray icon")?;
 
         Ok(Self {
-            tray_icon,
+            tray_icon: Some(tray_icon),
             launch_at_login_item,
         })
     }
@@ -289,7 +291,10 @@ impl TrayManager {
             TrayMenuAction::LaunchAtLogin.id(),
             "Launch at Login",
             true, // enabled
+            #[cfg(target_os = "macos")]
             login_item::is_login_item_enabled(),
+            #[cfg(not(target_os = "macos"))]
+            false, // Windows: not supported yet
             None, // no accelerator
         );
 
@@ -380,8 +385,16 @@ impl TrayManager {
     pub fn handle_action(&self, action: TrayMenuAction) -> Result<()> {
         if action == TrayMenuAction::LaunchAtLogin {
             // Toggle login item then re-read state from OS (never trust "intended" state)
-            login_item::toggle_login_item().context("Failed to toggle login item")?;
-            self.refresh_launch_at_login_checkmark();
+            #[cfg(target_os = "macos")]
+            {
+                login_item::toggle_login_item().context("Failed to toggle login item")?;
+                self.refresh_launch_at_login_checkmark();
+            }
+            #[cfg(not(target_os = "macos"))]
+            {
+                // Windows: not supported yet
+                tracing::warn!("Launch at login not supported on Windows yet");
+            }
         }
         // Other actions have no side effects in TrayManager
         Ok(())
@@ -393,9 +406,18 @@ impl TrayManager {
     /// - After toggling the login item
     /// - When the tray menu is about to be shown
     /// - On app startup
+    #[allow(dead_code)]
     pub fn refresh_launch_at_login_checkmark(&self) {
-        let enabled = login_item::is_login_item_enabled();
-        self.launch_at_login_item.set_checked(enabled);
+        #[cfg(target_os = "macos")]
+        {
+            let enabled = login_item::is_login_item_enabled();
+            self.launch_at_login_item.set_checked(enabled);
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            // Windows: not supported yet, keep unchecked
+            self.launch_at_login_item.set_checked(false);
+        }
     }
 }
 

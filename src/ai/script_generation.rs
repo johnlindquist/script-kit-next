@@ -7,7 +7,12 @@ use std::sync::Arc;
 
 use super::config::ModelInfo;
 use super::providers::{AiProvider, ProviderMessage, ProviderRegistry};
+#[cfg(target_os = "macos")]
 use crate::menu_bar::current_app_commands::CurrentAppCommandRecipe;
+
+/// Stub type for non-macOS platforms where menu bar integration is unavailable.
+#[cfg(not(target_os = "macos"))]
+pub type CurrentAppCommandRecipe = serde_json::Value;
 
 const AI_SCRIPT_DEFAULT_SLUG: &str = "ai-script";
 const AI_SCRIPT_MAX_SLUG_LEN: usize = 64;
@@ -363,7 +368,14 @@ pub fn extract_current_app_recipe_from_script(
         .ok()?;
     let json = String::from_utf8(bytes).ok()?;
 
-    crate::menu_bar::current_app_commands::parse_current_app_command_recipe_json(&json).ok()
+    #[cfg(target_os = "macos")]
+    {
+        crate::menu_bar::current_app_commands::parse_current_app_command_recipe_json(&json).ok()
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        serde_json::from_str(&json).ok()
+    }
 }
 
 pub fn generate_script_from_prompt(
@@ -461,6 +473,7 @@ pub fn generate_script_from_prompt_with_receipt(
 
     write_generated_script_receipt(&receipt_path, &receipt)?;
 
+    #[cfg(target_os = "macos")]
     if let Err(error) = crate::ai::upsert_current_app_automation_memory_from_receipt(&receipt) {
         tracing::warn!(
             target: "ai",
@@ -618,6 +631,7 @@ pub(crate) fn save_generated_script_from_response(
     };
     write_generated_script_receipt(&receipt_path, &receipt)?;
 
+    #[cfg(target_os = "macos")]
     if let Err(error) = crate::ai::upsert_current_app_automation_memory_from_receipt(&receipt) {
         tracing::warn!(
             target: "ai",

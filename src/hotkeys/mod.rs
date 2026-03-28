@@ -152,8 +152,58 @@ static HOTKEY_ROUTES: LazyLock<RwLock<HotkeyRoutes>> =
 fn routes() -> &'static RwLock<HotkeyRoutes> {
     &HOTKEY_ROUTES
 }
+
+// =============================================================================
+// Platform-specific hotkey manager wrapper
+// =============================================================================
+// On Windows, GlobalHotKeyManager contains *mut c_void which is not Send.
+// However, in practice it's only accessed from the main thread via Mutex.
+// We wrap it in a newtype and mark it Send to satisfy the type system.
+
+struct SendableHotkeyManager(GlobalHotKeyManager);
+
+// SAFETY: GlobalHotKeyManager is only accessed from the main thread in our application.
+// The Mutex ensures proper synchronization, and we never actually send the manager across threads.
+unsafe impl Send for SendableHotkeyManager {}
+
+impl SendableHotkeyManager {
+    fn new() -> Result<Self, HotkeyError> {
+        GlobalHotKeyManager::new().map(SendableHotkeyManager)
+    }
+
+    fn inner(&mut self) -> &mut GlobalHotKeyManager {
+        &mut self.0
+    }
+}
+
+// Sendable wrapper for ScriptHotkeyManager (also contains GlobalHotKeyManager)
+struct SendableScriptHotkeyManager(ScriptHotkeyManager);
+
+// SAFETY: Same as SendableHotkeyManager - only accessed from main thread via Mutex.
+unsafe impl Send for SendableScriptHotkeyManager {}
+
+impl SendableScriptHotkeyManager {
+    fn new(manager: GlobalHotKeyManager) -> Self {
+        SendableScriptHotkeyManager(ScriptHotkeyManager::new(manager))
+    }
+}
+
+impl std::ops::Deref for SendableScriptHotkeyManager {
+    type Target = ScriptHotkeyManager;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl std::ops::DerefMut for SendableScriptHotkeyManager {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
 /// The main GlobalHotKeyManager - stored globally so update_hotkeys can access it
-static MAIN_MANAGER: OnceLock<Mutex<GlobalHotKeyManager>> = OnceLock::new();
+static MAIN_MANAGER: OnceLock<Mutex<SendableHotkeyManager>> = OnceLock::new();
 /// Parse a HotkeyConfig into (Modifiers, Code)
 fn parse_hotkey_config(hk: &config::HotkeyConfig) -> Option<(Modifiers, Code)> {
     let code = match hk.key.as_str() {
@@ -196,6 +246,16 @@ fn parse_hotkey_config(hk: &config::HotkeyConfig) -> Option<(Modifiers, Code)> {
         "KeyX" => Code::KeyX,
         "KeyY" => Code::KeyY,
         "KeyZ" => Code::KeyZ,
+        "Quote" => Code::Quote,
+        "Backquote" => Code::Backquote,
+        "BracketLeft" => Code::BracketLeft,
+        "BracketRight" => Code::BracketRight,
+        "Backslash" => Code::Backslash,
+        "Comma" => Code::Comma,
+        "Period" => Code::Period,
+        "Slash" => Code::Slash,
+        "Minus" => Code::Minus,
+        "Equal" => Code::Equal,
         "F1" => Code::F1,
         "F2" => Code::F2,
         "F3" => Code::F3,
@@ -215,7 +275,7 @@ fn parse_hotkey_config(hk: &config::HotkeyConfig) -> Option<(Modifiers, Code)> {
     for modifier in &hk.modifiers {
         match modifier.as_str() {
             "meta" => modifiers |= Modifiers::META,
-            "ctrl" => modifiers |= Modifiers::CONTROL,
+            "ctrl" | "control" => modifiers |= Modifiers::CONTROL,
             "alt" => modifiers |= Modifiers::ALT,
             "shift" => modifiers |= Modifiers::SHIFT,
             _ => {}
@@ -326,7 +386,7 @@ fn rebind_hotkey_transactional(
 /// Uses transactional updates: register new before unregistering old
 #[tracing::instrument(skip_all)]
 pub fn update_hotkeys(cfg: &config::Config) {
-    let manager_guard = match MAIN_MANAGER.get() {
+    let mut manager_guard = match MAIN_MANAGER.get() {
         Some(m) => match m.lock() {
             Ok(g) => g,
             Err(e) => {
@@ -340,20 +400,22 @@ pub fn update_hotkeys(cfg: &config::Config) {
         }
     };
 
+    let manager = manager_guard.inner();
+
     // Update main hotkey
     let main_config = &cfg.hotkey;
     if let Some((mods, code)) = parse_hotkey_config(main_config) {
         let display = hotkey_config_to_display(main_config);
         let success =
-            rebind_hotkey_transactional(&manager_guard, HotkeyAction::Main, mods, code, &display);
+            rebind_hotkey_transactional(manager, HotkeyAction::Main, mods, code, &display);
         MAIN_HOTKEY_REGISTERED.store(success, Ordering::Relaxed);
     }
 
-    // Update notes hotkey (only if configured - no default)
+    // Update notes hotkey (only if configured)
     if let Some(notes_config) = cfg.get_notes_hotkey() {
         if let Some((mods, code)) = parse_hotkey_config(&notes_config) {
             let display = hotkey_config_to_display(&notes_config);
-            rebind_hotkey_transactional(&manager_guard, HotkeyAction::Notes, mods, code, &display);
+            rebind_hotkey_transactional(manager, HotkeyAction::Notes, mods, code, &display);
         }
     }
 
@@ -361,7 +423,7 @@ pub fn update_hotkeys(cfg: &config::Config) {
     if let Some(ai_config) = cfg.get_ai_hotkey() {
         if let Some((mods, code)) = parse_hotkey_config(&ai_config) {
             let display = hotkey_config_to_display(&ai_config);
-            rebind_hotkey_transactional(&manager_guard, HotkeyAction::Ai, mods, code, &display);
+            rebind_hotkey_transactional(manager, HotkeyAction::Ai, mods, code, &display);
         }
     }
 
@@ -369,13 +431,7 @@ pub fn update_hotkeys(cfg: &config::Config) {
     if let Some(logs_config) = cfg.get_logs_hotkey() {
         if let Some((mods, code)) = parse_hotkey_config(&logs_config) {
             let display = hotkey_config_to_display(&logs_config);
-            rebind_hotkey_transactional(
-                &manager_guard,
-                HotkeyAction::ToggleLogs,
-                mods,
-                code,
-                &display,
-            );
+            rebind_hotkey_transactional(manager, HotkeyAction::ToggleLogs, mods, code, &display);
         }
     }
 }
@@ -545,14 +601,14 @@ impl ScriptHotkeyManager {
 }
 /// Global singleton for the ScriptHotkeyManager.
 /// Initialized when start_hotkey_listener is called.
-static SCRIPT_HOTKEY_MANAGER: OnceLock<Mutex<ScriptHotkeyManager>> = OnceLock::new();
+static SCRIPT_HOTKEY_MANAGER: OnceLock<Mutex<SendableScriptHotkeyManager>> = OnceLock::new();
 /// Initialize the global ScriptHotkeyManager.
 /// Must be called from the main thread.
 /// Returns an error if already initialized.
 #[allow(dead_code)]
 pub fn init_script_hotkey_manager(manager: GlobalHotKeyManager) -> anyhow::Result<()> {
     SCRIPT_HOTKEY_MANAGER
-        .set(Mutex::new(ScriptHotkeyManager::new(manager)))
+        .set(Mutex::new(SendableScriptHotkeyManager::new(manager)))
         .map_err(|_| anyhow::anyhow!("ScriptHotkeyManager already initialized"))
 }
 /// Register a script hotkey dynamically.
@@ -634,7 +690,7 @@ pub fn register_dynamic_shortcut(
         .get()
         .ok_or_else(|| anyhow::anyhow!("Hotkey manager not initialized"))?;
 
-    let manager_guard = manager
+    let mut manager_guard = manager
         .lock()
         .map_err(|e| anyhow::anyhow!("Lock poisoned: {}", e))?;
 
@@ -657,6 +713,7 @@ pub fn register_dynamic_shortcut(
 
     // Register with OS
     manager_guard
+        .inner()
         .register(hotkey)
         .map_err(|e| anyhow::anyhow!("Failed to register hotkey '{}': {}", shortcut, e))?;
 
@@ -691,7 +748,7 @@ pub fn unregister_dynamic_shortcut(command_id: &str) -> anyhow::Result<()> {
         .get()
         .ok_or_else(|| anyhow::anyhow!("Hotkey manager not initialized"))?;
 
-    let manager_guard = manager
+    let mut manager_guard = manager
         .lock()
         .map_err(|e| anyhow::anyhow!("Lock poisoned: {}", e))?;
 
@@ -705,7 +762,7 @@ pub fn unregister_dynamic_shortcut(command_id: &str) -> anyhow::Result<()> {
     .ok_or_else(|| anyhow::anyhow!("No shortcut registered for {}", command_id))?;
 
     // Unregister from OS
-    if let Err(e) = manager_guard.unregister(hotkey) {
+    if let Err(e) = manager_guard.inner().unregister(hotkey) {
         logging::log(
             "HOTKEY",
             &format!(
@@ -1103,7 +1160,7 @@ fn register_script_hotkey_internal(
 #[allow(dead_code)]
 pub(crate) fn start_hotkey_listener(config: config::Config) {
     std::thread::spawn(move || {
-        let manager = match GlobalHotKeyManager::new() {
+        let manager = match SendableHotkeyManager::new() {
             Ok(m) => m,
             Err(e) => {
                 logging::log("HOTKEY", &format!("Failed to create hotkey manager: {}", e));
@@ -1116,35 +1173,31 @@ pub(crate) fn start_hotkey_listener(config: config::Config) {
             return;
         }
 
-        let manager_guard = match MAIN_MANAGER.get() {
-            Some(m) => match m.lock() {
-                Ok(g) => g,
-                Err(e) => {
-                    logging::log("HOTKEY", &format!("Failed to lock manager: {}", e));
-                    return;
-                }
-            },
-            None => {
-                tracing::error!("MAIN_MANAGER not initialized");
+        let mut manager_guard = match MAIN_MANAGER.get().unwrap().lock() {
+            Ok(g) => g,
+            Err(e) => {
+                logging::log("HOTKEY", &format!("Failed to lock manager: {}", e));
                 return;
             }
         };
 
+        let manager = manager_guard.inner();
+
         // Register main hotkey using unified registration
-        if register_builtin_hotkey(&manager_guard, HotkeyAction::Main, &config.hotkey).is_some() {
+        if register_builtin_hotkey(manager, HotkeyAction::Main, &config.hotkey).is_some() {
             MAIN_HOTKEY_REGISTERED.store(true, Ordering::Relaxed);
         }
 
         // Register notes hotkey (only if configured - no default)
         if let Some(notes_hotkey) = config.get_notes_hotkey() {
-            register_builtin_hotkey(&manager_guard, HotkeyAction::Notes, &notes_hotkey);
+            register_builtin_hotkey(manager, HotkeyAction::Notes, &notes_hotkey);
         }
         // Register AI and logs hotkeys
         if let Some(ai_hotkey) = config.get_ai_hotkey() {
-            register_builtin_hotkey(&manager_guard, HotkeyAction::Ai, &ai_hotkey);
+            register_builtin_hotkey(manager, HotkeyAction::Ai, &ai_hotkey);
         }
         if let Some(logs_hotkey) = config.get_logs_hotkey() {
-            register_builtin_hotkey(&manager_guard, HotkeyAction::ToggleLogs, &logs_hotkey);
+            register_builtin_hotkey(manager, HotkeyAction::ToggleLogs, &logs_hotkey);
         }
 
         // Register script shortcuts
@@ -1154,8 +1207,7 @@ pub(crate) fn start_hotkey_listener(config: config::Config) {
         for script in &all_scripts {
             if let Some(ref shortcut) = script.shortcut {
                 let path = script.path.to_string_lossy().to_string();
-                if register_script_hotkey_internal(&manager_guard, &path, shortcut, &script.name)
-                    .is_some()
+                if register_script_hotkey_internal(manager, &path, shortcut, &script.name).is_some()
                 {
                     script_count += 1;
                 }
@@ -1169,7 +1221,7 @@ pub(crate) fn start_hotkey_listener(config: config::Config) {
                     .file_path
                     .clone()
                     .unwrap_or_else(|| scriptlet.name.clone());
-                if register_script_hotkey_internal(&manager_guard, &path, shortcut, &scriptlet.name)
+                if register_script_hotkey_internal(manager, &path, shortcut, &scriptlet.name)
                     .is_some()
                 {
                     script_count += 1;
@@ -1193,7 +1245,7 @@ pub(crate) fn start_hotkey_listener(config: config::Config) {
                 if let Some(hotkey_config) = &cmd_config.shortcut {
                     let shortcut_str = hotkey_config.to_shortcut_string();
                     if register_script_hotkey_internal(
-                        &manager_guard,
+                        manager,
                         command_id,
                         &shortcut_str,
                         command_id,
@@ -1236,7 +1288,7 @@ pub(crate) fn start_hotkey_listener(config: config::Config) {
 
                     let shortcut_str = shortcut.to_canonical_string();
                     if register_script_hotkey_internal(
-                        &manager_guard,
+                        manager,
                         &command_id,
                         &shortcut_str,
                         &command_id,
@@ -1281,7 +1333,44 @@ pub(crate) fn start_hotkey_listener(config: config::Config) {
         let receiver = GlobalHotKeyEvent::receiver();
 
         loop {
-            if let Ok(event) = receiver.recv() {
+            // On Windows, global_hotkey uses RegisterHotKey which delivers WM_HOTKEY
+            // via the thread's message queue. We MUST pump messages for events to arrive.
+            #[cfg(target_os = "windows")]
+            {
+                #[repr(C)]
+                struct MSG {
+                    hwnd: *mut std::ffi::c_void,
+                    message: u32,
+                    w_param: usize,
+                    l_param: isize,
+                    time: u32,
+                    pt_x: i32,
+                    pt_y: i32,
+                }
+                extern "system" {
+                    fn PeekMessageW(
+                        msg: *mut MSG,
+                        hwnd: *mut std::ffi::c_void,
+                        filter_min: u32,
+                        filter_max: u32,
+                        remove: u32,
+                    ) -> i32;
+                    fn TranslateMessage(msg: *const MSG) -> i32;
+                    fn DispatchMessageW(msg: *const MSG) -> isize;
+                }
+                const PM_REMOVE: u32 = 0x0001;
+                unsafe {
+                    let mut msg = std::mem::zeroed::<MSG>();
+                    while PeekMessageW(&mut msg, std::ptr::null_mut(), 0, 0, PM_REMOVE) != 0 {
+                        TranslateMessage(&msg);
+                        DispatchMessageW(&msg);
+                    }
+                }
+            }
+
+            // Use try_recv + short sleep instead of blocking recv so the
+            // Windows message pump above runs regularly.
+            if let Ok(event) = receiver.try_recv() {
                 if event.state != HotKeyState::Pressed {
                     continue;
                 }
@@ -1397,6 +1486,9 @@ pub(crate) fn start_hotkey_listener(config: config::Config) {
                         logging::log("HOTKEY", &format!("Unknown hotkey event id={}", event.id));
                     }
                 }
+            } else {
+                // No event ready — sleep briefly to avoid busy-spinning
+                std::thread::sleep(std::time::Duration::from_millis(10));
             }
         }
     });
@@ -1589,11 +1681,11 @@ mod tests {
 
         /// Helper to create a manager for testing.
         /// Note: Registration will fail without an event loop, but we can test tracking logic.
-        fn create_test_manager() -> Option<ScriptHotkeyManager> {
+        fn create_test_manager() -> Option<SendableScriptHotkeyManager> {
             // GlobalHotKeyManager::new() may fail in test environment
             GlobalHotKeyManager::new()
                 .ok()
-                .map(ScriptHotkeyManager::new)
+                .map(SendableScriptHotkeyManager::new)
         }
 
         #[test]

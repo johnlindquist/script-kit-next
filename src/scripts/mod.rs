@@ -43,6 +43,10 @@ pub use self::types::{
     ScriptMatch, Scriptlet, ScriptletMatch, SearchResult, WindowMatch,
 };
 
+// Re-export MenuBarItem type (needed for cross-platform compatibility)
+#[cfg(not(target_os = "macos"))]
+pub use grouping::MenuBarItem;
+
 #[cfg(test)]
 pub(crate) use self::metadata::{
     extract_full_metadata, extract_script_metadata, parse_metadata_line,

@@ -11,7 +11,9 @@
 // --- merged from part_000.rs ---
 use crate::config::{self, LayoutConfig};
 use crate::list_item::LIST_ITEM_HEIGHT;
+#[cfg(target_os = "macos")]
 use crate::logging;
+#[cfg(target_os = "macos")]
 use crate::window_manager;
 #[cfg(target_os = "macos")]
 use cocoa::base::{id, nil};
@@ -22,7 +24,9 @@ use gpui::{px, Pixels};
 use objc::{class, msg_send, sel, sel_impl};
 use std::sync::OnceLock;
 use tracing::{debug, info, warn};
+#[allow(dead_code)]
 const RESIZE_MIN_DELTA_PX: f64 = 1.0;
+#[allow(dead_code)]
 const WINDOW_RESIZE_ANIMATE: bool = false;
 const MINI_MAIN_WINDOW_MIN_HEIGHT: f32 = 220.0;
 const MINI_MAIN_WINDOW_MAX_HEIGHT: f32 = 420.0;
@@ -221,12 +225,14 @@ const MINI_MAIN_WINDOW_WIDTH: f32 = 480.0;
 /// Width for full main window (standard launcher)
 const FULL_MAIN_WINDOW_WIDTH: f32 = 750.0;
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[allow(dead_code)]
 struct FrameGeometry {
     x: f64,
     y: f64,
     width: f64,
     height: f64,
 }
+#[allow(dead_code)]
 impl FrameGeometry {
     const fn new(x: f64, y: f64, width: f64, height: f64) -> Self {
         Self {
@@ -261,12 +267,15 @@ struct ScreenGeometry {
     visible_bounds: FrameGeometry,
     backing_scale: f64,
 }
+#[allow(dead_code)]
 fn sanitize_backing_scale(backing_scale: Option<f64>) -> Option<f64> {
     backing_scale.filter(|scale| scale.is_finite() && *scale > 0.0)
 }
+#[allow(dead_code)]
 fn round_to_backing_scale(value: f64, backing_scale: f64) -> f64 {
     (value * backing_scale).round() / backing_scale
 }
+#[allow(dead_code)]
 fn normalize_frame_to_backing_scale(frame: FrameGeometry, backing_scale: f64) -> FrameGeometry {
     FrameGeometry::new(
         round_to_backing_scale(frame.x, backing_scale),
@@ -275,10 +284,12 @@ fn normalize_frame_to_backing_scale(frame: FrameGeometry, backing_scale: f64) ->
         round_to_backing_scale(frame.height, backing_scale),
     )
 }
+#[allow(dead_code)]
 fn clamp_dimension_to_visible_bounds(size: f64, visible_size: f64, edge_margin: f64) -> f64 {
     let max_size = (visible_size - (edge_margin * 2.0)).max(1.0);
     size.min(max_size)
 }
+#[allow(dead_code)]
 fn clamp_axis_to_visible_bounds(
     origin: f64,
     size: f64,
@@ -295,6 +306,7 @@ fn clamp_axis_to_visible_bounds(
         min_origin
     }
 }
+#[allow(dead_code)]
 fn clamp_frame_to_visible_bounds(
     frame: FrameGeometry,
     visible_bounds: FrameGeometry,
@@ -320,6 +332,7 @@ fn clamp_frame_to_visible_bounds(
     );
     FrameGeometry::new(x, y, width, height)
 }
+#[allow(dead_code)]
 fn calculate_resized_frame(
     current_frame: FrameGeometry,
     target_height: f64,
@@ -334,6 +347,7 @@ fn calculate_resized_frame(
         backing_scale,
     )
 }
+#[allow(dead_code)]
 fn calculate_resized_frame_with_width(
     current_frame: FrameGeometry,
     target_height: f64,
@@ -371,6 +385,7 @@ fn calculate_resized_frame_with_width(
 
     resized
 }
+#[allow(dead_code)]
 fn should_apply_resize(current_height: f64, target_height: f64) -> bool {
     (current_height - target_height).abs() >= RESIZE_MIN_DELTA_PX
 }
@@ -739,7 +754,7 @@ pub fn get_first_window_height() -> Option<Pixels> {
 /// Non-macOS stub for resize function
 #[cfg(not(target_os = "macos"))]
 pub fn resize_first_window_to_height(_target_height: Pixels) {
-    logging::log("RESIZE", "Window resize is only supported on macOS");
+    tracing::debug!("Window resize is only supported on macOS");
 }
 /// Non-macOS stub for get_first_window_height
 #[allow(dead_code)]
@@ -822,7 +837,7 @@ pub fn resize_first_window_to_size(target_height: Pixels, target_width: Option<f
 /// Non-macOS stub for resize_first_window_to_size
 #[cfg(not(target_os = "macos"))]
 pub fn resize_first_window_to_size(_target_height: Pixels, _target_width: Option<f32>) {
-    logging::log("RESIZE", "Window resize is only supported on macOS");
+    tracing::debug!("Window resize is only supported on macOS");
 }
 
 // --- merged from part_001.rs ---

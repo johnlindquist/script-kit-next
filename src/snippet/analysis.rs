@@ -35,6 +35,7 @@ pub struct HybridSnippetPlan {
 
 impl HybridSnippetPlan {
     /// Whether this plan requires user interaction before pasting.
+    #[allow(dead_code)]
     pub fn needs_interaction(&self) -> bool {
         matches!(self.kind, HybridSnippetPlanKind::InteractiveTemplate)
     }

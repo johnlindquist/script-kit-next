@@ -137,6 +137,7 @@ pub unsafe fn configure_actions_popup_window(window: id, is_dark: bool) {
 }
 
 #[cfg(not(target_os = "macos"))]
+#[allow(dead_code)]
 pub fn configure_actions_popup_window(_window: *mut std::ffi::c_void, _is_dark: bool) {
     // No-op on non-macOS platforms
 }
@@ -153,6 +154,7 @@ pub unsafe fn configure_confirm_popup_window(window: id, is_dark: bool) {
 }
 
 #[cfg(not(target_os = "macos"))]
+#[allow(dead_code)]
 pub fn configure_confirm_popup_window(_window: *mut std::ffi::c_void, _is_dark: bool) {
     // No-op on non-macOS platforms
 }
@@ -195,6 +197,7 @@ pub unsafe fn configure_secondary_window_vibrancy(window: id, window_name: &str,
 }
 
 #[cfg(not(target_os = "macos"))]
+#[allow(dead_code)]
 pub fn configure_secondary_window_vibrancy(
     _window: *mut std::ffi::c_void,
     _window_name: &str,
@@ -291,6 +294,7 @@ pub fn update_all_secondary_windows_appearance(_is_dark: bool) {
 }
 
 // Re-export display/coordinate helpers from the unified display module.
+#[allow(unused_imports)]
 pub use self::display::{
     clamp_to_visible, display_for_point, flip_y, get_global_mouse_position, get_macos_displays,
     get_macos_visible_displays, primary_screen_height, VisibleDisplayBounds,

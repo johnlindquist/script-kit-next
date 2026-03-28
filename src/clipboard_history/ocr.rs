@@ -5,7 +5,7 @@
 //! runs OCR, and persists OCR text into SQLite.
 
 use anyhow::{anyhow, bail, Context, Result};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::mpsc::{self, Receiver, SyncSender, TrySendError};
 use std::sync::{Mutex, OnceLock};
 use std::thread::{self, JoinHandle};

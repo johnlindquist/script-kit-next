@@ -4,6 +4,11 @@ version = "0.1.0"
 edition = "2021"
 default-run = "script-kit-gpui"
 
+[lints.rust]
+unused_imports = "deny"
+unused_variables = "deny"
+dead_code = "deny"
+
 [lib]
 name = "script_kit_gpui"
 path = "src/lib.rs"
@@ -115,7 +120,6 @@ gpui-component = { path = "vendor/gpui-component/crates/ui", package = "gpui-com
 
 # Tree-sitter markdown grammar for Notes editor highlighting
 tree-sitter-md = "0.5.2"
-
 
 # Cron scheduling support
 croner = "3.0"                 # Parse and validate cron expressions

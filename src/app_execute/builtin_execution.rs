@@ -568,6 +568,7 @@ impl ScriptListApp {
         .detach();
     }
 
+    #[cfg(target_os = "macos")]
     fn spawn_send_selected_text_to_ai_after_hide(
         &mut self,
         trace_id: &str,
@@ -599,6 +600,15 @@ impl ScriptListApp {
             },
             cx,
         );
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    fn spawn_send_selected_text_to_ai_after_hide(
+        &mut self,
+        _trace_id: &str,
+        _cx: &mut Context<Self>,
+    ) {
+        tracing::warn!("spawn_send_selected_text_to_ai_after_hide is not supported on this platform");
     }
 
     fn spawn_send_browser_tab_to_ai_after_hide(
@@ -634,6 +644,7 @@ impl ScriptListApp {
         );
     }
 
+    #[cfg(target_os = "macos")]
     fn spawn_generate_script_from_current_app_after_hide(
         &mut self,
         trace_id: String,
@@ -754,11 +765,22 @@ impl ScriptListApp {
         .detach();
     }
 
+    #[cfg(not(target_os = "macos"))]
+    fn spawn_generate_script_from_current_app_after_hide(
+        &mut self,
+        _trace_id: String,
+        _query_override: Option<String>,
+        _cx: &mut Context<Self>,
+    ) {
+        tracing::warn!("spawn_generate_script_from_current_app_after_hide is not supported on this platform");
+    }
+
     /// Like `spawn_generate_script_from_current_app_after_hide`, but reuses an
     /// already-built recipe instead of recapturing live context after hide.
     ///
     /// This eliminates prompt drift: the prompt copied in the recipe is
     /// byte-for-byte the prompt sent to the AI generation path.
+    #[cfg(target_os = "macos")]
     fn spawn_generate_script_from_recipe_after_hide(
         &mut self,
         trace_id: String,
@@ -816,13 +838,17 @@ impl ScriptListApp {
         .detach();
     }
 
+    #[allow(dead_code)]
     fn system_action_feedback_message(
         &self,
         action_type: &builtins::SystemActionType,
     ) -> Option<String> {
         let dark_mode_enabled = if matches!(action_type, builtins::SystemActionType::ToggleDarkMode)
         {
-            system_actions::is_dark_mode().ok()
+            #[cfg(target_os = "macos")]
+            { system_actions::is_dark_mode().ok() }
+            #[cfg(not(target_os = "macos"))]
+            { None }
         } else {
             None
         };
@@ -912,7 +938,7 @@ impl ScriptListApp {
         dctx: &crate::action_helpers::DispatchContext,
         cx: &mut Context<Self>,
     ) -> crate::action_helpers::DispatchOutcome {
-        let start = std::time::Instant::now();
+        let _start = std::time::Instant::now();
 
         tracing::info!(
             category = "BUILTIN",
@@ -1015,6 +1041,7 @@ impl ScriptListApp {
 
     /// Shared result handler for system actions — shows HUD on success, Toast on error.
     /// Returns a `DispatchOutcome` for structured logging at the call boundary.
+    #[allow(dead_code)]
     fn handle_system_action_result(
         &mut self,
         result: Result<(), String>,
@@ -1330,6 +1357,7 @@ impl ScriptListApp {
     /// Same UX contract as [`open_builtin_filterable_view`] but pre-fills the
     /// filter input instead of clearing it. Used by `DoInCurrentApp` to open
     /// the command palette with the user's query already typed.
+    #[allow(dead_code)]
     fn open_builtin_filterable_view_with_filter(
         &mut self,
         view: AppView,
@@ -2208,6 +2236,20 @@ impl ScriptListApp {
                     "Executing permission command"
                 );
 
+                #[cfg(not(target_os = "macos"))]
+                {
+                    let _ = cmd_type;
+                    self.show_hud(
+                        "Permission management is only available on macOS".to_string(),
+                        Some(HUD_SHORT_MS),
+                        cx,
+                    );
+                    cx.notify();
+                    Self::builtin_success(dctx, "permissions_not_supported_on_platform")
+                }
+
+                #[cfg(target_os = "macos")]
+                {
                 use builtins::PermissionCommandType;
 
                 match cmd_type {
@@ -2271,6 +2313,7 @@ impl ScriptListApp {
                             Self::builtin_success(dctx, "open_accessibility_settings")
                         }
                     }
+                }
                 }
             }
 
@@ -2536,6 +2579,12 @@ impl ScriptListApp {
                         }
                     }
                     UtilityCommandType::TraceCurrentAppIntent => {
+                        #[cfg(not(target_os = "macos"))]
+                        {
+                            return Self::builtin_success(dctx, "This feature requires macOS");
+                        }
+                        #[cfg(target_os = "macos")]
+                        {
                         let raw_query_owned = query_override
                             .unwrap_or(&self.filter_text)
                             .to_string();
@@ -2630,8 +2679,15 @@ impl ScriptListApp {
                                 )
                             }
                         }
+                        }
                     }
                     UtilityCommandType::VerifyCurrentAppRecipe => {
+                        #[cfg(not(target_os = "macos"))]
+                        {
+                            return Self::builtin_success(dctx, "This feature requires macOS");
+                        }
+                        #[cfg(target_os = "macos")]
+                        {
                         tracing::info!(
                             trace_id = %dctx.trace_id,
                             "verify_current_app_recipe.requested"
@@ -2732,8 +2788,15 @@ impl ScriptListApp {
                                 )
                             }
                         }
+                        }
                     }
                     UtilityCommandType::ReplayCurrentAppRecipe => {
+                        #[cfg(not(target_os = "macos"))]
+                        {
+                            return Self::builtin_success(dctx, "This feature requires macOS");
+                        }
+                        #[cfg(target_os = "macos")]
+                        {
                         tracing::info!(
                             trace_id = %dctx.trace_id,
                             "replay_current_app_recipe.requested"
@@ -2917,8 +2980,15 @@ impl ScriptListApp {
                                 )
                             }
                         }
+                        }
                     }
                     UtilityCommandType::TurnThisIntoCommand => {
+                        #[cfg(not(target_os = "macos"))]
+                        {
+                            return Self::builtin_success(dctx, "This feature requires macOS");
+                        }
+                        #[cfg(target_os = "macos")]
+                        {
                         let raw_query_owned = query_override
                             .unwrap_or(&self.filter_text)
                             .to_string();
@@ -3041,8 +3111,15 @@ impl ScriptListApp {
                                 }
                             }
                         }
+                        }
                     }
                     UtilityCommandType::DoInCurrentApp => {
+                        #[cfg(not(target_os = "macos"))]
+                        {
+                            return Self::builtin_success(dctx, "This feature requires macOS");
+                        }
+                        #[cfg(target_os = "macos")]
+                        {
                         let raw_query_owned = query_override
                             .unwrap_or(&self.filter_text)
                             .to_string();
@@ -3291,8 +3368,15 @@ impl ScriptListApp {
                                 )
                             }
                         }
+                        }
                     }
                     UtilityCommandType::CurrentAppCommands => {
+                        #[cfg(not(target_os = "macos"))]
+                        {
+                            return Self::builtin_success(dctx, "This feature requires macOS");
+                        }
+                        #[cfg(target_os = "macos")]
+                        {
                         tracing::info!(
                             trace_id = %dctx.trace_id,
                             "current_app_commands.open_requested"
@@ -3366,6 +3450,7 @@ impl ScriptListApp {
                                     "current_app_commands_capture_failed",
                                 )
                             }
+                        }
                         }
                     }
                 }

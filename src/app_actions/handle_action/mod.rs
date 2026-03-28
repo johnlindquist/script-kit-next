@@ -523,6 +523,7 @@ impl ScriptListApp {
     }
 
     /// Simple percent-encoding for URL query strings.
+    #[allow(dead_code)]
     fn percent_encode_for_url(&self, input: &str) -> String {
         let mut encoded = String::with_capacity(input.len() * 3);
         for byte in input.bytes() {

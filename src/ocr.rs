@@ -15,7 +15,7 @@
 
 use anyhow::{anyhow, Result};
 use std::thread;
-use tracing::{debug, error, info};
+use tracing::{error, info};
 
 #[cfg(target_os = "macos")]
 use cocoa::base::{id, nil};

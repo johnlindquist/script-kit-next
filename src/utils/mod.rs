@@ -18,6 +18,7 @@ pub(crate) fn truncate_str_chars(s: &str, max_chars: usize) -> &str {
 
 // Re-export all public items for backwards compatibility
 // Allow unused imports - these are public API exports for external use
+#[cfg(target_os = "macos")]
 pub use applescript::escape_applescript_string;
 #[allow(unused_imports)]
 pub use assets::{get_asset_path, get_logo_path};

@@ -3,6 +3,7 @@
 //! This module handles protocol messages related to selected text operations
 //! (get, set, check/request accessibility permissions).
 
+#[cfg(target_os = "macos")]
 use crate::logging;
 use crate::protocol::Message;
 use tracing::{debug, info, instrument, warn};

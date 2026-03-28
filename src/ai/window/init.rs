@@ -89,7 +89,6 @@ impl AiApp {
             InputState::new(window, cx)
                 .placeholder("Ask anything...")
                 .auto_grow(1, 6)
-                .submit_on_enter(true)
         });
 
         let search_state = cx.new(|cx| InputState::new(window, cx).placeholder("Search chats..."));

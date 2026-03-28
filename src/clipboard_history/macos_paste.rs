@@ -18,7 +18,6 @@ use objc::{msg_send, sel, sel_impl};
 
 use anyhow::{Context, Result};
 use std::path::Path;
-use tracing::debug;
 
 /// Copy an image to the clipboard with BOTH image data and file URL representations.
 ///

@@ -26,6 +26,9 @@
 //! execute_menu_action("com.apple.Safari", &["File", "New Window"])?;
 //! ```
 
+n// This entire module is macOS-only
+#![cfg(target_os = "macos")]
+
 #![allow(non_upper_case_globals)]
 #![allow(dead_code)]
 

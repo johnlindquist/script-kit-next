@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::io::Write;
 use std::path::PathBuf;
 use std::process::Command;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 use tempfile::NamedTempFile;
 use tracing::{debug, error, info, instrument, warn};
 

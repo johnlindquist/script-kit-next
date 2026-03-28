@@ -106,9 +106,9 @@ impl NotesApp {
             }
             if is_key_tab(key) && !modifiers.platform && !modifiers.control && !modifiers.alt {
                 if modifiers.shift {
-                    window.focus_prev_in_dialog(cx);
+                    window.focus_prev(cx);
                 } else {
-                    window.focus_next_in_dialog(cx);
+                    window.focus_next(cx);
                 }
                 cx.stop_propagation();
                 return;

@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! Debounced keystroke logging for text expansion system
 //!
 //! This module provides consolidated logging for keystroke events to avoid

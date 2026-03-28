@@ -1,3 +1,4 @@
+#[cfg(target_os = "macos")]
 use crate::logging;
 use crate::windows::DisplayBounds;
 use gpui::{point, px, Bounds, Pixels, Size};
@@ -115,6 +116,7 @@ pub fn primary_screen_height() -> Option<f64> {
 }
 
 #[cfg(not(target_os = "macos"))]
+#[allow(dead_code)]
 pub fn primary_screen_height() -> Option<f64> {
     Some(1080.0)
 }

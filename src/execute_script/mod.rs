@@ -29,6 +29,7 @@ fn protocol_tile_to_window_control(pos: &protocol::TilePosition) -> window_contr
 }
 /// Standard macOS menu bar height in points (consistent since macOS 10.0)
 /// Note: This is an approximation - the actual height can vary with accessibility settings
+#[cfg(target_os = "macos")]
 const MACOS_MENU_BAR_HEIGHT: i32 = 24;
 const CLIPBOARD_HISTORY_PREVIEW_CHAR_LIMIT: usize = 1000;
 /// Get information about all displays/monitors
@@ -135,12 +136,14 @@ fn take_active_script_session(
         .ok_or_else(|| format_missing_interactive_session_error(script_name, script_path))
 }
 
+#[cfg(target_os = "macos")]
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct ExecuteScriptFeedbackCommandSpec {
     program: &'static str,
     args: Vec<String>,
 }
 
+#[cfg(target_os = "macos")]
 fn execute_script_normalize_optional_text(value: Option<String>) -> Option<String> {
     value.and_then(|value| {
         let trimmed = value.trim();
@@ -152,6 +155,7 @@ fn execute_script_normalize_optional_text(value: Option<String>) -> Option<Strin
     })
 }
 
+#[cfg(target_os = "macos")]
 fn execute_script_normalize_notify_fields(
     title: Option<String>,
     body: Option<String>,
@@ -167,10 +171,12 @@ fn execute_script_normalize_notify_fields(
     }
 }
 
+#[cfg(target_os = "macos")]
 fn execute_script_escape_applescript_string(value: &str) -> String {
     format!("\"{}\"", value.replace('\\', "\\\\").replace('"', "\\\""))
 }
 
+#[cfg(target_os = "macos")]
 fn execute_script_build_beep_command_spec() -> ExecuteScriptFeedbackCommandSpec {
     ExecuteScriptFeedbackCommandSpec {
         program: "afplay",
@@ -178,6 +184,7 @@ fn execute_script_build_beep_command_spec() -> ExecuteScriptFeedbackCommandSpec 
     }
 }
 
+#[cfg(target_os = "macos")]
 fn execute_script_build_notify_command_spec(
     title: Option<String>,
     body: Option<String>,
@@ -195,6 +202,7 @@ fn execute_script_build_notify_command_spec(
     })
 }
 
+#[cfg(target_os = "macos")]
 fn execute_script_build_say_command_spec(
     text: String,
     voice: Option<String>,
@@ -215,6 +223,7 @@ fn execute_script_build_say_command_spec(
     })
 }
 
+#[cfg(target_os = "macos")]
 fn execute_script_spawn_feedback_command(
     effect: &'static str,
     spec: ExecuteScriptFeedbackCommandSpec,
@@ -434,10 +443,18 @@ impl ScriptListApp {
                     // Writer thread - handles sending responses to script
                     std::thread::spawn(move || {
                         use std::io::Write;
-                        use std::os::unix::io::AsRawFd;
 
-                        // Log the stdin file descriptor for debugging
-                        let fd = stdin.as_raw_fd();
+                        // Log the stdin file descriptor/handle for debugging
+                        #[cfg(unix)]
+                        let fd: i32 = {
+                            use std::os::unix::io::AsRawFd;
+                            stdin.as_raw_fd()
+                        };
+                        #[cfg(not(unix))]
+                        let fd: i32 = {
+                            use std::os::windows::io::AsRawHandle;
+                            stdin.as_raw_handle() as i32
+                        };
                         tracing::info!(category = "EXEC", fd, "Writer thread started");
 
                         // Check if fd is a valid pipe
@@ -478,7 +495,9 @@ impl ScriptListApp {
                                     let bytes = format!("{}\n", json);
                                     let bytes_len = bytes.len();
 
-                                    // Check fd validity before write
+                                    // Check fd validity before write (Unix only)
+                                    #[cfg(unix)]
+                                    {
                                     let fcntl_result = unsafe { libc::fcntl(fd, libc::F_GETFD) };
                                     tracing::info!(
                                         category = "EXEC",
@@ -486,6 +505,7 @@ impl ScriptListApp {
                                         fcntl_result,
                                         "Pre-write fcntl(F_GETFD) completed"
                                     );
+                                    }
 
                                     match stdin.write_all(bytes.as_bytes()) {
                                         Ok(()) => {
