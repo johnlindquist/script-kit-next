@@ -200,11 +200,15 @@ impl ScriptListApp {
     /// on top of `main_content` using `.when_some(...)`.
     pub(crate) fn render_tab_ai_overlay(
         &mut self,
-        _window: &mut Window,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Option<gpui::AnyElement> {
         let state = self.tab_ai_state.as_ref()?;
         let theme = crate::theme::get_cached_theme();
+
+        if !self.focus_handle.is_focused(window) {
+            window.focus(&self.focus_handle, cx);
+        }
 
         let intent_text: SharedString = state.intent.clone().into();
         let is_running = state.running;
@@ -218,7 +222,7 @@ impl ScriptListApp {
         };
 
         // Gold accent bar color
-        let accent = gpui::rgb(0xfbbf24);
+        let accent = gpui::rgb(theme.colors.accent.selected);
         // Colors derived from theme hex values
         let bg_scrim = gpui::rgba(
             crate::ui_foundation::hex_to_rgba_with_opacity(theme.colors.background.main, 0.85),
@@ -233,12 +237,14 @@ impl ScriptListApp {
         let text_muted = gpui::rgba(
             crate::ui_foundation::hex_to_rgba_with_opacity(theme.colors.text.primary, 0.5),
         );
+        let error_color = gpui::rgb(theme.colors.ui.error);
 
         // Build the overlay element
         let overlay = div()
             .id("tab-ai-overlay")
             .absolute()
             .inset_0()
+            .track_focus(&self.focus_handle)
             .flex()
             .flex_col()
             .items_center()
@@ -296,12 +302,12 @@ impl ScriptListApp {
                     .when_some(error_msg, |d, msg| {
                         d.child(
                             div()
-                                .w_full()
-                                .px(px(12.))
-                                .py(px(4.))
-                                .text_xs()
-                                .text_color(gpui::rgb(0xef4444))
-                                .child(msg),
+                            .w_full()
+                            .px(px(12.))
+                            .py(px(4.))
+                            .text_xs()
+                            .text_color(error_color)
+                            .child(msg),
                         )
                     })
                     // Hint strip
@@ -439,34 +445,159 @@ impl ScriptListApp {
             context_len = context_json.len(),
         );
 
-        // Spawn async task for AI call + execution
+        // Resolve AI provider + model before spawning the worker thread
+        let registry = self
+            .cached_provider_registry
+            .clone()
+            .unwrap_or_else(|| {
+                crate::ai::ProviderRegistry::from_environment_with_config(Some(&self.config))
+            });
+
+        let selected_model = match crate::prompt_ai::select_default_ai_script_model(&registry) {
+            Some(m) => m,
+            None => {
+                tracing::error!(event = "tab_ai_no_model");
+                if let Some(state) = &mut self.tab_ai_state {
+                    state.running = false;
+                    state.error = Some("No AI model configured".into());
+                }
+                cx.notify();
+                return;
+            }
+        };
+
+        let provider = match registry
+            .find_provider_for_model(&selected_model.id)
+            .cloned()
+        {
+            Some(p) => p,
+            None => {
+                tracing::error!(
+                    event = "tab_ai_no_provider",
+                    model_id = %selected_model.id,
+                );
+                if let Some(state) = &mut self.tab_ai_state {
+                    state.running = false;
+                    state.error = Some("No AI provider for selected model".into());
+                }
+                cx.notify();
+                return;
+            }
+        };
+
+        let model_id = selected_model.id.clone();
+
+        // Channel for worker thread → async GPUI task
+        let (tx, rx) = async_channel::bounded::<Result<(String, String), String>>(1);
+
+        // Blocking AI call on worker thread
+        std::thread::spawn(move || {
+            let messages = vec![
+                crate::ai::ProviderMessage::system(
+                    crate::prompt_ai::AI_SCRIPT_GENERATION_SYSTEM_PROMPT,
+                ),
+                crate::ai::ProviderMessage::user(&user_prompt),
+            ];
+
+            let result = match provider.send_message(&messages, &model_id) {
+                Ok(raw_response) => {
+                    let source = match crate::prompt_ai::extract_generated_script_source(
+                        &raw_response,
+                    ) {
+                        Some(source) => source,
+                        None => {
+                            return {
+                                let _ = tx.send_blocking(Err(
+                                    "AI returned no extractable script code".to_string(),
+                                ));
+                            };
+                        }
+                    };
+                    let slug = crate::ai::script_generation::prepare_script_from_ai_response(
+                        &user_prompt,
+                        &raw_response,
+                    )
+                    .map(|(slug, _)| slug)
+                    .unwrap_or_else(|_| "tab-ai-script".to_string());
+                    Ok((slug, source))
+                }
+                Err(error) => Err(format!(
+                    "tab_ai_send_message model_id={model_id}: {error:#}"
+                )),
+            };
+
+            // Ignore send error — the receiver may have been dropped if overlay was closed
+            let _ = tx.send_blocking(result);
+        });
+
+        // Async GPUI task: await response, create temp file, execute
         let app_entity = cx.entity().downgrade();
         let task = cx.spawn(async move |_this, cx| {
-            // For now, log the prompt — actual AI call will be wired in Phase 3
-            tracing::info!(
-                event = "tab_ai_prompt_built",
-                prompt_len = user_prompt.len(),
-            );
-
-            // TODO(phase-3): Call AI provider, extract script, execute
-            // For now, close overlay after a brief delay to show the flow works
-            cx.background_executor()
-                .timer(std::time::Duration::from_millis(500))
-                .await;
+            let response = match rx.recv().await {
+                Ok(r) => r,
+                Err(_) => {
+                    tracing::error!(event = "tab_ai_channel_closed");
+                    return;
+                }
+            };
 
             cx.update(|cx| {
-                if let Some(app) = app_entity.upgrade() {
-                    app.update(cx, |this, cx| {
-                        tracing::info!(event = "tab_ai_complete");
+                let Some(app) = app_entity.upgrade() else {
+                    return;
+                };
+                app.update(cx, |this, cx| match response {
+                    Ok((_slug, source)) => {
+                        tracing::info!(
+                            event = "tab_ai_script_extracted",
+                            source_len = source.len(),
+                        );
+
+                        // Write to temp file
+                        match crate::execution_scripts::create_interactive_temp_script(
+                            &source,
+                            ".ts",
+                            crate::execution_scripts::InteractiveTempFileMode::InterpreterFed,
+                        ) {
+                            Ok(temp_path) => {
+                                let path_str: String = temp_path.to_string_lossy().to_string();
+                                tracing::info!(
+                                    event = "tab_ai_execute_script",
+                                    path = %path_str,
+                                );
+
+                                // Store the generated source for potential future save
+                                // Close overlay before execution
+                                this.tab_ai_state = None;
+                                this.tab_ai_task = None;
+                                cx.notify();
+
+                                // Execute the ephemeral script
+                                this.execute_script_by_path(&path_str, cx);
+                            }
+                            Err(e) => {
+                                tracing::error!(
+                                    event = "tab_ai_temp_file_failed",
+                                    error = %e,
+                                );
+                                if let Some(state) = &mut this.tab_ai_state {
+                                    state.running = false;
+                                    state.error = Some(
+                                        format!("Failed to create temp script: {e}").into(),
+                                    );
+                                }
+                                cx.notify();
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        tracing::error!(event = "tab_ai_execute_failed", error = %e);
                         if let Some(state) = &mut this.tab_ai_state {
                             state.running = false;
-                            state.error = Some(
-                                "Tab AI execution not yet wired (Phase 3)".into(),
-                            );
+                            state.error = Some(SharedString::from(e));
                         }
                         cx.notify();
-                    });
-                }
+                    }
+                });
             });
         });
 
@@ -474,15 +605,8 @@ impl ScriptListApp {
     }
 }
 
-/// Build the user prompt sent to the AI model for Tab AI script generation.
-fn build_tab_ai_user_prompt(intent: &str, context_json: &str) -> String {
-    format!(
-        "User intent:\n{intent}\n\n\
-         Current context JSON:\n{context_json}\n\n\
-         Generate a minimal Script Kit TypeScript script that acts immediately on this context. \
-         Return only runnable code in a single fenced code block."
-    )
-}
+/// Re-export the canonical prompt builder so sibling modules and tests can use it.
+pub(crate) use crate::ai::tab_context::build_tab_ai_user_prompt;
 
 #[cfg(test)]
 mod tests {
@@ -496,4 +620,50 @@ mod tests {
         assert!(prompt.contains("Script Kit TypeScript"));
     }
 
+    #[test]
+    fn tab_ai_user_prompt_contains_code_block_instruction() {
+        let prompt = build_tab_ai_user_prompt("test intent", "{}");
+        assert!(
+            prompt.contains("fenced code block"),
+            "Prompt must ask for a fenced code block so extract_generated_script_source works"
+        );
+    }
+
+    #[test]
+    fn tab_ai_user_prompt_separates_intent_from_context() {
+        let prompt = build_tab_ai_user_prompt("copy url", r#"{"schemaVersion":1}"#);
+        // The intent appears before the context
+        let intent_pos = prompt.find("copy url").expect("intent present");
+        let context_pos = prompt.find("schemaVersion").expect("context present");
+        assert!(
+            intent_pos < context_pos,
+            "Intent should appear before context JSON"
+        );
+    }
+
+    #[test]
+    fn tab_ai_user_prompt_with_rich_context_json() {
+        let context = serde_json::to_string_pretty(&crate::ai::TabAiContextBlob::from_parts(
+            crate::ai::TabAiUiSnapshot {
+                prompt_type: "ScriptList".to_string(),
+                input_text: Some("slack".to_string()),
+                focused_semantic_id: Some("input:filter".to_string()),
+                selected_semantic_id: Some("choice:0:slack".to_string()),
+                visible_elements: vec![],
+            },
+            Default::default(),
+            vec!["recent1".to_string()],
+            None,
+            "2026-03-28T00:00:00Z".to_string(),
+        ))
+        .expect("serialize");
+
+        let prompt = build_tab_ai_user_prompt("force quit this app", &context);
+
+        assert!(prompt.contains("force quit this app"));
+        assert!(prompt.contains("ScriptList"));
+        assert!(prompt.contains("slack"));
+        assert!(prompt.contains("choice:0:slack"));
+        assert!(prompt.contains("recent1"));
+    }
 }
