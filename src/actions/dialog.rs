@@ -2600,6 +2600,8 @@ pub(crate) struct ActionsDialogChromeAudit {
     pub search_position: &'static str,
     /// Whether the search row renders a visible border/divider.
     pub shows_search_divider: bool,
+    /// Whether the dialog container renders a visible border.
+    pub show_container_border: bool,
     /// `"headers"`, `"separators"`, or `"none"`.
     pub section_mode: &'static str,
     /// Corner radius for row selection background (0 = sharp).
@@ -2616,9 +2618,10 @@ impl ActionsDialogChromeAudit {
             container_mode: "sharp",
             search_position: super::constants::ACTIONS_DIALOG_EXPECT_SEARCH_POSITION,
             shows_search_divider: style.show_search_divider,
+            show_container_border: style.show_container_border,
             section_mode: "headers",
             row_radius: style.row_radius as u16,
-            footer_hint_count: 3,
+            footer_hint_count: super::constants::ACTIONS_DIALOG_EXPECT_FOOTER_HINT_COUNT,
         }
     }
 
@@ -2631,9 +2634,10 @@ impl ActionsDialogChromeAudit {
             container_mode: "sharp",
             search_position: super::constants::ACTIONS_DIALOG_EXPECT_SEARCH_POSITION,
             shows_search_divider: style.show_search_divider,
+            show_container_border: style.show_container_border,
             section_mode: "headers",
             row_radius: style.row_radius as u16,
-            footer_hint_count: 3,
+            footer_hint_count: super::constants::ACTIONS_DIALOG_EXPECT_FOOTER_HINT_COUNT,
         }
     }
 }
@@ -2688,6 +2692,35 @@ fn actions_dialog_section_mode_name(value: &super::types::SectionStyle) -> &'sta
     }
 }
 
+/// Surface-scoped expected contract for the Actions dialog.
+///
+/// `impeccable()` returns the `.impeccable.md` baseline. Future presets
+/// (e.g. notes, main-menu) can define their own contracts by constructing
+/// this struct with different values.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+pub(crate) struct ActionsDialogExpectedContract {
+    pub search_position: &'static str,
+    pub shows_search_divider: bool,
+    pub show_container_border: bool,
+    pub footer_hint_count: u8,
+}
+
+impl ActionsDialogExpectedContract {
+    pub(crate) const fn impeccable() -> Self {
+        Self {
+            search_position: super::constants::ACTIONS_DIALOG_EXPECT_SEARCH_POSITION,
+            shows_search_divider: super::constants::ACTIONS_DIALOG_EXPECT_SEARCH_DIVIDER,
+            show_container_border: super::constants::ACTIONS_DIALOG_EXPECT_CONTAINER_BORDER,
+            footer_hint_count: super::constants::ACTIONS_DIALOG_EXPECT_FOOTER_HINT_COUNT,
+        }
+    }
+}
+
+#[inline]
+fn actions_dialog_bool_name(value: bool) -> &'static str {
+    if value { "true" } else { "false" }
+}
+
 impl ActionsDialogRuntimeAudit {
     #[cfg(not(feature = "storybook"))]
     pub(crate) fn from_parts(
@@ -2733,22 +2766,25 @@ impl ActionsDialogRuntimeAudit {
         }
     }
 
-    pub(crate) fn validate(&self) -> Vec<ActionsDialogRuntimeViolation> {
+    pub(crate) fn validate_against(
+        &self,
+        expected: &ActionsDialogExpectedContract,
+    ) -> Vec<ActionsDialogRuntimeViolation> {
         let mut violations = Vec::new();
-        if self.search_position != super::constants::ACTIONS_DIALOG_EXPECT_SEARCH_POSITION {
+        if self.search_position != expected.search_position {
             violations.push(ActionsDialogRuntimeViolation {
                 surface: self.surface,
                 field: "search_position",
-                expected: super::constants::ACTIONS_DIALOG_EXPECT_SEARCH_POSITION,
+                expected: expected.search_position,
                 actual: self.search_position,
             });
         }
-        if self.shows_search_divider != super::constants::ACTIONS_DIALOG_EXPECT_SEARCH_DIVIDER {
+        if self.shows_search_divider != expected.shows_search_divider {
             violations.push(ActionsDialogRuntimeViolation {
                 surface: self.surface,
                 field: "shows_search_divider",
-                expected: "false",
-                actual: "true",
+                expected: actions_dialog_bool_name(expected.shows_search_divider),
+                actual: actions_dialog_bool_name(self.shows_search_divider),
             });
         }
         if self.section_mode == "separators" {
@@ -2759,17 +2795,15 @@ impl ActionsDialogRuntimeAudit {
                 actual: "separators",
             });
         }
-        if self.show_container_border != super::constants::ACTIONS_DIALOG_EXPECT_CONTAINER_BORDER {
+        if self.show_container_border != expected.show_container_border {
             violations.push(ActionsDialogRuntimeViolation {
                 surface: self.surface,
                 field: "show_container_border",
-                expected: "false",
-                actual: "true",
+                expected: actions_dialog_bool_name(expected.show_container_border),
+                actual: actions_dialog_bool_name(self.show_container_border),
             });
         }
-        if self.show_footer
-            && self.footer_hint_count != super::constants::ACTIONS_DIALOG_EXPECT_FOOTER_HINT_COUNT
-        {
+        if self.show_footer && self.footer_hint_count != expected.footer_hint_count {
             violations.push(ActionsDialogRuntimeViolation {
                 surface: self.surface,
                 field: "footer_hint_count",
@@ -2778,6 +2812,10 @@ impl ActionsDialogRuntimeAudit {
             });
         }
         violations
+    }
+
+    pub(crate) fn validate(&self) -> Vec<ActionsDialogRuntimeViolation> {
+        self.validate_against(&ActionsDialogExpectedContract::impeccable())
     }
 }
 
@@ -3120,7 +3158,9 @@ mod tests {
 
 #[cfg(test)]
 mod actions_dialog_spec_tests {
-    use super::{ActionsDialogChromeAudit, ActionsDialogRuntimeAudit};
+    use super::{
+        ActionsDialogChromeAudit, ActionsDialogExpectedContract, ActionsDialogRuntimeAudit,
+    };
 
     #[test]
     fn live_defaults_match_impeccable_contract() {
@@ -3250,5 +3290,109 @@ mod actions_dialog_spec_tests {
             audit.validate().is_empty(),
             "fully spec-compliant audit should produce zero violations"
         );
+    }
+
+    // ── Contract struct tests ─────────────────────────────────────────
+
+    #[test]
+    fn actions_dialog_live_defaults_match_top_search_contract() {
+        let audit = ActionsDialogChromeAudit::from_live_defaults();
+        assert_eq!(
+            audit.search_position,
+            super::super::constants::ACTIONS_DIALOG_EXPECT_SEARCH_POSITION,
+            "search position must match .impeccable.md top-search rule"
+        );
+    }
+
+    #[test]
+    fn actions_dialog_live_defaults_expose_container_border() {
+        let audit = ActionsDialogChromeAudit::from_live_defaults();
+        // The audit struct must expose the field so runtime validation can check it.
+        // The non-storybook fallback currently has show_container_border: true,
+        // which is off-spec — validate() will flag this as a violation.
+        let style = super::actions_dialog_default_style();
+        assert_eq!(
+            audit.show_container_border, style.show_container_border,
+            "chrome audit must reflect the actual live style value"
+        );
+    }
+
+    #[test]
+    fn actions_dialog_expected_contract_impeccable_matches_constants() {
+        let contract = ActionsDialogExpectedContract::impeccable();
+        assert_eq!(contract.search_position, "top");
+        assert!(!contract.shows_search_divider);
+        assert!(!contract.show_container_border);
+        assert_eq!(contract.footer_hint_count, 3);
+    }
+
+    #[test]
+    fn actions_dialog_runtime_audit_reports_search_position_and_border_violations() {
+        let audit = ActionsDialogRuntimeAudit {
+            surface: "actions_dialog.current",
+            search_position: "bottom",
+            section_mode: "headers",
+            shows_search_divider: false,
+            show_footer: false,
+            show_icons: true,
+            show_container_border: true,
+            footer_hint_count: 0,
+        };
+        let violations = audit.validate_against(&ActionsDialogExpectedContract::impeccable());
+        assert!(
+            violations
+                .iter()
+                .any(|v| v.field == "search_position"
+                    && v.expected == "top"
+                    && v.actual == "bottom"),
+            "expected a search_position violation"
+        );
+        assert!(
+            violations
+                .iter()
+                .any(|v| v.field == "show_container_border"
+                    && v.expected == "false"
+                    && v.actual == "true"),
+            "expected a show_container_border violation"
+        );
+    }
+
+    #[test]
+    fn actions_dialog_runtime_violations_serialize_as_machine_readable_json() {
+        let audit = ActionsDialogRuntimeAudit {
+            surface: "actions_dialog.current",
+            search_position: "bottom",
+            section_mode: "headers",
+            shows_search_divider: false,
+            show_footer: false,
+            show_icons: true,
+            show_container_border: true,
+            footer_hint_count: 0,
+        };
+        let violations = audit.validate_against(&ActionsDialogExpectedContract::impeccable());
+        let json = serde_json::to_string(&violations).expect("serialize violations");
+        let value: serde_json::Value = serde_json::from_str(&json).expect("parse violations");
+        assert_eq!(value[0]["surface"], "actions_dialog.current");
+        assert_eq!(value[0]["field"], "search_position");
+        assert_eq!(value[0]["expected"], "top");
+        assert_eq!(value[0]["actual"], "bottom");
+    }
+
+    #[test]
+    fn actions_dialog_validate_delegates_to_validate_against_impeccable() {
+        let audit = ActionsDialogRuntimeAudit {
+            surface: "test_surface",
+            search_position: "bottom",
+            section_mode: "headers",
+            shows_search_divider: false,
+            show_footer: false,
+            show_icons: true,
+            show_container_border: true,
+            footer_hint_count: 0,
+        };
+        let via_validate = audit.validate();
+        let via_validate_against =
+            audit.validate_against(&ActionsDialogExpectedContract::impeccable());
+        assert_eq!(via_validate, via_validate_against);
     }
 }
