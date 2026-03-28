@@ -266,8 +266,8 @@ impl Render for EnvPrompt {
                         )
                     }),
             );
-            // Footer is owned by the outer wrapper shell (render_prompts::other.rs)
-            // which provides the canonical three-key hint strip.
+        // Footer is owned by the outer wrapper shell (render_prompts::other.rs)
+        // which provides the canonical three-key hint strip.
 
         FocusablePrompt::new(container)
             .key_context("env_prompt")

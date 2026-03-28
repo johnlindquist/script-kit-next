@@ -206,6 +206,11 @@ enum AppView {
         filter: String,
         selected_index: usize,
     },
+    /// Full-view Tab AI chat surface. Replaces the current view (like ChatPrompt)
+    /// instead of painting over it as an overlay.
+    TabAiChat {
+        entity: Entity<TabAiChat>,
+    },
 }
 
 /// Wrapper to hold a script session that can be shared across async boundaries
@@ -383,6 +388,7 @@ struct AliasInputState {
 ///
 /// When this is `Some`, the overlay is visible and captures keyboard input.
 #[derive(Debug, Clone)]
+#[allow(dead_code)] // Overlay path — retained for incremental migration
 struct TabAiOverlayState {
     /// User-typed natural-language intent (e.g. "force quit this app").
     intent: String,
@@ -410,4 +416,201 @@ struct TabAiSaveOfferState {
     filename_stem: String,
     /// Error message if save attempt failed, shown inline in the overlay.
     error: Option<SharedString>,
+}
+
+/// A context card shown in the Tab AI chat empty state.
+#[derive(Debug, Clone)]
+struct TabAiContextCard {
+    label: SharedString,
+    body: SharedString,
+}
+
+/// Kind of a turn in the Tab AI chat.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TabAiTurnKind {
+    User,
+    AssistantText,
+    AssistantCode,
+}
+
+/// A single turn (message) in the Tab AI chat.
+#[derive(Debug, Clone)]
+struct TabAiTurn {
+    kind: TabAiTurnKind,
+    body: SharedString,
+}
+
+/// Full-view Tab AI chat entity. Replaces the overlay approach with a proper
+/// entity-backed view that stores return state and chat turns.
+struct TabAiChat {
+    /// The view to restore when closing the chat.
+    return_view: AppView,
+    /// The focus target to restore when closing the chat.
+    return_focus_target: FocusTarget,
+    /// UI snapshot captured when Tab was pressed.
+    ui_snapshot: crate::ai::TabAiUiSnapshot,
+    /// Machine-readable invocation receipt.
+    invocation_receipt: crate::ai::TabAiInvocationReceipt,
+    /// Frontmost app bundle ID captured at open time.
+    frontmost_bundle_id: Option<String>,
+    /// Best prior automation hint for the current intent.
+    memory_hint: Option<crate::ai::TabAiMemorySuggestion>,
+    /// Context cards shown as the empty state before the user types.
+    context_cards: Vec<TabAiContextCard>,
+    /// User-typed natural-language intent.
+    intent: String,
+    /// Chat turns (user messages and AI responses).
+    turns: Vec<TabAiTurn>,
+    /// Whether an AI call is in-flight.
+    running: bool,
+    /// Error message from the last failed attempt.
+    error: Option<SharedString>,
+}
+
+impl TabAiChat {
+    fn new(
+        return_view: AppView,
+        return_focus_target: FocusTarget,
+        ui_snapshot: crate::ai::TabAiUiSnapshot,
+        invocation_receipt: crate::ai::TabAiInvocationReceipt,
+        frontmost_bundle_id: Option<String>,
+        context_cards: Vec<TabAiContextCard>,
+    ) -> Self {
+        Self {
+            return_view,
+            return_focus_target,
+            ui_snapshot,
+            invocation_receipt,
+            frontmost_bundle_id,
+            memory_hint: None,
+            context_cards,
+            intent: String::new(),
+            turns: Vec::new(),
+            running: false,
+            error: None,
+        }
+    }
+
+    fn restore_target(&self) -> (AppView, FocusTarget) {
+        (self.return_view.clone(), self.return_focus_target)
+    }
+
+    fn current_intent(&self) -> String {
+        self.intent.clone()
+    }
+
+    fn can_submit(&self) -> bool {
+        !self.running && !self.intent.trim().is_empty()
+    }
+
+    fn submission_payload(
+        &self,
+    ) -> (
+        String,
+        crate::ai::TabAiUiSnapshot,
+        crate::ai::TabAiInvocationReceipt,
+    ) {
+        (
+            self.intent.clone(),
+            self.ui_snapshot.clone(),
+            self.invocation_receipt.clone(),
+        )
+    }
+
+    fn push_text(&mut self, text: &str) {
+        if self.running {
+            return;
+        }
+        self.intent.push_str(text);
+        self.error = None;
+        self.refresh_memory_hint();
+    }
+
+    fn backspace(&mut self) {
+        if self.running {
+            return;
+        }
+        self.intent.pop();
+        self.refresh_memory_hint();
+    }
+
+    fn refresh_memory_hint(&mut self) {
+        let intent = self.intent.trim().to_string();
+        self.memory_hint = match crate::ai::resolve_tab_ai_memory_suggestions_with_outcome(
+            &intent,
+            self.frontmost_bundle_id.as_deref(),
+            1,
+        ) {
+            Ok(resolution) => resolution.suggestions.into_iter().next(),
+            Err(error) => {
+                tracing::warn!(event = "tab_ai_memory_hint_failed", error = %error);
+                None
+            }
+        };
+    }
+
+    fn append_user_turn(&mut self, body: impl Into<SharedString>) {
+        self.turns.push(TabAiTurn {
+            kind: TabAiTurnKind::User,
+            body: body.into(),
+        });
+    }
+
+    fn append_assistant_text_turn(&mut self, body: impl Into<SharedString>) {
+        self.turns.push(TabAiTurn {
+            kind: TabAiTurnKind::AssistantText,
+            body: body.into(),
+        });
+    }
+
+    fn append_assistant_code_turn(&mut self, body: impl Into<SharedString>) {
+        self.turns.push(TabAiTurn {
+            kind: TabAiTurnKind::AssistantCode,
+            body: body.into(),
+        });
+    }
+
+    fn set_running(&mut self, running: bool) {
+        self.running = running;
+    }
+
+    fn set_error(&mut self, error: Option<SharedString>) {
+        self.error = error;
+    }
+
+    fn collect_elements(&self, limit: usize) -> ElementCollectionOutcome {
+        let total_count = self.turns.len() + 2;
+        let mut elements = Vec::new();
+
+        if elements.len() < limit {
+            elements.push(crate::protocol::ElementInfo::input(
+                "tab-ai-input",
+                Some(self.intent.as_str()),
+                true,
+            ));
+        }
+        if elements.len() < limit {
+            elements.push(crate::protocol::ElementInfo::list(
+                "tab-ai-turns",
+                self.turns.len(),
+            ));
+        }
+        for (index, turn) in self.turns.iter().enumerate() {
+            if elements.len() >= limit {
+                break;
+            }
+            let text = turn.body.to_string();
+            elements.push(crate::protocol::ElementInfo {
+                semantic_id: crate::protocol::generate_semantic_id("choice", index, &text),
+                element_type: crate::protocol::ElementType::Choice,
+                text: Some(text.clone()),
+                value: Some(text),
+                selected: Some(false),
+                focused: None,
+                index: Some(index),
+            });
+        }
+
+        ElementCollectionOutcome::new(elements, total_count)
+    }
 }

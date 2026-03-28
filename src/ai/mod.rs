@@ -32,6 +32,7 @@
 #![allow(unused_imports)]
 #![allow(dead_code)]
 
+pub(crate) mod acp;
 pub(crate) mod config;
 pub(crate) mod context_contract;
 #[cfg(test)]
@@ -97,10 +98,10 @@ pub use self::tab_context::{
     TabAiClipboardContext, TabAiContextBlob, TabAiDegradationReason, TabAiExecutionReceipt,
     TabAiExecutionRecord, TabAiExecutionStatus, TabAiFieldStatus, TabAiInvocationReceipt,
     TabAiMemoryEntry, TabAiMemoryResolution, TabAiMemoryResolutionOutcome,
-    TabAiMemoryResolutionReason, TabAiMemorySuggestion, TabAiTargetContext, TabAiUiSnapshot,
-    TAB_AI_CONTEXT_SCHEMA_VERSION, TAB_AI_EXECUTION_RECEIPT_SCHEMA_VERSION,
+    TabAiMemoryResolutionReason, TabAiMemorySuggestion, TabAiTargetAudit, TabAiTargetContext,
+    TabAiUiSnapshot, TAB_AI_CONTEXT_SCHEMA_VERSION, TAB_AI_EXECUTION_RECEIPT_SCHEMA_VERSION,
     TAB_AI_EXECUTION_RECORD_SCHEMA_VERSION, TAB_AI_INVOCATION_RECEIPT_SCHEMA_VERSION,
-    TAB_AI_MEMORY_ENTRY_SCHEMA_VERSION,
+    TAB_AI_MEMORY_ENTRY_SCHEMA_VERSION, TAB_AI_TARGET_AUDIT_SCHEMA_VERSION,
 };
 pub use self::window::{
     add_ai_attachment, apply_ai_preset, close_ai_window, get_ai_window_state, is_ai_window,

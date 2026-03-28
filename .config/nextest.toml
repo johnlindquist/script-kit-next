@@ -1,0 +1,10 @@
+[profile.default]
+# Fast feedback: ~12s for 10k+ tests. System API tests excluded (use --profile ci).
+slow-timeout = { period = "5s", terminate-after = 2 }
+fail-fast = false
+default-filter = "not (test(login_item::) | test(ocr::tests::) | test(acp::client::) | test(template_variables::) | test(window_control::query::) | test(clipboard_history::change_detection::) | test(clipboard_history::macos_paste::) | test(clipboard_history::monitor::tests::test_capture) | test(hotkeys::tests::script_hotkey) | test(keyboard_monitor::) | test(keyword_manager::) | test(ai::window::window_api::) | test(permissions_wizard::) | test(platform::positioning_bounds) | test(platform::tests::test_get_global_mouse))"
+
+[profile.ci]
+# CI runs everything with generous timeouts
+slow-timeout = { period = "120s", terminate-after = 3 }
+fail-fast = false

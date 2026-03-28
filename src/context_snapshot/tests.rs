@@ -282,3 +282,29 @@ fn capture_from_seed_skips_warnings_for_disabled_providers() {
         "disabled providers should not produce warnings"
     );
 }
+
+#[test]
+fn capture_from_seed_preserves_metadata_only_focused_window() {
+    let seed = CaptureContextSeed {
+        selected_text: Ok(None),
+        frontmost_app: Ok(None),
+        menu_bar_items: Ok(Vec::new()),
+        browser: Ok(None),
+        focused_window: Ok(Some(FocusedWindowContext {
+            title: "Cached Title".into(),
+            width: 0,
+            height: 0,
+            used_fallback: false,
+        })),
+    };
+
+    let snapshot = capture_context_snapshot_from_seed(&CaptureContextOptions::minimal(), seed);
+    let focused_window = snapshot
+        .focused_window
+        .expect("focused window metadata should be preserved");
+
+    assert_eq!(focused_window.title, "Cached Title");
+    assert_eq!(focused_window.width, 0);
+    assert_eq!(focused_window.height, 0);
+    assert!(!focused_window.used_fallback);
+}

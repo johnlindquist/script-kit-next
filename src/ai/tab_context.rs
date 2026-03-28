@@ -81,6 +81,83 @@ pub struct TabAiTargetContext {
     pub metadata: Option<serde_json::Value>,
 }
 
+/// Machine-readable audit of target resolution emitted at context assembly time.
+///
+/// Captures the `focusedTarget` and `visibleTargets` fields that were resolved
+/// from the active surface, plus summary counts for downstream agents and
+/// dashboards to verify target availability without parsing the full context blob.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct TabAiTargetAudit {
+    /// Schema version for forward compatibility.
+    pub schema_version: u32,
+    /// `AppView` variant name at invocation time.
+    pub prompt_type: String,
+    /// Whether a focused target was resolved.
+    pub has_focused_target: bool,
+    /// Number of visible targets resolved.
+    pub visible_target_count: usize,
+    /// Source surface of the focused target, if present.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub focused_source: Option<String>,
+    /// Kind of the focused target (e.g. "file", "app"), if present.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub focused_kind: Option<String>,
+    /// Semantic ID of the focused target, if present.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub focused_semantic_id: Option<String>,
+    /// Distinct target kinds among visible targets (e.g. ["file", "directory"]).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub visible_kinds: Vec<String>,
+}
+
+/// Schema version for `TabAiTargetAudit`. Bump when adding/removing/renaming fields.
+pub const TAB_AI_TARGET_AUDIT_SCHEMA_VERSION: u32 = 1;
+
+impl TabAiTargetAudit {
+    /// Build a target audit from the resolved target context.
+    pub fn from_targets(
+        prompt_type: &str,
+        focused_target: &Option<TabAiTargetContext>,
+        visible_targets: &[TabAiTargetContext],
+    ) -> Self {
+        let mut visible_kinds: Vec<String> = visible_targets
+            .iter()
+            .map(|t| t.kind.clone())
+            .collect::<std::collections::BTreeSet<_>>()
+            .into_iter()
+            .collect();
+        visible_kinds.sort();
+
+        Self {
+            schema_version: TAB_AI_TARGET_AUDIT_SCHEMA_VERSION,
+            prompt_type: prompt_type.to_string(),
+            has_focused_target: focused_target.is_some(),
+            visible_target_count: visible_targets.len(),
+            focused_source: focused_target.as_ref().map(|t| t.source.clone()),
+            focused_kind: focused_target.as_ref().map(|t| t.kind.clone()),
+            focused_semantic_id: focused_target.as_ref().map(|t| t.semantic_id.clone()),
+            visible_kinds,
+        }
+    }
+
+    /// Emit this audit as a structured `tracing::info` log line.
+    pub fn emit(&self) {
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "tab_ai_target_audit",
+            schema_version = self.schema_version,
+            prompt_type = %self.prompt_type,
+            has_focused_target = self.has_focused_target,
+            visible_target_count = self.visible_target_count,
+            focused_source = ?self.focused_source,
+            focused_kind = ?self.focused_kind,
+            focused_semantic_id = ?self.focused_semantic_id,
+            visible_kinds = ?self.visible_kinds,
+        );
+    }
+}
+
 /// Complete context blob sent alongside the user's natural-language intent.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
@@ -213,10 +290,8 @@ pub fn tab_ai_intent_uses_implicit_target(intent: &str) -> bool {
         .map(ToString::to_string)
         .collect();
 
-    let token_set: std::collections::BTreeSet<&str> = normalized_tokens
-        .iter()
-        .map(String::as_str)
-        .collect();
+    let token_set: std::collections::BTreeSet<&str> =
+        normalized_tokens.iter().map(String::as_str).collect();
 
     if token_set.contains("this")
         || token_set.contains("it")
@@ -232,15 +307,21 @@ pub fn tab_ai_intent_uses_implicit_target(intent: &str) -> bool {
     let second = normalized_tokens.get(1).map(String::as_str);
     let third = normalized_tokens.get(2).map(String::as_str);
 
-    match (first, second, third) {
+    matches!(
+        (first, second, third),
         (Some("rename"), Some("to" | "as" | "into"), _)
-        | (Some("convert" | "change" | "transform" | "format"), Some("to" | "as" | "into"), _)
-        | (Some("force"), Some("quit"), None)
-        | (Some("quit" | "close" | "delete" | "remove" | "duplicate" | "kill"), None, None) => {
-            true
-        }
-        _ => false,
-    }
+            | (
+                Some("convert" | "change" | "transform" | "format"),
+                Some("to" | "as" | "into"),
+                _
+            )
+            | (Some("force"), Some("quit"), None)
+            | (
+                Some("quit" | "close" | "delete" | "remove" | "duplicate" | "kill"),
+                None,
+                None
+            )
+    )
 }
 
 /// Schema version for `TabAiExecutionRecord`. Bump when adding/removing/renaming fields.
@@ -2372,9 +2453,7 @@ mod target_context_tests {
         assert!(tab_ai_intent_uses_implicit_target(
             "rename this to kebab-case"
         ));
-        assert!(tab_ai_intent_uses_implicit_target(
-            "rename to kebab-case"
-        ));
+        assert!(tab_ai_intent_uses_implicit_target("rename to kebab-case"));
         assert!(!tab_ai_intent_uses_implicit_target(
             "rename report.md to kebab-case"
         ));
@@ -2433,5 +2512,123 @@ mod target_context_tests {
         let json = serde_json::to_string(&blob).expect("serialize");
         assert!(!json.contains("visibleTargets"));
         assert!(!json.contains("focusedTarget"));
+    }
+}
+
+#[cfg(test)]
+mod target_audit_tests {
+    use super::*;
+
+    fn sample_focused_target() -> TabAiTargetContext {
+        TabAiTargetContext {
+            source: "FileSearch".to_string(),
+            kind: "file".to_string(),
+            semantic_id: "choice:0:report.md".to_string(),
+            label: "report.md".to_string(),
+            metadata: Some(serde_json::json!({"path": "/tmp/report.md"})),
+        }
+    }
+
+    fn sample_visible_targets() -> Vec<TabAiTargetContext> {
+        vec![
+            TabAiTargetContext {
+                source: "FileSearch".to_string(),
+                kind: "file".to_string(),
+                semantic_id: "choice:0:report.md".to_string(),
+                label: "report.md".to_string(),
+                metadata: None,
+            },
+            TabAiTargetContext {
+                source: "FileSearch".to_string(),
+                kind: "directory".to_string(),
+                semantic_id: "choice:1:src".to_string(),
+                label: "src".to_string(),
+                metadata: None,
+            },
+        ]
+    }
+
+    #[test]
+    fn target_audit_schema_version_is_one() {
+        assert_eq!(TAB_AI_TARGET_AUDIT_SCHEMA_VERSION, 1);
+    }
+
+    #[test]
+    fn target_audit_from_focused_target_captures_fields() {
+        let focused = sample_focused_target();
+        let audit = TabAiTargetAudit::from_targets("FileSearch", &Some(focused), &[]);
+        assert!(audit.has_focused_target);
+        assert_eq!(audit.visible_target_count, 0);
+        assert_eq!(audit.focused_source.as_deref(), Some("FileSearch"));
+        assert_eq!(audit.focused_kind.as_deref(), Some("file"));
+        assert_eq!(
+            audit.focused_semantic_id.as_deref(),
+            Some("choice:0:report.md")
+        );
+        assert!(audit.visible_kinds.is_empty());
+    }
+
+    #[test]
+    fn target_audit_from_visible_targets_deduplicates_kinds() {
+        let visible = sample_visible_targets();
+        let audit = TabAiTargetAudit::from_targets("FileSearch", &None, &visible);
+        assert!(!audit.has_focused_target);
+        assert_eq!(audit.visible_target_count, 2);
+        assert!(audit.focused_source.is_none());
+        assert!(audit.focused_kind.is_none());
+        assert!(audit.focused_semantic_id.is_none());
+        assert_eq!(audit.visible_kinds, vec!["directory", "file"]);
+    }
+
+    #[test]
+    fn target_audit_serializes_camel_case() {
+        let focused = sample_focused_target();
+        let audit = TabAiTargetAudit::from_targets("FileSearch", &Some(focused), &[]);
+        let json = serde_json::to_string(&audit).expect("serialize");
+
+        assert!(json.contains("schemaVersion"));
+        assert!(json.contains("promptType"));
+        assert!(json.contains("hasFocusedTarget"));
+        assert!(json.contains("visibleTargetCount"));
+        assert!(json.contains("focusedSource"));
+        assert!(json.contains("focusedKind"));
+        assert!(json.contains("focusedSemanticId"));
+
+        // Snake case must not appear
+        assert!(!json.contains("schema_version"));
+        assert!(!json.contains("prompt_type"));
+        assert!(!json.contains("has_focused_target"));
+        assert!(!json.contains("visible_target_count"));
+        assert!(!json.contains("focused_source"));
+        assert!(!json.contains("focused_kind"));
+        assert!(!json.contains("focused_semantic_id"));
+    }
+
+    #[test]
+    fn target_audit_roundtrip_preserves_all_fields() {
+        let focused = sample_focused_target();
+        let visible = sample_visible_targets();
+        let audit = TabAiTargetAudit::from_targets("FileSearch", &Some(focused), &visible);
+        let json = serde_json::to_string(&audit).expect("serialize");
+        let parsed: TabAiTargetAudit = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(parsed, audit);
+    }
+
+    #[test]
+    fn target_audit_omits_empty_optional_fields() {
+        let audit = TabAiTargetAudit::from_targets("ScriptList", &None, &[]);
+        let json = serde_json::to_string(&audit).expect("serialize");
+        assert!(!json.contains("focusedSource"));
+        assert!(!json.contains("focusedKind"));
+        assert!(!json.contains("focusedSemanticId"));
+        assert!(!json.contains("visibleKinds"));
+    }
+
+    #[test]
+    fn target_audit_fails_deserialization_without_required_fields() {
+        // Missing hasFocusedTarget — required field
+        let json = r#"{"schemaVersion":1,"promptType":"X","visibleTargetCount":0}"#;
+        let result = serde_json::from_str::<TabAiTargetAudit>(json);
+        assert!(result.is_err(), "should fail without hasFocusedTarget");
     }
 }

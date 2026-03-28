@@ -304,7 +304,6 @@ impl ScriptListApp {
                                             .description_opt(description)
                                             .selected(is_selected)
                                             .hovered(is_hovered)
-                                            .with_hover_effect(current_input_mode == InputMode::Mouse)
                                             .with_accent_bar(true),
                                     )
                             } else {

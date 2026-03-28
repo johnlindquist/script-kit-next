@@ -1,121 +1,22 @@
 {
   "version": 1,
-  "updatedAt": "2026-03-28T11:08:04.537Z",
+  "updatedAt": "2026-03-28T19:42:19.110Z",
   "agents": {
-    "adoption-system-a1": {
-      "id": "adoption-system-a1",
+    "tab-ai-instant-context-a1": {
+      "id": "tab-ai-instant-context-a1",
       "kind": "codex",
       "mode": "exec",
       "model": "openai/gpt-5.4",
-      "task": "Implement the storybook-to-live-app adoption system for the actions dialog. This is a Rust GPUI project.\n\nOBJECTIVE: Create a generic adoption layer so that selecting a design variation in the storybook immediately drives the live actions dialog rendering. Both the storybook preview and the live ActionsDialog::render() must call the SAME shared renderer with the SAME typed style.\n\nARCHITECTURE (from Oracle consultation):\n\n1. CREATE src/storybook/adoption.rs:\n   - VariationId trait: as_str(), name(), description(), from_stable_id()\n   - AdoptableSurface trait: associates Id, Spec, Live types + STORY_ID + DEFAULT_ID\n   - resolve_surface_live<S>(selected: Option<&str>) -> (S::Live, SurfaceSelectionResolution)\n   - adopted_surface_live<S>() -> S::Live (reads from load_selected_story_variant)\n   - SurfaceSelectionResolution struct (story_id, requested_variant_id, resolved_variant_id, fallback_used)\n\n2. CREATE src/storybook/actions_dialog_variations/mod.rs:\n   - ActionsDialogVariationId enum: Current, Whisper, GhostPills, Typewriter, SingleColumn, InlineKeys, SearchFocused, DotAccent (8 variants)\n   - Implement VariationId for ActionsDialogVariationId\n   - ActionsDialogStyle struct with typed fields:\n     - show_container_border: bool\n     - show_header: bool  \n     - show_search_divider: bool\n     - show_icons: bool\n     - selection_opacity: f32 (0.0-1.0)\n     - hover_opacity: f32\n     - row_height: f32\n     - row_radius: f32\n     - shortcut_visible: bool\n     - mono_font: bool\n     - prefix_marker: Option<&'static str>\n   - ActionsDialogVariationSpec { id, style }\n   - SPECS const array with all 8 variations\n   - Implement AdoptableSurface\n   - actions_dialog_story_variants() -> Vec<StoryVariant>\n   - adopted_actions_dialog_style() -> ActionsDialogStyle\n   - Current variant: seeded from existing constants in src/actions/constants.rs (POPUP_WIDTH=320, ACTION_ITEM_HEIGHT=30, SELECTION_RADIUS=6, etc.)\n   - Whisper: no borders, no header, selection_opacity=0.04, row_radius=6\n   - GhostPills: pill radius=16, border on selection, selection_opacity=0.12\n   - Typewriter: mono_font=true, prefix_marker=Some('>'), no icons\n   - SingleColumn: no shortcuts visible, no icons\n   - InlineKeys: shortcuts inline (not keycaps)\n   - SearchFocused: show_search_divider=true\n   - DotAccent: selection_opacity=0.0 (uses dot instead)\n\n3. CREATE src/storybook/actions_dialog_variations/tests.rs:\n   - ID uniqueness, round-trip, variant coverage, surface prop tests\n\n4. MODIFY src/storybook/mod.rs:\n   - Add pub mod adoption\n   - Add pub mod actions_dialog_variations\n   - Add pub use exports for new types\n\n5. MODIFY src/actions/dialog.rs:\n   - At the START of the render method, call adopted_actions_dialog_style() to get the active style\n   - Replace the 8 'Whisper:' commented-out border lines with conditional checks on style fields:\n     - if style.show_container_border { container.border_1().border_color(...) }\n     - if style.show_search_divider { ... }\n     - etc.\n   - Replace the halved selection_alpha with style.selection_opacity and style.hover_opacity\n   - Revert the _ prefixes on unused variables (they'll be used again in conditionals)\n   - Import adopted_actions_dialog_style from crate::storybook::actions_dialog_variations\n\n6. MODIFY src/stories/actions_mini_variations.rs:\n   - Import resolve_surface_live and the new types\n   - In render_variant(), resolve the style from the variant ID, then call the SAME render path\n   - Actually: for now, keep the mock renderers but add a comment that they should be replaced with the shared renderer once extracted\n\nKEY FILES:\n- src/storybook/selection.rs — existing persistence (load_selected_story_variant)\n- src/storybook/footer_variations/mod.rs — reference pattern for adoption\n- src/storybook/input_variations/mod.rs — reference pattern for adoption  \n- src/storybook/mod.rs — module registration\n- src/actions/dialog.rs — the live render target (~2400 lines, search for 'Whisper:' to find the 8 change sites)\n- src/actions/constants.rs — existing dimensional constants to seed Current variant\n- src/stories/actions_mini_variations.rs — storybook story\n\nCONSTRAINTS:\n- Rust GPUI project. Use gpui::* types.\n- Theme colors: crate::theme::get_cached_theme(), crate::ui_foundation::HexColorExt\n- DO NOT use .when() fluent builder (type inference issues) — use if/else with mut bindings\n- Run: cargo check && cargo clippy --lib -- -D warnings\n- Existing tests: cargo test --lib storybook\n- The dialog.rs render method is in an include!() flat namespace — NO top-level use statements in it. Use fully qualified paths or existing main.rs scope imports.\n\nSUCCESS CONDITION: cargo check passes, cargo clippy --lib -- -D warnings passes, tests pass. The adopted_actions_dialog_style() function returns Current by default (no storybook selection), and returns Whisper when 'whisper' is persisted in the selection store.",
-      "scope": "src/storybook/**,src/actions/dialog.rs,src/stories/actions_mini_variations.rs",
+      "task": "Eliminate the ~3.4s delay when pressing Tab to open inline AI chat in the main menu. The delay is caused by build_tab_ai_context_cards() in src/app_impl/tab_ai_mode.rs (around line 235) calling capture_context_snapshot() with include_focused_window: true, which triggers capture_focused_window_screenshot() in src/platform/ai_commands.rs — this enumerates all windows via xcap, captures a screenshot, resizes with Lanczos3, and encodes PNG, all synchronously on the main thread. The context cards only need the window TITLE, not a screenshot.\n\nFIX: Extend the existing frontmost_app_tracker (src/frontmost_app_tracker/mod.rs) to also cache the focused window title. The tracker already watches NSWorkspaceDidActivateApplicationNotification and stores TrackedApp {pid, bundle_id, name} in a global RwLock<TrackerState>. Add a window_title: Option<String> field to TrackedApp. On each app activation notification, also grab the frontmost window title via a lightweight method — either CGWindowListCopyWindowInfo (fast, ~1ms) filtering by the activated app's PID, or AXUIElementCopyAttributeValue for kAXFocusedWindowAttribute then kAXTitleAttribute. Do NOT use xcap or capture screenshots.\n\nThen update build_tab_ai_context_cards() in src/app_impl/tab_ai_mode.rs to use get_last_real_app() from the tracker instead of calling capture_context_snapshot() with include_focused_window: true. Replace the expensive snapshot call with the instant tracker lookup. The frontmost app card should use app.name and the focused window card should use app.window_title (if Some and non-empty).\n\nAlso update the two other call sites that use capture_context_snapshot with include_focused_window: true — check capture_focused_window_live() in src/context_snapshot/capture.rs to see if it can also benefit from using the cached title instead of the expensive xcap path (at minimum for the title-only use case).\n\nKEY FILES: src/frontmost_app_tracker/mod.rs (TrackedApp struct, TrackerState, the NSWorkspace observer callback around line 398, start_tracking(), get_last_real_app()), src/app_impl/tab_ai_mode.rs (build_tab_ai_context_cards around line 221, open_tab_ai_chat around line 135), src/context_snapshot/capture.rs (capture_focused_window_live around line 182, capture_context_snapshot around line 206), src/platform/ai_commands.rs (capture_focused_window_screenshot — do NOT modify this, it may still be needed for actual screenshot use cases).\n\nCONSTRAINTS from CLAUDE.md: Use parking_lot::Mutex/RwLock (non-poisoning). Every unsafe block needs a // SAFETY: comment. ObjC runtime is objc = 0.2 (NOT objc2). Use msg_send! with explicit return types. Nil-check ObjC pointers. Every #[cfg(target_os = macos)] function needs a #[cfg(not(target_os = macos))] stub. Use tracing::{info,warn,debug} for logging. No unwrap/expect in production code. Use ? + anyhow::Context or explicit handling.\n\nVERIFICATION: cargo check && cargo clippy --all-targets -- -D warnings && cargo test",
+      "scope": "src/frontmost_app_tracker/**,src/app_impl/tab_ai_mode.rs,src/context_snapshot/capture.rs",
       "readonly": false,
       "status": "needs_split",
       "claims": [],
-      "createdAt": "2026-03-27T07:34:58.025Z",
-      "lastSeenAt": "2026-03-27T07:56:02.861Z",
+      "createdAt": "2026-03-28T19:12:17.468Z",
+      "lastSeenAt": "2026-03-28T19:42:17.534Z",
       "host": "Johns-MacBook-Pro.local",
-      "startSha": "6074d9c67d95ed979137929f266e4be32ed1f78e",
-      "notes": "[policy] commits touch files outside declared scope",
-      "report": {
-        "schema": "opex.agent_report.v1",
-        "agentId": "adoption-system-a1",
-        "taskSummary": "Implemented the generic storybook adoption layer for actions dialog variations, wired the live ActionsDialog renderer to the adopted typed style, and added coverage for persisted selection and variation resolution.",
-        "tests": [
-          {
-            "cmd": "cargo test --lib storybook::actions_dialog_variations::tests::adopted_actions_dialog_style_reads_persisted_selection -- --nocapture",
-            "result": "pass"
-          },
-          {
-            "cmd": "cargo test --lib storybook",
-            "result": "pass"
-          },
-          {
-            "cmd": "cargo check",
-            "result": "pass"
-          },
-          {
-            "cmd": "cargo clippy --lib -- -D warnings",
-            "result": "pass"
-          }
-        ],
-        "changedFiles": [
-          "src/actions/dialog.rs",
-          "src/main.rs",
-          "src/stories/actions_mini_variations.rs",
-          "src/stories/mod.rs",
-          "src/storybook/actions_dialog_variations/mod.rs",
-          "src/storybook/actions_dialog_variations/tests.rs",
-          "src/storybook/adoption.rs",
-          "src/storybook/mod.rs",
-          "src/storybook/selection.rs"
-        ],
-        "commitCount": 1,
-        "commitShas": [
-          "ca3d5fe837749114ae87a20948bef7ae31dfc1a6"
-        ],
-        "commitFiles": [
-          "src/actions/dialog.rs",
-          "src/main.rs",
-          "src/stories/actions_mini_variations.rs",
-          "src/stories/mod.rs",
-          "src/storybook/actions_dialog_variations/mod.rs",
-          "src/storybook/actions_dialog_variations/tests.rs",
-          "src/storybook/adoption.rs",
-          "src/storybook/mod.rs",
-          "src/storybook/selection.rs"
-        ]
-      },
-      "claimed_at": {}
-    },
-    "escape-to-mini-a1": {
-      "id": "escape-to-mini-a1",
-      "kind": "codex",
-      "mode": "exec",
-      "model": "openai/gpt-5.4",
-      "task": "When pressing Escape in various UI views (clipboard history, file search, and any other built-in views), the app returns to the old full-size main menu instead of the new mini main menu. Fix ALL such views so that Escape returns to the mini main menu and collapses the window width/size back to the mini main menu dimensions.\n\nKey architecture context from CLAUDE.md:\n- Built-in commands: BuiltInFeature enum in src/builtins/mod.rs → get_builtin_entries() → execute_builtin() in src/app_execute/builtin_execution.rs → AppView variant in src/main_sections/app_view_state.rs → render dispatch in src/main_sections/render_impl.rs\n- App navigation lives in src/app_navigation/\n- App state in src/main_sections/app_state.rs\n- Render dispatch in src/main_sections/render_impl.rs\n- Non-dismissable views: is_dismissable_view() in src/app_impl/shortcuts_hud_grid.rs\n- The mini main menu likely has its own AppView variant and window size configuration\n- Look for escape/dismiss handlers that navigate back to the main menu and ensure they go to the MINI variant instead\n- Also ensure the window resizes to mini dimensions when returning to mini main menu\n- include!() files share main.rs scope — no top-level use statements in those files\n- Verification: cargo check && cargo clippy --all-targets -- -D warnings && cargo test",
-      "scope": "src/app_navigation/**,src/main_sections/**,src/app_impl/**,src/app_execute/**,src/builtins/**,src/render_prompts/**,src/prompts/**",
-      "readonly": false,
-      "status": "needs_split",
-      "claims": [],
-      "createdAt": "2026-03-27T17:26:56.647Z",
-      "lastSeenAt": "2026-03-27T17:35:46.059Z",
-      "host": "Johns-MacBook-Pro.local",
-      "startSha": "cdca97c17ad4a2f394fe5701fc9558aa9e000c9b",
-      "notes": "[policy] tests failed",
-      "report": {
-        "schema": "opex.agent_report.v1",
-        "agentId": "escape-to-mini-a1",
-        "taskSummary": "Updated shared and direct Escape/cancel return paths so built-in views go back to the mini main menu and collapse the window back to mini dimensions.",
-        "tests": [
-          {
-            "cmd": "cargo check",
-            "result": "pass"
-          },
-          {
-            "cmd": "cargo clippy --all-targets -- -D warnings",
-            "result": "fail"
-          },
-          {
-            "cmd": "cargo test",
-            "result": "fail"
-          }
-        ],
-        "changedFiles": [
-          "src/app_impl/lifecycle_reset.rs",
-          "src/app_impl/naming_dialog.rs",
-          "src/render_prompts/other.rs"
-        ],
-        "commitCount": 1,
-        "commitShas": [
-          "ed1e2d2aad7aa34adc1c470491b110da2f00948d"
-        ],
-        "commitFiles": [
-          "src/app_impl/lifecycle_reset.rs",
-          "src/app_impl/naming_dialog.rs",
-          "src/render_prompts/other.rs"
-        ]
-      },
+      "startSha": "1d892fedf6c3dd1cbd7d19595b2c68524419f2fe",
+      "notes": "[auto] timed out after 1800s — task too broad",
       "claimed_at": {}
     }
   }

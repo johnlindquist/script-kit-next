@@ -1,14 +1,5 @@
 use super::*;
 
-/// Input mode for AI window navigation.
-/// Keyboard mode suppresses hover highlights to prevent dual-highlight states.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub(super) enum InputMode {
-    #[default]
-    Mouse,
-    Keyboard,
-}
-
 /// The main AI chat application view
 pub struct AiApp {
     /// Current presentation mode for the AI window.
@@ -181,10 +172,6 @@ pub struct AiApp {
 
     /// Whether the mouse cursor is currently hidden (hidden on keyboard, shown on mouse move)
     pub(super) mouse_cursor_hidden: bool,
-
-    /// Tracks whether the user is navigating with keyboard or mouse.
-    /// Mouse mode enables hover highlights; keyboard mode suppresses them.
-    pub(super) input_mode: InputMode,
 
     /// ID of the message whose content was just copied (for showing checkmark feedback)
     pub(super) copied_message_id: Option<String>,
@@ -364,12 +351,7 @@ impl AiMiniDebugSnapshot {
 
 #[cfg(test)]
 mod tests {
-    use super::{AiMiniDebugSnapshot, InputMode};
-
-    #[test]
-    fn test_ai_window_input_mode_defaults_to_mouse() {
-        assert_eq!(InputMode::default(), InputMode::Mouse);
-    }
+    use super::AiMiniDebugSnapshot;
 
     #[test]
     fn debug_snapshot_serde_roundtrip_uses_camel_case() {

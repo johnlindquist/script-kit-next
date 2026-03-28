@@ -144,12 +144,18 @@ impl Render for ScriptListApp {
                 && !script_kit_gpui::is_within_focus_grace_period()
                 && !actions::is_actions_window_open()
                 && !confirm::is_confirm_window_open()
+                && self.tab_ai_save_offer_state.is_none()
             {
                 logging::log(
                     "FOCUS",
                     "Main window lost focus while in dismissable view - closing",
                 );
                 self.close_and_reset_window(cx);
+            } else if self.tab_ai_save_offer_state.is_some() {
+                logging::log(
+                    "FOCUS",
+                    "Main window lost focus but Tab AI save-offer is active - staying open",
+                );
             } else if actions::is_actions_window_open() {
                 logging::log(
                     "FOCUS",
@@ -374,6 +380,9 @@ impl Render for ScriptListApp {
             } => self
                 .render_favorites_browse(filter, selected_index, cx)
                 .into_any_element(),
+            AppView::TabAiChat { entity } => {
+                self.render_tab_ai_chat(entity, cx).into_any_element()
+            }
         };
 
         // Wrap content in a container that can have the debug grid overlay
@@ -429,9 +438,6 @@ impl Render for ScriptListApp {
 
         // Build alias input overlay if state is set
         let alias_input_overlay = self.render_alias_input_overlay(window, cx);
-
-        // Build Tab AI overlay if state is set
-        let tab_ai_overlay = self.render_tab_ai_overlay(window, cx);
 
         // Build Tab AI save-offer overlay if a successful run is awaiting save decision
         let tab_ai_save_offer_overlay = self.render_tab_ai_save_offer_overlay(window, cx);
@@ -498,6 +504,7 @@ impl Render for ScriptListApp {
                 div()
                     .w_full()
                     .h_full()
+                    .relative() // Needed for Tab AI absolute overlay positioning
                     .flex()
                     .flex_col()
                     // Hide mouse cursor while typing
@@ -529,10 +536,6 @@ impl Render for ScriptListApp {
                     })
                     // Alias input overlay (on top of main content when entering alias)
                     .when_some(alias_input_overlay, |container, overlay| {
-                        container.child(overlay)
-                    })
-                    // Tab AI overlay (on top of main content when Tab AI is active)
-                    .when_some(tab_ai_overlay, |container, overlay| {
                         container.child(overlay)
                     })
                     // Tab AI save-offer overlay (on top after successful Tab AI execution)

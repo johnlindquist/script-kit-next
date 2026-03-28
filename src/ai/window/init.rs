@@ -251,7 +251,6 @@ impl AiApp {
             context_preview_index: None,
             // Mouse cursor state
             mouse_cursor_hidden: false,
-            input_mode: InputMode::Mouse,
             // Copy feedback state
             copied_message_id: None,
             copied_at: None,

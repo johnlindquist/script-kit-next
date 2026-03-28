@@ -97,20 +97,9 @@ impl AiApp {
     }
 
     pub(super) fn move_setup_button_focus(&mut self, delta: isize, cx: &mut Context<Self>) {
-        let mut should_notify = false;
-
-        if self.input_mode != InputMode::Keyboard {
-            self.input_mode = InputMode::Keyboard;
-            should_notify = true;
-        }
-
         let next_index = Self::next_setup_button_focus_index(self.setup_button_focus_index, delta);
         if next_index != self.setup_button_focus_index {
             self.setup_button_focus_index = next_index;
-            should_notify = true;
-        }
-
-        if should_notify {
             cx.notify();
         }
     }

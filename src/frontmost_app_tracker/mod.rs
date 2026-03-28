@@ -50,6 +50,8 @@ pub struct TrackedApp {
     pub bundle_id: String,
     /// Localized display name (e.g., "Google Chrome")
     pub name: String,
+    /// Cached focused window title for the app, if available.
+    pub window_title: Option<String>,
 }
 /// Global state for the frontmost app tracker
 #[derive(Default)]
@@ -74,6 +76,49 @@ static TRACKING_STARTED: AtomicBool = AtomicBool::new(false);
 /// Our own bundle ID to filter out
 const SCRIPT_KIT_BUNDLE_ID: &str = "dev.scriptkit.scriptkit";
 #[cfg(target_os = "macos")]
+type AXUIElementRef = *const std::ffi::c_void;
+#[cfg(target_os = "macos")]
+type CFTypeRef = *const std::ffi::c_void;
+#[cfg(target_os = "macos")]
+type CFStringRef = *const std::ffi::c_void;
+#[cfg(target_os = "macos")]
+const K_AX_ERROR_SUCCESS: i32 = 0;
+#[cfg(target_os = "macos")]
+const K_AX_ERROR_NO_VALUE: i32 = -25212;
+#[cfg(target_os = "macos")]
+const K_CFSTRING_ENCODING_UTF8: u32 = 0x08000100;
+
+#[cfg(target_os = "macos")]
+#[link(name = "ApplicationServices", kind = "framework")]
+extern "C" {
+    fn AXUIElementCreateApplication(pid: i32) -> AXUIElementRef;
+    fn AXUIElementCopyAttributeValue(
+        element: AXUIElementRef,
+        attribute: CFStringRef,
+        value: *mut CFTypeRef,
+    ) -> i32;
+}
+
+#[cfg(target_os = "macos")]
+#[link(name = "CoreFoundation", kind = "framework")]
+extern "C" {
+    fn CFRelease(cf: *const std::ffi::c_void);
+    fn CFStringCreateWithCString(
+        alloc: *const std::ffi::c_void,
+        c_str: *const i8,
+        encoding: u32,
+    ) -> CFStringRef;
+    fn CFStringGetCString(
+        string: CFStringRef,
+        buffer: *mut i8,
+        buffer_size: i64,
+        encoding: u32,
+    ) -> bool;
+    fn CFStringGetLength(string: CFStringRef) -> i64;
+    fn CFGetTypeID(cf: CFTypeRef) -> u64;
+    fn CFStringGetTypeID() -> u64;
+}
+#[cfg(target_os = "macos")]
 fn require_objc_class(class_name: &str) -> Option<&'static objc::runtime::Class> {
     match objc::runtime::Class::get(class_name) {
         Some(class) => Some(class),
@@ -91,6 +136,189 @@ fn require_objc_class(class_name: &str) -> Option<&'static objc::runtime::Class>
 }
 fn make_objc_cstring(input: &str) -> Result<std::ffi::CString, std::ffi::NulError> {
     std::ffi::CString::new(input)
+}
+
+fn normalize_window_title(title: Option<String>) -> Option<String> {
+    title.and_then(|title| {
+        let trimmed = title.trim();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed.to_string())
+        }
+    })
+}
+
+#[cfg(target_os = "macos")]
+fn try_create_cf_string(input: &str) -> Option<CFStringRef> {
+    let c_str = match make_objc_cstring(input) {
+        Ok(value) => value,
+        Err(error) => {
+            tracing::warn!(
+                target: "script_kit::frontmost_app_tracker",
+                %error,
+                attribute = input,
+                "frontmost app tracker failed to build CFString"
+            );
+            return None;
+        }
+    };
+
+    // SAFETY: `c_str` is a valid NUL-terminated UTF-8 string for the duration
+    // of the call and CoreFoundation copies the bytes into a new CFString.
+    let cf_string =
+        unsafe {
+            CFStringCreateWithCString(
+                std::ptr::null(),
+                c_str.as_ptr(),
+                K_CFSTRING_ENCODING_UTF8,
+            )
+        };
+    if cf_string.is_null() {
+        tracing::warn!(
+            target: "script_kit::frontmost_app_tracker",
+            attribute = input,
+            "frontmost app tracker received null CFString"
+        );
+        None
+    } else {
+        Some(cf_string)
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn cf_release(cf: *const std::ffi::c_void) {
+    if !cf.is_null() {
+        // SAFETY: The caller only passes owned CoreFoundation references created
+        // or returned with +1 retain semantics in this module.
+        unsafe { CFRelease(cf) };
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn cf_string_to_string(cf_string: CFStringRef) -> Option<String> {
+    if cf_string.is_null() {
+        return None;
+    }
+
+    // SAFETY: `cf_string` is a valid CFStringRef owned by the caller.
+    let length = unsafe { CFStringGetLength(cf_string) };
+    if length <= 0 {
+        return Some(String::new());
+    }
+
+    let buffer_size = (length * 4 + 1) as usize;
+    let mut buffer = vec![0_i8; buffer_size];
+
+    // SAFETY: `cf_string` is a valid CFStringRef; `buffer` is a writable,
+    // properly sized output buffer for UTF-8 conversion.
+    let success = unsafe {
+        CFStringGetCString(
+            cf_string,
+            buffer.as_mut_ptr(),
+            buffer_size as i64,
+            K_CFSTRING_ENCODING_UTF8,
+        )
+    };
+
+    if !success {
+        return None;
+    }
+
+    // SAFETY: `buffer` was written by CFStringGetCString with a trailing NUL.
+    unsafe { std::ffi::CStr::from_ptr(buffer.as_ptr()) }
+        .to_str()
+        .ok()
+        .map(ToOwned::to_owned)
+}
+
+#[cfg(target_os = "macos")]
+fn get_ax_string_attribute(element: AXUIElementRef, attribute: &str) -> Option<String> {
+    let attr = try_create_cf_string(attribute)?;
+    let mut value: CFTypeRef = std::ptr::null();
+
+    // SAFETY: `element` is an AXUIElementRef owned by the caller, `attr` is a
+    // valid CFStringRef, and `value` is a stack out-pointer for the API result.
+    let result = unsafe { AXUIElementCopyAttributeValue(element, attr, &mut value) };
+    cf_release(attr);
+
+    if result == K_AX_ERROR_NO_VALUE || value.is_null() {
+        return None;
+    }
+    if result != K_AX_ERROR_SUCCESS {
+        tracing::debug!(
+            target: "script_kit::frontmost_app_tracker",
+            attribute,
+            code = result,
+            "frontmost app tracker AX attribute unavailable"
+        );
+        return None;
+    }
+
+    // SAFETY: `value` is returned by AXUIElementCopyAttributeValue and valid for
+    // CoreFoundation type inspection until released below.
+    let value_type_id = unsafe { CFGetTypeID(value) };
+    // SAFETY: CFStringGetTypeID is a pure CoreFoundation query.
+    let string_type_id = unsafe { CFStringGetTypeID() };
+    let result = if value_type_id == string_type_id {
+        cf_string_to_string(value as CFStringRef)
+    } else {
+        None
+    };
+    cf_release(value);
+    result
+}
+
+#[cfg(target_os = "macos")]
+fn capture_window_title_for_pid(pid: i32) -> Option<String> {
+    if !crate::window_control::has_accessibility_permission() {
+        tracing::debug!(
+            target: "script_kit::frontmost_app_tracker",
+            pid,
+            "frontmost app tracker skipped focused window title capture without AX permission"
+        );
+        return None;
+    }
+
+    // SAFETY: AXUIElementCreateApplication returns an owned accessibility object
+    // for the supplied PID when the app exists. The pointer is released below.
+    let app = unsafe { AXUIElementCreateApplication(pid) };
+    if app.is_null() {
+        return None;
+    }
+
+    let title = (|| {
+        let attr = try_create_cf_string("AXFocusedWindow")?;
+        let mut focused_window: CFTypeRef = std::ptr::null();
+        // SAFETY: `app` and `attr` are valid CF objects and `focused_window` is
+        // a stack out-pointer for AXUIElementCopyAttributeValue.
+        let result = unsafe { AXUIElementCopyAttributeValue(app, attr, &mut focused_window) };
+        cf_release(attr);
+
+        if result != K_AX_ERROR_SUCCESS || focused_window.is_null() {
+            if result != K_AX_ERROR_NO_VALUE {
+                tracing::debug!(
+                    target: "script_kit::frontmost_app_tracker",
+                    pid,
+                    code = result,
+                    "frontmost app tracker focused window lookup unavailable"
+                );
+            }
+            return None;
+        }
+
+        let title = get_ax_string_attribute(focused_window as AXUIElementRef, "AXTitle");
+        cf_release(focused_window);
+        title
+    })();
+
+    cf_release(app);
+    normalize_window_title(title)
+}
+
+#[cfg(not(target_os = "macos"))]
+fn capture_window_title_for_pid(_pid: i32) -> Option<String> {
+    None
 }
 /// Start the background frontmost app tracker.
 ///
@@ -195,6 +423,7 @@ fn capture_current_frontmost_app() {
                 pid,
                 bundle_id: bundle_id.clone(),
                 name: name.unwrap_or_else(|| bundle_id.clone()),
+                window_title: capture_window_title_for_pid(pid),
             };
 
             logging::log(
@@ -321,6 +550,7 @@ fn setup_workspace_observer() {
                         pid,
                         bundle_id: bundle_id.clone(),
                         name: name.unwrap_or_else(|| bundle_id.clone()),
+                        window_title: capture_window_title_for_pid(pid),
                     };
 
                     logging::log(
@@ -583,11 +813,13 @@ mod tests {
             pid: 123,
             bundle_id: "com.test.app".to_string(),
             name: "Test App".to_string(),
+            window_title: Some("Window".to_string()),
         };
         let cloned = app.clone();
         assert_eq!(cloned.pid, 123);
         assert_eq!(cloned.bundle_id, "com.test.app");
         assert_eq!(cloned.name, "Test App");
+        assert_eq!(cloned.window_title.as_deref(), Some("Window"));
     }
 
     #[test]
@@ -614,6 +846,7 @@ mod tests {
             pid: 42,
             bundle_id: "com.example.bundle".to_string(),
             name: "Example".to_string(),
+            window_title: Some("Editor".to_string()),
         });
         drop(state);
 
@@ -644,6 +877,7 @@ mod tests {
             pid: 100,
             bundle_id: "com.test.app".to_string(),
             name: "Test App".to_string(),
+            window_title: Some("Main".to_string()),
         };
         assert!(
             should_update(&new_app, &None),
@@ -655,6 +889,7 @@ mod tests {
             pid: 100,
             bundle_id: "com.other.app".to_string(),
             name: "Other App".to_string(),
+            window_title: Some("Other".to_string()),
         });
         assert!(
             should_update(&new_app, &current),
@@ -666,6 +901,7 @@ mod tests {
             pid: 100,
             bundle_id: "com.test.app".to_string(),
             name: "Test App".to_string(),
+            window_title: Some("Main".to_string()),
         });
         assert!(
             !should_update(&new_app, &current_same),
@@ -678,6 +914,7 @@ mod tests {
             pid: 200, // Different PID - app was relaunched!
             bundle_id: "com.test.app".to_string(),
             name: "Test App".to_string(),
+            window_title: Some("Main".to_string()),
         });
         assert!(
             should_update(&new_app, &current_relaunched),
@@ -695,5 +932,15 @@ mod tests {
     fn test_make_objc_cstring_accepts_valid_string() {
         let result = make_objc_cstring("NSWorkspaceDidActivateApplicationNotification");
         assert!(result.is_ok(), "valid strings should convert to CString");
+    }
+
+    #[test]
+    fn test_normalize_window_title_trims_and_drops_empty_values() {
+        assert_eq!(
+            normalize_window_title(Some("  README.md  ".to_string())).as_deref(),
+            Some("README.md")
+        );
+        assert_eq!(normalize_window_title(Some("   ".to_string())), None);
+        assert_eq!(normalize_window_title(None), None);
     }
 }

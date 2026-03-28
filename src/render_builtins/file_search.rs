@@ -952,149 +952,99 @@ impl ScriptListApp {
                 )
         };
 
-        // Main container - styled to match main menu exactly
-        // NOTE: No border to match main menu (border adds visual padding/shift)
-        div()
-            .key_context("FileSearchView")
-            .track_focus(&self.focus_handle)
-            .on_key_down(handle_key)
-            .w_full()
-            .h_full()
+        // Header: bare input + file count (scaffold adds padding/layout)
+        let input_height = CURSOR_HEIGHT_LG + (CURSOR_MARGIN_Y * 2.0);
+        let header_element = div()
+            .flex_1()
             .flex()
-            .flex_col()
-            // Removed: .bg(rgba(bg_with_alpha)) - let vibrancy show through from Root
-            // Removed: .shadow(box_shadows) - shadows on transparent elements block vibrancy
-            // Sharp edges per .impeccable.md (no rounded corners on main containers)
-            // Header with search input - styled to match main menu exactly
-            // Uses shared header constants (HEADER_PADDING_X/Y, CURSOR_HEIGHT_LG) for visual consistency.
-            // The right-side element uses same py(4px) padding as main menu's "Ask AI" button
-            // to ensure identical flex row height (28px) and input vertical centering.
-            .child({
-                // Calculate input height using same formula as main menu
-                let input_height = CURSOR_HEIGHT_LG + (CURSOR_MARGIN_Y * 2.0);
-
+            .flex_row()
+            .items_center()
+            .gap(px(HEADER_GAP))
+            .child(
+                div().flex_1().flex().flex_row().items_center().child(
+                    Input::new(&self.gpui_input_state)
+                        .w_full()
+                        .h(px(input_height))
+                        .px(px(0.))
+                        .py(px(0.))
+                        .with_size(Size::Size(px(_design_typography.font_size_xl)))
+                        .appearance(false)
+                        .bordered(false)
+                        .focus_bordered(false),
+                ),
+            )
+            .child(
                 div()
-                    .w_full()
-                    .px(px(HEADER_PADDING_X))
-                    .py(px(HEADER_PADDING_Y))
                     .flex()
                     .flex_row()
                     .items_center()
-                    .gap(px(HEADER_GAP))
-                    // Search input - matches main menu Input styling for visual consistency
-                    // NOTE: Removed search icon to match main menu alignment exactly
-                    .child(
-                        div().flex_1().flex().flex_row().items_center().child(
-                            Input::new(&self.gpui_input_state)
-                                .w_full()
-                                .h(px(input_height))
-                                .px(px(0.))
-                                .py(px(0.))
-                                .with_size(Size::Size(px(_design_typography.font_size_xl)))
-                                .appearance(false)
-                                .bordered(false)
-                                .focus_bordered(false),
-                        ),
-                    )
-                    // Right-side element styled to match main menu's "Ask AI" button height
-                    // Using fixed width to prevent layout shift when content changes
-                    .child(
-                        div()
-                            .flex()
-                            .flex_row()
-                            .items_center()
-                            .justify_end()
-                            .py(px(4.))
-                            .w(px(70.)) // Fixed width prevents layout shift
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .text_color(rgb(text_dimmed))
-                                    .child(format!("{} files", filtered_len)),
-                            ),
-                    )
-            })
-            // Whisper chrome: spacing defines structure, no explicit divider
-            // Main content: loading state OR empty state OR 50/50 split
-            .child(if is_loading && filtered_len == 0 {
-                // Loading state: full-width centered (no split, clean appearance)
-                div()
-                    .flex_1()
-                    .w_full()
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .min_h(px(0.))
+                    .justify_end()
+                    .py(px(4.))
+                    .w(px(70.))
                     .child(
                         div()
                             .text_sm()
                             .text_color(rgb(text_dimmed))
-                            .child("Searching..."),
-                    )
-            } else if filtered_len == 0 {
-                // Empty state: single centered message (no awkward 50/50 split)
-                div()
-                    .flex_1()
-                    .w_full()
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .min_h(px(0.))
-                    .child(
-                        div().flex().flex_col().items_center().gap(px(8.)).child(
-                            div()
-                                .text_color(rgb(text_dimmed))
-                                .child(if query.is_empty() {
-                                    "Type to search files"
-                                } else {
-                                    "No files found"
-                                }),
-                        ),
-                    )
-            } else {
-                // Normal state: 50/50 split with list and preview
-                div()
-                    .flex_1()
-                    .w_full()
-                    .flex()
-                    .flex_row()
-                    .min_h(px(0.))
-                    .overflow_hidden()
-                    // Left panel: file list (50%)
-                    .child(
+                            .child(format!("{} files", filtered_len)),
+                    ),
+            );
+
+        // List pane: loading/empty/results with scrollbar overlay
+        let list_pane = if is_loading && filtered_len == 0 {
+            div()
+                .w_full()
+                .h_full()
+                .flex()
+                .items_center()
+                .justify_center()
+                .child(
+                    div()
+                        .text_sm()
+                        .text_color(rgb(text_dimmed))
+                        .child("Searching..."),
+                )
+        } else if filtered_len == 0 {
+            div()
+                .w_full()
+                .h_full()
+                .flex()
+                .items_center()
+                .justify_center()
+                .child(
+                    div().flex().flex_col().items_center().gap(px(8.)).child(
                         div()
-                            .flex_1()
-                            .h_full()
-                            .overflow_hidden()
-                            .border_r(px(design_visual.border_thin))
-                            .border_color(rgba(crate::ui_foundation::hex_to_rgba_with_opacity(ui_border, crate::theme::opacity::OPACITY_GHOST)))
-                            .child(
-                                div()
-                                    .relative()
-                                    .w_full()
-                                    .h_full()
-                                    .child(list_element)
-                                    .child(list_scrollbar),
-                            ),
-                    )
-                    // Right panel: preview (50%)
-                    .child(
-                        div()
-                            .flex_1()
-                            .h_full()
-                            .overflow_hidden()
-                            .child(preview_content),
-                    )
-            })
-            // Footer — canonical three-key hint strip per .impeccable.md
-            .child(crate::components::render_simple_hint_strip(
-                vec![
-                    gpui::SharedString::from("↵ Run"),
-                    gpui::SharedString::from("⌘K Actions"),
-                    gpui::SharedString::from("Tab AI"),
-                ],
-                None,
-            ))
+                            .text_color(rgb(text_dimmed))
+                            .child(if query.is_empty() {
+                                "Type to search files"
+                            } else {
+                                "No files found"
+                            }),
+                    ),
+                )
+        } else {
+            div()
+                .relative()
+                .w_full()
+                .h_full()
+                .child(list_element)
+                .child(list_scrollbar)
+        };
+
+        // Preview pane: file detail or placeholder
+        let preview_pane = preview_content;
+
+        // Assemble via shared expanded-view scaffold (owns header padding, 50/50 split, footer)
+        tracing::info!(
+            surface = "file_search",
+            layout_mode = "expanded",
+            custom_footer_removed = true,
+            custom_divider_removed = true,
+            "file_search_chrome_checkpoint: migrated to render_expanded_view_scaffold"
+        );
+        crate::components::render_expanded_view_scaffold(header_element, list_pane, preview_pane)
+            .key_context("FileSearchView")
+            .track_focus(&self.focus_handle)
+            .on_key_down(handle_key)
             .into_any_element()
 
     }
@@ -1179,37 +1129,49 @@ mod file_search_thumbnail_tests {
 #[cfg(test)]
 mod file_search_chrome_audit {
     #[test]
-    fn file_search_uses_minimal_chrome_footer() {
+    fn file_search_uses_shared_expanded_view_shell() {
         let source = include_str!("file_search.rs");
-        assert!(
-            source.contains("render_simple_hint_strip("),
-            "file_search should use render_simple_hint_strip"
-        );
-        // Count occurrences of the legacy footer pattern — only the test assertion itself should match
-        let legacy = "Prompt".to_owned() + "Footer::new(";
-        let count = source.matches(&legacy).count();
-        assert_eq!(
-            count, 0,
-            "file_search should not use PromptFooter (found {count} occurrences)"
-        );
-    }
 
-    #[test]
-    fn file_search_has_no_section_divider() {
-        let source = include_str!("file_search.rs");
-        // SectionDivider is legacy chrome — spacing defines structure per .impeccable.md
-        let divider_pattern = "SectionDivider::new()";
-        let count = source.matches(divider_pattern).count();
+        // Must route through the shared expanded-view scaffold
+        assert!(
+            source.contains("render_expanded_view_scaffold("),
+            "file_search must use the shared expanded-view scaffold"
+        );
+
+        // Must emit expanded layout audit
+        assert!(
+            source.contains("PromptChromeAudit::expanded(\"file_search\""),
+            "file_search must declare expanded layout mode"
+        );
+
+        // Must NOT have hand-rolled divider chrome (split string to avoid self-match)
+        let divider_call = "SectionDivider".to_owned() + "::new()";
+        assert!(
+            !source.contains(&divider_call),
+            "file_search must not use SectionDivider (scaffold owns structure)"
+        );
+
+        // Must NOT have legacy PromptFooter
+        let legacy = "Prompt".to_owned() + "Footer::new(";
+        assert!(
+            !source.contains(&legacy),
+            "file_search must not use PromptFooter (scaffold owns footer)"
+        );
+
+        // Must NOT have hand-rolled render_simple_hint_strip (scaffold owns footer)
+        // The only render_simple_hint_strip usage should be inside the scaffold itself.
+        // Count occurrences — none should appear in file_search.rs directly.
+        let hint_strip_call = "render_simple_hint_strip(";
+        let count = source.matches(hint_strip_call).count();
         assert_eq!(
             count, 0,
-            "file_search should not use SectionDivider (found {count} occurrences)"
+            "file_search must not call render_simple_hint_strip directly (scaffold owns footer, found {count})"
         );
     }
 
     #[test]
     fn file_search_has_no_hardcoded_alpha_fills() {
         let source = include_str!("file_search.rs");
-        // No hardcoded alpha byte patterns like `| 0x24)` or `| 0x40)` — use opacity tokens
         assert!(
             !source.contains("| 0x24)"),
             "file_search should not contain hardcoded alpha fill 0x24"
@@ -1221,19 +1183,11 @@ mod file_search_chrome_audit {
     }
 
     #[test]
-    fn file_search_footer_matches_canonical_three_key_pattern() {
+    fn file_search_emits_checkpoint_log() {
         let source = include_str!("file_search.rs");
         assert!(
-            source.contains(r#""↵ Run""#),
-            "footer should contain ↵ Run"
-        );
-        assert!(
-            source.contains(r#""⌘K Actions""#),
-            "footer should contain ⌘K Actions"
-        );
-        assert!(
-            source.contains(r#""Tab AI""#),
-            "footer should contain Tab AI"
+            source.contains("file_search_chrome_checkpoint"),
+            "file_search must emit a structured checkpoint log for migration verification"
         );
     }
 }

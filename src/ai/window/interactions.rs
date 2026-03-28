@@ -2,39 +2,17 @@ use super::*;
 
 impl AiApp {
     pub(super) fn hide_mouse_cursor(&mut self, cx: &mut Context<Self>) {
-        let mut should_notify = false;
-
-        if self.input_mode != InputMode::Keyboard {
-            self.input_mode = InputMode::Keyboard;
-            should_notify = true;
-        }
-
         if !self.mouse_cursor_hidden {
             self.mouse_cursor_hidden = true;
             crate::platform::hide_cursor_until_mouse_moves();
-            should_notify = true;
-        }
-
-        if should_notify {
             cx.notify();
         }
     }
 
     /// Show the mouse cursor when mouse moves.
     pub(super) fn show_mouse_cursor(&mut self, cx: &mut Context<Self>) {
-        let mut should_notify = false;
-
-        if self.input_mode != InputMode::Mouse {
-            self.input_mode = InputMode::Mouse;
-            should_notify = true;
-        }
-
         if self.mouse_cursor_hidden {
             self.mouse_cursor_hidden = false;
-            should_notify = true;
-        }
-
-        if should_notify {
             cx.notify();
         }
     }

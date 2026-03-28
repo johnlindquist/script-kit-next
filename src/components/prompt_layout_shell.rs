@@ -1330,16 +1330,21 @@ mod prompt_layout_shell_tests {
     #[test]
     fn file_search_source_matches_expanded_contract() {
         let source = include_str!("../render_builtins/file_search_layout.rs");
-        // Still uses the shared chrome infrastructure (SectionDivider, hint strip, header padding)
-        assert_minimal_surface_source(source, "file_search_layout.rs", true);
-        // But now emits a hint audit with the universal three-key footer
+        // Must route through the shared expanded-view scaffold
         assert!(
-            source.contains("emit_prompt_hint_audit("),
-            "file search layout should emit a prompt hint audit"
+            source.contains("render_expanded_view_scaffold("),
+            "file search layout must use the shared expanded-view scaffold"
         );
+        // Must NOT have hand-rolled SectionDivider (scaffold owns structure)
+        let divider = "SectionDivider".to_owned() + "::new()";
         assert!(
-            source.contains("universal_prompt_hints()"),
-            "file search should use the canonical three-key footer"
+            !source.contains(&divider),
+            "file search layout must not use SectionDivider (scaffold owns structure)"
+        );
+        // Must NOT have hardcoded alpha (old 0x40 pattern)
+        assert!(
+            !source.contains("| 0x40)"),
+            "file search layout must not have hardcoded alpha fills"
         );
     }
 
