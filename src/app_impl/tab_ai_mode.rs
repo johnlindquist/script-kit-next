@@ -549,7 +549,7 @@ impl ScriptListApp {
                     return;
                 };
                 app.update(cx, |this, cx| match response {
-                    Ok((_slug, source)) => {
+                    Ok((slug, source)) => {
                         tracing::info!(
                             event = "tab_ai_script_extracted",
                             source_len = source.len(),
@@ -568,7 +568,18 @@ impl ScriptListApp {
                                     path = %path_str,
                                 );
 
-                                // Store the generated source for potential future save
+                                // Capture intent and context before closing overlay
+                                let intent = this
+                                    .tab_ai_state
+                                    .as_ref()
+                                    .map(|s| s.intent.clone())
+                                    .unwrap_or_default();
+                                let prompt_type = this
+                                    .tab_ai_state
+                                    .as_ref()
+                                    .map(|s| s.ui_snapshot.prompt_type.clone())
+                                    .unwrap_or_else(|| "Unknown".to_string());
+
                                 // Close overlay before execution
                                 this.tab_ai_state = None;
                                 this.tab_ai_task = None;
@@ -576,6 +587,36 @@ impl ScriptListApp {
 
                                 // Execute the ephemeral script
                                 this.execute_script_by_path(&path_str, cx);
+
+                                // --- Post-dispatch bookkeeping ---
+                                let record =
+                                    crate::ai::TabAiExecutionRecord::from_parts(
+                                        intent,
+                                        source.clone(),
+                                        path_str.clone(),
+                                        slug,
+                                        prompt_type,
+                                        None, // Phase 2: wire bundle_id from desktop snapshot
+                                        chrono::Utc::now().to_rfc3339(),
+                                    );
+
+                                // Do not remove the temp script here. `execute_script_by_path`
+                                // resolves and launches the file asynchronously by path, so
+                                // deleting it immediately can race the executor and cause
+                                // "script file not found" failures.
+
+                                // 1. Memory write-back
+                                if let Err(e) =
+                                    crate::ai::write_tab_ai_memory_entry(&record)
+                                {
+                                    tracing::warn!(
+                                        event = "tab_ai_memory_writeback_failed",
+                                        error = %e,
+                                    );
+                                }
+
+                                // 2. Save-offer decision (logged; UI offer is Phase 2)
+                                let _offer = crate::ai::should_offer_save(&record);
                             }
                             Err(e) => {
                                 tracing::error!(
