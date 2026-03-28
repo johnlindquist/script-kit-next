@@ -375,3 +375,19 @@ struct AliasInputState {
     /// Current alias text being edited
     alias_text: String,
 }
+
+/// State for the Tab AI overlay — a mini natural-language input that
+/// floats above any current view.
+///
+/// When this is `Some`, the overlay is visible and captures keyboard input.
+#[derive(Debug, Clone)]
+struct TabAiOverlayState {
+    /// User-typed natural-language intent (e.g. "force quit this app").
+    intent: String,
+    /// UI snapshot captured the moment Tab was pressed.
+    ui_snapshot: crate::ai::TabAiUiSnapshot,
+    /// Whether the AI call is in-flight.
+    running: bool,
+    /// Error message from the last failed attempt, if any.
+    error: Option<SharedString>,
+}

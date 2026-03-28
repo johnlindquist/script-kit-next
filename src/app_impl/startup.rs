@@ -499,6 +499,9 @@ impl ScriptListApp {
             alias_input_state: None,
             // Alias input entity - persisted to maintain focus
             alias_input_entity: None,
+            // Tab AI overlay state - starts as None (overlay hidden)
+            tab_ai_state: None,
+            tab_ai_task: None,
             // Input history for shell-like up/down navigation
             input_history: {
                 let mut history = input_history::InputHistory::new();
@@ -763,24 +766,22 @@ impl ScriptListApp {
                                 }
                             }
 
-                            // Handle Tab/Shift+Tab in ScriptList view for AI actions.
-                            // Tab opens Ask AI chat, Shift+Tab opens script generation chat mode.
-                            if matches!(this.current_view, AppView::ScriptList)
+                            // Shift+Tab in ScriptList: script generation (existing behavior)
+                            if has_shift
+                                && matches!(this.current_view, AppView::ScriptList)
                                 && !this.filter_text.is_empty()
                                 && !this.show_actions_popup
                             {
                                 let query = this.filter_text.clone();
+                                this.dispatch_ai_script_generation_from_query(query, cx);
+                                cx.stop_propagation();
+                                return;
+                            }
 
-                                if has_shift {
-                                    this.dispatch_ai_script_generation_from_query(query, cx);
-                                } else {
-                                    // Clear filter text before switching view
-                                    this.filter_text.clear();
-                                    // Show inline AI chat with the query as initial input
-                                    this.show_inline_ai_chat(Some(query), cx);
-                                }
-
-                                // Stop propagation so Input doesn't handle it
+                            // Universal Tab AI: open the mini natural-language overlay
+                            // from any non-special surface (not FileSearch, not ChatPrompt setup)
+                            if !has_shift && !this.show_actions_popup {
+                                this.open_tab_ai_overlay(cx);
                                 cx.stop_propagation();
                             }
                         });

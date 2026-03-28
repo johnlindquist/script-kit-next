@@ -1007,7 +1007,7 @@ fn command_bar_ai_style_uses_headers() {
 #[test]
 fn command_bar_main_menu_uses_separators() {
     let config = CommandBarConfig::main_menu_style();
-    assert_eq!(config.dialog_config.section_style, SectionStyle::Separators);
+    assert_eq!(config.dialog_config.section_style, SectionStyle::Headers);
 }
 
 // =========================================================================

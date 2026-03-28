@@ -1815,13 +1815,13 @@ mod from_dialog_builtin_action_validation_tests_33 {
     #[test]
     fn command_bar_main_menu_section_separators() {
         let config = CommandBarConfig::main_menu_style();
-        assert_eq!(config.dialog_config.section_style, SectionStyle::Separators);
+        assert_eq!(config.dialog_config.section_style, SectionStyle::Headers);
     }
     
     #[test]
     fn command_bar_notes_section_separators() {
         let config = CommandBarConfig::notes_style();
-        assert_eq!(config.dialog_config.section_style, SectionStyle::Separators);
+        assert_eq!(config.dialog_config.section_style, SectionStyle::Headers);
     }
     
     #[test]
@@ -2031,10 +2031,10 @@ mod from_dialog_builtin_action_validation_tests_33 {
     fn script_context_action_count_no_shortcut_no_alias() {
         let script = ScriptInfo::new("test", "/path/test.ts");
         let actions = get_script_context_actions(&script);
-        // run + add_shortcut + add_alias + toggle_favorite + edit + view_logs + reveal + copy_path + copy_content + copy_deeplink + delete_script = 11
-        assert_eq!(actions.len(), 11);
+        // run + toggle_info + add_shortcut + add_alias + toggle_favorite + edit + view_logs + reveal + copy_path + copy_content + copy_deeplink + delete_script = 12
+        assert_eq!(actions.len(), 12);
     }
-    
+
     // =====================================================================
     // 19. Script context: agent-specific descriptions mention "agent"
     // =====================================================================
@@ -3593,7 +3593,7 @@ mod from_dialog_builtin_action_validation_tests_34 {
         let config = CommandBarConfig::notes_style();
         assert!(matches!(
             config.dialog_config.section_style,
-            SectionStyle::Separators
+            SectionStyle::Headers
         ));
     }
     
@@ -4267,8 +4267,8 @@ mod from_dialog_builtin_action_validation_tests_35 {
     };
     use crate::actions::command_bar::CommandBarConfig;
     use crate::actions::constants::{
-        ACCENT_BAR_WIDTH, ACTION_ROW_INSET, HEADER_HEIGHT, KEYCAP_HEIGHT, KEYCAP_MIN_WIDTH,
-        SEARCH_INPUT_HEIGHT, SECTION_HEADER_HEIGHT, SELECTION_RADIUS,
+        ACCENT_BAR_WIDTH, ACTION_ROW_INSET, HEADER_HEIGHT, SEARCH_INPUT_HEIGHT,
+        SECTION_HEADER_HEIGHT,
     };
     use crate::actions::dialog::{build_grouped_items_static, coerce_action_selection, ActionsDialog};
     use crate::actions::types::{Action, ActionCategory, ScriptInfo, SectionStyle};
@@ -5208,24 +5208,12 @@ mod from_dialog_builtin_action_validation_tests_35 {
         assert_eq!(ACTION_ROW_INSET, 4.0);
     }
 
-    #[test]
-    fn constant_selection_radius() {
-        assert_eq!(SELECTION_RADIUS, 6.0);
-    }
+    // Removed: constant_selection_radius, constant_keycap_min_width, constant_keycap_height
+    // (legacy constants SELECTION_RADIUS, KEYCAP_MIN_WIDTH, KEYCAP_HEIGHT removed from constants.rs)
 
     // =====================================================================
-    // 18. Constants: keycap and accent bar
+    // 18. Constants: accent bar
     // =====================================================================
-
-    #[test]
-    fn constant_keycap_min_width() {
-        assert_eq!(KEYCAP_MIN_WIDTH, 20.0);
-    }
-
-    #[test]
-    fn constant_keycap_height() {
-        assert_eq!(KEYCAP_HEIGHT, 20.0);
-    }
 
     #[test]
     fn constant_accent_bar_width() {
@@ -6406,18 +6394,18 @@ mod from_dialog_builtin_action_validation_tests_36 {
     fn script_context_base_count_no_extras() {
         let script = ScriptInfo::new("test", "/path/test.ts");
         let actions = get_script_context_actions(&script);
-        // run + add_shortcut + add_alias + toggle_favorite + edit + view_logs + reveal + copy_path + copy_content + copy_deeplink + delete_script = 11
-        assert_eq!(actions.len(), 11);
+        // run + toggle_info + add_shortcut + add_alias + toggle_favorite + edit + view_logs + reveal + copy_path + copy_content + copy_deeplink + delete_script = 12
+        assert_eq!(actions.len(), 12);
     }
-    
+
     #[test]
     fn script_context_with_shortcut_adds_one() {
         let script = ScriptInfo::with_shortcut("test", "/path/test.ts", Some("cmd+t".into()));
         let actions = get_script_context_actions(&script);
-        // run + update_shortcut + remove_shortcut + add_alias + toggle_favorite + edit + view_logs + reveal + copy_path + copy_content + copy_deeplink + delete_script = 12
-        assert_eq!(actions.len(), 12);
+        // run + toggle_info + update_shortcut + remove_shortcut + add_alias + toggle_favorite + edit + view_logs + reveal + copy_path + copy_content + copy_deeplink + delete_script = 13
+        assert_eq!(actions.len(), 13);
     }
-    
+
     #[test]
     fn script_context_with_both_adds_two() {
         let script = ScriptInfo::with_shortcut_and_alias(
@@ -6427,17 +6415,17 @@ mod from_dialog_builtin_action_validation_tests_36 {
             Some("ts".into()),
         );
         let actions = get_script_context_actions(&script);
-        // run + update_shortcut + remove_shortcut + update_alias + remove_alias + toggle_favorite + edit + view_logs + reveal + copy_path + copy_content + copy_deeplink + delete_script = 13
-        assert_eq!(actions.len(), 13);
+        // run + toggle_info + update_shortcut + remove_shortcut + update_alias + remove_alias + toggle_favorite + edit + view_logs + reveal + copy_path + copy_content + copy_deeplink + delete_script = 14
+        assert_eq!(actions.len(), 14);
     }
-    
+
     #[test]
     fn script_context_with_suggestion_adds_reset_ranking() {
         let script =
             ScriptInfo::new("test", "/path/test.ts").with_frecency(true, Some("/path/test.ts".into()));
         let actions = get_script_context_actions(&script);
-        // 11 + reset_ranking = 12
-        assert_eq!(actions.len(), 12);
+        // 12 + reset_ranking = 13
+        assert_eq!(actions.len(), 13);
         assert!(actions.iter().any(|a| a.id == "reset_ranking"));
     }
     
@@ -8328,7 +8316,7 @@ mod from_dialog_builtin_action_validation_tests_38 {
         #[test]
         fn actions_dialog_config_default_section_style_separators() {
             let cfg = crate::actions::types::ActionsDialogConfig::default();
-            assert_eq!(cfg.section_style, SectionStyle::Separators);
+            assert_eq!(cfg.section_style, SectionStyle::Headers);
         }
     
         #[test]
@@ -8442,10 +8430,10 @@ mod from_dialog_builtin_action_validation_tests_38 {
         fn builtin_script_action_count_no_extras() {
             let builtin = ScriptInfo::builtin("Clipboard History");
             let actions = get_script_context_actions(&builtin);
-            // run_script + add_shortcut + add_alias + copy_deeplink = 4
-            assert_eq!(actions.len(), 4);
+            // run_script + toggle_info + add_shortcut + add_alias + copy_deeplink = 5
+            assert_eq!(actions.len(), 5);
         }
-    
+
         #[test]
         fn builtin_script_no_edit_actions() {
             let builtin = ScriptInfo::builtin("App Launcher");
@@ -11024,10 +11012,10 @@ mod from_dialog_builtin_action_validation_tests_40 {
         fn builtin_no_shortcut_no_alias_has_4_actions() {
             let info = ScriptInfo::builtin("Clipboard History");
             let actions = get_script_context_actions(&info);
-            // run_script, add_shortcut, add_alias, copy_deeplink = 4
-            assert_eq!(actions.len(), 4);
+            // run_script, toggle_info, add_shortcut, add_alias, copy_deeplink = 5
+            assert_eq!(actions.len(), 5);
         }
-    
+
         #[test]
         fn builtin_action_ids() {
             let info = ScriptInfo::builtin("Clipboard History");
@@ -12771,36 +12759,36 @@ mod from_dialog_builtin_action_validation_tests_41 {
     
         #[test]
         fn script_context_real_script_count() {
-            // Real script currently includes toggle_favorite and delete_script in addition to the historical 9 actions.
+            // Real script currently includes toggle_info, toggle_favorite, and delete_script in addition to the historical 9 actions.
             let info = ScriptInfo::new("test", "/test.ts");
             let actions = get_script_context_actions(&info);
-            assert_eq!(actions.len(), 11);
+            assert_eq!(actions.len(), 12);
         }
-    
+
         #[test]
         fn script_context_builtin_count() {
-            // Builtin: run + add_shortcut + add_alias + copy_deeplink = 4
+            // Builtin: run + toggle_info + add_shortcut + add_alias + copy_deeplink = 5
             let info = ScriptInfo::builtin("Clipboard History");
             let actions = get_script_context_actions(&info);
-            assert_eq!(actions.len(), 4);
+            assert_eq!(actions.len(), 5);
         }
-    
+
         #[test]
         fn script_context_agent_count() {
-            // Agent currently includes toggle_favorite in addition to the historical 8 actions.
+            // Agent currently includes toggle_info and toggle_favorite in addition to the historical 8 actions.
             let mut info = ScriptInfo::new("my-agent", "/a.md");
             info.is_agent = true;
             info.is_script = false;
             let actions = get_script_context_actions(&info);
-            assert_eq!(actions.len(), 9);
+            assert_eq!(actions.len(), 10);
         }
-    
+
         #[test]
         fn script_context_scriptlet_count() {
-            // Scriptlet currently includes toggle_favorite in addition to the historical 8 actions.
+            // Scriptlet currently includes toggle_info and toggle_favorite in addition to the historical 8 actions.
             let info = ScriptInfo::scriptlet("Test Scriptlet", "/t.md", None, None);
             let actions = get_script_context_actions(&info);
-            assert_eq!(actions.len(), 9);
+            assert_eq!(actions.len(), 10);
         }
     
         // =========================================================================
@@ -15496,7 +15484,7 @@ mod from_dialog_builtin_action_validation_tests_45 {
         s.is_agent = true;
         s.is_script = false;
         let actions = get_script_context_actions(&s);
-        assert_eq!(actions.len(), 9);
+        assert_eq!(actions.len(), 10);
     }
     
     #[test]

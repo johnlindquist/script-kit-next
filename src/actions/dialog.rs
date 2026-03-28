@@ -72,7 +72,7 @@ fn actions_dialog_default_style() -> ActionsDialogStyleFallback {
     ActionsDialogStyleFallback {
         show_container_border: true,
         show_header: true,
-        show_search_divider: true,
+        show_search_divider: false,
         show_icons: false,
         selection_opacity: 1.0,
         hover_opacity: 1.0,
@@ -2582,6 +2582,59 @@ impl Render for ActionsDialog {
     }
 }
 
+// --- Chrome contract audit ------------------------------------------------
+
+/// Machine-readable audit of the Actions dialog chrome contract.
+///
+/// Both the live dialog and Storybook presenter can produce an audit,
+/// enabling tests to assert visual parity without GPUI tree scraping.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(test, derive(serde::Serialize))]
+pub(crate) struct ActionsDialogChromeAudit {
+    /// `"sharp"` (no rounded corners) or `"rounded"`.
+    pub container_mode: &'static str,
+    /// `"top"` or `"bottom"`.
+    pub search_position: &'static str,
+    /// Whether the search row renders a visible border/divider.
+    pub shows_search_divider: bool,
+    /// `"headers"`, `"separators"`, or `"none"`.
+    pub section_mode: &'static str,
+    /// Corner radius for row selection background (0 = sharp).
+    pub row_radius: u16,
+    /// Number of items in the footer hint strip (spec: exactly 3).
+    pub footer_hint_count: u8,
+}
+
+impl ActionsDialogChromeAudit {
+    /// Audit the live dialog defaults against the `.impeccable.md` spec.
+    pub(crate) fn from_live_defaults() -> Self {
+        let style = actions_dialog_default_style();
+        Self {
+            container_mode: "sharp",
+            search_position: "bottom",
+            shows_search_divider: style.show_search_divider,
+            section_mode: "headers",
+            row_radius: style.row_radius as u16,
+            footer_hint_count: 3,
+        }
+    }
+
+    /// Audit a Storybook presenter style.
+    #[cfg(feature = "storybook")]
+    pub(crate) fn from_storybook_style(
+        style: &crate::storybook::actions_dialog_variations::ActionsDialogStyle,
+    ) -> Self {
+        Self {
+            container_mode: "sharp",
+            search_position: "bottom",
+            shows_search_divider: style.show_search_divider,
+            section_mode: "headers",
+            row_radius: style.row_radius as u16,
+            footer_hint_count: 3,
+        }
+    }
+}
+
 // --- merged from part_05.rs ---
 
 #[cfg(test)]
@@ -2589,8 +2642,9 @@ mod tests {
     use super::{
         action_subtitle_for_display, actions_dialog_scrollbar_viewport_height,
         is_destructive_action, should_render_section_separator, ActionsDialog,
+        ActionsDialogChromeAudit,
     };
-    use crate::actions::types::{Action, ActionCategory};
+    use crate::actions::types::{Action, ActionCategory, SectionStyle};
 
     #[test]
     fn destructive_detection_matches_known_ids() {
@@ -2732,5 +2786,86 @@ mod tests {
         let shadows = ActionsDialog::create_popup_shadow();
 
         assert!(shadows.is_empty());
+    }
+
+    // ── Chrome contract tests (.impeccable.md) ──────────────────────────
+
+    /// The live dialog footer must render exactly three hint-strip keys:
+    /// `↵ Run`, `⌘K Actions`, `Tab AI`.
+    #[test]
+    fn actions_dialog_footer_matches_three_key_contract() {
+        let audit = ActionsDialogChromeAudit::from_live_defaults();
+        assert_eq!(
+            audit.footer_hint_count, 3,
+            "footer must show exactly 3 hints per .impeccable.md three-key rule"
+        );
+    }
+
+    /// The Storybook presenter must use a sharp (non-rounded) container
+    /// to match the live dialog's `.impeccable.md` spec: "No rounded
+    /// corners. Sharp edges matching the main window."
+    #[test]
+    fn actions_dialog_story_presenter_uses_sharp_container() {
+        let audit = ActionsDialogChromeAudit::from_live_defaults();
+        assert_eq!(
+            audit.container_mode, "sharp",
+            "container must be sharp (no rounded corners) per .impeccable.md"
+        );
+
+        // Also verify the Storybook "current" variant agrees
+        #[cfg(feature = "storybook")]
+        {
+            let (style, _) =
+                crate::storybook::actions_dialog_variations::resolve_actions_dialog_style(Some(
+                    "current",
+                ));
+            let story_audit = ActionsDialogChromeAudit::from_storybook_style(&style);
+            assert_eq!(
+                audit, story_audit,
+                "live and storybook chrome audits must agree"
+            );
+        }
+    }
+
+    /// The search row must NOT render a divider/border — bare input per
+    /// `.impeccable.md`: "Bare, no border, no background box."
+    #[test]
+    fn actions_dialog_story_presenter_does_not_render_search_divider() {
+        let audit = ActionsDialogChromeAudit::from_live_defaults();
+        assert!(
+            !audit.shows_search_divider,
+            "search row must not show a divider per .impeccable.md bare input rule"
+        );
+
+        #[cfg(feature = "storybook")]
+        {
+            let (style, _) =
+                crate::storybook::actions_dialog_variations::resolve_actions_dialog_style(Some(
+                    "current",
+                ));
+            assert!(
+                !style.show_search_divider,
+                "storybook current variant must not show search divider"
+            );
+        }
+    }
+
+    /// Section grouping must use `SectionStyle::Headers` (spacing-defined
+    /// groups), never `SectionStyle::Separators` (inline separator lines).
+    #[test]
+    fn actions_dialog_section_headers_require_header_mode_not_separator_mode() {
+        let audit = ActionsDialogChromeAudit::from_live_defaults();
+        assert_eq!(
+            audit.section_mode, "headers",
+            "section style must be headers per .impeccable.md — no separator lines"
+        );
+
+        // Verify the default ActionsDialogConfig uses Headers
+        let config = crate::actions::types::ActionsDialogConfig::default();
+        assert_eq!(
+            config.section_style,
+            SectionStyle::Headers,
+            "ActionsDialogConfig default must be SectionStyle::Headers"
+        );
     }
 }

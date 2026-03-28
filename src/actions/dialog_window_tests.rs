@@ -44,7 +44,7 @@ fn command_bar_config_default_values() {
     ));
     assert!(matches!(
         config.dialog_config.section_style,
-        SectionStyle::Separators
+        SectionStyle::Headers
     ));
     assert!(matches!(
         config.dialog_config.anchor,
@@ -66,7 +66,7 @@ fn command_bar_config_main_menu_style() {
     ));
     assert!(matches!(
         config.dialog_config.section_style,
-        SectionStyle::Separators
+        SectionStyle::Headers
     ));
     assert!(matches!(
         config.dialog_config.anchor,
@@ -108,7 +108,7 @@ fn command_bar_config_no_search() {
     ));
     assert!(matches!(
         config.dialog_config.section_style,
-        SectionStyle::Separators
+        SectionStyle::Headers
     ));
     assert!(matches!(
         config.dialog_config.anchor,
@@ -127,7 +127,7 @@ fn command_bar_config_notes_style() {
     ));
     assert!(matches!(
         config.dialog_config.section_style,
-        SectionStyle::Separators
+        SectionStyle::Headers
     ));
     assert!(matches!(config.dialog_config.anchor, AnchorPosition::Top));
     assert!(config.dialog_config.show_icons);

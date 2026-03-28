@@ -1,0 +1,499 @@
+use super::*;
+
+impl ScriptListApp {
+    /// Open the Tab AI overlay from any surface.
+    ///
+    /// Captures a UI snapshot at invocation time and shows the mini input.
+    /// The underlying view remains visible and unchanged.
+    pub(crate) fn open_tab_ai_overlay(&mut self, cx: &mut Context<Self>) {
+        // Already open — do nothing
+        if self.tab_ai_state.is_some() {
+            return;
+        }
+
+        let ui_snapshot = self.snapshot_tab_ai_ui(cx);
+        tracing::info!(
+            event = "tab_ai_open",
+            prompt_type = %ui_snapshot.prompt_type,
+        );
+
+        self.tab_ai_state = Some(TabAiOverlayState {
+            intent: String::new(),
+            ui_snapshot,
+            running: false,
+            error: None,
+        });
+
+        // Close actions popup if open
+        self.show_actions_popup = false;
+        self.actions_dialog = None;
+
+        cx.notify();
+    }
+
+    /// Close the Tab AI overlay and restore focus.
+    pub(crate) fn close_tab_ai_overlay(&mut self, cx: &mut Context<Self>) {
+        if self.tab_ai_state.is_some() {
+            tracing::info!(event = "tab_ai_close");
+            self.tab_ai_state = None;
+            self.tab_ai_task = None;
+            self.pending_focus = Some(FocusTarget::MainFilter);
+            cx.notify();
+        }
+    }
+
+    /// Returns whether the Tab AI overlay is currently visible.
+    #[allow(dead_code)] // Will be used by key interceptors in future phases
+    pub(crate) fn is_tab_ai_overlay_open(&self) -> bool {
+        self.tab_ai_state.is_some()
+    }
+
+    /// Capture a snapshot of the current UI state for context assembly.
+    #[allow(dead_code)]
+    fn snapshot_tab_ai_ui(&self, cx: &Context<Self>) -> crate::ai::TabAiUiSnapshot {
+        let prompt_type = self.app_view_name();
+
+        // Collect visible elements (capped to keep token cost low)
+        let outcome = self.collect_visible_elements(12, cx);
+
+        let input_text = self.current_input_text();
+
+        crate::ai::TabAiUiSnapshot {
+            prompt_type,
+            input_text,
+            focused_semantic_id: outcome.focused_semantic_id(),
+            selected_semantic_id: outcome.selected_semantic_id(),
+            visible_elements: outcome.elements,
+        }
+    }
+
+    /// Build the full context blob for AI submission.
+    fn build_tab_ai_context(&self, _cx: &Context<Self>) -> crate::ai::TabAiContextBlob {
+        let ui = self
+            .tab_ai_state
+            .as_ref()
+            .map(|s| s.ui_snapshot.clone())
+            .unwrap_or_default();
+
+        // Desktop context — use the lightweight recommendation profile
+        let desktop = crate::context_snapshot::capture_context_snapshot(
+            &crate::context_snapshot::CaptureContextOptions::recommendation(),
+        );
+
+        // Recent input history (most recent first, bounded)
+        let recent_inputs = self.input_history.recent_entries(5);
+
+        let timestamp = chrono::Utc::now().to_rfc3339();
+
+        tracing::info!(
+            event = "tab_ai_context_built",
+            prompt_type = %ui.prompt_type,
+            visible_count = ui.visible_elements.len(),
+        );
+
+        crate::ai::TabAiContextBlob {
+            schema_version: crate::ai::TAB_AI_CONTEXT_SCHEMA_VERSION,
+            timestamp,
+            ui,
+            desktop,
+            recent_inputs,
+            clipboard_preview: None, // Phase 2: clipboard OCR
+        }
+    }
+
+    /// Return a human-readable name for the current `AppView` variant.
+    #[allow(dead_code)]
+    fn app_view_name(&self) -> String {
+        match &self.current_view {
+            AppView::ScriptList => "ScriptList".to_string(),
+            AppView::ArgPrompt { .. } => "ArgPrompt".to_string(),
+            AppView::MiniPrompt { .. } => "MiniPrompt".to_string(),
+            AppView::MicroPrompt { .. } => "MicroPrompt".to_string(),
+            AppView::DivPrompt { .. } => "DivPrompt".to_string(),
+            AppView::FormPrompt { .. } => "FormPrompt".to_string(),
+            AppView::TermPrompt { .. } => "TermPrompt".to_string(),
+            AppView::EditorPrompt { .. } => "EditorPrompt".to_string(),
+            AppView::SelectPrompt { .. } => "SelectPrompt".to_string(),
+            AppView::PathPrompt { .. } => "PathPrompt".to_string(),
+            AppView::EnvPrompt { .. } => "EnvPrompt".to_string(),
+            AppView::DropPrompt { .. } => "DropPrompt".to_string(),
+            AppView::TemplatePrompt { .. } => "TemplatePrompt".to_string(),
+            AppView::ChatPrompt { .. } => "ChatPrompt".to_string(),
+            AppView::ClipboardHistoryView { .. } => "ClipboardHistory".to_string(),
+            AppView::AppLauncherView { .. } => "AppLauncher".to_string(),
+            AppView::WindowSwitcherView { .. } => "WindowSwitcher".to_string(),
+            AppView::FileSearchView { .. } => "FileSearch".to_string(),
+            AppView::ThemeChooserView { .. } => "ThemeChooser".to_string(),
+            AppView::EmojiPickerView { .. } => "EmojiPicker".to_string(),
+            AppView::WebcamView { .. } => "Webcam".to_string(),
+            AppView::ScratchPadView { .. } => "ScratchPad".to_string(),
+            AppView::QuickTerminalView { .. } => "QuickTerminal".to_string(),
+            AppView::NamingPrompt { .. } => "NamingPrompt".to_string(),
+            AppView::CreationFeedback { .. } => "CreationFeedback".to_string(),
+            AppView::DesignGalleryView { .. } => "DesignGallery".to_string(),
+            #[cfg(feature = "storybook")]
+            AppView::DesignExplorerView { .. } => "DesignExplorer".to_string(),
+            AppView::ActionsDialog => "ActionsDialog".to_string(),
+            AppView::BrowseKitsView { .. } => "BrowseKits".to_string(),
+            AppView::InstalledKitsView { .. } => "InstalledKits".to_string(),
+            AppView::ProcessManagerView { .. } => "ProcessManager".to_string(),
+            AppView::SearchAiPresetsView { .. } => "SearchAiPresets".to_string(),
+            AppView::CreateAiPresetView { .. } => "CreateAiPreset".to_string(),
+            AppView::SettingsView { .. } => "Settings".to_string(),
+            AppView::FavoritesBrowseView { .. } => "FavoritesBrowse".to_string(),
+            AppView::CurrentAppCommandsView { .. } => "CurrentAppCommands".to_string(),
+        }
+    }
+
+    /// Return the current input text from whichever view is active.
+    #[allow(dead_code)]
+    fn current_input_text(&self) -> Option<String> {
+        match &self.current_view {
+            AppView::ScriptList => {
+                let text = self.filter_text.clone();
+                if text.is_empty() {
+                    None
+                } else {
+                    Some(text)
+                }
+            }
+            AppView::ArgPrompt { .. }
+            | AppView::MiniPrompt { .. }
+            | AppView::MicroPrompt { .. } => {
+                let text = self.arg_input.text().to_string();
+                if text.is_empty() {
+                    None
+                } else {
+                    Some(text)
+                }
+            }
+            AppView::ClipboardHistoryView { filter, .. }
+            | AppView::AppLauncherView { filter, .. }
+            | AppView::WindowSwitcherView { filter, .. }
+            | AppView::ThemeChooserView { filter, .. }
+            | AppView::EmojiPickerView { filter, .. }
+            | AppView::ProcessManagerView { filter, .. }
+            | AppView::SearchAiPresetsView { filter, .. }
+            | AppView::FavoritesBrowseView { filter, .. }
+            | AppView::CurrentAppCommandsView { filter, .. }
+            | AppView::DesignGalleryView { filter, .. } => {
+                if filter.is_empty() {
+                    None
+                } else {
+                    Some(filter.clone())
+                }
+            }
+            AppView::FileSearchView { query, .. } => {
+                if query.is_empty() {
+                    None
+                } else {
+                    Some(query.clone())
+                }
+            }
+            _ => None,
+        }
+    }
+
+    /// Render the Tab AI overlay element if the overlay is open.
+    ///
+    /// Returns `None` when the overlay is hidden. The caller layers this
+    /// on top of `main_content` using `.when_some(...)`.
+    pub(crate) fn render_tab_ai_overlay(
+        &mut self,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Option<gpui::AnyElement> {
+        let state = self.tab_ai_state.as_ref()?;
+        let theme = crate::theme::get_cached_theme();
+
+        let intent_text: SharedString = state.intent.clone().into();
+        let is_running = state.running;
+        let error_msg = state.error.clone();
+
+        // Placeholder text depends on running state
+        let placeholder: SharedString = if is_running {
+            "Generating script...".into()
+        } else {
+            "What do you want to do?".into()
+        };
+
+        // Gold accent bar color
+        let accent = gpui::rgb(0xfbbf24);
+        // Colors derived from theme hex values
+        let bg_scrim = gpui::rgba(
+            crate::ui_foundation::hex_to_rgba_with_opacity(theme.colors.background.main, 0.85),
+        );
+        let card_bg = gpui::rgba(
+            crate::ui_foundation::hex_to_rgba_with_opacity(theme.colors.background.main, 0.6),
+        );
+        let text_primary = gpui::rgb(theme.colors.text.primary);
+        let text_hint = gpui::rgba(
+            crate::ui_foundation::hex_to_rgba_with_opacity(theme.colors.text.primary, 0.4),
+        );
+        let text_muted = gpui::rgba(
+            crate::ui_foundation::hex_to_rgba_with_opacity(theme.colors.text.primary, 0.5),
+        );
+
+        // Build the overlay element
+        let overlay = div()
+            .id("tab-ai-overlay")
+            .absolute()
+            .inset_0()
+            .flex()
+            .flex_col()
+            .items_center()
+            .justify_center()
+            .bg(bg_scrim)
+            .child(
+                div()
+                    .id("tab-ai-card")
+                    .w(px(420.))
+                    .flex()
+                    .flex_col()
+                    .gap_1()
+                    // Gold top accent bar
+                    .child(div().w_full().h(px(2.)).bg(accent))
+                    // Input row
+                    .child(
+                        div()
+                            .w_full()
+                            .px(px(12.))
+                            .py(px(8.))
+                            .bg(card_bg)
+                            .rounded_b(px(8.))
+                            .child(
+                                div()
+                                    .w_full()
+                                    .flex()
+                                    .flex_row()
+                                    .items_center()
+                                    .gap_2()
+                                    // Tab glyph
+                                    .child(div().text_sm().text_color(accent).child("⇥"))
+                                    // Intent text or placeholder
+                                    .child(
+                                        div()
+                                            .flex_1()
+                                            .text_sm()
+                                            .font_family(crate::list_item::FONT_MONO)
+                                            .when(intent_text.is_empty(), |d| {
+                                                d.text_color(text_hint).child(placeholder)
+                                            })
+                                            .when(!intent_text.is_empty(), |d| {
+                                                d.text_color(text_primary)
+                                                    .child(intent_text.clone())
+                                            }),
+                                    )
+                                    // Spinner when running
+                                    .when(is_running, |d| {
+                                        d.child(
+                                            div().text_sm().text_color(text_muted).child("⏳"),
+                                        )
+                                    }),
+                            ),
+                    )
+                    // Error message if present
+                    .when_some(error_msg, |d, msg| {
+                        d.child(
+                            div()
+                                .w_full()
+                                .px(px(12.))
+                                .py(px(4.))
+                                .text_xs()
+                                .text_color(gpui::rgb(0xef4444))
+                                .child(msg),
+                        )
+                    })
+                    // Hint strip
+                    .child(
+                        div()
+                            .w_full()
+                            .px(px(12.))
+                            .py(px(4.))
+                            .flex()
+                            .flex_row()
+                            .justify_between()
+                            .text_xs()
+                            .text_color(text_hint)
+                            .child("↵ Run")
+                            .child("Esc Cancel"),
+                    ),
+            )
+            // Keyboard handling: capture keys for this overlay
+            .on_key_down(cx.listener(Self::handle_tab_ai_key_down));
+
+        Some(overlay.into_any_element())
+    }
+
+    /// Handle key-down events within the Tab AI overlay.
+    fn handle_tab_ai_key_down(
+        &mut self,
+        event: &KeyDownEvent,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let key = event.keystroke.key.as_str();
+
+        if crate::ui_foundation::is_key_escape(key) {
+            self.close_tab_ai_overlay(cx);
+            cx.stop_propagation();
+            return;
+        }
+
+        if crate::ui_foundation::is_key_enter(key) {
+            if let Some(state) = &self.tab_ai_state {
+                if !state.intent.trim().is_empty() && !state.running {
+                    self.submit_tab_ai_overlay(cx);
+                }
+            }
+            cx.stop_propagation();
+            return;
+        }
+
+        if key == "backspace" || key == "Backspace" {
+            if let Some(state) = &mut self.tab_ai_state {
+                if !state.running {
+                    state.intent.pop();
+                    cx.notify();
+                }
+            }
+            cx.stop_propagation();
+            return;
+        }
+
+        // Type printable characters
+        if event.keystroke.key.len() == 1
+            && !event.keystroke.modifiers.platform
+            && !event.keystroke.modifiers.control
+            && !event.keystroke.modifiers.alt
+        {
+            if let Some(state) = &mut self.tab_ai_state {
+                if !state.running {
+                    state.intent.push_str(&event.keystroke.key);
+                    state.error = None; // Clear error on new input
+                    cx.notify();
+                }
+            }
+            cx.stop_propagation();
+            return;
+        }
+
+        // Handle space (it's a printable but might be " " or "space")
+        if key == " " || key.eq_ignore_ascii_case("space") {
+            if let Some(state) = &mut self.tab_ai_state {
+                if !state.running {
+                    state.intent.push(' ');
+                    state.error = None;
+                    cx.notify();
+                }
+            }
+            cx.stop_propagation();
+            return;
+        }
+
+        // Let other keys propagate
+        cx.propagate();
+    }
+
+    /// Submit the Tab AI overlay intent — gather context, call AI, execute script.
+    fn submit_tab_ai_overlay(&mut self, cx: &mut Context<Self>) {
+        let intent = match &self.tab_ai_state {
+            Some(state) => state.intent.clone(),
+            None => return,
+        };
+
+        if intent.trim().is_empty() {
+            return;
+        }
+
+        tracing::info!(event = "tab_ai_submit", intent = %intent);
+
+        // Mark as running
+        if let Some(state) = &mut self.tab_ai_state {
+            state.running = true;
+            state.error = None;
+        }
+        cx.notify();
+
+        // Build context blob
+        let context = self.build_tab_ai_context(cx);
+        let context_json = match serde_json::to_string_pretty(&context) {
+            Ok(json) => json,
+            Err(e) => {
+                tracing::error!(event = "tab_ai_context_serialize_failed", error = %e);
+                if let Some(state) = &mut self.tab_ai_state {
+                    state.running = false;
+                    state.error = Some(format!("Context error: {}", e).into());
+                }
+                cx.notify();
+                return;
+            }
+        };
+
+        // Build the prompt
+        let user_prompt = build_tab_ai_user_prompt(&intent, &context_json);
+
+        tracing::info!(
+            event = "tab_ai_execute_start",
+            intent_len = intent.len(),
+            context_len = context_json.len(),
+        );
+
+        // Spawn async task for AI call + execution
+        let app_entity = cx.entity().downgrade();
+        let task = cx.spawn(async move |_this, cx| {
+            // For now, log the prompt — actual AI call will be wired in Phase 3
+            tracing::info!(
+                event = "tab_ai_prompt_built",
+                prompt_len = user_prompt.len(),
+            );
+
+            // TODO(phase-3): Call AI provider, extract script, execute
+            // For now, close overlay after a brief delay to show the flow works
+            cx.background_executor()
+                .timer(std::time::Duration::from_millis(500))
+                .await;
+
+            cx.update(|cx| {
+                if let Some(app) = app_entity.upgrade() {
+                    app.update(cx, |this, cx| {
+                        tracing::info!(event = "tab_ai_complete");
+                        if let Some(state) = &mut this.tab_ai_state {
+                            state.running = false;
+                            state.error = Some(
+                                "Tab AI execution not yet wired (Phase 3)".into(),
+                            );
+                        }
+                        cx.notify();
+                    });
+                }
+            });
+        });
+
+        self.tab_ai_task = Some(task);
+    }
+}
+
+/// Build the user prompt sent to the AI model for Tab AI script generation.
+fn build_tab_ai_user_prompt(intent: &str, context_json: &str) -> String {
+    format!(
+        "User intent:\n{intent}\n\n\
+         Current context JSON:\n{context_json}\n\n\
+         Generate a minimal Script Kit TypeScript script that acts immediately on this context. \
+         Return only runnable code in a single fenced code block."
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tab_ai_user_prompt_contains_intent_and_context() {
+        let prompt = build_tab_ai_user_prompt("force quit", r#"{"ui":{}}"#);
+        assert!(prompt.contains("force quit"));
+        assert!(prompt.contains(r#"{"ui":{}}"#));
+        assert!(prompt.contains("Script Kit TypeScript"));
+    }
+
+}

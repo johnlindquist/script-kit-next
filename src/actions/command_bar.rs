@@ -178,12 +178,12 @@ impl Default for CommandBarConfig {
 
 #[allow(dead_code)] // Public API - methods for future main menu and other integrations
 impl CommandBarConfig {
-    /// Create config for main menu style (search at bottom, separators)
+    /// Create config for main menu style (search at bottom, headers)
     pub fn main_menu_style() -> Self {
         Self {
             dialog_config: ActionsDialogConfig {
                 search_position: SearchPosition::Bottom,
-                section_style: SectionStyle::Separators,
+                section_style: SectionStyle::Headers,
                 anchor: AnchorPosition::Bottom,
                 ..ActionsDialogConfig::default()
             },
@@ -210,7 +210,7 @@ impl CommandBarConfig {
         Self {
             dialog_config: ActionsDialogConfig {
                 search_position: SearchPosition::Hidden,
-                section_style: SectionStyle::Separators,
+                section_style: SectionStyle::Headers,
                 anchor: AnchorPosition::Bottom,
                 ..ActionsDialogConfig::default()
             },
@@ -218,13 +218,12 @@ impl CommandBarConfig {
         }
     }
 
-    /// Create config for Notes window style (search at top, separators, icons)
-    /// Uses SectionStyle::Separators to match main menu's denser item spacing
+    /// Create config for Notes window style (search at top, headers, icons)
     pub fn notes_style() -> Self {
         Self {
             dialog_config: ActionsDialogConfig {
                 search_position: SearchPosition::Top,
-                section_style: SectionStyle::Separators,
+                section_style: SectionStyle::Headers,
                 anchor: AnchorPosition::Top,
                 show_icons: true,
                 ..ActionsDialogConfig::default()
@@ -921,7 +920,7 @@ mod command_bar_config_tests {
         ));
         assert!(matches!(
             config.dialog_config.section_style,
-            SectionStyle::Separators
+            SectionStyle::Headers
         ));
         assert!(!config.dialog_config.show_icons);
         assert!(!config.dialog_config.show_footer);

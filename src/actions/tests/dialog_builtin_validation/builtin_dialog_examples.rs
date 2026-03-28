@@ -978,7 +978,7 @@ mod from_dialog_builtin_action_validation_tests_21 {
     #[test]
     fn batch21_dialog_config_default_section_separators() {
         let c = ActionsDialogConfig::default();
-        assert!(matches!(c.section_style, SectionStyle::Separators));
+        assert!(matches!(c.section_style, SectionStyle::Headers));
     }
     
     #[test]
@@ -2836,7 +2836,7 @@ mod from_dialog_builtin_action_validation_tests_22 {
     #[test]
     fn batch22_command_bar_notes_separators() {
         let cfg = CommandBarConfig::notes_style();
-        assert_eq!(cfg.dialog_config.section_style, SectionStyle::Separators);
+        assert_eq!(cfg.dialog_config.section_style, SectionStyle::Headers);
         assert!(cfg.dialog_config.show_icons);
     }
     
@@ -3118,9 +3118,9 @@ mod from_dialog_builtin_action_validation_tests_22 {
     #[test]
     fn batch22_actions_dialog_config_default_section_separators() {
         let cfg = ActionsDialogConfig::default();
-        assert_eq!(cfg.section_style, SectionStyle::Separators);
+        assert_eq!(cfg.section_style, SectionStyle::Headers);
     }
-    
+
     #[test]
     fn batch22_actions_dialog_config_default_anchor_bottom() {
         let cfg = ActionsDialogConfig::default();
@@ -3210,24 +3210,24 @@ mod from_dialog_builtin_action_validation_tests_23 {
         // is_script=true, no shortcut, no alias, not suggested
         let script = ScriptInfo::new("test", "/test.ts");
         let actions = get_script_context_actions(&script);
-        // run_script + add_shortcut + add_alias + toggle_favorite + edit_script + view_logs + reveal_in_finder + copy_path + copy_content + copy_deeplink + delete_script = 11
-        assert_eq!(actions.len(), 11);
+        // run_script + toggle_info + add_shortcut + add_alias + toggle_favorite + edit_script + view_logs + reveal_in_finder + copy_path + copy_content + copy_deeplink + delete_script = 12
+        assert_eq!(actions.len(), 12);
     }
     
     #[test]
     fn batch23_builtin_action_count() {
         let builtin = ScriptInfo::builtin("Test Built-in");
         let actions = get_script_context_actions(&builtin);
-        // run_script + add_shortcut + add_alias + copy_deeplink = 4
-        assert_eq!(actions.len(), 4);
+        // run_script + toggle_info + add_shortcut + add_alias + copy_deeplink = 5
+        assert_eq!(actions.len(), 5);
     }
-    
+
     #[test]
     fn batch23_scriptlet_action_count() {
         let scriptlet = ScriptInfo::scriptlet("Test", "/test.md", None, None);
         let actions = get_script_context_actions(&scriptlet);
-        // run_script + add_shortcut + add_alias + toggle_favorite + edit_scriptlet + reveal_scriptlet + copy_scriptlet_path + copy_content + copy_deeplink = 9
-        assert_eq!(actions.len(), 9);
+        // run_script + toggle_info + add_shortcut + add_alias + toggle_favorite + edit_scriptlet + reveal_scriptlet + copy_scriptlet_path + copy_content + copy_deeplink = 10
+        assert_eq!(actions.len(), 10);
     }
     
     #[test]
@@ -3235,7 +3235,7 @@ mod from_dialog_builtin_action_validation_tests_23 {
         let script = ScriptInfo::with_shortcut("test", "/test.ts", Some("cmd+t".to_string()));
         let actions = get_script_context_actions(&script);
         // Same as full script but shortcut adds one extra (update+remove instead of add = +1)
-        assert_eq!(actions.len(), 12);
+        assert_eq!(actions.len(), 13);
     }
     
     #[test]
@@ -3247,8 +3247,8 @@ mod from_dialog_builtin_action_validation_tests_23 {
             Some("ts".to_string()),
         );
         let actions = get_script_context_actions(&script);
-        // script(11) + 1 extra shortcut + 1 extra alias = 13
-        assert_eq!(actions.len(), 13);
+        // script(12) + 1 extra shortcut + 1 extra alias = 14
+        assert_eq!(actions.len(), 14);
     }
     
     // ============================================================
@@ -6116,7 +6116,7 @@ mod from_dialog_builtin_action_validation_tests_24 {
     #[test]
     fn batch24_cmdbar_notes_style_separators() {
         let config = CommandBarConfig::notes_style();
-        assert_eq!(config.dialog_config.section_style, SectionStyle::Separators);
+        assert_eq!(config.dialog_config.section_style, SectionStyle::Headers);
         assert!(config.dialog_config.show_icons);
         assert!(!config.dialog_config.show_footer);
     }
@@ -7707,21 +7707,21 @@ mod from_dialog_builtin_action_validation_tests_26 {
     fn cat26_30_builtin_exactly_4_actions() {
         let b = ScriptInfo::builtin("B");
         let actions = get_script_context_actions(&b);
-        assert_eq!(actions.len(), 4); // run, add_shortcut, add_alias, copy_deeplink
+        assert_eq!(actions.len(), 5); // run, toggle_info, add_shortcut, add_alias, copy_deeplink
     }
-    
+
     #[test]
     fn cat26_30_script_exactly_9_actions() {
         let s = ScriptInfo::new("s", "/s.ts");
         let actions = get_script_context_actions(&s);
-        assert_eq!(actions.len(), 11);
+        assert_eq!(actions.len(), 12);
     }
-    
+
     #[test]
     fn cat26_30_scriptlet_exactly_8_actions() {
         let s = ScriptInfo::scriptlet("S", "/s.md", None, None);
         let actions = get_script_context_actions(&s);
-        assert_eq!(actions.len(), 9);
+        assert_eq!(actions.len(), 10);
     }
     
     #[test]
@@ -7887,8 +7887,8 @@ mod from_dialog_builtin_action_validation_tests_27 {
         script.is_agent = true;
         script.is_script = false;
         let actions = get_script_context_actions(&script);
-        // run_script, add_shortcut, add_alias, edit_script(agent), reveal, copy_path, copy_content, copy_deeplink
-        assert_eq!(actions.len(), 8);
+        // run_script, toggle_info, add_shortcut, add_alias, edit_script(agent), reveal, copy_path, copy_content, copy_deeplink
+        assert_eq!(actions.len(), 9);
     }
     
     #[test]
@@ -8466,7 +8466,7 @@ mod from_dialog_builtin_action_validation_tests_27 {
     #[test]
     fn cat27_15_notes_style_uses_separators() {
         let cfg = CommandBarConfig::notes_style();
-        assert_eq!(cfg.dialog_config.section_style, SectionStyle::Separators);
+        assert_eq!(cfg.dialog_config.section_style, SectionStyle::Headers);
     }
     
     #[test]
@@ -8478,7 +8478,7 @@ mod from_dialog_builtin_action_validation_tests_27 {
     #[test]
     fn cat27_15_main_menu_uses_separators() {
         let cfg = CommandBarConfig::main_menu_style();
-        assert_eq!(cfg.dialog_config.section_style, SectionStyle::Separators);
+        assert_eq!(cfg.dialog_config.section_style, SectionStyle::Headers);
     }
     
     #[test]
@@ -13102,7 +13102,7 @@ mod from_dialog_builtin_action_validation_tests_30 {
         let cfg = CommandBarConfig::notes_style();
         assert!(matches!(
             cfg.dialog_config.section_style,
-            SectionStyle::Separators
+            SectionStyle::Headers
         ));
     }
     

@@ -119,7 +119,7 @@ pub const SPECS: [ActionsDialogVariationSpec; 8] = [
         style: ActionsDialogStyle {
             show_container_border: true,
             show_header: true,
-            show_search_divider: true,
+            show_search_divider: false,
             show_icons: false,
             selection_opacity: 1.0,
             hover_opacity: 1.0,

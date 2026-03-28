@@ -432,7 +432,7 @@ fn fuzzy_match_repeated_chars() {
 fn action_config_default_values() {
     let config = super::types::ActionsDialogConfig::default();
     assert_eq!(config.search_position, super::types::SearchPosition::Bottom);
-    assert_eq!(config.section_style, SectionStyle::Separators);
+    assert_eq!(config.section_style, SectionStyle::Headers);
     assert_eq!(config.anchor, super::types::AnchorPosition::Bottom);
     assert!(!config.show_icons);
     assert!(!config.show_footer);

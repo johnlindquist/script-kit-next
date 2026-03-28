@@ -301,7 +301,7 @@ fn command_bar_config_notes_style() {
     ));
     assert!(matches!(
         config.dialog_config.section_style,
-        SectionStyle::Separators
+        SectionStyle::Headers
     ));
     assert!(matches!(config.dialog_config.anchor, AnchorPosition::Top));
     assert!(config.dialog_config.show_icons);
@@ -320,7 +320,7 @@ fn command_bar_config_notes_style() {
 fn actions_dialog_config_default_values() {
     let config = ActionsDialogConfig::default();
     assert!(matches!(config.search_position, SearchPosition::Bottom));
-    assert!(matches!(config.section_style, SectionStyle::Separators));
+    assert!(matches!(config.section_style, SectionStyle::Headers));
     assert!(matches!(config.anchor, AnchorPosition::Bottom));
     assert!(!config.show_icons);
     assert!(!config.show_footer);
@@ -827,6 +827,6 @@ fn action_category_partial_eq() {
 #[test]
 fn enum_defaults() {
     assert!(matches!(SearchPosition::default(), SearchPosition::Bottom));
-    assert!(matches!(SectionStyle::default(), SectionStyle::Separators));
+    assert!(matches!(SectionStyle::default(), SectionStyle::Headers));
     assert!(matches!(AnchorPosition::default(), AnchorPosition::Bottom));
 }

@@ -1067,7 +1067,7 @@ fn command_bar_config_notes_style_specific_fields() {
     ));
     assert!(matches!(
         config.dialog_config.section_style,
-        SectionStyle::Separators
+        SectionStyle::Headers
     ));
     assert!(matches!(config.dialog_config.anchor, AnchorPosition::Top));
     assert!(config.dialog_config.show_icons);
@@ -1275,8 +1275,8 @@ fn action_with_icon_and_section_chain() {
 fn script_action_count_without_shortcut_or_alias() {
     let script = ScriptInfo::new("test", "/path/test.ts");
     let actions = get_script_context_actions(&script);
-    // + toggle_favorite + delete_script = 11
-    assert_eq!(actions.len(), 11);
+    // + toggle_info + toggle_favorite + delete_script = 12
+    assert_eq!(actions.len(), 12);
 }
 
 #[test]
@@ -1288,25 +1288,25 @@ fn script_action_count_with_shortcut_and_alias() {
         Some("ts".into()),
     );
     let actions = get_script_context_actions(&script);
-    // run + update_shortcut + remove_shortcut + update_alias + remove_alias
-    // + edit + view_logs + reveal + copy_path + copy_content + copy_deeplink + toggle_favorite + delete_script = 13
-    assert_eq!(actions.len(), 13);
+    // run + toggle_info + update_shortcut + remove_shortcut + update_alias + remove_alias
+    // + edit + view_logs + reveal + copy_path + copy_content + copy_deeplink + toggle_favorite + delete_script = 14
+    assert_eq!(actions.len(), 14);
 }
 
 #[test]
 fn builtin_action_count() {
     let builtin = ScriptInfo::builtin("Test Builtin");
     let actions = get_script_context_actions(&builtin);
-    // run + add_shortcut + add_alias + copy_deeplink = 4
-    assert_eq!(actions.len(), 4);
+    // run + toggle_info + add_shortcut + add_alias + copy_deeplink = 5
+    assert_eq!(actions.len(), 5);
 }
 
 #[test]
 fn scriptlet_action_count_without_shortcut_or_alias() {
     let scriptlet = ScriptInfo::scriptlet("Test", "/path/test.md", None, None);
     let actions = get_script_context_actions(&scriptlet);
-    // + toggle_favorite = 9
-    assert_eq!(actions.len(), 9);
+    // + toggle_info + toggle_favorite = 10
+    assert_eq!(actions.len(), 10);
 }
 
 #[test]
@@ -1458,7 +1458,7 @@ fn search_position_default_is_bottom() {
 
 #[test]
 fn section_style_default_is_separators() {
-    assert!(matches!(SectionStyle::default(), SectionStyle::Separators));
+    assert!(matches!(SectionStyle::default(), SectionStyle::Headers));
 }
 
 #[test]
@@ -1470,7 +1470,7 @@ fn anchor_position_default_is_bottom() {
 fn actions_dialog_config_default_values() {
     let config = ActionsDialogConfig::default();
     assert!(matches!(config.search_position, SearchPosition::Bottom));
-    assert!(matches!(config.section_style, SectionStyle::Separators));
+    assert!(matches!(config.section_style, SectionStyle::Headers));
     assert!(matches!(config.anchor, AnchorPosition::Bottom));
     assert!(!config.show_icons);
     assert!(!config.show_footer);

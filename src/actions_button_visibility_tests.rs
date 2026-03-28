@@ -102,7 +102,7 @@ mod tests {
         );
         assert!(
             content.contains("if is_mini {")
-                && content.contains("// Mini mode: single column, no preview, no footer")
+                && content.contains("// Mini mode: single column, toggle between list and info panel")
                 && content.contains(".child(\"↵ Run  ·  ⌘K Actions  ·  Tab AI\")")
                 && content.contains("mode = \"mini\""),
             "mini mode branch should render the single-column layout, compact hint strip, and mini perf log"

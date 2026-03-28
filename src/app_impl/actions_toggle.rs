@@ -285,7 +285,7 @@ impl ScriptListApp {
                 } else {
                     dialog.set_config(crate::actions::ActionsDialogConfig {
                         search_position: crate::actions::SearchPosition::Bottom,
-                        section_style: crate::actions::SectionStyle::Separators,
+                        section_style: crate::actions::SectionStyle::Headers,
                         anchor: crate::actions::AnchorPosition::Bottom,
                         search_placeholder: script_info.as_ref().map(|script| script.name.clone()),
                         show_context_header: false,
