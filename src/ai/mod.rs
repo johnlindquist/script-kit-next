@@ -56,9 +56,8 @@ pub(crate) mod window;
 pub use self::config::{DetectedKeys, ModelInfo, ProviderConfig};
 pub use self::current_app_automation_memory::{
     current_app_automation_memory_index_path, read_current_app_automation_memory_index,
-    resolve_current_app_automation_from_memory,
-    upsert_current_app_automation_memory_from_receipt, CurrentAppAutomationMemoryDecision,
-    CurrentAppAutomationMemoryIndexEntry,
+    resolve_current_app_automation_from_memory, upsert_current_app_automation_memory_from_receipt,
+    CurrentAppAutomationMemoryDecision, CurrentAppAutomationMemoryIndexEntry,
 };
 pub use self::message_parts::{
     file_path_parts, merge_context_parts, prepare_user_message_with_receipt,
@@ -91,10 +90,13 @@ pub use self::tab_context::{
     build_tab_ai_execution_receipt, build_tab_ai_user_prompt, cleanup_tab_ai_temp_script,
     read_tab_ai_memory_index, read_tab_ai_memory_index_from_path,
     resolve_tab_ai_memory_suggestions, resolve_tab_ai_memory_suggestions_from_path,
-    should_offer_save, tab_ai_execution_audit_path, tab_ai_memory_index_path,
-    truncate_tab_ai_text, write_tab_ai_memory_entry, write_tab_ai_memory_entry_to_path,
-    TabAiClipboardContext, TabAiContextBlob, TabAiExecutionReceipt, TabAiExecutionRecord,
-    TabAiExecutionStatus, TabAiMemoryEntry, TabAiMemorySuggestion, TabAiUiSnapshot,
+    resolve_tab_ai_memory_suggestions_with_outcome,
+    resolve_tab_ai_memory_suggestions_with_outcome_from_path, should_offer_save,
+    tab_ai_execution_audit_path, tab_ai_memory_index_path, truncate_tab_ai_text,
+    write_tab_ai_memory_entry, write_tab_ai_memory_entry_to_path, TabAiClipboardContext,
+    TabAiContextBlob, TabAiExecutionReceipt, TabAiExecutionRecord, TabAiExecutionStatus,
+    TabAiMemoryEntry, TabAiMemoryResolution, TabAiMemoryResolutionOutcome,
+    TabAiMemoryResolutionReason, TabAiMemorySuggestion, TabAiUiSnapshot,
     TAB_AI_CONTEXT_SCHEMA_VERSION, TAB_AI_EXECUTION_RECEIPT_SCHEMA_VERSION,
     TAB_AI_EXECUTION_RECORD_SCHEMA_VERSION, TAB_AI_MEMORY_ENTRY_SCHEMA_VERSION,
 };

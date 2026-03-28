@@ -82,12 +82,23 @@ impl ScriptListApp {
             None => return,
         };
 
-        let memory_hint = match crate::ai::resolve_tab_ai_memory_suggestions(
+        let memory_hint = match crate::ai::resolve_tab_ai_memory_suggestions_with_outcome(
             &intent,
             bundle_id.as_deref(),
             1,
         ) {
-            Ok(suggestions) => suggestions.into_iter().next(),
+            Ok(resolution) => {
+                tracing::info!(
+                    event = "tab_ai_memory_hint_resolved",
+                    query = %resolution.outcome.query,
+                    bundle_id = ?resolution.outcome.bundle_id,
+                    reason = ?resolution.outcome.reason,
+                    candidate_count = resolution.outcome.candidate_count,
+                    match_count = resolution.outcome.match_count,
+                    top_score = ?resolution.outcome.top_score,
+                );
+                resolution.suggestions.into_iter().next()
+            }
             Err(error) => {
                 tracing::warn!(event = "tab_ai_memory_hint_failed", error = %error);
                 None
@@ -182,12 +193,23 @@ impl ScriptListApp {
         let clipboard = self.resolve_tab_ai_clipboard_context();
 
         // Prior automation suggestions (up to 3)
-        let prior_automations = match crate::ai::resolve_tab_ai_memory_suggestions(
+        let prior_automations = match crate::ai::resolve_tab_ai_memory_suggestions_with_outcome(
             &intent_for_lookup,
             bundle_id.as_deref(),
             3,
         ) {
-            Ok(entries) => entries,
+            Ok(resolution) => {
+                tracing::info!(
+                    event = "tab_ai_prior_automations_resolved",
+                    query = %resolution.outcome.query,
+                    bundle_id = ?resolution.outcome.bundle_id,
+                    reason = ?resolution.outcome.reason,
+                    candidate_count = resolution.outcome.candidate_count,
+                    match_count = resolution.outcome.match_count,
+                    top_score = ?resolution.outcome.top_score,
+                );
+                resolution.suggestions
+            }
             Err(error) => {
                 tracing::warn!(event = "tab_ai_prior_automation_lookup_failed", error = %error);
                 Vec::new()
