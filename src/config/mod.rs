@@ -22,12 +22,12 @@ pub use defaults::DEFAULT_SUGGESTED_HALF_LIFE_DAYS;
 // Re-export types that are used externally
 #[allow(unused_imports)]
 pub use types::{
-    BuiltInConfig, ClaudeCodeConfig, Config, HotkeyConfig, LayoutConfig, ScriptKitUserPreferences,
-    SuggestedConfig, ThemeSelectionPreferences, WatcherConfig,
+    BuiltInConfig, ClaudeCodeConfig, Config, DictationPreferences, HotkeyConfig, LayoutConfig,
+    ScriptKitUserPreferences, SuggestedConfig, ThemeSelectionPreferences, WatcherConfig,
 };
 
 // Re-export loader
-pub use loader::{load_config, load_user_preferences};
+pub use loader::{load_config, load_user_preferences, save_user_preferences};
 
 // Re-export editor types for safe config writes (public API for other modules)
 #[allow(unused_imports)]

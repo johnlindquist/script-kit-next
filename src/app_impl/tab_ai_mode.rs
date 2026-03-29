@@ -442,12 +442,12 @@ impl ScriptListApp {
                 ocr_text: entry.ocr_text.clone(),
             }
         });
-        let prior_automations = match crate::ai::resolve_tab_ai_memory_suggestions_with_outcome(
+        let prior_automations = match crate::ai::resolve_tab_ai_prior_automations_for_entry(
             &intent_for_lookup,
             bundle_id.as_deref(),
             3,
         ) {
-            Ok(resolution) => resolution.suggestions,
+            Ok(items) => items,
             Err(error) => {
                 tracing::warn!(event = "tab_ai_prior_automation_lookup_failed", error = %error);
                 Vec::new()

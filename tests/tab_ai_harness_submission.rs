@@ -6,7 +6,8 @@
 
 use script_kit_gpui::ai::{
     build_tab_ai_harness_submission, validate_tab_ai_harness_config, HarnessConfig,
-    TabAiContextBlob, TabAiHarnessSubmissionMode, TabAiUiSnapshot,
+    TabAiContextBlob, TabAiFieldStatus, TabAiHarnessSubmissionMode, TabAiInvocationReceipt,
+    TabAiSuggestedIntentSpec, TabAiUiSnapshot, TAB_AI_INVOCATION_RECEIPT_SCHEMA_VERSION,
 };
 
 fn make_context(prompt_type: &str, input_text: Option<&str>) -> TabAiContextBlob {
@@ -330,5 +331,241 @@ fn warm_reentry_does_not_respawn_pty() {
     assert!(
         alive_check_pos < new_spawn_pos,
         "alive check must come before PTY spawn — reuse existing session first"
+    );
+}
+
+// =========================================================================
+// Hints block regression: receipt + suggestions → <scriptKitHints>
+// =========================================================================
+
+fn sample_invocation_receipt(prompt_type: &str) -> TabAiInvocationReceipt {
+    TabAiInvocationReceipt {
+        schema_version: TAB_AI_INVOCATION_RECEIPT_SCHEMA_VERSION,
+        prompt_type: prompt_type.to_string(),
+        input_status: TabAiFieldStatus::Captured,
+        focus_status: TabAiFieldStatus::Captured,
+        elements_status: TabAiFieldStatus::Captured,
+        element_count: 5,
+        warning_count: 0,
+        has_focus_target: true,
+        has_input_text: false,
+        degradation_reasons: vec![],
+        rich: true,
+    }
+}
+
+#[test]
+fn paste_only_includes_hints_block_when_receipt_and_suggestions_provided() {
+    let context = make_context("FileSearch", Some("readme"));
+    let receipt = sample_invocation_receipt("FileSearch");
+    let suggestions = vec![
+        TabAiSuggestedIntentSpec::new("Summarize", "summarize this file"),
+        TabAiSuggestedIntentSpec::new("Rename", "rename this file"),
+    ];
+
+    let submission = build_tab_ai_harness_submission(
+        &context,
+        None,
+        TabAiHarnessSubmissionMode::PasteOnly,
+        Some(&receipt),
+        &suggestions,
+    )
+    .expect("submission should build");
+
+    assert!(
+        submission.contains("<scriptKitHints>"),
+        "PasteOnly with receipt+suggestions must include the hints block"
+    );
+    assert!(
+        submission.contains("</scriptKitHints>"),
+        "hints block must be properly closed"
+    );
+    assert!(
+        submission.contains("\"promptType\": \"FileSearch\""),
+        "hints block must include the invocation receipt prompt type"
+    );
+    assert!(
+        submission.contains("\"intent\": \"summarize this file\""),
+        "hints block must include suggested intents"
+    );
+    assert!(
+        submission.contains("\"intent\": \"rename this file\""),
+        "hints block must include all suggested intents"
+    );
+    assert!(
+        submission.ends_with('\n'),
+        "PasteOnly submission must end on a fresh line"
+    );
+}
+
+#[test]
+fn paste_only_omits_hints_block_when_no_receipt_or_suggestions() {
+    let context = make_context("ScriptList", None);
+
+    let submission = build_tab_ai_harness_submission(
+        &context,
+        None,
+        TabAiHarnessSubmissionMode::PasteOnly,
+        None,
+        &[],
+    )
+    .expect("submission should build");
+
+    assert!(
+        !submission.contains("<scriptKitHints>"),
+        "PasteOnly without receipt/suggestions must NOT include hints block"
+    );
+    assert!(
+        submission.contains("<scriptKitContext"),
+        "context block must still be present"
+    );
+}
+
+#[test]
+fn submit_mode_also_includes_hints_block_when_provided() {
+    let context = make_context("ScriptList", None);
+    let receipt = sample_invocation_receipt("ScriptList");
+    let suggestions = vec![TabAiSuggestedIntentSpec::new(
+        "Open settings",
+        "open settings",
+    )];
+
+    let submission = build_tab_ai_harness_submission(
+        &context,
+        None,
+        TabAiHarnessSubmissionMode::Submit,
+        Some(&receipt),
+        &suggestions,
+    )
+    .expect("submission should build");
+
+    assert!(
+        submission.contains("<scriptKitHints>"),
+        "Submit mode with receipt must include hints block"
+    );
+    assert!(
+        submission.contains("Await the user's next terminal input."),
+        "Submit mode without intent must still append wait sentinel after hints"
+    );
+}
+
+#[test]
+fn hints_block_appears_between_context_and_intent() {
+    let context = make_context("FileSearch", Some("readme"));
+    let receipt = sample_invocation_receipt("FileSearch");
+    let suggestions = vec![TabAiSuggestedIntentSpec::new("Summarize", "summarize this")];
+
+    let submission = build_tab_ai_harness_submission(
+        &context,
+        Some("rename this file"),
+        TabAiHarnessSubmissionMode::PasteOnly,
+        Some(&receipt),
+        &suggestions,
+    )
+    .expect("submission should build");
+
+    let context_end = submission
+        .find("</scriptKitContext>")
+        .expect("context block must exist");
+    let hints_start = submission
+        .find("<scriptKitHints>")
+        .expect("hints block must exist");
+    let intent_start = submission
+        .find("User intent:")
+        .expect("intent must exist");
+
+    assert!(
+        context_end < hints_start,
+        "hints block must come after the context block"
+    );
+    assert!(
+        hints_start < intent_start,
+        "hints block must come before the user intent"
+    );
+}
+
+// =========================================================================
+// Readiness gate: source-level regression for output-based wait
+// =========================================================================
+
+#[test]
+fn readiness_gate_checks_has_received_output_not_was_cold_start() {
+    // The readiness check method must be based on has_received_output,
+    // NOT on was_cold_start. This ensures prewarmed sessions that haven't
+    // printed their prompt yet still trigger the readiness wait.
+    let readiness_fn_start = TAB_AI_MODE_SOURCE
+        .find("fn tab_ai_harness_needs_readiness_wait(")
+        .expect("tab_ai_harness_needs_readiness_wait must exist");
+    let readiness_fn_body = &TAB_AI_MODE_SOURCE[readiness_fn_start..];
+    let next_fn = readiness_fn_body[1..]
+        .find("\n    fn ")
+        .unwrap_or(readiness_fn_body.len());
+    let readiness_fn_body = &readiness_fn_body[..next_fn];
+
+    assert!(
+        readiness_fn_body.contains("has_received_output"),
+        "readiness gate must check has_received_output"
+    );
+    assert!(
+        !readiness_fn_body.contains("was_cold_start"),
+        "readiness gate must NOT check was_cold_start — it must be output-based"
+    );
+}
+
+#[test]
+fn open_harness_terminal_calls_readiness_check_before_injection() {
+    // The open function must call the output-based readiness check,
+    // not rely on was_cold_start for the wait decision.
+    let open_fn_start = TAB_AI_MODE_SOURCE
+        .find("fn open_tab_ai_harness_terminal(")
+        .expect("open_tab_ai_harness_terminal must exist");
+    let open_fn_body = &TAB_AI_MODE_SOURCE[open_fn_start..];
+    let next_fn = open_fn_body[1..]
+        .find("\n    fn ")
+        .unwrap_or(open_fn_body.len());
+    let open_fn_body = &open_fn_body[..next_fn];
+
+    assert!(
+        open_fn_body.contains("tab_ai_harness_needs_readiness_wait"),
+        "open path must use the output-based readiness check method"
+    );
+
+    // Ensure wait_for_readiness is passed to inject, not was_cold_start
+    let readiness_pos = open_fn_body
+        .find("wait_for_readiness")
+        .expect("wait_for_readiness must be used in open path");
+    let inject_pos = open_fn_body
+        .find("inject_tab_ai_harness_submission")
+        .expect("must call inject_tab_ai_harness_submission");
+    assert!(
+        readiness_pos < inject_pos,
+        "readiness check must happen before injection call"
+    );
+}
+
+// =========================================================================
+// Zero-intent open: suggested intents + receipt passed to submission
+// =========================================================================
+
+#[test]
+fn open_harness_terminal_passes_receipt_and_suggestions_to_submission() {
+    // The open function must pass invocation_receipt and suggested_intents
+    // to build_tab_ai_harness_submission, not just None/&[].
+    let open_fn_start = TAB_AI_MODE_SOURCE
+        .find("fn open_tab_ai_harness_terminal(")
+        .expect("open_tab_ai_harness_terminal must exist");
+    let open_fn_body = &TAB_AI_MODE_SOURCE[open_fn_start..];
+    let next_fn = open_fn_body[1..]
+        .find("\n    fn ")
+        .unwrap_or(open_fn_body.len());
+    let open_fn_body = &open_fn_body[..next_fn];
+
+    assert!(
+        open_fn_body.contains("resolved.invocation_receipt"),
+        "open path must pass invocation_receipt from resolved context to submission builder"
+    );
+    assert!(
+        open_fn_body.contains("resolved.suggested_intents"),
+        "open path must pass suggested_intents from resolved context to submission builder"
     );
 }
