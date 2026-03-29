@@ -490,6 +490,9 @@ struct TabAiChat {
     frontmost_bundle_id: Option<String>,
     /// Best prior automation hint for the current intent.
     memory_hint: Option<crate::ai::TabAiMemorySuggestion>,
+    /// Desktop snapshot captured at open time. Submitted as-is so the model
+    /// always sees the same context the user saw in the preview cards.
+    preview_desktop_snapshot: crate::context_snapshot::AiContextSnapshot,
     /// Context cards shown as the empty state before the user types.
     context_cards: Vec<TabAiContextCard>,
     /// Index of the currently highlighted suggestion pill (wraps around).
@@ -511,6 +514,7 @@ impl TabAiChat {
         ui_snapshot: crate::ai::TabAiUiSnapshot,
         invocation_receipt: crate::ai::TabAiInvocationReceipt,
         frontmost_bundle_id: Option<String>,
+        preview_desktop_snapshot: crate::context_snapshot::AiContextSnapshot,
         context_cards: Vec<TabAiContextCard>,
         focus_handle: FocusHandle,
     ) -> Self {
@@ -524,6 +528,7 @@ impl TabAiChat {
             invocation_receipt,
             frontmost_bundle_id,
             memory_hint: None,
+            preview_desktop_snapshot,
             context_cards,
             selected_suggestion_index: 0,
             turns: Vec::new(),
