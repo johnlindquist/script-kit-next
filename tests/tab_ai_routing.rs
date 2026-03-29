@@ -4,9 +4,8 @@
 //!   Tab key → `open_tab_ai_chat()` → `open_tab_ai_harness_terminal()` →
 //!   `AppView::QuickTerminalView` rendered via `TermPrompt`.
 //!
-//! The inline `TabAiChat` entity is retained for legacy/internal use but
-//! is NOT the implicit Tab entry point. Tests in this file validate that
-//! the harness-terminal contract is the authoritative surface.
+//! Tests in this file validate that the harness-terminal contract is the
+//! authoritative Tab AI surface.
 
 const TAB_SOURCE: &str = include_str!("../src/app_impl/startup_new_tab.rs");
 const TAB_AI_MODE_SOURCE: &str = include_str!("../src/app_impl/tab_ai_mode.rs");
@@ -556,63 +555,6 @@ fn live_capture_respects_deterministic_flag() {
 // =========================================================================
 // Legacy inline chat: retained but NOT the primary Tab entry
 // =========================================================================
-
-#[test]
-fn legacy_inline_chat_retained_but_not_primary() {
-    // open_tab_ai_full_view_chat still exists for internal use
-    assert!(
-        TAB_AI_MODE_SOURCE.contains("fn open_tab_ai_full_view_chat("),
-        "legacy open_tab_ai_full_view_chat must be retained for internal use"
-    );
-    // But it's NOT called from the primary Tab route
-    let open_fn_start = TAB_AI_MODE_SOURCE
-        .find("fn open_tab_ai_chat(")
-        .expect("open_tab_ai_chat must exist");
-    let open_fn_body = &TAB_AI_MODE_SOURCE[open_fn_start..];
-    let next_fn = open_fn_body[1..]
-        .find("\n    fn ")
-        .unwrap_or(open_fn_body.len());
-    let open_fn_body = &open_fn_body[..next_fn];
-
-    assert!(
-        !open_fn_body.contains("open_tab_ai_full_view_chat"),
-        "primary Tab route must NOT call legacy inline chat open function"
-    );
-}
-
-#[test]
-fn app_view_state_marks_tab_ai_chat_as_legacy() {
-    assert!(
-        APP_VIEW_STATE_SOURCE.contains("Legacy full-view Tab AI chat surface"),
-        "TabAiChat must be marked legacy in app_view_state.rs"
-    );
-}
-
-#[test]
-fn submit_tab_ai_chat_with_intent_marked_legacy() {
-    assert!(
-        TAB_AI_MODE_SOURCE.contains("Legacy full-view chat submission path"),
-        "submit_tab_ai_chat_with_intent must be marked legacy in tab_ai_mode.rs"
-    );
-}
-
-#[test]
-fn legacy_close_tab_ai_chat_still_exists() {
-    // close_tab_ai_chat handles closing the retained TabAiChat entity
-    assert!(
-        TAB_AI_MODE_SOURCE.contains("fn close_tab_ai_chat("),
-        "close_tab_ai_chat must exist for the retained TabAiChat entity"
-    );
-}
-
-#[test]
-fn legacy_tab_ai_chat_stores_preview_desktop_snapshot() {
-    // The retained TabAiChat entity still stores a preview snapshot
-    assert!(
-        APP_VIEW_STATE_SOURCE.contains("preview_desktop_snapshot"),
-        "TabAiChat entity must still store the desktop snapshot (retained for internal use)"
-    );
-}
 
 #[test]
 fn implicit_target_detection_uses_public_function() {

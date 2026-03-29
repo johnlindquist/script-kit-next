@@ -248,7 +248,6 @@ impl ScriptListApp {
             }
             AppView::SettingsView { .. } => Some((ViewType::ScriptList, 0)),
             AppView::FavoritesBrowseView { .. } => Some((ViewType::ScriptList, 0)),
-            AppView::TabAiChat { .. } => Some((ViewType::DivPrompt, 0)),
         }
     }
 

@@ -380,9 +380,6 @@ impl Render for ScriptListApp {
             } => self
                 .render_favorites_browse(filter, selected_index, cx)
                 .into_any_element(),
-            AppView::TabAiChat { entity } => {
-                self.render_tab_ai_chat(entity, cx).into_any_element()
-            }
         };
 
         // Wrap content in a container that can have the debug grid overlay
