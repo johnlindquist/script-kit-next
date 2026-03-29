@@ -51,6 +51,7 @@ pub(crate) mod sdk_handlers;
 pub(crate) mod session;
 pub(crate) mod storage;
 pub(crate) mod tab_context;
+pub(crate) mod harness;
 pub(crate) mod window;
 
 // Re-export commonly used types
@@ -102,6 +103,12 @@ pub use self::tab_context::{
     TabAiUiSnapshot, TAB_AI_CONTEXT_SCHEMA_VERSION, TAB_AI_EXECUTION_RECEIPT_SCHEMA_VERSION,
     TAB_AI_EXECUTION_RECORD_SCHEMA_VERSION, TAB_AI_INVOCATION_RECEIPT_SCHEMA_VERSION,
     TAB_AI_MEMORY_ENTRY_SCHEMA_VERSION, TAB_AI_TARGET_AUDIT_SCHEMA_VERSION,
+};
+pub use self::harness::{
+    build_tab_ai_harness_context_block, build_tab_ai_harness_submission,
+    read_tab_ai_harness_config, tab_ai_harness_config_path, HarnessBackendKind, HarnessConfig,
+    TabAiHarnessSessionState, TAB_AI_HARNESS_CONFIG_SCHEMA_VERSION,
+    TAB_AI_HARNESS_CONTEXT_SCHEMA_VERSION,
 };
 pub use self::window::{
     add_ai_attachment, apply_ai_preset, close_ai_window, get_ai_window_state, is_ai_window,
