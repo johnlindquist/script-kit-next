@@ -193,12 +193,6 @@
                                 return;
                             }
 
-                            // Block Tab while the legacy inline chat is open
-                            if matches!(this.current_view, AppView::TabAiChat { .. }) {
-                                cx.stop_propagation();
-                                return;
-                            }
-
                             // Block Tab while the save-offer overlay is visible
                             if this.tab_ai_save_offer_state.is_some() {
                                 cx.stop_propagation();

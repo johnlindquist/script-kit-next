@@ -499,7 +499,6 @@ impl ScriptListApp {
             alias_input_state: None,
             // Alias input entity - persisted to maintain focus
             alias_input_entity: None,
-            tab_ai_task: None,
             pending_tab_ai_execution: None,
             tab_ai_save_offer_state: None,
             tab_ai_harness: None,
@@ -777,12 +776,6 @@ impl ScriptListApp {
                             {
                                 let query = this.filter_text.clone();
                                 this.dispatch_ai_script_generation_from_query(query, cx);
-                                cx.stop_propagation();
-                                return;
-                            }
-
-                            // Block Tab while the Tab AI chat is already open
-                            if matches!(this.current_view, AppView::TabAiChat { .. }) {
                                 cx.stop_propagation();
                                 return;
                             }

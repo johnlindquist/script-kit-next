@@ -86,6 +86,7 @@ impl CaptureContextOptions {
 
     /// Submit-time Tab AI capture. This is the only built-in profile that
     /// requests pixel data — all others keep screenshots disabled.
+    #[allow(dead_code)]
     pub const fn tab_ai() -> Self {
         Self {
             include_selected_text: true,

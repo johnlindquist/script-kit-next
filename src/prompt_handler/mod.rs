@@ -539,16 +539,11 @@ impl ScriptListApp {
                     "SCRIPT_REQUESTED_HIDE reset to: false"
                 );
 
-                // Keep Tab AI chat mounted through script lifecycle.
-                // The chat view stays visible so the user sees execution
-                // status turns; the save-offer overlay composites on top.
-                let stay_in_tab_ai = matches!(self.current_view, AppView::TabAiChat { .. });
                 let keep_tab_ai_save_offer_open = self.tab_ai_save_offer_state.is_some();
 
-                if stay_in_tab_ai || keep_tab_ai_save_offer_open {
+                if keep_tab_ai_save_offer_open {
                     tracing::info!(
                         category = "VISIBILITY",
-                        stay_in_tab_ai,
                         keep_tab_ai_save_offer_open,
                         "Tab AI active after script exit - preserving view"
                     );
@@ -1420,19 +1415,6 @@ impl ScriptListApp {
                         *selected_index as i32,
                         None,
                     ),
-                    AppView::TabAiChat { entity } => {
-                        let intent = entity.read(cx).current_intent();
-                        (
-                            "tabAiChat".to_string(),
-                            None,
-                            None,
-                            intent,
-                            0,
-                            0,
-                            0,
-                            None,
-                        )
-                    }
                 };
 
                 // Focus state: we use focused_input as a proxy since we don't have Window access here.

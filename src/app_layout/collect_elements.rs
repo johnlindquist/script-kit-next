@@ -485,8 +485,6 @@ impl ScriptListApp {
                 )
             }
 
-            AppView::TabAiChat { entity } => entity.read(cx).collect_elements(limit),
-
             _ => {
                 let total_count = 1;
                 let elements: Vec<protocol::ElementInfo> =
