@@ -149,8 +149,7 @@ fn list_item_relies_on_gpui_hover_without_custom_toggle() {
         "non-selected rows should keep hover styling"
     );
     assert!(
-        LIST_ITEM_SOURCE
-            .contains("inner_content = inner_content.hover(move |s| s.bg(hover_bg));"),
+        LIST_ITEM_SOURCE.contains("inner_content = inner_content.hover(move |s| s.bg(hover_bg));"),
         "hover styling should be unconditional for non-selected rows"
     );
 }

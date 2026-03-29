@@ -953,6 +953,13 @@ fn init_internal() -> LoggingGuard {
 }
 /// Get the log directory path (~/.scriptkit/logs/)
 fn get_log_dir() -> PathBuf {
+    if cfg!(test) {
+        return std::env::temp_dir()
+            .join("script-kit-gpui-tests")
+            .join(std::process::id().to_string())
+            .join("logs");
+    }
+
     dirs::home_dir()
         .map(|h| h.join(".scriptkit").join("logs"))
         .unwrap_or_else(|| std::env::temp_dir().join("script-kit-logs"))

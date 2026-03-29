@@ -17,6 +17,14 @@ static NOTES_DB: OnceLock<Arc<Mutex<Connection>>> = OnceLock::new();
 
 /// Get the path to the notes database
 fn get_notes_db_path() -> PathBuf {
+    if cfg!(test) {
+        return std::env::temp_dir()
+            .join("script-kit-gpui-tests")
+            .join(std::process::id().to_string())
+            .join("db")
+            .join("notes.sqlite");
+    }
+
     let kit_dir = dirs::home_dir()
         .map(|h| h.join(".scriptkit"))
         .unwrap_or_else(|| PathBuf::from(".scriptkit"));
@@ -484,8 +492,7 @@ mod tests {
 
     #[test]
     fn test_search_notes_handles_special_characters() {
-        // Ensure DB is initialized
-        let _ = init_notes_db();
+        init_notes_db().expect("notes db should initialize for special-character search");
 
         // Search with special characters should not error (even if no results)
         // These are FTS5 special characters that can break MATCH queries
@@ -514,7 +521,7 @@ mod tests {
 
     #[test]
     fn test_notes_au_trigger_has_when_guard_for_real_content_changes() {
-        let _ = init_notes_db();
+        init_notes_db().expect("notes db should initialize before trigger inspection");
 
         let db = get_db().expect("notes db should be initialized");
         let conn = db.lock().expect("notes db lock should succeed");
@@ -535,7 +542,7 @@ mod tests {
 
     #[test]
     fn test_init_notes_db_recreates_triggers_for_existing_connection() {
-        let _ = init_notes_db();
+        init_notes_db().expect("notes db should initialize before trigger recreation");
 
         let db = get_db().expect("notes db should be initialized");
         let conn = db.lock().expect("notes db lock should succeed");
@@ -577,7 +584,7 @@ mod tests {
 
     #[test]
     fn test_search_notes_limits_fts_results_to_200() {
-        let _ = init_notes_db();
+        init_notes_db().expect("notes db should initialize before search limit test");
         let token = unique_test_token("search_limit");
         let now = Utc::now();
         let mut note_ids = Vec::new();
@@ -613,7 +620,7 @@ mod tests {
 
     #[test]
     fn test_delete_all_deleted_notes_removes_soft_deleted_notes_in_batch() {
-        let _ = init_notes_db();
+        init_notes_db().expect("notes db should initialize before batch delete test");
         let token = unique_test_token("batch_delete");
         let now = Utc::now();
 
@@ -660,7 +667,7 @@ mod tests {
 
     #[test]
     fn test_rebuild_notes_search_index_recovers_desynced_rows() {
-        let _ = init_notes_db();
+        init_notes_db().expect("notes db should initialize before FTS rebuild test");
         let token = unique_test_token("fts_rebuild");
         let now = Utc::now();
 
@@ -717,7 +724,7 @@ mod tests {
 
     #[test]
     fn test_search_notes_returns_matching_note_for_special_character_content() {
-        let _ = init_notes_db();
+        init_notes_db().expect("notes db should initialize before special-character match test");
         let token = unique_test_token("search_special_match");
         let query = format!("{token}@example.com");
         let now = Utc::now();

@@ -286,7 +286,7 @@ Universal AI surface triggered by Tab from any view. Two modes: an overlay (lega
 
 **Architecture:**
 - `AppView::TabAiChat` variant — full-view replacement (primary path via `open_tab_ai_chat()`)
-- `TabAiOverlayState` — legacy overlay path (retained, `open_tab_ai_overlay()`)
+- `TabAiChat` — full-view chat entity with TextInputState, ListState, and FocusHandle
 - Context assembly: `build_tab_ai_context()` → `TabAiResolvedContext` (blob + bundle_id + warning count + invocation receipt)
 - Target resolution: `resolve_tab_ai_surface_targets()` extracts focused/visible targets per surface (ClipboardHistory, FileSearch, WindowSwitcher, etc.)
 

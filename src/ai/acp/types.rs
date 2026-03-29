@@ -37,10 +37,7 @@ pub(crate) fn build_prompt_blocks(
             // ACP agents handle system prompts via session config, not inline.
             // Emit as a labelled text block so the agent at least sees the content.
             blocks.push(agent_client_protocol::ContentBlock::Text(
-                agent_client_protocol::TextContent::new(format!(
-                    "[system]\n{}",
-                    msg.content
-                )),
+                agent_client_protocol::TextContent::new(format!("[system]\n{}", msg.content)),
             ));
             continue;
         }

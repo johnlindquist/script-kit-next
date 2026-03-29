@@ -166,14 +166,9 @@ fn try_create_cf_string(input: &str) -> Option<CFStringRef> {
 
     // SAFETY: `c_str` is a valid NUL-terminated UTF-8 string for the duration
     // of the call and CoreFoundation copies the bytes into a new CFString.
-    let cf_string =
-        unsafe {
-            CFStringCreateWithCString(
-                std::ptr::null(),
-                c_str.as_ptr(),
-                K_CFSTRING_ENCODING_UTF8,
-            )
-        };
+    let cf_string = unsafe {
+        CFStringCreateWithCString(std::ptr::null(), c_str.as_ptr(), K_CFSTRING_ENCODING_UTF8)
+    };
     if cf_string.is_null() {
         tracing::warn!(
             target: "script_kit::frontmost_app_tracker",

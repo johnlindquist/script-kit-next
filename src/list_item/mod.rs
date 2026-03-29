@@ -773,7 +773,6 @@ impl ListItem {
         self
     }
 
-
     /// Set the index of this item in the list (required for hover callback to work)
     pub fn index(mut self, index: usize) -> Self {
         self.index = Some(index);
