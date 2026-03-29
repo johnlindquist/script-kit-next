@@ -600,6 +600,64 @@ mod tests {
     }
 
     #[test]
+    fn metadata_only_failure_does_not_emit_screenshot_warning() {
+        let options = CaptureContextOptions::tab_ai_submit();
+        let snapshot = capture_context_snapshot_from_seed(
+            &options,
+            CaptureContextSeed {
+                focused_window: Err("window enumeration failed".to_string()),
+                focused_window_image: Err("png encode should be ignored".to_string()),
+                ..Default::default()
+            },
+        );
+        assert_eq!(snapshot.focused_window, None);
+        assert_eq!(snapshot.focused_window_image, None);
+        // Only the focusedWindow warning should appear — not a screenshot warning,
+        // because tab_ai_submit() has include_screenshot=false.
+        assert_eq!(
+            snapshot.warnings,
+            vec!["focusedWindow: window enumeration failed".to_string()]
+        );
+    }
+
+    #[test]
+    fn screenshot_enabled_seed_keeps_image_bytes() {
+        let options = CaptureContextOptions {
+            include_selected_text: false,
+            include_frontmost_app: false,
+            include_menu_bar: false,
+            include_browser_url: false,
+            include_focused_window: true,
+            include_screenshot: true,
+            include_panel_screenshot: false,
+        };
+        let window = FocusedWindowContext {
+            title: "Notes — Scratch".to_string(),
+            width: 1440,
+            height: 900,
+            used_fallback: false,
+        };
+        let image = Base64PngContext {
+            mime_type: "image/png".to_string(),
+            width: 1440,
+            height: 900,
+            base64_data: "ZmFrZS1wbmc=".to_string(),
+            title: Some("Notes — Scratch".to_string()),
+        };
+        let snapshot = capture_context_snapshot_from_seed(
+            &options,
+            CaptureContextSeed {
+                focused_window: Ok(Some(window.clone())),
+                focused_window_image: Ok(Some(image.clone())),
+                ..Default::default()
+            },
+        );
+        assert_eq!(snapshot.focused_window, Some(window));
+        assert_eq!(snapshot.focused_window_image, Some(image));
+        assert!(snapshot.warnings.is_empty());
+    }
+
+    #[test]
     fn seed_capture_omits_panel_screenshot_when_disabled() {
         let snapshot = capture_context_snapshot_from_seed(
             &CaptureContextOptions {
