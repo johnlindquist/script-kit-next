@@ -185,11 +185,22 @@
                                 return;
                             }
 
-                            // Never steal Tab from the harness terminal; once
-                            // QuickTerminalView is open, the terminal TUI owns
-                            // Tab navigation/completion.
-                            if matches!(this.current_view, AppView::QuickTerminalView { .. }) {
-                                cx.propagate();
+                            // Forward Tab/Shift+Tab directly to the harness
+                            // terminal PTY.  We must NOT call cx.propagate()
+                            // here because GPUI's built-in focus-traversal
+                            // would consume the Tab keystroke before it reaches
+                            // the TermPrompt key handler.  Instead, write the
+                            // raw byte to the PTY and stop propagation.
+                            if let AppView::QuickTerminalView { entity, .. } = &this.current_view {
+                                entity.update(cx, |term, _cx| {
+                                    let bytes: &[u8] = if has_shift {
+                                        b"\x1b[Z" // Shift+Tab (backtab)
+                                    } else {
+                                        b"\t" // Tab
+                                    };
+                                    let _ = term.terminal.input(bytes);
+                                });
+                                cx.stop_propagation();
                                 return;
                             }
 
