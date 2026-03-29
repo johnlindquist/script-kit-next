@@ -2423,6 +2423,11 @@ impl ScriptListApp {
                         self.open_quick_terminal(cx);
                         Self::builtin_success(dctx, "open_quick_terminal")
                     }
+                    UtilityCommandType::ClaudeCode => {
+                        self.opened_from_main_menu = true;
+                        self.open_claude_code_terminal(cx);
+                        Self::builtin_success(dctx, "open_claude_code_terminal")
+                    }
                     UtilityCommandType::ProcessManager => {
                         let processes =
                             crate::process_manager::PROCESS_MANAGER.get_active_processes_sorted();
