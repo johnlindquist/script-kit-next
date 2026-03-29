@@ -75,6 +75,11 @@ fn is_term_prompt_actions_toggle_shortcut(has_cmd: bool, has_shift: bool, key: &
     has_cmd && has_shift && ui_foundation::is_key_k(key)
 }
 
+#[inline]
+fn render_terminal_prompt_hint_strip() -> AnyElement {
+    crate::components::prompt_layout_shell::render_simple_hint_strip("⌘W Close", None)
+}
+
 impl ScriptListApp {
     #[inline]
     fn toggle_term_prompt_actions(
@@ -119,12 +124,10 @@ impl ScriptListApp {
     ) -> AnyElement {
         let has_actions = self.has_nonempty_sdk_actions();
 
-        crate::components::emit_prompt_chrome_audit(
-            &crate::components::PromptChromeAudit::editor(
-                "render_prompts::term",
-                has_actions,
-            ),
-        );
+        crate::components::emit_prompt_chrome_audit(&crate::components::PromptChromeAudit::editor(
+            "render_prompts::term",
+            has_actions,
+        ));
 
         let render_context = PromptRenderContext::new(self.theme.as_ref(), self.current_design);
         let theme = render_context.theme;
@@ -138,6 +141,7 @@ impl ScriptListApp {
         let show_actions = self.show_actions_popup;
         entity.update(cx, |term, _| {
             term.suppress_keys = show_actions;
+            term.escape_cancels = !matches!(self.current_view, AppView::QuickTerminalView { .. });
         });
 
         // VIBRANCY: Use foundation helper - returns None when vibrancy enabled (let Root handle bg)
@@ -188,15 +192,9 @@ impl ScriptListApp {
                             return true;
                         }
 
-                        // For QuickTerminalView (built-in utility): ESC returns to main menu or closes window
-                        // This is different from TermPrompt (SDK prompt) which doesn't respond to ESC
+                        // For QuickTerminalView, plain Escape belongs to the terminal so TUIs can use it.
+                        // Only Cmd+W is handled by the outer wrapper.
                         if is_quick_terminal {
-                            if ui_foundation::is_key_escape(key) && !this.show_actions_popup {
-                                logging::log("KEY", "ESC in QuickTerminalView");
-                                this.go_back_or_close(window, cx);
-                                return true;
-                            }
-
                             if has_cmd && key.eq_ignore_ascii_case("w") {
                                 logging::log("KEY", "Cmd+W - closing window");
                                 this.close_and_reset_window(cx);
@@ -302,8 +300,8 @@ impl ScriptListApp {
             // Keep overflow clipping scoped to terminal output so the actions popup can
             // preserve vibrancy/translucency compositing when rendered as an overlay.
             .child(div().flex_1().min_h(px(0.)).overflow_hidden().child(entity))
-            // Shared three-key hint strip footer
-            .child(crate::components::render_universal_prompt_hint_strip())
+            // Terminal-specific footer: only advertise close so the PTY keeps full keyboard control.
+            .child(render_terminal_prompt_hint_strip())
             // Actions dialog overlay
             .when_some(
                 render_actions_backdrop_bottom_anchored(
@@ -390,9 +388,8 @@ mod term_prompt_render_tests {
             "term root container should not clip overflow before key handling, so overlay vibrancy can composite correctly"
         );
         assert!(
-            TERM_RENDER_SOURCE.contains(
-                ".child(div().flex_1().min_h(px(0.)).overflow_hidden().child(entity))"
-            ),
+            TERM_RENDER_SOURCE
+                .contains(".child(div().flex_1().min_h(px(0.)).overflow_hidden().child(entity))"),
             "term render should keep overflow clipping scoped to the terminal content child"
         );
     }
@@ -477,8 +474,8 @@ mod term_prompt_render_tests {
             "term prompt should no longer use exception chrome audit"
         );
         assert!(
-            TERM_RENDER_SOURCE.contains("render_universal_prompt_hint_strip()"),
-            "term prompt should use the canonical three-key hint strip footer"
+            TERM_RENDER_SOURCE.contains("render_terminal_prompt_hint_strip()"),
+            "term prompt should use the terminal-specific close-only footer"
         );
     }
 
