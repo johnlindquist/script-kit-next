@@ -1,6 +1,6 @@
-//! Tab AI Overlay — Visual States
+//! Tab AI Chat — Visual States
 //!
-//! Exposes the key visual states of the Tab AI overlay for deterministic
+//! Exposes the key visual states of the Tab AI chat view for deterministic
 //! storybook verification: idle, running, error, and memory-hint.
 //! Each variant renders using the same shared HintStrip footer and
 //! opacity tokens used in production code.
@@ -11,19 +11,19 @@ use crate::storybook::{
     story_container, story_item, story_section, Story, StorySurface, StoryVariant,
 };
 
-pub struct TabAiOverlayStory;
+pub struct TabAiChatStory;
 
-impl Story for TabAiOverlayStory {
+impl Story for TabAiChatStory {
     fn id(&self) -> &'static str {
-        "tab-ai-overlay"
+        "tab-ai-chat"
     }
 
     fn name(&self) -> &'static str {
-        "Tab AI Overlay States"
+        "Tab AI Chat States"
     }
 
     fn category(&self) -> &'static str {
-        "Overlays"
+        "Views"
     }
 
     fn surface(&self) -> StorySurface {
@@ -34,10 +34,10 @@ impl Story for TabAiOverlayStory {
         let theme = crate::theme::get_cached_theme();
 
         story_container()
-            .child(story_section("Tab AI Overlay — Visual States").children(
+            .child(story_section("Tab AI Chat — Visual States").children(
                 self.variants().iter().map(|v| {
-                    let kind = TabAiOverlayKind::from_variant_id(&v.stable_id());
-                    story_item(&v.name, render_overlay_kind(&theme, &kind))
+                    let kind = TabAiChatKind::from_variant_id(&v.stable_id());
+                    story_item(&v.name, render_chat_kind(&theme, &kind))
                 }),
             ))
             .into_any_element()
@@ -45,8 +45,8 @@ impl Story for TabAiOverlayStory {
 
     fn render_variant(&self, variant: &StoryVariant) -> AnyElement {
         let theme = crate::theme::get_cached_theme();
-        let kind = TabAiOverlayKind::from_variant_id(&variant.stable_id());
-        render_overlay_kind(&theme, &kind).into_any_element()
+        let kind = TabAiChatKind::from_variant_id(&variant.stable_id());
+        render_chat_kind(&theme, &kind).into_any_element()
     }
 
     fn variants(&self) -> Vec<StoryVariant> {
@@ -67,13 +67,13 @@ impl Story for TabAiOverlayStory {
     }
 }
 
-/// Visual state kind — main overlay vs save-offer overlay.
-enum TabAiOverlayKind {
+/// Visual state kind — main chat vs save-offer.
+enum TabAiChatKind {
     Main(TabAiMainState),
     SaveOffer(TabAiSaveOfferVisualState),
 }
 
-/// Pure data describing one visual state of the main Tab AI overlay.
+/// Pure data describing one visual state of the main Tab AI chat.
 struct TabAiMainState {
     intent: SharedString,
     placeholder: SharedString,
@@ -82,13 +82,13 @@ struct TabAiMainState {
     memory_hint: Option<SharedString>,
 }
 
-/// Pure data describing one visual state of the save-offer overlay.
+/// Pure data describing one visual state of the save-offer.
 struct TabAiSaveOfferVisualState {
     filename_stem: SharedString,
     error: Option<SharedString>,
 }
 
-impl TabAiOverlayKind {
+impl TabAiChatKind {
     fn from_variant_id(id: &str) -> Self {
         match id {
             "running" => Self::Main(TabAiMainState {
@@ -137,15 +137,15 @@ impl TabAiOverlayKind {
     }
 }
 
-/// Dispatch to the correct renderer based on overlay kind.
-fn render_overlay_kind(theme: &crate::theme::Theme, kind: &TabAiOverlayKind) -> Div {
+/// Dispatch to the correct renderer based on chat kind.
+fn render_chat_kind(theme: &crate::theme::Theme, kind: &TabAiChatKind) -> Div {
     match kind {
-        TabAiOverlayKind::Main(state) => render_tab_ai_main_preview(theme, state),
-        TabAiOverlayKind::SaveOffer(state) => render_tab_ai_save_offer_preview(theme, state),
+        TabAiChatKind::Main(state) => render_tab_ai_main_preview(theme, state),
+        TabAiChatKind::SaveOffer(state) => render_tab_ai_save_offer_preview(theme, state),
     }
 }
 
-/// Render a static preview of the main Tab AI overlay.
+/// Render a static preview of the main Tab AI chat view.
 ///
 /// Uses the same shared primitives (HintStrip, opacity tokens, FONT_MONO)
 /// as the production Tab AI chat in `src/app_impl/tab_ai_mode.rs`.
@@ -257,7 +257,7 @@ fn render_tab_ai_main_preview(theme: &crate::theme::Theme, state: &TabAiMainStat
         ]))
 }
 
-/// Render a static preview of the save-offer overlay.
+/// Render a static preview of the save-offer.
 ///
 /// Mirrors the inline panel treatment from the production
 /// `render_tab_ai_save_offer_overlay` in `src/app_impl/tab_ai_mode.rs`.
@@ -326,19 +326,19 @@ fn render_tab_ai_save_offer_preview(
 
 #[cfg(test)]
 mod tests {
-    use super::TabAiOverlayStory;
+    use super::TabAiChatStory;
     use crate::storybook::{Story, StorySurface};
 
     #[test]
-    fn tab_ai_overlay_story_is_discoverable() {
-        let story = TabAiOverlayStory;
-        assert_eq!(story.id(), "tab-ai-overlay");
+    fn tab_ai_chat_story_is_discoverable() {
+        let story = TabAiChatStory;
+        assert_eq!(story.id(), "tab-ai-chat");
         assert_eq!(story.surface(), StorySurface::Shell);
     }
 
     #[test]
-    fn tab_ai_overlay_story_has_six_variants() {
-        let story = TabAiOverlayStory;
+    fn tab_ai_chat_story_has_six_variants() {
+        let story = TabAiChatStory;
         let variants = story.variants();
         assert_eq!(variants.len(), 6);
         let ids: Vec<String> = variants.iter().map(|v| v.stable_id()).collect();
@@ -351,8 +351,8 @@ mod tests {
     }
 
     #[test]
-    fn tab_ai_overlay_story_is_comparable() {
-        let story = TabAiOverlayStory;
+    fn tab_ai_chat_story_is_comparable() {
+        let story = TabAiChatStory;
         assert!(
             story.variants().len() > 1,
             "must be comparable (>1 variant)"

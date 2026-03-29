@@ -116,8 +116,7 @@ mod tests {
                 {"id": "claude-sonnet-4-6", "displayName": "Claude Sonnet 4.6", "contextWindow": 200000}
             ]
         }"#;
-        let config: AcpAgentConfig =
-            serde_json::from_str(json).expect("full config should parse");
+        let config: AcpAgentConfig = serde_json::from_str(json).expect("full config should parse");
         assert_eq!(config.command, "claude-acp");
         assert_eq!(config.args, vec!["--profile", "default"]);
         assert_eq!(
@@ -153,8 +152,7 @@ mod tests {
             models: vec![],
         };
         let json = serde_json::to_string(&config).expect("should serialize");
-        let back: AcpAgentConfig =
-            serde_json::from_str(&json).expect("should deserialize");
+        let back: AcpAgentConfig = serde_json::from_str(&json).expect("should deserialize");
         assert_eq!(back.id, config.id);
         assert_eq!(back.command, config.command);
     }

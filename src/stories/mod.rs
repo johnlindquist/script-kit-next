@@ -29,7 +29,7 @@ mod path_prompt_stories;
 mod run_button_exploration;
 mod scrollbar_stories;
 mod select_prompt_stories;
-mod tab_ai_overlay_stories;
+mod tab_ai_chat_stories;
 mod toast_stories;
 
 use crate::storybook::StoryEntry;
@@ -62,7 +62,7 @@ pub use path_prompt_stories::PathPromptStory;
 pub use run_button_exploration::RunButtonExplorationStory;
 pub use scrollbar_stories::ScrollbarStory;
 pub use select_prompt_stories::SelectPromptStory;
-pub use tab_ai_overlay_stories::TabAiOverlayStory;
+pub use tab_ai_chat_stories::TabAiChatStory;
 pub use toast_stories::ToastStory;
 
 /// Static storage for all stories
@@ -99,8 +99,8 @@ static ALL_STORIES: LazyLock<Vec<StoryEntry>> = LazyLock::new(|| {
         StoryEntry::new(Box::new(EnvPromptStory)),
         StoryEntry::new(Box::new(PathPromptStory)),
         StoryEntry::new(Box::new(SelectPromptStory)),
-        // Overlays
-        StoryEntry::new(Box::new(TabAiOverlayStory)),
+        // Views
+        StoryEntry::new(Box::new(TabAiChatStory)),
     ]
 });
 

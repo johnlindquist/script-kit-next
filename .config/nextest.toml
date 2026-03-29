@@ -2,16 +2,23 @@
 # Fast feedback: ~12s for 10k+ tests. System API tests excluded (use --profile ci).
 slow-timeout = { period = "5s", terminate-after = 2 }
 fail-fast = false
-default-filter = "not (test(login_item::) | test(ocr::tests::) | test(acp::client::) | test(template_variables::) | test(window_control::query::) | test(clipboard_history::change_detection::) | test(clipboard_history::macos_paste::) | test(clipboard_history::monitor::tests::test_capture) | test(hotkeys::tests::script_hotkey) | test(keyboard_monitor::) | test(keyword_manager::) | test(ai::window::window_api::) | test(permissions_wizard::) | test(platform::positioning_bounds) | test(platform::tests::test_get_global_mouse))"
+default-filter = "not (test(login_item::) | test(ocr::tests::) | test(acp::client::) | test(template_variables::) | test(window_control::query::) | test(clipboard_history::change_detection::) | test(clipboard_history::macos_paste::) | test(clipboard_history::monitor::tests::test_capture) | test(hotkeys::tests::script_hotkey) | test(keyboard_monitor::) | test(keyword_manager::) | test(ai::window::window_api::) | test(permissions_wizard::) | test(platform::positioning_bounds) | test(platform::tests::test_get_global_mouse) | test(mcp_server::tests::))"
 
 # Serialize notes::storage tests — they share a global SQLite DB and
 # the trigger-recreation test races with the trigger-assertion test.
 [test-groups.notes-storage]
 max-threads = 1
 
+[test-groups.logging-capture]
+max-threads = 1
+
 [[profile.default.overrides]]
 filter = 'test(notes::storage::)'
 test-group = 'notes-storage'
+
+[[profile.default.overrides]]
+filter = 'test(logging::tests::test_toggle_capture_returns_correct_state) | test(logging::tests::test_capture_file_path_format)'
+test-group = 'logging-capture'
 
 [profile.ci]
 # CI runs everything with generous timeouts
@@ -21,3 +28,7 @@ fail-fast = false
 [[profile.ci.overrides]]
 filter = 'test(notes::storage::)'
 test-group = 'notes-storage'
+
+[[profile.ci.overrides]]
+filter = 'test(logging::tests::test_toggle_capture_returns_correct_state) | test(logging::tests::test_capture_file_path_format)'
+test-group = 'logging-capture'

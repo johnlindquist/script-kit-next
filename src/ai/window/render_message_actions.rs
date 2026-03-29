@@ -265,11 +265,7 @@ impl AiApp {
 /// Base styled div for action strip buttons.
 /// Hover styles are always applied — GPUI's modality-aware `is_hovered()` automatically
 /// suppresses hover during keyboard navigation.
-fn action_btn_base(
-    id: &'static str,
-    muted_fg: gpui::Hsla,
-    muted_bg: gpui::Hsla,
-) -> Stateful<Div> {
+fn action_btn_base(id: &'static str, muted_fg: gpui::Hsla, muted_bg: gpui::Hsla) -> Stateful<Div> {
     div()
         .id(id)
         .flex()

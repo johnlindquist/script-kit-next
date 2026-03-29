@@ -11,9 +11,9 @@ use agent_client_protocol::{
     ExtResponse, KillTerminalRequest, KillTerminalResponse, ReadTextFileRequest,
     ReadTextFileResponse, ReleaseTerminalRequest, ReleaseTerminalResponse,
     RequestPermissionOutcome, RequestPermissionRequest, RequestPermissionResponse, Result,
-    SessionNotification, SessionUpdate, TerminalOutputRequest,
-    TerminalOutputResponse, WaitForTerminalExitRequest, WaitForTerminalExitResponse,
-    WriteTextFileRequest, WriteTextFileResponse,
+    SessionNotification, SessionUpdate, TerminalOutputRequest, TerminalOutputResponse,
+    WaitForTerminalExitRequest, WaitForTerminalExitResponse, WriteTextFileRequest,
+    WriteTextFileResponse,
 };
 use serde_json::value::RawValue;
 
@@ -156,11 +156,7 @@ impl Client for ScriptKitAcpClient {
             }
             (Some(start_line), None) => {
                 let start = (start_line.saturating_sub(1)) as usize;
-                content
-                    .lines()
-                    .skip(start)
-                    .collect::<Vec<_>>()
-                    .join("\n")
+                content.lines().skip(start).collect::<Vec<_>>().join("\n")
             }
             (None, Some(limit)) => content
                 .lines()

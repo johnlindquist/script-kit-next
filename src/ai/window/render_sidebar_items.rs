@@ -231,9 +231,7 @@ impl AiApp {
                                 .bg(cx.theme().danger.opacity(OPACITY_SUBTLE))
                                 .text_xs()
                                 .text_color(cx.theme().danger)
-                                .hover(|s| {
-                                    s.bg(cx.theme().danger.opacity(OPACITY_DANGER_HOVER))
-                                })
+                                .hover(|s| s.bg(cx.theme().danger.opacity(OPACITY_DANGER_HOVER)))
                                 .on_mouse_down(
                                     gpui::MouseButton::Left,
                                     cx.listener(move |this, _, _window, cx| {
@@ -255,10 +253,7 @@ impl AiApp {
                                 .opacity(OPACITY_HIDDEN)
                                 .group_hover("chat-item", |s| s.opacity(1.0))
                                 .hover(|s| {
-                                    s.bg(cx
-                                        .theme()
-                                        .danger
-                                        .opacity(OPACITY_MESSAGE_USER_BACKGROUND))
+                                    s.bg(cx.theme().danger.opacity(OPACITY_MESSAGE_USER_BACKGROUND))
                                 })
                                 .on_mouse_down(
                                     gpui::MouseButton::Left,
