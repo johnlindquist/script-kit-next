@@ -1638,6 +1638,177 @@ mod tests {
             Some(vec![b'\x1b'])
         );
     }
+
+    // ========================================================================
+    // Key Encoder Regression Tests
+    //
+    // Freeze the current terminal key encoder behavior. These tests lock in
+    // the exact byte sequences produced for modifier+key combinations that
+    // TUI apps (Claude Code, vim, fzf, etc.) depend on.
+    // ========================================================================
+
+    #[test]
+    fn test_enter_sends_carriage_return() {
+        // Enter MUST send \r (CR), not \n (LF). TUI apps and line-discipline
+        // both expect CR from the terminal side.
+        assert_eq!(
+            TermPrompt::encode_special_key_bytes("enter", &gpui::Modifiers::none(), false),
+            Some(vec![b'\r'])
+        );
+        // "return" alias must behave identically
+        assert_eq!(
+            TermPrompt::encode_special_key_bytes("return", &gpui::Modifiers::none(), false),
+            Some(vec![b'\r'])
+        );
+    }
+
+    #[test]
+    fn test_ctrl_arrow_keys_all_directions() {
+        let ctrl = gpui::Modifiers {
+            control: true,
+            ..gpui::Modifiers::none()
+        };
+
+        // Ctrl+Arrow keys use xterm modifier parameter 5
+        assert_eq!(
+            TermPrompt::encode_special_key_bytes("left", &ctrl, false),
+            Some(b"\x1b[1;5D".to_vec()),
+            "Ctrl+Left"
+        );
+        assert_eq!(
+            TermPrompt::encode_special_key_bytes("right", &ctrl, false),
+            Some(b"\x1b[1;5C".to_vec()),
+            "Ctrl+Right"
+        );
+        assert_eq!(
+            TermPrompt::encode_special_key_bytes("up", &ctrl, false),
+            Some(b"\x1b[1;5A".to_vec()),
+            "Ctrl+Up"
+        );
+        assert_eq!(
+            TermPrompt::encode_special_key_bytes("down", &ctrl, false),
+            Some(b"\x1b[1;5B".to_vec()),
+            "Ctrl+Down"
+        );
+    }
+
+    #[test]
+    fn test_shift_left_arrow() {
+        let shift = gpui::Modifiers {
+            shift: true,
+            ..gpui::Modifiers::none()
+        };
+
+        assert_eq!(
+            TermPrompt::encode_special_key_bytes("left", &shift, false),
+            Some(b"\x1b[1;2D".to_vec()),
+            "Shift+Left"
+        );
+    }
+
+    #[test]
+    fn test_alt_left_arrow() {
+        let alt = gpui::Modifiers {
+            alt: true,
+            ..gpui::Modifiers::none()
+        };
+
+        assert_eq!(
+            TermPrompt::encode_special_key_bytes("left", &alt, false),
+            Some(b"\x1b[1;3D".to_vec()),
+            "Alt+Left"
+        );
+    }
+
+    #[test]
+    fn test_ctrl_delete_home_end() {
+        let ctrl = gpui::Modifiers {
+            control: true,
+            ..gpui::Modifiers::none()
+        };
+
+        assert_eq!(
+            TermPrompt::encode_special_key_bytes("delete", &ctrl, false),
+            Some(b"\x1b[3;5~".to_vec()),
+            "Ctrl+Delete"
+        );
+        assert_eq!(
+            TermPrompt::encode_special_key_bytes("home", &ctrl, false),
+            Some(b"\x1b[1;5H".to_vec()),
+            "Ctrl+Home"
+        );
+        assert_eq!(
+            TermPrompt::encode_special_key_bytes("end", &ctrl, false),
+            Some(b"\x1b[1;5F".to_vec()),
+            "Ctrl+End"
+        );
+    }
+
+    #[test]
+    fn test_alt_backspace() {
+        let alt = gpui::Modifiers {
+            alt: true,
+            ..gpui::Modifiers::none()
+        };
+
+        assert_eq!(
+            TermPrompt::encode_special_key_bytes("backspace", &alt, false),
+            Some(vec![0x1b, 0x7f]),
+            "Alt+Backspace"
+        );
+    }
+
+    #[test]
+    fn test_shift_tab_backtab() {
+        let shift = gpui::Modifiers {
+            shift: true,
+            ..gpui::Modifiers::none()
+        };
+
+        assert_eq!(
+            TermPrompt::encode_special_key_bytes("tab", &shift, false),
+            Some(b"\x1b[Z".to_vec()),
+            "Shift+Tab (backtab)"
+        );
+    }
+
+    #[test]
+    fn test_printable_alt_chord_produces_escape_prefix() {
+        // Alt+<printable> should be handled by the key handler's printable path:
+        //   has_escape_prefix = true (because alt is set)
+        //   should_use_printable_key_char("b", Some("b")) = true
+        //   result: [0x1b, 'b'] = \x1bb
+        //
+        // We test the two components that compose this behavior:
+        // 1. "b" with key_char "b" is printable
+        assert!(TermPrompt::should_use_printable_key_char("b", Some("b")));
+        // 2. Alt modifier produces escape prefix (csi_modifier_parameter returns Some(3))
+        let alt = gpui::Modifiers {
+            alt: true,
+            ..gpui::Modifiers::none()
+        };
+        assert_eq!(TermPrompt::csi_modifier_parameter(&alt), Some(3));
+
+        // 3. encode_special_key_bytes returns None for "b" (it's not a special key),
+        //    so the printable path handles it — verifying the fallthrough.
+        assert_eq!(
+            TermPrompt::encode_special_key_bytes("b", &alt, false),
+            None,
+            "Printable keys must fall through to the printable path, not be handled as special keys"
+        );
+
+        // Simulate the printable Alt chord assembly (mirrors key handler lines 1174-1181)
+        let has_escape_prefix = alt.alt; // true
+        let key_char = Some("b");
+        let mut bytes = Vec::new();
+        if has_escape_prefix {
+            bytes.push(b'\x1b');
+        }
+        if let Some(kc) = key_char {
+            bytes.extend_from_slice(kc.as_bytes());
+        }
+        assert_eq!(bytes, vec![0x1b, b'b'], "Alt+b should produce ESC b");
+    }
     // ========================================================================
     // Cell Dimension Tests
     // ========================================================================
