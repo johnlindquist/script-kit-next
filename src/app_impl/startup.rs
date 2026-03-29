@@ -499,8 +499,6 @@ impl ScriptListApp {
             alias_input_state: None,
             // Alias input entity - persisted to maintain focus
             alias_input_entity: None,
-            // Tab AI overlay state - starts as None (overlay hidden)
-            tab_ai_state: None,
             tab_ai_task: None,
             pending_tab_ai_execution: None,
             tab_ai_save_offer_state: None,

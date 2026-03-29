@@ -262,8 +262,6 @@ struct ScriptListApp {
     alias_input_state: Option<AliasInputState>,
     /// The alias input entity (persisted to maintain focus)
     alias_input_entity: Option<Entity<crate::components::alias_input::AliasInput>>,
-    /// Tab AI overlay state — when Some, the mini natural-language input is visible
-    tab_ai_state: Option<TabAiOverlayState>,
     /// Tab AI background task (AI call + script execution)
     tab_ai_task: Option<gpui::Task<()>>,
     /// Most recent Tab AI execution waiting for success/failure accounting.

@@ -10,32 +10,6 @@ struct TabAiResolvedContext {
     invocation_receipt: crate::ai::TabAiInvocationReceipt,
 }
 
-/// Shared helper that sets the Tab AI error state, clears `running`, and emits
-/// a structured `tab_ai_error_state_set` event with stable `kind` and
-/// `remediation` fields.  All submit-path early returns route through this
-/// instead of duplicating the state mutation.
-#[allow(dead_code)] // Overlay path — retained for incremental migration
-fn set_tab_ai_error(
-    state: &mut Option<TabAiOverlayState>,
-    kind: &'static str,
-    message: impl Into<SharedString>,
-    remediation: &'static str,
-) {
-    let message = message.into();
-    tracing::warn!(
-        target: "script_kit::tab_ai",
-        event = "tab_ai_error_state_set",
-        kind,
-        remediation,
-        message = %message,
-        "tab ai error state set"
-    );
-    if let Some(state) = state.as_mut() {
-        state.running = false;
-        state.error = Some(message);
-    }
-}
-
 /// Shared helper that sets Tab AI chat error state on the entity, clears `running`,
 /// and emits a structured log event. Used by the full-view chat submit path.
 fn set_tab_ai_chat_error(
@@ -62,72 +36,6 @@ fn set_tab_ai_chat_error(
 }
 
 impl ScriptListApp {
-    /// Open the Tab AI overlay from any surface.
-    ///
-    /// Captures a UI snapshot at invocation time and shows the mini input.
-    /// The underlying view remains visible and unchanged.
-    #[allow(dead_code)] // Overlay path — retained for incremental migration
-    pub(crate) fn open_tab_ai_overlay(&mut self, cx: &mut Context<Self>) {
-        // Already open or save-offer visible — do nothing
-        if self.tab_ai_state.is_some() || self.tab_ai_save_offer_state.is_some() {
-            return;
-        }
-
-        let (ui_snapshot, invocation_receipt) = self.snapshot_tab_ai_ui(cx);
-
-        // Emit the receipt as a standalone structured log line for agent/test consumption
-        tracing::info!(
-            target: "script_kit::tab_ai",
-            event = "tab_ai_invocation_receipt",
-            prompt_type = %invocation_receipt.prompt_type,
-            input_status = %invocation_receipt.input_status,
-            focus_status = %invocation_receipt.focus_status,
-            elements_status = %invocation_receipt.elements_status,
-            has_input_text = invocation_receipt.has_input_text,
-            has_focus_target = invocation_receipt.has_focus_target,
-            element_count = invocation_receipt.element_count,
-            warning_count = invocation_receipt.warning_count,
-            rich = invocation_receipt.rich,
-            degradation_reasons = ?invocation_receipt.degradation_reasons,
-            receipt_json = %serde_json::to_string(&invocation_receipt).unwrap_or_default(),
-        );
-
-        // Cheap frontmost-app capture — no screenshots, no selected text
-        let frontmost_bundle_id = crate::context_snapshot::capture_context_snapshot(
-            &crate::context_snapshot::CaptureContextOptions {
-                include_selected_text: false,
-                include_frontmost_app: true,
-                include_menu_bar: false,
-                include_browser_url: false,
-                include_focused_window: false,
-            },
-        )
-        .frontmost_app
-        .map(|app| app.bundle_id);
-
-        tracing::info!(
-            event = "tab_ai_open",
-            prompt_type = %ui_snapshot.prompt_type,
-            has_frontmost_bundle_id = frontmost_bundle_id.is_some(),
-        );
-
-        self.tab_ai_state = Some(TabAiOverlayState {
-            intent: String::new(),
-            ui_snapshot,
-            frontmost_bundle_id,
-            memory_hint: None,
-            running: false,
-            error: None,
-            invocation_receipt,
-        });
-
-        // Close actions popup if open
-        self.show_actions_popup = false;
-        self.actions_dialog = None;
-
-        cx.notify();
-    }
-
     /// Open the Tab AI chat as a full-view replacement (not an overlay).
     ///
     /// Captures a UI snapshot, builds context cards, creates the `TabAiChat`
@@ -183,7 +91,7 @@ impl ScriptListApp {
             context_card_count = context_cards.len(),
         );
 
-        let entity = cx.new(|_cx| {
+        let entity = cx.new(|cx| {
             TabAiChat::new(
                 return_view,
                 return_focus_target,
@@ -191,6 +99,7 @@ impl ScriptListApp {
                 invocation_receipt,
                 frontmost_bundle_id,
                 context_cards,
+                cx.focus_handle(),
             )
         });
 
@@ -277,6 +186,8 @@ impl ScriptListApp {
     }
 
     /// Handle key-down events within the Tab AI chat view.
+    /// Escape closes, Enter submits, everything else is routed through
+    /// `TextInputState::handle_key()` for selection, clipboard, and editing.
     fn handle_tab_ai_chat_key_down(
         &mut self,
         entity: Entity<TabAiChat>,
@@ -291,7 +202,7 @@ impl ScriptListApp {
             return;
         }
 
-        if crate::ui_foundation::is_key_enter(key) {
+        if crate::ui_foundation::is_key_enter(key) && !event.keystroke.modifiers.shift {
             if entity.read(cx).can_submit() {
                 self.submit_tab_ai_chat(entity, cx);
             }
@@ -299,41 +210,31 @@ impl ScriptListApp {
             return;
         }
 
-        if key == "backspace" || key == "Backspace" {
-            entity.update(cx, |chat, cx| {
-                chat.backspace();
+        // Delegate all other keys to TextInputState (handles backspace, delete,
+        // arrows, word-jump, select-all, copy, cut, paste, undo, redo, and
+        // printable character insertion).
+        let key_lower = event.keystroke.key.to_ascii_lowercase();
+        let key_char = event.keystroke.key_char.as_deref();
+        entity.update(cx, |chat, cx| {
+            if chat.running {
+                return;
+            }
+            let handled = chat.input.handle_key(
+                key_lower.as_str(),
+                key_char,
+                event.keystroke.modifiers.platform,
+                event.keystroke.modifiers.alt,
+                event.keystroke.modifiers.shift,
+                cx,
+            );
+            if handled {
+                chat.cursor_visible = true;
+                chat.error = None;
+                chat.refresh_memory_hint();
                 cx.notify();
-            });
-            cx.stop_propagation();
-            return;
-        }
-
-        // Handle space
-        if key == " " || key.eq_ignore_ascii_case("space") {
-            entity.update(cx, |chat, cx| {
-                chat.push_text(" ");
-                cx.notify();
-            });
-            cx.stop_propagation();
-            return;
-        }
-
-        // Type printable characters
-        if event.keystroke.key.len() == 1
-            && !event.keystroke.modifiers.platform
-            && !event.keystroke.modifiers.control
-            && !event.keystroke.modifiers.alt
-        {
-            let text = event.keystroke.key.clone();
-            entity.update(cx, |chat, cx| {
-                chat.push_text(&text);
-                cx.notify();
-            });
-            cx.stop_propagation();
-            return;
-        }
-
-        cx.propagate();
+            }
+        });
+        cx.stop_propagation();
     }
 
     /// Build context from explicit inputs (not from overlay state).
@@ -406,6 +307,7 @@ impl ScriptListApp {
 
         entity.update(cx, |chat, cx| {
             chat.append_user_turn(intent.clone());
+            chat.clear_input();
             chat.set_running(true);
             chat.set_error(None);
             cx.notify();
@@ -689,65 +591,6 @@ impl ScriptListApp {
 
             #[cfg(feature = "storybook")]
             AppView::DesignExplorerView { .. } => FocusTarget::AppRoot,
-        }
-    }
-
-    /// Close the Tab AI overlay and restore focus.
-    #[allow(dead_code)] // Overlay path — retained for incremental migration
-    pub(crate) fn close_tab_ai_overlay(&mut self, cx: &mut Context<Self>) {
-        if self.tab_ai_state.is_some() {
-            let target = self.tab_ai_return_focus_target();
-            tracing::info!(
-                event = "tab_ai_close",
-                focus_target = %format!("{target:?}"),
-            );
-            self.tab_ai_state = None;
-            self.tab_ai_task = None;
-            self.pending_focus = Some(target);
-            cx.notify();
-        }
-    }
-
-    /// Returns whether the Tab AI overlay is currently visible.
-    #[allow(dead_code)] // Will be used by key interceptors in future phases
-    pub(crate) fn is_tab_ai_overlay_open(&self) -> bool {
-        self.tab_ai_state.is_some()
-    }
-
-    /// Refresh the memory hint based on the current intent and frontmost bundle id.
-    /// Degrades to `None` with a warning log on failure — never aborts the overlay.
-    #[allow(dead_code)] // Overlay path — retained for incremental migration
-    fn refresh_tab_ai_memory_hint(&mut self) {
-        let (intent, bundle_id) = match self.tab_ai_state.as_ref() {
-            Some(state) => (state.intent.trim().to_string(), state.frontmost_bundle_id.clone()),
-            None => return,
-        };
-
-        let memory_hint = match crate::ai::resolve_tab_ai_memory_suggestions_with_outcome(
-            &intent,
-            bundle_id.as_deref(),
-            1,
-        ) {
-            Ok(resolution) => {
-                tracing::info!(
-                    event = "tab_ai_memory_hint_resolved",
-                    query = %resolution.outcome.query,
-                    bundle_id = ?resolution.outcome.bundle_id,
-                    reason = ?resolution.outcome.reason,
-                    candidate_count = resolution.outcome.candidate_count,
-                    match_count = resolution.outcome.match_count,
-                    top_score = ?resolution.outcome.top_score,
-                );
-                resolution.suggestions.into_iter().next()
-            }
-            Err(error) => {
-                tracing::warn!(event = "tab_ai_memory_hint_failed", error = %error);
-                None
-            }
-        };
-
-        if let Some(state) = &mut self.tab_ai_state {
-            state.memory_hint = memory_hint;
         }
     }
 
@@ -1171,144 +1014,6 @@ impl ScriptListApp {
         (snapshot, receipt)
     }
 
-    /// Build the full context blob for AI submission.
-    ///
-    /// Returns a `TabAiResolvedContext` carrying bundle metadata and warning
-    /// counts alongside the serializable blob.  Uses
-    /// `TabAiContextBlob::from_parts(...)` so the runtime path and
-    /// deterministic test path share one constructor.
-    #[allow(dead_code)] // Overlay path — retained for incremental migration
-    fn build_tab_ai_context(&self, _cx: &Context<Self>) -> TabAiResolvedContext {
-        let ui = self
-            .tab_ai_state
-            .as_ref()
-            .map(|s| s.ui_snapshot.clone())
-            .unwrap_or_default();
-
-        let intent_for_lookup = self
-            .tab_ai_state
-            .as_ref()
-            .map(|s| s.intent.clone())
-            .unwrap_or_default();
-
-        // Desktop context — use the lightweight recommendation profile
-        let desktop = crate::context_snapshot::capture_context_snapshot(
-            &crate::context_snapshot::CaptureContextOptions::recommendation(),
-        );
-
-        let bundle_id = desktop
-            .frontmost_app
-            .as_ref()
-            .map(|app| app.bundle_id.clone());
-
-        let context_warning_count = desktop.warnings.len();
-
-        // Recent input history (most recent first, bounded)
-        let recent_inputs = self.input_history.recent_entries(5);
-
-        // Cached clipboard context — prefer selected item on clipboard surface
-        let clipboard_selected_index = match &self.current_view {
-            AppView::ClipboardHistoryView { selected_index, .. } => Some(*selected_index),
-            _ => None,
-        };
-        let clipboard = self.resolve_tab_ai_clipboard_context(clipboard_selected_index);
-
-        // Prior automation suggestions (up to 3)
-        let prior_automations = match crate::ai::resolve_tab_ai_memory_suggestions_with_outcome(
-            &intent_for_lookup,
-            bundle_id.as_deref(),
-            3,
-        ) {
-            Ok(resolution) => {
-                tracing::info!(
-                    event = "tab_ai_prior_automations_resolved",
-                    query = %resolution.outcome.query,
-                    bundle_id = ?resolution.outcome.bundle_id,
-                    reason = ?resolution.outcome.reason,
-                    candidate_count = resolution.outcome.candidate_count,
-                    match_count = resolution.outcome.match_count,
-                    top_score = ?resolution.outcome.top_score,
-                );
-                resolution.suggestions
-            }
-            Err(error) => {
-                tracing::warn!(event = "tab_ai_prior_automation_lookup_failed", error = %error);
-                Vec::new()
-            }
-        };
-
-        let timestamp = chrono::Utc::now().to_rfc3339();
-
-        // Resolve surface targets
-        let (focused_target, visible_targets) = self.resolve_tab_ai_surface_targets(&ui);
-
-        // Capture counts before moving into from_parts_with_targets
-        let visible_element_count = ui.visible_elements.len();
-        let recent_input_count = recent_inputs.len();
-        let has_clipboard = clipboard.is_some();
-        let prior_automation_count = prior_automations.len();
-        let has_bundle_id = bundle_id.is_some();
-        let has_focused_target = focused_target.is_some();
-        let visible_target_count = visible_targets.len();
-
-        let context = crate::ai::TabAiContextBlob::from_parts_with_targets(
-            ui,
-            focused_target,
-            visible_targets,
-            desktop,
-            recent_inputs,
-            clipboard,
-            prior_automations,
-            timestamp,
-        );
-
-        // Emit structured target audit for agent/dashboard observability
-        let target_audit = crate::ai::TabAiTargetAudit::from_targets(
-            &context.ui.prompt_type,
-            &context.focused_target,
-            &context.visible_targets,
-        );
-        target_audit.emit();
-
-        tracing::info!(
-            target: "script_kit::tab_ai",
-            event = "tab_ai_context_built",
-            schema_version = context.schema_version,
-            prompt_type = %context.ui.prompt_type,
-            visible_element_count,
-            recent_input_count,
-            has_clipboard,
-            prior_automation_count,
-            context_warning_count,
-            has_bundle_id,
-            has_focused_target,
-            visible_target_count,
-            "tab ai context built"
-        );
-
-        let invocation_receipt = self
-            .tab_ai_state
-            .as_ref()
-            .map(|s| s.invocation_receipt.clone())
-            .unwrap_or_else(|| {
-                crate::ai::TabAiInvocationReceipt::from_snapshot(
-                    &context.ui.prompt_type,
-                    &context.ui.input_text,
-                    &context.ui.focused_semantic_id,
-                    &context.ui.selected_semantic_id,
-                    context.ui.visible_elements.len(),
-                    &[],
-                )
-            });
-
-        TabAiResolvedContext {
-            context,
-            bundle_id,
-            context_warning_count,
-            invocation_receipt,
-        }
-    }
-
     /// Return a human-readable name for the current `AppView` variant.
     #[allow(dead_code)]
     fn app_view_name(&self) -> String {
@@ -1467,495 +1172,6 @@ impl ScriptListApp {
             #[cfg(feature = "storybook")]
             AppView::DesignExplorerView { .. } => None,
         }
-    }
-
-    /// Render the Tab AI overlay element if the overlay is open.
-    ///
-    /// Returns `None` when the overlay is hidden. The caller layers this
-    /// on top of `main_content` using `.when_some(...)`.
-    #[allow(dead_code)] // Overlay path — retained for incremental migration
-    pub(crate) fn render_tab_ai_overlay(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Option<gpui::AnyElement> {
-        let state = self.tab_ai_state.as_ref()?;
-        let theme = crate::theme::get_cached_theme();
-
-        if !self.focus_handle.is_focused(window) {
-            window.focus(&self.focus_handle, cx);
-        }
-
-        let intent_text: SharedString = state.intent.clone().into();
-        let is_running = state.running;
-        let error_msg = state.error.clone();
-        let memory_hint = state.memory_hint.clone();
-
-        // Placeholder text depends on running state
-        let placeholder: SharedString = if is_running {
-            "Generating...".into()
-        } else {
-            "Ask AI...".into()
-        };
-
-        // Whisper chrome colors — ghost-opacity surfaces, content at full weight
-        let accent = gpui::rgb(theme.colors.accent.selected);
-        let bg_scrim = gpui::rgba(crate::ui_foundation::hex_to_rgba_with_opacity(
-            theme.colors.background.main,
-            crate::theme::opacity::OPACITY_NEAR_FULL,
-        ));
-        let text_primary = gpui::rgb(theme.colors.text.primary);
-        let text_hint = gpui::rgba(crate::ui_foundation::hex_to_rgba_with_opacity(
-            theme.colors.text.primary,
-            crate::theme::opacity::OPACITY_DISABLED,
-        ));
-        let error_color = gpui::rgb(theme.colors.ui.error);
-        let divider_rgba = gpui::rgba(crate::ui_foundation::hex_to_rgba_with_opacity(
-            theme.colors.text.primary,
-            crate::theme::opacity::OPACITY_GHOST,
-        ));
-
-        // Hint strip horizontal padding (matches main window footer)
-        let hint_px: f32 = crate::window_resize::mini_layout::HINT_STRIP_PADDING_X;
-
-        // Build the overlay — full-width inline panel, not a floating card
-        let overlay = div()
-            .id("tab-ai-overlay")
-            .absolute()
-            .inset_0()
-            .track_focus(&self.focus_handle)
-            .flex()
-            .flex_col()
-            .bg(bg_scrim)
-            // Input row — bare input, no border, matches main filter style
-            .child(
-                div()
-                    .w_full()
-                    .px(px(hint_px))
-                    .py(px(10.))
-                    .flex()
-                    .flex_row()
-                    .items_center()
-                    .gap_2()
-                    // Intent text or placeholder — bare, no box
-                    .child(
-                        div()
-                            .flex_1()
-                            .text_size(gpui::rems(1.125))
-                            .font_family(crate::list_item::FONT_MONO)
-                            .when(intent_text.is_empty(), |d| {
-                                d.text_color(text_hint).child(placeholder)
-                            })
-                            .when(!intent_text.is_empty(), |d| {
-                                d.text_color(text_primary)
-                                    .child(intent_text.clone())
-                            }),
-                    )
-                    // Gold cursor indicator when empty
-                    .when(intent_text.is_empty() && !is_running, |d| {
-                        d.child(div().w(px(2.)).h(px(18.)).bg(accent))
-                    })
-                    // Subtle spinner when running
-                    .when(is_running, |d| {
-                        d.child(div().text_sm().text_color(accent).child("\u{25CF}"))
-                    }),
-            )
-            // Hairline divider — ghost opacity
-            .child(div().w_full().h(px(1.)).bg(divider_rgba))
-            // Error message if present — below divider, minimal
-            .when_some(error_msg, |d, msg| {
-                d.child(
-                    div()
-                        .w_full()
-                        .px(px(hint_px))
-                        .py(px(4.))
-                        .text_xs()
-                        .text_color(error_color)
-                        .child(msg),
-                )
-            })
-            // Memory hint — show similar prior automation when available
-            .when_some(memory_hint, |d, hint| {
-                d.child(
-                    div()
-                        .w_full()
-                        .px(px(hint_px))
-                        .pb(px(4.))
-                        .text_xs()
-                        .text_color(text_hint)
-                        .child(SharedString::from(format!(
-                            "Similar prior automation: {} \u{2014} {} ({:.2})",
-                            hint.slug, hint.effective_query, hint.score
-                        ))),
-                )
-            })
-            // Spacer pushes footer to bottom
-            .child(div().flex_1())
-            // Footer — canonical three-key hint strip via shared component
-            .child(components::HintStrip::new(vec![
-                "\u{21B5} Run".into(),
-                "\u{2318}K Actions".into(),
-                "Tab AI".into(),
-            ]))
-            // Keyboard handling
-            .on_key_down(cx.listener(Self::handle_tab_ai_key_down));
-
-        Some(overlay.into_any_element())
-    }
-
-    /// Handle key-down events within the Tab AI overlay.
-    #[allow(dead_code)] // Overlay path — retained for incremental migration
-    fn handle_tab_ai_key_down(
-        &mut self,
-        event: &KeyDownEvent,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let key = event.keystroke.key.as_str();
-
-        if crate::ui_foundation::is_key_escape(key) {
-            self.close_tab_ai_overlay(cx);
-            cx.stop_propagation();
-            return;
-        }
-
-        if crate::ui_foundation::is_key_enter(key) {
-            if let Some(state) = &self.tab_ai_state {
-                if !state.intent.trim().is_empty() && !state.running {
-                    self.submit_tab_ai_overlay(cx);
-                }
-            }
-            cx.stop_propagation();
-            return;
-        }
-
-        if key == "backspace" || key == "Backspace" {
-            if let Some(state) = &mut self.tab_ai_state {
-                if !state.running {
-                    state.intent.pop();
-                    self.refresh_tab_ai_memory_hint();
-                    cx.notify();
-                }
-            }
-            cx.stop_propagation();
-            return;
-        }
-
-        // Type printable characters
-        if event.keystroke.key.len() == 1
-            && !event.keystroke.modifiers.platform
-            && !event.keystroke.modifiers.control
-            && !event.keystroke.modifiers.alt
-        {
-            if let Some(state) = &mut self.tab_ai_state {
-                if !state.running {
-                    state.intent.push_str(&event.keystroke.key);
-                    state.error = None; // Clear error on new input
-                    self.refresh_tab_ai_memory_hint();
-                    cx.notify();
-                }
-            }
-            cx.stop_propagation();
-            return;
-        }
-
-        // Handle space (it's a printable but might be " " or "space")
-        if key == " " || key.eq_ignore_ascii_case("space") {
-            if let Some(state) = &mut self.tab_ai_state {
-                if !state.running {
-                    state.intent.push(' ');
-                    state.error = None;
-                    self.refresh_tab_ai_memory_hint();
-                    cx.notify();
-                }
-            }
-            cx.stop_propagation();
-            return;
-        }
-
-        // Let other keys propagate
-        cx.propagate();
-    }
-
-    /// Submit the Tab AI overlay intent — gather context, call AI, execute script.
-    #[allow(dead_code)] // Overlay path — retained for incremental migration
-    fn submit_tab_ai_overlay(&mut self, cx: &mut Context<Self>) {
-        let intent = match &self.tab_ai_state {
-            Some(state) => state.intent.clone(),
-            None => return,
-        };
-
-        if intent.trim().is_empty() {
-            return;
-        }
-
-        tracing::info!(event = "tab_ai_submit", intent = %intent);
-
-        // Mark as running
-        if let Some(state) = &mut self.tab_ai_state {
-            state.running = true;
-            state.error = None;
-        }
-        cx.notify();
-
-        // Build context blob (returns bundle metadata + warning counts)
-        let resolved_context = self.build_tab_ai_context(cx);
-
-        // Reject implicit-object intents when no stable target exists
-        if resolved_context.context.focused_target.is_none()
-            && crate::ai::tab_ai_intent_uses_implicit_target(&intent)
-        {
-            set_tab_ai_error(
-                &mut self.tab_ai_state,
-                "missing_implicit_target",
-                "No stable target is selected on this surface. Select an item or describe the target explicitly.",
-                "select_target_or_use_explicit_intent",
-            );
-            cx.notify();
-            return;
-        }
-
-        let bundle_id = resolved_context.bundle_id.clone();
-        let context_warning_count = resolved_context.context_warning_count;
-        let context_json = match serde_json::to_string_pretty(&resolved_context.context) {
-            Ok(json) => json,
-            Err(e) => {
-                set_tab_ai_error(
-                    &mut self.tab_ai_state,
-                    "context_serialize_failed",
-                    format!("Context error: {}", e),
-                    "fix_context_serialization",
-                );
-                cx.notify();
-                return;
-            }
-        };
-
-        // Emit the invocation receipt at submit time for observability
-        tracing::info!(
-            target: "script_kit::tab_ai",
-            event = "tab_ai_submit_receipt",
-            prompt_type = %resolved_context.invocation_receipt.prompt_type,
-            rich = resolved_context.invocation_receipt.rich,
-            input_status = %resolved_context.invocation_receipt.input_status,
-            focus_status = %resolved_context.invocation_receipt.focus_status,
-            elements_status = %resolved_context.invocation_receipt.elements_status,
-            degradation_reasons = ?resolved_context.invocation_receipt.degradation_reasons,
-        );
-
-        // Build the prompt
-        let user_prompt = build_tab_ai_user_prompt(&intent, &context_json);
-
-        tracing::info!(
-            event = "tab_ai_execute_start",
-            intent_len = intent.len(),
-            context_len = context_json.len(),
-        );
-
-        // Resolve AI provider + model before spawning the worker thread
-        let registry = self
-            .cached_provider_registry
-            .clone()
-            .unwrap_or_else(|| {
-                crate::ai::ProviderRegistry::from_environment_with_config(Some(&self.config))
-            });
-
-        let selected_model = match crate::prompt_ai::select_default_ai_script_model(&registry) {
-            Some(m) => m,
-            None => {
-                set_tab_ai_error(
-                    &mut self.tab_ai_state,
-                    "no_model_configured",
-                    "No AI model configured. Open Settings \u{2192} AI and add a provider API key.",
-                    "configure_ai_provider",
-                );
-                cx.notify();
-                return;
-            }
-        };
-
-        let provider = match registry
-            .find_provider_for_model(&selected_model.id)
-            .cloned()
-        {
-            Some(p) => p,
-            None => {
-                set_tab_ai_error(
-                    &mut self.tab_ai_state,
-                    "no_provider_matched",
-                    "No AI provider matched the selected model. Reopen Settings \u{2192} AI and reselect a model.",
-                    "reselect_model_or_provider",
-                );
-                cx.notify();
-                return;
-            }
-        };
-
-        let model_id = selected_model.id.clone();
-        let provider_id = provider.provider_id().to_string();
-
-        // Channel for worker thread → async GPUI task
-        let (tx, rx) = async_channel::bounded::<Result<(String, String), String>>(1);
-
-        // Blocking AI call on worker thread
-        let worker_model_id = model_id.clone();
-        std::thread::spawn(move || {
-            let messages = vec![
-                crate::ai::ProviderMessage::system(
-                    crate::prompt_ai::AI_SCRIPT_GENERATION_SYSTEM_PROMPT,
-                ),
-                crate::ai::ProviderMessage::user(&user_prompt),
-            ];
-
-            let result = match provider.send_message(&messages, &worker_model_id) {
-                Ok(raw_response) => {
-                    match crate::ai::script_generation::prepare_script_from_ai_response(
-                        &user_prompt,
-                        &raw_response,
-                    ) {
-                        Ok((slug, source)) => Ok((slug, source)),
-                        Err(_) => Err(
-                            "AI returned no runnable script. Retry with a clearer verb and target.".to_string(),
-                        ),
-                    }
-                }
-                Err(error) => Err(format!(
-                    "tab_ai_send_message model_id={worker_model_id}: {error:#}"
-                )),
-            };
-
-            // Ignore send error — the receiver may have been dropped if overlay was closed
-            let _ = tx.send_blocking(result);
-        });
-
-        // Clone metadata for the async closure
-        let dispatch_model_id = model_id.clone();
-        let dispatch_provider_id = provider_id.clone();
-        let dispatch_bundle_id = bundle_id.clone();
-
-        // Async GPUI task: await response, create temp file, execute
-        let app_entity = cx.entity().downgrade();
-        let task = cx.spawn(async move |_this, cx| {
-            let response = match rx.recv().await {
-                Ok(r) => r,
-                Err(_) => {
-                    tracing::error!(event = "tab_ai_channel_closed");
-                    return;
-                }
-            };
-
-            cx.update(|cx| {
-                let Some(app) = app_entity.upgrade() else {
-                    return;
-                };
-                app.update(cx, |this, cx| match response {
-                    Ok((slug, source)) => {
-                        tracing::info!(
-                            event = "tab_ai_script_extracted",
-                            source_len = source.len(),
-                        );
-
-                        // Write to temp file
-                        match crate::execution_scripts::create_interactive_temp_script(
-                            &source,
-                            ".ts",
-                            crate::execution_scripts::InteractiveTempFileMode::InterpreterFed,
-                        ) {
-                            Ok(temp_path) => {
-                                let path_str: String = temp_path.to_string_lossy().to_string();
-                                tracing::info!(
-                                    event = "tab_ai_execute_script",
-                                    path = %path_str,
-                                );
-
-                                // Capture intent and context before closing overlay
-                                let intent = this
-                                    .tab_ai_state
-                                    .as_ref()
-                                    .map(|s| s.intent.clone())
-                                    .unwrap_or_default();
-                                let prompt_type = this
-                                    .tab_ai_state
-                                    .as_ref()
-                                    .map(|s| s.ui_snapshot.prompt_type.clone())
-                                    .unwrap_or_else(|| "Unknown".to_string());
-
-                                // Close overlay before execution
-                                this.tab_ai_state = None;
-                                this.tab_ai_task = None;
-                                cx.notify();
-
-                                // Build execution record with full metadata
-                                let record =
-                                    crate::ai::TabAiExecutionRecord::from_parts(
-                                        intent,
-                                        source.clone(),
-                                        path_str.clone(),
-                                        slug,
-                                        prompt_type,
-                                        dispatch_bundle_id,
-                                        dispatch_model_id.clone(),
-                                        dispatch_provider_id.clone(),
-                                        context_warning_count,
-                                        chrono::Utc::now().to_rfc3339(),
-                                    );
-
-                                // Store pending record — bookkeeping deferred until completion
-                                this.pending_tab_ai_execution = Some(record.clone());
-
-                                // Write dispatched audit receipt
-                                if let Err(e) = crate::ai::append_tab_ai_execution_receipt(
-                                    &crate::ai::build_tab_ai_execution_receipt(
-                                        &record,
-                                        crate::ai::TabAiExecutionStatus::Dispatched,
-                                        false,
-                                        false,
-                                        None,
-                                    ),
-                                ) {
-                                    tracing::warn!(
-                                        event = "tab_ai_execution_audit_write_failed",
-                                        error = %e,
-                                    );
-                                }
-
-                                // Execute the ephemeral script
-                                this.execute_script_by_path(&path_str, cx);
-
-                                tracing::info!(
-                                    event = "tab_ai_post_execution_deferred",
-                                    slug = %record.slug,
-                                    prompt_type = %record.prompt_type,
-                                    model_id = %record.model_id,
-                                    provider_id = %record.provider_id,
-                                    "memory/save/cleanup deferred until actual completion",
-                                );
-                            }
-                            Err(e) => {
-                                set_tab_ai_error(
-                                    &mut this.tab_ai_state,
-                                    "temp_script_create_failed",
-                                    format!("Failed to create temp script: {e}"),
-                                    "check_temp_dir_permissions",
-                                );
-                                cx.notify();
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        set_tab_ai_error(
-                            &mut this.tab_ai_state,
-                            "ai_execution_failed",
-                            e,
-                            "retry_with_clearer_intent_or_check_provider_logs",
-                        );
-                        cx.notify();
-                    }
-                });
-            });
-        });
-
-        self.tab_ai_task = Some(task);
     }
 
     /// Complete the pending Tab AI execution after the script actually exits.
@@ -2279,7 +1495,7 @@ impl ScriptListApp {
 }
 
 impl Render for TabAiChat {
-    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = crate::theme::get_cached_theme();
         let bg = gpui::rgba(crate::ui_foundation::hex_to_rgba_with_opacity(
             theme.colors.background.main,
@@ -2293,10 +1509,17 @@ impl Render for TabAiChat {
             theme.colors.text.primary,
             crate::theme::opacity::OPACITY_DISABLED,
         ));
-        let text = gpui::rgb(theme.colors.text.primary);
+        let text_color = gpui::rgb(theme.colors.text.primary);
+        let accent_color = gpui::rgb(theme.colors.accent.selected);
         let error_color = gpui::rgb(theme.colors.ui.error);
 
-        let input_text: SharedString = self.intent.clone().into();
+        let is_focused = self.focus_handle.is_focused(window);
+        let input_text = self.input.text();
+        let cursor_pos = self.input.cursor().min(input_text.chars().count());
+        let chars: Vec<char> = input_text.chars().collect();
+        let before: SharedString = chars[..cursor_pos].iter().collect::<String>().into();
+        let after: SharedString = chars[cursor_pos..].iter().collect::<String>().into();
+
         let placeholder: SharedString = if self.running {
             "Generating\u{2026}".into()
         } else {
@@ -2307,41 +1530,6 @@ impl Render for TabAiChat {
             theme.colors.background.main,
             crate::theme::opacity::OPACITY_GHOST,
         ));
-
-        let cards_or_turns: Vec<gpui::AnyElement> = if self.turns.is_empty() {
-            self.context_cards
-                .iter()
-                .cloned()
-                .map(|card| {
-                    div()
-                        .w_full()
-                        .mb(px(8.))
-                        .px(px(12.))
-                        .py(px(10.))
-                        .bg(card_ghost_bg)
-                        .child(div().text_xs().text_color(hint).child(card.label))
-                        .child(div().mt(px(4.)).text_sm().text_color(text).child(card.body))
-                        .into_any_element()
-                })
-                .collect()
-        } else {
-            self.turns
-                .iter()
-                .cloned()
-                .map(|turn| {
-                    let mono = matches!(turn.kind, TabAiTurnKind::AssistantCode);
-                    div()
-                        .w_full()
-                        .mb(px(8.))
-                        .px(px(12.))
-                        .py(px(10.))
-                        .bg(card_ghost_bg)
-                        .when(mono, |d| d.font_family(crate::list_item::FONT_MONO))
-                        .child(div().text_sm().text_color(text).child(turn.body))
-                        .into_any_element()
-                })
-                .collect()
-        };
 
         // Memory hint text
         let memory_hint_element = self.memory_hint.as_ref().map(|mh| {
@@ -2357,27 +1545,126 @@ impl Render for TabAiChat {
                 )))
         });
 
+        // Center body: context cards (empty state) or scrollable turns list
+        let body: gpui::AnyElement = if self.turns.is_empty() {
+            let context_cards: Vec<gpui::AnyElement> = self
+                .context_cards
+                .iter()
+                .cloned()
+                .map(|card| {
+                    div()
+                        .w_full()
+                        .mb(px(8.))
+                        .px(px(12.))
+                        .py(px(10.))
+                        .bg(card_ghost_bg)
+                        .child(div().text_xs().text_color(hint).child(card.label))
+                        .child(div().mt(px(4.)).text_sm().text_color(text_color).child(card.body))
+                        .into_any_element()
+                })
+                .collect();
+            div()
+                .flex_1()
+                .min_h(px(0.))
+                .overflow_y_scrollbar()
+                .px(px(12.))
+                .py(px(12.))
+                .children(context_cards)
+                .into_any_element()
+        } else {
+            let turns = self.turns.clone();
+            let entity = cx.entity();
+            list(self.turns_list_state.clone(), move |ix, _window, _cx| {
+                let theme = crate::theme::get_cached_theme();
+                let card_bg = gpui::rgba(crate::ui_foundation::hex_to_rgba_with_opacity(
+                    theme.colors.background.main,
+                    crate::theme::opacity::OPACITY_GHOST,
+                ));
+                let text_rgb = gpui::rgb(theme.colors.text.primary);
+                let hint_rgba = gpui::rgba(crate::ui_foundation::hex_to_rgba_with_opacity(
+                    theme.colors.text.primary,
+                    crate::theme::opacity::OPACITY_DISABLED,
+                ));
+                let _ = &entity; // prevent entity from being dropped
+
+                if let Some(turn) = turns.get(ix) {
+                    let mono = matches!(turn.kind, TabAiTurnKind::AssistantCode);
+                    let title: SharedString = match turn.kind {
+                        TabAiTurnKind::User => "You".into(),
+                        TabAiTurnKind::AssistantText => "AI".into(),
+                        TabAiTurnKind::AssistantCode => "Generated Script".into(),
+                    };
+                    div()
+                        .w_full()
+                        .mb(px(8.))
+                        .px(px(12.))
+                        .py(px(10.))
+                        .bg(card_bg)
+                        .child(div().text_xs().text_color(hint_rgba).child(title))
+                        .child(
+                            div()
+                                .mt(px(4.))
+                                .text_sm()
+                                .text_color(text_rgb)
+                                .when(mono, |d| d.font_family(crate::list_item::FONT_MONO))
+                                .child(turn.body.clone()),
+                        )
+                        .into_any_element()
+                } else {
+                    div().w_full().into_any_element()
+                }
+            })
+            .with_sizing_behavior(ListSizingBehavior::Infer)
+            .flex_1()
+            .min_h(px(0.))
+            .px(px(12.))
+            .py(px(12.))
+            .into_any_element()
+        };
+
         div()
             .id("tab-ai-chat")
             .size_full()
             .flex()
             .flex_col()
             .bg(bg)
-            // Input row
+            .track_focus(&self.focus_handle)
+            // Input row with cursor
             .child(
                 div()
+                    .id("tab-ai-chat-input")
                     .w_full()
                     .px(px(crate::window_resize::mini_layout::HINT_STRIP_PADDING_X))
                     .py(px(12.))
+                    .flex()
+                    .flex_row()
+                    .items_center()
                     .child(
                         div()
+                            .flex()
+                            .flex_row()
+                            .items_center()
                             .text_size(gpui::rems(1.125))
                             .font_family(crate::list_item::FONT_MONO)
-                            .when(input_text.is_empty(), |d| {
-                                d.text_color(hint).child(placeholder)
+                            // Text before cursor
+                            .when(!before.is_empty(), |d| {
+                                d.child(div().text_color(text_color).child(before.clone()))
                             })
-                            .when(!input_text.is_empty(), |d| {
-                                d.text_color(text).child(input_text)
+                            // Cursor bar
+                            .child(
+                                div()
+                                    .w(px(2.))
+                                    .h(px(18.))
+                                    .when(is_focused && self.cursor_visible, |d| {
+                                        d.bg(accent_color)
+                                    }),
+                            )
+                            // Placeholder or text after cursor
+                            .when(input_text.is_empty(), |d| {
+                                d.child(div().text_color(hint).child(placeholder.clone()))
+                            })
+                            .when(!after.is_empty(), |d| {
+                                d.child(div().text_color(text_color).child(after.clone()))
                             }),
                     ),
             )
@@ -2396,16 +1683,8 @@ impl Render for TabAiChat {
             })
             // Memory hint
             .when_some(memory_hint_element, |d, el| d.child(el))
-            // Scrollable body with context cards or turns
-            .child(
-                div()
-                    .flex_1()
-                    .min_h(px(0.))
-                    .overflow_y_scrollbar()
-                    .px(px(12.))
-                    .py(px(12.))
-                    .children(cards_or_turns),
-            )
+            // Scrollable body
+            .child(body)
             // Bottom divider
             .child(div().w_full().h(px(1.)).bg(divider))
             // Footer hint strip
@@ -2481,23 +1760,19 @@ mod tests {
     }
 
     #[test]
-    fn tab_ai_overlay_uses_canonical_three_key_footer_contract() {
+    fn tab_ai_chat_uses_three_key_footer_contract() {
         const TAB_AI_SOURCE: &str = include_str!("tab_ai_mode.rs");
         assert!(
-            TAB_AI_SOURCE.contains(r#""\u{21B5} Run"#),
-            "tab ai overlay should expose the Run hint"
+            TAB_AI_SOURCE.contains(r#""\u{21B5} Send"#),
+            "tab ai chat should expose the Send hint"
         );
         assert!(
             TAB_AI_SOURCE.contains(r#""\u{2318}K Actions"#),
-            "tab ai overlay should expose the Actions hint"
+            "tab ai chat should expose the Actions hint"
         );
         assert!(
-            TAB_AI_SOURCE.contains("\"Tab AI\""),
-            "tab ai overlay should expose the AI hint"
-        );
-        assert!(
-            !TAB_AI_SOURCE.contains("\"Esc Cancel\""),
-            "tab ai overlay should not use a bespoke Esc footer anymore"
+            TAB_AI_SOURCE.contains(r#""Esc Back"#),
+            "tab ai chat should expose the Esc Back hint"
         );
     }
 

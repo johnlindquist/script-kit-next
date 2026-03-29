@@ -148,7 +148,7 @@ fn render_overlay_kind(theme: &crate::theme::Theme, kind: &TabAiOverlayKind) -> 
 /// Render a static preview of the main Tab AI overlay.
 ///
 /// Uses the same shared primitives (HintStrip, opacity tokens, FONT_MONO)
-/// as the production `render_tab_ai_overlay` in `src/app_impl/tab_ai_mode.rs`.
+/// as the production Tab AI chat in `src/app_impl/tab_ai_mode.rs`.
 fn render_tab_ai_main_preview(theme: &crate::theme::Theme, state: &TabAiMainState) -> Div {
     let accent = gpui::rgb(theme.colors.accent.selected);
     let bg_scrim = gpui::rgba(crate::ui_foundation::hex_to_rgba_with_opacity(

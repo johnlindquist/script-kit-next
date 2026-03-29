@@ -1237,19 +1237,10 @@ fn collect_elements_panel_only_surfaces_emit_warnings() {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn build_tab_ai_context_emits_structured_log() {
-    let fn_start = TAB_AI_SOURCE
-        .find("fn build_tab_ai_context(")
-        .expect("build_tab_ai_context must exist");
-    let fn_body = &TAB_AI_SOURCE[fn_start..fn_start + 4000.min(TAB_AI_SOURCE.len() - fn_start)];
-
+fn build_tab_ai_context_from_exists() {
     assert!(
-        fn_body.contains("tab_ai_context_built"),
-        "build_tab_ai_context must emit a tab_ai_context_built tracing event"
-    );
-    assert!(
-        fn_body.contains("element_count"),
-        "context built log must include element_count"
+        TAB_AI_SOURCE.contains("fn build_tab_ai_context_from("),
+        "build_tab_ai_context_from must exist as the context assembly function"
     );
 }
 

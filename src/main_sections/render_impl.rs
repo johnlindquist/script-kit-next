@@ -504,7 +504,7 @@ impl Render for ScriptListApp {
                 div()
                     .w_full()
                     .h_full()
-                    .relative() // Needed for Tab AI absolute overlay positioning
+                    .relative()
                     .flex()
                     .flex_col()
                     // Hide mouse cursor while typing

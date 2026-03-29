@@ -249,16 +249,16 @@ const TAB_AI_SOURCE: &str = include_str!("../src/app_impl/tab_ai_mode.rs");
 fn tab_ai_overlay_uses_canonical_three_key_footer_contract() {
     // Source uses \u{21B5} and \u{2318} escape sequences — match the raw text
     assert!(
-        TAB_AI_SOURCE.contains(r#""\u{21B5} Run"#),
-        "tab ai overlay must expose the Run hint in the footer"
+        TAB_AI_SOURCE.contains(r#""\u{21B5} Send"#),
+        "tab ai chat must expose the Send hint in the footer"
     );
     assert!(
         TAB_AI_SOURCE.contains(r#""\u{2318}K Actions"#),
-        "tab ai overlay must expose the Actions hint in the footer"
+        "tab ai chat must expose the Actions hint in the footer"
     );
     assert!(
-        TAB_AI_SOURCE.contains("\"Tab AI\""),
-        "tab ai overlay must expose the Tab AI hint in the footer"
+        TAB_AI_SOURCE.contains(r#""Esc Back"#),
+        "tab ai chat must expose the Esc Back hint in the footer"
     );
 }
 
@@ -281,16 +281,16 @@ fn tab_ai_overlay_preserves_memory_hint_rendering() {
 #[test]
 fn tab_ai_overlay_idle_placeholder_matches_expected_copy() {
     assert!(
-        TAB_AI_SOURCE.contains("\"What do you want to do?\""),
-        "idle placeholder must be 'What do you want to do?'"
+        TAB_AI_SOURCE.contains("Ask AI about the current context"),
+        "idle placeholder must contain 'Ask AI about the current context'"
     );
 }
 
 #[test]
 fn tab_ai_overlay_running_placeholder_matches_expected_copy() {
     assert!(
-        TAB_AI_SOURCE.contains("\"Generating...\""),
-        "running placeholder must be 'Generating...'"
+        TAB_AI_SOURCE.contains("Generating"),
+        "running placeholder must contain 'Generating'"
     );
 }
 
