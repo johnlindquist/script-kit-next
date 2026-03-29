@@ -1,14 +1,16 @@
-use crate::dictation::capture::{mix_to_mono, normalize_chunk, resample_linear};
+use crate::dictation::capture::{mix_to_mono, normalize_chunk, resample_linear, run_processor};
 use crate::dictation::transcription::{
     build_session_result, merge_captured_chunks, DictationEngine, DictationTranscriber,
     DictationTranscriptionConfig,
 };
 use crate::dictation::types::{
-    CapturedAudioChunk, DictationCaptureConfig, DictationDestination, DictationLevel,
-    RawAudioChunk,
+    CapturedAudioChunk, DictationCaptureConfig, DictationCaptureEvent, DictationDestination,
+    DictationLevel, RawAudioChunk,
 };
 use crate::dictation::visualizer::{bars_for_level, compute_level};
 use anyhow::Result;
+use parking_lot::Mutex;
+use std::sync::Arc;
 use std::time::Duration;
 
 // ---------------------------------------------------------------------------
@@ -123,10 +125,7 @@ fn transcriber_returns_none_for_silence() -> Result<()> {
             output: "should not be used".to_string(),
         }),
     );
-    assert_eq!(
-        transcriber.transcribe_samples(&[0.0, 0.0, 0.0, 0.0])?,
-        None
-    );
+    assert_eq!(transcriber.transcribe_samples(&[0.0, 0.0, 0.0, 0.0])?, None);
     Ok(())
 }
 
@@ -247,4 +246,195 @@ fn build_session_result_active_prompt_destination() {
     assert_eq!(result.transcript, "dictated text");
     assert_eq!(result.destination, DictationDestination::ActivePrompt);
     assert_eq!(result.audio_duration, Duration::from_millis(50));
+}
+
+// ---------------------------------------------------------------------------
+// Chunk-duration buffering tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn run_processor_honors_chunk_duration_and_flushes_tail() {
+    let config = DictationCaptureConfig {
+        sample_rate_hz: 16_000,
+        chunk_duration: Duration::from_millis(1), // 16 samples per chunk
+        level_window: Duration::from_millis(1),
+    };
+    let (raw_tx, raw_rx) = std::sync::mpsc::sync_channel(4);
+    let (event_tx, event_rx) = async_channel::bounded(16);
+
+    let join = std::thread::spawn(move || run_processor(raw_rx, event_tx, config));
+
+    raw_tx
+        .send(RawAudioChunk {
+            sample_rate_hz: 16_000,
+            channels: 1,
+            samples: vec![0.25; 20],
+        })
+        .expect("send raw chunk");
+    drop(raw_tx);
+
+    let mut chunk_lengths = Vec::new();
+    while let Ok(event) = event_rx.recv_blocking() {
+        match event {
+            DictationCaptureEvent::Chunk(chunk) => chunk_lengths.push(chunk.samples.len()),
+            DictationCaptureEvent::EndOfStream => break,
+            DictationCaptureEvent::Level(_) => {}
+        }
+    }
+
+    join.join().expect("processor thread");
+    assert_eq!(chunk_lengths, vec![16, 4]);
+}
+
+#[test]
+fn run_processor_emits_exact_chunk_with_no_tail() {
+    let config = DictationCaptureConfig {
+        sample_rate_hz: 16_000,
+        chunk_duration: Duration::from_millis(1), // 16 samples per chunk
+        level_window: Duration::from_millis(1),
+    };
+    let (raw_tx, raw_rx) = std::sync::mpsc::sync_channel(4);
+    let (event_tx, event_rx) = async_channel::bounded(16);
+
+    let join = std::thread::spawn(move || run_processor(raw_rx, event_tx, config));
+
+    raw_tx
+        .send(RawAudioChunk {
+            sample_rate_hz: 16_000,
+            channels: 1,
+            samples: vec![0.5; 16],
+        })
+        .expect("send raw chunk");
+    drop(raw_tx);
+
+    let mut chunk_lengths = Vec::new();
+    while let Ok(event) = event_rx.recv_blocking() {
+        match event {
+            DictationCaptureEvent::Chunk(chunk) => chunk_lengths.push(chunk.samples.len()),
+            DictationCaptureEvent::EndOfStream => break,
+            DictationCaptureEvent::Level(_) => {}
+        }
+    }
+
+    join.join().expect("processor thread");
+    assert_eq!(chunk_lengths, vec![16]);
+}
+
+#[test]
+fn run_processor_buffers_across_multiple_raw_chunks() {
+    let config = DictationCaptureConfig {
+        sample_rate_hz: 16_000,
+        chunk_duration: Duration::from_millis(1), // 16 samples per chunk
+        level_window: Duration::from_millis(1),
+    };
+    let (raw_tx, raw_rx) = std::sync::mpsc::sync_channel(4);
+    let (event_tx, event_rx) = async_channel::bounded(16);
+
+    let join = std::thread::spawn(move || run_processor(raw_rx, event_tx, config));
+
+    // Send 10 samples, then 10 more — should produce one 16-sample chunk + 4-sample tail
+    raw_tx
+        .send(RawAudioChunk {
+            sample_rate_hz: 16_000,
+            channels: 1,
+            samples: vec![0.1; 10],
+        })
+        .expect("send first");
+    raw_tx
+        .send(RawAudioChunk {
+            sample_rate_hz: 16_000,
+            channels: 1,
+            samples: vec![0.2; 10],
+        })
+        .expect("send second");
+    drop(raw_tx);
+
+    let mut chunk_lengths = Vec::new();
+    while let Ok(event) = event_rx.recv_blocking() {
+        match event {
+            DictationCaptureEvent::Chunk(chunk) => chunk_lengths.push(chunk.samples.len()),
+            DictationCaptureEvent::EndOfStream => break,
+            DictationCaptureEvent::Level(_) => {}
+        }
+    }
+
+    join.join().expect("processor thread");
+    assert_eq!(chunk_lengths, vec![16, 4]);
+}
+
+// ---------------------------------------------------------------------------
+// Transcriber contract tests (prompt forwarding, idle timeout)
+// ---------------------------------------------------------------------------
+
+struct RecordingEngine {
+    prompts: Arc<Mutex<Vec<Option<String>>>>,
+    output: String,
+}
+
+impl DictationEngine for RecordingEngine {
+    fn transcribe(&mut self, _samples: &[f32], initial_prompt: Option<&str>) -> Result<String> {
+        self.prompts.lock().push(initial_prompt.map(str::to_owned));
+        Ok(self.output.clone())
+    }
+}
+
+#[test]
+fn transcriber_forwards_initial_prompt() -> Result<()> {
+    let prompts = Arc::new(Mutex::new(Vec::new()));
+    let transcriber = DictationTranscriber::new(
+        DictationTranscriptionConfig {
+            initial_prompt: Some("keep punctuation".into()),
+            minimum_samples: 1,
+            ..Default::default()
+        },
+        Box::new(RecordingEngine {
+            prompts: prompts.clone(),
+            output: "hello".into(),
+        }),
+    );
+
+    assert_eq!(
+        transcriber.transcribe_samples(&[0.25])?,
+        Some("hello".into())
+    );
+    assert_eq!(
+        prompts.lock().as_slice(),
+        &[Some("keep punctuation".into())]
+    );
+    Ok(())
+}
+
+#[test]
+fn transcriber_reports_idle_after_timeout() {
+    let transcriber = DictationTranscriber::new(
+        DictationTranscriptionConfig {
+            idle_unload_after: Duration::from_millis(1),
+            minimum_samples: 1,
+            ..Default::default()
+        },
+        Box::new(StubEngine {
+            output: "ok".into(),
+        }),
+    );
+
+    std::thread::sleep(Duration::from_millis(5));
+    assert!(transcriber.is_idle());
+}
+
+#[test]
+fn transcriber_not_idle_immediately_after_use() -> Result<()> {
+    let transcriber = DictationTranscriber::new(
+        DictationTranscriptionConfig {
+            idle_unload_after: Duration::from_secs(300),
+            minimum_samples: 1,
+            ..Default::default()
+        },
+        Box::new(StubEngine {
+            output: "test".into(),
+        }),
+    );
+
+    let _ = transcriber.transcribe_samples(&[0.5])?;
+    assert!(!transcriber.is_idle());
+    Ok(())
 }

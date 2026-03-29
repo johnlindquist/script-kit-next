@@ -3505,6 +3505,15 @@ impl ScriptListApp {
                 self.open_webcam(cx);
                 Self::builtin_success(dctx, "open_webcam")
             }
+            builtins::BuiltInFeature::Dictation => {
+                tracing::info!(
+                    category = "BUILTIN",
+                    trace_id = %dctx.trace_id,
+                    "Dictation builtin triggered (not yet wired)"
+                );
+                // TODO: wire to dictation toggle entrypoint
+                Self::builtin_success(dctx, "dictation_stub")
+            }
             builtins::BuiltInFeature::FileSearch => {
                 tracing::info!(
                     category = "BUILTIN",

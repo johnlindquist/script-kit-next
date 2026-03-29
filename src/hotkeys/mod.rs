@@ -34,6 +34,8 @@ pub enum HotkeyAction {
     Ai,
     /// Toggle log capture hotkey
     ToggleLogs,
+    /// Voice dictation toggle hotkey
+    Dictation,
     /// Script shortcut - run the script at this path
     Script(String),
 }
@@ -62,6 +64,8 @@ struct HotkeyRoutes {
     ai_id: Option<u32>,
     /// Current logs hotkey ID (for quick lookup)
     logs_id: Option<u32>,
+    /// Current dictation hotkey ID (for quick lookup)
+    dictation_id: Option<u32>,
 }
 impl HotkeyRoutes {
     fn new() -> Self {
@@ -72,6 +76,7 @@ impl HotkeyRoutes {
             notes_id: None,
             ai_id: None,
             logs_id: None,
+            dictation_id: None,
         }
     }
 
@@ -87,6 +92,7 @@ impl HotkeyRoutes {
             HotkeyAction::Notes => self.notes_id = Some(id),
             HotkeyAction::Ai => self.ai_id = Some(id),
             HotkeyAction::ToggleLogs => self.logs_id = Some(id),
+            HotkeyAction::Dictation => self.dictation_id = Some(id),
             HotkeyAction::Script(path) => {
                 self.script_paths.insert(path.clone(), id);
             }
@@ -118,6 +124,11 @@ impl HotkeyRoutes {
                         self.logs_id = None;
                     }
                 }
+                HotkeyAction::Dictation => {
+                    if self.dictation_id == Some(id) {
+                        self.dictation_id = None;
+                    }
+                }
                 HotkeyAction::Script(path) => {
                     self.script_paths.remove(path);
                 }
@@ -141,6 +152,7 @@ impl HotkeyRoutes {
             HotkeyAction::Notes => self.notes_id?,
             HotkeyAction::Ai => self.ai_id?,
             HotkeyAction::ToggleLogs => self.logs_id?,
+            HotkeyAction::Dictation => self.dictation_id?,
             HotkeyAction::Script(path) => *self.script_paths.get(path)?,
         };
         self.routes.get(&id)
@@ -254,6 +266,7 @@ fn rebind_hotkey_transactional(
             HotkeyAction::Notes => routes_guard.notes_id,
             HotkeyAction::Ai => routes_guard.ai_id,
             HotkeyAction::ToggleLogs => routes_guard.logs_id,
+            HotkeyAction::Dictation => routes_guard.dictation_id,
             HotkeyAction::Script(path) => routes_guard.get_script_id(path),
         }
     };
@@ -282,6 +295,7 @@ fn rebind_hotkey_transactional(
             HotkeyAction::Notes => routes_guard.notes_id,
             HotkeyAction::Ai => routes_guard.ai_id,
             HotkeyAction::ToggleLogs => routes_guard.logs_id,
+            HotkeyAction::Dictation => routes_guard.dictation_id,
             HotkeyAction::Script(path) => routes_guard.get_script_id(path),
         };
         let old_entry = old_id.and_then(|id| routes_guard.remove_route(id));
@@ -1362,6 +1376,16 @@ pub(crate) fn start_hotkey_listener(config: config::Config) {
                         {
                             logging::log("HOTKEY", "Logs hotkey channel full/closed");
                         }
+                    }
+                    Some(HotkeyAction::Dictation) => {
+                        let correlation_id = format!("hotkey:dictation:{}", Uuid::new_v4());
+                        let _guard = logging::set_correlation_id(correlation_id.clone());
+
+                        logging::log(
+                            "HOTKEY",
+                            "Dictation hotkey pressed - dispatching to main thread",
+                        );
+                        // TODO: wire dictation toggle dispatch channel
                     }
                     Some(HotkeyAction::Script(path)) => {
                         // Set correlation ID for this hotkey event

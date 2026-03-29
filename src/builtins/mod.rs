@@ -286,6 +286,8 @@ pub enum BuiltInFeature {
     FileSearch,
     /// Webcam capture
     Webcam,
+    /// Voice dictation overlay + paste flow
+    Dictation,
     /// Settings hub for viewing configuration panels
     Settings,
 }
@@ -1624,6 +1626,22 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             vec!["webcam", "camera", "capture", "photo", "image"],
             BuiltInFeature::Webcam,
             "📸",
+        ));
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin-dictation",
+            "Dictation",
+            "Voice dictation — speak and paste transcribed text",
+            vec![
+                "dictation",
+                "voice",
+                "speech",
+                "microphone",
+                "transcribe",
+                "whisper",
+            ],
+            BuiltInFeature::Dictation,
+            "🎙️",
         ));
     }
 

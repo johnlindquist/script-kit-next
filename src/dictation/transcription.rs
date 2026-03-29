@@ -1,6 +1,4 @@
-use crate::dictation::types::{
-    CapturedAudioChunk, DictationDestination, DictationSessionResult,
-};
+use crate::dictation::types::{CapturedAudioChunk, DictationDestination, DictationSessionResult};
 use anyhow::Result;
 use parking_lot::Mutex;
 use std::path::{Path, PathBuf};

@@ -238,12 +238,8 @@ pub fn load_user_preferences() -> ScriptKitUserPreferences {
 pub fn save_user_preferences(prefs: &ScriptKitUserPreferences) -> anyhow::Result<()> {
     let path = settings_json_path();
     if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).with_context(|| {
-            format!(
-                "failed to create settings directory {}",
-                parent.display()
-            )
-        })?;
+        std::fs::create_dir_all(parent)
+            .with_context(|| format!("failed to create settings directory {}", parent.display()))?;
     }
 
     // Read existing JSON to preserve unknown keys from other tools.
