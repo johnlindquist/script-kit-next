@@ -1,6 +1,7 @@
 use script_kit_gpui::ai::{
     read_tab_ai_memory_index_from_path, resolve_tab_ai_memory_suggestions_from_path,
-    resolve_tab_ai_memory_suggestions_with_outcome_from_path, write_tab_ai_memory_entry_to_path,
+    resolve_tab_ai_memory_suggestions_with_outcome_from_path,
+    resolve_tab_ai_prior_automations_for_entry_from_path, write_tab_ai_memory_entry_to_path,
     TabAiExecutionRecord, TabAiMemoryEntry, TabAiMemoryResolutionReason, TabAiMemorySuggestion,
     TAB_AI_MEMORY_ENTRY_SCHEMA_VERSION,
 };
@@ -514,4 +515,95 @@ fn outcome_write_dedupes_same_intent_and_bundle() {
     assert_eq!(resolution.outcome.match_count, 1);
     assert_eq!(resolution.outcome.top_score, Some(1.0));
     assert_eq!(resolution.suggestions[0].slug, "copy-url-two");
+}
+
+// ---------------------------------------------------------------------------
+// Entry-aware resolver: non-empty query uses query matching, not recent-only
+// ---------------------------------------------------------------------------
+
+#[test]
+fn non_empty_entry_query_uses_query_resolution_not_recent_only() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("tab-ai-memory.json");
+
+    let entries = vec![
+        memory_entry(
+            "rename this file",
+            Some("com.apple.finder"),
+            "rename",
+            "2026-03-29T10:00:00Z",
+        ),
+        memory_entry(
+            "summarize this file",
+            Some("com.apple.finder"),
+            "summarize",
+            "2026-03-29T11:00:00Z",
+        ),
+    ];
+
+    std::fs::write(
+        &path,
+        serde_json::to_string_pretty(&entries).expect("serialize"),
+    )
+    .expect("write");
+
+    let suggestions = resolve_tab_ai_prior_automations_for_entry_from_path(
+        "rename file",
+        Some("com.apple.finder"),
+        3,
+        &path,
+    )
+    .expect("resolve");
+
+    assert_eq!(
+        suggestions.first().map(|item| item.slug.as_str()),
+        Some("rename"),
+        "non-empty entry query must match the relevant automation, not just most recent"
+    );
+}
+
+#[test]
+fn empty_entry_query_falls_back_to_recent_bundle_automations() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("tab-ai-memory.json");
+
+    let entries = vec![
+        memory_entry(
+            "rename this file",
+            Some("com.apple.finder"),
+            "rename",
+            "2026-03-29T10:00:00Z",
+        ),
+        memory_entry(
+            "summarize this file",
+            Some("com.apple.finder"),
+            "summarize",
+            "2026-03-29T11:00:00Z",
+        ),
+    ];
+
+    std::fs::write(
+        &path,
+        serde_json::to_string_pretty(&entries).expect("serialize"),
+    )
+    .expect("write");
+
+    let suggestions = resolve_tab_ai_prior_automations_for_entry_from_path(
+        "",
+        Some("com.apple.finder"),
+        3,
+        &path,
+    )
+    .expect("resolve");
+
+    // Empty query should return recent bundle-matched automations (most recent first)
+    assert!(
+        !suggestions.is_empty(),
+        "empty entry must still return bundle-matched recent automations"
+    );
+    assert_eq!(
+        suggestions.first().map(|item| item.slug.as_str()),
+        Some("summarize"),
+        "empty entry must return most recent automation first"
+    );
 }

@@ -173,14 +173,16 @@
                                 }
                             }
 
-                            // Shift+Tab in ScriptList: script generation (existing behavior)
+                            // Shift+Tab in ScriptList: route typed query through the
+                            // harness terminal so Tab always means "send me to my
+                            // running harness with context."
                             if has_shift
                                 && matches!(this.current_view, AppView::ScriptList)
                                 && !this.filter_text.is_empty()
                                 && !this.show_actions_popup
                             {
                                 let query = this.filter_text.clone();
-                                this.dispatch_ai_script_generation_from_query(query, cx);
+                                this.open_tab_ai_chat_with_entry_intent(Some(query), cx);
                                 cx.stop_propagation();
                                 return;
                             }

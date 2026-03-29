@@ -45,14 +45,15 @@ fn test_calculate_fallback_error_message_includes_expression_and_recovery() {
 }
 
 #[test]
-fn test_shift_tab_routes_to_shared_ai_script_generation_handler() {
+fn test_shift_tab_routes_through_harness_entry_intent() {
     let startup_tab = fs::read_to_string("src/app_impl/startup_new_tab.rs")
         .expect("Failed to read src/app_impl/startup_new_tab.rs");
 
     assert!(
         startup_tab.contains("if has_shift")
-            && startup_tab.contains("this.dispatch_ai_script_generation_from_query(query, cx);"),
-        "Shift+Tab in ScriptList should route to dispatch_ai_script_generation_from_query. \
+            && startup_tab
+                .contains("this.open_tab_ai_chat_with_entry_intent(Some(query), cx);"),
+        "Shift+Tab in ScriptList should route through the harness terminal with entry intent. \
          Missing expected branch in startup_new_tab.rs"
     );
 }
@@ -69,24 +70,25 @@ fn test_generate_script_builtin_routes_to_shared_ai_script_generation_handler() 
 }
 
 #[test]
-fn test_tab_still_routes_to_inline_ai_chat_in_script_list_tab_interceptor() {
+fn test_tab_routes_to_harness_terminal_in_startup_new_tab() {
     let startup_tab = fs::read_to_string("src/app_impl/startup_new_tab.rs")
         .expect("Failed to read src/app_impl/startup_new_tab.rs");
 
     assert!(
-        startup_tab.contains("this.show_inline_ai_chat(Some(query), cx);"),
-        "Tab in ScriptList should continue routing to show_inline_ai_chat"
+        startup_tab.contains("open_tab_ai_chat(cx)")
+            || startup_tab.contains("open_tab_ai_chat_with_entry_intent("),
+        "Tab in startup_new_tab.rs should route to the harness terminal"
     );
 }
 
 #[test]
-fn test_tab_interceptor_matches_both_tab_key_variants() {
+fn test_tab_interceptor_matches_tab_key_case_insensitive() {
     let startup_tab = fs::read_to_string("src/app_impl/startup_new_tab.rs")
         .expect("Failed to read src/app_impl/startup_new_tab.rs");
 
     assert!(
-        startup_tab.contains("matches!(event.keystroke.key.as_str(), \"tab\" | \"Tab\")"),
-        "Tab interceptor should match both tab key variants: \"tab\" and \"Tab\""
+        startup_tab.contains("eq_ignore_ascii_case(\"tab\")"),
+        "Tab interceptor should match tab key case-insensitively"
     );
 }
 
