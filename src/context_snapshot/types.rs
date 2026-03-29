@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 /// Schema version for `AiContextSnapshot`. Bump when adding/removing/renaming fields.
-pub const AI_CONTEXT_SNAPSHOT_SCHEMA_VERSION: u32 = 1;
+pub const AI_CONTEXT_SNAPSHOT_SCHEMA_VERSION: u32 = 3;
 
 /// Options controlling which context sections are captured.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -12,10 +12,15 @@ pub struct CaptureContextOptions {
     pub include_menu_bar: bool,
     pub include_browser_url: bool,
     pub include_focused_window: bool,
+    /// When true, preserve focused-window screenshot bytes as base64 PNG.
+    /// Off by default to keep `kit://context` responses lightweight.
+    #[serde(default)]
+    pub include_screenshot: bool,
 }
 
 impl CaptureContextOptions {
-    /// Full capture — every provider enabled. Equivalent to `Default`.
+    /// Full metadata capture. Keeps screenshots off by default to preserve the
+    /// existing lightweight `kit://context` contract.
     pub const fn all() -> Self {
         Self {
             include_selected_text: true,
@@ -23,6 +28,7 @@ impl CaptureContextOptions {
             include_menu_bar: true,
             include_browser_url: true,
             include_focused_window: true,
+            include_screenshot: false,
         }
     }
 
@@ -39,6 +45,7 @@ impl CaptureContextOptions {
             include_menu_bar: false,
             include_browser_url: true,
             include_focused_window: false,
+            include_screenshot: false,
         }
     }
 
@@ -51,6 +58,20 @@ impl CaptureContextOptions {
             include_menu_bar: false,
             include_browser_url: true,
             include_focused_window: true,
+            include_screenshot: false,
+        }
+    }
+
+    /// Submit-time Tab AI capture. This is the only built-in profile that
+    /// requests pixel data — all others keep screenshots disabled.
+    pub const fn tab_ai() -> Self {
+        Self {
+            include_selected_text: true,
+            include_frontmost_app: true,
+            include_menu_bar: true,
+            include_browser_url: true,
+            include_focused_window: true,
+            include_screenshot: true,
         }
     }
 }
@@ -59,6 +80,18 @@ impl Default for CaptureContextOptions {
     fn default() -> Self {
         Self::all()
     }
+}
+
+/// Base64-encoded PNG image with dimensions metadata.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct Base64PngContext {
+    pub mime_type: String,
+    pub width: u32,
+    pub height: u32,
+    pub base64_data: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
 }
 
 /// Deterministic, schema-versioned snapshot of AI-relevant desktop context.
@@ -76,6 +109,9 @@ pub struct AiContextSnapshot {
     pub browser: Option<BrowserContext>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub focused_window: Option<FocusedWindowContext>,
+    /// Base64 PNG of the focused window, present only when `include_screenshot` is enabled.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub focused_window_image: Option<Base64PngContext>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub warnings: Vec<String>,
 }
@@ -89,6 +125,7 @@ impl Default for AiContextSnapshot {
             menu_bar_items: Vec::new(),
             browser: None,
             focused_window: None,
+            focused_window_image: None,
             warnings: Vec::new(),
         }
     }
@@ -110,7 +147,7 @@ pub struct BrowserContext {
     pub url: String,
 }
 
-/// Focused window metadata (no pixel data in v1).
+/// Focused window metadata. Pixel data lives in `Base64PngContext` (v2+).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct FocusedWindowContext {

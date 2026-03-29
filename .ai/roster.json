@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-03-29T02:41:16.685Z",
+  "updatedAt": "2026-03-29T07:12:37.499Z",
   "agents": {
     "tab-ai-instant-context-a1": {
       "id": "tab-ai-instant-context-a1",
@@ -57,6 +57,56 @@
           "src/app_execute/builtin_execution.rs",
           "src/app_execute/utility_views.rs",
           "src/builtins/mod.rs"
+        ]
+      },
+      "claimed_at": {}
+    },
+    "terminal-keyboard-overhaul-a1": {
+      "id": "terminal-keyboard-overhaul-a1",
+      "kind": "codex",
+      "mode": "exec",
+      "model": "openai/gpt-5.4",
+      "task": "Overhaul the embedded terminal keyboard handling, footer, and escape behavior for full TUI compatibility. This is a Rust GPUI app with an embedded alacritty_terminal. The terminal key handler is in src/term_prompt/mod.rs, the terminal render wrapper is in src/render_prompts/term.rs, and the terminal handle is in src/terminal/alacritty/handle_runtime.rs.\n\nCHANGES NEEDED (implement ALL):\n\n1. PRINTABLE-TEXT ALLOWLIST (src/term_prompt/mod.rs ~line 1008):\n   Currently we skip key_char for enter/return/tab/backspace. Oracle recommended flipping the model: only use key_char for printable text input. Replace the skip-list check with: use key_char ONLY when key_char exists AND key_char bytes are all >= 0x20 (space) AND the key name is NOT a known special key. All other keys go through the special key encoder. This prevents future bugs where GPUI's key_char sends wrong bytes for special keys.\n\n2. MODIFIER-AWARE KEY ENCODER (src/term_prompt/mod.rs, in the special key match block ~line 1025):\n   Add support for modified key variants using standard xterm/CSI sequences:\n   - Shift+Tab → ESC[Z (reverse tab / backtab)\n   - Alt/Meta + printable char → ESC prefix + char (e.g. Alt+b = ESC b)\n   - Ctrl+Left/Right → ESC[1;5D / ESC[1;5C (word navigation)\n   - Ctrl+Up/Down → ESC[1;5A / ESC[1;5B\n   - Shift+arrows → ESC[1;2A/B/C/D\n   - Alt+arrows → ESC[1;3A/B/C/D\n   - Ctrl+Delete → ESC[3;5~\n   - Ctrl+Home/End → ESC[1;5H / ESC[1;5F\n   - Alt+Backspace → ESC + DEL (0x1b 0x7f)\n   The modifier parameter encoding for CSI sequences is: 1+modifier_bits where shift=1, alt=2, ctrl=4, meta=8. So Ctrl = ;5, Shift = ;2, Alt = ;3, Ctrl+Shift = ;6, etc.\n\n3. TERMINAL-SPECIFIC FOOTER (src/render_prompts/term.rs):\n   Replace the current render_universal_prompt_hint_strip() call (~line 306) with a terminal-specific footer that shows ONLY '⌘W Close'. The terminal should have full keyboard control — no Enter/Tab/Actions hints that conflict with terminal usage. Create a simple inline hint strip with just the close shortcut. Use the same visual style (text_xs, hint opacity from the theme) as the universal strip but with just one hint.\n\n4. ESCAPE PASSTHROUGH (src/render_prompts/term.rs ~line 176-198):\n   Currently Escape is intercepted: for SDK terminals it's blocked, for QuickTerminal it calls go_back_or_close(). Change this: when the terminal is in QuickTerminalView, Escape should ONLY be handled by the outer wrapper if Cmd is held (Cmd+W closes). Plain Escape must pass through to the terminal so TUI apps (vim, claude, htop) receive it. Remove the is_key_escape check for QuickTerminalView. Keep the non-dismissable escape blocking for SDK TermPrompt (those terminals are script-controlled and should not close on Escape).\n\n5. CMD+W ONLY CLOSE (src/render_prompts/term.rs):\n   The Cmd+W close handler already exists at line ~200-204. Keep it. But remove or gate the plain Escape close for QuickTerminalView since we're passing Escape through now.\n\n6. STARTUP COMMAND CR FIX (src/terminal/alacritty/handle_creation.rs ~line 132-141):\n   The startup command injection currently appends newline. Check if it appends '\\n' and change it to '\\r' for consistency with the Enter fix. Terminals expect CR for line submission.\n\nAfter all changes, run: cargo check && cargo clippy --lib -- -D warnings && cargo nextest run --lib (with 120s timeout per command). Fix any compilation or lint errors.",
+      "scope": "src/term_prompt/mod.rs,src/render_prompts/term.rs,src/terminal/alacritty/handle_creation.rs,src/terminal/alacritty/handle_runtime.rs",
+      "readonly": false,
+      "status": "done",
+      "claims": [],
+      "createdAt": "2026-03-29T06:54:37.615Z",
+      "lastSeenAt": "2026-03-29T07:12:36.679Z",
+      "host": "johns.macbook.pro.lan",
+      "startSha": "6b1a28d13d12af257da33f57a0d8c79d6dffb8d7",
+      "notes": "done. exit=0. final=.ai/logs/terminal-keyboard-overhaul-a1.final.md. See final message file.",
+      "report": {
+        "schema": "opex.agent_report.v1",
+        "agentId": "terminal-keyboard-overhaul-a1",
+        "taskSummary": "Implemented the embedded terminal keyboard, footer, escape passthrough, and startup CR handling overhaul for full TUI compatibility and verified it with the required Rust checks.",
+        "tests": [
+          {
+            "cmd": "cargo check",
+            "result": "pass"
+          },
+          {
+            "cmd": "cargo clippy --lib -- -D warnings",
+            "result": "pass"
+          },
+          {
+            "cmd": "cargo nextest run --lib",
+            "result": "pass"
+          }
+        ],
+        "changedFiles": [
+          "src/term_prompt/mod.rs",
+          "src/render_prompts/term.rs",
+          "src/terminal/alacritty/handle_creation.rs"
+        ],
+        "commitCount": 1,
+        "commitShas": [
+          "9c2f23678169001e1ba15116601b549f01de3c0b"
+        ],
+        "commitFiles": [
+          "src/render_prompts/term.rs",
+          "src/term_prompt/mod.rs",
+          "src/terminal/alacritty/handle_creation.rs"
         ]
       },
       "claimed_at": {}

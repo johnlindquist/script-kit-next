@@ -160,6 +160,30 @@ pub fn read_tab_ai_harness_config() -> Result<HarnessConfig, String> {
 }
 
 // ---------------------------------------------------------------------------
+// Config validation
+// ---------------------------------------------------------------------------
+
+/// Validate that a harness config is usable: command is non-empty and the
+/// binary is on PATH. Returns an actionable error message on failure.
+pub fn validate_tab_ai_harness_config(config: &HarnessConfig) -> Result<(), String> {
+    if config.command.trim().is_empty() {
+        return Err(
+            "Harness command is empty. Set a command in ~/.scriptkit/harness.json \
+             or delete the file to use the default (claude)."
+                .to_string(),
+        );
+    }
+    if which::which(&config.command).is_err() {
+        return Err(format!(
+            "'{}' not found on PATH. Install the CLI or update the \
+             \"command\" field in ~/.scriptkit/harness.json.",
+            config.command,
+        ));
+    }
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
 // Session state
 // ---------------------------------------------------------------------------
 
@@ -189,6 +213,15 @@ impl TabAiHarnessSessionState {
 // Context formatting
 // ---------------------------------------------------------------------------
 
+/// Whether to submit context as a full turn or stage it for later input.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TabAiHarnessSubmissionMode {
+    /// Submit immediately as a full harness turn.
+    Submit,
+    /// Paste/stage context only; user will type intent next.
+    PasteOnly,
+}
+
 /// Build a `<scriptKitContext>` XML block from a resolved context blob.
 pub fn build_tab_ai_harness_context_block(
     context: &crate::ai::TabAiContextBlob,
@@ -210,22 +243,27 @@ pub fn build_tab_ai_harness_context_block(
 
 /// Build a full harness submission: context block + optional user intent.
 ///
-/// When `intent` is `None` (or blank), appends a sentinel asking the
-/// harness to wait for the user's next terminal input.
+/// Behavior depends on `mode`:
+/// - `Submit` without intent: appends a sentinel asking the harness to wait.
+/// - `PasteOnly` without intent: stages context only, no synthetic turn text.
+/// - With intent (either mode): appends the intent as `User intent:`.
 pub fn build_tab_ai_harness_submission(
     context: &crate::ai::TabAiContextBlob,
     intent: Option<&str>,
+    mode: TabAiHarnessSubmissionMode,
 ) -> Result<String, String> {
     let mut output = build_tab_ai_harness_context_block(context)?;
-    output.push_str("\n\n");
     match intent.map(str::trim).filter(|v| !v.is_empty()) {
         Some(intent) => {
-            output.push_str("User intent:\n");
+            output.push_str("\n\nUser intent:\n");
             output.push_str(intent);
             output.push('\n');
         }
+        None if matches!(mode, TabAiHarnessSubmissionMode::Submit) => {
+            output.push_str("\n\nAwait the user's next terminal input.\n");
+        }
         None => {
-            output.push_str("Await the user's next terminal input.\n");
+            // PasteOnly: stage context only, no synthetic turn text.
         }
     }
     Ok(output)
@@ -261,10 +299,7 @@ mod tests {
             args: vec!["--resume".to_string(), "project with space".to_string()],
             warm_on_startup: false,
             working_directory: Some("/tmp/my dir".to_string()),
-            env: std::collections::BTreeMap::from([(
-                "FOO".to_string(),
-                "bar baz".to_string(),
-            )]),
+            env: std::collections::BTreeMap::from([("FOO".to_string(), "bar baz".to_string())]),
         };
         assert_eq!(
             config.command_line(),
@@ -328,24 +363,124 @@ mod tests {
             vec![],
             None,
             vec![],
+            vec![],
             "2026-03-29T04:39:58Z".to_string(),
         );
 
-        // With intent
-        let with_intent =
-            build_tab_ai_harness_submission(&context, Some("rename this file"))
-                .expect("should build");
+        // With intent (Submit mode)
+        let with_intent = build_tab_ai_harness_submission(
+            &context,
+            Some("rename this file"),
+            TabAiHarnessSubmissionMode::Submit,
+        )
+        .expect("should build");
         assert!(with_intent.contains("<scriptKitContext schemaVersion=\"1\">"));
         assert!(with_intent.contains("\"promptType\": \"FileSearch\""));
         assert!(with_intent.contains("User intent:\nrename this file"));
         assert!(!with_intent.contains("Await the user"));
 
-        // Without intent
-        let without_intent =
-            build_tab_ai_harness_submission(&context, None).expect("should build");
+        // Without intent (Submit mode) — sentinel present
+        let without_intent = build_tab_ai_harness_submission(
+            &context,
+            None,
+            TabAiHarnessSubmissionMode::Submit,
+        )
+        .expect("should build");
         assert!(without_intent.contains("<scriptKitContext schemaVersion=\"1\">"));
         assert!(without_intent.contains("Await the user's next terminal input."));
         assert!(!without_intent.contains("User intent:"));
+    }
+
+    #[test]
+    fn harness_paste_only_omits_sentinel() {
+        let context = crate::ai::TabAiContextBlob::from_parts(
+            crate::ai::TabAiUiSnapshot {
+                prompt_type: "ScriptList".to_string(),
+                ..Default::default()
+            },
+            Default::default(),
+            vec![],
+            None,
+            vec![],
+            vec![],
+            "2026-03-29T07:07:06Z".to_string(),
+        );
+
+        let paste = build_tab_ai_harness_submission(
+            &context,
+            None,
+            TabAiHarnessSubmissionMode::PasteOnly,
+        )
+        .expect("should build");
+        assert!(paste.contains("<scriptKitContext schemaVersion=\"1\">"));
+        assert!(!paste.contains("Await the user's next terminal input."));
+        assert!(!paste.contains("User intent:"));
+    }
+
+    #[test]
+    fn harness_paste_only_with_intent_still_includes_intent() {
+        let context = crate::ai::TabAiContextBlob::from_parts(
+            crate::ai::TabAiUiSnapshot {
+                prompt_type: "ScriptList".to_string(),
+                ..Default::default()
+            },
+            Default::default(),
+            vec![],
+            None,
+            vec![],
+            vec![],
+            "2026-03-29T07:07:06Z".to_string(),
+        );
+
+        let paste = build_tab_ai_harness_submission(
+            &context,
+            Some("open settings"),
+            TabAiHarnessSubmissionMode::PasteOnly,
+        )
+        .expect("should build");
+        assert!(paste.contains("User intent:\nopen settings"));
+        assert!(!paste.contains("Await the user's next terminal input."));
+    }
+
+    #[test]
+    fn validate_rejects_empty_command() {
+        let config = HarnessConfig {
+            command: "".to_string(),
+            ..HarnessConfig::default()
+        };
+        let err = validate_tab_ai_harness_config(&config).unwrap_err();
+        assert!(err.contains("harness.json"), "must mention config file: {err}");
+    }
+
+    #[test]
+    fn validate_rejects_whitespace_only_command() {
+        let config = HarnessConfig {
+            command: "   ".to_string(),
+            ..HarnessConfig::default()
+        };
+        let err = validate_tab_ai_harness_config(&config).unwrap_err();
+        assert!(err.contains("empty"), "must say command is empty: {err}");
+    }
+
+    #[test]
+    fn validate_rejects_missing_binary() {
+        let config = HarnessConfig {
+            command: "nonexistent-binary-xyz-42".to_string(),
+            ..HarnessConfig::default()
+        };
+        let err = validate_tab_ai_harness_config(&config).unwrap_err();
+        assert!(err.contains("not found on PATH"), "must mention PATH: {err}");
+        assert!(err.contains("harness.json"), "must mention config file: {err}");
+    }
+
+    #[test]
+    fn validate_accepts_known_binary() {
+        // `sh` is universally available
+        let config = HarnessConfig {
+            command: "sh".to_string(),
+            ..HarnessConfig::default()
+        };
+        assert!(validate_tab_ai_harness_config(&config).is_ok());
     }
 
     #[test]

@@ -87,9 +87,7 @@ impl TerminalEntry {
                 // Truncate from the beginning, keeping the tail
                 let excess = self.output_buf.len() - limit;
                 // Find character boundary at or after `excess`
-                let boundary = self
-                    .output_buf
-                    .ceil_char_boundary(excess);
+                let boundary = self.output_buf.ceil_char_boundary(excess);
                 self.output_buf.drain(..boundary);
             }
         }
@@ -339,11 +337,7 @@ impl Client for ScriptKitAcpClient {
         let approved = self
             .approve_or_deny(
                 "ACP file write request",
-                &format!(
-                    "Write {} bytes to {}",
-                    args.content.len(),
-                    path_display
-                ),
+                &format!("Write {} bytes to {}", args.content.len(), path_display),
             )
             .map_err(|_| Error::internal_error())?;
 
@@ -371,15 +365,8 @@ impl Client for ScriptKitAcpClient {
 
     // ── terminal/create ────────────────────────────────────────────────
 
-    async fn create_terminal(
-        &self,
-        args: CreateTerminalRequest,
-    ) -> Result<CreateTerminalResponse> {
-        let cmd_display = format!(
-            "{} {}",
-            args.command,
-            args.args.join(" ")
-        );
+    async fn create_terminal(&self, args: CreateTerminalRequest) -> Result<CreateTerminalResponse> {
+        let cmd_display = format!("{} {}", args.command, args.args.join(" "));
         tracing::info!(command = %cmd_display, "acp_create_terminal_request");
 
         let approved = self
@@ -431,10 +418,7 @@ impl Client for ScriptKitAcpClient {
 
     // ── terminal/output ────────────────────────────────────────────────
 
-    async fn terminal_output(
-        &self,
-        args: TerminalOutputRequest,
-    ) -> Result<TerminalOutputResponse> {
+    async fn terminal_output(&self, args: TerminalOutputRequest) -> Result<TerminalOutputResponse> {
         let tid = args.terminal_id.0.as_ref();
 
         let mut terminals = self.terminals.borrow_mut();
@@ -445,9 +429,9 @@ impl Client for ScriptKitAcpClient {
 
         entry.drain_output();
 
-        let exit_status = entry.exit_code.map(|code| {
-            TerminalExitStatus::new().exit_code(code.map(|c| c as u32))
-        });
+        let exit_status = entry
+            .exit_code
+            .map(|code| TerminalExitStatus::new().exit_code(code.map(|c| c as u32)));
 
         let mut resp = TerminalOutputResponse::new(&entry.output_buf, entry.truncated());
         if let Some(status) = exit_status {
@@ -598,8 +582,8 @@ mod tests {
     fn request_permission_denied_by_default() {
         run_local(async {
             use agent_client_protocol::{
-                PermissionOption, PermissionOptionId, PermissionOptionKind, SessionId,
-                ToolCallId, ToolCallUpdate, ToolCallUpdateFields,
+                PermissionOption, PermissionOptionId, PermissionOptionKind, SessionId, ToolCallId,
+                ToolCallUpdate, ToolCallUpdateFields,
             };
 
             let client = ScriptKitAcpClient::new();
@@ -626,8 +610,8 @@ mod tests {
     fn request_permission_approved_selects_allow_option() {
         run_local(async {
             use agent_client_protocol::{
-                PermissionOption, PermissionOptionId, PermissionOptionKind, SessionId,
-                ToolCallId, ToolCallUpdate, ToolCallUpdateFields,
+                PermissionOption, PermissionOptionId, PermissionOptionKind, SessionId, ToolCallId,
+                ToolCallUpdate, ToolCallUpdateFields,
             };
 
             let client = ScriptKitAcpClient::with_approval(Arc::new(|_, _| Ok(true)));
@@ -734,8 +718,7 @@ mod tests {
             let tid = create_resp.terminal_id;
 
             // Wait for exit
-            let wait_req =
-                WaitForTerminalExitRequest::new(SessionId::new("sess-1"), tid.clone());
+            let wait_req = WaitForTerminalExitRequest::new(SessionId::new("sess-1"), tid.clone());
             let wait_resp = client
                 .wait_for_terminal_exit(wait_req)
                 .await
@@ -743,8 +726,7 @@ mod tests {
             assert_eq!(wait_resp.exit_status.exit_code, Some(0));
 
             // Get output
-            let output_req =
-                TerminalOutputRequest::new(SessionId::new("sess-1"), tid.clone());
+            let output_req = TerminalOutputRequest::new(SessionId::new("sess-1"), tid.clone());
             let output_resp = client.terminal_output(output_req).await.expect("output ok");
             assert!(
                 output_resp.output.contains("hello-from-acp"),
@@ -753,8 +735,7 @@ mod tests {
             );
 
             // Release
-            let release_req =
-                ReleaseTerminalRequest::new(SessionId::new("sess-1"), tid.clone());
+            let release_req = ReleaseTerminalRequest::new(SessionId::new("sess-1"), tid.clone());
             let release_resp = client.release_terminal(release_req).await;
             assert!(release_resp.is_ok());
 
@@ -784,8 +765,7 @@ mod tests {
             assert!(kill_resp.is_ok());
 
             // Can still get output after kill (terminal not released)
-            let output_req =
-                TerminalOutputRequest::new(SessionId::new("sess-1"), tid.clone());
+            let output_req = TerminalOutputRequest::new(SessionId::new("sess-1"), tid.clone());
             let output_resp = client.terminal_output(output_req).await;
             assert!(output_resp.is_ok(), "output after kill should work");
 

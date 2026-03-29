@@ -270,6 +270,10 @@ struct ScriptListApp {
     tab_ai_save_offer_state: Option<TabAiSaveOfferState>,
     /// Persistent harness terminal session — reused across Tab presses.
     pub(crate) tab_ai_harness: Option<crate::ai::TabAiHarnessSessionState>,
+    /// Previous surface to restore when leaving Tab AI quick terminal.
+    pub(crate) tab_ai_harness_return_view: Option<AppView>,
+    /// Previous focus target to restore when leaving Tab AI quick terminal.
+    pub(crate) tab_ai_harness_return_focus_target: Option<FocusTarget>,
     /// Input history for shell-like up/down navigation through previous inputs
     input_history: input_history::InputHistory,
     /// Pending API key configuration - tracks which provider is being configured

@@ -39,6 +39,7 @@ pub(crate) mod context_contract;
 mod context_contract_integration_tests;
 pub(crate) mod context_mentions;
 pub(crate) mod current_app_automation_memory;
+pub(crate) mod harness;
 pub mod message_parts;
 pub(crate) mod model;
 pub(crate) mod preflight_audit;
@@ -51,7 +52,6 @@ pub(crate) mod sdk_handlers;
 pub(crate) mod session;
 pub(crate) mod storage;
 pub(crate) mod tab_context;
-pub(crate) mod harness;
 pub(crate) mod window;
 
 // Re-export commonly used types
@@ -60,6 +60,12 @@ pub use self::current_app_automation_memory::{
     current_app_automation_memory_index_path, read_current_app_automation_memory_index,
     resolve_current_app_automation_from_memory, upsert_current_app_automation_memory_from_receipt,
     CurrentAppAutomationMemoryDecision, CurrentAppAutomationMemoryIndexEntry,
+};
+pub use self::harness::{
+    build_tab_ai_harness_context_block, build_tab_ai_harness_submission,
+    read_tab_ai_harness_config, tab_ai_harness_config_path, validate_tab_ai_harness_config,
+    HarnessBackendKind, HarnessConfig, TabAiHarnessSessionState, TabAiHarnessSubmissionMode,
+    TAB_AI_HARNESS_CONFIG_SCHEMA_VERSION, TAB_AI_HARNESS_CONTEXT_SCHEMA_VERSION,
 };
 pub use self::message_parts::{
     file_path_parts, merge_context_parts, prepare_user_message_with_receipt,
@@ -96,19 +102,15 @@ pub use self::tab_context::{
     resolve_tab_ai_memory_suggestions_with_outcome_from_path, should_offer_save,
     tab_ai_execution_audit_path, tab_ai_intent_uses_implicit_target, tab_ai_memory_index_path,
     truncate_tab_ai_text, write_tab_ai_memory_entry, write_tab_ai_memory_entry_to_path,
-    TabAiClipboardContext, TabAiContextBlob, TabAiDegradationReason, TabAiExecutionReceipt,
+    build_tab_ai_suggested_intents, recent_tab_ai_automations_for_bundle,
+    recent_tab_ai_automations_for_bundle_from_path, TabAiSuggestedIntentSpec,
+    TabAiClipboardContext, TabAiClipboardHistoryEntry, TabAiContextBlob, TabAiDegradationReason, TabAiExecutionReceipt,
     TabAiExecutionRecord, TabAiExecutionStatus, TabAiFieldStatus, TabAiInvocationReceipt,
     TabAiMemoryEntry, TabAiMemoryResolution, TabAiMemoryResolutionOutcome,
     TabAiMemoryResolutionReason, TabAiMemorySuggestion, TabAiTargetAudit, TabAiTargetContext,
     TabAiUiSnapshot, TAB_AI_CONTEXT_SCHEMA_VERSION, TAB_AI_EXECUTION_RECEIPT_SCHEMA_VERSION,
     TAB_AI_EXECUTION_RECORD_SCHEMA_VERSION, TAB_AI_INVOCATION_RECEIPT_SCHEMA_VERSION,
     TAB_AI_MEMORY_ENTRY_SCHEMA_VERSION, TAB_AI_TARGET_AUDIT_SCHEMA_VERSION,
-};
-pub use self::harness::{
-    build_tab_ai_harness_context_block, build_tab_ai_harness_submission,
-    read_tab_ai_harness_config, tab_ai_harness_config_path, HarnessBackendKind, HarnessConfig,
-    TabAiHarnessSessionState, TAB_AI_HARNESS_CONFIG_SCHEMA_VERSION,
-    TAB_AI_HARNESS_CONTEXT_SCHEMA_VERSION,
 };
 pub use self::window::{
     add_ai_attachment, apply_ai_preset, close_ai_window, get_ai_window_state, is_ai_window,

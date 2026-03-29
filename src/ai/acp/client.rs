@@ -106,11 +106,9 @@ pub(crate) fn build_initialize_request() -> InitializeRequest {
     InitializeRequest::new(ProtocolVersion::V1)
         .client_capabilities(
             ClientCapabilities::new()
-                .fs(
-                    FileSystemCapabilities::new()
-                        .read_text_file(true)
-                        .write_text_file(true),
-                )
+                .fs(FileSystemCapabilities::new()
+                    .read_text_file(true)
+                    .write_text_file(true))
                 .terminal(true),
         )
         .client_info(
@@ -334,7 +332,10 @@ mod tests {
         let init = build_initialize_request();
         let value = serde_json::to_value(&init).expect("serialize init request");
         assert_eq!(value["clientInfo"]["name"], serde_json::json!("script-kit"));
-        assert_eq!(value["clientInfo"]["title"], serde_json::json!("Script Kit"));
+        assert_eq!(
+            value["clientInfo"]["title"],
+            serde_json::json!("Script Kit")
+        );
     }
 
     #[test]
