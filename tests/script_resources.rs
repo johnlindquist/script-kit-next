@@ -153,8 +153,7 @@ fn kit_scriptlets_returns_schema_versioned_json() {
 #[test]
 fn kit_scriptlets_entries_carry_optional_fields() {
     let scriptlets = fixture_scriptlets();
-    let content =
-        mcp_resources::read_resource("kit://scriptlets", &[], &scriptlets, None).unwrap();
+    let content = mcp_resources::read_resource("kit://scriptlets", &[], &scriptlets, None).unwrap();
     let doc: ScriptletsResourceDocument = serde_json::from_str(&content.text).unwrap();
 
     let first = &doc.scriptlets[0];

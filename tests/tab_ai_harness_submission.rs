@@ -4,8 +4,7 @@
 //! between PasteOnly (stage context) and Submit (immediate turn) modes.
 
 use script_kit_gpui::ai::{
-    build_tab_ai_harness_submission, TabAiContextBlob, TabAiHarnessSubmissionMode,
-    TabAiUiSnapshot,
+    build_tab_ai_harness_submission, TabAiContextBlob, TabAiHarnessSubmissionMode, TabAiUiSnapshot,
 };
 
 fn make_context(prompt_type: &str, input_text: Option<&str>) -> TabAiContextBlob {
@@ -27,12 +26,9 @@ fn make_context(prompt_type: &str, input_text: Option<&str>) -> TabAiContextBlob
 #[test]
 fn paste_only_without_intent_omits_sentinel() {
     let context = make_context("FileSearch", Some("readme"));
-    let submission = build_tab_ai_harness_submission(
-        &context,
-        None,
-        TabAiHarnessSubmissionMode::PasteOnly,
-    )
-    .expect("submission should build");
+    let submission =
+        build_tab_ai_harness_submission(&context, None, TabAiHarnessSubmissionMode::PasteOnly)
+            .expect("submission should build");
 
     assert!(submission.contains("<scriptKitContext schemaVersion=\"1\">"));
     assert!(
@@ -48,12 +44,9 @@ fn paste_only_without_intent_omits_sentinel() {
 #[test]
 fn submit_without_intent_includes_sentinel() {
     let context = make_context("ScriptList", None);
-    let submission = build_tab_ai_harness_submission(
-        &context,
-        None,
-        TabAiHarnessSubmissionMode::Submit,
-    )
-    .expect("submission should build");
+    let submission =
+        build_tab_ai_harness_submission(&context, None, TabAiHarnessSubmissionMode::Submit)
+            .expect("submission should build");
 
     assert!(submission.contains("<scriptKitContext schemaVersion=\"1\">"));
     assert!(
@@ -109,12 +102,9 @@ fn blank_intent_treated_as_none() {
     assert!(!paste.contains("User intent:"));
     assert!(!paste.contains("Await the user"));
 
-    let submit = build_tab_ai_harness_submission(
-        &context,
-        Some("   "),
-        TabAiHarnessSubmissionMode::Submit,
-    )
-    .expect("should build");
+    let submit =
+        build_tab_ai_harness_submission(&context, Some("   "), TabAiHarnessSubmissionMode::Submit)
+            .expect("should build");
     assert!(!submit.contains("User intent:"));
     assert!(submit.contains("Await the user's next terminal input."));
 }

@@ -380,12 +380,9 @@ mod tests {
         assert!(!with_intent.contains("Await the user"));
 
         // Without intent (Submit mode) — sentinel present
-        let without_intent = build_tab_ai_harness_submission(
-            &context,
-            None,
-            TabAiHarnessSubmissionMode::Submit,
-        )
-        .expect("should build");
+        let without_intent =
+            build_tab_ai_harness_submission(&context, None, TabAiHarnessSubmissionMode::Submit)
+                .expect("should build");
         assert!(without_intent.contains("<scriptKitContext schemaVersion=\"1\">"));
         assert!(without_intent.contains("Await the user's next terminal input."));
         assert!(!without_intent.contains("User intent:"));
@@ -406,12 +403,9 @@ mod tests {
             "2026-03-29T07:07:06Z".to_string(),
         );
 
-        let paste = build_tab_ai_harness_submission(
-            &context,
-            None,
-            TabAiHarnessSubmissionMode::PasteOnly,
-        )
-        .expect("should build");
+        let paste =
+            build_tab_ai_harness_submission(&context, None, TabAiHarnessSubmissionMode::PasteOnly)
+                .expect("should build");
         assert!(paste.contains("<scriptKitContext schemaVersion=\"1\">"));
         assert!(!paste.contains("Await the user's next terminal input."));
         assert!(!paste.contains("User intent:"));
@@ -449,7 +443,10 @@ mod tests {
             ..HarnessConfig::default()
         };
         let err = validate_tab_ai_harness_config(&config).unwrap_err();
-        assert!(err.contains("harness.json"), "must mention config file: {err}");
+        assert!(
+            err.contains("harness.json"),
+            "must mention config file: {err}"
+        );
     }
 
     #[test]
@@ -469,8 +466,14 @@ mod tests {
             ..HarnessConfig::default()
         };
         let err = validate_tab_ai_harness_config(&config).unwrap_err();
-        assert!(err.contains("not found on PATH"), "must mention PATH: {err}");
-        assert!(err.contains("harness.json"), "must mention config file: {err}");
+        assert!(
+            err.contains("not found on PATH"),
+            "must mention PATH: {err}"
+        );
+        assert!(
+            err.contains("harness.json"),
+            "must mention config file: {err}"
+        );
     }
 
     #[test]
