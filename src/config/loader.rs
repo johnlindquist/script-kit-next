@@ -2,6 +2,7 @@
 //!
 //! Handles loading and parsing the config.ts file using bun.
 
+use anyhow::Context;
 use serde::de::DeserializeOwned;
 use serde_json::{Map, Value};
 use std::path::{Path, PathBuf};
@@ -237,13 +238,29 @@ pub fn load_user_preferences() -> ScriptKitUserPreferences {
 pub fn save_user_preferences(prefs: &ScriptKitUserPreferences) -> anyhow::Result<()> {
     let path = settings_json_path();
     if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)?;
+        std::fs::create_dir_all(parent).with_context(|| {
+            format!(
+                "failed to create settings directory {}",
+                parent.display()
+            )
+        })?;
     }
 
     // Read existing JSON to preserve unknown keys from other tools.
     let mut root: serde_json::Map<String, Value> = if path.exists() {
-        let text = std::fs::read_to_string(&path).unwrap_or_default();
-        serde_json::from_str(&text).unwrap_or_default()
+        let text = std::fs::read_to_string(&path)
+            .with_context(|| format!("failed to read settings file {}", path.display()))?;
+        match serde_json::from_str::<serde_json::Map<String, Value>>(&text) {
+            Ok(map) => map,
+            Err(error) => {
+                warn!(
+                    path = %path.display(),
+                    error = %error,
+                    "Settings file was not a JSON object; overwriting known preference fields"
+                );
+                serde_json::Map::new()
+            }
+        }
     } else {
         serde_json::Map::new()
     };
@@ -257,7 +274,8 @@ pub fn save_user_preferences(prefs: &ScriptKitUserPreferences) -> anyhow::Result
     }
 
     let json = serde_json::to_string_pretty(&root)?;
-    std::fs::write(&path, json)?;
+    std::fs::write(&path, json)
+        .with_context(|| format!("failed to write settings file {}", path.display()))?;
     Ok(())
 }
 
