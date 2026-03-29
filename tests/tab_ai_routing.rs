@@ -15,6 +15,7 @@ const APP_STATE_SOURCE: &str = include_str!("../src/main_sections/app_state.rs")
 const APP_VIEW_STATE_SOURCE: &str = include_str!("../src/main_sections/app_view_state.rs");
 const HARNESS_SOURCE: &str = include_str!("../src/ai/harness/mod.rs");
 const TERM_RENDER_SOURCE: &str = include_str!("../src/render_prompts/term.rs");
+const AI_MOD_SOURCE: &str = include_str!("../src/ai/mod.rs");
 
 // =========================================================================
 // Primary contract: Tab → harness terminal (QuickTerminalView)
@@ -849,5 +850,243 @@ fn harness_injection_submits_or_pastes_based_on_flag() {
     assert!(
         inject_fn_body.contains("send_text_as_paste"),
         "PasteOnly mode must use send_text_as_paste for staging"
+    );
+}
+
+// =========================================================================
+// Escape pass-through: QuickTerminalView disables escape-cancel
+// =========================================================================
+
+#[test]
+fn quick_terminal_disables_escape_cancel() {
+    // For QuickTerminalView, escape_cancels must be set to false so that
+    // Escape is forwarded to the PTY (harness TUI owns Escape for navigation).
+    assert!(
+        TERM_RENDER_SOURCE.contains("escape_cancels")
+            && TERM_RENDER_SOURCE.contains("QuickTerminalView"),
+        "render_prompts/term.rs must set escape_cancels based on QuickTerminalView"
+    );
+
+    // The escape_cancels assignment must negate QuickTerminalView matches
+    // (i.e., escape_cancels = !matches!(..., QuickTerminalView)).
+    assert!(
+        TERM_RENDER_SOURCE.contains("!matches!(self.current_view, AppView::QuickTerminalView"),
+        "escape_cancels must be false for QuickTerminalView (negated matches)"
+    );
+}
+
+#[test]
+fn quick_terminal_cmd_w_dispatches_close() {
+    // Cmd+W in QuickTerminalView must be intercepted before reaching the PTY
+    // and must call close_tab_ai_harness_terminal.
+    assert!(
+        TERM_RENDER_SOURCE.contains("close_tab_ai_harness_terminal"),
+        "Cmd+W in QuickTerminalView must dispatch to close_tab_ai_harness_terminal"
+    );
+    // The handler must check for the "w" key specifically
+    assert!(
+        TERM_RENDER_SOURCE.contains("\"w\""),
+        "Cmd+W handler must match the 'w' key"
+    );
+}
+
+// =========================================================================
+// Footer hint strip: QuickTerminalView shows only "⌘W Close"
+// =========================================================================
+
+#[test]
+fn quick_terminal_footer_shows_only_cmd_w_close() {
+    assert!(
+        TERM_RENDER_SOURCE.contains("⌘W Close"),
+        "QuickTerminalView footer hint strip must show '⌘W Close'"
+    );
+    // Must use render_simple_hint_strip for minimal chrome
+    assert!(
+        TERM_RENDER_SOURCE.contains("render_simple_hint_strip"),
+        "QuickTerminalView footer must use render_simple_hint_strip for minimal chrome"
+    );
+}
+
+// =========================================================================
+// Close function guards: only acts when in QuickTerminalView
+// =========================================================================
+
+#[test]
+fn close_harness_terminal_guards_current_view() {
+    // close_tab_ai_harness_terminal must check that we're actually in
+    // QuickTerminalView before restoring — prevent no-op restore from
+    // corrupting view state when called from unexpected contexts.
+    let close_fn_start = TAB_AI_MODE_SOURCE
+        .find("fn close_tab_ai_harness_terminal(")
+        .expect("close_tab_ai_harness_terminal must exist");
+    let close_fn_body = &TAB_AI_MODE_SOURCE[close_fn_start..];
+    let next_fn = close_fn_body[1..]
+        .find("\n    fn ")
+        .unwrap_or(close_fn_body.len());
+    let close_fn_body = &close_fn_body[..next_fn];
+
+    assert!(
+        close_fn_body.contains("QuickTerminalView"),
+        "close must verify current_view is QuickTerminalView before restoring"
+    );
+    assert!(
+        close_fn_body.contains("cx.notify()"),
+        "close must call cx.notify() to trigger re-render after view change"
+    );
+}
+
+// =========================================================================
+// Legacy-removal guard: TabAiChat must not reappear in changed surfaces
+// =========================================================================
+
+#[test]
+fn legacy_tab_ai_chat_not_in_primary_entry_path() {
+    // The primary Tab AI entry functions must not reference TabAiChat.
+    // If TabAiChat silently comes back in these surfaces, the harness terminal
+    // contract is broken.
+
+    // open_tab_ai_chat: the public entry point
+    let open_fn_start = TAB_AI_MODE_SOURCE
+        .find("fn open_tab_ai_chat(")
+        .expect("open_tab_ai_chat must exist");
+    let open_fn_body = &TAB_AI_MODE_SOURCE[open_fn_start..];
+    let next_fn = open_fn_body[1..]
+        .find("\n    fn ")
+        .unwrap_or(open_fn_body.len());
+    let open_fn_body = &open_fn_body[..next_fn];
+    assert!(
+        !open_fn_body.contains("TabAiChat"),
+        "open_tab_ai_chat must not reference TabAiChat — harness terminal is primary"
+    );
+
+    // open_tab_ai_harness_terminal: the harness launcher
+    let harness_fn_start = TAB_AI_MODE_SOURCE
+        .find("fn open_tab_ai_harness_terminal(")
+        .expect("open_tab_ai_harness_terminal must exist");
+    let harness_fn_body = &TAB_AI_MODE_SOURCE[harness_fn_start..];
+    let next_fn = harness_fn_body[1..]
+        .find("\n    fn ")
+        .unwrap_or(harness_fn_body.len());
+    let harness_fn_body = &harness_fn_body[..next_fn];
+    assert!(
+        !harness_fn_body.contains("TabAiChat"),
+        "open_tab_ai_harness_terminal must not reference TabAiChat"
+    );
+
+    // close_tab_ai_harness_terminal: the close handler
+    let close_fn_start = TAB_AI_MODE_SOURCE
+        .find("fn close_tab_ai_harness_terminal(")
+        .expect("close_tab_ai_harness_terminal must exist");
+    let close_fn_body = &TAB_AI_MODE_SOURCE[close_fn_start..];
+    let next_fn = close_fn_body[1..]
+        .find("\n    fn ")
+        .unwrap_or(close_fn_body.len());
+    let close_fn_body = &close_fn_body[..next_fn];
+    assert!(
+        !close_fn_body.contains("TabAiChat"),
+        "close_tab_ai_harness_terminal must not reference TabAiChat"
+    );
+}
+
+#[test]
+fn legacy_tab_ai_chat_not_in_startup_tab_handler() {
+    // The Tab interceptor in startup.rs must not route to TabAiChat.
+    assert!(
+        !TAB_SOURCE.contains("TabAiChat"),
+        "startup.rs Tab handler must not reference TabAiChat — harness terminal is primary"
+    );
+}
+
+#[test]
+fn legacy_tab_ai_chat_not_in_script_list_tab_handler() {
+    // ScriptList Tab handler must not route to TabAiChat.
+    assert!(
+        !SCRIPT_LIST_SOURCE.contains("TabAiChat"),
+        "ScriptList Tab handler must not reference TabAiChat"
+    );
+}
+
+#[test]
+fn legacy_tab_ai_chat_not_in_term_render() {
+    // The QuickTerminalView renderer must not reference TabAiChat.
+    assert!(
+        !TERM_RENDER_SOURCE.contains("TabAiChat"),
+        "render_prompts/term.rs must not reference TabAiChat"
+    );
+}
+
+#[test]
+fn legacy_inline_chat_not_reexported_from_ai_mod() {
+    // TabAiChat should NOT be re-exported from the ai module's public surface.
+    // It may still exist internally but must not be discoverable via pub use.
+    let has_tab_ai_chat_reexport = AI_MOD_SOURCE
+        .lines()
+        .any(|line| line.contains("pub use") && line.contains("TabAiChat"));
+    assert!(
+        !has_tab_ai_chat_reexport,
+        "ai/mod.rs must not re-export TabAiChat in its public API"
+    );
+}
+
+// =========================================================================
+// Consolidated legacy inline-chat regression guard
+// =========================================================================
+//
+// This guard covers ALL changed harness-entry surfaces in a single test.
+// If TabAiChat or open_tab_ai_full_view_chat silently reappears in any
+// of these files, the harness-terminal contract is broken.
+
+#[test]
+fn legacy_inline_chat_absent_from_all_changed_harness_surfaces() {
+    // Every source constant that represents a harness-entry surface must be
+    // free of legacy inline-chat references. This is the single authoritative
+    // guard — the per-file tests above are fine-grained; this one is the safety net.
+    let surfaces: &[(&str, &str)] = &[
+        ("startup.rs (Tab interceptor)", TAB_SOURCE),
+        ("tab_ai_mode.rs (orchestration)", TAB_AI_MODE_SOURCE),
+        ("render_prompts/term.rs (QuickTerminalView renderer)", TERM_RENDER_SOURCE),
+        ("render_script_list/mod.rs (ScriptList Tab fallback)", SCRIPT_LIST_SOURCE),
+        ("app_view_state.rs (view enum)", APP_VIEW_STATE_SOURCE),
+        ("app_state.rs (shared state)", APP_STATE_SOURCE),
+    ];
+
+    let legacy_markers = &[
+        "open_tab_ai_full_view_chat",
+        "TabAiChat::new",
+        "open_tab_ai_overlay",
+        "render_tab_ai_overlay",
+    ];
+
+    for (label, source) in surfaces {
+        for marker in legacy_markers {
+            assert!(
+                !source.contains(marker),
+                "{label} must not contain legacy marker `{marker}` — \
+                 the harness terminal is the primary Tab AI surface"
+            );
+        }
+    }
+}
+
+#[test]
+fn legacy_tab_ai_chat_not_in_app_view_state() {
+    // AppView enum and related types must not route to TabAiChat.
+    // TabAiChat is an entity for the legacy inline chat — the harness terminal
+    // uses TermPrompt/QuickTerminalView instead.
+    assert!(
+        !APP_VIEW_STATE_SOURCE.contains("TabAiChat"),
+        "app_view_state.rs must not reference TabAiChat — \
+         QuickTerminalView is the Tab AI view variant"
+    );
+}
+
+#[test]
+fn legacy_tab_ai_chat_not_in_app_state() {
+    // Shared app state must not hold TabAiChat references.
+    // The harness uses TabAiHarnessSessionState instead.
+    assert!(
+        !APP_STATE_SOURCE.contains("TabAiChat"),
+        "app_state.rs must not reference TabAiChat — \
+         tab_ai_harness is the session state field"
     );
 }
