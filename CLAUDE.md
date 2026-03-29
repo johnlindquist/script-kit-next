@@ -276,19 +276,33 @@ Composable context attachments for AI chat flows with deterministic resolution a
 - `tests/context_part_start_chat_flow.rs` — empty message + parts, message + parts, invalid parts, mixed success, order
 - `tests/context_part_submission_flow.rs` — mixed success tracking, full success prefix persistence
 
-### Tab AI — Context Chat with Script Execution
+### Tab AI — Quick Terminal with Context Injection
 
-Universal AI surface triggered by Tab from any view. Two modes: an overlay (legacy, retained for migration) and a full-view `TabAiChat` entity that replaces the current view.
+Universal AI surface triggered by Tab from any view. Connects to a pre-running CLI harness (Claude Code, Codex, Gemini CLI, Copilot CLI, or a custom command) and injects hierarchical context via PTY stdin. The terminal surface renders the harness TUI directly in a `TermPrompt` widget.
 
-**Two entry paths, one destination:**
-- **Enter on fallback** — user types something with no matches, hits Enter on first fallback command → inline AI chat opens with filter text **auto-submitted** as first message.
-- **Tab on any item** — user presses Tab from any view → inline AI chat opens showing **context cards** (selected item, desktop state, etc.), input is empty. User types intent, then Enter.
+**Entry path:**
+- **Tab on any item** — user presses Tab from any view → harness terminal opens in `AppView::QuickTerminalView`, structured `<scriptKitContext>` block is pasted into the PTY (PasteOnly mode), user types intent and presses Enter.
+
+**Close semantics:**
+- `Cmd+W` closes the wrapper and restores the previous view/focus.
+- Plain `Escape` is forwarded to the PTY (harness TUI owns it).
+- Footer hint strip advertises only "⌘W Close".
 
 **Architecture:**
-- `AppView::TabAiChat` variant — full-view replacement (primary path via `open_tab_ai_chat()`)
-- `TabAiChat` — full-view chat entity with TextInputState, ListState, and FocusHandle
-- Context assembly: `build_tab_ai_context()` → `TabAiResolvedContext` (blob + bundle_id + warning count + invocation receipt)
-- Target resolution: `resolve_tab_ai_surface_targets()` extracts focused/visible targets per surface (ClipboardHistory, FileSearch, WindowSwitcher, etc.)
+- `AppView::QuickTerminalView` — primary Tab AI destination (via `open_tab_ai_chat()` → `open_tab_ai_harness_terminal()`)
+- `HarnessConfig` — persisted at `~/.scriptkit/harness.json`, supports Claude Code, Codex, Gemini CLI, Copilot CLI, Custom backends
+- `TabAiHarnessSessionState` — runtime state for a live harness PTY session (reused across Tab invocations)
+- Context assembly (unchanged): `build_tab_ai_context()` → `TabAiResolvedContext` (blob + bundle_id + warning count + invocation receipt)
+- Target resolution: `resolve_tab_ai_surface_targets()` extracts focused/visible targets per surface
+- Context injection: `build_tab_ai_harness_submission()` → `<scriptKitContext>` XML block → `inject_tab_ai_harness_submission()` via PTY paste
+
+**Submission modes** (`TabAiHarnessSubmissionMode`):
+- `PasteOnly` (default for Tab entry) — stages context in the PTY without submitting; user types intent next.
+- `Submit` — appends a sentinel asking the harness to wait, completing a full turn.
+
+**Capture profiles:**
+- Generic PTY backends use `CaptureContextOptions::tab_ai_submit()` (text-safe, no screenshots — base64 PNG in PTY stdin is fragile).
+- The richer `tab_ai()` profile with screenshots is reserved for a future Claude-specific SDK path.
 
 **Schema-versioned types** (all in `src/ai/tab_context.rs`, bump version constants when changing fields):
 
@@ -306,33 +320,29 @@ Universal AI surface triggered by Tab from any view. Two modes: an overlay (lega
 | `TabAiFieldStatus` | Enum: `Unavailable`, `Degraded`, `Captured` — per-field telemetry |
 | `TabAiDegradationReason` | Enum: `PanelOnlyWarning`, `CollectorFallback`, `MissingInput`, etc. |
 
-**Execution pipeline:**
-1. `submit_tab_ai_chat()` — assembles context, calls AI, generates script
-2. `prepare_script_from_ai_response()` → strip SDK imports → `create_interactive_temp_script()` → `execute_script_by_path()`
-3. `complete_tab_ai_execution()` — builds `TabAiExecutionReceipt`, appends to JSONL audit trail
-4. `open_tab_ai_save_offer()` — conditional save UI based on `should_offer_save()`
+**Harness lifecycle:**
+- First Tab press spawns the configured harness CLI in a PTY (cold start ~120ms delay for prompt render).
+- Subsequent Tab presses reuse the live session if the PTY is still alive.
+- Crash/exit triggers a fresh spawn on next Tab press.
 
-**Memory system:**
-- `write_tab_ai_memory_entry()` — persists successful automations
-- `resolve_tab_ai_memory_suggestions()` — finds prior automations matching current context
-- `resolve_tab_ai_memory_suggestions_with_outcome()` — outcome-aware variant returning `TabAiMemoryResolution`
-- `refresh_tab_ai_memory_hint()` — updates memory hint display with candidate/match counts
+**Legacy:** `TabAiChat` entity and `open_tab_ai_full_view_chat()` are retained for internal use but are no longer the implicit Tab entry point.
 
 **Key files:**
+- `src/ai/harness/mod.rs` — `HarnessConfig`, `TabAiHarnessSubmissionMode`, context formatting, config I/O
 - `src/ai/tab_context.rs` — all Tab AI types, context assembly, memory I/O, execution receipts
-- `src/ai/mod.rs` — re-exports (lines 89–105)
-- `src/app_impl/tab_ai_mode.rs` — orchestration: context building, submission, target resolution, save flow, overlay + chat paths
+- `src/ai/mod.rs` — re-exports
+- `src/app_impl/tab_ai_mode.rs` — orchestration: harness terminal open/close, context injection, legacy chat paths
+- `src/app_impl/startup_new_tab.rs` — Tab key interceptor routing
+- `src/render_prompts/term.rs` — QuickTerminalView rendering and key handling (Cmd+W close, Escape passthrough)
 - `src/context_snapshot/capture.rs` — desktop context providers
 
 **Integration tests:**
 - `tests/tab_ai_context.rs` — context blob assembly and schema
 - `tests/tab_ai_execution.rs` — execution receipt pipeline
 - `tests/tab_ai_memory.rs` — memory write/read/resolution
-- `tests/tab_ai_routing.rs` — entry path routing
+- `tests/tab_ai_routing.rs` — entry path routing, close semantics, capture profile, submission mode
 - `tests/tab_ai_prompt.rs` — user prompt construction
 - `tests/tab_ai_input_coverage.rs` — input edge cases
-
-**Design plan:** `.notes/20260327-175739-tab-ai-do-this-to-that.md`
 
 ## Consistency Rules (Non-Negotiable)
 

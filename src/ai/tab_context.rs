@@ -263,9 +263,7 @@ pub struct TabAiExperienceSpec {
 
 pub fn tab_ai_experience_pack_subtitle(pack: TabAiExperiencePack) -> &'static str {
     match pack {
-        TabAiExperiencePack::DesktopGeneral => {
-            "Use the current desktop state as the live subject."
-        }
+        TabAiExperiencePack::DesktopGeneral => "Use the current desktop state as the live subject.",
         TabAiExperiencePack::ClipboardStudio => {
             "Transform copied content without opening another tool."
         }
@@ -274,9 +272,7 @@ pub fn tab_ai_experience_pack_subtitle(pack: TabAiExperiencePack) -> &'static st
         TabAiExperiencePack::CommandAlchemy => {
             "Teach the selected app command into something reusable."
         }
-        TabAiExperiencePack::AppPilot => {
-            "Steer the current app like a custom operator console."
-        }
+        TabAiExperiencePack::AppPilot => "Steer the current app like a custom operator console.",
         TabAiExperiencePack::WindowPilot => "Operate on this exact window, not the whole app.",
         TabAiExperiencePack::ProcessPilot => "Inspect or tame a live automation process.",
         TabAiExperiencePack::GenericSelection => "Use the selected thing as the subject.",
@@ -970,11 +966,19 @@ mod tab_ai_experience_tests {
         let spec = build_tab_ai_experience_spec(Some(&focused), &visible, None, &[])
             .expect("command experience spec");
         assert_eq!(spec.title, "Command Alchemy");
-        let labels: Vec<&str> = spec.intents.iter().map(|item| item.label.as_str()).collect();
+        let labels: Vec<&str> = spec
+            .intents
+            .iter()
+            .map(|item| item.label.as_str())
+            .collect();
         // "Teach This Command" is tier 1, promoted above tier 2 generic verbs
         assert_eq!(
             labels,
-            vec!["Teach This Command", "Run This Command", "Explain This Command"]
+            vec![
+                "Teach This Command",
+                "Run This Command",
+                "Explain This Command"
+            ]
         );
     }
 
@@ -982,15 +986,15 @@ mod tab_ai_experience_tests {
     fn experience_spec_uses_clipboard_studio_for_copied_color() {
         let focused = target("clipboard_entry", "Copied Color");
         let visible = vec![focused.clone()];
-        let spec = build_tab_ai_experience_spec(
-            Some(&focused),
-            &visible,
-            Some(&clipboard("color")),
-            &[],
-        )
-        .expect("clipboard color experience spec");
+        let spec =
+            build_tab_ai_experience_spec(Some(&focused), &visible, Some(&clipboard("color")), &[])
+                .expect("clipboard color experience spec");
         assert_eq!(spec.title, "Clipboard Studio");
-        let labels: Vec<&str> = spec.intents.iter().map(|item| item.label.as_str()).collect();
+        let labels: Vec<&str> = spec
+            .intents
+            .iter()
+            .map(|item| item.label.as_str())
+            .collect();
         assert!(labels.contains(&"Build Palette"));
     }
 
@@ -998,14 +1002,14 @@ mod tab_ai_experience_tests {
     fn experience_spec_promotes_clipboard_fusion_into_top_three() {
         let focused = target("file", "tab_ai_mode.rs");
         let visible = vec![focused.clone()];
-        let spec = build_tab_ai_experience_spec(
-            Some(&focused),
-            &visible,
-            Some(&clipboard("text")),
-            &[],
-        )
-        .expect("expected file studio experience spec");
-        let labels: Vec<&str> = spec.intents.iter().map(|item| item.label.as_str()).collect();
+        let spec =
+            build_tab_ai_experience_spec(Some(&focused), &visible, Some(&clipboard("text")), &[])
+                .expect("expected file studio experience spec");
+        let labels: Vec<&str> = spec
+            .intents
+            .iter()
+            .map(|item| item.label.as_str())
+            .collect();
         assert_eq!(spec.title, "File Studio");
         assert_eq!(spec.subtitle, "Act on the selected file in-place.");
         assert_eq!(labels[0], "Rename From Clipboard");
@@ -1017,7 +1021,11 @@ mod tab_ai_experience_tests {
         let visible = vec![target("file", "a.rs"), target("file", "b.rs")];
         let spec = build_tab_ai_experience_spec(None, &visible, None, &[])
             .expect("expected desktop experience spec");
-        let labels: Vec<&str> = spec.intents.iter().map(|item| item.label.as_str()).collect();
+        let labels: Vec<&str> = spec
+            .intents
+            .iter()
+            .map(|item| item.label.as_str())
+            .collect();
         assert_eq!(spec.title, "Next Move");
         // Mixed shortlist: one hero (Sweep), one teachable (Ritual), one fallback (Inspect)
         assert!(labels.contains(&"Sweep Visible Files"));
@@ -1044,7 +1052,11 @@ mod tab_ai_experience_tests {
             }],
         )
         .expect("expected file studio experience spec");
-        let labels: Vec<&str> = spec.intents.iter().map(|item| item.label.as_str()).collect();
+        let labels: Vec<&str> = spec
+            .intents
+            .iter()
+            .map(|item| item.label.as_str())
+            .collect();
         // Mixed shortlist picks one hero, one teachable, one fallback.
         // Clone This Pattern (hero/adaptation) beats Reuse My Last Flow on rank.
         assert_eq!(labels.len(), 3);
@@ -1071,10 +1083,18 @@ mod tab_ai_experience_tests {
         let visible = vec![focused.clone()];
         let spec = build_tab_ai_experience_spec(Some(&focused), &visible, None, &[])
             .expect("command spec");
-        let labels: Vec<&str> = spec.intents.iter().map(|item| item.label.as_str()).collect();
+        let labels: Vec<&str> = spec
+            .intents
+            .iter()
+            .map(|item| item.label.as_str())
+            .collect();
         assert_eq!(
             labels,
-            vec!["Teach This Command", "Run This Command", "Explain This Command"]
+            vec![
+                "Teach This Command",
+                "Run This Command",
+                "Explain This Command"
+            ]
         );
     }
 
@@ -1089,23 +1109,38 @@ mod tab_ai_experience_tests {
             &[memory("rename-rust-module", "rename rust module")],
         )
         .expect("file spec");
-        let labels: Vec<&str> = spec.intents.iter().map(|item| item.label.as_str()).collect();
+        let labels: Vec<&str> = spec
+            .intents
+            .iter()
+            .map(|item| item.label.as_str())
+            .collect();
         // Mixed shortlist: one hero (Rename), one teachable (Tool), one fallback (Summarize)
         assert_eq!(
             labels,
-            vec!["Rename From Clipboard", "Turn This Into a Tool", "Summarize File"]
+            vec![
+                "Rename From Clipboard",
+                "Turn This Into a Tool",
+                "Summarize File"
+            ]
         );
     }
 
     #[test]
     fn desktop_general_shortlist_uses_script_kit_native_language() {
         let visible: Vec<TabAiTargetContext> = vec![];
-        let spec = build_tab_ai_experience_spec(None, &visible, None, &[])
-            .expect("desktop spec");
-        let labels: Vec<&str> = spec.intents.iter().map(|item| item.label.as_str()).collect();
+        let spec = build_tab_ai_experience_spec(None, &visible, None, &[]).expect("desktop spec");
+        let labels: Vec<&str> = spec
+            .intents
+            .iter()
+            .map(|item| item.label.as_str())
+            .collect();
         assert_eq!(
             labels,
-            vec!["Continue the Thread", "Make This Ritual", "Inspect Current Context"]
+            vec![
+                "Continue the Thread",
+                "Make This Ritual",
+                "Inspect Current Context"
+            ]
         );
     }
 
@@ -1113,24 +1148,39 @@ mod tab_ai_experience_tests {
     fn app_pilot_shortlist_contains_command_capture() {
         let focused = target("app", "Safari");
         let visible = vec![focused.clone()];
-        let spec = build_tab_ai_experience_spec(Some(&focused), &visible, None, &[])
-            .expect("app spec");
-        let labels: Vec<&str> = spec.intents.iter().map(|item| item.label.as_str()).collect();
+        let spec =
+            build_tab_ai_experience_spec(Some(&focused), &visible, None, &[]).expect("app spec");
+        let labels: Vec<&str> = spec
+            .intents
+            .iter()
+            .map(|item| item.label.as_str())
+            .collect();
         assert_eq!(
             labels,
-            vec!["Turn This Into Command", "Find Right Window", "Automate This App"]
+            vec![
+                "Turn This Into Command",
+                "Find Right Window",
+                "Automate This App"
+            ]
         );
     }
 
     #[test]
     fn desktop_general_shortlist_prefers_thread_then_ritual() {
         let visible: Vec<TabAiTargetContext> = vec![];
-        let spec = build_tab_ai_experience_spec(None, &visible, None, &[])
-            .expect("desktop spec");
-        let labels: Vec<&str> = spec.intents.iter().map(|item| item.label.as_str()).collect();
+        let spec = build_tab_ai_experience_spec(None, &visible, None, &[]).expect("desktop spec");
+        let labels: Vec<&str> = spec
+            .intents
+            .iter()
+            .map(|item| item.label.as_str())
+            .collect();
         assert_eq!(
             labels,
-            vec!["Continue the Thread", "Make This Ritual", "Inspect Current Context"]
+            vec![
+                "Continue the Thread",
+                "Make This Ritual",
+                "Inspect Current Context"
+            ]
         );
     }
 
@@ -1138,12 +1188,20 @@ mod tab_ai_experience_tests {
     fn file_studio_shortlist_prefers_pattern_then_tool_then_fallback() {
         let focused = target("file", "main.rs");
         let visible = vec![focused.clone()];
-        let spec = build_tab_ai_experience_spec(Some(&focused), &visible, None, &[])
-            .expect("file spec");
-        let labels: Vec<&str> = spec.intents.iter().map(|item| item.label.as_str()).collect();
+        let spec =
+            build_tab_ai_experience_spec(Some(&focused), &visible, None, &[]).expect("file spec");
+        let labels: Vec<&str> = spec
+            .intents
+            .iter()
+            .map(|item| item.label.as_str())
+            .collect();
         assert_eq!(
             labels,
-            vec!["Clone This Pattern", "Turn This Into a Tool", "Summarize File"]
+            vec![
+                "Clone This Pattern",
+                "Turn This Into a Tool",
+                "Summarize File"
+            ]
         );
     }
 
@@ -1151,12 +1209,20 @@ mod tab_ai_experience_tests {
     fn folder_studio_shortlist_prefers_operator_then_hot_path() {
         let focused = target("directory", "src");
         let visible = vec![focused.clone()];
-        let spec = build_tab_ai_experience_spec(Some(&focused), &visible, None, &[])
-            .expect("folder spec");
-        let labels: Vec<&str> = spec.intents.iter().map(|item| item.label.as_str()).collect();
+        let spec =
+            build_tab_ai_experience_spec(Some(&focused), &visible, None, &[]).expect("folder spec");
+        let labels: Vec<&str> = spec
+            .intents
+            .iter()
+            .map(|item| item.label.as_str())
+            .collect();
         assert_eq!(
             labels,
-            vec!["Spin Project Operator", "Find the Hot Path", "Map the Territory"]
+            vec![
+                "Spin Project Operator",
+                "Find the Hot Path",
+                "Map the Territory"
+            ]
         );
     }
 
