@@ -10,12 +10,13 @@ fn default_capture_options_enable_all_sections() {
     assert!(options.include_browser_url);
     assert!(options.include_focused_window);
     assert!(!options.include_screenshot, "screenshot off by default");
+    assert!(!options.include_panel_screenshot, "panel screenshot off by default");
 }
 
 #[test]
-fn snapshot_default_has_schema_version_3() {
+fn snapshot_default_has_schema_version_4() {
     let snapshot = AiContextSnapshot::default();
-    assert_eq!(snapshot.schema_version, 3);
+    assert_eq!(snapshot.schema_version, 4);
     assert!(snapshot.selected_text.is_none());
     assert!(snapshot.frontmost_app.is_none());
     assert!(snapshot.menu_bar_items.is_empty());
@@ -27,7 +28,7 @@ fn snapshot_default_has_schema_version_3() {
 #[test]
 fn snapshot_serializes_to_stable_camel_case_json() {
     let snapshot = AiContextSnapshot {
-        schema_version: 3,
+        schema_version: AI_CONTEXT_SNAPSHOT_SCHEMA_VERSION,
         selected_text: Some("fn render(...) -> impl IntoElement".to_string()),
         frontmost_app: Some(FrontmostAppContext {
             pid: 4242,
@@ -55,11 +56,12 @@ fn snapshot_serializes_to_stable_camel_case_json() {
             used_fallback: false,
         }),
         focused_window_image: None,
+        script_kit_panel_image: None,
         warnings: vec![],
     };
 
     let json = serde_json::to_string(&snapshot).expect("snapshot should serialize");
-    assert!(json.contains("\"schemaVersion\":3"));
+    assert!(json.contains("\"schemaVersion\":4"));
     assert!(
         json.contains("\"selectedText\":\"fn render(...) -> impl IntoElement\""),
         "should use camelCase for selectedText"
@@ -100,13 +102,13 @@ fn snapshot_omits_none_fields_in_json() {
         "None fields should be omitted"
     );
     // Only schemaVersion should remain
-    assert!(json.contains("\"schemaVersion\":3"));
+    assert!(json.contains("\"schemaVersion\":4"));
 }
 
 #[test]
 fn snapshot_roundtrips_through_serde() {
     let original = AiContextSnapshot {
-        schema_version: 3,
+        schema_version: AI_CONTEXT_SNAPSHOT_SCHEMA_VERSION,
         selected_text: Some("hello".to_string()),
         frontmost_app: Some(FrontmostAppContext {
             pid: 1,
@@ -117,6 +119,7 @@ fn snapshot_roundtrips_through_serde() {
         browser: None,
         focused_window: None,
         focused_window_image: None,
+        script_kit_panel_image: None,
         warnings: vec!["test warning".to_string()],
     };
 
@@ -134,6 +137,7 @@ fn capture_options_roundtrip_through_serde() {
         include_browser_url: false,
         include_focused_window: true,
         include_screenshot: false,
+        include_panel_screenshot: false,
     };
 
     let json = serde_json::to_string(&original).expect("serialize");
@@ -200,6 +204,7 @@ fn full_seed() -> CaptureContextSeed {
             used_fallback: false,
         })),
         focused_window_image: Ok(None),
+        script_kit_panel_image: Ok(None),
     }
 }
 
@@ -251,6 +256,7 @@ fn capture_from_seed_keeps_partial_success_and_records_warnings() {
         })),
         focused_window: Err("no focused window".into()),
         focused_window_image: Ok(None),
+        script_kit_panel_image: Ok(None),
     };
 
     let snapshot = capture_context_snapshot_from_seed(&CaptureContextOptions::all(), seed);
@@ -279,6 +285,7 @@ fn capture_from_seed_skips_warnings_for_disabled_providers() {
         browser: Ok(None),
         focused_window: Ok(None),
         focused_window_image: Ok(None),
+        script_kit_panel_image: Ok(None),
     };
 
     // minimal disables selected_text and menu_bar, so their errors are silent
@@ -304,6 +311,7 @@ fn capture_from_seed_preserves_metadata_only_focused_window() {
             used_fallback: false,
         })),
         focused_window_image: Ok(None),
+        script_kit_panel_image: Ok(None),
     };
 
     let snapshot = capture_context_snapshot_from_seed(&CaptureContextOptions::minimal(), seed);
@@ -337,6 +345,7 @@ fn tab_ai_profile_enables_all_including_screenshot() {
     assert!(tab_ai.include_menu_bar);
     assert!(tab_ai.include_focused_window);
     assert!(tab_ai.include_screenshot);
+    assert!(tab_ai.include_panel_screenshot);
 }
 
 #[test]

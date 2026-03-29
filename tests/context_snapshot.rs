@@ -58,6 +58,7 @@ fn context_option_profiles_are_stable() {
     assert!(full.include_selected_text);
     assert!(full.include_menu_bar);
     assert!(!full.include_screenshot, "full profile must not include screenshot by default");
+    assert!(!full.include_panel_screenshot, "full profile must not include panel screenshot by default");
 
     assert!(!minimal.include_selected_text);
     assert!(!minimal.include_menu_bar);
@@ -65,6 +66,7 @@ fn context_option_profiles_are_stable() {
     assert!(minimal.include_browser_url);
     assert!(minimal.include_focused_window);
     assert!(!minimal.include_screenshot, "minimal profile must not include screenshot");
+    assert!(!minimal.include_panel_screenshot, "minimal profile must not include panel screenshot");
 
     assert!(tab_ai.include_selected_text);
     assert!(tab_ai.include_menu_bar);
@@ -72,6 +74,7 @@ fn context_option_profiles_are_stable() {
     assert!(tab_ai.include_browser_url);
     assert!(tab_ai.include_focused_window);
     assert!(tab_ai.include_screenshot, "tab_ai profile must include screenshot");
+    assert!(tab_ai.include_panel_screenshot, "tab_ai profile must include panel screenshot");
 }
 
 #[test]
@@ -329,8 +332,24 @@ fn versioned_resources_are_listed_and_resolve() {
     .expect("kit://sdk-reference should resolve");
     let sdk_json: serde_json::Value =
         serde_json::from_str(&sdk_doc.text).expect("kit://sdk-reference must be valid JSON");
-    assert_eq!(sdk_json["schemaVersion"], 1);
+    assert_eq!(sdk_json["schemaVersion"], 2);
     assert_eq!(sdk_json["sdkPackage"], "@johnlindquist/kit");
+    assert!(
+        sdk_json["harnessWorkflow"].is_object(),
+        "sdk-reference must include harnessWorkflow"
+    );
+    assert!(
+        sdk_json["harnessWorkflow"]["testScriptDirectory"]
+            .as_str()
+            .is_some(),
+        "harnessWorkflow must include testScriptDirectory"
+    );
+    assert!(
+        sdk_json["harnessWorkflow"]["runCommand"]
+            .as_str()
+            .is_some(),
+        "harnessWorkflow must include runCommand"
+    );
 }
 
 #[test]
@@ -350,4 +369,244 @@ fn context_snapshot_inspection_receipt_is_stable() {
     assert!(!receipt.has_browser);
     assert!(!receipt.has_focused_window);
     assert_eq!(receipt.top_level_menu_count, 0);
+}
+
+#[test]
+fn context_schema_lists_panel_screenshot_parameter() {
+    init();
+    let scripts: Vec<std::sync::Arc<script_kit_gpui::scripts::Script>> = Vec::new();
+    let scriptlets: Vec<std::sync::Arc<script_kit_gpui::scripts::Scriptlet>> = Vec::new();
+
+    let content = script_kit_gpui::mcp_resources::read_resource(
+        "kit://context/schema",
+        &scripts,
+        &scriptlets,
+        None,
+    )
+    .expect("schema resource should resolve");
+
+    let parsed: serde_json::Value =
+        serde_json::from_str(&content.text).expect("schema must be valid JSON");
+
+    let params = parsed["parameters"]
+        .as_array()
+        .expect("parameters array");
+    assert!(
+        params.iter().any(|param| param["name"] == "panelScreenshot"),
+        "schema must list panelScreenshot parameter"
+    );
+
+    let examples = parsed["examples"]
+        .as_array()
+        .expect("examples array");
+    assert!(
+        examples
+            .iter()
+            .any(|e| e.as_str() == Some("kit://context?panelScreenshot=1")),
+        "schema should advertise kit://context?panelScreenshot=1 example"
+    );
+}
+
+#[test]
+fn context_diagnostics_reflects_panel_screenshot_override() {
+    script_kit_gpui::context_snapshot::enable_deterministic_context_capture();
+
+    let scripts: Vec<std::sync::Arc<script_kit_gpui::scripts::Script>> = Vec::new();
+    let scriptlets: Vec<std::sync::Arc<script_kit_gpui::scripts::Scriptlet>> = Vec::new();
+
+    let content = script_kit_gpui::mcp_resources::read_resource(
+        "kit://context?panelScreenshot=1&diagnostics=1",
+        &scripts,
+        &scriptlets,
+        None,
+    )
+    .expect("diagnostics resource should resolve");
+
+    let value: serde_json::Value =
+        serde_json::from_str(&content.text).expect("diagnostics must be valid JSON");
+
+    assert_eq!(value["kind"], "context_diagnostics");
+    assert_eq!(value["meta"]["options"]["includePanelScreenshot"], true);
+
+    let field_statuses = value["meta"]["fieldStatuses"]
+        .as_array()
+        .expect("fieldStatuses array");
+    assert!(
+        field_statuses
+            .iter()
+            .any(|s| s["field"].as_str() == Some("panelScreenshot") && s["enabled"] == true),
+        "panelScreenshot field status should be enabled"
+    );
+}
+
+// =======================================================
+// Clipboard history resource integration tests
+// =======================================================
+
+#[test]
+fn clipboard_history_resource_is_listed() {
+    let resources = script_kit_gpui::mcp_resources::get_resource_definitions();
+    assert!(
+        resources.iter().any(|r| r.uri == "kit://clipboard-history"),
+        "kit://clipboard-history should be in resource definitions"
+    );
+}
+
+#[test]
+fn clipboard_history_resource_resolves_and_returns_valid_json() {
+    let scripts: Vec<std::sync::Arc<script_kit_gpui::scripts::Script>> = Vec::new();
+    let scriptlets: Vec<std::sync::Arc<script_kit_gpui::scripts::Scriptlet>> = Vec::new();
+
+    let content = script_kit_gpui::mcp_resources::read_resource(
+        "kit://clipboard-history",
+        &scripts,
+        &scriptlets,
+        None,
+    )
+    .expect("kit://clipboard-history should resolve");
+
+    assert_eq!(content.uri, "kit://clipboard-history");
+    assert_eq!(content.mime_type, "application/json");
+
+    let value: serde_json::Value =
+        serde_json::from_str(&content.text).expect("must be valid JSON");
+    assert_eq!(
+        value["schemaVersion"],
+        script_kit_gpui::mcp_resources::CLIPBOARD_HISTORY_RESOURCE_SCHEMA_VERSION
+    );
+    assert!(value["count"].is_number());
+}
+
+#[test]
+fn clipboard_history_resource_supports_limit_param() {
+    let scripts: Vec<std::sync::Arc<script_kit_gpui::scripts::Script>> = Vec::new();
+    let scriptlets: Vec<std::sync::Arc<script_kit_gpui::scripts::Scriptlet>> = Vec::new();
+
+    let content = script_kit_gpui::mcp_resources::read_resource(
+        "kit://clipboard-history?limit=3",
+        &scripts,
+        &scriptlets,
+        None,
+    )
+    .expect("should resolve with limit param");
+
+    let value: serde_json::Value =
+        serde_json::from_str(&content.text).expect("must be valid JSON");
+    assert_eq!(value["schemaVersion"], 1);
+}
+
+#[test]
+fn clipboard_history_diagnostics_returns_meta() {
+    let scripts: Vec<std::sync::Arc<script_kit_gpui::scripts::Script>> = Vec::new();
+    let scriptlets: Vec<std::sync::Arc<script_kit_gpui::scripts::Scriptlet>> = Vec::new();
+
+    let content = script_kit_gpui::mcp_resources::read_resource(
+        "kit://clipboard-history?diagnostics=1",
+        &scripts,
+        &scriptlets,
+        None,
+    )
+    .expect("diagnostics should resolve");
+
+    let value: serde_json::Value =
+        serde_json::from_str(&content.text).expect("must be valid JSON");
+    assert_eq!(value["kind"], "clipboard_history_diagnostics");
+    assert!(value["meta"]["durationMs"].is_number());
+    assert_eq!(value["meta"]["source"], "cached_entries");
+}
+
+// =======================================================
+// Focused item resource integration tests
+// =======================================================
+
+#[test]
+fn focused_item_resource_is_listed() {
+    let resources = script_kit_gpui::mcp_resources::get_resource_definitions();
+    assert!(
+        resources.iter().any(|r| r.uri == "kit://focused-item"),
+        "kit://focused-item should be in resource definitions"
+    );
+}
+
+#[test]
+fn focused_item_resource_resolves_and_returns_valid_json() {
+    script_kit_gpui::mcp_resources::clear_focused_item();
+
+    let scripts: Vec<std::sync::Arc<script_kit_gpui::scripts::Script>> = Vec::new();
+    let scriptlets: Vec<std::sync::Arc<script_kit_gpui::scripts::Scriptlet>> = Vec::new();
+
+    let content = script_kit_gpui::mcp_resources::read_resource(
+        "kit://focused-item",
+        &scripts,
+        &scriptlets,
+        None,
+    )
+    .expect("kit://focused-item should resolve");
+
+    assert_eq!(content.uri, "kit://focused-item");
+    assert_eq!(content.mime_type, "application/json");
+
+    let value: serde_json::Value =
+        serde_json::from_str(&content.text).expect("must be valid JSON");
+    assert_eq!(
+        value["schemaVersion"],
+        script_kit_gpui::mcp_resources::FOCUSED_ITEM_RESOURCE_SCHEMA_VERSION
+    );
+    assert_eq!(value["hasFocusedItem"], false);
+}
+
+#[test]
+fn focused_item_resource_returns_published_item() {
+    script_kit_gpui::mcp_resources::publish_focused_item(
+        script_kit_gpui::mcp_resources::FocusedItemInfo {
+            source: "TestSurface".to_string(),
+            kind: "test_entry".to_string(),
+            semantic_id: "choice:0:test".to_string(),
+            label: "Test Item".to_string(),
+            metadata: Some(serde_json::json!({"key": "value"})),
+        },
+    );
+
+    let scripts: Vec<std::sync::Arc<script_kit_gpui::scripts::Script>> = Vec::new();
+    let scriptlets: Vec<std::sync::Arc<script_kit_gpui::scripts::Scriptlet>> = Vec::new();
+
+    let content = script_kit_gpui::mcp_resources::read_resource(
+        "kit://focused-item",
+        &scripts,
+        &scriptlets,
+        None,
+    )
+    .expect("should resolve");
+
+    let value: serde_json::Value =
+        serde_json::from_str(&content.text).expect("must be valid JSON");
+    assert_eq!(value["hasFocusedItem"], true);
+    assert_eq!(value["focusedItem"]["source"], "TestSurface");
+    assert_eq!(value["focusedItem"]["semanticId"], "choice:0:test");
+
+    // Clean up
+    script_kit_gpui::mcp_resources::clear_focused_item();
+}
+
+#[test]
+fn focused_item_diagnostics_returns_meta() {
+    script_kit_gpui::mcp_resources::clear_focused_item();
+
+    let scripts: Vec<std::sync::Arc<script_kit_gpui::scripts::Script>> = Vec::new();
+    let scriptlets: Vec<std::sync::Arc<script_kit_gpui::scripts::Scriptlet>> = Vec::new();
+
+    let content = script_kit_gpui::mcp_resources::read_resource(
+        "kit://focused-item?diagnostics=1",
+        &scripts,
+        &scriptlets,
+        None,
+    )
+    .expect("diagnostics should resolve");
+
+    let value: serde_json::Value =
+        serde_json::from_str(&content.text).expect("must be valid JSON");
+    assert_eq!(value["kind"], "focused_item_diagnostics");
+    assert!(value["meta"]["durationMs"].is_number());
+    assert_eq!(value["meta"]["hasFocusedItem"], false);
+    assert!(value["meta"]["warningCount"].as_u64().unwrap_or(0) > 0);
 }

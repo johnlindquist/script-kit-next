@@ -87,6 +87,7 @@ mod tests {
                 used_fallback: false,
             }),
             focused_window_image: None,
+            script_kit_panel_image: None,
             warnings: Vec::new(),
         };
 

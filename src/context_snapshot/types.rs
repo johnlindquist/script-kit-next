@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 /// Schema version for `AiContextSnapshot`. Bump when adding/removing/renaming fields.
-pub const AI_CONTEXT_SNAPSHOT_SCHEMA_VERSION: u32 = 3;
+pub const AI_CONTEXT_SNAPSHOT_SCHEMA_VERSION: u32 = 4;
 
 /// Options controlling which context sections are captured.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -16,6 +16,10 @@ pub struct CaptureContextOptions {
     /// Off by default to keep `kit://context` responses lightweight.
     #[serde(default)]
     pub include_screenshot: bool,
+    /// When true, capture Script Kit's own visible panel as a second base64 PNG.
+    /// Off by default; only the `tab_ai()` profile enables this.
+    #[serde(default)]
+    pub include_panel_screenshot: bool,
 }
 
 impl CaptureContextOptions {
@@ -29,6 +33,7 @@ impl CaptureContextOptions {
             include_browser_url: true,
             include_focused_window: true,
             include_screenshot: false,
+            include_panel_screenshot: false,
         }
     }
 
@@ -46,6 +51,7 @@ impl CaptureContextOptions {
             include_browser_url: true,
             include_focused_window: false,
             include_screenshot: false,
+            include_panel_screenshot: false,
         }
     }
 
@@ -59,6 +65,7 @@ impl CaptureContextOptions {
             include_browser_url: true,
             include_focused_window: true,
             include_screenshot: false,
+            include_panel_screenshot: false,
         }
     }
 
@@ -72,6 +79,7 @@ impl CaptureContextOptions {
             include_browser_url: true,
             include_focused_window: true,
             include_screenshot: true,
+            include_panel_screenshot: true,
         }
     }
 }
@@ -112,6 +120,9 @@ pub struct AiContextSnapshot {
     /// Base64 PNG of the focused window, present only when `include_screenshot` is enabled.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub focused_window_image: Option<Base64PngContext>,
+    /// Base64 PNG of Script Kit's own panel, present only when `include_panel_screenshot` is enabled.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub script_kit_panel_image: Option<Base64PngContext>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub warnings: Vec<String>,
 }
@@ -126,6 +137,7 @@ impl Default for AiContextSnapshot {
             browser: None,
             focused_window: None,
             focused_window_image: None,
+            script_kit_panel_image: None,
             warnings: Vec::new(),
         }
     }

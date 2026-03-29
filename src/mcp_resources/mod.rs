@@ -144,7 +144,7 @@ pub fn get_resource_definitions() -> Vec<McpResource> {
             uri: "kit://context".to_string(),
             name: "Current Context".to_string(),
             description: Some(
-                "Deterministic snapshot of AI-relevant desktop context. Supports ?profile=minimal, ?diagnostics=1, and per-field flags: selectedText, frontmostApp, menuBar, browserUrl, focusedWindow, screenshot. See kit://context/schema for the full contract."
+                "Deterministic snapshot of AI-relevant desktop context. Supports ?profile=minimal, ?diagnostics=1, and per-field flags: selectedText, frontmostApp, menuBar, browserUrl, focusedWindow, screenshot, panelScreenshot. See kit://context/schema for the full contract."
                     .to_string(),
             ),
             mime_type: "application/json".to_string(),
@@ -185,6 +185,24 @@ pub fn get_resource_definitions() -> Vec<McpResource> {
             ),
             mime_type: "application/json".to_string(),
         },
+        McpResource {
+            uri: "kit://clipboard-history".to_string(),
+            name: "Clipboard History".to_string(),
+            description: Some(
+                "Most recent clipboard entries in newest-first order with content type, preview, OCR text, timestamps, and image dimensions. Supports ?limit=N (default 10) and ?diagnostics=1."
+                    .to_string(),
+            ),
+            mime_type: "application/json".to_string(),
+        },
+        McpResource {
+            uri: "kit://focused-item".to_string(),
+            name: "Focused Item".to_string(),
+            description: Some(
+                "Precise focused or selected item metadata for the active surface. Includes source, kind, semantic ID, label, and surface-specific metadata. Supports ?diagnostics=1."
+                    .to_string(),
+            ),
+            mime_type: "application/json".to_string(),
+        },
     ];
     resources.extend(transaction_resources::transaction_resource_definitions());
     resources
@@ -219,6 +237,12 @@ pub fn read_resource(
             || uri.starts_with("kit://context/schema?") =>
         {
             read_context_resource(uri)
+        }
+        _ if uri == "kit://clipboard-history" || uri.starts_with("kit://clipboard-history?") => {
+            read_clipboard_history_resource(uri)
+        }
+        _ if uri == "kit://focused-item" || uri.starts_with("kit://focused-item?") => {
+            read_focused_item_resource(uri)
         }
         _ if transaction_resources::is_transaction_resource_uri(uri) => {
             transaction_resources::read_transaction_resource(uri)
@@ -280,6 +304,12 @@ fn read_scriptlets_resource(scriptlets: &[Arc<Scriptlet>]) -> Result<ResourceCon
 // Schema-versioned script/scriptlet/sdk-reference resources
 // ---------------------------------------------------------------
 
+/// Schema version for the `kit://clipboard-history` resource envelope.
+pub const CLIPBOARD_HISTORY_RESOURCE_SCHEMA_VERSION: u32 = 1;
+
+/// Schema version for the `kit://focused-item` resource envelope.
+pub const FOCUSED_ITEM_RESOURCE_SCHEMA_VERSION: u32 = 1;
+
 /// Schema version for the `kit://scripts` resource envelope.
 pub const SCRIPTS_RESOURCE_SCHEMA_VERSION: u32 = 1;
 
@@ -287,7 +317,8 @@ pub const SCRIPTS_RESOURCE_SCHEMA_VERSION: u32 = 1;
 pub const SCRIPTLETS_RESOURCE_SCHEMA_VERSION: u32 = 1;
 
 /// Schema version for the `kit://sdk-reference` resource.
-pub const SDK_REFERENCE_SCHEMA_VERSION: u32 = 1;
+/// Bumped to 2: added `harnessWorkflow` field with test paths and execution bridge.
+pub const SDK_REFERENCE_SCHEMA_VERSION: u32 = 2;
 
 /// Schema-versioned envelope for script metadata.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -317,6 +348,31 @@ pub struct SdkFunctionRef {
     pub category: String,
 }
 
+/// Describes how a harness can create and run scripts non-interactively.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct HarnessWorkflow {
+    /// Dedicated directory for test/temp scripts that won't pollute the user's
+    /// main `~/.scriptkit/scripts/` collection.
+    pub test_script_directory: String,
+    /// Dedicated directory for test scriptlet extension files.
+    pub test_scriptlet_directory: String,
+    /// Shell command to execute a script non-interactively.
+    /// The harness replaces `{path}` with the absolute script path.
+    pub run_command: String,
+    /// JSONL message the app sends to its stdin to trigger a script run.
+    /// Harnesses that communicate over the stdin bridge use this shape.
+    pub stdin_run_message: String,
+    /// Shape of a successful execution result on stdout (JSONL).
+    pub success_output_shape: String,
+    /// Shape of an error execution result on stdout (JSONL).
+    pub error_output_shape: String,
+    /// Example minimal test script content (TypeScript).
+    pub example_test_script: String,
+    /// Example scriptlet (Markdown) content.
+    pub example_scriptlet: String,
+}
+
 /// Schema-versioned SDK reference document.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -327,6 +383,104 @@ pub struct SdkReferenceDocument {
     pub scriptlet_pattern: String,
     pub metadata_format: String,
     pub functions: Vec<SdkFunctionRef>,
+    /// Non-interactive workflow for harness-driven script creation and execution.
+    pub harness_workflow: HarnessWorkflow,
+}
+
+// ---------------------------------------------------------------
+// Clipboard history resource types
+// ---------------------------------------------------------------
+
+/// A single clipboard history entry in the MCP resource.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ClipboardHistoryEntry {
+    pub id: String,
+    pub content_type: String,
+    pub timestamp: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub text_preview: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ocr_text: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub image_width: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub image_height: Option<u32>,
+    pub pinned: bool,
+}
+
+/// Schema-versioned envelope for clipboard history.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ClipboardHistoryDocument {
+    pub schema_version: u32,
+    pub count: usize,
+    pub entries: Vec<ClipboardHistoryEntry>,
+}
+
+/// Diagnostics wrapper for clipboard history.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+struct ClipboardHistoryDiagnosticsDocument {
+    kind: &'static str,
+    uri: String,
+    document: ClipboardHistoryDocument,
+    meta: ClipboardHistoryDiagnosticsMeta,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+struct ClipboardHistoryDiagnosticsMeta {
+    duration_ms: u128,
+    entry_count: usize,
+    source: &'static str,
+}
+
+// ---------------------------------------------------------------
+// Focused item resource types
+// ---------------------------------------------------------------
+
+/// The focused/selected item from the active surface.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct FocusedItemInfo {
+    pub source: String,
+    pub kind: String,
+    pub semantic_id: String,
+    pub label: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<serde_json::Value>,
+}
+
+/// Schema-versioned envelope for focused item.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct FocusedItemDocument {
+    pub schema_version: u32,
+    pub has_focused_item: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub focused_item: Option<FocusedItemInfo>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub warnings: Vec<String>,
+}
+
+/// Diagnostics wrapper for focused item.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+struct FocusedItemDiagnosticsDocument {
+    kind: &'static str,
+    uri: String,
+    document: FocusedItemDocument,
+    meta: FocusedItemDiagnosticsMeta,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+struct FocusedItemDiagnosticsMeta {
+    duration_ms: u128,
+    has_focused_item: bool,
+    warning_count: usize,
+    source: String,
 }
 
 fn build_sdk_function_refs() -> Vec<SdkFunctionRef> {
@@ -438,6 +592,36 @@ fn build_sdk_reference_document() -> SdkReferenceDocument {
         scriptlet_pattern: "~/.scriptkit/kit/*/extensions/*.md".into(),
         metadata_format: "// Name: My Script\n// Description: What it does\n// Shortcut: opt i".into(),
         functions: build_sdk_function_refs(),
+        harness_workflow: build_harness_workflow(),
+    }
+}
+
+fn build_harness_workflow() -> HarnessWorkflow {
+    HarnessWorkflow {
+        test_script_directory: "~/.scriptkit/tmp/test-scripts/".into(),
+        test_scriptlet_directory: "~/.scriptkit/tmp/test-scriptlets/".into(),
+        run_command: "echo '{\"type\":\"run\",\"path\":\"{path}\"}' | ./target/debug/script-kit-gpui".into(),
+        stdin_run_message: r#"{"type":"run","path":"/absolute/path/to/script.ts"}"#.into(),
+        success_output_shape: "No dedicated success envelope is emitted for stdin `run`; successful scripts communicate through their normal stdout JSONL protocol and app logs.".into(),
+        error_output_shape: "No dedicated error envelope is emitted for stdin `run`; failures surface through script error protocol messages, app logs, and HUD/toast feedback.".into(),
+        example_test_script: concat!(
+            "// Name: Harness Test\n",
+            "// Description: Automated test script\n",
+            "\n",
+            "import \"@johnlindquist/kit\";\n",
+            "\n",
+            "const result = await arg(\"Pick one\", [\"a\", \"b\", \"c\"]);\n",
+            "console.log(result);\n",
+        ).into(),
+        example_scriptlet: concat!(
+            "## Copy Date\n",
+            "\n",
+            "```js\n",
+            "// Shortcut: opt d\n",
+            "// Description: Copy today's date\n",
+            "await copy(new Date().toISOString().slice(0, 10));\n",
+            "```\n",
+        ).into(),
     }
 }
 
@@ -492,6 +676,209 @@ fn read_sdk_reference_resource() -> Result<ResourceContent, String> {
         text: json,
     })
 }
+// ---------------------------------------------------------------
+// Clipboard history resource
+// ---------------------------------------------------------------
+
+/// Default limit for clipboard history entries returned.
+const CLIPBOARD_HISTORY_DEFAULT_LIMIT: usize = 10;
+
+/// Maximum limit for clipboard history entries.
+const CLIPBOARD_HISTORY_MAX_LIMIT: usize = 50;
+
+fn parse_clipboard_history_request(uri: &str) -> Result<(usize, bool), String> {
+    if uri == "kit://clipboard-history" {
+        return Ok((CLIPBOARD_HISTORY_DEFAULT_LIMIT, false));
+    }
+
+    let (_base, query) = uri
+        .split_once('?')
+        .ok_or_else(|| format!("Resource not found: {uri}"))?;
+
+    let mut limit = CLIPBOARD_HISTORY_DEFAULT_LIMIT;
+    let mut diagnostics = false;
+
+    for pair in query.split('&').filter(|p| !p.is_empty()) {
+        let (key, value) = pair.split_once('=').unwrap_or((pair, "1"));
+        match key {
+            "limit" => {
+                limit = value
+                    .parse::<usize>()
+                    .map_err(|_| format!("Invalid limit value: {value}. Expected a positive integer."))?
+                    .min(CLIPBOARD_HISTORY_MAX_LIMIT);
+            }
+            "diagnostics" => diagnostics = parse_bool_param(value)?,
+            _ => {
+                return Err(format!(
+                    "Invalid kit://clipboard-history parameter: {key}. Supported parameters: limit, diagnostics."
+                ));
+            }
+        }
+    }
+
+    Ok((limit, diagnostics))
+}
+
+fn read_clipboard_history_entries(limit: usize) -> Vec<ClipboardHistoryEntry> {
+    let cached = crate::clipboard_history::get_cached_entries(limit);
+    cached
+        .into_iter()
+        .map(|entry| ClipboardHistoryEntry {
+            id: entry.id,
+            content_type: entry.content_type.as_str().to_string(),
+            timestamp: entry.timestamp,
+            text_preview: if entry.text_preview.is_empty() || entry.text_preview == "[Image]" {
+                None
+            } else {
+                Some(entry.text_preview)
+            },
+            ocr_text: entry.ocr_text,
+            image_width: entry.image_width,
+            image_height: entry.image_height,
+            pinned: entry.pinned,
+        })
+        .collect()
+}
+
+/// Read kit://clipboard-history resource
+fn read_clipboard_history_resource(uri: &str) -> Result<ResourceContent, String> {
+    let (limit, diagnostics) = parse_clipboard_history_request(uri)?;
+
+    let started = Instant::now();
+    let entries = read_clipboard_history_entries(limit);
+    let duration_ms = started.elapsed().as_millis();
+
+    let doc = ClipboardHistoryDocument {
+        schema_version: CLIPBOARD_HISTORY_RESOURCE_SCHEMA_VERSION,
+        count: entries.len(),
+        entries,
+    };
+
+    let json = if diagnostics {
+        let diag = ClipboardHistoryDiagnosticsDocument {
+            kind: "clipboard_history_diagnostics",
+            uri: uri.to_string(),
+            meta: ClipboardHistoryDiagnosticsMeta {
+                duration_ms,
+                entry_count: doc.count,
+                source: "cached_entries",
+            },
+            document: doc,
+        };
+        serde_json::to_string_pretty(&diag)
+            .map_err(|e| format!("Failed to serialize clipboard history diagnostics: {e}"))?
+    } else {
+        serde_json::to_string_pretty(&doc)
+            .map_err(|e| format!("Failed to serialize clipboard history: {e}"))?
+    };
+
+    Ok(ResourceContent {
+        uri: uri.to_string(),
+        mime_type: "application/json".to_string(),
+        text: json,
+    })
+}
+
+// ---------------------------------------------------------------
+// Focused item resource
+// ---------------------------------------------------------------
+
+fn parse_focused_item_request(uri: &str) -> Result<bool, String> {
+    if uri == "kit://focused-item" {
+        return Ok(false);
+    }
+
+    let (_base, query) = uri
+        .split_once('?')
+        .ok_or_else(|| format!("Resource not found: {uri}"))?;
+
+    let mut diagnostics = false;
+
+    for pair in query.split('&').filter(|p| !p.is_empty()) {
+        let (key, value) = pair.split_once('=').unwrap_or((pair, "1"));
+        match key {
+            "diagnostics" => diagnostics = parse_bool_param(value)?,
+            _ => {
+                return Err(format!(
+                    "Invalid kit://focused-item parameter: {key}. Supported parameters: diagnostics."
+                ));
+            }
+        }
+    }
+
+    Ok(diagnostics)
+}
+
+/// Read the focused item from the global focused-item slot.
+///
+/// The slot is populated by surfaces (e.g., Tab AI orchestration) when they
+/// resolve the focused/selected item. Outside of those flows, the slot is empty
+/// and the resource returns `hasFocusedItem: false`.
+fn read_focused_item_data() -> (Option<FocusedItemInfo>, Vec<String>) {
+    let guard = FOCUSED_ITEM_SLOT.lock();
+    match guard.as_ref() {
+        Some(item) => (Some(item.clone()), Vec::new()),
+        None => (None, vec!["no_active_surface: No surface has published a focused item.".to_string()]),
+    }
+}
+
+/// Read kit://focused-item resource
+fn read_focused_item_resource(uri: &str) -> Result<ResourceContent, String> {
+    let diagnostics = parse_focused_item_request(uri)?;
+
+    let started = Instant::now();
+    let (focused_item, warnings) = read_focused_item_data();
+    let duration_ms = started.elapsed().as_millis();
+
+    let doc = FocusedItemDocument {
+        schema_version: FOCUSED_ITEM_RESOURCE_SCHEMA_VERSION,
+        has_focused_item: focused_item.is_some(),
+        focused_item,
+        warnings: warnings.clone(),
+    };
+
+    let json = if diagnostics {
+        let diag = FocusedItemDiagnosticsDocument {
+            kind: "focused_item_diagnostics",
+            uri: uri.to_string(),
+            meta: FocusedItemDiagnosticsMeta {
+                duration_ms,
+                has_focused_item: doc.has_focused_item,
+                warning_count: warnings.len(),
+                source: "focused_item_slot".to_string(),
+            },
+            document: doc,
+        };
+        serde_json::to_string_pretty(&diag)
+            .map_err(|e| format!("Failed to serialize focused item diagnostics: {e}"))?
+    } else {
+        serde_json::to_string_pretty(&doc)
+            .map_err(|e| format!("Failed to serialize focused item: {e}"))?
+    };
+
+    Ok(ResourceContent {
+        uri: uri.to_string(),
+        mime_type: "application/json".to_string(),
+        text: json,
+    })
+}
+
+/// Global slot for the currently focused item, populated by surface resolvers.
+static FOCUSED_ITEM_SLOT: parking_lot::Mutex<Option<FocusedItemInfo>> =
+    parking_lot::Mutex::new(None);
+
+/// Publish a focused item to the global slot so `kit://focused-item` can serve it.
+#[allow(dead_code)] // Public API surface — called by Tab AI orchestration at runtime
+pub fn publish_focused_item(item: FocusedItemInfo) {
+    *FOCUSED_ITEM_SLOT.lock() = Some(item);
+}
+
+/// Clear the focused item slot (e.g., when the surface is dismissed).
+#[allow(dead_code)] // Public API surface — called when surfaces are dismissed at runtime
+pub fn clear_focused_item() {
+    *FOCUSED_ITEM_SLOT.lock() = None;
+}
+
 /// Convert resource content to JSON-RPC result format
 pub fn resource_content_to_value(content: ResourceContent) -> Value {
     serde_json::json!({
@@ -624,7 +1011,9 @@ fn supported_context_examples() -> Vec<&'static str> {
         "kit://context?profile=minimal&diagnostics=1",
         "kit://context?selectedText=0&browserUrl=1&focusedWindow=1",
         "kit://context?screenshot=1",
-        "kit://context?screenshot=1&diagnostics=1",
+        "kit://context?panelScreenshot=1",
+        "kit://context?screenshot=1&panelScreenshot=1",
+        "kit://context?screenshot=1&panelScreenshot=1&diagnostics=1",
         "kit://context/schema",
     ]
 }
@@ -639,6 +1028,7 @@ fn supported_context_param_names() -> &'static [&'static str] {
         "browserUrl",
         "focusedWindow",
         "screenshot",
+        "panelScreenshot",
     ]
 }
 
@@ -742,6 +1132,10 @@ fn parse_context_resource_request(uri: &str) -> Result<ContextResourceRequest, S
                 options.include_screenshot = parse_bool_param(v)?;
                 saw_override = true;
             }
+            ("panelScreenshot", v) => {
+                options.include_panel_screenshot = parse_bool_param(v)?;
+                saw_override = true;
+            }
             _ => return Err(invalid_context_param(key, value)),
         }
     }
@@ -835,6 +1229,13 @@ fn build_context_schema_document() -> ContextSchemaDocument {
                 default_value: "false",
                 allowed_values: vec!["1", "0", "true", "false"],
             },
+            ContextParameterDescriptor {
+                name: "panelScreenshot",
+                value_type: "boolean",
+                description: "Include Script Kit's visible panel screenshot as base64 PNG in scriptKitPanelImage.",
+                default_value: "false",
+                allowed_values: vec!["1", "0", "true", "false"],
+            },
         ],
         examples: supported_context_examples(),
     }
@@ -848,6 +1249,7 @@ fn context_warning_code(field: &str) -> &'static str {
         "browserUrl" => "browser_url_capture_failed",
         "focusedWindow" => "focused_window_capture_failed",
         "screenshot" => "screenshot_capture_failed",
+        "panelScreenshot" => "panel_screenshot_capture_failed",
         _ => "capture_failed",
     }
 }
@@ -931,6 +1333,12 @@ fn build_context_field_statuses(
             snapshot.focused_window_image.is_some(),
             warnings_by_field,
         ),
+        build_context_field_status(
+            "panelScreenshot",
+            options.include_panel_screenshot,
+            snapshot.script_kit_panel_image.is_some(),
+            warnings_by_field,
+        ),
     ]
 }
 
@@ -959,6 +1367,7 @@ fn build_context_diagnostics_document(
         request.options.include_browser_url,
         request.options.include_focused_window,
         request.options.include_screenshot,
+        request.options.include_panel_screenshot,
     ]
     .into_iter()
     .filter(|enabled| *enabled)
@@ -1148,7 +1557,7 @@ mod tests {
         // REQUIREMENT: resources/list returns all three resources
         let resources = get_resource_definitions();
 
-        assert_eq!(resources.len(), 10, "Should have exactly 10 resources");
+        assert_eq!(resources.len(), 12, "Should have exactly 12 resources");
 
         let uris: Vec<&str> = resources.iter().map(|r| r.uri.as_str()).collect();
         assert!(uris.contains(&"kit://state"), "Should include kit://state");
@@ -1336,7 +1745,7 @@ mod tests {
         assert!(resource_array.is_some());
 
         let resource_array = resource_array.unwrap();
-        assert_eq!(resource_array.len(), 10);
+        assert_eq!(resource_array.len(), 12);
 
         // First resource should have expected fields
         let first = &resource_array[0];
@@ -1769,5 +2178,231 @@ mod tests {
         let json = serde_json::to_string(&doc).expect("serialize");
         let parsed: SdkReferenceDocument = serde_json::from_str(&json).expect("deserialize");
         assert_eq!(doc, parsed);
+    }
+
+    #[test]
+    fn parse_context_request_accepts_panel_screenshot_flag() {
+        let request = parse_context_resource_request(
+            "kit://context?screenshot=1&panelScreenshot=1&diagnostics=1",
+        )
+        .expect("request");
+        assert!(request.options.include_screenshot);
+        assert!(request.options.include_panel_screenshot);
+        assert!(request.diagnostics);
+    }
+
+    #[test]
+    fn diagnostics_surface_reports_panel_screenshot_state() {
+        let request = parse_context_resource_request(
+            "kit://context?panelScreenshot=1&diagnostics=1",
+        )
+        .expect("request");
+
+        let snapshot = crate::context_snapshot::AiContextSnapshot {
+            schema_version: crate::context_snapshot::AI_CONTEXT_SNAPSHOT_SCHEMA_VERSION,
+            script_kit_panel_image: Some(crate::context_snapshot::Base64PngContext {
+                mime_type: "image/png".to_string(),
+                width: 700,
+                height: 520,
+                base64_data: "cGFuZWw=".to_string(),
+                title: Some("Script Kit - Clipboard History".to_string()),
+            }),
+            ..Default::default()
+        };
+
+        let doc = build_context_diagnostics_document(
+            "kit://context?panelScreenshot=1&diagnostics=1",
+            &request,
+            &snapshot,
+            1,
+        );
+        assert!(
+            doc.meta
+                .field_statuses
+                .iter()
+                .any(|field| field.field == "panelScreenshot"
+                    && field.enabled
+                    && field.present
+                    && matches!(field.state, ContextFieldCaptureState::Captured))
+        );
+    }
+
+    #[test]
+    fn schema_document_includes_panel_screenshot_parameter() {
+        let schema = build_context_schema_document();
+        assert!(
+            schema.parameters.iter().any(|p| p.name == "panelScreenshot"),
+            "schema must list panelScreenshot parameter"
+        );
+    }
+
+    // =======================================================
+    // Clipboard history resource tests
+    // =======================================================
+
+    #[test]
+    fn clipboard_history_resource_is_listed() {
+        let resources = get_resource_definitions();
+        assert!(
+            resources.iter().any(|r| r.uri == "kit://clipboard-history"),
+            "kit://clipboard-history should be in resource definitions"
+        );
+    }
+
+    #[test]
+    fn clipboard_history_resource_resolves_with_valid_schema() {
+        let content = read_resource("kit://clipboard-history", &[], &[], None)
+            .expect("should resolve");
+        assert_eq!(content.uri, "kit://clipboard-history");
+        assert_eq!(content.mime_type, "application/json");
+
+        let doc: ClipboardHistoryDocument =
+            serde_json::from_str(&content.text).expect("valid JSON");
+        assert_eq!(doc.schema_version, CLIPBOARD_HISTORY_RESOURCE_SCHEMA_VERSION);
+        assert_eq!(doc.count, doc.entries.len());
+    }
+
+    #[test]
+    fn clipboard_history_parse_accepts_limit_param() {
+        let (limit, diagnostics) =
+            parse_clipboard_history_request("kit://clipboard-history?limit=5").unwrap();
+        assert_eq!(limit, 5);
+        assert!(!diagnostics);
+    }
+
+    #[test]
+    fn clipboard_history_parse_clamps_limit_to_max() {
+        let (limit, _) =
+            parse_clipboard_history_request("kit://clipboard-history?limit=999").unwrap();
+        assert_eq!(limit, CLIPBOARD_HISTORY_MAX_LIMIT);
+    }
+
+    #[test]
+    fn clipboard_history_parse_rejects_unknown_param() {
+        let err =
+            parse_clipboard_history_request("kit://clipboard-history?foo=1").unwrap_err();
+        assert!(err.contains("Invalid kit://clipboard-history parameter"));
+    }
+
+    #[test]
+    fn clipboard_history_diagnostics_returns_wrapper() {
+        let content =
+            read_resource("kit://clipboard-history?diagnostics=1", &[], &[], None)
+                .expect("should resolve");
+
+        let value: serde_json::Value =
+            serde_json::from_str(&content.text).expect("valid JSON");
+        assert_eq!(value["kind"], "clipboard_history_diagnostics");
+        assert_eq!(value["document"]["schemaVersion"], CLIPBOARD_HISTORY_RESOURCE_SCHEMA_VERSION);
+        assert_eq!(value["meta"]["source"], "cached_entries");
+    }
+
+    #[test]
+    fn clipboard_history_entry_serialization_roundtrip() {
+        let entry = ClipboardHistoryEntry {
+            id: "abc-123".to_string(),
+            content_type: "text".to_string(),
+            timestamp: 1711700000,
+            text_preview: Some("Hello world".to_string()),
+            ocr_text: None,
+            image_width: None,
+            image_height: None,
+            pinned: false,
+        };
+        let json = serde_json::to_string(&entry).expect("serialize");
+        let parsed: ClipboardHistoryEntry = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(entry, parsed);
+    }
+
+    // =======================================================
+    // Focused item resource tests
+    // =======================================================
+
+    #[test]
+    fn focused_item_resource_is_listed() {
+        let resources = get_resource_definitions();
+        assert!(
+            resources.iter().any(|r| r.uri == "kit://focused-item"),
+            "kit://focused-item should be in resource definitions"
+        );
+    }
+
+    #[test]
+    fn focused_item_resource_returns_empty_when_no_slot() {
+        // Ensure slot is clear
+        clear_focused_item();
+
+        let content = read_resource("kit://focused-item", &[], &[], None)
+            .expect("should resolve");
+        assert_eq!(content.uri, "kit://focused-item");
+
+        let doc: FocusedItemDocument =
+            serde_json::from_str(&content.text).expect("valid JSON");
+        assert_eq!(doc.schema_version, FOCUSED_ITEM_RESOURCE_SCHEMA_VERSION);
+        assert!(!doc.has_focused_item);
+        assert!(doc.focused_item.is_none());
+        assert!(!doc.warnings.is_empty(), "should have a warning when no item");
+    }
+
+    #[test]
+    fn focused_item_resource_returns_published_item() {
+        publish_focused_item(FocusedItemInfo {
+            source: "ClipboardHistory".to_string(),
+            kind: "clipboard_entry".to_string(),
+            semantic_id: "choice:0:hello".to_string(),
+            label: "hello world".to_string(),
+            metadata: Some(serde_json::json!({"contentType": "text"})),
+        });
+
+        let content = read_resource("kit://focused-item", &[], &[], None)
+            .expect("should resolve");
+
+        let doc: FocusedItemDocument =
+            serde_json::from_str(&content.text).expect("valid JSON");
+        assert!(doc.has_focused_item);
+        let item = doc.focused_item.expect("item present");
+        assert_eq!(item.source, "ClipboardHistory");
+        assert_eq!(item.semantic_id, "choice:0:hello");
+        assert!(doc.warnings.is_empty());
+
+        // Clean up
+        clear_focused_item();
+    }
+
+    #[test]
+    fn focused_item_parse_rejects_unknown_param() {
+        let err = parse_focused_item_request("kit://focused-item?foo=1").unwrap_err();
+        assert!(err.contains("Invalid kit://focused-item parameter"));
+    }
+
+    #[test]
+    fn focused_item_diagnostics_returns_wrapper() {
+        clear_focused_item();
+
+        let content =
+            read_resource("kit://focused-item?diagnostics=1", &[], &[], None)
+                .expect("should resolve");
+
+        let value: serde_json::Value =
+            serde_json::from_str(&content.text).expect("valid JSON");
+        assert_eq!(value["kind"], "focused_item_diagnostics");
+        assert_eq!(value["document"]["schemaVersion"], FOCUSED_ITEM_RESOURCE_SCHEMA_VERSION);
+        assert_eq!(value["meta"]["source"], "focused_item_slot");
+        assert_eq!(value["meta"]["hasFocusedItem"], false);
+        assert!(value["meta"]["warningCount"].as_u64().unwrap_or(0) > 0);
+    }
+
+    #[test]
+    fn focused_item_info_serialization_roundtrip() {
+        let item = FocusedItemInfo {
+            source: "FileSearch".to_string(),
+            kind: "file".to_string(),
+            semantic_id: "choice:2:readme".to_string(),
+            label: "README.md".to_string(),
+            metadata: Some(serde_json::json!({"path": "/tmp/README.md"})),
+        };
+        let json = serde_json::to_string(&item).expect("serialize");
+        let parsed: FocusedItemInfo = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(item, parsed);
     }
 }
