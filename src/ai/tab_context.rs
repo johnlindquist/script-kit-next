@@ -285,6 +285,14 @@ pub fn tab_ai_experience_pack_subtitle(pack: TabAiExperiencePack) -> &'static st
 
 /// Card-priority tier for an experience intent, derived from its flavor.
 ///
+// Named spotlight ranks — lower values surface first in the three-card shortlist.
+const SPOTLIGHT_CONTEXT_HERO: u8 = 0;
+const SPOTLIGHT_PATTERN_HERO: u8 = 1;
+const SPOTLIGHT_MEMORY_HERO: u8 = 2;
+const SPOTLIGHT_TEACHABLE: u8 = 3;
+const SPOTLIGHT_BATCH_HERO: u8 = 4;
+const SPOTLIGHT_FALLBACK: u8 = 10;
+
 /// Lower values surface first in the three-card shortlist.
 /// Tier 0 = differentiated fusion/batch/adaptation (Raycast cannot do these).
 /// Tier 1 = teachable/reusable command creation.
@@ -315,16 +323,36 @@ fn prioritize_tab_ai_experience_card_intents(
     indexed.into_iter().map(|(_, intent)| intent).collect()
 }
 
-/// Prioritize intents then take the top `limit` — shared helper so that
-/// truncation never happens before ranking.
+/// Prioritize intents, but reserve the first three slots for a deliberate mix:
+/// - one context-aware hero (Fusion / Adaptation / Batch)
+/// - one teachable reusable move
+/// - one generic fallback
+///
+/// After those are filled, continue with the normal sorted overflow.
 fn prioritize_then_take_tab_ai_experience_intents(
     intents: Vec<TabAiExperienceIntent>,
     limit: usize,
 ) -> Vec<TabAiExperienceIntent> {
-    prioritize_tab_ai_experience_card_intents(intents)
-        .into_iter()
-        .take(limit)
-        .collect()
+    let mut featured = Vec::new();
+    let mut overflow = Vec::new();
+    let mut seen_tier = [false; 3];
+
+    for intent in prioritize_tab_ai_experience_card_intents(intents) {
+        let tier = tab_ai_experience_card_priority(&intent) as usize;
+        if tier < seen_tier.len() && !seen_tier[tier] && featured.len() < limit {
+            seen_tier[tier] = true;
+            featured.push(intent);
+        } else {
+            overflow.push(intent);
+        }
+    }
+
+    featured.extend(
+        overflow
+            .into_iter()
+            .take(limit.saturating_sub(featured.len())),
+    );
+    featured
 }
 
 /// Build a display-ready experience spec from the current context.
@@ -430,6 +458,23 @@ fn push_unique_tab_ai_experience_with_flavor_and_rank(
     if seen.insert(key) {
         out.push(item);
     }
+}
+
+fn push_unique_tab_ai_experience_ranked(
+    out: &mut Vec<TabAiExperienceIntent>,
+    seen: &mut BTreeSet<String>,
+    label: impl Into<String>,
+    intent: impl Into<String>,
+    spotlight_rank: u8,
+) {
+    push_unique_tab_ai_experience_with_flavor_and_rank(
+        out,
+        seen,
+        label,
+        intent,
+        TabAiExperienceFlavor::Generic,
+        spotlight_rank,
+    );
 }
 
 fn focused_content_type<'a>(
@@ -543,45 +588,52 @@ pub fn build_tab_ai_experience_intents(
             }
         }
         TabAiExperiencePack::FileStudio => {
-            push_unique_tab_ai_experience_with_flavor(
+            push_unique_tab_ai_experience_with_flavor_and_rank(
+                &mut out,
+                &mut seen,
+                "Clone This Pattern",
+                "Use this file as a pattern and create the matching test, implementation, or sibling file I am probably missing.",
+                TabAiExperienceFlavor::Adaptation,
+                SPOTLIGHT_PATTERN_HERO,
+            );
+            push_unique_tab_ai_experience_with_flavor_and_rank(
                 &mut out,
                 &mut seen,
                 "Turn This Into a Tool",
                 "Turn this file and its nearby project context into a reusable Script Kit command for the repeatable task around it.",
                 TabAiExperienceFlavor::Teachable,
+                SPOTLIGHT_TEACHABLE,
             );
-            push_unique_tab_ai_experience(
-                &mut out,
-                &mut seen,
-                "Clone This Pattern",
-                "Use this file as a pattern and create the matching test, implementation, or sibling file I am probably missing.",
-            );
-            push_unique_tab_ai_experience(
+            push_unique_tab_ai_experience_ranked(
                 &mut out,
                 &mut seen,
                 "Summarize File",
                 "Summarize this file, tell me what it is for, and suggest the next edit.",
+                SPOTLIGHT_FALLBACK,
             );
         }
         TabAiExperiencePack::FolderStudio => {
-            push_unique_tab_ai_experience_with_flavor(
+            push_unique_tab_ai_experience_with_flavor_and_rank(
                 &mut out,
                 &mut seen,
                 "Spin Project Operator",
                 "Turn this folder into a reusable Script Kit project operator with the most important entrypoints and actions.",
                 TabAiExperienceFlavor::Teachable,
+                SPOTLIGHT_TEACHABLE,
             );
-            push_unique_tab_ai_experience(
+            push_unique_tab_ai_experience_ranked(
+                &mut out,
+                &mut seen,
+                "Find the Hot Path",
+                "Find the real entrypoint in this folder, the file I should open next, and the fastest command to move forward.",
+                SPOTLIGHT_FALLBACK,
+            );
+            push_unique_tab_ai_experience_ranked(
                 &mut out,
                 &mut seen,
                 "Map the Territory",
                 "Explain what this folder contains, where the real entrypoints are, and what I should open first.",
-            );
-            push_unique_tab_ai_experience(
-                &mut out,
-                &mut seen,
-                "Generate README",
-                "Generate a concise README for this folder.",
+                SPOTLIGHT_FALLBACK.saturating_add(1),
             );
         }
         TabAiExperiencePack::CommandAlchemy => {
@@ -729,7 +781,7 @@ pub fn build_tab_ai_experience_intents(
                 "Sweep Visible Files",
                 "Act on the visible files as a set, not just the selected file.",
                 TabAiExperienceFlavor::Batch,
-                2,
+                SPOTLIGHT_BATCH_HERO,
             );
         } else if all_menu_commands {
             push_unique_tab_ai_experience_with_flavor_and_rank(
@@ -738,7 +790,7 @@ pub fn build_tab_ai_experience_intents(
                 "Pick Best Command",
                 "Compare the visible current-app commands and pick the best one for my goal.",
                 TabAiExperienceFlavor::Batch,
-                2,
+                SPOTLIGHT_BATCH_HERO,
             );
         } else {
             push_unique_tab_ai_experience_with_flavor_and_rank(
@@ -747,7 +799,7 @@ pub fn build_tab_ai_experience_intents(
                 "Use Visible Items",
                 "Use the visible items on this surface, not just the selected one.",
                 TabAiExperienceFlavor::Batch,
-                2,
+                SPOTLIGHT_BATCH_HERO,
             );
         }
     }
@@ -762,7 +814,7 @@ pub fn build_tab_ai_experience_intents(
                     "Rename From Clipboard",
                     "Rename this file using the clipboard text as the source of truth.",
                     TabAiExperienceFlavor::Fusion,
-                    0,
+                    SPOTLIGHT_CONTEXT_HERO,
                 );
             }
             ("window", "link") | ("app", "link") => {
@@ -772,7 +824,7 @@ pub fn build_tab_ai_experience_intents(
                     "Send Link Here",
                     "Use the copied link in this selected app or window and continue the task.",
                     TabAiExperienceFlavor::Fusion,
-                    0,
+                    SPOTLIGHT_CONTEXT_HERO,
                 );
             }
             ("menu_command", "text") => {
@@ -782,7 +834,7 @@ pub fn build_tab_ai_experience_intents(
                     "Apply Clipboard Then Run",
                     "Use the clipboard text with this selected current-app command if it helps complete the task.",
                     TabAiExperienceFlavor::Fusion,
-                    0,
+                    SPOTLIGHT_CONTEXT_HERO,
                 );
             }
             _ => {}
@@ -800,7 +852,7 @@ pub fn build_tab_ai_experience_intents(
                 last.effective_query
             ),
             TabAiExperienceFlavor::Adaptation,
-            1,
+            SPOTLIGHT_MEMORY_HERO,
         );
     }
 
@@ -906,8 +958,8 @@ mod tab_ai_experience_tests {
         assert_eq!(spec.title, "File Studio");
         assert_eq!(spec.subtitle, "Act on the selected file in-place.");
         assert_eq!(spec.intents.len(), 3);
-        assert_eq!(spec.intents[0].label, "Turn This Into a Tool");
-        assert_eq!(spec.intents[1].label, "Clone This Pattern");
+        assert_eq!(spec.intents[0].label, "Clone This Pattern");
+        assert_eq!(spec.intents[1].label, "Turn This Into a Tool");
         assert_eq!(spec.intents[2].label, "Summarize File");
     }
 
@@ -967,13 +1019,14 @@ mod tab_ai_experience_tests {
             .expect("expected desktop experience spec");
         let labels: Vec<&str> = spec.intents.iter().map(|item| item.label.as_str()).collect();
         assert_eq!(spec.title, "Next Move");
+        // Mixed shortlist: one hero (Sweep), one teachable (Ritual), one fallback (Inspect)
         assert!(labels.contains(&"Sweep Visible Files"));
-        assert!(labels.contains(&"Continue the Thread"));
+        assert!(labels.contains(&"Make This Ritual"));
         assert_eq!(labels.len(), 3);
     }
 
     #[test]
-    fn experience_spec_promotes_prior_automation_into_top_three() {
+    fn experience_spec_mixed_shortlist_with_prior_automation() {
         let focused = target("file", "main.rs");
         let visible = vec![focused.clone()];
         let spec = build_tab_ai_experience_spec(
@@ -992,8 +1045,12 @@ mod tab_ai_experience_tests {
         )
         .expect("expected file studio experience spec");
         let labels: Vec<&str> = spec.intents.iter().map(|item| item.label.as_str()).collect();
-        assert_eq!(labels[0], "Reuse My Last Flow");
+        // Mixed shortlist picks one hero, one teachable, one fallback.
+        // Clone This Pattern (hero/adaptation) beats Reuse My Last Flow on rank.
         assert_eq!(labels.len(), 3);
+        assert_eq!(labels[0], "Clone This Pattern");
+        assert_eq!(labels[1], "Turn This Into a Tool");
+        assert_eq!(labels[2], "Summarize File");
     }
 
     fn memory(slug: &str, effective_query: &str) -> TabAiMemorySuggestion {
@@ -1022,7 +1079,7 @@ mod tab_ai_experience_tests {
     }
 
     #[test]
-    fn rich_file_context_shortlist_prefers_fusion_then_memory_then_batch() {
+    fn rich_file_context_shortlist_prefers_fusion_then_teachable_then_fallback() {
         let focused = target("file", "main.rs");
         let visible = vec![focused.clone(), target("file", "lib.rs")];
         let spec = build_tab_ai_experience_spec(
@@ -1033,9 +1090,10 @@ mod tab_ai_experience_tests {
         )
         .expect("file spec");
         let labels: Vec<&str> = spec.intents.iter().map(|item| item.label.as_str()).collect();
+        // Mixed shortlist: one hero (Rename), one teachable (Tool), one fallback (Summarize)
         assert_eq!(
             labels,
-            vec!["Rename From Clipboard", "Reuse My Last Flow", "Sweep Visible Files"]
+            vec!["Rename From Clipboard", "Turn This Into a Tool", "Summarize File"]
         );
     }
 
@@ -1060,7 +1118,7 @@ mod tab_ai_experience_tests {
         let labels: Vec<&str> = spec.intents.iter().map(|item| item.label.as_str()).collect();
         assert_eq!(
             labels,
-            vec!["Turn This Into Command", "Automate This App", "Find Right Window"]
+            vec!["Turn This Into Command", "Find Right Window", "Automate This App"]
         );
     }
 
@@ -1077,7 +1135,7 @@ mod tab_ai_experience_tests {
     }
 
     #[test]
-    fn file_studio_shortlist_prefers_tool_then_pattern() {
+    fn file_studio_shortlist_prefers_pattern_then_tool_then_fallback() {
         let focused = target("file", "main.rs");
         let visible = vec![focused.clone()];
         let spec = build_tab_ai_experience_spec(Some(&focused), &visible, None, &[])
@@ -1085,12 +1143,12 @@ mod tab_ai_experience_tests {
         let labels: Vec<&str> = spec.intents.iter().map(|item| item.label.as_str()).collect();
         assert_eq!(
             labels,
-            vec!["Turn This Into a Tool", "Clone This Pattern", "Summarize File"]
+            vec!["Clone This Pattern", "Turn This Into a Tool", "Summarize File"]
         );
     }
 
     #[test]
-    fn folder_studio_shortlist_prefers_operator_first() {
+    fn folder_studio_shortlist_prefers_operator_then_hot_path() {
         let focused = target("directory", "src");
         let visible = vec![focused.clone()];
         let spec = build_tab_ai_experience_spec(Some(&focused), &visible, None, &[])
@@ -1098,7 +1156,7 @@ mod tab_ai_experience_tests {
         let labels: Vec<&str> = spec.intents.iter().map(|item| item.label.as_str()).collect();
         assert_eq!(
             labels,
-            vec!["Spin Project Operator", "Map the Territory", "Generate README"]
+            vec!["Spin Project Operator", "Find the Hot Path", "Map the Territory"]
         );
     }
 
@@ -1106,15 +1164,108 @@ mod tab_ai_experience_tests {
     fn prior_automation_label_is_humanized() {
         let focused = target("file", "main.rs");
         let visible = vec![focused.clone()];
-        let spec = build_tab_ai_experience_spec(
+        let intents = build_tab_ai_experience_intents(
             Some(&focused),
             &visible,
             None,
             &[memory("rename-rust-module", "rename rust module")],
-        )
-        .expect("file spec");
-        let labels: Vec<&str> = spec.intents.iter().map(|item| item.label.as_str()).collect();
-        assert_eq!(labels[0], "Reuse My Last Flow");
+        );
+        let labels: Vec<&str> = intents.iter().map(|item| item.label.as_str()).collect();
+        assert!(labels.contains(&"Reuse My Last Flow"));
+    }
+}
+
+#[cfg(test)]
+mod tab_ai_experience_shortlist_tests {
+    use super::*;
+
+    fn labels(intents: &[TabAiExperienceIntent]) -> Vec<String> {
+        intents.iter().map(|intent| intent.label.clone()).collect()
+    }
+
+    #[test]
+    fn spotlight_rank_breaks_ties_inside_hero_tier() {
+        let ordered = prioritize_tab_ai_experience_card_intents(vec![
+            TabAiExperienceIntent::new("Later Hero", "later")
+                .with_flavor(TabAiExperienceFlavor::Fusion)
+                .with_spotlight_rank(2),
+            TabAiExperienceIntent::new("Sooner Hero", "sooner")
+                .with_flavor(TabAiExperienceFlavor::Fusion)
+                .with_spotlight_rank(0),
+            TabAiExperienceIntent::new("Teach It", "teach")
+                .with_flavor(TabAiExperienceFlavor::Teachable)
+                .with_spotlight_rank(0),
+        ]);
+        assert_eq!(
+            labels(&ordered),
+            vec![
+                "Sooner Hero".to_string(),
+                "Later Hero".to_string(),
+                "Teach It".to_string(),
+            ],
+        );
+    }
+
+    #[test]
+    fn shortlist_keeps_one_hero_one_teachable_one_fallback_when_available() {
+        let shortlisted = prioritize_then_take_tab_ai_experience_intents(
+            vec![
+                TabAiExperienceIntent::new("Rename From Clipboard", "rename")
+                    .with_flavor(TabAiExperienceFlavor::Fusion)
+                    .with_spotlight_rank(0),
+                TabAiExperienceIntent::new("Reuse My Last Flow", "reuse")
+                    .with_flavor(TabAiExperienceFlavor::Adaptation)
+                    .with_spotlight_rank(2),
+                TabAiExperienceIntent::new("Sweep Visible Files", "sweep")
+                    .with_flavor(TabAiExperienceFlavor::Batch)
+                    .with_spotlight_rank(4),
+                TabAiExperienceIntent::new("Turn This Into a Tool", "teach")
+                    .with_flavor(TabAiExperienceFlavor::Teachable)
+                    .with_spotlight_rank(3),
+                TabAiExperienceIntent::new("Summarize File", "summary")
+                    .with_flavor(TabAiExperienceFlavor::Generic)
+                    .with_spotlight_rank(10),
+            ],
+            3,
+        );
+        assert_eq!(
+            labels(&shortlisted),
+            vec![
+                "Rename From Clipboard".to_string(),
+                "Turn This Into a Tool".to_string(),
+                "Summarize File".to_string(),
+            ],
+        );
+    }
+
+    #[test]
+    fn shortlist_fills_remaining_slots_with_sorted_overflow() {
+        let shortlisted = prioritize_then_take_tab_ai_experience_intents(
+            vec![
+                TabAiExperienceIntent::new("Rename From Clipboard", "rename")
+                    .with_flavor(TabAiExperienceFlavor::Fusion)
+                    .with_spotlight_rank(0),
+                TabAiExperienceIntent::new("Reuse My Last Flow", "reuse")
+                    .with_flavor(TabAiExperienceFlavor::Adaptation)
+                    .with_spotlight_rank(2),
+                TabAiExperienceIntent::new("Turn This Into a Tool", "teach")
+                    .with_flavor(TabAiExperienceFlavor::Teachable)
+                    .with_spotlight_rank(3),
+                TabAiExperienceIntent::new("Summarize File", "summary")
+                    .with_flavor(TabAiExperienceFlavor::Generic)
+                    .with_spotlight_rank(10),
+            ],
+            4,
+        );
+        assert_eq!(
+            labels(&shortlisted),
+            vec![
+                "Rename From Clipboard".to_string(),
+                "Turn This Into a Tool".to_string(),
+                "Summarize File".to_string(),
+                "Reuse My Last Flow".to_string(),
+            ],
+        );
     }
 }
 
