@@ -378,7 +378,6 @@ impl ScriptListApp {
                     entity.update(cx, |this, cx| {
                         let current_selected = this.selected_index;
                         let current_hovered = this.hovered_index;
-                        let current_input_mode = this.input_mode;
 
                         if let Some(grouped_item) = grouped_items_clone.get(ix) {
                             match grouped_item {
@@ -396,9 +395,8 @@ impl ScriptListApp {
                                 GroupedListItem::Item(result_idx) => {
                                     // Regular item at 40px height (LIST_ITEM_HEIGHT)
                                     let is_selected = ix == current_selected;
-                                    // Only show hover effect when in Mouse mode to prevent dual-highlight
-                                    let is_hovered = current_hovered == Some(ix)
-                                        && current_input_mode == InputMode::Mouse;
+                                    // Hover gating is now handled by ListItem via GPUI input modality
+                                    let is_hovered = current_hovered == Some(ix);
 
                                     // Create hover handler
                                     let hover_handler = cx.listener(

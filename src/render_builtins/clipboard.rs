@@ -296,7 +296,6 @@ impl ScriptListApp {
                 .collect();
             let selected = selected_index;
             let hovered = self.hovered_index;
-            let current_input_mode = self.input_mode;
             let image_cache_for_list = image_cache.clone();
             let click_entity_handle = cx.entity().downgrade();
             let hover_entity_handle = cx.entity().downgrade();
@@ -309,7 +308,7 @@ impl ScriptListApp {
                         .map(|ix| {
                             if let Some((_, entry)) = entries_for_closure.get(ix) {
                                 let is_selected = ix == selected;
-                                let is_hovered = hovered == Some(ix) && current_input_mode == InputMode::Mouse;
+                                let is_hovered = hovered == Some(ix);
 
                                 // Get cached thumbnail for images
                                 let cached_image = if entry.content_type

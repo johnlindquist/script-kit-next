@@ -239,7 +239,6 @@ impl ScriptListApp {
 
         // Build list items
         let entity = cx.entity().downgrade();
-        let current_input_mode = self.input_mode;
         let hovered = self.hovered_index;
 
         let list_items: Vec<AnyElement> = items
@@ -247,8 +246,7 @@ impl ScriptListApp {
             .enumerate()
             .map(|(ix, item)| {
                 let is_selected = ix == selected_index;
-                let is_hovered =
-                    hovered == Some(ix) && current_input_mode == InputMode::Mouse;
+                let is_hovered = hovered == Some(ix);
                 let action = item.action.clone();
                 let entity_click = entity.clone();
                 let entity_hover = entity.clone();

@@ -311,7 +311,6 @@ impl ScriptListApp {
                 .collect();
             let selected = selected_index;
             let hovered = self.hovered_index;
-            let current_input_mode = self.input_mode;
             let click_entity_handle = cx.entity().downgrade();
             let hover_entity_handle = cx.entity().downgrade();
 
@@ -323,8 +322,7 @@ impl ScriptListApp {
                         .map(|ix| {
                             if let Some((_, process_info)) = processes_for_closure.get(ix) {
                                 let is_selected = ix == selected;
-                                let is_hovered =
-                                    hovered == Some(ix) && current_input_mode == InputMode::Mouse;
+                                let is_hovered = hovered == Some(ix);
 
                                 // Show script name as primary, PID and path as description
                                 let script_name = std::path::Path::new(&process_info.script_path)
