@@ -144,7 +144,7 @@ pub fn get_resource_definitions() -> Vec<McpResource> {
             uri: "kit://context".to_string(),
             name: "Current Context".to_string(),
             description: Some(
-                "Deterministic snapshot of AI-relevant desktop context. Supports ?profile=minimal, ?diagnostics=1, and per-field flags: selectedText, frontmostApp, menuBar, browserUrl, focusedWindow. See kit://context/schema for the full contract."
+                "Deterministic snapshot of AI-relevant desktop context. Supports ?profile=minimal, ?diagnostics=1, and per-field flags: selectedText, frontmostApp, menuBar, browserUrl, focusedWindow, screenshot. See kit://context/schema for the full contract."
                     .to_string(),
             ),
             mime_type: "application/json".to_string(),

@@ -55,7 +55,10 @@ fn full_blob() -> TabAiContextBlob {
 fn schema_version_is_current() {
     let blob = full_blob();
     assert_eq!(blob.schema_version, TAB_AI_CONTEXT_SCHEMA_VERSION);
-    assert_eq!(blob.schema_version, 3, "bump tests when schema changes");
+    assert_eq!(
+        blob.schema_version, TAB_AI_CONTEXT_SCHEMA_VERSION,
+        "bump tests when schema changes"
+    );
 }
 
 #[test]
@@ -239,7 +242,7 @@ fn tab_ai_context_blob_serializes_clipboard_and_prior_automations() {
     );
 
     let json = serde_json::to_value(&blob).expect("serialize tab ai context blob");
-    assert_eq!(json["schemaVersion"], 3);
+    assert_eq!(json["schemaVersion"], TAB_AI_CONTEXT_SCHEMA_VERSION);
     assert_eq!(json["clipboard"]["ocrText"], "Quarterly Report Final.png");
     assert_eq!(json["priorAutomations"][0]["slug"], "rename-file-kebab");
     let score = json["priorAutomations"][0]["score"]
@@ -331,7 +334,7 @@ fn tab_ai_context_blob_serializes_clipboard_history_and_window_image() {
     );
 
     let value = serde_json::to_value(&blob).expect("serialize tab ai context");
-    assert_eq!(value["schemaVersion"], 3);
+    assert_eq!(value["schemaVersion"], TAB_AI_CONTEXT_SCHEMA_VERSION);
     assert_eq!(value["clipboardHistory"][0]["fullText"], "hello");
     assert_eq!(
         value["desktop"]["focusedWindowImage"]["mimeType"],
@@ -367,6 +370,89 @@ fn desktop_snapshot_omits_screenshot_by_default() {
     let snapshot = AiContextSnapshot::default();
     let json = serde_json::to_string(&snapshot).unwrap();
     assert!(!json.contains("focusedWindowImage"));
+}
+
+#[test]
+fn tab_ai_context_blob_serializes_schema_v3_clipboard_history_and_targets() {
+    use script_kit_gpui::ai::TabAiTargetContext;
+
+    let blob = TabAiContextBlob::from_parts_with_targets(
+        TabAiUiSnapshot {
+            prompt_type: "ClipboardHistory".to_string(),
+            input_text: Some("rename this".to_string()),
+            focused_semantic_id: Some("choice:0:report".to_string()),
+            selected_semantic_id: Some("choice:0:report".to_string()),
+            visible_elements: Vec::new(),
+        },
+        Some(TabAiTargetContext {
+            source: "ClipboardHistory".to_string(),
+            kind: "clipboard_entry".to_string(),
+            semantic_id: "choice:0:report".to_string(),
+            label: "Quarterly Report Final.png".to_string(),
+            metadata: Some(serde_json::json!({
+                "id": "clip-1",
+                "contentType": "image",
+                "timestamp": 1_743_230_400_000i64,
+                "imageWidth": 640,
+                "imageHeight": 480,
+                "ocrText": "Quarterly Report Final",
+            })),
+        }),
+        vec![TabAiTargetContext {
+            source: "ClipboardHistory".to_string(),
+            kind: "clipboard_entry".to_string(),
+            semantic_id: "choice:0:report".to_string(),
+            label: "Quarterly Report Final.png".to_string(),
+            metadata: None,
+        }],
+        AiContextSnapshot {
+            frontmost_app: Some(FrontmostAppContext {
+                pid: 42,
+                bundle_id: "com.apple.finder".to_string(),
+                name: "Finder".to_string(),
+            }),
+            ..Default::default()
+        },
+        vec!["rename selected file".to_string()],
+        Some(TabAiClipboardContext {
+            content_type: "image".to_string(),
+            preview: "640\u{00d7}480 image".to_string(),
+            ocr_text: Some("Quarterly Report Final".to_string()),
+        }),
+        vec![TabAiClipboardHistoryEntry {
+            id: "clip-1".to_string(),
+            content_type: "image".to_string(),
+            timestamp: 1_743_230_400_000i64,
+            preview: "640\u{00d7}480 image".to_string(),
+            full_text: None,
+            ocr_text: Some("Quarterly Report Final".to_string()),
+            image_width: Some(640),
+            image_height: Some(480),
+        }],
+        Vec::new(),
+        "2026-03-29T07:30:00Z".to_string(),
+    );
+
+    let json = serde_json::to_value(&blob).expect("serialize context blob");
+    assert_eq!(json["schemaVersion"], TAB_AI_CONTEXT_SCHEMA_VERSION);
+    assert_eq!(json["focusedTarget"]["semanticId"], "choice:0:report");
+    assert_eq!(
+        json["focusedTarget"]["label"],
+        "Quarterly Report Final.png"
+    );
+    assert_eq!(json["focusedTarget"]["kind"], "clipboard_entry");
+    assert_eq!(json["visibleTargets"][0]["source"], "ClipboardHistory");
+    assert_eq!(json["clipboardHistory"][0]["id"], "clip-1");
+    assert_eq!(json["clipboardHistory"][0]["imageWidth"], 640);
+    assert_eq!(
+        json["clipboardHistory"][0]["ocrText"],
+        "Quarterly Report Final"
+    );
+    assert_eq!(json["clipboard"]["ocrText"], "Quarterly Report Final");
+    assert_eq!(
+        json["desktop"]["frontmostApp"]["bundleId"],
+        "com.apple.finder"
+    );
 }
 
 // ---------------------------------------------------------------------------
