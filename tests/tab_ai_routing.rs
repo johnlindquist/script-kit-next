@@ -7,7 +7,7 @@
 //! Tests in this file validate that the harness-terminal contract is the
 //! authoritative Tab AI surface.
 
-const TAB_SOURCE: &str = include_str!("../src/app_impl/startup_new_tab.rs");
+const TAB_SOURCE: &str = include_str!("../src/app_impl/startup.rs");
 const TAB_AI_MODE_SOURCE: &str = include_str!("../src/app_impl/tab_ai_mode.rs");
 const RENDER_IMPL_SOURCE: &str = include_str!("../src/main_sections/render_impl.rs");
 const SCRIPT_LIST_SOURCE: &str = include_str!("../src/render_script_list/mod.rs");
@@ -64,15 +64,15 @@ fn open_tab_ai_chat_does_not_create_tab_ai_chat_entity() {
 fn startup_routes_tab_into_harness_terminal() {
     assert!(
         TAB_SOURCE.contains("open_tab_ai_chat(cx)"),
-        "startup_new_tab.rs must call open_tab_ai_chat for universal Tab AI"
+        "startup.rs must call open_tab_ai_chat for universal Tab AI"
     );
     assert!(
         !TAB_SOURCE.contains("open_tab_ai_overlay"),
-        "startup_new_tab.rs must not reference the removed overlay opener"
+        "startup.rs must not reference the removed overlay opener"
     );
     assert!(
         !TAB_SOURCE.contains("open_tab_ai_full_view_chat"),
-        "startup_new_tab.rs must not call the legacy inline chat directly"
+        "startup.rs must not call the legacy inline chat directly"
     );
 }
 
@@ -562,6 +562,247 @@ fn implicit_target_detection_uses_public_function() {
     assert!(
         tab_context_source.contains("pub fn tab_ai_intent_uses_implicit_target("),
         "tab_ai_intent_uses_implicit_target must be a public function"
+    );
+}
+
+// =========================================================================
+// Warm startup: prewarm on startup, opt-out, and first-Tab reuse
+// =========================================================================
+
+#[test]
+fn startup_wires_prewarm_call() {
+    // The startup file must call warm_tab_ai_harness_on_startup asynchronously
+    // so the first Tab press finds a live PTY.
+    assert!(
+        TAB_SOURCE.contains("warm_tab_ai_harness_on_startup"),
+        "startup.rs must invoke warm_tab_ai_harness_on_startup"
+    );
+}
+
+#[test]
+fn startup_prewarm_runs_after_tab_interceptor() {
+    // Prewarm must be wired AFTER the Tab interceptor subscription is pushed,
+    // so the interceptor is guaranteed to be in place before the harness spawns.
+    let interceptor_push_pos = TAB_SOURCE
+        .find("gpui_input_subscriptions.push(tab_interceptor)")
+        .expect("Tab interceptor push must exist");
+    let prewarm_pos = TAB_SOURCE
+        .find("warm_tab_ai_harness_on_startup")
+        .expect("prewarm call must exist");
+
+    assert!(
+        interceptor_push_pos < prewarm_pos,
+        "prewarm must be wired after the Tab interceptor is installed"
+    );
+}
+
+#[test]
+fn startup_prewarm_is_async_and_detached() {
+    // Prewarm must not block the startup path — it should be a spawned task.
+    let prewarm_pos = TAB_SOURCE
+        .find("warm_tab_ai_harness_on_startup")
+        .expect("prewarm call must exist");
+    let after_prewarm = &TAB_SOURCE[prewarm_pos..];
+
+    assert!(
+        after_prewarm.contains(".detach()"),
+        "prewarm task must be detached so it does not block startup"
+    );
+}
+
+#[test]
+fn prewarm_checks_warm_on_startup_flag() {
+    // The warm method must respect the config's warm_on_startup field.
+    let warm_fn_start = TAB_AI_MODE_SOURCE
+        .find("fn warm_tab_ai_harness_on_startup(")
+        .expect("warm_tab_ai_harness_on_startup must exist");
+    let warm_fn_body = &TAB_AI_MODE_SOURCE[warm_fn_start..];
+    let next_fn = warm_fn_body[1..]
+        .find("\n    fn ")
+        .unwrap_or(warm_fn_body.len());
+    let warm_fn_body = &warm_fn_body[..next_fn];
+
+    assert!(
+        warm_fn_body.contains("warm_on_startup"),
+        "prewarm must check config.warm_on_startup before spawning"
+    );
+    assert!(
+        warm_fn_body.contains("\"disabled\""),
+        "prewarm must log reason=disabled when warm_on_startup is false"
+    );
+}
+
+#[test]
+fn prewarm_reuses_ensure_harness_terminal() {
+    // Prewarm must call the same session constructor that Tab uses,
+    // so the first Tab press reuses the prewarmed session.
+    let warm_fn_start = TAB_AI_MODE_SOURCE
+        .find("fn warm_tab_ai_harness_on_startup(")
+        .expect("warm_tab_ai_harness_on_startup must exist");
+    let warm_fn_body = &TAB_AI_MODE_SOURCE[warm_fn_start..];
+    let next_fn = warm_fn_body[1..]
+        .find("\n    fn ")
+        .unwrap_or(warm_fn_body.len());
+    let warm_fn_body = &warm_fn_body[..next_fn];
+
+    assert!(
+        warm_fn_body.contains("ensure_tab_ai_harness_terminal"),
+        "prewarm must call ensure_tab_ai_harness_terminal (same path as Tab)"
+    );
+}
+
+#[test]
+fn prewarm_skips_if_session_already_alive() {
+    // If a harness session is already live, prewarm should no-op.
+    let warm_fn_start = TAB_AI_MODE_SOURCE
+        .find("fn warm_tab_ai_harness_on_startup(")
+        .expect("warm_tab_ai_harness_on_startup must exist");
+    let warm_fn_body = &TAB_AI_MODE_SOURCE[warm_fn_start..];
+    let next_fn = warm_fn_body[1..]
+        .find("\n    fn ")
+        .unwrap_or(warm_fn_body.len());
+    let warm_fn_body = &warm_fn_body[..next_fn];
+
+    assert!(
+        warm_fn_body.contains("is_alive()"),
+        "prewarm must check if existing session is alive"
+    );
+    assert!(
+        warm_fn_body.contains("\"already_alive\""),
+        "prewarm must log reason=already_alive when skipping"
+    );
+}
+
+#[test]
+fn prewarm_handles_config_read_failure_silently() {
+    // If config cannot be read, prewarm must log and return — no toast, no panic.
+    let warm_fn_start = TAB_AI_MODE_SOURCE
+        .find("fn warm_tab_ai_harness_on_startup(")
+        .expect("warm_tab_ai_harness_on_startup must exist");
+    let warm_fn_body = &TAB_AI_MODE_SOURCE[warm_fn_start..];
+    let next_fn = warm_fn_body[1..]
+        .find("\n    fn ")
+        .unwrap_or(warm_fn_body.len());
+    let warm_fn_body = &warm_fn_body[..next_fn];
+
+    assert!(
+        warm_fn_body.contains("\"config_read_failed\""),
+        "prewarm must log reason=config_read_failed on I/O error"
+    );
+    // Must not contain toast/hud/user-facing error calls
+    assert!(
+        !warm_fn_body.contains("show_hud"),
+        "prewarm must NOT show HUD on config failure"
+    );
+    assert!(
+        !warm_fn_body.contains("toast_manager"),
+        "prewarm must NOT show toast on config failure"
+    );
+}
+
+#[test]
+fn prewarm_handles_invalid_config_silently() {
+    // If config is invalid (e.g. missing binary), prewarm must log and return.
+    let warm_fn_start = TAB_AI_MODE_SOURCE
+        .find("fn warm_tab_ai_harness_on_startup(")
+        .expect("warm_tab_ai_harness_on_startup must exist");
+    let warm_fn_body = &TAB_AI_MODE_SOURCE[warm_fn_start..];
+    let next_fn = warm_fn_body[1..]
+        .find("\n    fn ")
+        .unwrap_or(warm_fn_body.len());
+    let warm_fn_body = &warm_fn_body[..next_fn];
+
+    assert!(
+        warm_fn_body.contains("validate_tab_ai_harness_config"),
+        "prewarm must validate config before spawning"
+    );
+    assert!(
+        warm_fn_body.contains("\"invalid_config\""),
+        "prewarm must log reason=invalid_config on validation failure"
+    );
+}
+
+#[test]
+fn prewarm_logs_structured_events() {
+    // All prewarm paths must use tracing with structured event fields
+    // so SCRIPT_KIT_AI_LOG=1 output is machine-parseable.
+    let warm_fn_start = TAB_AI_MODE_SOURCE
+        .find("fn warm_tab_ai_harness_on_startup(")
+        .expect("warm_tab_ai_harness_on_startup must exist");
+    let warm_fn_body = &TAB_AI_MODE_SOURCE[warm_fn_start..];
+    let next_fn = warm_fn_body[1..]
+        .find("\n    fn ")
+        .unwrap_or(warm_fn_body.len());
+    let warm_fn_body = &warm_fn_body[..next_fn];
+
+    assert!(
+        warm_fn_body.contains("event = \"tab_ai_harness_prewarmed\""),
+        "success path must log event=tab_ai_harness_prewarmed"
+    );
+    assert!(
+        warm_fn_body.contains("event = \"tab_ai_harness_prewarm_failed\""),
+        "failure path must log event=tab_ai_harness_prewarm_failed"
+    );
+    assert!(
+        warm_fn_body.contains("event = \"tab_ai_harness_prewarm_skipped\""),
+        "skip paths must log event=tab_ai_harness_prewarm_skipped"
+    );
+}
+
+#[test]
+fn prewarm_does_not_switch_view() {
+    // Prewarm must be invisible to the user — no view transition.
+    let warm_fn_start = TAB_AI_MODE_SOURCE
+        .find("fn warm_tab_ai_harness_on_startup(")
+        .expect("warm_tab_ai_harness_on_startup must exist");
+    let warm_fn_body = &TAB_AI_MODE_SOURCE[warm_fn_start..];
+    let next_fn = warm_fn_body[1..]
+        .find("\n    fn ")
+        .unwrap_or(warm_fn_body.len());
+    let warm_fn_body = &warm_fn_body[..next_fn];
+
+    assert!(
+        !warm_fn_body.contains("current_view"),
+        "prewarm must NOT change current_view — it is invisible to the user"
+    );
+    assert!(
+        !warm_fn_body.contains("QuickTerminalView"),
+        "prewarm must NOT switch to QuickTerminalView"
+    );
+}
+
+#[test]
+fn harness_config_default_warm_on_startup_is_true() {
+    // The default config must have warm_on_startup=true so prewarm is opt-out.
+    let config = script_kit_gpui::ai::HarnessConfig::default();
+    assert!(
+        config.warm_on_startup,
+        "HarnessConfig::default() must have warm_on_startup=true"
+    );
+}
+
+#[test]
+fn harness_config_missing_warm_field_deserializes_as_true() {
+    // Old config files without warmOnStartup should default to true.
+    let json = r#"{"schemaVersion":1,"backend":"claudeCode","command":"claude"}"#;
+    let config: script_kit_gpui::ai::HarnessConfig =
+        serde_json::from_str(json).expect("deserialize");
+    assert!(
+        config.warm_on_startup,
+        "missing warmOnStartup must default to true"
+    );
+}
+
+#[test]
+fn harness_config_explicit_opt_out_deserializes_as_false() {
+    // Explicit "warmOnStartup": false must be respected.
+    let json =
+        r#"{"schemaVersion":1,"backend":"claudeCode","command":"claude","warmOnStartup":false}"#;
+    let config: script_kit_gpui::ai::HarnessConfig =
+        serde_json::from_str(json).expect("deserialize");
+    assert!(
+        !config.warm_on_startup,
+        "explicit warmOnStartup=false must be preserved"
     );
 }
 

@@ -780,13 +780,21 @@ impl ScriptListApp {
                                 return;
                             }
 
+                            // Never steal Tab from the harness terminal; once
+                            // QuickTerminalView is open, the terminal TUI owns
+                            // Tab navigation/completion.
+                            if matches!(this.current_view, AppView::QuickTerminalView { .. }) {
+                                cx.propagate();
+                                return;
+                            }
+
                             // Block Tab while the save-offer overlay is visible
                             if this.tab_ai_save_offer_state.is_some() {
                                 cx.stop_propagation();
                                 return;
                             }
 
-                            // Universal Tab AI: open the full-view chat
+                            // Universal Tab AI: open the harness terminal surface
                             // from any non-special surface (not FileSearch, not ChatPrompt setup)
                             if !has_shift && !this.show_actions_popup {
                                 this.open_tab_ai_chat(cx);
@@ -798,6 +806,24 @@ impl ScriptListApp {
             }
         });
         app.gpui_input_subscriptions.push(tab_interceptor);
+
+        // Prewarm the Tab AI harness asynchronously so the first Tab press
+        // reuses a live PTY instead of paying spawn cost. Runs once, silently.
+        let app_entity_for_tab_ai_warm = cx.entity().downgrade();
+        cx.spawn(async move |_this, cx| {
+            cx.background_executor()
+                .timer(std::time::Duration::from_millis(1))
+                .await;
+            let _ = cx.update(|cx| {
+                let Some(app) = app_entity_for_tab_ai_warm.upgrade() else {
+                    return;
+                };
+                app.update(cx, |this, cx| {
+                    this.warm_tab_ai_harness_on_startup(cx);
+                });
+            });
+        })
+        .detach();
 
         // Add arrow key interceptor for builtin views with Input components
         // This fires BEFORE Input component handles arrow keys, allowing list navigation

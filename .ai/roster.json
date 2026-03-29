@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-03-29T07:12:37.499Z",
+  "updatedAt": "2026-03-29T17:00:37.910Z",
   "agents": {
     "tab-ai-instant-context-a1": {
       "id": "tab-ai-instant-context-a1",
@@ -107,6 +107,98 @@
           "src/render_prompts/term.rs",
           "src/term_prompt/mod.rs",
           "src/terminal/alacritty/handle_creation.rs"
+        ]
+      },
+      "claimed_at": {}
+    },
+    "remove-legacy-tab-ai-a1": {
+      "id": "remove-legacy-tab-ai-a1",
+      "kind": "codex",
+      "mode": "exec",
+      "model": "openai/gpt-5.4",
+      "task": "Remove all dead/legacy TabAiChat code from the codebase. The Tab AI surface was pivoted from an inline chat (TabAiChat) to a harness terminal (QuickTerminalView) in commit 97a4b505. The legacy code is now dead and must be fully excised.\n\nWHAT TO REMOVE:\n1. In src/app_impl/tab_ai_mode.rs: delete open_tab_ai_full_view_chat(), build_tab_ai_context_cards(), resolve_tab_ai_clipboard_context(), submit_tab_ai_chat_with_intent(), submit_tab_ai_chat(), handle_tab_ai_chat_key_down(), close_tab_ai_chat(), and any helper only used by those functions. Remove the 'Legacy full-view chat submission path' comment block added in 97a4b505.\n2. In src/main_sections/app_view_state.rs: delete the TabAiChat variant from AppView enum, delete the TabAiChat struct and all its impl blocks (Render, Focusable, new(), current_intent(), selected_suggestion(), move_selected_suggestion(), restore_target(), etc.), delete FocusTarget::TabAiChat variant.\n3. In src/main_sections/app_state.rs: delete the tab_ai_task field.\n4. In src/main_sections/render_impl.rs: delete the AppView::TabAiChat match arm in the render dispatch.\n5. In src/ai/mod.rs: remove re-exports of deleted types (TabAiChat if exported).\n6. In src/app_impl/startup_new_tab.rs: remove the 'Block Tab while the legacy inline chat is open' guard that matches AppView::TabAiChat.\n7. In tests/tab_ai_routing.rs: remove tests that reference deleted code (legacy_inline_chat_retained_but_not_primary, legacy_close_tab_ai_chat_still_exists, legacy_tab_ai_chat_stores_preview_desktop_snapshot, escape_in_tab_ai_chat_calls_close, close_tab_ai_chat_restores_return_view_and_focus, empty_input_enter_submits_selected_suggestion, up_down_arrows_cycle_suggestions_on_empty_input, submit_rejects_implicit_target_intent_without_focused_target, open_captures_preview_once_and_passes_to_entity, tab_ai_chat_stores_preview_desktop_snapshot, submit_uses_stored_preview_snapshot_not_recapture). Also remove any include_str constants that are no longer referenced.\n8. Chase ALL compile errors from removed types/variants — every match arm, every field access, every import. The Rust compiler will tell you what's broken.\n\nKEY FILES: src/app_impl/tab_ai_mode.rs, src/main_sections/app_view_state.rs, src/main_sections/app_state.rs, src/main_sections/render_impl.rs, src/app_impl/startup_new_tab.rs, src/ai/mod.rs, tests/tab_ai_routing.rs, src/render_prompts/tab_ai_chat.rs (if exists)\n\nVERIFICATION GATE (mandatory before reporting done):\n  cargo check && cargo clippy --lib -- -D warnings && cargo nextest run --lib\nAlso run: cargo nextest run --test tab_ai_routing\n\nDO NOT remove: open_tab_ai_harness_terminal, close_tab_ai_harness_terminal, ensure_tab_ai_harness_terminal, inject_tab_ai_harness_submission, build_tab_ai_context_from, snapshot_tab_ai_ui, TabAiContextBlob, TabAiUiSnapshot, or any harness/context types. Those are the LIVE code path.\n\nIMPORTANT: This is a Rust codebase using include!() macros. Files in src/app_impl/, src/main_sections/, src/render_prompts/ share the main.rs namespace. There are no top-level use statements in those files. Read CLAUDE.md for compilation context rules.",
+      "scope": "src/app_impl/tab_ai_mode.rs,src/main_sections/app_view_state.rs,src/main_sections/app_state.rs,src/main_sections/render_impl.rs,src/app_impl/startup_new_tab.rs,src/ai/mod.rs,tests/tab_ai_routing.rs,src/render_prompts/tab_ai_chat.rs,src/render_script_list/mod.rs",
+      "readonly": false,
+      "status": "needs_split",
+      "claims": [],
+      "createdAt": "2026-03-29T16:41:26.612Z",
+      "lastSeenAt": "2026-03-29T17:00:37.910Z",
+      "host": "johns.macbook.pro.lan",
+      "startSha": "97a4b505bc7f499d403c2883d605bd375a757734",
+      "notes": "[policy] commits touch files outside declared scope",
+      "report": {
+        "schema": "opex.agent_report.v1",
+        "agentId": "remove-legacy-tab-ai-a1",
+        "taskSummary": "Removed legacy TabAiChat code and verified the harness-only Tab AI path.",
+        "tests": [
+          {
+            "cmd": "cargo check",
+            "result": "pass"
+          },
+          {
+            "cmd": "cargo clippy --lib -- -D warnings",
+            "result": "pass"
+          },
+          {
+            "cmd": "cargo nextest run --lib",
+            "result": "pass"
+          },
+          {
+            "cmd": "cargo nextest run --test tab_ai_routing",
+            "result": "pass"
+          }
+        ],
+        "changedFiles": [
+          "src/app_impl/registries_state.rs",
+          "src/app_impl/shortcuts_hud_grid.rs",
+          "src/app_impl/startup.rs",
+          "src/app_impl/startup_new_state.rs",
+          "src/app_impl/startup_new_tab.rs",
+          "src/app_impl/tab_ai_mode.rs",
+          "src/app_impl/theme_focus.rs",
+          "src/app_impl/ui_window.rs",
+          "src/app_layout/build_component_bounds.rs",
+          "src/app_layout/build_layout_info.rs",
+          "src/app_layout/collect_elements.rs",
+          "src/context_snapshot/types.rs",
+          "src/main_sections/app_state.rs",
+          "src/main_sections/app_view_state.rs",
+          "src/main_sections/render_impl.rs",
+          "src/prompt_handler/mod.rs",
+          "src/stories/mod.rs",
+          "src/stories/tab_ai_chat_stories.rs",
+          "tests/tab_ai_chat_refactor.rs",
+          "tests/tab_ai_context.rs",
+          "tests/tab_ai_execution.rs",
+          "tests/tab_ai_routing.rs"
+        ],
+        "commitCount": 1,
+        "commitShas": [
+          "3d36bb6ba2542a6a927bb53e54772bdd059c662b"
+        ],
+        "commitFiles": [
+          "src/app_impl/registries_state.rs",
+          "src/app_impl/shortcuts_hud_grid.rs",
+          "src/app_impl/startup_new_state.rs",
+          "src/app_impl/startup_new_tab.rs",
+          "src/app_impl/startup.rs",
+          "src/app_impl/tab_ai_mode.rs",
+          "src/app_impl/theme_focus.rs",
+          "src/app_impl/ui_window.rs",
+          "src/app_layout/build_component_bounds.rs",
+          "src/app_layout/build_layout_info.rs",
+          "src/app_layout/collect_elements.rs",
+          "src/context_snapshot/types.rs",
+          "src/main_sections/app_state.rs",
+          "src/main_sections/app_view_state.rs",
+          "src/main_sections/render_impl.rs",
+          "src/prompt_handler/mod.rs",
+          "src/stories/mod.rs",
+          "src/stories/tab_ai_chat_stories.rs",
+          "tests/tab_ai_chat_refactor.rs",
+          "tests/tab_ai_context.rs",
+          "tests/tab_ai_execution.rs",
+          "tests/tab_ai_routing.rs"
         ]
       },
       "claimed_at": {}

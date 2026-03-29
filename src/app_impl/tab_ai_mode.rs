@@ -134,6 +134,69 @@ impl ScriptListApp {
         }
     }
 
+    /// Prewarm the configured harness at app startup so the first Tab press
+    /// reuses a live PTY instead of paying spawn cost.
+    ///
+    /// This must be silent: no view switch, no focus change, no toast.
+    /// User-facing errors still belong to the explicit Tab path.
+    pub(crate) fn warm_tab_ai_harness_on_startup(&mut self, cx: &mut Context<Self>) {
+        if let Some(existing) = &self.tab_ai_harness {
+            if existing.entity.read(cx).is_alive() {
+                tracing::debug!(
+                    event = "tab_ai_harness_prewarm_skipped",
+                    reason = "already_alive",
+                );
+                return;
+            }
+        }
+
+        let config = match crate::ai::read_tab_ai_harness_config() {
+            Ok(config) => config,
+            Err(error) => {
+                tracing::debug!(
+                    event = "tab_ai_harness_prewarm_skipped",
+                    reason = "config_read_failed",
+                    error = %error,
+                );
+                return;
+            }
+        };
+
+        if !config.warm_on_startup {
+            tracing::debug!(
+                event = "tab_ai_harness_prewarm_skipped",
+                reason = "disabled",
+            );
+            return;
+        }
+
+        if let Err(error) = crate::ai::validate_tab_ai_harness_config(&config) {
+            tracing::debug!(
+                event = "tab_ai_harness_prewarm_skipped",
+                reason = "invalid_config",
+                error = %error,
+            );
+            return;
+        }
+
+        match self.ensure_tab_ai_harness_terminal(cx) {
+            Ok((_entity, was_cold_start)) => {
+                tracing::info!(
+                    event = "tab_ai_harness_prewarmed",
+                    backend = ?config.backend,
+                    command = %config.command,
+                    was_cold_start,
+                );
+            }
+            Err(error) => {
+                tracing::warn!(
+                    event = "tab_ai_harness_prewarm_failed",
+                    error = %error,
+                );
+            }
+        }
+    }
+
     /// Ensure a harness terminal session exists and is alive.
     /// Returns the entity and whether this was a cold start (newly created).
     fn ensure_tab_ai_harness_terminal(

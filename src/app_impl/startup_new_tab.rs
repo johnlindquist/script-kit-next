@@ -211,3 +211,21 @@
             }
         });
         app.gpui_input_subscriptions.push(tab_interceptor);
+
+        // Prewarm the Tab AI harness asynchronously so the first Tab press
+        // reuses a live PTY instead of paying spawn cost.  Runs once, silently.
+        let app_entity_for_tab_ai_warm = cx.entity().downgrade();
+        cx.spawn(async move |_this, cx| {
+            cx.background_executor()
+                .timer(std::time::Duration::from_millis(1))
+                .await;
+            let _ = cx.update(|cx| {
+                let Some(app) = app_entity_for_tab_ai_warm.upgrade() else {
+                    return;
+                };
+                app.update(cx, |this, cx| {
+                    this.warm_tab_ai_harness_on_startup(cx);
+                });
+            });
+        })
+        .detach();

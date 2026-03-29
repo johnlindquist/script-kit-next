@@ -39,12 +39,21 @@ pub struct HarnessConfig {
     pub command: String,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub args: Vec<String>,
-    #[serde(default)]
+    #[serde(default = "default_tab_ai_harness_warm_on_startup")]
     pub warm_on_startup: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub working_directory: Option<String>,
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub env: std::collections::BTreeMap<String, String>,
+}
+
+/// Default value for [`HarnessConfig::warm_on_startup`].
+///
+/// Returns `true` so that omitting the field from JSON (or using
+/// `HarnessConfig::default()`) enables prewarm.  Users opt *out*
+/// with `"warmOnStartup": false`.
+fn default_tab_ai_harness_warm_on_startup() -> bool {
+    true
 }
 
 impl Default for HarnessConfig {
@@ -54,7 +63,7 @@ impl Default for HarnessConfig {
             backend: HarnessBackendKind::ClaudeCode,
             command: "claude".to_string(),
             args: Vec::new(),
-            warm_on_startup: false,
+            warm_on_startup: default_tab_ai_harness_warm_on_startup(),
             working_directory: None,
             env: std::collections::BTreeMap::new(),
         }
@@ -284,10 +293,33 @@ mod tests {
         assert_eq!(config.backend, HarnessBackendKind::ClaudeCode);
         assert_eq!(config.command, "claude");
         assert!(config.args.is_empty());
-        assert!(!config.warm_on_startup);
+        assert!(config.warm_on_startup);
         assert!(config.working_directory.is_none());
         assert!(config.env.is_empty());
         assert_eq!(config.command_line(), "claude");
+    }
+
+    #[test]
+    fn harness_config_missing_warm_on_startup_field_defaults_to_true() {
+        let json = r#"{
+            "schemaVersion": 1,
+            "backend": "claudeCode",
+            "command": "claude"
+        }"#;
+        let parsed: HarnessConfig = serde_json::from_str(json).expect("deserialize");
+        assert!(parsed.warm_on_startup);
+    }
+
+    #[test]
+    fn harness_config_explicit_false_preserves_opt_out() {
+        let json = r#"{
+            "schemaVersion": 1,
+            "backend": "claudeCode",
+            "command": "claude",
+            "warmOnStartup": false
+        }"#;
+        let parsed: HarnessConfig = serde_json::from_str(json).expect("deserialize");
+        assert!(!parsed.warm_on_startup);
     }
 
     #[test]
