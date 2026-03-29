@@ -90,57 +90,19 @@ const TAB_AI_CLIPBOARD_TEXT_LIMIT: usize = 1000;
 impl ScriptListApp {
     /// Open the Tab AI surface.
     ///
-    /// Routes through the harness terminal path: captures context from the
-    /// current view, ensures a warm harness PTY is running, injects the
-    /// context block, and switches to `AppView::QuickTerminalView`.
+    /// Always opens the full-view `TabAiChat` — the primary power-user
+    /// experience. The harness terminal path is preserved for explicit
+    /// action invocation but is no longer the implicit Tab entry.
     pub(crate) fn open_tab_ai_chat(&mut self, cx: &mut Context<Self>) {
-        // Already showing the harness terminal or save-offer — do nothing
         if self.tab_ai_save_offer_state.is_some() {
             return;
         }
-        // If we're already in the harness terminal, just re-inject context
-        if let Some(ref session) = self.tab_ai_harness {
-            if matches!(self.current_view, AppView::QuickTerminalView { .. }) {
-                let entity = session.entity.clone();
-                if entity.read(cx).is_alive() {
-                    let (ui_snapshot, invocation_receipt) = self.snapshot_tab_ai_ui(cx);
-                    let source_view = self
-                        .tab_ai_harness_return_view
-                        .clone()
-                        .unwrap_or(AppView::ScriptList);
-                    let resolved = self.build_tab_ai_context_from(
-                        String::new(),
-                        source_view,
-                        ui_snapshot,
-                        invocation_receipt,
-                        cx,
-                    );
-                    if let Ok(submission) =
-                        crate::ai::build_tab_ai_harness_submission(
-                            &resolved.context,
-                            None,
-                            crate::ai::TabAiHarnessSubmissionMode::PasteOnly,
-                        )
-                    {
-                        self.inject_tab_ai_harness_submission(entity, submission, false, false, cx);
-                    }
-                    return;
-                }
-            }
-        }
-
-        // Try harness terminal first; fall back to full-view chat if unavailable
-        if crate::ai::read_tab_ai_harness_config()
-            .and_then(|config| crate::ai::validate_tab_ai_harness_config(&config).map(|_| config))
-            .is_ok()
-        {
-            self.open_tab_ai_harness_terminal(cx);
-        } else {
-            self.open_tab_ai_full_view_chat(cx);
-        }
+        self.open_tab_ai_full_view_chat(cx);
     }
 
     /// Core harness-terminal open: snapshot context, ensure PTY, switch view, inject.
+    /// Preserved for future explicit action invocation (e.g. via Actions dialog).
+    #[allow(dead_code)]
     fn open_tab_ai_harness_terminal(&mut self, cx: &mut Context<Self>) {
         let source_view = self.current_view.clone();
         let (ui_snapshot, invocation_receipt) = self.snapshot_tab_ai_ui(cx);
@@ -200,11 +162,15 @@ impl ScriptListApp {
         .detach();
         cx.notify();
 
-        // Build and inject context
+        // Build and inject context (harness path captures fresh desktop snapshot)
+        let desktop = crate::context_snapshot::capture_context_snapshot(
+            &crate::context_snapshot::CaptureContextOptions::tab_ai(),
+        );
         let resolved = self.build_tab_ai_context_from(
             String::new(),
             source_view,
             ui_snapshot,
+            desktop,
             invocation_receipt,
             cx,
         );
@@ -236,6 +202,7 @@ impl ScriptListApp {
 
     /// Ensure a harness terminal session exists and is alive.
     /// Returns the entity and whether this was a cold start (newly created).
+    #[allow(dead_code)]
     fn ensure_tab_ai_harness_terminal(
         &mut self,
         cx: &mut Context<Self>,
@@ -290,6 +257,7 @@ impl ScriptListApp {
     /// When `submit` is true, the payload is sent as a full line (appends CR).
     /// When false, the payload is pasted without a trailing CR so the user
     /// can type their intent before pressing Enter.
+    #[allow(dead_code)]
     fn inject_tab_ai_harness_submission(
         &self,
         entity: gpui::Entity<crate::term_prompt::TermPrompt>,
@@ -424,6 +392,7 @@ impl ScriptListApp {
                 ui_snapshot,
                 invocation_receipt,
                 frontmost_bundle_id,
+                desktop_preview.clone(),
                 context_cards,
                 focus_handle,
             );
@@ -513,6 +482,7 @@ impl ScriptListApp {
         }
 
         // -- Visible items card --
+        let visible_target_count = visible_targets.len();
         let visible_rows: Vec<TabAiContextRow> = visible_targets
             .iter()
             .take(5)
@@ -522,7 +492,7 @@ impl ScriptListApp {
             cards.push(TabAiContextCard {
                 kind: TabAiContextCardKind::VisibleItems,
                 label: "Visible Items".into(),
-                title: format!("{} visible targets", visible_rows.len()).into(),
+                title: format!("{} visible targets", visible_target_count).into(),
                 body: None,
                 rows: visible_rows,
                 suggestions: Vec::new(),
@@ -533,6 +503,14 @@ impl ScriptListApp {
         let mut desktop_rows = Vec::new();
         if let Some(app) = desktop.frontmost_app.as_ref() {
             desktop_rows.push(TabAiContextRow::new("App", app.name.clone()));
+        }
+        if let Some(browser) = desktop.browser.as_ref() {
+            if !browser.url.trim().is_empty() {
+                desktop_rows.push(TabAiContextRow::new(
+                    "Browser",
+                    crate::ai::truncate_tab_ai_text(&browser.url, 80),
+                ));
+            }
         }
         if let Some(window) = desktop.focused_window.as_ref() {
             if !window.title.trim().is_empty() {
@@ -746,12 +724,10 @@ impl ScriptListApp {
         intent_for_lookup: String,
         source_view: AppView,
         ui: crate::ai::TabAiUiSnapshot,
+        desktop: crate::context_snapshot::AiContextSnapshot,
         invocation_receipt: crate::ai::TabAiInvocationReceipt,
         _cx: &Context<Self>,
     ) -> TabAiResolvedContext {
-        let desktop = crate::context_snapshot::capture_context_snapshot(
-            &crate::context_snapshot::CaptureContextOptions::tab_ai(),
-        );
         let bundle_id = desktop
             .frontmost_app
             .as_ref()
@@ -832,11 +808,12 @@ impl ScriptListApp {
             return;
         }
 
-        let (source_view, ui_snapshot, invocation_receipt) = {
+        let (source_view, ui_snapshot, desktop_snapshot, invocation_receipt) = {
             let chat = entity.read(cx);
             (
                 chat.restore_target().0,
                 chat.ui_snapshot.clone(),
+                chat.preview_desktop_snapshot.clone(),
                 chat.invocation_receipt.clone(),
             )
         };
@@ -855,6 +832,7 @@ impl ScriptListApp {
             intent.clone(),
             source_view,
             ui_snapshot,
+            desktop_snapshot,
             invocation_receipt,
             cx,
         );

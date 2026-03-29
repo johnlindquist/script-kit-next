@@ -316,3 +316,42 @@ fn capture_from_seed_preserves_metadata_only_focused_window() {
     assert_eq!(focused_window.height, 0);
     assert!(!focused_window.used_fallback);
 }
+
+#[test]
+fn recommendation_profile_includes_browser_excludes_menu_and_window() {
+    let rec = CaptureContextOptions::recommendation();
+    assert!(rec.include_selected_text);
+    assert!(rec.include_frontmost_app);
+    assert!(rec.include_browser_url);
+    assert!(!rec.include_menu_bar);
+    assert!(!rec.include_focused_window);
+    assert!(!rec.include_screenshot);
+}
+
+#[test]
+fn tab_ai_profile_enables_all_including_screenshot() {
+    let tab_ai = CaptureContextOptions::tab_ai();
+    assert!(tab_ai.include_selected_text);
+    assert!(tab_ai.include_frontmost_app);
+    assert!(tab_ai.include_browser_url);
+    assert!(tab_ai.include_menu_bar);
+    assert!(tab_ai.include_focused_window);
+    assert!(tab_ai.include_screenshot);
+}
+
+#[test]
+fn capture_from_seed_recommendation_profile_includes_browser_skips_window() {
+    let snapshot =
+        capture_context_snapshot_from_seed(&CaptureContextOptions::recommendation(), full_seed());
+
+    assert_eq!(snapshot.schema_version, AI_CONTEXT_SNAPSHOT_SCHEMA_VERSION);
+    assert_eq!(snapshot.selected_text, Some("secret code".into()));
+    assert!(snapshot.frontmost_app.is_some());
+    assert_eq!(
+        snapshot.browser.as_ref().map(|b| b.url.as_str()),
+        Some("https://example.com")
+    );
+    // recommendation() excludes focused_window and menu_bar
+    assert!(snapshot.focused_window.is_none());
+    assert!(snapshot.menu_bar_items.is_empty());
+}
