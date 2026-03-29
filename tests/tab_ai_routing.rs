@@ -34,8 +34,9 @@ fn open_tab_ai_chat_routes_to_harness_terminal() {
     let open_fn_body = &open_fn_body[..next_fn];
 
     assert!(
-        open_fn_body.contains("open_tab_ai_harness_terminal(cx)"),
-        "open_tab_ai_chat must call open_tab_ai_harness_terminal as the primary surface"
+        open_fn_body.contains("open_tab_ai_chat_with_entry_intent(None, cx)")
+            || open_fn_body.contains("open_tab_ai_harness_terminal("),
+        "open_tab_ai_chat must delegate to the harness terminal as the primary surface"
     );
     assert!(
         !open_fn_body.contains("open_tab_ai_full_view_chat"),
@@ -146,22 +147,26 @@ fn tab_ai_routing_preserves_chat_prompt_tab() {
 }
 
 #[test]
-fn tab_ai_routing_shift_tab_uses_script_generation() {
+fn tab_ai_routing_shift_tab_routes_through_harness() {
     assert!(
-        TAB_SOURCE.contains("dispatch_ai_script_generation_from_query"),
-        "Shift+Tab must still route to script generation"
+        TAB_SOURCE.contains("open_tab_ai_chat_with_entry_intent(Some(query), cx)"),
+        "Shift+Tab must route typed queries through the harness terminal"
+    );
+    assert!(
+        !TAB_SOURCE.contains("dispatch_ai_script_generation_from_query(query, cx)"),
+        "Shift+Tab must not use the legacy script generation bypass"
     );
 
     let shift_tab_pos = TAB_SOURCE
-        .find("dispatch_ai_script_generation_from_query")
-        .expect("Shift+Tab route must exist");
+        .find("open_tab_ai_chat_with_entry_intent(Some(query), cx)")
+        .expect("Shift+Tab harness route must exist");
     let ai_pos = TAB_SOURCE
-        .find("open_tab_ai_chat")
+        .find("open_tab_ai_chat(cx)")
         .expect("open_tab_ai_chat must exist");
 
     assert!(
         shift_tab_pos < ai_pos,
-        "Shift+Tab script generation must come before universal Tab AI route"
+        "Shift+Tab harness route must come before universal Tab AI route"
     );
 }
 
@@ -225,7 +230,7 @@ fn harness_terminal_uses_text_safe_capture_profile() {
 }
 
 #[test]
-fn harness_terminal_entry_uses_paste_only_mode() {
+fn harness_terminal_entry_derives_mode_from_intent() {
     let open_fn_start = TAB_AI_MODE_SOURCE
         .find("fn open_tab_ai_harness_terminal(")
         .expect("open_tab_ai_harness_terminal must exist");
@@ -237,11 +242,19 @@ fn harness_terminal_entry_uses_paste_only_mode() {
 
     assert!(
         open_fn_body.contains("PasteOnly"),
-        "Tab entry must use PasteOnly so context is staged without auto-submitting"
+        "Zero-intent Tab entry must use PasteOnly so context is staged without auto-submitting"
     );
     assert!(
-        !open_fn_body.contains("TabAiHarnessSubmissionMode::Submit"),
-        "Tab entry must not use Submit mode — user types intent before pressing Enter"
+        open_fn_body.contains("let submission_mode = if entry_intent.is_some()"),
+        "tab_ai_mode.rs must derive submission mode from entry-intent presence"
+    );
+    assert!(
+        open_fn_body.contains("TabAiHarnessSubmissionMode::Submit"),
+        "Typed Tab entry must submit immediately through the harness"
+    );
+    assert!(
+        open_fn_body.contains("entry_intent.as_deref()"),
+        "Typed Tab entry must pass the user's query into build_tab_ai_harness_submission"
     );
 }
 
@@ -1471,5 +1484,54 @@ fn legacy_tab_ai_chat_not_in_app_state() {
         !APP_STATE_SOURCE.contains("TabAiChat"),
         "app_state.rs must not reference TabAiChat — \
          tab_ai_harness is the session state field"
+    );
+}
+
+// =========================================================================
+// Intent-aware harness entry: typed Tab queries route through harness
+// =========================================================================
+
+#[test]
+fn startup_tab_interceptor_routes_nonempty_script_list_query_into_harness() {
+    assert!(
+        TAB_SOURCE.contains("open_tab_ai_chat_with_entry_intent(Some(query), cx)"),
+        "startup.rs must route non-empty ScriptList Tab queries into the harness"
+    );
+    assert!(
+        !TAB_SOURCE.contains("dispatch_ai_script_generation_from_query(query, cx)"),
+        "startup.rs must not keep the legacy Script Kit AI generation Tab bypass"
+    );
+}
+
+#[test]
+fn typed_tab_entry_uses_submit_mode_in_harness() {
+    assert!(
+        TAB_AI_MODE_SOURCE.contains("fn open_tab_ai_chat_with_entry_intent("),
+        "tab_ai_mode.rs must expose an entry-intent-aware harness entry point"
+    );
+    assert!(
+        TAB_AI_MODE_SOURCE.contains("let submission_mode = if entry_intent.is_some()"),
+        "tab_ai_mode.rs must derive submission mode from entry-intent presence"
+    );
+    assert!(
+        TAB_AI_MODE_SOURCE.contains("crate::ai::TabAiHarnessSubmissionMode::Submit"),
+        "typed Tab entry must submit immediately through the harness"
+    );
+    assert!(
+        TAB_AI_MODE_SOURCE.contains("entry_intent.as_deref()"),
+        "typed Tab entry must pass the user's query into build_tab_ai_harness_submission"
+    );
+}
+
+#[test]
+fn entry_intent_is_trimmed_and_empty_filtered() {
+    // Whitespace-only intents must be treated as None (zero-intent).
+    assert!(
+        TAB_AI_MODE_SOURCE.contains(".map(|value| value.trim().to_string())"),
+        "entry_intent must be trimmed"
+    );
+    assert!(
+        TAB_AI_MODE_SOURCE.contains(".filter(|value| !value.is_empty())"),
+        "empty trimmed intent must be filtered to None"
     );
 }

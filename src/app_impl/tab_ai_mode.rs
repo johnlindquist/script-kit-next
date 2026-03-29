@@ -22,22 +22,41 @@ const TAB_AI_CLIPBOARD_HISTORY_LIMIT: usize = 8;
 const TAB_AI_CLIPBOARD_TEXT_LIMIT: usize = 1000;
 
 impl ScriptListApp {
-    /// Open the Tab AI surface.
+    /// Open the Tab AI surface (zero-intent).
     ///
     /// Routes to the harness terminal (`QuickTerminalView`), which connects
     /// to a pre-running CLI harness (Claude Code, Codex, Gemini CLI, etc.)
     /// and injects hierarchical context via PTY stdin.
     pub(crate) fn open_tab_ai_chat(&mut self, cx: &mut Context<Self>) {
+        self.open_tab_ai_chat_with_entry_intent(None, cx);
+    }
+
+    /// Primary Tab entry point.
+    ///
+    /// - `None` => open the harness and stage context only (`PasteOnly`)
+    /// - `Some(intent)` => open the harness and immediately submit that intent
+    pub(crate) fn open_tab_ai_chat_with_entry_intent(
+        &mut self,
+        entry_intent: Option<String>,
+        cx: &mut Context<Self>,
+    ) {
         if self.tab_ai_save_offer_state.is_some() {
             return;
         }
-        self.open_tab_ai_harness_terminal(cx);
+        self.open_tab_ai_harness_terminal(entry_intent, cx);
     }
 
     /// Core harness-terminal open: snapshot context, ensure PTY, switch view, inject.
-    fn open_tab_ai_harness_terminal(&mut self, cx: &mut Context<Self>) {
+    fn open_tab_ai_harness_terminal(
+        &mut self,
+        entry_intent: Option<String>,
+        cx: &mut Context<Self>,
+    ) {
         let source_view = self.current_view.clone();
         let (ui_snapshot, invocation_receipt) = self.snapshot_tab_ai_ui(cx);
+        let entry_intent = entry_intent
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty());
 
         // Emit the receipt as a standalone structured log line for agent/test consumption
         tracing::info!(
@@ -82,6 +101,7 @@ impl ScriptListApp {
         tracing::debug!(
             event = "tab_ai_harness_submission_planned",
             wait_for_readiness,
+            has_entry_intent = entry_intent.is_some(),
         );
 
         // Save the originating surface so Escape and re-entry can use it
@@ -112,7 +132,7 @@ impl ScriptListApp {
             &crate::context_snapshot::CaptureContextOptions::tab_ai_submit(),
         );
         let resolved = self.build_tab_ai_context_from(
-            String::new(),
+            entry_intent.clone().unwrap_or_default(),
             source_view,
             ui_snapshot,
             desktop,
@@ -120,10 +140,16 @@ impl ScriptListApp {
             cx,
         );
 
+        let submission_mode = if entry_intent.is_some() {
+            crate::ai::TabAiHarnessSubmissionMode::Submit
+        } else {
+            crate::ai::TabAiHarnessSubmissionMode::PasteOnly
+        };
+
         match crate::ai::build_tab_ai_harness_submission(
             &resolved.context,
-            None,
-            crate::ai::TabAiHarnessSubmissionMode::PasteOnly,
+            entry_intent.as_deref(),
+            submission_mode,
             Some(&resolved.invocation_receipt),
             &resolved.suggested_intents,
         ) {
@@ -132,7 +158,7 @@ impl ScriptListApp {
                     entity,
                     submission,
                     wait_for_readiness,
-                    false,
+                    entry_intent.is_some(),
                     cx,
                 );
             }

@@ -470,9 +470,7 @@ fn hints_block_appears_between_context_and_intent() {
     let hints_start = submission
         .find("<scriptKitHints>")
         .expect("hints block must exist");
-    let intent_start = submission
-        .find("User intent:")
-        .expect("intent must exist");
+    let intent_start = submission.find("User intent:").expect("intent must exist");
 
     assert!(
         context_end < hints_start,
