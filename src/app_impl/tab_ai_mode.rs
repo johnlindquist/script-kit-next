@@ -4,6 +4,8 @@ use super::*;
 #[derive(Debug, Clone)]
 struct TabAiResolvedContext {
     context: crate::ai::TabAiContextBlob,
+    invocation_receipt: crate::ai::TabAiInvocationReceipt,
+    suggested_intents: Vec<crate::ai::TabAiSuggestedIntentSpec>,
 }
 
 
@@ -54,7 +56,7 @@ impl ScriptListApp {
             receipt_json = %serde_json::to_string(&invocation_receipt).unwrap_or_default(),
         );
 
-        let (entity, was_cold_start) = match self.ensure_tab_ai_harness_terminal(cx) {
+        let (entity, _was_cold_start) = match self.ensure_tab_ai_harness_terminal(cx) {
             Ok(result) => result,
             Err(error) => {
                 tracing::error!(
@@ -72,6 +74,15 @@ impl ScriptListApp {
                 return;
             }
         };
+
+        // Determine readiness based on actual PTY output, not cold-start flag.
+        // A prewarmed session that hasn't printed its prompt yet still needs the wait.
+        let wait_for_readiness = Self::tab_ai_harness_needs_readiness_wait(&entity, cx);
+
+        tracing::debug!(
+            event = "tab_ai_harness_submission_planned",
+            wait_for_readiness,
+        );
 
         // Save the originating surface so Escape and re-entry can use it
         self.tab_ai_harness_return_view = Some(source_view.clone());
@@ -113,9 +124,17 @@ impl ScriptListApp {
             &resolved.context,
             None,
             crate::ai::TabAiHarnessSubmissionMode::PasteOnly,
+            Some(&resolved.invocation_receipt),
+            &resolved.suggested_intents,
         ) {
             Ok(submission) => {
-                self.inject_tab_ai_harness_submission(entity, submission, was_cold_start, false, cx);
+                self.inject_tab_ai_harness_submission(
+                    entity,
+                    submission,
+                    wait_for_readiness,
+                    false,
+                    cx,
+                );
             }
             Err(error) => {
                 tracing::warn!(
@@ -254,12 +273,25 @@ impl ScriptListApp {
     /// Interval (ms) between readiness polls during cold-start wait.
     const HARNESS_READINESS_POLL_MS: u64 = 20;
 
+    /// Check whether a harness session needs to wait for prompt readiness
+    /// before context paste.  Returns `true` when the PTY has not yet
+    /// produced any output — regardless of whether it was cold-started or
+    /// prewarmed.
+    fn tab_ai_harness_needs_readiness_wait(
+        entity: &gpui::Entity<crate::term_prompt::TermPrompt>,
+        cx: &Context<Self>,
+    ) -> bool {
+        !entity.read(cx).has_received_output
+    }
+
     /// Inject the context submission into the harness PTY, with a readiness
-    /// gate for cold starts.
+    /// gate that fires whenever the PTY has not yet produced output.
     ///
-    /// On cold start, polls `has_received_output` on the `TermPrompt` entity
-    /// up to [`HARNESS_READINESS_TIMEOUT_MS`] before injecting.  Falls back
+    /// Polls `has_received_output` on the `TermPrompt` entity up to
+    /// [`HARNESS_READINESS_TIMEOUT_MS`] before injecting.  Falls back
     /// deterministically if the harness does not produce output in time.
+    /// This applies to both cold-started and prewarmed sessions that have
+    /// not yet rendered their first prompt.
     ///
     /// When `submit` is true, the payload is sent as a full line (appends CR).
     /// When false, the payload is pasted without a trailing CR so the user
@@ -268,7 +300,7 @@ impl ScriptListApp {
         &self,
         entity: gpui::Entity<crate::term_prompt::TermPrompt>,
         submission: String,
-        was_cold_start: bool,
+        wait_for_readiness: bool,
         submit: bool,
         cx: &mut Context<Self>,
     ) {
@@ -276,9 +308,10 @@ impl ScriptListApp {
         let entity_weak = entity.downgrade();
 
         cx.spawn(async move |_this, cx| {
-            // For cold starts, wait until the harness has produced output
-            // (its prompt/banner), with a bounded timeout as fallback.
-            if was_cold_start {
+            // Wait until the harness has produced output (its prompt/banner),
+            // with a bounded timeout as fallback.  This fires for both
+            // cold-started and prewarmed sessions that are not yet ready.
+            if wait_for_readiness {
                 let poll_interval =
                     std::time::Duration::from_millis(Self::HARNESS_READINESS_POLL_MS);
                 let deadline = std::time::Instant::now()
@@ -422,6 +455,13 @@ impl ScriptListApp {
         };
         let (focused_target, visible_targets) =
             self.resolve_tab_ai_surface_targets_for_view(&source_view, &ui);
+
+        let suggested_intents = crate::ai::build_tab_ai_suggested_intents(
+            focused_target.as_ref(),
+            clipboard.as_ref(),
+            &prior_automations,
+        );
+
         let context = crate::ai::TabAiContextBlob::from_parts_with_targets(
             ui,
             focused_target,
@@ -434,9 +474,11 @@ impl ScriptListApp {
             chrono::Utc::now().to_rfc3339(),
         );
 
-        let _ = invocation_receipt;
-
-        TabAiResolvedContext { context }
+        TabAiResolvedContext {
+            context,
+            invocation_receipt,
+            suggested_intents,
+        }
     }
 
     /// Return the correct `FocusTarget` for the originating surface so that

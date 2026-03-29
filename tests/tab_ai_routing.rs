@@ -823,8 +823,8 @@ fn harness_injection_uses_readiness_gate_for_cold_start() {
     let inject_fn_body = &inject_fn_body[..next_fn];
 
     assert!(
-        inject_fn_body.contains("was_cold_start"),
-        "injection must differentiate cold vs warm start"
+        inject_fn_body.contains("wait_for_readiness"),
+        "injection must accept a readiness flag independent of cold/warm start"
     );
     assert!(
         inject_fn_body.contains("has_received_output"),
@@ -913,6 +913,105 @@ fn harness_injection_submits_or_pastes_based_on_flag() {
     assert!(
         inject_fn_body.contains("send_text_as_paste"),
         "PasteOnly mode must use send_text_as_paste for staging"
+    );
+}
+
+// =========================================================================
+// Harness readiness gate: prewarmed sessions also wait for output
+// =========================================================================
+
+#[test]
+fn harness_readiness_gate_applies_to_prewarmed_sessions() {
+    // A reused (prewarmed) session with has_received_output == false must
+    // still take the readiness-wait path before context paste. The gate
+    // must NOT be conditioned on was_cold_start alone.
+    let open_fn_start = TAB_AI_MODE_SOURCE
+        .find("fn open_tab_ai_harness_terminal(")
+        .expect("open_tab_ai_harness_terminal must exist");
+    let open_fn_body = &TAB_AI_MODE_SOURCE[open_fn_start..];
+    let next_fn = open_fn_body[1..]
+        .find("\n    fn ")
+        .unwrap_or(open_fn_body.len());
+    let open_fn_body = &open_fn_body[..next_fn];
+
+    // The open function must call the readiness check method
+    assert!(
+        open_fn_body.contains("tab_ai_harness_needs_readiness_wait"),
+        "open_tab_ai_harness_terminal must call tab_ai_harness_needs_readiness_wait \
+         to determine readiness independent of cold-start status"
+    );
+
+    // The readiness check must be based on has_received_output, not was_cold_start
+    assert!(
+        open_fn_body.contains("wait_for_readiness"),
+        "open_tab_ai_harness_terminal must use wait_for_readiness from the readiness check"
+    );
+}
+
+#[test]
+fn harness_readiness_check_method_exists_and_checks_output() {
+    // tab_ai_harness_needs_readiness_wait must exist and check has_received_output
+    assert!(
+        TAB_AI_MODE_SOURCE.contains("fn tab_ai_harness_needs_readiness_wait("),
+        "tab_ai_harness_needs_readiness_wait method must exist"
+    );
+
+    let fn_start = TAB_AI_MODE_SOURCE
+        .find("fn tab_ai_harness_needs_readiness_wait(")
+        .expect("method must exist");
+    let fn_body = &TAB_AI_MODE_SOURCE[fn_start..];
+    let next_fn = fn_body[1..].find("\n    fn ").unwrap_or(fn_body.len());
+    let fn_body = &fn_body[..next_fn];
+
+    assert!(
+        fn_body.contains("has_received_output"),
+        "readiness check must be based on has_received_output"
+    );
+}
+
+#[test]
+fn harness_injection_uses_wait_for_readiness_not_cold_start() {
+    // The injection function must use wait_for_readiness parameter,
+    // not was_cold_start, ensuring prewarmed sessions also wait.
+    let inject_fn_start = TAB_AI_MODE_SOURCE
+        .find("fn inject_tab_ai_harness_submission(")
+        .expect("inject_tab_ai_harness_submission must exist");
+    let inject_fn_body = &TAB_AI_MODE_SOURCE[inject_fn_start..];
+    let next_fn = inject_fn_body[1..]
+        .find("\n    fn ")
+        .unwrap_or(inject_fn_body.len());
+    let inject_fn_body = &inject_fn_body[..next_fn];
+
+    assert!(
+        inject_fn_body.contains("wait_for_readiness: bool"),
+        "injection must accept wait_for_readiness parameter"
+    );
+    assert!(
+        !inject_fn_body.contains("was_cold_start: bool"),
+        "injection must NOT use was_cold_start — readiness is output-based"
+    );
+}
+
+#[test]
+fn harness_submission_planned_event_logged() {
+    // open_tab_ai_harness_terminal must log a structured submission_planned event
+    // with the wait_for_readiness flag for diagnostics.
+    let open_fn_start = TAB_AI_MODE_SOURCE
+        .find("fn open_tab_ai_harness_terminal(")
+        .expect("open_tab_ai_harness_terminal must exist");
+    let open_fn_body = &TAB_AI_MODE_SOURCE[open_fn_start..];
+    let next_fn = open_fn_body[1..]
+        .find("\n    fn ")
+        .unwrap_or(open_fn_body.len());
+    let open_fn_body = &open_fn_body[..next_fn];
+
+    assert!(
+        open_fn_body.contains("tab_ai_harness_submission_planned"),
+        "must log tab_ai_harness_submission_planned event"
+    );
+    assert!(
+        open_fn_body.contains("wait_for_readiness"),
+        "submission_planned event must include wait_for_readiness field"
     );
 }
 
@@ -1021,6 +1120,8 @@ fn smoke_matrix_claude_code_paste_only_stages_context() {
         &context,
         None,
         script_kit_gpui::ai::TabAiHarnessSubmissionMode::PasteOnly,
+        None,
+        &[],
     )
     .expect("Claude Code PasteOnly submission must succeed");
 
@@ -1032,15 +1133,14 @@ fn smoke_matrix_claude_code_paste_only_stages_context() {
 
 #[test]
 fn smoke_matrix_codex_paste_only_stages_context() {
-    let _config = config_for_backend(
-        script_kit_gpui::ai::HarnessBackendKind::Codex,
-        "codex",
-    );
+    let _config = config_for_backend(script_kit_gpui::ai::HarnessBackendKind::Codex, "codex");
     let context = smoke_matrix_context();
     let submission = script_kit_gpui::ai::build_tab_ai_harness_submission(
         &context,
         None,
         script_kit_gpui::ai::TabAiHarnessSubmissionMode::PasteOnly,
+        None,
+        &[],
     )
     .expect("Codex PasteOnly submission must succeed");
 
@@ -1051,15 +1151,14 @@ fn smoke_matrix_codex_paste_only_stages_context() {
 
 #[test]
 fn smoke_matrix_gemini_cli_paste_only_stages_context() {
-    let _config = config_for_backend(
-        script_kit_gpui::ai::HarnessBackendKind::GeminiCli,
-        "gemini",
-    );
+    let _config = config_for_backend(script_kit_gpui::ai::HarnessBackendKind::GeminiCli, "gemini");
     let context = smoke_matrix_context();
     let submission = script_kit_gpui::ai::build_tab_ai_harness_submission(
         &context,
         None,
         script_kit_gpui::ai::TabAiHarnessSubmissionMode::PasteOnly,
+        None,
+        &[],
     )
     .expect("Gemini CLI PasteOnly submission must succeed");
 
@@ -1070,15 +1169,14 @@ fn smoke_matrix_gemini_cli_paste_only_stages_context() {
 
 #[test]
 fn smoke_matrix_copilot_cli_paste_only_stages_context() {
-    let _config = config_for_backend(
-        script_kit_gpui::ai::HarnessBackendKind::CopilotCli,
-        "gh",
-    );
+    let _config = config_for_backend(script_kit_gpui::ai::HarnessBackendKind::CopilotCli, "gh");
     let context = smoke_matrix_context();
     let submission = script_kit_gpui::ai::build_tab_ai_harness_submission(
         &context,
         None,
         script_kit_gpui::ai::TabAiHarnessSubmissionMode::PasteOnly,
+        None,
+        &[],
     )
     .expect("Copilot CLI PasteOnly submission must succeed");
 
@@ -1093,18 +1191,31 @@ fn smoke_matrix_all_backends_produce_identical_context_block() {
     let context = smoke_matrix_context();
     let mode = script_kit_gpui::ai::TabAiHarnessSubmissionMode::PasteOnly;
 
-    let claude = script_kit_gpui::ai::build_tab_ai_harness_submission(&context, None, mode)
-        .expect("Claude Code");
-    let codex = script_kit_gpui::ai::build_tab_ai_harness_submission(&context, None, mode)
-        .expect("Codex");
-    let gemini = script_kit_gpui::ai::build_tab_ai_harness_submission(&context, None, mode)
-        .expect("Gemini CLI");
-    let copilot = script_kit_gpui::ai::build_tab_ai_harness_submission(&context, None, mode)
-        .expect("Copilot CLI");
+    let claude =
+        script_kit_gpui::ai::build_tab_ai_harness_submission(&context, None, mode, None, &[])
+            .expect("Claude Code");
+    let codex =
+        script_kit_gpui::ai::build_tab_ai_harness_submission(&context, None, mode, None, &[])
+            .expect("Codex");
+    let gemini =
+        script_kit_gpui::ai::build_tab_ai_harness_submission(&context, None, mode, None, &[])
+            .expect("Gemini CLI");
+    let copilot =
+        script_kit_gpui::ai::build_tab_ai_harness_submission(&context, None, mode, None, &[])
+            .expect("Copilot CLI");
 
-    assert_eq!(claude, codex, "Claude Code and Codex must produce identical context");
-    assert_eq!(codex, gemini, "Codex and Gemini CLI must produce identical context");
-    assert_eq!(gemini, copilot, "Gemini CLI and Copilot CLI must produce identical context");
+    assert_eq!(
+        claude, codex,
+        "Claude Code and Codex must produce identical context"
+    );
+    assert_eq!(
+        codex, gemini,
+        "Codex and Gemini CLI must produce identical context"
+    );
+    assert_eq!(
+        gemini, copilot,
+        "Gemini CLI and Copilot CLI must produce identical context"
+    );
 }
 
 #[test]
@@ -1113,8 +1224,9 @@ fn smoke_matrix_submit_mode_appends_sentinel_for_all_backends() {
     let mode = script_kit_gpui::ai::TabAiHarnessSubmissionMode::Submit;
 
     for label in ["Claude Code", "Codex", "Gemini CLI", "Copilot CLI"] {
-        let submission = script_kit_gpui::ai::build_tab_ai_harness_submission(&context, None, mode)
-            .unwrap_or_else(|e| panic!("{label} Submit failed: {e}"));
+        let submission =
+            script_kit_gpui::ai::build_tab_ai_harness_submission(&context, None, mode, None, &[])
+                .unwrap_or_else(|e| panic!("{label} Submit failed: {e}"));
         assert!(
             submission.contains("Await the user's next terminal input."),
             "{label} Submit mode must append wait sentinel"
@@ -1127,13 +1239,21 @@ fn smoke_matrix_intent_appends_for_all_backends() {
     let context = smoke_matrix_context();
 
     for (label, mode) in [
-        ("PasteOnly", script_kit_gpui::ai::TabAiHarnessSubmissionMode::PasteOnly),
-        ("Submit", script_kit_gpui::ai::TabAiHarnessSubmissionMode::Submit),
+        (
+            "PasteOnly",
+            script_kit_gpui::ai::TabAiHarnessSubmissionMode::PasteOnly,
+        ),
+        (
+            "Submit",
+            script_kit_gpui::ai::TabAiHarnessSubmissionMode::Submit,
+        ),
     ] {
         let submission = script_kit_gpui::ai::build_tab_ai_harness_submission(
             &context,
             Some("rename this file"),
             mode,
+            None,
+            &[],
         )
         .unwrap_or_else(|e| panic!("{label} with intent failed: {e}"));
         assert!(
@@ -1353,4 +1473,3 @@ fn legacy_tab_ai_chat_not_in_app_state() {
          tab_ai_harness is the session state field"
     );
 }
-
