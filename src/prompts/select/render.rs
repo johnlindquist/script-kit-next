@@ -28,6 +28,20 @@ pub(super) fn compute_row_state(
     }
 }
 
+pub(super) fn visual_row_state_for_input_modality(
+    row_state: SelectRowState,
+    last_input_was_keyboard: bool,
+) -> SelectRowState {
+    if last_input_was_keyboard {
+        SelectRowState {
+            is_hovered: false,
+            ..row_state
+        }
+    } else {
+        row_state
+    }
+}
+
 pub(super) fn resolve_row_bg_hex(
     row_state: SelectRowState,
     focused_bg_hex: u32,
@@ -187,8 +201,7 @@ impl Render for SelectPrompt {
                             hover_opacity: 0.0,
                             ..UnifiedListItemColors::from_theme(&this.theme)
                         };
-                        let hover_allowed = !window.last_input_was_keyboard();
-                        let effective_hovered = if hover_allowed { this.hovered_index } else { None };
+                        let last_input_was_keyboard = window.last_input_was_keyboard();
                         let mut rows = Vec::with_capacity(visible_range.len());
 
                         for display_idx in visible_range {
@@ -201,11 +214,15 @@ impl Render for SelectPrompt {
                                             this.focused_index,
                                             choice_idx,
                                             &this.selected,
-                                            effective_hovered,
+                                            this.hovered_index,
                                         );
-                                        let is_focused = row_state.is_focused;
-                                        let is_selected = row_state.is_selected;
-                                        let is_hovered = row_state.is_hovered;
+                                        let visual_row_state = visual_row_state_for_input_modality(
+                                            row_state,
+                                            last_input_was_keyboard,
+                                        );
+                                        let is_focused = visual_row_state.is_focused;
+                                        let is_selected = visual_row_state.is_selected;
+                                        let is_hovered = visual_row_state.is_hovered;
                                         let semantic_id =
                                             choice.semantic_id.clone().unwrap_or_else(|| {
                                                 indexed_choice.stable_semantic_id.clone()
@@ -237,7 +254,7 @@ impl Render for SelectPrompt {
                                                 },
                                             );
                                         let row_bg = rgba(resolve_row_bg_hex(
-                                            row_state,
+                                            visual_row_state,
                                             focused_row_bg_hex,
                                             hovered_row_bg_hex,
                                         ));
@@ -373,7 +390,7 @@ impl Render for SelectPrompt {
 
 #[cfg(test)]
 mod tests {
-    use super::{resolve_row_bg_hex, SelectRowState};
+    use super::{resolve_row_bg_hex, visual_row_state_for_input_modality, SelectRowState};
 
     #[test]
     fn test_resolve_row_bg_hex_uses_focused_accent_for_selected_row() {
@@ -428,5 +445,52 @@ mod tests {
             !render_code.contains(&needle),
             "select prompt render code should not use PromptFooter"
         );
+    }
+
+    #[test]
+    fn visual_row_state_suppresses_hover_in_keyboard_modality() {
+        let row_state = SelectRowState {
+            is_focused: false,
+            is_selected: false,
+            is_hovered: true,
+        };
+        let visual = visual_row_state_for_input_modality(row_state, true);
+        assert_eq!(
+            visual,
+            SelectRowState {
+                is_focused: false,
+                is_selected: false,
+                is_hovered: false,
+            }
+        );
+    }
+
+    #[test]
+    fn visual_row_state_preserves_focus_and_selection_when_hover_is_suppressed() {
+        let row_state = SelectRowState {
+            is_focused: true,
+            is_selected: true,
+            is_hovered: true,
+        };
+        let visual = visual_row_state_for_input_modality(row_state, true);
+        assert_eq!(
+            visual,
+            SelectRowState {
+                is_focused: true,
+                is_selected: true,
+                is_hovered: false,
+            }
+        );
+    }
+
+    #[test]
+    fn visual_row_state_keeps_hover_in_mouse_modality() {
+        let row_state = SelectRowState {
+            is_focused: false,
+            is_selected: false,
+            is_hovered: true,
+        };
+        let visual = visual_row_state_for_input_modality(row_state, false);
+        assert_eq!(visual, row_state);
     }
 }
