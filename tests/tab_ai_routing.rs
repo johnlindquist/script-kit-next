@@ -212,10 +212,10 @@ fn harness_submission_uses_script_kit_context_block() {
 }
 
 #[test]
-fn quick_terminal_has_escape_to_previous_view() {
+fn quick_terminal_cmd_w_restores_previous_view() {
     assert!(
         TERM_RENDER_SOURCE.contains("close_tab_ai_harness_terminal"),
-        "Escape in QuickTerminalView must restore the previous surface"
+        "Cmd+W in QuickTerminalView must restore the previous surface"
     );
 }
 

@@ -397,11 +397,58 @@ struct TabAiSaveOfferState {
     error: Option<SharedString>,
 }
 
+/// The kind of context a Tab AI card represents.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TabAiContextCardKind {
+    SelectedItem,
+    FilterText,
+    VisibleItems,
+    Desktop,
+    Clipboard,
+    PriorAutomations,
+}
+
+/// A single key→value row inside a context card.
+#[derive(Debug, Clone)]
+struct TabAiContextRow {
+    label: SharedString,
+    value: SharedString,
+}
+
+impl TabAiContextRow {
+    fn new(label: impl Into<SharedString>, value: impl Into<SharedString>) -> Self {
+        Self {
+            label: label.into(),
+            value: value.into(),
+        }
+    }
+}
+
+/// A suggested intent pill shown in the Tab AI empty state.
+#[derive(Debug, Clone)]
+struct TabAiSuggestedIntent {
+    label: SharedString,
+    intent: SharedString,
+}
+
+impl From<crate::ai::TabAiSuggestedIntentSpec> for TabAiSuggestedIntent {
+    fn from(value: crate::ai::TabAiSuggestedIntentSpec) -> Self {
+        Self {
+            label: value.label.into(),
+            intent: value.intent.into(),
+        }
+    }
+}
+
 /// A context card shown in the Tab AI chat empty state.
 #[derive(Debug, Clone)]
 struct TabAiContextCard {
+    kind: TabAiContextCardKind,
     label: SharedString,
-    body: SharedString,
+    title: SharedString,
+    body: Option<SharedString>,
+    rows: Vec<TabAiContextRow>,
+    suggestions: Vec<TabAiSuggestedIntent>,
 }
 
 /// Kind of a turn in the Tab AI chat.
@@ -445,6 +492,8 @@ struct TabAiChat {
     memory_hint: Option<crate::ai::TabAiMemorySuggestion>,
     /// Context cards shown as the empty state before the user types.
     context_cards: Vec<TabAiContextCard>,
+    /// Index of the currently highlighted suggestion pill (wraps around).
+    selected_suggestion_index: usize,
     /// Chat turns (user messages and AI responses).
     turns: Vec<TabAiTurn>,
     /// Cursor blink visibility (toggled by timer).
@@ -476,6 +525,7 @@ impl TabAiChat {
             frontmost_bundle_id,
             memory_hint: None,
             context_cards,
+            selected_suggestion_index: 0,
             turns: Vec::new(),
             cursor_visible: true,
             running: false,
@@ -495,20 +545,40 @@ impl TabAiChat {
         !self.running && !self.input.text().trim().is_empty()
     }
 
-    fn submission_payload(
-        &self,
-    ) -> (
-        String,
-        AppView,
-        crate::ai::TabAiUiSnapshot,
-        crate::ai::TabAiInvocationReceipt,
-    ) {
-        (
-            self.input.text().to_string(),
-            self.return_view.clone(),
-            self.ui_snapshot.clone(),
-            self.invocation_receipt.clone(),
-        )
+    /// Collect up to 3 suggestion pills across all context cards.
+    fn context_suggestions(&self) -> Vec<TabAiSuggestedIntent> {
+        self.context_cards
+            .iter()
+            .flat_map(|card| card.suggestions.iter().cloned())
+            .take(3)
+            .collect()
+    }
+
+    /// Cycle the selected suggestion index by `delta` (wrapping).
+    fn move_selected_suggestion(&mut self, delta: isize) {
+        let count = self.context_suggestions().len();
+        if count == 0 {
+            self.selected_suggestion_index = 0;
+            return;
+        }
+        self.selected_suggestion_index =
+            (self.selected_suggestion_index as isize + delta).rem_euclid(count as isize) as usize;
+    }
+
+    /// Return the currently highlighted suggestion, if any.
+    fn selected_suggestion(&self) -> Option<TabAiSuggestedIntent> {
+        self.context_suggestions()
+            .get(self.selected_suggestion_index)
+            .cloned()
+    }
+
+    /// Dynamic placeholder based on the selected suggestion.
+    fn input_placeholder(&self) -> SharedString {
+        self.selected_suggestion()
+            .map(|suggestion| {
+                SharedString::from(format!("{} or type your own\u{2026}", suggestion.intent))
+            })
+            .unwrap_or_else(|| "What do you want to do?".into())
     }
 
     fn refresh_memory_hint(&mut self) {

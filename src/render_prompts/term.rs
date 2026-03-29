@@ -193,18 +193,14 @@ impl ScriptListApp {
                         }
 
                         // For QuickTerminalView (Tab AI harness):
-                        // - Escape returns to the previous view
-                        // - Cmd+W closes the window
-                        if is_quick_terminal {
-                            if ui_foundation::is_key_escape(key) && !this.show_actions_popup {
-                                this.close_tab_ai_harness_terminal(cx);
-                                return true;
-                            }
-                            if has_cmd && key.eq_ignore_ascii_case("w") {
-                                logging::log("KEY", "Cmd+W - closing window");
-                                this.close_and_reset_window(cx);
-                                return true;
-                            }
+                        // - Plain Escape is forwarded to the PTY (harness TUI owns it)
+                        // - Cmd+W closes the wrapper and restores the previous view/focus
+                        if is_quick_terminal
+                            && has_cmd
+                            && key.eq_ignore_ascii_case("w")
+                        {
+                            this.close_tab_ai_harness_terminal(cx);
+                            return true;
                         }
 
                         // Cmd+K clears terminal output.
@@ -481,6 +477,28 @@ mod term_prompt_render_tests {
         assert!(
             TERM_RENDER_SOURCE.contains("render_terminal_prompt_hint_strip()"),
             "term prompt should use the terminal-specific close-only footer"
+        );
+    }
+
+    #[test]
+    fn test_quick_terminal_escape_passes_through_to_pty() {
+        const TERM_RENDER_SOURCE: &str = include_str!("term.rs");
+
+        // QuickTerminalView must NOT intercept plain Escape — it should fall through
+        // to the terminal PTY so the harness TUI can handle it.
+        assert!(
+            !TERM_RENDER_SOURCE.contains("is_key_escape(key) && !this.show_actions_popup {\n                                this.close_tab_ai_harness_terminal"),
+            "QuickTerminalView must not close on plain Escape — Escape belongs to the PTY"
+        );
+
+        // Cmd+W is the designated close shortcut for QuickTerminalView.
+        assert!(
+            TERM_RENDER_SOURCE.contains("eq_ignore_ascii_case(\"w\")"),
+            "QuickTerminalView must use Cmd+W to close the wrapper"
+        );
+        assert!(
+            TERM_RENDER_SOURCE.contains("close_tab_ai_harness_terminal"),
+            "Cmd+W must restore the previous view via close_tab_ai_harness_terminal"
         );
     }
 
