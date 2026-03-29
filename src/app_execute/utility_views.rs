@@ -328,6 +328,14 @@ impl ScriptListApp {
         }
     }
 
+    /// Open Claude Code in the quick terminal view
+    fn open_claude_code_terminal(&mut self, cx: &mut Context<Self>) {
+        tracing::info!(message = %"Opening Claude Code Terminal");
+
+        let command = "zsh -lc 'mkdir -p \"$HOME/.scriptkit/sessions\" && cd \"$HOME/.scriptkit/sessions\" && exec claude'".to_string();
+        self.open_terminal_with_command(command, cx);
+    }
+
     /// Open the webcam prompt
     #[cfg(target_os = "macos")]
     fn open_webcam(&mut self, cx: &mut Context<Self>) {
