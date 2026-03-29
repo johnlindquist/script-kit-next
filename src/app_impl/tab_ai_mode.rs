@@ -247,8 +247,19 @@ impl ScriptListApp {
         Ok((entity, true))
     }
 
-    /// Inject the context submission into the harness PTY, with a startup
-    /// delay for cold starts.
+    /// Maximum time (ms) to wait for a cold-started harness to produce its
+    /// first output before injecting context anyway.
+    const HARNESS_READINESS_TIMEOUT_MS: u64 = 2000;
+
+    /// Interval (ms) between readiness polls during cold-start wait.
+    const HARNESS_READINESS_POLL_MS: u64 = 20;
+
+    /// Inject the context submission into the harness PTY, with a readiness
+    /// gate for cold starts.
+    ///
+    /// On cold start, polls `has_received_output` on the `TermPrompt` entity
+    /// up to [`HARNESS_READINESS_TIMEOUT_MS`] before injecting.  Falls back
+    /// deterministically if the harness does not produce output in time.
     ///
     /// When `submit` is true, the payload is sent as a full line (appends CR).
     /// When false, the payload is pasted without a trailing CR so the user
@@ -263,14 +274,42 @@ impl ScriptListApp {
     ) {
         let app = cx.entity().downgrade();
         let entity_weak = entity.downgrade();
-        // Give new processes a moment to render their prompt
-        let delay_ms: u64 = if was_cold_start { 120 } else { 0 };
 
         cx.spawn(async move |_this, cx| {
-            if delay_ms > 0 {
-                cx.background_executor()
-                    .timer(std::time::Duration::from_millis(delay_ms))
-                    .await;
+            // For cold starts, wait until the harness has produced output
+            // (its prompt/banner), with a bounded timeout as fallback.
+            if was_cold_start {
+                let poll_interval =
+                    std::time::Duration::from_millis(Self::HARNESS_READINESS_POLL_MS);
+                let deadline = std::time::Instant::now()
+                    + std::time::Duration::from_millis(Self::HARNESS_READINESS_TIMEOUT_MS);
+
+                loop {
+                    let is_ready = cx.update(|cx| {
+                        entity_weak
+                            .upgrade()
+                            .map(|e| e.read(cx).has_received_output)
+                            .unwrap_or(true) // entity gone → skip waiting
+                    });
+
+                    if is_ready {
+                        tracing::debug!(
+                            event = "tab_ai_harness_readiness_detected",
+                            elapsed_ms = %std::time::Instant::now()
+                                .duration_since(deadline - std::time::Duration::from_millis(Self::HARNESS_READINESS_TIMEOUT_MS))
+                                .as_millis(),
+                        );
+                        break;
+                    }
+                    if std::time::Instant::now() >= deadline {
+                        tracing::warn!(
+                            event = "tab_ai_harness_readiness_timeout",
+                            timeout_ms = Self::HARNESS_READINESS_TIMEOUT_MS,
+                        );
+                        break;
+                    }
+                    cx.background_executor().timer(poll_interval).await;
+                }
             }
 
             let _ = cx.update(|cx| {

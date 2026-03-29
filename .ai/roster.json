@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-03-29T17:00:37.910Z",
+  "updatedAt": "2026-03-29T19:16:18.600Z",
   "agents": {
     "tab-ai-instant-context-a1": {
       "id": "tab-ai-instant-context-a1",
@@ -199,6 +199,66 @@
           "tests/tab_ai_context.rs",
           "tests/tab_ai_execution.rs",
           "tests/tab_ai_routing.rs"
+        ]
+      },
+      "claimed_at": {}
+    },
+    "dictation-capture-a1": {
+      "id": "dictation-capture-a1",
+      "kind": "codex",
+      "mode": "exec",
+      "model": "openai/gpt-5.4",
+      "task": "Create the entire src/dictation/ module tree for a headless audio capture runtime. This is greenfield — no existing dictation code exists yet.\n\nFILES TO CREATE (all under src/dictation/):\n- mod.rs: module facade with pub mod capture; mod device; mod types; mod visualizer; and pub use re-exports for all public types/functions\n- types.rs: DictationDeviceId(String), DictationDeviceInfo{id,name,is_default}, DictationCaptureConfig with Default (16000 Hz, 40ms chunks, 60ms level window), RawAudioChunk{sample_rate_hz,channels,samples:Vec<f32>}, CapturedAudioChunk{sample_rate_hz,samples:Vec<f32>,duration:Duration}, DictationLevel{rms:f32,peak:f32}, DictationCaptureEvent enum (Chunk/Level/EndOfStream)\n- visualizer.rs: compute_level(samples:&[f32])->DictationLevel (RMS+peak with clamping), bars_for_level(DictationLevel)->[f32;9] (symmetric bell shape, clamped 0.08..1.0)\n- capture.rs: Pure-Rust helpers mix_to_mono, resample_linear, normalize_chunk, run_processor. Plus macOS AVFoundation start_capture/DictationCaptureHandle following src/camera/mod.rs lifecycle pattern exactly (session/delegate/queue/sender ownership, Drop stops session, drains queue with dispatch_sync_f, nulls sender ivar, reclaims box, releases ObjC objects, joins processor thread). DictationCaptureHandle struct with unsafe impl Send. extract_pcm_chunk supporting float32 and int16 PCM only. Audio delegate callback only does extract_pcm_chunk + send RawAudioChunk.\n- device.rs: list_input_devices()->Result<Vec<DictationDeviceInfo>> and default_input_device()->Result<Option<DictationDeviceInfo>> using AVCaptureDevice/AVMediaTypeAudio on macOS, empty stubs on other platforms. Use objc 0.2 crate (NOT objc2). Use c\"\" string literals for ObjC interop.\n- tests.rs: Unit tests for mix_to_mono, resample_linear, normalize_chunk, compute_level, bars_for_level. Referenced via #[cfg(test)] mod tests; in mod.rs.\n\nALSO MODIFY:\n- src/main.rs: Add 'mod dictation;' declaration (this file uses include!() pattern — check where other mod declarations live, likely near top with other mod statements)\n\nKEY ANCHORS:\n- src/camera/mod.rs — THE template for AVFoundation lifecycle (CaptureHandle ownership, delegate callback, Drop cleanup). Port this pattern exactly for audio.\n- src/main.rs — where mod declarations live\n- CLAUDE.md rules: use objc 0.2, SAFETY comments on unsafe blocks, c\"\" literals, #[cfg(target_os=macos)] with not(target_os=macos) stubs, no unwrap in non-test code, use anyhow::Context for errors, pub(crate) default visibility\n\nCRITICAL CONSTRAINTS:\n- capture.rs pure-Rust helpers (mix_to_mono, resample_linear, normalize_chunk, run_processor) must be pub(crate) so tests.rs can import them\n- Use async_channel::bounded(128) for event channel, std::sync::mpsc::sync_channel(128) for raw channel\n- Use std::thread::spawn for processor thread (not cx.spawn — this is outside GPUI)\n- AVMediaTypeAudio is NSString 'soun' not a constant import\n- CMSampleBufferGetAudioBufferListWithRetainedBlockBuffer for PCM extraction\n- Support only float32 and int16 PCM formats in extract_pcm_chunk\n- No cpal dependency. Pure AVFoundation.\n- run_processor sends Level then Chunk for each raw buffer\n\nEXIT CRITERIA: cargo check && cargo clippy --lib -- -D warnings && cargo nextest run --lib must all pass",
+      "scope": "src/dictation/**,src/main.rs",
+      "readonly": false,
+      "status": "needs_split",
+      "claims": [],
+      "createdAt": "2026-03-29T18:56:22.186Z",
+      "lastSeenAt": "2026-03-29T19:16:18.600Z",
+      "host": "johns.macbook.pro.lan",
+      "startSha": "570fd914038cbc458013d6e8f75c1e6c0b8c83a6",
+      "notes": "[policy] commits touch files outside declared scope",
+      "report": {
+        "schema": "opex.agent_report.v1",
+        "agentId": "dictation-capture-a1",
+        "taskSummary": "Created a new headless dictation capture module with AVFoundation audio capture, processing helpers, device enumeration, visualizer utilities, tests, and module wiring, then verified, committed, and pushed it.",
+        "tests": [
+          {
+            "cmd": "cargo check",
+            "result": "pass"
+          },
+          {
+            "cmd": "cargo clippy --lib -- -D warnings",
+            "result": "pass"
+          },
+          {
+            "cmd": "cargo nextest run --lib",
+            "result": "pass"
+          }
+        ],
+        "changedFiles": [
+          "src/dictation/mod.rs",
+          "src/dictation/types.rs",
+          "src/dictation/visualizer.rs",
+          "src/dictation/device.rs",
+          "src/dictation/capture.rs",
+          "src/dictation/tests.rs",
+          "src/main.rs",
+          "src/lib.rs"
+        ],
+        "commitCount": 1,
+        "commitShas": [
+          "9ad7d3b1cb55a857dd074f69d20cfa34dd035050"
+        ],
+        "commitFiles": [
+          "src/dictation/capture.rs",
+          "src/dictation/device.rs",
+          "src/dictation/mod.rs",
+          "src/dictation/tests.rs",
+          "src/dictation/types.rs",
+          "src/dictation/visualizer.rs",
+          "src/lib.rs",
+          "src/main.rs"
         ]
       },
       "claimed_at": {}

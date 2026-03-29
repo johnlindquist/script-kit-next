@@ -101,6 +101,10 @@ pub struct TermPrompt {
     pub suppress_keys: bool,
     /// When true, Escape cancels the prompt instead of passing through to the PTY.
     pub escape_cancels: bool,
+    /// Set to `true` once the PTY has produced at least one chunk of output.
+    /// Used as a readiness signal for cold-start injection: callers can poll
+    /// this instead of relying on a fixed delay.
+    pub has_received_output: bool,
 }
 
 // --- merged from part_001.rs ---
@@ -155,6 +159,7 @@ impl TermPrompt {
             click_count: 0,
             suppress_keys: false,
             escape_cancels: true,
+            has_received_output: false,
         })
     }
 
@@ -575,6 +580,7 @@ impl TermPrompt {
                                 if processed_data {
                                     had_output = true;
                                     needs_render = true;
+                                    term_prompt.has_received_output = true;
                                 }
                                 for event in events {
                                     match event {

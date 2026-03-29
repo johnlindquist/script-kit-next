@@ -284,8 +284,7 @@ fn capture_focused_window_with_image_live(
                 mime_type: "image/png".to_string(),
                 width: capture.width,
                 height: capture.height,
-                base64_data: base64::engine::general_purpose::STANDARD
-                    .encode(&capture.png_data),
+                base64_data: base64::engine::general_purpose::STANDARD.encode(&capture.png_data),
                 title: Some(capture.window_title),
             });
             Ok((Some(window), image))

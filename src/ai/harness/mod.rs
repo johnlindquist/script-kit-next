@@ -272,7 +272,11 @@ pub fn build_tab_ai_harness_submission(
             output.push_str("\n\nAwait the user's next terminal input.\n");
         }
         None => {
-            // PasteOnly: stage context only, no synthetic turn text.
+            // PasteOnly: stage context only, but leave the cursor on a fresh
+            // line so the user's next keystrokes do not join the closing tag.
+            if !output.ends_with('\n') {
+                output.push('\n');
+            }
         }
     }
     Ok(output)
@@ -570,6 +574,37 @@ mod tests {
         )
         .expect("submission");
         assert!(submission.contains("Await the user's next terminal input."));
+    }
+
+    #[test]
+    fn paste_only_submission_ends_on_fresh_line() {
+        let submission = build_tab_ai_harness_submission(
+            &sample_context_with_focused_window(),
+            None,
+            TabAiHarnessSubmissionMode::PasteOnly,
+        )
+        .expect("submission");
+        assert!(
+            submission.ends_with("</scriptKitContext>\n"),
+            "PasteOnly must leave the cursor on the next line after the context block: {submission:?}"
+        );
+        assert!(!submission.contains("Await the user's next terminal input."));
+        assert!(!submission.contains("User intent:"));
+    }
+
+    #[test]
+    fn paste_only_submission_keeps_next_user_input_separate_from_context_block() {
+        let submission = build_tab_ai_harness_submission(
+            &sample_context_with_focused_window(),
+            None,
+            TabAiHarnessSubmissionMode::PasteOnly,
+        )
+        .expect("submission");
+        let composed = format!("{submission}rename this file\n");
+        assert!(
+            composed.contains("</scriptKitContext>\nrename this file\n"),
+            "user input must start on a fresh line after the context block: {composed:?}"
+        );
     }
 
     #[test]
