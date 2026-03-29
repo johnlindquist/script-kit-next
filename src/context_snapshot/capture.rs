@@ -204,14 +204,19 @@ fn capture_browser_live() -> Result<Option<BrowserContext>, String> {
 
 /// Capture focused-window metadata and optionally its PNG image bytes.
 ///
-/// When `include_image` is false, tries the fast path (tracker cache with
-/// metadata only). When true, always goes through `capture_focused_window_screenshot`
+/// When `include_image` is false, uses metadata-only paths that never invoke
+/// `capture_image()` or PNG encoding:
+///   1. Fast path: tracker cache (zero-cost, no OS calls)
+///   2. Fallback: `capture_focused_window_metadata()` (window enumeration only)
+///
+/// When `include_image` is true, goes through `capture_focused_window_screenshot`
 /// to obtain pixel data alongside metadata.
 fn capture_focused_window_with_image_live(
     include_image: bool,
 ) -> Result<(Option<FocusedWindowContext>, Option<Base64PngContext>), String> {
-    // Fast path: when screenshot is not needed, use cached metadata
+    // Metadata-only path: never capture pixels
     if !include_image {
+        // Try 1: tracker cache (cheapest)
         if let Some(app) = crate::frontmost_app_tracker::get_last_real_app() {
             if let Some(title) = app.window_title {
                 let title = title.trim().to_string();
@@ -234,8 +239,32 @@ fn capture_focused_window_with_image_live(
                 }
             }
         }
+
+        // Try 2: metadata-only window enumeration (no capture_image / PNG encode)
+        match crate::platform::capture_focused_window_metadata() {
+            Ok(meta) => {
+                tracing::info!(
+                    title = %meta.window_title,
+                    width = meta.width,
+                    height = meta.height,
+                    used_fallback = meta.used_fallback,
+                    "context_snapshot: captured focused window metadata (no screenshot)"
+                );
+                return Ok((
+                    Some(FocusedWindowContext {
+                        title: meta.window_title,
+                        width: meta.width,
+                        height: meta.height,
+                        used_fallback: meta.used_fallback,
+                    }),
+                    None,
+                ));
+            }
+            Err(error) => return Err(error.to_string()),
+        }
     }
 
+    // Screenshot path: capture pixels + encode PNG
     match crate::platform::capture_focused_window_screenshot() {
         Ok(capture) => {
             tracing::info!(
@@ -251,18 +280,14 @@ fn capture_focused_window_with_image_live(
                 height: capture.height,
                 used_fallback: capture.used_fallback,
             };
-            let image = if include_image {
-                Some(Base64PngContext {
-                    mime_type: "image/png".to_string(),
-                    width: capture.width,
-                    height: capture.height,
-                    base64_data: base64::engine::general_purpose::STANDARD
-                        .encode(&capture.png_data),
-                    title: Some(capture.window_title),
-                })
-            } else {
-                None
-            };
+            let image = Some(Base64PngContext {
+                mime_type: "image/png".to_string(),
+                width: capture.width,
+                height: capture.height,
+                base64_data: base64::engine::general_purpose::STANDARD
+                    .encode(&capture.png_data),
+                title: Some(capture.window_title),
+            });
             Ok((Some(window), image))
         }
         Err(error) => Err(error.to_string()),
@@ -508,6 +533,69 @@ mod tests {
                 .expect("panel image")
                 .base64_data,
             "cGFuZWw="
+        );
+    }
+
+    #[test]
+    fn seed_capture_metadata_only_path_yields_focused_window_without_image() {
+        // Simulates the tab_ai_submit() profile: include_focused_window=true,
+        // include_screenshot=false. The seed has focused-window metadata but
+        // the image slot is None — matching what the metadata-only fallback
+        // produces when the tracker cache misses.
+        let snapshot = capture_context_snapshot_from_seed(
+            &CaptureContextOptions::tab_ai_submit(),
+            CaptureContextSeed {
+                focused_window: Ok(Some(FocusedWindowContext {
+                    title: "VS Code - main.rs".to_string(),
+                    width: 1440,
+                    height: 900,
+                    used_fallback: false,
+                })),
+                focused_window_image: Ok(None), // metadata-only path produces no image
+                selected_text: Ok(Some("let x = 42;".to_string())),
+                frontmost_app: Ok(Some(FrontmostAppContext {
+                    pid: 99,
+                    bundle_id: "com.microsoft.VSCode".to_string(),
+                    name: "Code".to_string(),
+                })),
+                ..Default::default()
+            },
+        );
+
+        // Focused window metadata is present
+        let fw = snapshot
+            .focused_window
+            .as_ref()
+            .expect("focused window metadata should be present");
+        assert_eq!(fw.title, "VS Code - main.rs");
+        assert_eq!(fw.width, 1440);
+        assert_eq!(fw.height, 900);
+
+        // Screenshot is absent (tab_ai_submit has include_screenshot=false)
+        assert!(
+            snapshot.focused_window_image.is_none(),
+            "tab_ai_submit must not include focused_window_image"
+        );
+
+        // Other metadata is present
+        assert!(snapshot.selected_text.is_some());
+        assert!(snapshot.frontmost_app.is_some());
+    }
+
+    #[test]
+    fn tab_ai_submit_profile_never_requests_screenshots() {
+        let opts = CaptureContextOptions::tab_ai_submit();
+        assert!(
+            opts.include_focused_window,
+            "tab_ai_submit must include focused window metadata"
+        );
+        assert!(
+            !opts.include_screenshot,
+            "tab_ai_submit must NOT include screenshot"
+        );
+        assert!(
+            !opts.include_panel_screenshot,
+            "tab_ai_submit must NOT include panel screenshot"
         );
     }
 

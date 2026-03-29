@@ -96,6 +96,49 @@ fn context_option_profiles_are_stable() {
 }
 
 #[test]
+fn tab_ai_submit_profile_is_stable_and_screenshot_free() {
+    let opts = script_kit_gpui::context_snapshot::CaptureContextOptions::tab_ai_submit();
+
+    // Rich metadata for higher-precision actions
+    assert!(opts.include_selected_text);
+    assert!(opts.include_frontmost_app);
+    assert!(opts.include_menu_bar);
+    assert!(opts.include_browser_url);
+    assert!(opts.include_focused_window);
+
+    // No screenshots — keeps the Tab AI path fast
+    assert!(
+        !opts.include_screenshot,
+        "tab_ai_submit must not request focused-window screenshot"
+    );
+    assert!(
+        !opts.include_panel_screenshot,
+        "tab_ai_submit must not request panel screenshot"
+    );
+}
+
+#[test]
+fn tab_ai_submit_snapshot_contains_metadata_without_image() {
+    init();
+
+    // Use the deterministic seed path (no live OS calls) and verify that the
+    // tab_ai_submit profile yields focused-window metadata but no image data.
+    let snapshot = script_kit_gpui::context_snapshot::capture_context_snapshot(
+        &script_kit_gpui::context_snapshot::CaptureContextOptions::tab_ai_submit(),
+    );
+
+    // Deterministic mode returns empty fields, but crucially no image data
+    assert!(
+        snapshot.focused_window_image.is_none(),
+        "tab_ai_submit snapshot must not contain focused_window_image"
+    );
+    assert!(
+        snapshot.script_kit_panel_image.is_none(),
+        "tab_ai_submit snapshot must not contain script_kit_panel_image"
+    );
+}
+
+#[test]
 fn context_resource_is_available() {
     init();
     let scripts: Vec<std::sync::Arc<script_kit_gpui::scripts::Script>> = Vec::new();

@@ -182,6 +182,86 @@ pub fn capture_focused_window_screenshot(
     })
 }
 
+/// Metadata about a focused window without pixel data.
+///
+/// Returned by `capture_focused_window_metadata()` for callers that only need
+/// the window title and dimensions — avoids the expensive `capture_image()` +
+/// PNG-encode path.
+pub struct FocusedWindowMetadata {
+    pub window_title: String,
+    pub width: u32,
+    pub height: u32,
+    pub used_fallback: bool,
+}
+
+/// Return focused-window metadata (title, dimensions) without capturing pixels.
+///
+/// Uses the same window-enumeration logic as `capture_focused_window_screenshot()`
+/// but stops before `capture_image()`, making it suitable for the Tab AI submit
+/// path where only metadata is needed.
+pub fn capture_focused_window_metadata(
+) -> Result<FocusedWindowMetadata, Box<dyn std::error::Error + Send + Sync>> {
+    use xcap::Window;
+
+    let windows = Window::all()?;
+
+    let mut target_window = None;
+    let mut found_focused = false;
+    for window in windows {
+        let app_name = window.app_name().unwrap_or_else(|_| String::new());
+        let is_minimized = window.is_minimized().unwrap_or(true);
+        let is_focused = window.is_focused().unwrap_or(false);
+
+        let is_our_app = app_name.contains("script-kit-gpui")
+            || app_name == "Script Kit"
+            || app_name.contains("Script Kit");
+
+        let width = window.width().unwrap_or(0);
+        let height = window.height().unwrap_or(0);
+        let is_reasonable_size = width >= 100 && height >= 100;
+
+        if !is_our_app && !is_minimized && is_reasonable_size {
+            if is_focused {
+                target_window = Some(window);
+                found_focused = true;
+                break;
+            }
+            if target_window.is_none() {
+                target_window = Some(window);
+            }
+        }
+    }
+
+    let used_fallback = target_window.is_some() && !found_focused;
+
+    let window = target_window.ok_or("No suitable window found for metadata")?;
+    let title = window.title().unwrap_or_else(|_| "Unknown".to_string());
+    let app_name = window.app_name().unwrap_or_else(|_| "Unknown".to_string());
+    let width = window.width().unwrap_or(0);
+    let height = window.height().unwrap_or(0);
+
+    let display_title = if title.is_empty() {
+        app_name.clone()
+    } else {
+        format!("{} - {}", app_name, title)
+    };
+
+    tracing::debug!(
+        width,
+        height,
+        title = %display_title,
+        used_fallback,
+        "Focused window metadata captured (no screenshot)"
+    );
+
+    Ok(FocusedWindowMetadata {
+        window_title: display_title,
+        width,
+        height,
+        used_fallback,
+    })
+}
+
 /// Capture a screenshot of Script Kit's own visible panel window.
 ///
 /// Unlike `capture_focused_window_screenshot()`, this helper intentionally
