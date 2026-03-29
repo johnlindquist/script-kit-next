@@ -1005,8 +1005,14 @@ impl Render for TermPrompt {
                     }
                 }
 
-                // Forward regular input to terminal
-                if let Some(key_char) = &event.keystroke.key_char {
+                // Forward regular input to terminal.
+                // IMPORTANT: Skip key_char for Enter/Tab/Backspace — GPUI sets
+                // key_char="\n" for Enter but terminals expect \r (0x0d). These
+                // keys must fall through to the special key match below.
+                let use_key_char = event.keystroke.key_char.is_some()
+                    && !matches!(key_str.as_str(), "enter" | "return" | "tab" | "backspace");
+
+                if let (true, Some(key_char)) = (use_key_char, &event.keystroke.key_char) {
                     if let Err(e) = this.terminal.input(key_char.as_bytes()) {
                         if !this.exited {
                             warn!(error = %e, "Failed to send input to terminal");
