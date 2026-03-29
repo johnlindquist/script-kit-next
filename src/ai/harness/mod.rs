@@ -250,18 +250,74 @@ pub fn build_tab_ai_harness_context_block(
     ))
 }
 
-/// Build a full harness submission: context block + optional user intent.
+// ---------------------------------------------------------------------------
+// Hints block (invocation receipt + suggested intents)
+// ---------------------------------------------------------------------------
+
+/// Serializable hints block appended after the context block.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct TabAiHarnessHints<'a> {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    invocation_receipt: Option<&'a crate::ai::TabAiInvocationReceipt>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    suggested_intents: Vec<crate::ai::TabAiSuggestedIntentSpec>,
+}
+
+/// Build the optional `<scriptKitHints>` block from receipt + suggestions.
+/// Returns `None` when both are empty (no block emitted).
+fn build_tab_ai_harness_hints_block(
+    invocation_receipt: Option<&crate::ai::TabAiInvocationReceipt>,
+    suggested_intents: &[crate::ai::TabAiSuggestedIntentSpec],
+) -> Result<Option<String>, String> {
+    if invocation_receipt.is_none() && suggested_intents.is_empty() {
+        return Ok(None);
+    }
+    let hints = TabAiHarnessHints {
+        invocation_receipt,
+        suggested_intents: suggested_intents.to_vec(),
+    };
+    let hints_json = serde_json::to_string_pretty(&hints)
+        .map_err(|e| format!("tab_ai_harness_hints_serialize_failed: {e}"))?;
+    Ok(Some(format!(
+        "<scriptKitHints>\n\
+         Use these to understand capture quality and suggest strong first actions.\n\
+         ```json\n\
+         {hints_json}\n\
+         ```\n\
+         </scriptKitHints>"
+    )))
+}
+
+// ---------------------------------------------------------------------------
+// Full submission builder
+// ---------------------------------------------------------------------------
+
+/// Build a full harness submission: context block + optional hints + optional user intent.
 ///
 /// Behavior depends on `mode`:
 /// - `Submit` without intent: appends a sentinel asking the harness to wait.
 /// - `PasteOnly` without intent: stages context only, no synthetic turn text.
 /// - With intent (either mode): appends the intent as `User intent:`.
+///
+/// When `invocation_receipt` or `suggested_intents` are provided, a
+/// `<scriptKitHints>` block is appended between the context and intent.
 pub fn build_tab_ai_harness_submission(
     context: &crate::ai::TabAiContextBlob,
     intent: Option<&str>,
     mode: TabAiHarnessSubmissionMode,
+    invocation_receipt: Option<&crate::ai::TabAiInvocationReceipt>,
+    suggested_intents: &[crate::ai::TabAiSuggestedIntentSpec],
 ) -> Result<String, String> {
     let mut output = build_tab_ai_harness_context_block(context)?;
+
+    if let Some(hints_block) =
+        build_tab_ai_harness_hints_block(invocation_receipt, suggested_intents)?
+    {
+        output.push_str("\n\n");
+        output.push_str(&hints_block);
+    }
+
     match intent.map(str::trim).filter(|v| !v.is_empty()) {
         Some(intent) => {
             output.push_str("\n\nUser intent:\n");
@@ -408,6 +464,8 @@ mod tests {
             &context,
             Some("rename this file"),
             TabAiHarnessSubmissionMode::Submit,
+            None,
+            &[],
         )
         .expect("should build");
         assert!(with_intent.contains("<scriptKitContext schemaVersion=\"1\">"));
@@ -416,9 +474,14 @@ mod tests {
         assert!(!with_intent.contains("Await the user"));
 
         // Without intent (Submit mode) — sentinel present
-        let without_intent =
-            build_tab_ai_harness_submission(&context, None, TabAiHarnessSubmissionMode::Submit)
-                .expect("should build");
+        let without_intent = build_tab_ai_harness_submission(
+            &context,
+            None,
+            TabAiHarnessSubmissionMode::Submit,
+            None,
+            &[],
+        )
+        .expect("should build");
         assert!(without_intent.contains("<scriptKitContext schemaVersion=\"1\">"));
         assert!(without_intent.contains("Await the user's next terminal input."));
         assert!(!without_intent.contains("User intent:"));
@@ -439,9 +502,14 @@ mod tests {
             "2026-03-29T07:07:06Z".to_string(),
         );
 
-        let paste =
-            build_tab_ai_harness_submission(&context, None, TabAiHarnessSubmissionMode::PasteOnly)
-                .expect("should build");
+        let paste = build_tab_ai_harness_submission(
+            &context,
+            None,
+            TabAiHarnessSubmissionMode::PasteOnly,
+            None,
+            &[],
+        )
+        .expect("should build");
         assert!(paste.contains("<scriptKitContext schemaVersion=\"1\">"));
         assert!(!paste.contains("Await the user's next terminal input."));
         assert!(!paste.contains("User intent:"));
@@ -466,6 +534,8 @@ mod tests {
             &context,
             Some("open settings"),
             TabAiHarnessSubmissionMode::PasteOnly,
+            None,
+            &[],
         )
         .expect("should build");
         assert!(paste.contains("User intent:\nopen settings"));
@@ -552,6 +622,8 @@ mod tests {
             &sample_context_with_focused_window(),
             None,
             TabAiHarnessSubmissionMode::PasteOnly,
+            None,
+            &[],
         )
         .expect("submission");
         let expected_open = format!(
@@ -571,6 +643,8 @@ mod tests {
             &sample_context_with_focused_window(),
             None,
             TabAiHarnessSubmissionMode::Submit,
+            None,
+            &[],
         )
         .expect("submission");
         assert!(submission.contains("Await the user's next terminal input."));
@@ -582,6 +656,8 @@ mod tests {
             &sample_context_with_focused_window(),
             None,
             TabAiHarnessSubmissionMode::PasteOnly,
+            None,
+            &[],
         )
         .expect("submission");
         assert!(
@@ -598,6 +674,8 @@ mod tests {
             &sample_context_with_focused_window(),
             None,
             TabAiHarnessSubmissionMode::PasteOnly,
+            None,
+            &[],
         )
         .expect("submission");
         let composed = format!("{submission}rename this file\n");
@@ -619,5 +697,82 @@ mod tests {
 
         // Single quotes get escaped
         assert_eq!(shell_quote("it's"), "'it'\"'\"'s'");
+    }
+
+    #[test]
+    fn paste_only_submission_includes_hints_block_when_receipt_or_suggestions_exist() {
+        let context = crate::ai::TabAiContextBlob::from_parts(
+            crate::ai::TabAiUiSnapshot {
+                prompt_type: "FileSearch".to_string(),
+                ..Default::default()
+            },
+            Default::default(),
+            vec![],
+            None,
+            vec![],
+            vec![],
+            "2026-03-29T18:10:15Z".to_string(),
+        );
+
+        let receipt = crate::ai::TabAiInvocationReceipt {
+            schema_version: crate::ai::TAB_AI_INVOCATION_RECEIPT_SCHEMA_VERSION,
+            prompt_type: "FileSearch".to_string(),
+            input_status: crate::ai::TabAiFieldStatus::Captured,
+            focus_status: crate::ai::TabAiFieldStatus::Captured,
+            elements_status: crate::ai::TabAiFieldStatus::Captured,
+            element_count: 3,
+            warning_count: 0,
+            has_focus_target: true,
+            has_input_text: false,
+            degradation_reasons: vec![],
+            rich: true,
+        };
+
+        let suggestions = vec![
+            crate::ai::TabAiSuggestedIntentSpec::new("Summarize", "summarize this file"),
+            crate::ai::TabAiSuggestedIntentSpec::new("Rename", "rename this file"),
+        ];
+
+        let submission = build_tab_ai_harness_submission(
+            &context,
+            None,
+            TabAiHarnessSubmissionMode::PasteOnly,
+            Some(&receipt),
+            &suggestions,
+        )
+        .expect("submission");
+
+        assert!(submission.contains("<scriptKitHints>"));
+        assert!(submission.contains("\"promptType\": \"FileSearch\""));
+        assert!(submission.contains("\"intent\": \"summarize this file\""));
+        assert!(submission.ends_with('\n'));
+    }
+
+    #[test]
+    fn paste_only_submission_omits_hints_block_when_no_receipt_or_suggestions() {
+        let context = crate::ai::TabAiContextBlob::from_parts(
+            crate::ai::TabAiUiSnapshot {
+                prompt_type: "ScriptList".to_string(),
+                ..Default::default()
+            },
+            Default::default(),
+            vec![],
+            None,
+            vec![],
+            vec![],
+            "2026-03-29T18:10:15Z".to_string(),
+        );
+
+        let submission = build_tab_ai_harness_submission(
+            &context,
+            None,
+            TabAiHarnessSubmissionMode::PasteOnly,
+            None,
+            &[],
+        )
+        .expect("submission");
+
+        assert!(!submission.contains("<scriptKitHints>"));
+        assert!(submission.contains("<scriptKitContext"));
     }
 }

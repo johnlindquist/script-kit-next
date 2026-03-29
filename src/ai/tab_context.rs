@@ -2255,7 +2255,8 @@ pub fn resolve_tab_ai_memory_suggestions_from_path(
 ///
 /// At most 3 suggestions are returned, preferring app-specific verbs when the
 /// focused target has `kind == "app"`.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TabAiSuggestedIntentSpec {
     pub label: String,
     pub intent: String,

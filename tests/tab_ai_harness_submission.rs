@@ -32,9 +32,14 @@ fn make_context(prompt_type: &str, input_text: Option<&str>) -> TabAiContextBlob
 #[test]
 fn paste_only_without_intent_omits_sentinel() {
     let context = make_context("FileSearch", Some("readme"));
-    let submission =
-        build_tab_ai_harness_submission(&context, None, TabAiHarnessSubmissionMode::PasteOnly)
-            .expect("submission should build");
+    let submission = build_tab_ai_harness_submission(
+        &context,
+        None,
+        TabAiHarnessSubmissionMode::PasteOnly,
+        None,
+        &[],
+    )
+    .expect("submission should build");
 
     assert!(submission.contains("<scriptKitContext schemaVersion=\"1\">"));
     assert!(
@@ -54,6 +59,8 @@ fn paste_only_with_intent_includes_intent() {
         &context,
         Some("open settings"),
         TabAiHarnessSubmissionMode::PasteOnly,
+        None,
+        &[],
     )
     .expect("submission should build");
 
@@ -67,9 +74,14 @@ fn paste_only_with_intent_includes_intent() {
 #[test]
 fn paste_only_stages_context_block_with_schema_version() {
     let context = make_context("ScriptList", Some("hello"));
-    let submission =
-        build_tab_ai_harness_submission(&context, None, TabAiHarnessSubmissionMode::PasteOnly)
-            .expect("should build");
+    let submission = build_tab_ai_harness_submission(
+        &context,
+        None,
+        TabAiHarnessSubmissionMode::PasteOnly,
+        None,
+        &[],
+    )
+    .expect("should build");
 
     assert!(
         submission.starts_with("<scriptKitContext schemaVersion=\"1\">"),
@@ -92,9 +104,14 @@ fn paste_only_stages_context_block_with_schema_version() {
 #[test]
 fn submit_without_intent_includes_sentinel() {
     let context = make_context("ScriptList", None);
-    let submission =
-        build_tab_ai_harness_submission(&context, None, TabAiHarnessSubmissionMode::Submit)
-            .expect("submission should build");
+    let submission = build_tab_ai_harness_submission(
+        &context,
+        None,
+        TabAiHarnessSubmissionMode::Submit,
+        None,
+        &[],
+    )
+    .expect("submission should build");
 
     assert!(submission.contains("<scriptKitContext schemaVersion=\"1\">"));
     assert!(
@@ -110,6 +127,8 @@ fn submit_with_intent_includes_intent_and_omits_sentinel() {
         &context,
         Some("rename this file"),
         TabAiHarnessSubmissionMode::Submit,
+        None,
+        &[],
     )
     .expect("submission should build");
 
@@ -132,14 +151,21 @@ fn blank_intent_treated_as_none() {
         &context,
         Some("   "),
         TabAiHarnessSubmissionMode::PasteOnly,
+        None,
+        &[],
     )
     .expect("should build");
     assert!(!paste.contains("User intent:"));
     assert!(!paste.contains("Await the user"));
 
-    let submit =
-        build_tab_ai_harness_submission(&context, Some("   "), TabAiHarnessSubmissionMode::Submit)
-            .expect("should build");
+    let submit = build_tab_ai_harness_submission(
+        &context,
+        Some("   "),
+        TabAiHarnessSubmissionMode::Submit,
+        None,
+        &[],
+    )
+    .expect("should build");
     assert!(!submit.contains("User intent:"));
     assert!(submit.contains("Await the user's next terminal input."));
 }
@@ -147,9 +173,14 @@ fn blank_intent_treated_as_none() {
 #[test]
 fn empty_string_intent_treated_as_none() {
     let context = make_context("ScriptList", None);
-    let paste =
-        build_tab_ai_harness_submission(&context, Some(""), TabAiHarnessSubmissionMode::PasteOnly)
-            .expect("should build");
+    let paste = build_tab_ai_harness_submission(
+        &context,
+        Some(""),
+        TabAiHarnessSubmissionMode::PasteOnly,
+        None,
+        &[],
+    )
+    .expect("should build");
     assert!(!paste.contains("User intent:"));
     assert!(!paste.contains("Await the user"));
 }
@@ -161,9 +192,14 @@ fn empty_string_intent_treated_as_none() {
 #[test]
 fn submission_includes_input_text_from_context() {
     let context = make_context("FileSearch", Some("my-query"));
-    let submission =
-        build_tab_ai_harness_submission(&context, None, TabAiHarnessSubmissionMode::PasteOnly)
-            .expect("should build");
+    let submission = build_tab_ai_harness_submission(
+        &context,
+        None,
+        TabAiHarnessSubmissionMode::PasteOnly,
+        None,
+        &[],
+    )
+    .expect("should build");
 
     assert!(
         submission.contains("my-query"),
@@ -174,9 +210,14 @@ fn submission_includes_input_text_from_context() {
 #[test]
 fn submission_includes_prompt_type_from_context() {
     let context = make_context("ClipboardHistory", None);
-    let submission =
-        build_tab_ai_harness_submission(&context, None, TabAiHarnessSubmissionMode::PasteOnly)
-            .expect("should build");
+    let submission = build_tab_ai_harness_submission(
+        &context,
+        None,
+        TabAiHarnessSubmissionMode::PasteOnly,
+        None,
+        &[],
+    )
+    .expect("should build");
 
     assert!(
         submission.contains("ClipboardHistory"),
