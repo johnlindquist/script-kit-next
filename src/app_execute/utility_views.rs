@@ -332,7 +332,7 @@ impl ScriptListApp {
     fn open_claude_code_terminal(&mut self, cx: &mut Context<Self>) {
         tracing::info!(message = %"Opening Claude Code Terminal");
 
-        let command = "zsh -lc 'mkdir -p \"$HOME/.scriptkit/sessions\" && cd \"$HOME/.scriptkit/sessions\" && exec claude'".to_string();
+        let command = r#"zsh -lc 'mkdir -p "$HOME/.scriptkit/sessions" && cd "$HOME/.scriptkit/sessions" && exec claude'"#.to_string();
         self.open_terminal_with_command(command, cx);
     }
 

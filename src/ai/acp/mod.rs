@@ -13,7 +13,9 @@
 pub(crate) mod client;
 pub(crate) mod config;
 pub(crate) mod handlers;
+pub(crate) mod provider;
 pub(crate) mod types;
 
 pub(crate) use client::AcpRuntime;
 pub(crate) use config::AcpAgentConfig;
+pub(crate) use provider::AcpProvider;

@@ -495,11 +495,13 @@ impl TabAiChat {
         &self,
     ) -> (
         String,
+        AppView,
         crate::ai::TabAiUiSnapshot,
         crate::ai::TabAiInvocationReceipt,
     ) {
         (
             self.input.text().to_string(),
+            self.return_view.clone(),
             self.ui_snapshot.clone(),
             self.invocation_receipt.clone(),
         )

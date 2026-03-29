@@ -2390,15 +2390,27 @@ impl ProviderRegistry {
             registry.register(Arc::new(VercelGatewayProvider::new(key)));
         }
 
-        // Claude Code CLI provider
-        // Priority: config > environment variables
-        let claude_provider = config
-            .map(|c| c.get_claude_code())
-            .and_then(|claude_config| ClaudeCodeProvider::from_config(&claude_config))
-            .or_else(ClaudeCodeProvider::detect_from_env);
+        // Claude Code provider: keep the legacy raw CLI path as the default
+        // until the ACP runtime is wired to a real approval UI. ACP remains
+        // available behind an explicit opt-in for development.
+        let use_acp_claude = std::env::var("SCRIPT_KIT_ACP_CLAUDE_CODE")
+            .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+            .unwrap_or(false);
 
-        if let Some(claude_cli) = claude_provider {
-            registry.register(Arc::new(claude_cli));
+        if use_acp_claude {
+            let acp_provider = Self::detect_acp_claude_provider(config);
+            if let Some(provider) = acp_provider {
+                registry.register(Arc::new(provider));
+            }
+        } else {
+            let claude_provider = config
+                .map(|c| c.get_claude_code())
+                .and_then(|claude_config| ClaudeCodeProvider::from_config(&claude_config))
+                .or_else(ClaudeCodeProvider::detect_from_env);
+
+            if let Some(claude_cli) = claude_provider {
+                registry.register(Arc::new(claude_cli));
+            }
         }
 
         // Log which providers are available (without exposing keys)
@@ -2413,6 +2425,80 @@ impl ProviderRegistry {
         }
 
         registry
+    }
+
+    /// Build an ACP-backed Claude Code provider from config or environment.
+    ///
+    /// Returns `None` when Claude Code is not enabled or the binary is not found.
+    fn detect_acp_claude_provider(
+        config: Option<&crate::config::Config>,
+    ) -> Option<crate::ai::acp::AcpProvider> {
+        use crate::ai::acp::{AcpAgentConfig, AcpProvider};
+        use super::config::env_vars;
+
+        // Try config first, then env vars — same priority as the legacy path.
+        let (enabled, claude_path) = if let Some(cfg) = config {
+            let cc = cfg.get_claude_code();
+            let path = cc.path.clone().unwrap_or_else(|| "claude".to_string());
+            (cc.enabled, path)
+        } else {
+            let enabled = std::env::var(env_vars::CLAUDE_CODE_ENABLED)
+                .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+                .unwrap_or(false);
+            let path = std::env::var(env_vars::CLAUDE_CODE_PATH)
+                .unwrap_or_else(|_| "claude".to_string());
+            (enabled, path)
+        };
+
+        if !enabled {
+            tracing::debug!("ACP Claude Code provider not enabled");
+            return None;
+        }
+
+        if !ClaudeCodeProvider::is_available(&claude_path) {
+            tracing::warn!(
+                path = %claude_path,
+                "Claude Code CLI not found — ACP provider disabled"
+            );
+            return None;
+        }
+
+        let agent = AcpAgentConfig {
+            id: "claude-code".into(),
+            display_name: "Claude Code (ACP)".into(),
+            command: claude_path,
+            args: vec![],
+            env: std::collections::HashMap::new(),
+            models: vec![
+                crate::ai::acp::config::AcpModelEntry {
+                    id: "sonnet".into(),
+                    display_name: Some("Claude Sonnet (ACP)".into()),
+                    context_window: Some(200_000),
+                },
+                crate::ai::acp::config::AcpModelEntry {
+                    id: "opus".into(),
+                    display_name: Some("Claude Opus (ACP)".into()),
+                    context_window: Some(200_000),
+                },
+                crate::ai::acp::config::AcpModelEntry {
+                    id: "haiku".into(),
+                    display_name: Some("Claude Haiku (ACP)".into()),
+                    context_window: Some(200_000),
+                },
+                crate::ai::acp::config::AcpModelEntry {
+                    id: "default".into(),
+                    display_name: Some("Claude Code (ACP)".into()),
+                    context_window: Some(200_000),
+                },
+            ],
+        };
+
+        tracing::info!(
+            command = %agent.command,
+            "ACP Claude Code provider initialized"
+        );
+
+        Some(AcpProvider::new(agent))
     }
 
     /// Register a provider with the registry.
@@ -2916,6 +3002,70 @@ mod tests {
     fn test_should_not_retry_transport_error_bad_uri() {
         let err = ureq::Error::BadUri("missing scheme".to_string());
         assert!(!should_retry_transport_error(&err));
+    }
+
+    // ================= ACP Provider Registration Tests =================
+
+    #[test]
+    fn legacy_claude_provider_remains_default_without_acp_opt_in() {
+        let orig = std::env::var("SCRIPT_KIT_ACP_CLAUDE_CODE").ok();
+        std::env::remove_var("SCRIPT_KIT_ACP_CLAUDE_CODE");
+
+        let orig_enabled = std::env::var("SCRIPT_KIT_CLAUDE_CODE_ENABLED").ok();
+        std::env::set_var("SCRIPT_KIT_CLAUDE_CODE_ENABLED", "1");
+
+        let orig_path = std::env::var("SCRIPT_KIT_CLAUDE_CODE_PATH").ok();
+        std::env::set_var("SCRIPT_KIT_CLAUDE_CODE_PATH", "sh");
+
+        let registry = ProviderRegistry::from_environment();
+
+        assert!(
+            registry.get_provider("claude_code").is_some(),
+            "Legacy claude_code provider must remain the default without ACP opt-in"
+        );
+        assert!(
+            registry.get_provider("claude-code").is_none(),
+            "ACP provider must not be registered without ACP opt-in"
+        );
+
+        if let Some(v) = orig {
+            std::env::set_var("SCRIPT_KIT_ACP_CLAUDE_CODE", v);
+        } else {
+            std::env::remove_var("SCRIPT_KIT_ACP_CLAUDE_CODE");
+        }
+        if let Some(v) = orig_enabled {
+            std::env::set_var("SCRIPT_KIT_CLAUDE_CODE_ENABLED", v);
+        } else {
+            std::env::remove_var("SCRIPT_KIT_CLAUDE_CODE_ENABLED");
+        }
+        if let Some(v) = orig_path {
+            std::env::set_var("SCRIPT_KIT_CLAUDE_CODE_PATH", v);
+        } else {
+            std::env::remove_var("SCRIPT_KIT_CLAUDE_CODE_PATH");
+        }
+    }
+
+    #[test]
+    fn registry_can_register_acp_provider_without_legacy_claude_id() {
+        let agent = crate::ai::acp::AcpAgentConfig {
+            id: "claude-code".into(),
+            display_name: "Claude Code (ACP)".into(),
+            command: "claude".into(),
+            args: vec![],
+            env: std::collections::HashMap::new(),
+            models: vec![],
+        };
+        let mut registry = ProviderRegistry::new();
+        registry.register(Arc::new(crate::ai::acp::AcpProvider::new(agent)));
+
+        assert!(
+            registry.get_provider("claude-code").is_some(),
+            "ACP provider should be registered under 'claude-code'"
+        );
+        assert!(
+            registry.get_provider("claude_code").is_none(),
+            "Legacy 'claude_code' id must not appear"
+        );
     }
 
     // ================= Claude Code CLI Provider Tests =================
