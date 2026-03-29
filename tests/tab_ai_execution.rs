@@ -543,13 +543,13 @@ fn complete_execution_appends_status_turn_to_chat() {
 #[test]
 fn close_save_offer_restores_focus_to_tab_ai_chat() {
     // When save-offer is dismissed and current_view is TabAiChat,
-    // focus must return to the chat surface (AppRoot), not MainFilter.
+    // focus must return to the chat surface, not MainFilter.
     let close_pos = TAB_AI_MODE_SOURCE
         .find("fn close_tab_ai_save_offer")
         .expect("close_tab_ai_save_offer must exist");
     let close_code = &TAB_AI_MODE_SOURCE[close_pos..];
     assert!(
-        close_code.contains("AppView::TabAiChat { .. } => FocusTarget::AppRoot"),
-        "dismissing save-offer must restore focus to AppRoot when TabAiChat is current"
+        close_code.contains("AppView::TabAiChat { .. } => FocusTarget::TabAiChat"),
+        "dismissing save-offer must restore focus to TabAiChat when TabAiChat is current"
     );
 }
