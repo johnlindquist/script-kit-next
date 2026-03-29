@@ -192,9 +192,12 @@ impl ScriptListApp {
                             return true;
                         }
 
-                        // For QuickTerminalView (Tab AI harness):
-                        // - Plain Escape is forwarded to the PTY (harness TUI owns it)
-                        // - Cmd+W closes the wrapper and restores the previous view/focus
+                        // QuickTerminalView close semantics contract:
+                        // - Plain Escape is forwarded to the PTY (harness TUI owns it).
+                        // - Cmd+W closes the wrapper and restores the previous view/focus.
+                        // - The footer hint strip advertises only "⌘W Close".
+                        // This is intentional: CLI harnesses (Claude Code, Codex, etc.)
+                        // use Escape for their own TUI navigation (cancel, dismiss, etc.).
                         if is_quick_terminal
                             && has_cmd
                             && key.eq_ignore_ascii_case("w")

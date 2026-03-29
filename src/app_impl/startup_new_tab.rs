@@ -185,7 +185,15 @@
                                 return;
                             }
 
-                            // Block Tab while the Tab AI chat is already open
+                            // Never steal Tab from the harness terminal; once
+                            // QuickTerminalView is open, the terminal TUI owns
+                            // Tab navigation/completion.
+                            if matches!(this.current_view, AppView::QuickTerminalView { .. }) {
+                                cx.propagate();
+                                return;
+                            }
+
+                            // Block Tab while the legacy inline chat is open
                             if matches!(this.current_view, AppView::TabAiChat { .. }) {
                                 cx.stop_propagation();
                                 return;
@@ -197,7 +205,7 @@
                                 return;
                             }
 
-                            // Universal Tab AI: open the full-view chat
+                            // Universal Tab AI: open the harness terminal surface
                             // from any non-special surface (not FileSearch, not ChatPrompt setup)
                             if !has_shift && !this.show_actions_popup {
                                 this.open_tab_ai_chat(cx);

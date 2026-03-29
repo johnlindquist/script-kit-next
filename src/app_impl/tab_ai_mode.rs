@@ -90,19 +90,19 @@ const TAB_AI_CLIPBOARD_TEXT_LIMIT: usize = 1000;
 impl ScriptListApp {
     /// Open the Tab AI surface.
     ///
-    /// Always opens the full-view `TabAiChat` — the primary power-user
-    /// experience. The harness terminal path is preserved for explicit
-    /// action invocation but is no longer the implicit Tab entry.
+    /// Routes to the harness terminal (`QuickTerminalView`), which connects
+    /// to a pre-running CLI harness (Claude Code, Codex, Gemini CLI, etc.)
+    /// and injects hierarchical context via PTY stdin. The inline `TabAiChat`
+    /// entity is retained for legacy/internal use but is no longer the
+    /// implicit Tab entry point.
     pub(crate) fn open_tab_ai_chat(&mut self, cx: &mut Context<Self>) {
         if self.tab_ai_save_offer_state.is_some() {
             return;
         }
-        self.open_tab_ai_full_view_chat(cx);
+        self.open_tab_ai_harness_terminal(cx);
     }
 
     /// Core harness-terminal open: snapshot context, ensure PTY, switch view, inject.
-    /// Preserved for future explicit action invocation (e.g. via Actions dialog).
-    #[allow(dead_code)]
     fn open_tab_ai_harness_terminal(&mut self, cx: &mut Context<Self>) {
         let source_view = self.current_view.clone();
         let (ui_snapshot, invocation_receipt) = self.snapshot_tab_ai_ui(cx);
@@ -162,9 +162,13 @@ impl ScriptListApp {
         .detach();
         cx.notify();
 
-        // Build and inject context (harness path captures fresh desktop snapshot)
+        // Build and inject context (harness path captures fresh desktop snapshot).
+        // Use tab_ai_submit() (text-safe, no screenshots) for generic PTY backends.
+        // Pasting base64 PNG data into a CLI harness stdin is fragile and bloats the
+        // payload. The richer tab_ai() profile with screenshots is reserved for a
+        // future Claude-specific SDK path that can handle binary attachments natively.
         let desktop = crate::context_snapshot::capture_context_snapshot(
-            &crate::context_snapshot::CaptureContextOptions::tab_ai(),
+            &crate::context_snapshot::CaptureContextOptions::tab_ai_submit(),
         );
         let resolved = self.build_tab_ai_context_from(
             String::new(),
@@ -202,7 +206,6 @@ impl ScriptListApp {
 
     /// Ensure a harness terminal session exists and is alive.
     /// Returns the entity and whether this was a cold start (newly created).
-    #[allow(dead_code)]
     fn ensure_tab_ai_harness_terminal(
         &mut self,
         cx: &mut Context<Self>,
@@ -257,7 +260,6 @@ impl ScriptListApp {
     /// When `submit` is true, the payload is sent as a full line (appends CR).
     /// When false, the payload is pasted without a trailing CR so the user
     /// can type their intent before pressing Enter.
-    #[allow(dead_code)]
     fn inject_tab_ai_harness_submission(
         &self,
         entity: gpui::Entity<crate::term_prompt::TermPrompt>,
@@ -326,6 +328,11 @@ impl ScriptListApp {
     }
 
     /// Close the Tab AI harness terminal and restore the previous view + focus.
+    ///
+    /// **Close semantics contract:**
+    /// - `Cmd+W` closes the wrapper (handled in `render_prompts/term.rs`).
+    /// - Plain `Escape` is forwarded to the PTY so the harness TUI can handle it.
+    /// - The footer hint strip advertises only "⌘W Close".
     pub(crate) fn close_tab_ai_harness_terminal(&mut self, cx: &mut Context<Self>) {
         if !matches!(self.current_view, AppView::QuickTerminalView { .. }) {
             return;
@@ -833,6 +840,8 @@ impl ScriptListApp {
         }
     }
 
+    /// Legacy full-view chat submission path retained temporarily during the
+    /// harness pivot. Universal Tab should not route here.
     fn submit_tab_ai_chat_with_intent(
         &mut self,
         entity: Entity<TabAiChat>,

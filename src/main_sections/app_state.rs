@@ -262,7 +262,7 @@ struct ScriptListApp {
     alias_input_state: Option<AliasInputState>,
     /// The alias input entity (persisted to maintain focus)
     alias_input_entity: Option<Entity<crate::components::alias_input::AliasInput>>,
-    /// Tab AI background task (AI call + script execution)
+    /// Legacy Tab AI chat background task (custom provider + script execution).
     tab_ai_task: Option<gpui::Task<()>>,
     /// Most recent Tab AI execution waiting for success/failure accounting.
     pending_tab_ai_execution: Option<crate::ai::TabAiExecutionRecord>,

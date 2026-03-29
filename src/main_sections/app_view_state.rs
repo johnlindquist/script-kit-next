@@ -206,8 +206,9 @@ enum AppView {
         filter: String,
         selected_index: usize,
     },
-    /// Full-view Tab AI chat surface. Replaces the current view (like ChatPrompt)
-    /// instead of painting over it as an overlay.
+    /// Legacy full-view Tab AI chat surface kept only for transitional or
+    /// explicit flows. Universal Tab AI now routes through
+    /// `AppView::QuickTerminalView` and the external harness terminal.
     TabAiChat {
         entity: Entity<TabAiChat>,
     },
