@@ -144,12 +144,17 @@ fn open_ai_window_with_mode_from(
     let create_start = std::time::Instant::now();
     super::telemetry::log_ai_lifecycle("ai_window_create", mode, source, "begin");
 
-    // Load theme to determine window background appearance (vibrancy)
-    let theme = crate::theme::get_cached_theme();
-    let window_background = if theme.is_vibrancy_enabled() {
-        gpui::WindowBackgroundAppearance::Blurred
-    } else {
-        gpui::WindowBackgroundAppearance::Opaque
+    // Windows: Blurred vibrancy causes DirectWrite/swapchain allocation overflow. Force Opaque.
+    #[cfg(target_os = "windows")]
+    let window_background = gpui::WindowBackgroundAppearance::Opaque;
+    #[cfg(not(target_os = "windows"))]
+    let window_background = {
+        let theme = crate::theme::get_cached_theme();
+        if theme.is_vibrancy_enabled() {
+            gpui::WindowBackgroundAppearance::Blurred
+        } else {
+            gpui::WindowBackgroundAppearance::Opaque
+        }
     };
 
     // Restore one global AI window position. If that position is now off-screen

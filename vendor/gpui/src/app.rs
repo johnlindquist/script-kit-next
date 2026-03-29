@@ -1017,12 +1017,20 @@ impl App {
                     window.root.replace(root_view.into());
                     window.defer(cx, |window: &mut Window, cx| window.appearance_changed(cx));
 
-                    // allow a window to draw at least once before returning
-                    // this didn't cause any issues on non windows platforms as it seems we always won the race to on_request_frame
-                    // on windows we quite frequently lose the race and return a window that has never rendered, which leads to a crash
-                    // where DispatchTree::root_node_id asserts on empty nodes
-                    let clear = window.draw(cx);
-                    clear.clear();
+                    // Allow a window to draw at least once before returning.
+                    // On non-Windows platforms we always won the race to on_request_frame;
+                    // on Windows we frequently lose and return a window that has never
+                    // rendered, which leads to a DispatchTree::root_node_id assert.
+                    let arena_clear = window.draw(cx);
+                    // On Windows, do NOT clear the arena immediately after the forced
+                    // first draw. When another window (or WM_PAINT for this same window)
+                    // triggers a second draw before the next frame, the still-valid
+                    // ArenaBoxes from this draw may be referenced by deferred-draw
+                    // elements or element states. Clearing too early causes
+                    // "ArenaRef after Arena was cleared" panics. The arena will be
+                    // properly cleared during the next draw cycle.
+                    #[cfg(not(target_os = "windows"))]
+                    arena_clear.clear();
 
                     cx.window_handles.insert(id, window.handle);
                     cx.windows.get_mut(id).unwrap().replace(Box::new(window));

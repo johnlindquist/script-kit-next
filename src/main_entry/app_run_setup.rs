@@ -306,8 +306,12 @@ app.run(move |cx: &mut App| {
             &displays,
         );
 
-        // Load theme to determine window background appearance (vibrancy)
+        // Windows: Blurred vibrancy causes DirectWrite/swapchain allocation
+        // overflow (usize::unchecked_mul) during first render. Force Opaque.
         let initial_theme = theme::get_cached_theme();
+        #[cfg(target_os = "windows")]
+        let window_background = WindowBackgroundAppearance::Opaque;
+        #[cfg(not(target_os = "windows"))]
         let window_background = if initial_theme.is_vibrancy_enabled() {
             WindowBackgroundAppearance::Blurred
         } else {

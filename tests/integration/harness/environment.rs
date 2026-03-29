@@ -65,6 +65,9 @@ impl TestEnvironment {
         // Reasonable default log level
         env.insert("RUST_LOG".into(), "info".into());
 
+        // Full backtraces for debugging crashes
+        env.insert("RUST_BACKTRACE".into(), "full".into());
+
         // Inherit PATH so the app can find bun/node
         if let Ok(path) = std::env::var("PATH") {
             env.insert("PATH".into(), path);

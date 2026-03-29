@@ -1,4 +1,5 @@
 use super::*;
+#[cfg(not(target_os = "windows"))]
 use crate::theme::get_cached_theme;
 
 #[cfg(target_os = "macos")]
@@ -142,12 +143,17 @@ pub fn open_notes_window(cx: &mut App) -> Result<()> {
         &displays,
     );
 
-    // Load theme to determine window background appearance (vibrancy)
-    let theme = get_cached_theme();
-    let window_background = if theme.is_vibrancy_enabled() {
-        gpui::WindowBackgroundAppearance::Blurred
-    } else {
-        gpui::WindowBackgroundAppearance::Opaque
+    // Windows: Blurred vibrancy causes DirectWrite/swapchain allocation overflow. Force Opaque.
+    #[cfg(target_os = "windows")]
+    let window_background = gpui::WindowBackgroundAppearance::Opaque;
+    #[cfg(not(target_os = "windows"))]
+    let window_background = {
+        let theme = get_cached_theme();
+        if theme.is_vibrancy_enabled() {
+            gpui::WindowBackgroundAppearance::Blurred
+        } else {
+            gpui::WindowBackgroundAppearance::Opaque
+        }
     };
 
     let window_options = WindowOptions {

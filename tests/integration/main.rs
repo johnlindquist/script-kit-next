@@ -473,6 +473,19 @@ fn test_chat_actions() {
 // `showAiCommandBar`.
 
 #[test]
+fn test_ai_window_opens() {
+    windows_feature_suite("AI Window Opens")
+        .it("opens AI window without crash", |app| {
+            app.show();
+            app.wait(Duration::from_millis(300));
+            app.open_ai_with_mock_data();
+            let state = app.ai_command_bar_state();
+            assert!(state.ai_window_open, "AI window should be open");
+        })
+        .run();
+}
+
+#[test]
 fn test_ai_command_bar() {
     windows_feature_suite("AI Command Bar")
         .it("opens AI window and command bar", |app| {

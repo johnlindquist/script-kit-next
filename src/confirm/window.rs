@@ -340,6 +340,10 @@ pub(crate) fn open_confirm_popup_window(
     let theme = get_cached_theme();
     let is_dark_vibrancy = theme.should_use_dark_vibrancy();
     let vibrancy_enabled = theme.is_vibrancy_enabled();
+    // Windows: Blurred vibrancy causes DirectWrite/swapchain allocation overflow. Force Opaque.
+    #[cfg(target_os = "windows")]
+    let window_background = WindowBackgroundAppearance::Opaque;
+    #[cfg(not(target_os = "windows"))]
     let window_background = if vibrancy_enabled {
         WindowBackgroundAppearance::Blurred
     } else {
