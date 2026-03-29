@@ -258,10 +258,46 @@ pub fn tab_ai_experience_pack_subtitle(pack: TabAiExperiencePack) -> &'static st
     }
 }
 
+/// Card-priority tier for an experience intent.
+///
+/// Lower values surface first in the three-card shortlist.
+/// Tier 0 = differentiated fusion/batch/adaptation labels that Raycast cannot do.
+/// Tier 1 = teachable/reusable command creation labels.
+/// Tier 2 = everything else (generic pack verbs).
+fn tab_ai_experience_card_priority(intent: &TabAiExperienceIntent) -> u8 {
+    let label = intent.label.as_str();
+    if label.starts_with("Adapt ") {
+        return 0;
+    }
+    match label {
+        "Rename From Clipboard" | "Send Link Here" | "Apply Clipboard Then Run"
+        | "Sweep Visible Files" | "Pick Best Command" | "Use Visible Items" => 0,
+        "Teach This Command" | "Make Link Command" | "Make Command" | "Make Me a Command"
+        | "Make It Reusable" => 1,
+        _ => 2,
+    }
+}
+
+/// Re-sort intents so differentiated labels outrank generic verbs,
+/// preserving stable order within the same priority bucket.
+fn prioritize_tab_ai_experience_card_intents(
+    intents: Vec<TabAiExperienceIntent>,
+) -> Vec<TabAiExperienceIntent> {
+    let mut indexed: Vec<(usize, TabAiExperienceIntent)> =
+        intents.into_iter().enumerate().collect();
+    indexed.sort_by(|(left_ix, left), (right_ix, right)| {
+        tab_ai_experience_card_priority(left)
+            .cmp(&tab_ai_experience_card_priority(right))
+            .then_with(|| left_ix.cmp(right_ix))
+    });
+    indexed.into_iter().map(|(_, intent)| intent).collect()
+}
+
 /// Build a display-ready experience spec from the current context.
 ///
 /// Returns `None` when no intents can be generated (nothing useful to show).
-/// Intents are truncated to the first 3 for a focused empty-state card.
+/// Intents are prioritized so differentiated labels (fusion, batching, adaptation)
+/// outrank generic verbs, then truncated to the top 3 for a focused empty-state card.
 pub fn build_tab_ai_experience_spec(
     focused_target: Option<&TabAiTargetContext>,
     visible_targets: &[TabAiTargetContext],
@@ -269,13 +305,14 @@ pub fn build_tab_ai_experience_spec(
     prior_automations: &[TabAiMemorySuggestion],
 ) -> Option<TabAiExperienceSpec> {
     let pack = TabAiExperiencePack::from_target(focused_target);
-    let mut intents = build_tab_ai_experience_intents(
-        focused_target,
-        visible_targets,
-        clipboard,
-        prior_automations,
+    let intents = prioritize_tab_ai_experience_card_intents(
+        build_tab_ai_experience_intents(
+            focused_target,
+            visible_targets,
+            clipboard,
+            prior_automations,
+        ),
     );
-    intents.truncate(3);
     if intents.is_empty() {
         return None;
     }
@@ -283,7 +320,7 @@ pub fn build_tab_ai_experience_spec(
         pack,
         title: tab_ai_experience_pack_name(pack).to_string(),
         subtitle: tab_ai_experience_pack_subtitle(pack).to_string(),
-        intents,
+        intents: intents.into_iter().take(3).collect(),
     })
 }
 
@@ -792,9 +829,10 @@ mod tab_ai_experience_tests {
             .expect("command experience spec");
         assert_eq!(spec.title, "Command Alchemy");
         let labels: Vec<&str> = spec.intents.iter().map(|item| item.label.as_str()).collect();
+        // "Teach This Command" is tier 1, promoted above tier 2 generic verbs
         assert_eq!(
             labels,
-            vec!["Run This Command", "Explain This Command", "Teach This Command"]
+            vec!["Teach This Command", "Run This Command", "Explain This Command"]
         );
     }
 
@@ -812,6 +850,60 @@ mod tab_ai_experience_tests {
         assert_eq!(spec.title, "Clipboard Studio");
         let labels: Vec<&str> = spec.intents.iter().map(|item| item.label.as_str()).collect();
         assert!(labels.contains(&"Build Palette"));
+    }
+
+    #[test]
+    fn experience_spec_promotes_clipboard_fusion_into_top_three() {
+        let focused = target("file", "tab_ai_mode.rs");
+        let visible = vec![focused.clone()];
+        let spec = build_tab_ai_experience_spec(
+            Some(&focused),
+            &visible,
+            Some(&clipboard("text")),
+            &[],
+        )
+        .expect("expected file studio experience spec");
+        let labels: Vec<&str> = spec.intents.iter().map(|item| item.label.as_str()).collect();
+        assert_eq!(spec.title, "File Studio");
+        assert_eq!(spec.subtitle, "Act on the selected file in-place.");
+        assert_eq!(labels[0], "Rename From Clipboard");
+        assert_eq!(labels.len(), 3);
+    }
+
+    #[test]
+    fn experience_spec_promotes_visible_batch_into_top_three() {
+        let visible = vec![target("file", "a.rs"), target("file", "b.rs")];
+        let spec = build_tab_ai_experience_spec(None, &visible, None, &[])
+            .expect("expected desktop experience spec");
+        let labels: Vec<&str> = spec.intents.iter().map(|item| item.label.as_str()).collect();
+        assert_eq!(spec.title, "Next Move");
+        assert_eq!(labels[0], "Sweep Visible Files");
+        assert!(labels.contains(&"Make Me a Command"));
+        assert_eq!(labels.len(), 3);
+    }
+
+    #[test]
+    fn experience_spec_promotes_prior_automation_into_top_three() {
+        let focused = target("file", "main.rs");
+        let visible = vec![focused.clone()];
+        let spec = build_tab_ai_experience_spec(
+            Some(&focused),
+            &visible,
+            None,
+            &[TabAiMemorySuggestion {
+                slug: "rename-kebab".to_string(),
+                bundle_id: "com.test".to_string(),
+                raw_query: "rename files".to_string(),
+                effective_query: "rename files to kebab case".to_string(),
+                prompt_type: "arg".to_string(),
+                written_at: "2026-01-01T00:00:00Z".to_string(),
+                score: 1.0,
+            }],
+        )
+        .expect("expected file studio experience spec");
+        let labels: Vec<&str> = spec.intents.iter().map(|item| item.label.as_str()).collect();
+        assert_eq!(labels[0], "Adapt rename-kebab");
+        assert_eq!(labels.len(), 3);
     }
 }
 

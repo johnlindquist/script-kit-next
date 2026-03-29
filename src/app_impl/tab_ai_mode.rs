@@ -445,7 +445,31 @@ impl ScriptListApp {
         )
         .unwrap_or_default();
 
+        let experience_spec = crate::ai::build_tab_ai_experience_spec(
+            focused_target.as_ref(),
+            &visible_targets,
+            clipboard.as_ref(),
+            &prior_automations,
+        );
+        let show_experience_strip = experience_spec.is_some();
+
         let mut cards = Vec::new();
+
+        // -- Experience strip card (always first when present) --
+        if let Some(spec) = experience_spec {
+            cards.push(TabAiContextCard {
+                kind: TabAiContextCardKind::ExperienceStrip,
+                label: "Suggested Experience".into(),
+                title: spec.title.into(),
+                body: Some(spec.subtitle.into()),
+                rows: Vec::new(),
+                suggestions: spec
+                    .intents
+                    .into_iter()
+                    .map(|intent| intent.into_spec().into())
+                    .collect(),
+            });
+        }
 
         let focused_pack =
             crate::ai::TabAiExperiencePack::from_target(focused_target.as_ref());
@@ -461,37 +485,6 @@ impl ScriptListApp {
                     target.semantic_id.clone(),
                 )],
                 suggestions: Vec::new(),
-            });
-        }
-
-        // -- Experience card (first-class experience strip) --
-        if let Some(experience) = crate::ai::build_tab_ai_experience_spec(
-            focused_target.as_ref(),
-            &visible_targets,
-            clipboard.as_ref(),
-            &prior_automations,
-        ) {
-            let crate::ai::TabAiExperienceSpec {
-                title,
-                subtitle,
-                intents,
-                ..
-            } = experience;
-            let rows = intents
-                .iter()
-                .map(|item| TabAiContextRow::new(item.label.clone(), item.intent.clone()))
-                .collect();
-            let suggestions = intents
-                .into_iter()
-                .map(|item| -> TabAiSuggestedIntent { item.into_spec().into() })
-                .collect();
-            cards.push(TabAiContextCard {
-                kind: TabAiContextCardKind::ExperienceStrip,
-                label: "Experience".into(),
-                title: title.into(),
-                body: Some(subtitle.into()),
-                rows,
-                suggestions,
             });
         }
 
@@ -594,16 +587,20 @@ impl ScriptListApp {
                     .iter()
                     .map(|item| TabAiContextRow::new(item.slug.clone(), item.effective_query.clone()))
                     .collect(),
-                suggestions: prior_automations
-                    .iter()
-                    .take(1)
-                    .map(|item| {
-                        TabAiSuggestedIntent::from(crate::ai::TabAiSuggestedIntentSpec::new(
-                            format!("Repeat {}", item.slug),
-                            item.effective_query.clone(),
-                        ))
-                    })
-                    .collect(),
+                suggestions: if show_experience_strip {
+                    Vec::new()
+                } else {
+                    prior_automations
+                        .iter()
+                        .take(1)
+                        .map(|item| {
+                            TabAiSuggestedIntent::from(crate::ai::TabAiSuggestedIntentSpec::new(
+                                format!("Repeat {}", item.slug),
+                                item.effective_query.clone(),
+                            ))
+                        })
+                        .collect()
+                },
             });
         }
 
