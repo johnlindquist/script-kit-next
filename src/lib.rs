@@ -43,7 +43,7 @@ pub mod platform;
 pub mod prompts;
 pub mod protocol;
 pub mod scripts;
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 pub mod selected_text;
 pub mod shortcuts;
 pub mod syntax;

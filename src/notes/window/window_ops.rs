@@ -165,6 +165,10 @@ pub fn open_notes_window(cx: &mut App) -> Result<()> {
         show: true,
         // Use PopUp for floating panel behavior - allows keyboard input without
         // activating the app (Raycast-like). Creates NSPanel with NonactivatingPanel mask.
+        // Windows: PopUp triggers ArenaRef crash; use Normal
+        #[cfg(target_os = "windows")]
+        kind: gpui::WindowKind::Normal,
+        #[cfg(not(target_os = "windows"))]
         kind: gpui::WindowKind::PopUp,
         ..Default::default()
     };

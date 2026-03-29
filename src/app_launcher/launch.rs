@@ -1,6 +1,7 @@
 /// Launch an application
 ///
-/// Uses macOS `open -a` command to launch the application.
+/// On macOS, uses `open -a` command. On Windows, uses `cmd /c start` to
+/// launch .lnk shortcuts or executables.
 ///
 /// # Arguments
 /// * `app` - The application to launch
@@ -15,11 +16,26 @@ pub fn launch_application(app: &AppInfo) -> Result<()> {
         "Launching application"
     );
 
-    Command::new("open")
-        .arg("-a")
-        .arg(&app.path)
-        .spawn()
-        .with_context(|| format!("Failed to launch application: {}", app.name))?;
+    #[cfg(target_os = "macos")]
+    {
+        Command::new("open")
+            .arg("-a")
+            .arg(&app.path)
+            .spawn()
+            .with_context(|| format!("Failed to launch application: {}", app.name))?;
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        // Use `cmd /c start "" "path"` to launch the shortcut.
+        // The empty "" is required as the window title argument to `start`
+        // when the path is quoted.
+        Command::new("cmd")
+            .args(["/c", "start", ""])
+            .arg(&app.path)
+            .spawn()
+            .with_context(|| format!("Failed to launch application: {}", app.name))?;
+    }
 
     Ok(())
 }
@@ -45,4 +61,3 @@ pub fn launch_application_by_name(name: &str) -> Result<()> {
 
     launch_application(app)
 }
-

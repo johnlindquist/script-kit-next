@@ -10,7 +10,7 @@ fn get_icon_cache_dir() -> Option<PathBuf> {
 
 /// Generate a unique cache key from an app path using a hash
 #[allow(dead_code)]
-fn hash_path(path: &Path) -> String {
+pub fn hash_path(path: &Path) -> String {
     let mut hasher = DefaultHasher::new();
     path.hash(&mut hasher);
     format!("{:016x}", hasher.finish())

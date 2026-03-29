@@ -77,7 +77,6 @@ mod platform;
 mod prompts;
 mod protocol;
 mod scripts;
-#[cfg(target_os = "macos")]
 mod selected_text;
 mod setup;
 mod shortcuts;

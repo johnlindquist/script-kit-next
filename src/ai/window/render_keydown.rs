@@ -578,7 +578,7 @@ impl AiApp {
                     super::telemetry::log_ai_state(
                         "esc_dismiss_history_overlay",
                         "escape_key",
-                        &self.debug_snapshot(),
+                        &self.debug_snapshot(cx),
                     );
                     cx.stop_propagation();
                     return;
@@ -593,7 +593,7 @@ impl AiApp {
             super::telemetry::log_ai_state(
                 "esc_dismiss_shortcuts_overlay",
                 "escape_key",
-                &self.debug_snapshot(),
+                &self.debug_snapshot(cx),
             );
             cx.notify();
             cx.stop_propagation();
@@ -620,7 +620,7 @@ impl AiApp {
             super::telemetry::log_ai_state(
                 "esc_clear_search",
                 "escape_key",
-                &self.debug_snapshot(),
+                &self.debug_snapshot(cx),
             );
             cx.notify();
             cx.stop_propagation();
@@ -641,7 +641,7 @@ impl AiApp {
             super::telemetry::log_ai_state(
                 "esc_cancel_editing",
                 "escape_key",
-                &self.debug_snapshot(),
+                &self.debug_snapshot(cx),
             );
             cx.stop_propagation();
             return;
@@ -653,7 +653,7 @@ impl AiApp {
             super::telemetry::log_ai_state(
                 "esc_cancel_rename",
                 "escape_key",
-                &self.debug_snapshot(),
+                &self.debug_snapshot(cx),
             );
             cx.stop_propagation();
             return;
@@ -665,7 +665,7 @@ impl AiApp {
             super::telemetry::log_ai_state(
                 "esc_stop_streaming",
                 "escape_key",
-                &self.debug_snapshot(),
+                &self.debug_snapshot(cx),
             );
             cx.stop_propagation();
             return;
@@ -677,7 +677,7 @@ impl AiApp {
             super::telemetry::log_ai_state(
                 "esc_dismiss_api_key_input",
                 "escape_key",
-                &self.debug_snapshot(),
+                &self.debug_snapshot(cx),
             );
             cx.stop_propagation();
             return;
@@ -694,7 +694,7 @@ impl AiApp {
             super::telemetry::log_ai_state(
                 "esc_dismiss_dropdown",
                 "escape_key",
-                &self.debug_snapshot(),
+                &self.debug_snapshot(cx),
             );
             cx.stop_propagation();
             return;
@@ -705,7 +705,7 @@ impl AiApp {
             super::telemetry::log_ai_state(
                 "esc_close_mini_window",
                 "escape_key",
-                &self.debug_snapshot(),
+                &self.debug_snapshot(cx),
             );
             let wb = window.window_bounds();
             crate::window_state::save_window_from_gpui(

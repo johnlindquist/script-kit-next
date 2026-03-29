@@ -1,5 +1,5 @@
 /// Get the apps database path (~/.scriptkit/db/apps.sqlite)
-fn get_apps_db_path() -> PathBuf {
+pub fn get_apps_db_path() -> PathBuf {
     let kit = PathBuf::from(shellexpand::tilde("~/.scriptkit").as_ref());
     kit.join("db").join("apps.sqlite")
 }

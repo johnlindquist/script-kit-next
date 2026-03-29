@@ -161,6 +161,10 @@ default = ["ocr"]
 # These tests may have side effects like modifying clipboard, opening dialogs, etc.
 # Run with: cargo test --features system-tests
 system-tests = []
+# Integration tests that spawn the real app binary and drive it via stdin JSONL.
+# Requires binary pre-built: cargo build --bin script-kit-gpui
+# Run with: cargo test --features integration-tests --test integration -- --test-threads=1
+integration-tests = []
 # Enable slow tests that spawn shell processes (sleep, bash, zsh, etc.)
 # These tests add ~30+ seconds to the test suite.
 # Run with: cargo test --features slow-tests

@@ -273,7 +273,7 @@ impl AiApp {
                     super::telemetry::log_ai_state(
                         "set_window_mode",
                         "command",
-                        &self.debug_snapshot(),
+                        &self.debug_snapshot(cx),
                     );
                 }
                 AiCommand::SetSearch(query) => {

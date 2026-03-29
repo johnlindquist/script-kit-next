@@ -8,8 +8,8 @@ use crate::logging;
 use crate::protocol::Message;
 use tracing::{debug, info, instrument, warn};
 
-// Conditionally import selected_text for macOS only
-#[cfg(target_os = "macos")]
+// Import selected_text for platforms that support it
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 use crate::selected_text;
 
 /// Result of handling a selected text message
@@ -111,12 +111,41 @@ fn handle_get_selected_text(request_id: &str) -> Message {
     }
 }
 
-#[cfg(not(target_os = "macos"))]
+/// Handle GET_SELECTED_TEXT request (Windows)
+#[cfg(target_os = "windows")]
 fn handle_get_selected_text(request_id: &str) -> Message {
     info!(
         category = "EXEC",
         request_id = %request_id,
-        platform = "non_macos",
+        "GetSelectedText request (Windows)"
+    );
+
+    let result = selected_text::get_selected_text();
+
+    match result {
+        Ok(text) => {
+            info!(request_id = %request_id, text_len = text.len(), "Got selected text");
+            Message::Submit {
+                id: request_id.to_string(),
+                value: Some(text),
+            }
+        }
+        Err(e) => {
+            warn!(request_id = %request_id, error = %e, "Failed to get selected text");
+            Message::Submit {
+                id: request_id.to_string(),
+                value: Some(format!("ERROR: {}", e)),
+            }
+        }
+    }
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+fn handle_get_selected_text(request_id: &str) -> Message {
+    info!(
+        category = "EXEC",
+        request_id = %request_id,
+        platform = "unsupported",
         "GetSelectedText not supported on this platform"
     );
     warn!(request_id = %request_id, "Selected text not supported on this platform");
@@ -167,12 +196,40 @@ fn handle_set_selected_text(text: &str, request_id: &str) -> Message {
     }
 }
 
-#[cfg(not(target_os = "macos"))]
+/// Handle SET_SELECTED_TEXT request (Windows)
+#[cfg(target_os = "windows")]
+fn handle_set_selected_text(text: &str, request_id: &str) -> Message {
+    info!(
+        category = "EXEC",
+        request_id = %request_id,
+        text_len = text.len(),
+        "SetSelectedText request (Windows)"
+    );
+
+    match selected_text::set_selected_text(text) {
+        Ok(()) => {
+            info!(request_id = %request_id, "Set selected text successfully");
+            Message::Submit {
+                id: request_id.to_string(),
+                value: None,
+            }
+        }
+        Err(e) => {
+            warn!(request_id = %request_id, error = %e, "Failed to set selected text");
+            Message::Submit {
+                id: request_id.to_string(),
+                value: Some(format!("ERROR: {}", e)),
+            }
+        }
+    }
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
 fn handle_set_selected_text(_text: &str, request_id: &str) -> Message {
     info!(
         category = "EXEC",
         request_id = %request_id,
-        platform = "non_macos",
+        platform = "unsupported",
         "SetSelectedText not supported on this platform"
     );
     warn!(request_id = %request_id, "Selected text not supported on this platform");
@@ -207,15 +264,31 @@ fn handle_check_accessibility(request_id: &str) -> Message {
     }
 }
 
-#[cfg(not(target_os = "macos"))]
+/// Handle CHECK_ACCESSIBILITY request (Windows)
+#[cfg(target_os = "windows")]
 fn handle_check_accessibility(request_id: &str) -> Message {
     info!(
         category = "EXEC",
         request_id = %request_id,
-        platform = "non_macos",
+        "CheckAccessibility request (Windows)"
+    );
+
+    let granted = selected_text::has_accessibility_permission();
+    info!(request_id = %request_id, granted = granted, "Checked accessibility permission");
+    Message::Submit {
+        id: request_id.to_string(),
+        value: Some(granted.to_string()),
+    }
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+fn handle_check_accessibility(request_id: &str) -> Message {
+    info!(
+        category = "EXEC",
+        request_id = %request_id,
+        platform = "unsupported",
         "CheckAccessibility not supported on this platform"
     );
-    // On non-macOS, report as "not granted" since the feature isn't available
     Message::Submit {
         id: request_id.to_string(),
         value: Some("false".to_string()),
@@ -247,15 +320,31 @@ fn handle_request_accessibility(request_id: &str) -> Message {
     }
 }
 
-#[cfg(not(target_os = "macos"))]
+/// Handle REQUEST_ACCESSIBILITY request (Windows)
+#[cfg(target_os = "windows")]
 fn handle_request_accessibility(request_id: &str) -> Message {
     info!(
         category = "EXEC",
         request_id = %request_id,
-        platform = "non_macos",
+        "RequestAccessibility request (Windows)"
+    );
+
+    let granted = selected_text::request_accessibility_permission();
+    info!(request_id = %request_id, granted = granted, "Requested accessibility permission");
+    Message::Submit {
+        id: request_id.to_string(),
+        value: Some(granted.to_string()),
+    }
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+fn handle_request_accessibility(request_id: &str) -> Message {
+    info!(
+        category = "EXEC",
+        request_id = %request_id,
+        platform = "unsupported",
         "RequestAccessibility not supported on this platform"
     );
-    // On non-macOS, can't request permissions
     Message::Submit {
         id: request_id.to_string(),
         value: Some("false".to_string()),

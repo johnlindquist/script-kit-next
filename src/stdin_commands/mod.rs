@@ -477,6 +477,26 @@ pub enum ExternalCommand {
         #[serde(default, rename = "requestId")]
         request_id: Option<ExternalCommandRequestId>,
     },
+    /// Query current app state (prompt type, input value, choices, selection).
+    /// Response is written as JSONL to stdout, tagged with `{"type":"stateResult",...}`.
+    /// Used by integration tests for structured assertions.
+    GetState {
+        #[serde(default, rename = "requestId")]
+        request_id: Option<ExternalCommandRequestId>,
+    },
+    /// Query the chat actions dialog state: whether it's open, available actions,
+    /// selected action, and chat prompt metadata. Used by integration tests.
+    GetChatActionsState {
+        #[serde(default, rename = "requestId")]
+        request_id: Option<ExternalCommandRequestId>,
+    },
+    /// Query the AI window's command-bar state: open/closed, action list,
+    /// selected index. Response written as JSONL to stdout, tagged
+    /// `{"type":"aiCommandBarResult",...}`. Used by integration tests.
+    GetAiCommandBarState {
+        #[serde(default, rename = "requestId")]
+        request_id: Option<ExternalCommandRequestId>,
+    },
 }
 impl ExternalCommand {
     pub fn request_id(&self) -> Option<&str> {
@@ -494,7 +514,10 @@ impl ExternalCommand {
             | Self::GetAiWindowState { request_id, .. }
             | Self::ShowGrid { request_id, .. }
             | Self::ShowShortcutRecorder { request_id, .. }
-            | Self::ExecuteFallback { request_id, .. } => {
+            | Self::ExecuteFallback { request_id, .. }
+            | Self::GetState { request_id, .. }
+            | Self::GetChatActionsState { request_id, .. }
+            | Self::GetAiCommandBarState { request_id, .. } => {
                 request_id.as_ref().map(ExternalCommandRequestId::as_str)
             }
             _ => None,
@@ -524,6 +547,9 @@ impl ExternalCommand {
             Self::HideGrid => "hideGrid",
             Self::ShowShortcutRecorder { .. } => "showShortcutRecorder",
             Self::ExecuteFallback { .. } => "executeFallback",
+            Self::GetState { .. } => "getState",
+            Self::GetChatActionsState { .. } => "getChatActionsState",
+            Self::GetAiCommandBarState { .. } => "getAiCommandBarState",
         }
     }
 }
@@ -532,6 +558,107 @@ pub struct ExternalCommandEnvelope {
     pub command: ExternalCommand,
     pub correlation_id: String,
 }
+/// Response to a query-style `ExternalCommand`, written as JSONL to stdout.
+///
+/// Integration tests read these responses from the app's stdout pipe to make
+/// structured assertions on app state without relying on log scraping.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(tag = "type", rename_all = "camelCase")]
+pub enum QueryResponse {
+    /// Response to `GetState` ΓÇö snapshot of current prompt state.
+    StateResult {
+        #[serde(rename = "requestId")]
+        request_id: String,
+        /// Current prompt type: "none" (script list), "arg", "div", "form", "term", etc.
+        #[serde(rename = "promptType")]
+        prompt_type: String,
+        /// Current input/filter text.
+        #[serde(rename = "inputValue")]
+        input_value: String,
+        /// Total number of choices/items available.
+        #[serde(rename = "choiceCount")]
+        choice_count: usize,
+        /// Number of choices visible after filtering.
+        #[serde(rename = "visibleChoiceCount")]
+        visible_choice_count: usize,
+        /// Selected item index (-1 if none).
+        #[serde(rename = "selectedIndex")]
+        selected_index: i32,
+        /// Name/value of the selected item, if any.
+        #[serde(rename = "selectedValue", skip_serializing_if = "Option::is_none")]
+        selected_value: Option<String>,
+        /// Whether the input is focused.
+        #[serde(rename = "isFocused")]
+        is_focused: bool,
+        /// Whether the main window is visible.
+        #[serde(rename = "windowVisible")]
+        window_visible: bool,
+    },
+    /// Response to `GetChatActionsState` — snapshot of the chat actions dialog.
+    ChatActionsResult {
+        #[serde(rename = "requestId")]
+        request_id: String,
+        /// Whether the app is currently showing the ChatPrompt view.
+        #[serde(rename = "isChatView")]
+        is_chat_view: bool,
+        /// Whether the actions popup is currently open.
+        #[serde(rename = "actionsPopupOpen")]
+        actions_popup_open: bool,
+        /// List of action IDs available in the actions dialog (empty if not open).
+        #[serde(rename = "actionIds")]
+        action_ids: Vec<String>,
+        /// List of action titles corresponding to `actionIds`.
+        #[serde(rename = "actionTitles")]
+        action_titles: Vec<String>,
+        /// Currently selected action index in the dialog (-1 if none).
+        #[serde(rename = "selectedActionIndex")]
+        selected_action_index: i32,
+        /// Currently selected action ID (if any).
+        #[serde(rename = "selectedActionId", skip_serializing_if = "Option::is_none")]
+        selected_action_id: Option<String>,
+        /// Current chat model name (if set).
+        #[serde(rename = "chatModel", skip_serializing_if = "Option::is_none")]
+        chat_model: Option<String>,
+        /// Number of messages in the chat.
+        #[serde(rename = "messageCount")]
+        message_count: usize,
+        /// Whether the chat has any assistant responses.
+        #[serde(rename = "hasResponse")]
+        has_response: bool,
+    },
+    /// Response to `GetAiCommandBarState` — snapshot of the AI window's command bar.
+    AiCommandBarResult {
+        #[serde(rename = "requestId")]
+        request_id: String,
+        /// Whether the AI window is open.
+        #[serde(rename = "aiWindowOpen")]
+        ai_window_open: bool,
+        /// Whether the command bar overlay is open.
+        #[serde(rename = "commandBarOpen")]
+        command_bar_open: bool,
+        /// Action IDs in the command bar (filtered order).
+        #[serde(rename = "actionIds")]
+        action_ids: Vec<String>,
+        /// Currently selected action index in grouped_items (-1 if none/closed).
+        #[serde(rename = "selectedIndex")]
+        selected_index: i32,
+        /// Currently selected action ID (if any).
+        #[serde(rename = "selectedActionId", skip_serializing_if = "Option::is_none")]
+        selected_action_id: Option<String>,
+    },
+}
+
+/// Write a `QueryResponse` as a single JSONL line to stdout.
+///
+/// This is the response mechanism for query-style `ExternalCommand`s.
+/// The test harness reads these lines from the app's stdout pipe.
+pub fn write_query_response(response: &QueryResponse) {
+    if let Ok(json) = serde_json::to_string(response) {
+        // Write atomically: single println! call to avoid interleaving
+        println!("{}", json);
+    }
+}
+
 // --- merged from part_001.rs ---
 /// Start a thread that listens on stdin for external JSONL commands.
 /// Returns an async_channel::Receiver that can be awaited without polling.

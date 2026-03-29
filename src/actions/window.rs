@@ -986,9 +986,15 @@ pub fn open_actions_window(
     // Close any existing actions window first
     close_actions_window(cx);
 
-    // Load theme for vibrancy settings
+    // Load theme for vibrancy settings.
+    // Windows: always use Opaque — `Blurred` popup windows can trigger a
+    // DirectWrite / swapchain allocation overflow on first render when the
+    // compositor size is momentarily undefined.
     let theme = get_cached_theme();
     let _is_dark_vibrancy = theme.should_use_dark_vibrancy();
+    #[cfg(target_os = "windows")]
+    let window_background = gpui::WindowBackgroundAppearance::Opaque;
+    #[cfg(not(target_os = "windows"))]
     let window_background = if theme.is_vibrancy_enabled() {
         gpui::WindowBackgroundAppearance::Blurred
     } else {
@@ -1045,8 +1051,14 @@ pub fn open_actions_window(
         // macOS popup windows often don't receive keyboard events properly
         focus: false,
         show: true,
-        kind: WindowKind::PopUp, // Floating popup window
-        display_id,              // CRITICAL: Position on same display as main window
+        // Windows: WindowKind::PopUp maps to WS_EX_TOOLWINDOW + empty WINDOW_STYLE
+        // in the GPUI Windows platform layer, which triggers an ArenaRef-after-Arena-clear
+        // crash during first render. Use Normal to avoid this.
+        #[cfg(target_os = "windows")]
+        kind: WindowKind::Normal,
+        #[cfg(not(target_os = "windows"))]
+        kind: WindowKind::PopUp, // Floating popup window (macOS)
+        display_id, // CRITICAL: Position on same display as main window
         ..Default::default()
     };
 

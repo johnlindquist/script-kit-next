@@ -43,6 +43,15 @@ use std::sync::Arc;
 
 const COMMAND_BAR_PAGE_JUMP: usize = 8;
 
+/// Lightweight snapshot of command-bar state for integration tests.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CommandBarDebugState {
+    pub selected_index: Option<usize>,
+    pub action_ids: Vec<String>,
+    pub selected_action_id: Option<String>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum CommandBarKeyIntent {
     MoveUp,
@@ -635,6 +644,37 @@ impl CommandBar {
                 }
             });
             notify_actions_window(cx);
+        }
+    }
+
+    /// Return the selected index and action metadata from the inner dialog.
+    ///
+    /// Used by `AiMiniDebugSnapshot` to expose command-bar navigation state
+    /// to integration tests without coupling the test harness to GPUI entities.
+    pub fn debug_state(&self, cx: &App) -> CommandBarDebugState {
+        match &self.dialog {
+            Some(dialog) => {
+                let d = dialog.read(cx);
+                let action_ids: Vec<String> = d
+                    .filtered_actions
+                    .iter()
+                    .filter_map(|&idx| d.actions.get(idx).map(|a| a.id.clone()))
+                    .collect();
+                let selected_action_id = d
+                    .get_selected_filtered_index()
+                    .and_then(|fi| d.filtered_actions.get(fi).copied())
+                    .and_then(|ai| d.actions.get(ai).map(|a| a.id.clone()));
+                CommandBarDebugState {
+                    selected_index: Some(d.selected_index),
+                    action_ids,
+                    selected_action_id,
+                }
+            }
+            None => CommandBarDebugState {
+                selected_index: None,
+                action_ids: Vec::new(),
+                selected_action_id: None,
+            },
         }
     }
 

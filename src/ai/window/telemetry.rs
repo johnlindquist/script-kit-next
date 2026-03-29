@@ -163,6 +163,9 @@ mod tests {
             shortcuts_overlay_visible: false,
             editing_message_present: false,
             renaming_chat_present: false,
+            command_bar_selected_index: None,
+            command_bar_action_ids: Vec::new(),
+            command_bar_selected_action_id: None,
         };
         log_ai_state("test_event", "test", &snapshot);
     }

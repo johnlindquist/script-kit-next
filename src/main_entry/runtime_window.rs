@@ -10,6 +10,10 @@
                 // CRITICAL: Use PopUp for Raycast-like behavior
                 // Creates NSPanel with NonactivatingPanel style, allowing keyboard
                 // input without activating the application (preserves previous app focus)
+                // Windows: PopUp triggers ArenaRef crash; use Normal
+                #[cfg(target_os = "windows")]
+                kind: WindowKind::Normal,
+                #[cfg(not(target_os = "windows"))]
                 kind: WindowKind::PopUp,
                 ..Default::default()
             },

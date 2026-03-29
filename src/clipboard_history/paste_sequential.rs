@@ -284,7 +284,26 @@ fn paste_worker_sender() -> &'static std::sync::mpsc::SyncSender<String> {
                             );
                         }
                     }
-                    #[cfg(not(target_os = "macos"))]
+                    #[cfg(target_os = "windows")]
+                    {
+                        if let Err(e) = crate::selected_text::simulate_paste_with_cg() {
+                            tracing::error!(
+                                action = "paste_sequential",
+                                event = "worker_paste_error",
+                                entry_id = %entry_id,
+                                error = %e,
+                                "Failed to simulate paste (Windows SendInput)"
+                            );
+                        } else {
+                            info!(
+                                action = "paste_sequential",
+                                event = "worker_paste_success",
+                                entry_id = %entry_id,
+                                "Paste simulation completed (Windows)"
+                            );
+                        }
+                    }
+                    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
                     {
                         tracing::warn!(
                             action = "paste_sequential",

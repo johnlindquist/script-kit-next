@@ -217,7 +217,7 @@ impl AiApp {
         super::telemetry::log_ai_state(
             "window_mode_switched",
             "set_window_mode",
-            &self.debug_snapshot(),
+            &self.debug_snapshot(cx),
         );
         cx.notify();
     }

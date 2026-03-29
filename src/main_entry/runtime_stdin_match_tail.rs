@@ -223,6 +223,37 @@
                                     }
                                 }
                             }
+                            ExternalCommand::GetAiCommandBarState { ref request_id } => {
+                                let rid = request_id
+                                    .as_ref()
+                                    .map(|r| r.as_str().to_string())
+                                    .unwrap_or_default();
+                                logging::log("STDIN", &format!("GetAiCommandBarState: requestId='{}'", rid));
+                                match ai::get_ai_window_state(ctx) {
+                                    Some(snapshot) => {
+                                        let response = stdin_commands::QueryResponse::AiCommandBarResult {
+                                            request_id: rid,
+                                            ai_window_open: true,
+                                            command_bar_open: snapshot.command_bar_open,
+                                            action_ids: snapshot.command_bar_action_ids,
+                                            selected_index: snapshot.command_bar_selected_index.map(|i| i as i32).unwrap_or(-1),
+                                            selected_action_id: snapshot.command_bar_selected_action_id,
+                                        };
+                                        stdin_commands::write_query_response(&response);
+                                    }
+                                    None => {
+                                        let response = stdin_commands::QueryResponse::AiCommandBarResult {
+                                            request_id: rid,
+                                            ai_window_open: false,
+                                            command_bar_open: false,
+                                            action_ids: Vec::new(),
+                                            selected_index: -1,
+                                            selected_action_id: None,
+                                        };
+                                        stdin_commands::write_query_response(&response);
+                                    }
+                                }
+                            }
                             ExternalCommand::ShowGrid { grid_size, show_bounds, show_box_model, show_alignment_guides, show_dimensions, ref depth } => {
                                 logging::log("STDIN", &format!(
                                     "ShowGrid: size={}, bounds={}, box_model={}, guides={}, dimensions={}, depth={:?}",

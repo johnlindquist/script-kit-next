@@ -314,6 +314,15 @@ pub struct AiMiniDebugSnapshot {
     pub shortcuts_overlay_visible: bool,
     pub editing_message_present: bool,
     pub renaming_chat_present: bool,
+    /// Command-bar selected row index (into grouped_items, skips headers).
+    #[serde(default)]
+    pub command_bar_selected_index: Option<usize>,
+    /// Action IDs in the command bar (filtered order).
+    #[serde(default)]
+    pub command_bar_action_ids: Vec<String>,
+    /// Action ID of the currently selected command-bar row.
+    #[serde(default)]
+    pub command_bar_selected_action_id: Option<String>,
 }
 
 impl AiApp {
@@ -321,7 +330,8 @@ impl AiApp {
     ///
     /// Used by agentic tests and future automation to assert state without
     /// reaching into struct internals.
-    pub(crate) fn debug_snapshot(&self) -> AiMiniDebugSnapshot {
+    pub(crate) fn debug_snapshot(&self, cx: &App) -> AiMiniDebugSnapshot {
+        let cb_state = self.command_bar.debug_state(cx);
         AiMiniDebugSnapshot {
             window_mode: if self.window_mode.is_mini() {
                 "mini".to_string()
@@ -350,6 +360,9 @@ impl AiApp {
             shortcuts_overlay_visible: self.showing_shortcuts_overlay,
             editing_message_present: self.editing_message_id.is_some(),
             renaming_chat_present: self.renaming_chat_id.is_some(),
+            command_bar_selected_index: cb_state.selected_index,
+            command_bar_action_ids: cb_state.action_ids,
+            command_bar_selected_action_id: cb_state.selected_action_id,
         }
     }
 }
@@ -397,6 +410,9 @@ mod tests {
             shortcuts_overlay_visible: false,
             editing_message_present: false,
             renaming_chat_present: false,
+            command_bar_selected_index: None,
+            command_bar_action_ids: Vec::new(),
+            command_bar_selected_action_id: None,
         };
 
         let json = serde_json::to_string(&snapshot).expect("serialize");
@@ -449,6 +465,9 @@ mod tests {
             shortcuts_overlay_visible: false,
             editing_message_present: false,
             renaming_chat_present: false,
+            command_bar_selected_index: None,
+            command_bar_action_ids: Vec::new(),
+            command_bar_selected_action_id: None,
         };
 
         let redacted = snapshot.redact_for_external_use();

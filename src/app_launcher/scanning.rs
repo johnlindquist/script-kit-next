@@ -2,7 +2,7 @@
 // Application Scanning
 // ============================================================================
 
-/// Scan for installed macOS applications
+/// Scan for installed applications
 ///
 /// This function uses a two-phase loading strategy:
 /// 1. First, instantly load from SQLite cache (if available) WITHOUT icon decoding
@@ -82,34 +82,66 @@ fn scan_all_directories_with_db_update() -> Vec<AppInfo> {
     let mut apps = Vec::new();
     let mut dirs_scanned = 0;
 
-    for dir in APP_DIRECTORIES {
-        let expanded = shellexpand::tilde(dir);
-        let path = Path::new(expanded.as_ref());
+    // macOS: scan .app bundle directories
+    #[cfg(target_os = "macos")]
+    {
+        for dir in APP_DIRECTORIES {
+            let expanded = shellexpand::tilde(dir);
+            let path = Path::new(expanded.as_ref());
 
-        if path.exists() {
+            if path.exists() {
+                let dir_start = Instant::now();
+                match scan_directory_with_db_update(path) {
+                    Ok(found) => {
+                        let count = found.len();
+                        trace!(
+                            directory = %path.display(),
+                            count,
+                            duration_ms = dir_start.elapsed().as_millis(),
+                            "Scanned directory"
+                        );
+                        apps.extend(found);
+                        dirs_scanned += 1;
+                    }
+                    Err(e) => {
+                        warn!(
+                            directory = %path.display(),
+                            error = %e,
+                            "Failed to scan directory"
+                        );
+                    }
+                }
+            } else {
+                trace!(directory = %path.display(), "Directory does not exist, skipping");
+            }
+        }
+    }
+
+    // Windows: scan Start Menu shortcut directories
+    #[cfg(target_os = "windows")]
+    {
+        for dir_path in WINDOWS_APP_DIRECTORIES.iter() {
             let dir_start = Instant::now();
-            match scan_directory_with_db_update(path) {
+            match scan_windows_directory_recursive(dir_path) {
                 Ok(found) => {
                     let count = found.len();
                     trace!(
-                        directory = %path.display(),
+                        directory = %dir_path.display(),
                         count,
                         duration_ms = dir_start.elapsed().as_millis(),
-                        "Scanned directory"
+                        "Scanned Windows Start Menu directory"
                     );
                     apps.extend(found);
                     dirs_scanned += 1;
                 }
                 Err(e) => {
                     warn!(
-                        directory = %path.display(),
+                        directory = %dir_path.display(),
                         error = %e,
-                        "Failed to scan directory"
+                        "Failed to scan Windows Start Menu directory"
                     );
                 }
             }
-        } else {
-            trace!(directory = %path.display(), "Directory does not exist, skipping");
         }
     }
 
@@ -117,6 +149,7 @@ fn scan_all_directories_with_db_update() -> Vec<AppInfo> {
     apps.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
 
     // Remove duplicates (same name from different directories - prefer first)
+    // User Start Menu dirs are listed before system dirs, so user entries win
     apps.dedup_by(|a, b| a.name.to_lowercase() == b.name.to_lowercase());
 
     // Log icon extraction summary (batched instead of per-app)
@@ -132,9 +165,14 @@ fn scan_all_directories_with_db_update() -> Vec<AppInfo> {
     apps
 }
 
-/// Scan a single directory for .app bundles and update SQLite
+// ============================================================================
+// macOS Application Scanning
+// ============================================================================
+
+/// Scan a single directory for .app bundles and update SQLite (macOS)
 ///
 /// Uses parallel iteration (rayon) for icon extraction which is the bottleneck.
+#[cfg(target_os = "macos")]
 fn scan_directory_with_db_update(dir: &Path) -> Result<Vec<AppInfo>> {
     let entries = fs::read_dir(dir)
         .with_context(|| format!("Failed to read directory: {}", dir.display()))?;
@@ -170,7 +208,8 @@ fn scan_directory_with_db_update(dir: &Path) -> Result<Vec<AppInfo>> {
     Ok(apps)
 }
 
-/// Parse a .app bundle to extract application information and icon bytes
+/// Parse a .app bundle to extract application information and icon bytes (macOS)
+#[cfg(target_os = "macos")]
 fn parse_app_bundle_with_icon(path: &Path) -> Option<(AppInfo, Option<Vec<u8>>)> {
     // Extract app name from bundle name (strip .app extension)
     let name = path
@@ -203,7 +242,8 @@ fn parse_app_bundle_with_icon(path: &Path) -> Option<(AppInfo, Option<Vec<u8>>)>
     ))
 }
 
-/// Scan all configured directories for applications (legacy, no DB update)
+/// Scan all configured directories for applications (legacy, no DB update, macOS)
+#[cfg(target_os = "macos")]
 #[allow(dead_code)]
 fn scan_all_directories() -> Vec<AppInfo> {
     let mut apps = Vec::new();
@@ -244,7 +284,8 @@ fn scan_all_directories() -> Vec<AppInfo> {
     apps
 }
 
-/// Scan a single directory for .app bundles (legacy, no DB update)
+/// Scan a single directory for .app bundles (legacy, no DB update, macOS)
+#[cfg(target_os = "macos")]
 fn scan_directory(dir: &Path) -> Result<Vec<AppInfo>> {
     let mut apps = Vec::new();
 
@@ -267,7 +308,8 @@ fn scan_directory(dir: &Path) -> Result<Vec<AppInfo>> {
     Ok(apps)
 }
 
-/// Parse a .app bundle to extract application information (legacy)
+/// Parse a .app bundle to extract application information (legacy, macOS)
+#[cfg(target_os = "macos")]
 fn parse_app_bundle(path: &Path) -> Option<AppInfo> {
     // Extract app name from bundle name (strip .app extension)
     let name = path
@@ -297,9 +339,10 @@ fn parse_app_bundle(path: &Path) -> Option<AppInfo> {
     })
 }
 
-/// Extract CFBundleIdentifier from Info.plist
+/// Extract CFBundleIdentifier from Info.plist (macOS)
 ///
 /// Uses /usr/libexec/PlistBuddy for reliable plist parsing.
+#[cfg(target_os = "macos")]
 fn extract_bundle_id(app_path: &Path) -> Option<String> {
     let plist_path = app_path.join("Contents/Info.plist");
 
@@ -323,7 +366,7 @@ fn extract_bundle_id(app_path: &Path) -> Option<String> {
     None
 }
 
-/// Extract application icon using NSWorkspace
+/// Extract application icon using NSWorkspace (macOS)
 ///
 /// Uses macOS Cocoa APIs to get the icon for an application bundle.
 /// The icon is converted to PNG format at 32x32 pixels for list display.
@@ -393,4 +436,114 @@ fn extract_app_icon(app_path: &Path) -> Option<Vec<u8>> {
 
         Some(png_bytes)
     }
+}
+
+// ============================================================================
+// Windows Application Scanning
+// ============================================================================
+
+/// Recursively scan a Windows Start Menu directory for .lnk shortcut files
+///
+/// Walks subdirectories to find all shortcut files, extracts the app name
+/// from the filename (stripping the .lnk extension), and optionally resolves
+/// the shortcut target path via PowerShell.
+#[cfg(target_os = "windows")]
+pub fn scan_windows_directory_recursive(dir: &Path) -> Result<Vec<AppInfo>> {
+    let mut apps = Vec::new();
+    scan_windows_directory_inner(dir, &mut apps)?;
+    Ok(apps)
+}
+
+/// Inner recursive walker for Windows Start Menu scanning
+#[cfg(target_os = "windows")]
+pub fn scan_windows_directory_inner(dir: &Path, apps: &mut Vec<AppInfo>) -> Result<()> {
+    let entries = fs::read_dir(dir)
+        .with_context(|| format!("Failed to read directory: {}", dir.display()))?;
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+
+        if path.is_dir() {
+            // Recurse into subdirectories (e.g., "Startup", "Accessories", vendor folders)
+            if let Err(e) = scan_windows_directory_inner(&path, apps) {
+                trace!(
+                    directory = %path.display(),
+                    error = %e,
+                    "Skipping subdirectory"
+                );
+            }
+        } else if path
+            .extension()
+            .map(|ext| ext.eq_ignore_ascii_case("lnk"))
+            .unwrap_or(false)
+        {
+            if let Some(app_info) = parse_windows_shortcut(&path) {
+                // Save to SQLite cache
+                let mtime = get_mtime(&path).unwrap_or(0);
+                save_app_to_db(&app_info, None, mtime);
+                apps.push(app_info);
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Parse a Windows .lnk shortcut file into an AppInfo
+///
+/// Extracts the display name from the filename and resolves the shortcut
+/// target path using PowerShell's WScript.Shell COM object.
+#[cfg(target_os = "windows")]
+pub fn parse_windows_shortcut(lnk_path: &Path) -> Option<AppInfo> {
+    // Extract app name from filename (strip .lnk extension)
+    let name = lnk_path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .map(|s| s.to_string())?;
+
+    // Skip empty names
+    if name.is_empty() {
+        return None;
+    }
+
+    // Try to resolve the shortcut target path via PowerShell
+    // This tells us what the .lnk actually points to
+    let bundle_id = resolve_lnk_target(lnk_path);
+
+    Some(AppInfo {
+        name,
+        path: lnk_path.to_path_buf(),
+        bundle_id,
+        icon: None, // Icon extraction on Windows is complex - skip for now
+    })
+}
+
+/// Resolve a .lnk shortcut's target path using PowerShell
+///
+/// Uses WScript.Shell COM object to read the shortcut target. Returns None
+/// if the target cannot be resolved (broken shortcut, permission issue, etc.)
+#[cfg(target_os = "windows")]
+pub fn resolve_lnk_target(lnk_path: &Path) -> Option<String> {
+    let lnk_str = lnk_path.to_str()?;
+
+    // PowerShell command to resolve shortcut target
+    // Using -NoProfile for speed, single-quoted path inside double-quoted PS string
+    let ps_command = format!(
+        "(New-Object -ComObject WScript.Shell).CreateShortcut('{}').TargetPath",
+        lnk_str.replace('\'', "''") // Escape single quotes for PowerShell
+    );
+
+    let output = Command::new("powershell")
+        .args(["-NoProfile", "-NonInteractive", "-Command", &ps_command])
+        .output()
+        .ok()?;
+
+    if output.status.success() {
+        let target = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if !target.is_empty() {
+            return Some(target);
+        }
+    }
+
+    None
 }

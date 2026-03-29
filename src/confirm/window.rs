@@ -376,6 +376,10 @@ pub(crate) fn open_confirm_popup_window(
             window_background,
             focus: true,
             show: true,
+            // Windows: PopUp triggers ArenaRef crash; use Normal
+            #[cfg(target_os = "windows")]
+            kind: WindowKind::Normal,
+            #[cfg(not(target_os = "windows"))]
             kind: WindowKind::PopUp,
             display_id,
             ..Default::default()

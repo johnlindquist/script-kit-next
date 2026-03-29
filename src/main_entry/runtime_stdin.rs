@@ -276,6 +276,35 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                         };
                                         view.update_window_size_deferred(window, ctx);
                                     }
+                                    "windows" | "window-switcher" | "windowswitcher" => {
+                                        match window_control::list_windows() {
+                                            Ok(windows) => {
+                                                view.cached_windows = windows;
+                                                view.current_view = AppView::WindowSwitcherView {
+                                                    filter: String::new(),
+                                                    selected_index: 0,
+                                                };
+                                                view.update_window_size_deferred(window, ctx);
+                                            }
+                                            Err(e) => {
+                                                logging::log("ERROR", &format!("Failed to list windows: {}", e));
+                                            }
+                                        }
+                                    }
+                                    "paste-sequentially" | "pastesequentially" | "paste-sequential" => {
+                                        logging::log("BUILTIN", "Paste Sequentially triggered via stdin");
+                                        match clipboard_history::advance_paste_sequence(&mut view.paste_sequential_state) {
+                                            clipboard_history::PasteSequentialOutcome::Pasted(entry_id) => {
+                                                logging::log("BUILTIN", &format!("Paste sequential: pasted entry {}", entry_id));
+                                            }
+                                            clipboard_history::PasteSequentialOutcome::Exhausted => {
+                                                logging::log("BUILTIN", "Paste sequential: exhausted");
+                                            }
+                                            clipboard_history::PasteSequentialOutcome::Empty => {
+                                                logging::log("BUILTIN", "Paste sequential: empty clipboard");
+                                            }
+                                        }
+                                    }
                                     "file-search" | "filesearch" | "files" | "searchfiles" => {
                                         view.open_file_search(String::new(), ctx);
                                     }
@@ -872,6 +901,37 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                     }
                                 }
                             }
+                            ExternalCommand::GetAiCommandBarState { ref request_id } => {
+                                let rid = request_id
+                                    .as_ref()
+                                    .map(|r| r.as_str().to_string())
+                                    .unwrap_or_default();
+                                logging::log("STDIN", &format!("GetAiCommandBarState: requestId='{}'", rid));
+                                match ai::get_ai_window_state(ctx) {
+                                    Some(snapshot) => {
+                                        let response = stdin_commands::QueryResponse::AiCommandBarResult {
+                                            request_id: rid,
+                                            ai_window_open: true,
+                                            command_bar_open: snapshot.command_bar_open,
+                                            action_ids: snapshot.command_bar_action_ids,
+                                            selected_index: snapshot.command_bar_selected_index.map(|i| i as i32).unwrap_or(-1),
+                                            selected_action_id: snapshot.command_bar_selected_action_id,
+                                        };
+                                        stdin_commands::write_query_response(&response);
+                                    }
+                                    None => {
+                                        let response = stdin_commands::QueryResponse::AiCommandBarResult {
+                                            request_id: rid,
+                                            ai_window_open: false,
+                                            command_bar_open: false,
+                                            action_ids: Vec::new(),
+                                            selected_index: -1,
+                                            selected_action_id: None,
+                                        };
+                                        stdin_commands::write_query_response(&response);
+                                    }
+                                }
+                            }
                             ExternalCommand::ShowGrid { grid_size, show_bounds, show_box_model, show_alignment_guides, show_dimensions, ref depth } => {
                                 logging::log("STDIN", &format!(
                                     "ShowGrid: size={}, bounds={}, box_model={}, guides={}, dimensions={}, depth={:?}",
@@ -899,6 +959,187 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                             ExternalCommand::ShowShortcutRecorder { ref command_id, ref command_name } => {
                                 logging::log("STDIN", &format!("ShowShortcutRecorder: command_id='{}', command_name='{}'", command_id, command_name));
                                 view.show_shortcut_recorder(command_id.clone(), command_name.clone(), ctx);
+                            }
+                            ExternalCommand::GetState { ref request_id } => {
+                                let rid = request_id
+                                    .as_ref()
+                                    .map(|r| r.as_str().to_string())
+                                    .unwrap_or_default();
+                                logging::log("STDIN", &format!("GetState: requestId='{}'", rid));
+
+                                // Extract state snapshot from current view
+                                let (prompt_type, input_value, choice_count, visible_choice_count, selected_index, selected_value) =
+                                    match &view.current_view {
+                                        AppView::ScriptList => {
+                                            let total = view.scripts.len()
+                                                + view.scriptlets.len()
+                                                + view.builtin_entries.len()
+                                                + view.apps.len();
+                                            let filtered = view.filtered_results();
+                                            let visible = filtered.len();
+                                            let sel_idx = view.selected_index as i32;
+                                            let sel_val = filtered
+                                                .get(view.selected_index)
+                                                .map(|r| r.name().to_string());
+                                            ("none", view.filter_text.clone(), total, visible, sel_idx, sel_val)
+                                        }
+                                        AppView::ArgPrompt { ref choices, .. } => {
+                                            let total = choices.len();
+                                            let filtered = view.get_filtered_arg_choices(choices);
+                                            let visible = filtered.len();
+                                            let sel_idx = view.arg_selected_index as i32;
+                                            let sel_val = filtered
+                                                .get(view.arg_selected_index)
+                                                .map(|c| c.name.clone());
+                                            ("arg", view.arg_input.text().to_string(), total, visible, sel_idx, sel_val)
+                                        }
+                                        AppView::MiniPrompt { ref choices, .. } => {
+                                            let total = choices.len();
+                                            let filtered = view.get_filtered_arg_choices(choices);
+                                            let visible = filtered.len();
+                                            let sel_idx = view.arg_selected_index as i32;
+                                            let sel_val = filtered
+                                                .get(view.arg_selected_index)
+                                                .map(|c| c.name.clone());
+                                            ("mini", view.arg_input.text().to_string(), total, visible, sel_idx, sel_val)
+                                        }
+                                        AppView::MicroPrompt { ref choices, .. } => {
+                                            let total = choices.len();
+                                            let filtered = view.get_filtered_arg_choices(choices);
+                                            let visible = filtered.len();
+                                            let sel_idx = view.arg_selected_index as i32;
+                                            let sel_val = filtered
+                                                .get(view.arg_selected_index)
+                                                .map(|c| c.name.clone());
+                                            ("micro", view.arg_input.text().to_string(), total, visible, sel_idx, sel_val)
+                                        }
+                                        AppView::DivPrompt { .. } => ("div", String::new(), 0, 0, -1, None),
+                                        AppView::FormPrompt { .. } => ("form", String::new(), 0, 0, -1, None),
+                                        AppView::TermPrompt { .. } => ("term", String::new(), 0, 0, -1, None),
+                                        AppView::EditorPrompt { .. } => ("editor", String::new(), 0, 0, -1, None),
+                                        AppView::SelectPrompt { .. } => ("select", String::new(), 0, 0, -1, None),
+                                        AppView::PathPrompt { .. } => ("path", String::new(), 0, 0, -1, None),
+                                        AppView::EnvPrompt { .. } => ("env", String::new(), 0, 0, -1, None),
+                                        AppView::DropPrompt { .. } => ("drop", String::new(), 0, 0, -1, None),
+                                        AppView::TemplatePrompt { .. } => ("template", String::new(), 0, 0, -1, None),
+                                        AppView::ChatPrompt { .. } => ("chat", String::new(), 0, 0, -1, None),
+                                        AppView::NamingPrompt { .. } => ("naming", String::new(), 0, 0, -1, None),
+                                        AppView::ActionsDialog => ("actions", String::new(), 0, 0, -1, None),
+                                        AppView::ClipboardHistoryView { ref filter, selected_index } => {
+                                            let total = view.cached_clipboard_entries.len();
+                                            ("clipboard", filter.clone(), total, total, *selected_index as i32, None)
+                                        }
+                                        AppView::FileSearchView { ref query, selected_index } => {
+                                            let total = view.cached_file_results.len();
+                                            ("fileSearch", query.clone(), total, total, *selected_index as i32, None)
+                                        }
+                                        AppView::ProcessManagerView { ref filter, selected_index } => {
+                                            let total = view.cached_processes.len();
+                                            ("processManager", filter.clone(), total, total, *selected_index as i32, None)
+                                        }
+                                        AppView::WindowSwitcherView { ref filter, selected_index } => {
+                                            let total = view.cached_windows.len();
+                                            let sel_val = view.cached_windows
+                                                .get(*selected_index)
+                                                .map(|w| w.title.clone());
+                                            ("windowSwitcher", filter.clone(), total, total, *selected_index as i32, sel_val)
+                                        }
+                                        AppView::AppLauncherView { ref filter, selected_index } => {
+                                            let total = view.apps.len();
+                                            let sel_val = view.apps
+                                                .get(*selected_index)
+                                                .map(|a| a.name.clone());
+                                            ("appLauncher", filter.clone(), total, total, *selected_index as i32, sel_val)
+                                        }
+                                        // For other views, provide basic info
+                                        _ => {
+                                            let type_name = format!("{:?}", view.current_view);
+                                            let type_name = type_name.split('{').next()
+                                                .or_else(|| type_name.split('(').next())
+                                                .unwrap_or(&type_name)
+                                                .trim()
+                                                .to_string();
+                                            (type_name.leak() as &str, String::new(), 0, 0, -1, None)
+                                        }
+                                    };
+
+                                let is_focused = view.focused_input != FocusedInput::None;
+                                let window_visible = is_main_window_visible();
+
+                                let response = stdin_commands::QueryResponse::StateResult {
+                                    request_id: rid,
+                                    prompt_type: prompt_type.to_string(),
+                                    input_value,
+                                    choice_count,
+                                    visible_choice_count,
+                                    selected_index,
+                                    selected_value,
+                                    is_focused,
+                                    window_visible,
+                                };
+                                stdin_commands::write_query_response(&response);
+                            }
+                            ExternalCommand::GetChatActionsState { ref request_id } => {
+                                let rid = request_id
+                                    .as_ref()
+                                    .map(|r| r.as_str().to_string())
+                                    .unwrap_or_default();
+                                logging::log("STDIN", &format!("GetChatActionsState: requestId='{}'", rid));
+
+                                let is_chat_view = matches!(&view.current_view, AppView::ChatPrompt { .. });
+
+                                let actions_popup_open = view.show_actions_popup;
+
+                                // Extract action IDs and titles from the actions dialog if open
+                                let (action_ids, action_titles, selected_action_index, selected_action_id) =
+                                    if let Some(ref dialog_entity) = view.actions_dialog {
+                                        let dialog = dialog_entity.read(ctx);
+                                        let ids: Vec<String> = dialog.filtered_actions.iter()
+                                            .filter_map(|&idx| dialog.actions.get(idx))
+                                            .map(|a| a.id.clone())
+                                            .collect();
+                                        let titles: Vec<String> = dialog.filtered_actions.iter()
+                                            .filter_map(|&idx| dialog.actions.get(idx))
+                                            .map(|a| a.title.clone())
+                                            .collect();
+                                        let sel_id = dialog.get_selected_action_id();
+                                        let sel_idx = if sel_id.is_some() {
+                                            dialog.selected_index as i32
+                                        } else {
+                                            -1
+                                        };
+                                        (ids, titles, sel_idx, sel_id)
+                                    } else {
+                                        (vec![], vec![], -1, None)
+                                    };
+
+                                // Extract chat state if in chat view
+                                let (chat_model, message_count, has_response) =
+                                    if let AppView::ChatPrompt { ref entity, .. } = &view.current_view {
+                                        let chat = entity.read(ctx);
+                                        let model = chat.model.clone();
+                                        let msg_count = chat.messages.len();
+                                        let has_resp = chat.messages.iter().any(|m| {
+                                            matches!(m.position, crate::protocol::ChatMessagePosition::Left)
+                                        });
+                                        (model, msg_count, has_resp)
+                                    } else {
+                                        (None, 0, false)
+                                    };
+
+                                let response = stdin_commands::QueryResponse::ChatActionsResult {
+                                    request_id: rid,
+                                    is_chat_view,
+                                    actions_popup_open,
+                                    action_ids,
+                                    action_titles,
+                                    selected_action_index,
+                                    selected_action_id,
+                                    chat_model,
+                                    message_count,
+                                    has_response,
+                                };
+                                stdin_commands::write_query_response(&response);
                             }
                         }
 

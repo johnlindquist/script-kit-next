@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+#[cfg(target_os = "macos")]
 use rayon::prelude::*;
 use rusqlite::{params, Connection};
 use std::collections::hash_map::DefaultHasher;
@@ -152,7 +153,8 @@ static APP_LOADING_STATE: LazyLock<Mutex<AppLoadingState>> =
 /// Database connection for apps cache
 static APPS_DB: OnceLock<Arc<Mutex<Connection>>> = OnceLock::new();
 
-/// Directories to scan for .app bundles
+/// Directories to scan for .app bundles (macOS)
+#[cfg(target_os = "macos")]
 const APP_DIRECTORIES: &[&str] = &[
     // Standard macOS app locations
     "/Applications",
@@ -173,7 +175,57 @@ const APP_DIRECTORIES: &[&str] = &[
     "/Applications/Setapp",
 ];
 
+/// Directories to scan for Start Menu shortcuts (Windows)
+///
+/// Resolved at runtime from environment variables since these paths
+/// vary per user/system configuration.
+#[cfg(target_os = "windows")]
+pub static WINDOWS_APP_DIRECTORIES: LazyLock<Vec<PathBuf>> = LazyLock::new(|| {
+    let mut dirs = Vec::new();
+
+    // User Start Menu Programs (e.g., C:\Users\<user>\AppData\Roaming\Microsoft\Windows\Start Menu\Programs)
+    if let Ok(appdata) = std::env::var("APPDATA") {
+        let user_programs = PathBuf::from(&appdata)
+            .join("Microsoft")
+            .join("Windows")
+            .join("Start Menu")
+            .join("Programs");
+        if user_programs.exists() {
+            dirs.push(user_programs);
+        }
+        // User Start Menu root (contains some shortcuts directly)
+        let user_root = PathBuf::from(&appdata)
+            .join("Microsoft")
+            .join("Windows")
+            .join("Start Menu");
+        if user_root.exists() {
+            dirs.push(user_root);
+        }
+    }
+
+    // System Start Menu Programs (e.g., C:\ProgramData\Microsoft\Windows\Start Menu\Programs)
+    if let Ok(programdata) = std::env::var("PROGRAMDATA") {
+        let system_programs = PathBuf::from(&programdata)
+            .join("Microsoft")
+            .join("Windows")
+            .join("Start Menu")
+            .join("Programs");
+        if system_programs.exists() {
+            dirs.push(system_programs);
+        }
+        // System Start Menu root
+        let system_root = PathBuf::from(&programdata)
+            .join("Microsoft")
+            .join("Windows")
+            .join("Start Menu");
+        if system_root.exists() {
+            dirs.push(system_root);
+        }
+    }
+
+    dirs
+});
+
 // ============================================================================
 // SQLite Database Functions
 // ============================================================================
-

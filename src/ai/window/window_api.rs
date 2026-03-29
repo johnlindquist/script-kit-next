@@ -583,7 +583,7 @@ pub fn get_ai_window_state(cx: &mut App) -> Option<super::state::AiMiniDebugSnap
     handle
         .update(cx, |_root, _window, cx| {
             weak.upgrade()
-                .map(|entity| entity.read(cx).debug_snapshot().redact_for_external_use())
+                .map(|entity| entity.read(cx).debug_snapshot(cx).redact_for_external_use())
         })
         .ok()
         .flatten()
