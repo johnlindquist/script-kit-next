@@ -63,8 +63,26 @@ impl TerminalHandle {
         // from the child process.
         events.retain(|event| {
             if let TerminalEvent::PtyWrite(ref text) = event {
+                let escaped: String = text
+                    .chars()
+                    .map(|c| {
+                        if c == '\x1b' {
+                            "ESC".to_string()
+                        } else if c.is_control() {
+                            format!("\\x{:02x}", c as u32)
+                        } else {
+                            c.to_string()
+                        }
+                    })
+                    .collect();
+                tracing::info!(
+                    target: "script_kit::terminal",
+                    response = %escaped,
+                    bytes = text.len(),
+                    "Writing terminal emulator response back to PTY"
+                );
                 if let Err(e) = self.pty.write_all(text.as_bytes()) {
-                    debug!(error = %e, "Failed to write terminal response to PTY");
+                    tracing::warn!(error = %e, "Failed to write terminal response to PTY");
                 }
                 let _ = self.pty.flush();
                 false // Remove PtyWrite from the returned events
