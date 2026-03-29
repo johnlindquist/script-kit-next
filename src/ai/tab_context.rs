@@ -192,11 +192,23 @@ impl TabAiTargetAudit {
 // Tab AI experience packs — named, surface-native intent planning
 // ---------------------------------------------------------------------------
 
+/// Semantic flavor of an experience intent — drives priority ranking without
+/// relying on fragile label-string matching.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum TabAiExperienceFlavor {
+    Generic,
+    Teachable,
+    Fusion,
+    Batch,
+    Adaptation,
+}
+
 /// A single experience-pack suggestion with a human label and full intent string.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TabAiExperienceIntent {
     pub label: String,
     pub intent: String,
+    pub flavor: TabAiExperienceFlavor,
 }
 
 impl TabAiExperienceIntent {
@@ -204,7 +216,13 @@ impl TabAiExperienceIntent {
         Self {
             label: label.into(),
             intent: intent.into(),
+            flavor: TabAiExperienceFlavor::Generic,
         }
+    }
+
+    pub fn with_flavor(mut self, flavor: TabAiExperienceFlavor) -> Self {
+        self.flavor = flavor;
+        self
     }
 
     /// Convert into a [`TabAiSuggestedIntentSpec`] for the card suggestion system.
@@ -258,23 +276,19 @@ pub fn tab_ai_experience_pack_subtitle(pack: TabAiExperiencePack) -> &'static st
     }
 }
 
-/// Card-priority tier for an experience intent.
+/// Card-priority tier for an experience intent, derived from its flavor.
 ///
 /// Lower values surface first in the three-card shortlist.
-/// Tier 0 = differentiated fusion/batch/adaptation labels that Raycast cannot do.
-/// Tier 1 = teachable/reusable command creation labels.
+/// Tier 0 = differentiated fusion/batch/adaptation (Raycast cannot do these).
+/// Tier 1 = teachable/reusable command creation.
 /// Tier 2 = everything else (generic pack verbs).
 fn tab_ai_experience_card_priority(intent: &TabAiExperienceIntent) -> u8 {
-    let label = intent.label.as_str();
-    if label.starts_with("Adapt ") {
-        return 0;
-    }
-    match label {
-        "Rename From Clipboard" | "Send Link Here" | "Apply Clipboard Then Run"
-        | "Sweep Visible Files" | "Pick Best Command" | "Use Visible Items" => 0,
-        "Teach This Command" | "Make Link Command" | "Make Command" | "Make Me a Command"
-        | "Make It Reusable" => 1,
-        _ => 2,
+    match intent.flavor {
+        TabAiExperienceFlavor::Adaptation
+        | TabAiExperienceFlavor::Fusion
+        | TabAiExperienceFlavor::Batch => 0,
+        TabAiExperienceFlavor::Teachable => 1,
+        TabAiExperienceFlavor::Generic => 2,
     }
 }
 
@@ -293,6 +307,18 @@ fn prioritize_tab_ai_experience_card_intents(
     indexed.into_iter().map(|(_, intent)| intent).collect()
 }
 
+/// Prioritize intents then take the top `limit` — shared helper so that
+/// truncation never happens before ranking.
+fn prioritize_then_take_tab_ai_experience_intents(
+    intents: Vec<TabAiExperienceIntent>,
+    limit: usize,
+) -> Vec<TabAiExperienceIntent> {
+    prioritize_tab_ai_experience_card_intents(intents)
+        .into_iter()
+        .take(limit)
+        .collect()
+}
+
 /// Build a display-ready experience spec from the current context.
 ///
 /// Returns `None` when no intents can be generated (nothing useful to show).
@@ -305,13 +331,14 @@ pub fn build_tab_ai_experience_spec(
     prior_automations: &[TabAiMemorySuggestion],
 ) -> Option<TabAiExperienceSpec> {
     let pack = TabAiExperiencePack::from_target(focused_target);
-    let intents = prioritize_tab_ai_experience_card_intents(
+    let intents = prioritize_then_take_tab_ai_experience_intents(
         build_tab_ai_experience_intents(
             focused_target,
             visible_targets,
             clipboard,
             prior_automations,
         ),
+        3,
     );
     if intents.is_empty() {
         return None;
@@ -320,7 +347,7 @@ pub fn build_tab_ai_experience_spec(
         pack,
         title: tab_ai_experience_pack_name(pack).to_string(),
         subtitle: tab_ai_experience_pack_subtitle(pack).to_string(),
-        intents: intents.into_iter().take(3).collect(),
+        intents,
     })
 }
 
@@ -360,7 +387,23 @@ fn push_unique_tab_ai_experience(
     label: impl Into<String>,
     intent: impl Into<String>,
 ) {
-    let item = TabAiExperienceIntent::new(label, intent);
+    push_unique_tab_ai_experience_with_flavor(
+        out,
+        seen,
+        label,
+        intent,
+        TabAiExperienceFlavor::Generic,
+    );
+}
+
+fn push_unique_tab_ai_experience_with_flavor(
+    out: &mut Vec<TabAiExperienceIntent>,
+    seen: &mut BTreeSet<String>,
+    label: impl Into<String>,
+    intent: impl Into<String>,
+    flavor: TabAiExperienceFlavor,
+) {
+    let item = TabAiExperienceIntent::new(label, intent).with_flavor(flavor);
     let key = format!("{}::{}", item.label, item.intent);
     if seen.insert(key) {
         out.push(item);
@@ -426,11 +469,12 @@ pub fn build_tab_ai_experience_intents(
                         "Summarize Link",
                         "Summarize what this copied link is likely for and suggest a command I can save.",
                     );
-                    push_unique_tab_ai_experience(
+                    push_unique_tab_ai_experience_with_flavor(
                         &mut out,
                         &mut seen,
                         "Make Link Command",
                         "Create a reusable Script Kit command that works on copied links like this one.",
+                        TabAiExperienceFlavor::Teachable,
                     );
                 }
                 Some("color") => {
@@ -466,11 +510,12 @@ pub fn build_tab_ai_experience_intents(
                         "Turn Into Checklist",
                         "Turn this copied text into a tight checklist.",
                     );
-                    push_unique_tab_ai_experience(
+                    push_unique_tab_ai_experience_with_flavor(
                         &mut out,
                         &mut seen,
                         "Make Command",
                         "Turn this copied content into a reusable Script Kit command.",
+                        TabAiExperienceFlavor::Teachable,
                     );
                 }
             }
@@ -528,25 +573,28 @@ pub fn build_tab_ai_experience_intents(
                 "Explain This Command",
                 "Explain what this selected current-app command probably does and when to use it.",
             );
-            push_unique_tab_ai_experience(
+            push_unique_tab_ai_experience_with_flavor(
                 &mut out,
                 &mut seen,
                 "Teach This Command",
                 "Turn this selected current-app command into a reusable Script Kit command.",
+                TabAiExperienceFlavor::Teachable,
             );
         }
         TabAiExperiencePack::AppPilot => {
-            push_unique_tab_ai_experience(
+            push_unique_tab_ai_experience_with_flavor(
                 &mut out,
                 &mut seen,
-                "Set Up Workspace",
-                "Open this app in the most useful working state for me right now.",
+                "Turn This Into Command",
+                "Capture what I need to do in this app as a reusable Script Kit command.",
+                TabAiExperienceFlavor::Teachable,
             );
-            push_unique_tab_ai_experience(
+            push_unique_tab_ai_experience_with_flavor(
                 &mut out,
                 &mut seen,
-                "Show Automation Ideas",
-                "Show the best automation ideas for this app right now.",
+                "Automate This App",
+                "Find the fastest reusable Script Kit automation for what I need in this app right now.",
+                TabAiExperienceFlavor::Teachable,
             );
             push_unique_tab_ai_experience(
                 &mut out,
@@ -588,11 +636,12 @@ pub fn build_tab_ai_experience_intents(
                 "Stop Safely",
                 "Stop this running Script Kit process and tell me what I should run next.",
             );
-            push_unique_tab_ai_experience(
+            push_unique_tab_ai_experience_with_flavor(
                 &mut out,
                 &mut seen,
                 "Make It Reusable",
                 "Turn what this running Script Kit process does into a reusable launcher command.",
+                TabAiExperienceFlavor::Teachable,
             );
         }
         TabAiExperiencePack::GenericSelection => {
@@ -608,31 +657,33 @@ pub fn build_tab_ai_experience_intents(
                 "Explain Selection",
                 "Explain what this selected item is and what I can do with it.",
             );
-            push_unique_tab_ai_experience(
+            push_unique_tab_ai_experience_with_flavor(
                 &mut out,
                 &mut seen,
                 "Make Command",
                 "Turn this selection into a reusable Script Kit command.",
+                TabAiExperienceFlavor::Teachable,
             );
         }
         TabAiExperiencePack::DesktopGeneral => {
             push_unique_tab_ai_experience(
                 &mut out,
                 &mut seen,
-                "Act On Frontmost App",
-                "Do the fastest useful thing in the current app.",
+                "Do in Current App",
+                "Use the frontmost app, menu state, and selection to do the fastest useful thing.",
             );
             push_unique_tab_ai_experience(
                 &mut out,
                 &mut seen,
-                "Use Current Selection",
-                "Use the current selected text or frontmost context to help me continue.",
+                "Inspect Current Context",
+                "Summarize what Script Kit can currently see and tell me the best next move.",
             );
-            push_unique_tab_ai_experience(
+            push_unique_tab_ai_experience_with_flavor(
                 &mut out,
                 &mut seen,
                 "Make Me a Command",
                 "Turn what I am doing right now into a reusable Script Kit command.",
+                TabAiExperienceFlavor::Teachable,
             );
         }
     }
@@ -647,25 +698,28 @@ pub fn build_tab_ai_experience_intents(
             .all(|target| target.kind == "menu_command");
 
         if all_files {
-            push_unique_tab_ai_experience(
+            push_unique_tab_ai_experience_with_flavor(
                 &mut out,
                 &mut seen,
                 "Sweep Visible Files",
                 "Act on the visible files as a set, not just the selected file.",
+                TabAiExperienceFlavor::Batch,
             );
         } else if all_menu_commands {
-            push_unique_tab_ai_experience(
+            push_unique_tab_ai_experience_with_flavor(
                 &mut out,
                 &mut seen,
                 "Pick Best Command",
                 "Compare the visible current-app commands and pick the best one for my goal.",
+                TabAiExperienceFlavor::Batch,
             );
         } else {
-            push_unique_tab_ai_experience(
+            push_unique_tab_ai_experience_with_flavor(
                 &mut out,
                 &mut seen,
                 "Use Visible Items",
                 "Use the visible items on this surface, not just the selected one.",
+                TabAiExperienceFlavor::Batch,
             );
         }
     }
@@ -674,27 +728,30 @@ pub fn build_tab_ai_experience_intents(
     if let (Some(target), Some(entry)) = (focused_target, clipboard) {
         match (target.kind.as_str(), entry.content_type.as_str()) {
             ("file", "text") | ("file", "link") => {
-                push_unique_tab_ai_experience(
+                push_unique_tab_ai_experience_with_flavor(
                     &mut out,
                     &mut seen,
                     "Rename From Clipboard",
                     "Rename this file using the clipboard text as the source of truth.",
+                    TabAiExperienceFlavor::Fusion,
                 );
             }
             ("window", "link") | ("app", "link") => {
-                push_unique_tab_ai_experience(
+                push_unique_tab_ai_experience_with_flavor(
                     &mut out,
                     &mut seen,
                     "Send Link Here",
                     "Use the copied link in this selected app or window and continue the task.",
+                    TabAiExperienceFlavor::Fusion,
                 );
             }
             ("menu_command", "text") => {
-                push_unique_tab_ai_experience(
+                push_unique_tab_ai_experience_with_flavor(
                     &mut out,
                     &mut seen,
                     "Apply Clipboard Then Run",
                     "Use the clipboard text with this selected current-app command if it helps complete the task.",
+                    TabAiExperienceFlavor::Fusion,
                 );
             }
             _ => {}
@@ -703,7 +760,7 @@ pub fn build_tab_ai_experience_intents(
 
     // Prior automation adaptation
     if let Some(last) = prior_automations.first() {
-        push_unique_tab_ai_experience(
+        push_unique_tab_ai_experience_with_flavor(
             &mut out,
             &mut seen,
             format!("Adapt {}", last.slug),
@@ -711,11 +768,11 @@ pub fn build_tab_ai_experience_intents(
                 "Adapt my previous successful automation '{}' to the current context.",
                 last.effective_query
             ),
+            TabAiExperienceFlavor::Adaptation,
         );
     }
 
-    out.truncate(5);
-    out
+    prioritize_then_take_tab_ai_experience_intents(out, 5)
 }
 
 #[cfg(test)]
@@ -746,12 +803,13 @@ mod tab_ai_experience_tests {
         let visible = vec![focused.clone()];
         let intents = build_tab_ai_experience_intents(Some(&focused), &visible, None, &[]);
         let labels: Vec<&str> = intents.iter().map(|item| item.label.as_str()).collect();
+        // build_tab_ai_experience_intents now returns prioritized order
         assert_eq!(
             labels,
             vec![
+                "Teach This Command",
                 "Run This Command",
-                "Explain This Command",
-                "Teach This Command"
+                "Explain This Command"
             ]
         );
     }
@@ -904,6 +962,74 @@ mod tab_ai_experience_tests {
         let labels: Vec<&str> = spec.intents.iter().map(|item| item.label.as_str()).collect();
         assert_eq!(labels[0], "Adapt rename-kebab");
         assert_eq!(labels.len(), 3);
+    }
+
+    fn memory(slug: &str, effective_query: &str) -> TabAiMemorySuggestion {
+        TabAiMemorySuggestion {
+            slug: slug.to_string(),
+            bundle_id: "com.test".to_string(),
+            raw_query: effective_query.to_string(),
+            effective_query: effective_query.to_string(),
+            prompt_type: "arg".to_string(),
+            written_at: "2026-01-01T00:00:00Z".to_string(),
+            score: 1.0,
+        }
+    }
+
+    #[test]
+    fn command_alchemy_shortlist_promotes_teaching() {
+        let focused = target("menu_command", "New Private Window");
+        let visible = vec![focused.clone()];
+        let spec = build_tab_ai_experience_spec(Some(&focused), &visible, None, &[])
+            .expect("command spec");
+        let labels: Vec<&str> = spec.intents.iter().map(|item| item.label.as_str()).collect();
+        assert_eq!(
+            labels,
+            vec!["Teach This Command", "Run This Command", "Explain This Command"]
+        );
+    }
+
+    #[test]
+    fn rich_file_context_shortlist_keeps_batch_fusion_and_adaptation() {
+        let focused = target("file", "main.rs");
+        let visible = vec![focused.clone(), target("file", "lib.rs")];
+        let spec = build_tab_ai_experience_spec(
+            Some(&focused),
+            &visible,
+            Some(&clipboard("text")),
+            &[memory("rename-rust-module", "rename rust module")],
+        )
+        .expect("file spec");
+        let labels: Vec<&str> = spec.intents.iter().map(|item| item.label.as_str()).collect();
+        assert_eq!(
+            labels,
+            vec!["Sweep Visible Files", "Rename From Clipboard", "Adapt rename-rust-module"]
+        );
+    }
+
+    #[test]
+    fn desktop_general_shortlist_uses_script_kit_native_language() {
+        let visible: Vec<TabAiTargetContext> = vec![];
+        let spec = build_tab_ai_experience_spec(None, &visible, None, &[])
+            .expect("desktop spec");
+        let labels: Vec<&str> = spec.intents.iter().map(|item| item.label.as_str()).collect();
+        assert_eq!(
+            labels,
+            vec!["Make Me a Command", "Do in Current App", "Inspect Current Context"]
+        );
+    }
+
+    #[test]
+    fn app_pilot_shortlist_contains_command_capture() {
+        let focused = target("app", "Safari");
+        let visible = vec![focused.clone()];
+        let spec = build_tab_ai_experience_spec(Some(&focused), &visible, None, &[])
+            .expect("app spec");
+        let labels: Vec<&str> = spec.intents.iter().map(|item| item.label.as_str()).collect();
+        assert_eq!(
+            labels,
+            vec!["Turn This Into Command", "Automate This App", "Find Right Window"]
+        );
     }
 }
 
