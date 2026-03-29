@@ -193,12 +193,33 @@
                             // raw byte to the PTY and stop propagation.
                             if let AppView::QuickTerminalView { entity, .. } = &this.current_view {
                                 entity.update(cx, |term, _cx| {
+                                    let running = term.terminal.is_running();
                                     let bytes: &[u8] = if has_shift {
                                         b"\x1b[Z" // Shift+Tab (backtab)
                                     } else {
                                         b"\t" // Tab
                                     };
-                                    let _ = term.terminal.input(bytes);
+                                    if !running {
+                                        tracing::warn!(
+                                            event = "quick_terminal_tab_pty_dead",
+                                            has_shift,
+                                            "Tab intercepted but PTY is not running"
+                                        );
+                                        return;
+                                    }
+                                    match term.terminal.input(bytes) {
+                                        Ok(()) => tracing::debug!(
+                                            event = "quick_terminal_tab_sent",
+                                            has_shift,
+                                            "Tab byte written to PTY"
+                                        ),
+                                        Err(e) => tracing::warn!(
+                                            event = "quick_terminal_tab_write_failed",
+                                            error = %e,
+                                            has_shift,
+                                            "Failed to write Tab to PTY"
+                                        ),
+                                    }
                                 });
                                 cx.stop_propagation();
                                 return;
