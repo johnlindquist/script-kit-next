@@ -129,7 +129,15 @@ impl ScriptListApp {
             }
         }
 
-        self.open_tab_ai_harness_terminal(cx);
+        // Try harness terminal first; fall back to full-view chat if unavailable
+        if crate::ai::read_tab_ai_harness_config()
+            .and_then(|config| crate::ai::validate_tab_ai_harness_config(&config).map(|_| config))
+            .is_ok()
+        {
+            self.open_tab_ai_harness_terminal(cx);
+        } else {
+            self.open_tab_ai_full_view_chat(cx);
+        }
     }
 
     /// Core harness-terminal open: snapshot context, ensure PTY, switch view, inject.
@@ -378,42 +386,226 @@ impl ScriptListApp {
         cx.notify();
     }
 
-    /// Build context cards from the current UI state for the Tab AI empty state.
+    /// Open Tab AI as a full-view chat with preview context cards.
+    ///
+    /// Captures desktop context once with `CaptureContextOptions::recommendation()`
+    /// and passes it through both card construction and chat state so the preview
+    /// cannot drift from what the submit path sees.
+    pub(crate) fn open_tab_ai_full_view_chat(&mut self, cx: &mut Context<Self>) {
+        if self.tab_ai_save_offer_state.is_some() {
+            return;
+        }
+        if matches!(self.current_view, AppView::TabAiChat { .. }) {
+            return;
+        }
+
+        let source_view = self.current_view.clone();
+        let (ui_snapshot, invocation_receipt) = self.snapshot_tab_ai_ui(cx);
+
+        // Capture desktop context once with the lightweight recommendation profile
+        let desktop_preview = crate::context_snapshot::capture_context_snapshot(
+            &crate::context_snapshot::CaptureContextOptions::recommendation(),
+        );
+        let frontmost_bundle_id = desktop_preview
+            .frontmost_app
+            .as_ref()
+            .map(|app| app.bundle_id.clone());
+
+        let context_cards =
+            self.build_tab_ai_context_cards(&source_view, &ui_snapshot, &desktop_preview);
+
+        let return_focus_target = self.tab_ai_return_focus_target();
+
+        let focus_handle = self.focus_handle.clone();
+        let entity = cx.new(|cx| {
+            let mut chat = TabAiChat::new(
+                source_view,
+                return_focus_target,
+                ui_snapshot,
+                invocation_receipt,
+                frontmost_bundle_id,
+                context_cards,
+                focus_handle,
+            );
+            chat.start_cursor_blink(cx);
+            chat
+        });
+
+        tracing::info!(
+            event = "tab_ai_full_view_chat_open",
+            card_count = entity.read(cx).context_cards.len(),
+            suggestion_count = entity.read(cx).context_suggestions().len(),
+        );
+
+        self.current_view = AppView::TabAiChat { entity };
+        self.focused_input = FocusedInput::None;
+        self.show_actions_popup = false;
+        self.actions_dialog = None;
+        self.pending_focus = Some(FocusTarget::TabAiChat);
+
+        cx.spawn(async move |_this, _cx| {
+            resize_to_view_sync(ViewType::DivPrompt, 0);
+        })
+        .detach();
+        cx.notify();
+    }
+
+    /// Build typed context cards from the current UI state for the Tab AI empty state.
+    /// Uses the same resolution paths as the submit flow so the preview cannot drift.
     fn build_tab_ai_context_cards(
         &self,
+        source_view: &AppView,
         ui: &crate::ai::TabAiUiSnapshot,
+        desktop: &crate::context_snapshot::AiContextSnapshot,
     ) -> Vec<TabAiContextCard> {
-        let mut cards = Vec::new();
+        let (focused_target, visible_targets) =
+            self.resolve_tab_ai_surface_targets_for_view(source_view, ui);
 
-        let (focused_target, _) = self.resolve_tab_ai_surface_targets(ui);
-        if let Some(target) = focused_target {
-            cards.push(TabAiContextCard {
-                label: "Selected Item".into(),
-                body: SharedString::from(format!("{} \u{2014} {}", target.kind, target.label)),
-            });
-        }
-
-        if let Some(app) = crate::frontmost_app_tracker::get_last_real_app() {
-            cards.push(TabAiContextCard {
-                label: "Frontmost App".into(),
-                body: SharedString::from(app.name),
-            });
-            if let Some(window_title) = app.window_title.filter(|title| !title.trim().is_empty()) {
-                cards.push(TabAiContextCard {
-                    label: "Focused Window".into(),
-                    body: SharedString::from(window_title),
-                });
-            }
-        }
-
-        let clipboard_selected_index = match &self.current_view {
+        let clipboard_selected_index = match source_view {
             AppView::ClipboardHistoryView { selected_index, .. } => Some(*selected_index),
             _ => None,
         };
-        if let Some(clipboard) = self.resolve_tab_ai_clipboard_context(clipboard_selected_index) {
+        let clipboard = self.resolve_tab_ai_clipboard_context(clipboard_selected_index);
+
+        let prior_automations = crate::ai::recent_tab_ai_automations_for_bundle(
+            desktop
+                .frontmost_app
+                .as_ref()
+                .map(|app| app.bundle_id.as_str()),
+            3,
+        )
+        .unwrap_or_default();
+
+        let mut cards = Vec::new();
+
+        // -- Selected item card (with suggestions) --
+        if let Some(target) = focused_target.as_ref() {
             cards.push(TabAiContextCard {
+                kind: TabAiContextCardKind::SelectedItem,
+                label: "Selected Item".into(),
+                title: target.label.clone().into(),
+                body: Some(format!("{} \u{00B7} {}", target.kind, target.source).into()),
+                rows: vec![TabAiContextRow::new(
+                    "Semantic ID",
+                    target.semantic_id.clone(),
+                )],
+                suggestions: crate::ai::build_tab_ai_suggested_intents(
+                    Some(target),
+                    clipboard.as_ref(),
+                    &prior_automations,
+                )
+                .into_iter()
+                .map(Into::into)
+                .collect(),
+            });
+        }
+
+        // -- Filter text card --
+        if let Some(text) = ui.input_text.as_ref().filter(|t| !t.trim().is_empty()) {
+            cards.push(TabAiContextCard {
+                kind: TabAiContextCardKind::FilterText,
+                label: "Filter Text".into(),
+                title: text.clone().into(),
+                body: None,
+                rows: Vec::new(),
+                suggestions: Vec::new(),
+            });
+        }
+
+        // -- Visible items card --
+        let visible_rows: Vec<TabAiContextRow> = visible_targets
+            .iter()
+            .take(5)
+            .map(|t| TabAiContextRow::new(t.kind.clone(), t.label.clone()))
+            .collect();
+        if !visible_rows.is_empty() {
+            cards.push(TabAiContextCard {
+                kind: TabAiContextCardKind::VisibleItems,
+                label: "Visible Items".into(),
+                title: format!("{} visible targets", visible_rows.len()).into(),
+                body: None,
+                rows: visible_rows,
+                suggestions: Vec::new(),
+            });
+        }
+
+        // -- Desktop context card --
+        let mut desktop_rows = Vec::new();
+        if let Some(app) = desktop.frontmost_app.as_ref() {
+            desktop_rows.push(TabAiContextRow::new("App", app.name.clone()));
+        }
+        if let Some(window) = desktop.focused_window.as_ref() {
+            if !window.title.trim().is_empty() {
+                desktop_rows.push(TabAiContextRow::new("Window", window.title.clone()));
+            }
+        }
+        if let Some(selection) = desktop
+            .selected_text
+            .as_ref()
+            .filter(|t| !t.trim().is_empty())
+        {
+            desktop_rows.push(TabAiContextRow::new(
+                "Selection",
+                crate::ai::truncate_tab_ai_text(selection, 80),
+            ));
+        }
+        if !desktop_rows.is_empty() {
+            // If no focused target, put default suggestions on the desktop card
+            let desktop_suggestions = if focused_target.is_none() {
+                crate::ai::build_tab_ai_suggested_intents(
+                    None,
+                    clipboard.as_ref(),
+                    &prior_automations,
+                )
+                .into_iter()
+                .map(Into::into)
+                .collect()
+            } else {
+                Vec::new()
+            };
+            cards.push(TabAiContextCard {
+                kind: TabAiContextCardKind::Desktop,
+                label: "Desktop".into(),
+                title: "Current Context".into(),
+                body: None,
+                rows: desktop_rows,
+                suggestions: desktop_suggestions,
+            });
+        }
+
+        // -- Clipboard card --
+        if let Some(cb) = clipboard {
+            cards.push(TabAiContextCard {
+                kind: TabAiContextCardKind::Clipboard,
                 label: "Clipboard".into(),
-                body: SharedString::from(clipboard.preview),
+                title: cb.content_type.clone().into(),
+                body: Some(cb.preview.clone().into()),
+                rows: Vec::new(),
+                suggestions: Vec::new(),
+            });
+        }
+
+        // -- Prior automations card --
+        if !prior_automations.is_empty() {
+            cards.push(TabAiContextCard {
+                kind: TabAiContextCardKind::PriorAutomations,
+                label: "Prior Automations".into(),
+                title: format!("{} recent successes", prior_automations.len()).into(),
+                body: None,
+                rows: prior_automations
+                    .iter()
+                    .map(|item| TabAiContextRow::new(item.slug.clone(), item.effective_query.clone()))
+                    .collect(),
+                suggestions: prior_automations
+                    .iter()
+                    .take(1)
+                    .map(|item| {
+                        TabAiSuggestedIntent::from(crate::ai::TabAiSuggestedIntentSpec::new(
+                            format!("Repeat {}", item.slug),
+                            item.effective_query.clone(),
+                        ))
+                    })
+                    .collect(),
             });
         }
 
@@ -452,6 +644,52 @@ impl ScriptListApp {
             self.close_tab_ai_chat(cx);
             cx.stop_propagation();
             return;
+        }
+
+        // When input is empty, Up/Down cycle suggestions and Enter submits the selected one
+        if entity.read(cx).current_intent().trim().is_empty() {
+            if crate::ui_foundation::is_key_up(key) {
+                let handled = entity.update(cx, |chat, cx| {
+                    if chat.context_suggestions().is_empty() {
+                        return false;
+                    }
+                    chat.move_selected_suggestion(-1);
+                    cx.notify();
+                    true
+                });
+                if handled {
+                    cx.stop_propagation();
+                    return;
+                }
+            }
+
+            if crate::ui_foundation::is_key_down(key) {
+                let handled = entity.update(cx, |chat, cx| {
+                    if chat.context_suggestions().is_empty() {
+                        return false;
+                    }
+                    chat.move_selected_suggestion(1);
+                    cx.notify();
+                    true
+                });
+                if handled {
+                    cx.stop_propagation();
+                    return;
+                }
+            }
+
+            if crate::ui_foundation::is_key_enter(key) && !event.keystroke.modifiers.shift {
+                let suggestion = entity.read(cx).selected_suggestion();
+                if let Some(suggestion) = suggestion {
+                    self.submit_tab_ai_chat_with_intent(
+                        entity,
+                        suggestion.intent.to_string(),
+                        cx,
+                    );
+                    cx.stop_propagation();
+                    return;
+                }
+            }
         }
 
         if crate::ui_foundation::is_key_enter(key) && !event.keystroke.modifiers.shift {
@@ -575,12 +813,33 @@ impl ScriptListApp {
         entity: Entity<TabAiChat>,
         cx: &mut Context<Self>,
     ) {
-        let (intent, source_view, ui_snapshot, invocation_receipt) =
-            entity.read(cx).submission_payload();
+        let intent = entity.read(cx).current_intent();
+        self.submit_tab_ai_chat_with_intent(entity, intent, cx);
+    }
 
+    /// Submit an explicit intent string (from typed input or a selected suggestion).
+    fn submit_tab_ai_chat_with_intent(
+        &mut self,
+        entity: Entity<TabAiChat>,
+        intent: String,
+        cx: &mut Context<Self>,
+    ) {
         if intent.trim().is_empty() {
             return;
         }
+
+        if entity.read(cx).running {
+            return;
+        }
+
+        let (source_view, ui_snapshot, invocation_receipt) = {
+            let chat = entity.read(cx);
+            (
+                chat.restore_target().0,
+                chat.ui_snapshot.clone(),
+                chat.invocation_receipt.clone(),
+            )
+        };
 
         tracing::info!(event = "tab_ai_submit", intent = %intent);
 
@@ -1056,17 +1315,7 @@ impl ScriptListApp {
         }
     }
 
-    fn resolve_tab_ai_surface_targets(
-        &self,
-        ui: &crate::ai::TabAiUiSnapshot,
-    ) -> (
-        Option<crate::ai::TabAiTargetContext>,
-        Vec<crate::ai::TabAiTargetContext>,
-    ) {
-        self.resolve_tab_ai_surface_targets_for_view(&self.current_view, ui)
-    }
-
-    /// Source-view-aware variant: resolves targets against an explicit view
+    /// Source-view-aware target resolution: resolves targets against an explicit view
     /// instead of `self.current_view`. Used at submit time when `current_view`
     /// has already switched to `TabAiChat`.
     fn resolve_tab_ai_surface_targets_for_view(
@@ -1953,7 +2202,7 @@ impl Render for TabAiChat {
         let placeholder: SharedString = if self.running {
             "Generating\u{2026}".into()
         } else {
-            "Ask AI about the current context\u{2026}".into()
+            self.input_placeholder()
         };
 
         let card_ghost_bg = gpui::rgba(crate::ui_foundation::hex_to_rgba_with_opacity(
@@ -1975,6 +2224,10 @@ impl Render for TabAiChat {
                 )))
         });
 
+        // Collect suggestion pills across all cards (capped to 3)
+        let all_suggestions = self.context_suggestions();
+        let selected_idx = self.selected_suggestion_index;
+
         // Center body: context cards (empty state) or scrollable turns list
         let body: gpui::AnyElement = if self.turns.is_empty() {
             let context_cards: Vec<gpui::AnyElement> = self
@@ -1982,25 +2235,118 @@ impl Render for TabAiChat {
                 .iter()
                 .cloned()
                 .map(|card| {
-                    div()
+                    let card_id = match card.kind {
+                        TabAiContextCardKind::SelectedItem => "tab-ai-card-selected",
+                        TabAiContextCardKind::FilterText => "tab-ai-card-filter",
+                        TabAiContextCardKind::VisibleItems => "tab-ai-card-visible",
+                        TabAiContextCardKind::Desktop => "tab-ai-card-desktop",
+                        TabAiContextCardKind::Clipboard => "tab-ai-card-clipboard",
+                        TabAiContextCardKind::PriorAutomations => "tab-ai-card-automations",
+                    };
+                    let mut card_el = div()
+                        .id(card_id)
                         .w_full()
                         .mb(px(8.))
                         .px(px(12.))
                         .py(px(10.))
                         .bg(card_ghost_bg)
-                        .child(div().text_xs().text_color(hint).child(card.label))
-                        .child(div().mt(px(4.)).text_sm().text_color(text_color).child(card.body))
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(hint)
+                                .child(card.label),
+                        )
+                        // Single-line title
+                        .child(
+                            div()
+                                .mt(px(4.))
+                                .text_sm()
+                                .text_color(text_color)
+                                .child(card.title),
+                        );
+
+                    // Optional body
+                    if let Some(body_text) = card.body {
+                        card_el = card_el.child(
+                            div()
+                                .mt(px(2.))
+                                .text_xs()
+                                .text_color(hint)
+                                .child(body_text),
+                        );
+                    }
+
+                    // Up to 5 rows
+                    for row in card.rows.iter().take(5) {
+                        card_el = card_el.child(
+                            div()
+                                .mt(px(2.))
+                                .flex()
+                                .flex_row()
+                                .gap(px(8.))
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(hint)
+                                        .child(row.label.clone()),
+                                )
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(text_color)
+                                        .child(row.value.clone()),
+                                ),
+                        );
+                    }
+
+                    card_el.into_any_element()
+                })
+                .collect();
+
+            // Build suggestion pills (capped to 3 across the whole surface)
+            let suggestion_pills: Vec<gpui::AnyElement> = all_suggestions
+                .iter()
+                .enumerate()
+                .map(|(idx, suggestion)| {
+                    let is_selected = idx == selected_idx;
+                    let pill_bg = gpui::rgba(crate::ui_foundation::hex_to_rgba_with_opacity(
+                        theme.colors.accent.selected,
+                        0.15,
+                    ));
+                    div()
+                        .px(px(8.))
+                        .py(px(4.))
+                        .text_xs()
+                        .when(is_selected, |d| {
+                            d.bg(pill_bg)
+                                .text_color(accent_color)
+                        })
+                        .when(!is_selected, |d| d.text_color(hint))
+                        .child(suggestion.label.clone())
                         .into_any_element()
                 })
                 .collect();
-            div()
+
+            let mut container = div()
                 .flex_1()
                 .min_h(px(0.))
                 .overflow_y_scrollbar()
                 .px(px(12.))
                 .py(px(12.))
-                .children(context_cards)
-                .into_any_element()
+                .children(context_cards);
+
+            if !suggestion_pills.is_empty() {
+                container = container.child(
+                    div()
+                        .mt(px(8.))
+                        .flex()
+                        .flex_row()
+                        .gap(px(4.))
+                        .children(suggestion_pills),
+                );
+            }
+
+            container.into_any_element()
         } else {
             let turns = self.turns.clone();
             let entity = cx.entity();
