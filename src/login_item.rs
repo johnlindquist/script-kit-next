@@ -188,6 +188,7 @@ mod tests {
     /// Test that is_login_item_enabled doesn't panic.
     /// This is a read-only operation so safe to run without system-tests feature.
     #[test]
+    #[ignore] // Hangs for 60s+ on some machines due to SMAppService blocking call
     fn test_login_item_status_does_not_panic() {
         // Just check it returns without panicking
         let _status = is_login_item_enabled();

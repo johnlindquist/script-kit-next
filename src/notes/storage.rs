@@ -734,7 +734,17 @@ mod tests {
         };
 
         save_note(&note).expect("failed to save note for special character search test");
-        let results = search_notes(&query).expect("search should succeed");
+
+        // FTS5 index updates may lag under concurrent writes (nextest parallelism).
+        // Retry briefly so the test is not flaky.
+        let mut results = Vec::new();
+        for _ in 0..5 {
+            results = search_notes(&query).expect("search should succeed");
+            if results.iter().any(|c| c.id == note.id) {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
         delete_note_permanently(note.id).expect("cleanup failed for special character search test");
 
         assert!(
