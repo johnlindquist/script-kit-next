@@ -44,6 +44,7 @@ fn builtin_feature_annotation(feature: &builtins::BuiltInFeature) -> String {
         builtins::BuiltInFeature::KitStoreCommand(_) => "Kit Store".to_string(),
         builtins::BuiltInFeature::FileSearch => "File Browser".to_string(),
         builtins::BuiltInFeature::Webcam => "Webcam Capture".to_string(),
+        builtins::BuiltInFeature::Dictation => "Voice Dictation".to_string(),
         builtins::BuiltInFeature::Settings => "Settings".to_string(),
     }
 }

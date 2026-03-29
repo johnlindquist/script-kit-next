@@ -112,9 +112,11 @@ pub(crate) fn run_processor(
     event_tx: async_channel::Sender<DictationCaptureEvent>,
     config: DictationCaptureConfig,
 ) {
-    let window_sample_count =
-        samples_for_duration(config.sample_rate_hz.max(1), config.level_window).max(1);
+    let sample_rate_hz = config.sample_rate_hz.max(1);
+    let chunk_sample_count = samples_for_duration(sample_rate_hz, config.chunk_duration).max(1);
+    let window_sample_count = samples_for_duration(sample_rate_hz, config.level_window).max(1);
     let mut level_window = VecDeque::with_capacity(window_sample_count);
+    let mut pending_samples: Vec<f32> = Vec::with_capacity(chunk_sample_count);
 
     while let Ok(raw_chunk) = raw_rx.recv() {
         let normalized = normalize_chunk(raw_chunk, &config);
@@ -126,11 +128,7 @@ pub(crate) fn run_processor(
             }
         }
 
-        let snapshot = if level_window.is_empty() {
-            normalized.samples.clone()
-        } else {
-            level_window.iter().copied().collect::<Vec<_>>()
-        };
+        let snapshot: Vec<f32> = level_window.iter().copied().collect();
         let level: DictationLevel = compute_level(&snapshot);
 
         if event_tx
@@ -140,12 +138,33 @@ pub(crate) fn run_processor(
             return;
         }
 
-        if event_tx
-            .send_blocking(DictationCaptureEvent::Chunk(normalized))
-            .is_err()
-        {
-            return;
+        pending_samples.extend_from_slice(&normalized.samples);
+
+        while pending_samples.len() >= chunk_sample_count {
+            let tail = pending_samples.split_off(chunk_sample_count);
+            let chunk_samples = std::mem::replace(&mut pending_samples, tail);
+            let duration = duration_from_samples(chunk_samples.len(), sample_rate_hz);
+            if event_tx
+                .send_blocking(DictationCaptureEvent::Chunk(CapturedAudioChunk {
+                    sample_rate_hz,
+                    samples: chunk_samples,
+                    duration,
+                }))
+                .is_err()
+            {
+                return;
+            }
         }
+    }
+
+    // Flush remaining samples as a tail chunk.
+    if !pending_samples.is_empty() {
+        let duration = duration_from_samples(pending_samples.len(), sample_rate_hz);
+        let _ = event_tx.send_blocking(DictationCaptureEvent::Chunk(CapturedAudioChunk {
+            sample_rate_hz,
+            samples: pending_samples,
+            duration,
+        }));
     }
 
     let _ = event_tx.send_blocking(DictationCaptureEvent::EndOfStream);
