@@ -86,6 +86,7 @@ mod tests {
                 height: 900,
                 used_fallback: false,
             }),
+            focused_window_image: None,
             warnings: Vec::new(),
         };
 

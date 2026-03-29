@@ -933,6 +933,7 @@ fn tab_ai_full_context_blob_preserves_surface_quality() {
         vec!["previous query".to_string()],
         None,
         vec![],
+        vec![],
         "2026-03-28T00:00:00Z".to_string(),
     );
 
@@ -972,6 +973,7 @@ fn tab_ai_full_context_blob_degraded_surface_omits_optional() {
         AiContextSnapshot::default(),
         vec![],
         None,
+        vec![],
         vec![],
         "2026-03-28T00:00:00Z".to_string(),
     );
@@ -1262,7 +1264,7 @@ fn tab_ai_receipt_schema_version_is_stable() {
 fn tab_ai_context_schema_version_is_stable() {
     assert_eq!(
         script_kit_gpui::ai::TAB_AI_CONTEXT_SCHEMA_VERSION,
-        2,
+        3,
         "Context blob schema version changed — update downstream consumers"
     );
 }

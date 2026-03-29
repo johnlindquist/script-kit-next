@@ -5,10 +5,12 @@
 //! JSON field naming, and round-trip correctness.
 
 use script_kit_gpui::ai::{
-    TabAiClipboardContext, TabAiContextBlob, TabAiMemorySuggestion, TabAiUiSnapshot,
-    TAB_AI_CONTEXT_SCHEMA_VERSION,
+    TabAiClipboardContext, TabAiClipboardHistoryEntry, TabAiContextBlob, TabAiMemorySuggestion,
+    TabAiUiSnapshot, TAB_AI_CONTEXT_SCHEMA_VERSION,
 };
-use script_kit_gpui::context_snapshot::{AiContextSnapshot, BrowserContext, FrontmostAppContext};
+use script_kit_gpui::context_snapshot::{
+    AiContextSnapshot, Base64PngContext, BrowserContext, FocusedWindowContext, FrontmostAppContext,
+};
 use script_kit_gpui::protocol::ElementInfo;
 
 /// Build a fully-populated context blob for assertion.
@@ -44,6 +46,7 @@ fn full_blob() -> TabAiContextBlob {
             ocr_text: None,
         }),
         vec![],
+        vec![],
         "2026-03-28T20:00:00Z".to_string(),
     )
 }
@@ -52,7 +55,7 @@ fn full_blob() -> TabAiContextBlob {
 fn schema_version_is_current() {
     let blob = full_blob();
     assert_eq!(blob.schema_version, TAB_AI_CONTEXT_SCHEMA_VERSION);
-    assert_eq!(blob.schema_version, 2, "bump tests when schema changes");
+    assert_eq!(blob.schema_version, 3, "bump tests when schema changes");
 }
 
 #[test]
@@ -145,6 +148,7 @@ fn empty_optional_fields_omitted_from_json() {
         vec![],
         None,
         vec![],
+        vec![],
         "2026-03-28T00:00:00Z".to_string(),
     );
 
@@ -168,6 +172,10 @@ fn empty_optional_fields_omitted_from_json() {
         "empty Vec should be omitted"
     );
     assert!(!json.contains("clipboard"), "None should be omitted");
+    assert!(
+        !json.contains("clipboardHistory"),
+        "empty Vec should be omitted"
+    );
     assert!(
         !json.contains("priorAutomations"),
         "empty Vec should be omitted"
@@ -217,6 +225,7 @@ fn tab_ai_context_blob_serializes_clipboard_and_prior_automations() {
             preview: "Quarterly Report Final.png".to_string(),
             ocr_text: Some("Quarterly Report Final.png".to_string()),
         }),
+        vec![],
         vec![TabAiMemorySuggestion {
             slug: "rename-file-kebab".to_string(),
             bundle_id: "com.apple.finder".to_string(),
@@ -230,7 +239,7 @@ fn tab_ai_context_blob_serializes_clipboard_and_prior_automations() {
     );
 
     let json = serde_json::to_value(&blob).expect("serialize tab ai context blob");
-    assert_eq!(json["schemaVersion"], 2);
+    assert_eq!(json["schemaVersion"], 3);
     assert_eq!(json["clipboard"]["ocrText"], "Quarterly Report Final.png");
     assert_eq!(json["priorAutomations"][0]["slug"], "rename-file-kebab");
     let score = json["priorAutomations"][0]["score"]
@@ -276,4 +285,349 @@ fn tab_ai_clipboard_context_omits_none_ocr_text() {
     };
     let json = serde_json::to_string(&clip).unwrap();
     assert!(!json.contains("ocrText"));
+}
+
+#[test]
+fn tab_ai_context_blob_serializes_clipboard_history_and_window_image() {
+    let blob = TabAiContextBlob::from_parts(
+        TabAiUiSnapshot {
+            prompt_type: "ClipboardHistory".to_string(),
+            ..Default::default()
+        },
+        AiContextSnapshot {
+            focused_window: Some(FocusedWindowContext {
+                title: "Safari - docs.rs".to_string(),
+                width: 1200,
+                height: 800,
+                used_fallback: false,
+            }),
+            focused_window_image: Some(Base64PngContext {
+                mime_type: "image/png".to_string(),
+                width: 1200,
+                height: 800,
+                base64_data: "ZmFrZS1wbmc=".to_string(),
+                title: Some("Safari - docs.rs".to_string()),
+            }),
+            ..Default::default()
+        },
+        vec!["recent".to_string()],
+        Some(TabAiClipboardContext {
+            content_type: "text".to_string(),
+            preview: "hello".to_string(),
+            ocr_text: None,
+        }),
+        vec![TabAiClipboardHistoryEntry {
+            id: "cb-1".to_string(),
+            content_type: "text".to_string(),
+            timestamp: 1743229000000,
+            preview: "hello".to_string(),
+            full_text: Some("hello".to_string()),
+            ocr_text: None,
+            image_width: None,
+            image_height: None,
+        }],
+        vec![],
+        "2026-03-29T06:56:43Z".to_string(),
+    );
+
+    let value = serde_json::to_value(&blob).expect("serialize tab ai context");
+    assert_eq!(value["schemaVersion"], 3);
+    assert_eq!(value["clipboardHistory"][0]["fullText"], "hello");
+    assert_eq!(
+        value["desktop"]["focusedWindowImage"]["mimeType"],
+        "image/png"
+    );
+    assert_eq!(
+        value["desktop"]["focusedWindowImage"]["base64Data"],
+        "ZmFrZS1wbmc="
+    );
+}
+
+#[test]
+fn tab_ai_clipboard_history_omits_optional_fields() {
+    let entry = TabAiClipboardHistoryEntry {
+        id: "cb-2".to_string(),
+        content_type: "text".to_string(),
+        timestamp: 1743229000000,
+        preview: "hello".to_string(),
+        full_text: None,
+        ocr_text: None,
+        image_width: None,
+        image_height: None,
+    };
+    let json = serde_json::to_string(&entry).unwrap();
+    assert!(!json.contains("fullText"));
+    assert!(!json.contains("ocrText"));
+    assert!(!json.contains("imageWidth"));
+    assert!(!json.contains("imageHeight"));
+}
+
+#[test]
+fn desktop_snapshot_omits_screenshot_by_default() {
+    let snapshot = AiContextSnapshot::default();
+    let json = serde_json::to_string(&snapshot).unwrap();
+    assert!(!json.contains("focusedWindowImage"));
+}
+
+// ---------------------------------------------------------------------------
+// Suggested intent tests
+// ---------------------------------------------------------------------------
+
+use script_kit_gpui::ai::{
+    build_tab_ai_suggested_intents, recent_tab_ai_automations_for_bundle_from_path,
+    TabAiMemoryEntry, TabAiSuggestedIntentSpec, TabAiTargetContext,
+    TAB_AI_MEMORY_ENTRY_SCHEMA_VERSION,
+};
+
+#[test]
+fn build_tab_ai_suggested_intents_prefers_app_verbs() {
+    let target = TabAiTargetContext {
+        source: "AppLauncherView".to_string(),
+        kind: "app".to_string(),
+        semantic_id: "choice:0:notion".to_string(),
+        label: "Notion".to_string(),
+        metadata: None,
+    };
+    let suggestions = build_tab_ai_suggested_intents(Some(&target), None, &[]);
+    assert_eq!(suggestions.len(), 3);
+    assert_eq!(suggestions[0].intent, "focus on this app");
+    assert_eq!(suggestions[1].intent, "what does this app do?");
+    assert_eq!(
+        suggestions[2].intent,
+        "create a quick automation for this app"
+    );
+}
+
+#[test]
+fn build_tab_ai_suggested_intents_file_target() {
+    let target = TabAiTargetContext {
+        source: "FileSearch".to_string(),
+        kind: "file".to_string(),
+        semantic_id: "choice:0:readme".to_string(),
+        label: "README.md".to_string(),
+        metadata: None,
+    };
+    let suggestions = build_tab_ai_suggested_intents(Some(&target), None, &[]);
+    assert_eq!(suggestions.len(), 3);
+    assert_eq!(suggestions[0].intent, "summarize this file");
+}
+
+#[test]
+fn build_tab_ai_suggested_intents_clipboard_image() {
+    let clipboard = TabAiClipboardContext {
+        content_type: "image".to_string(),
+        preview: "screenshot.png".to_string(),
+        ocr_text: None,
+    };
+    let suggestions = build_tab_ai_suggested_intents(None, Some(&clipboard), &[]);
+    assert_eq!(suggestions.len(), 2);
+    assert_eq!(suggestions[0].intent, "extract the text from this image");
+}
+
+#[test]
+fn build_tab_ai_suggested_intents_no_context_fallback() {
+    let suggestions = build_tab_ai_suggested_intents(None, None, &[]);
+    assert_eq!(suggestions.len(), 2);
+    assert_eq!(suggestions[0].label, "What Can I Do?");
+}
+
+#[test]
+fn build_tab_ai_suggested_intents_prior_automation_caps_at_three() {
+    let target = TabAiTargetContext {
+        source: "AppLauncherView".to_string(),
+        kind: "app".to_string(),
+        semantic_id: "choice:0:slack".to_string(),
+        label: "Slack".to_string(),
+        metadata: None,
+    };
+    let prior = vec![script_kit_gpui::ai::TabAiMemorySuggestion {
+        slug: "mute-slack".to_string(),
+        bundle_id: "com.tinyspeck.slackmacgap".to_string(),
+        raw_query: "mute slack".to_string(),
+        effective_query: "mute slack notifications".to_string(),
+        prompt_type: "TabAiChat".to_string(),
+        written_at: "2026-03-28T12:00:00Z".to_string(),
+        score: 1.0,
+    }];
+    // 3 app suggestions + 1 prior = 4, truncated to 3
+    let suggestions = build_tab_ai_suggested_intents(Some(&target), None, &prior);
+    assert_eq!(suggestions.len(), 3);
+    // The prior automation replaces the third app suggestion
+    assert_eq!(suggestions[0].intent, "focus on this app");
+    assert_eq!(suggestions[1].intent, "what does this app do?");
+    assert_eq!(
+        suggestions[2].intent,
+        "create a quick automation for this app"
+    );
+}
+
+#[test]
+fn build_tab_ai_suggested_intents_prior_automation_fills_short_list() {
+    let clipboard = TabAiClipboardContext {
+        content_type: "text".to_string(),
+        preview: "hello world".to_string(),
+        ocr_text: None,
+    };
+    let prior = vec![script_kit_gpui::ai::TabAiMemorySuggestion {
+        slug: "translate-text".to_string(),
+        bundle_id: "com.apple.Safari".to_string(),
+        raw_query: "translate".to_string(),
+        effective_query: "translate this text".to_string(),
+        prompt_type: "TabAiChat".to_string(),
+        written_at: "2026-03-28T12:00:00Z".to_string(),
+        score: 1.0,
+    }];
+    // 2 clipboard suggestions + 1 prior = 3, exactly at cap
+    let suggestions = build_tab_ai_suggested_intents(None, Some(&clipboard), &prior);
+    assert_eq!(suggestions.len(), 3);
+    assert_eq!(suggestions[2].intent, "translate this text");
+    assert_eq!(suggestions[2].label, "Repeat translate-text");
+}
+
+// ---------------------------------------------------------------------------
+// Recent automations by bundle tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn recent_tab_ai_automations_for_bundle_returns_most_recent_first() {
+    let dir = std::env::temp_dir().join(format!(
+        "tab-ai-recent-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("system time before unix epoch")
+            .as_nanos()
+    ));
+    std::fs::create_dir_all(&dir).expect("create temp dir");
+    let path = dir.join(".tab-ai-memory.json");
+
+    let entries = vec![
+        TabAiMemoryEntry {
+            schema_version: TAB_AI_MEMORY_ENTRY_SCHEMA_VERSION,
+            intent: "copy current url".to_string(),
+            generated_source: "await copy(url)".to_string(),
+            slug: "copy-current-url".to_string(),
+            prompt_type: "TabAiChat".to_string(),
+            bundle_id: Some("com.apple.Safari".to_string()),
+            written_at: "2026-03-28T12:00:00Z".to_string(),
+        },
+        TabAiMemoryEntry {
+            schema_version: TAB_AI_MEMORY_ENTRY_SCHEMA_VERSION,
+            intent: "summarize current tab".to_string(),
+            generated_source: "await chat()".to_string(),
+            slug: "summarize-current-tab".to_string(),
+            prompt_type: "TabAiChat".to_string(),
+            bundle_id: Some("com.apple.Safari".to_string()),
+            written_at: "2026-03-29T12:00:00Z".to_string(),
+        },
+    ];
+    std::fs::write(
+        &path,
+        serde_json::to_string_pretty(&entries).expect("serialize memory entries"),
+    )
+    .expect("write memory index");
+
+    let recent = recent_tab_ai_automations_for_bundle_from_path(
+        Some("com.apple.Safari"),
+        2,
+        &path,
+    )
+    .expect("read recent bundle automations");
+    assert_eq!(recent.len(), 2);
+    assert_eq!(recent[0].slug, "summarize-current-tab");
+    assert_eq!(recent[1].slug, "copy-current-url");
+
+    // Cleanup
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn recent_tab_ai_automations_for_bundle_filters_other_bundles() {
+    let dir = std::env::temp_dir().join(format!(
+        "tab-ai-filter-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("system time before unix epoch")
+            .as_nanos()
+    ));
+    std::fs::create_dir_all(&dir).expect("create temp dir");
+    let path = dir.join(".tab-ai-memory.json");
+
+    let entries = vec![
+        TabAiMemoryEntry {
+            schema_version: TAB_AI_MEMORY_ENTRY_SCHEMA_VERSION,
+            intent: "copy url".to_string(),
+            generated_source: "await copy(url)".to_string(),
+            slug: "copy-url".to_string(),
+            prompt_type: "TabAiChat".to_string(),
+            bundle_id: Some("com.apple.Safari".to_string()),
+            written_at: "2026-03-28T12:00:00Z".to_string(),
+        },
+        TabAiMemoryEntry {
+            schema_version: TAB_AI_MEMORY_ENTRY_SCHEMA_VERSION,
+            intent: "open project".to_string(),
+            generated_source: "await open()".to_string(),
+            slug: "open-project".to_string(),
+            prompt_type: "TabAiChat".to_string(),
+            bundle_id: Some("com.microsoft.VSCode".to_string()),
+            written_at: "2026-03-29T12:00:00Z".to_string(),
+        },
+    ];
+    std::fs::write(
+        &path,
+        serde_json::to_string_pretty(&entries).expect("serialize"),
+    )
+    .expect("write");
+
+    let safari = recent_tab_ai_automations_for_bundle_from_path(
+        Some("com.apple.Safari"),
+        10,
+        &path,
+    )
+    .expect("read");
+    assert_eq!(safari.len(), 1);
+    assert_eq!(safari[0].slug, "copy-url");
+
+    let vscode = recent_tab_ai_automations_for_bundle_from_path(
+        Some("com.microsoft.VSCode"),
+        10,
+        &path,
+    )
+    .expect("read");
+    assert_eq!(vscode.len(), 1);
+    assert_eq!(vscode[0].slug, "open-project");
+
+    // Cleanup
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn recent_tab_ai_automations_for_bundle_returns_empty_for_missing_path() {
+    let path = std::path::Path::new("/tmp/nonexistent-tab-ai-memory-12345.json");
+    let result = recent_tab_ai_automations_for_bundle_from_path(
+        Some("com.apple.Safari"),
+        10,
+        path,
+    )
+    .expect("should succeed with empty result");
+    assert!(result.is_empty());
+}
+
+#[test]
+fn recent_tab_ai_automations_for_bundle_returns_empty_for_none_bundle() {
+    let result = recent_tab_ai_automations_for_bundle_from_path(
+        None,
+        10,
+        std::path::Path::new("/tmp/anything.json"),
+    )
+    .expect("should succeed");
+    assert!(result.is_empty());
+}
+
+#[test]
+fn suggested_intent_spec_new_works() {
+    let spec = TabAiSuggestedIntentSpec::new("Focus", "focus on this app");
+    assert_eq!(spec.label, "Focus");
+    assert_eq!(spec.intent, "focus on this app");
 }

@@ -59,7 +59,7 @@ pub struct AppStateResource {
     pub selected_index: Option<usize>,
 }
 /// Script metadata for the scripts:// resource
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ScriptResourceEntry {
     /// Script name
     pub name: String,
@@ -85,7 +85,7 @@ impl From<&Script> for ScriptResourceEntry {
     }
 }
 /// Scriptlet metadata for the scriptlets:// resource  
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ScriptletResourceEntry {
     /// Scriptlet name
     pub name: String,
@@ -158,6 +158,33 @@ pub fn get_resource_definitions() -> Vec<McpResource> {
             ),
             mime_type: "application/json".to_string(),
         },
+        McpResource {
+            uri: "kit://scripts".to_string(),
+            name: "Scripts (versioned)".to_string(),
+            description: Some(
+                "Schema-versioned list of all scripts in ~/.scriptkit/scripts/ with metadata. Safe for repeated reads."
+                    .to_string(),
+            ),
+            mime_type: "application/json".to_string(),
+        },
+        McpResource {
+            uri: "kit://scriptlets".to_string(),
+            name: "Scriptlets (versioned)".to_string(),
+            description: Some(
+                "Schema-versioned list of all scriptlets from markdown extension files with metadata."
+                    .to_string(),
+            ),
+            mime_type: "application/json".to_string(),
+        },
+        McpResource {
+            uri: "kit://sdk-reference".to_string(),
+            name: "SDK Reference".to_string(),
+            description: Some(
+                "Concise Script Kit SDK function reference, script metadata format, and directory conventions for harness script creation."
+                    .to_string(),
+            ),
+            mime_type: "application/json".to_string(),
+        },
     ];
     resources.extend(transaction_resources::transaction_resource_definitions());
     resources
@@ -183,6 +210,9 @@ pub fn read_resource(
         "kit://state" => read_state_resource(app_state),
         "scripts://" => read_scripts_resource(scripts),
         "scriptlets://" => read_scriptlets_resource(scriptlets),
+        "kit://scripts" => read_kit_scripts_resource(scripts),
+        "kit://scriptlets" => read_kit_scriptlets_resource(scriptlets),
+        "kit://sdk-reference" => read_sdk_reference_resource(),
         _ if uri == "kit://context"
             || uri.starts_with("kit://context?")
             || uri == "kit://context/schema"
@@ -241,6 +271,223 @@ fn read_scriptlets_resource(scriptlets: &[Arc<Scriptlet>]) -> Result<ResourceCon
 
     Ok(ResourceContent {
         uri: "scriptlets://".to_string(),
+        mime_type: "application/json".to_string(),
+        text: json,
+    })
+}
+
+// ---------------------------------------------------------------
+// Schema-versioned script/scriptlet/sdk-reference resources
+// ---------------------------------------------------------------
+
+/// Schema version for the `kit://scripts` resource envelope.
+pub const SCRIPTS_RESOURCE_SCHEMA_VERSION: u32 = 1;
+
+/// Schema version for the `kit://scriptlets` resource envelope.
+pub const SCRIPTLETS_RESOURCE_SCHEMA_VERSION: u32 = 1;
+
+/// Schema version for the `kit://sdk-reference` resource.
+pub const SDK_REFERENCE_SCHEMA_VERSION: u32 = 1;
+
+/// Schema-versioned envelope for script metadata.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ScriptsResourceDocument {
+    pub schema_version: u32,
+    pub count: usize,
+    pub scripts: Vec<ScriptResourceEntry>,
+}
+
+/// Schema-versioned envelope for scriptlet metadata.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ScriptletsResourceDocument {
+    pub schema_version: u32,
+    pub count: usize,
+    pub scriptlets: Vec<ScriptletResourceEntry>,
+}
+
+/// A single SDK function reference entry.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SdkFunctionRef {
+    pub name: String,
+    pub signature: String,
+    pub description: String,
+    pub category: String,
+}
+
+/// Schema-versioned SDK reference document.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SdkReferenceDocument {
+    pub schema_version: u32,
+    pub sdk_package: String,
+    pub script_directory: String,
+    pub scriptlet_pattern: String,
+    pub metadata_format: String,
+    pub functions: Vec<SdkFunctionRef>,
+}
+
+fn build_sdk_function_refs() -> Vec<SdkFunctionRef> {
+    vec![
+        SdkFunctionRef {
+            name: "arg".into(),
+            signature: "await arg(prompt: string, choices?: Choice[]): Promise<string>".into(),
+            description: "Prompt the user with an input field, optionally with a list of choices.".into(),
+            category: "prompts".into(),
+        },
+        SdkFunctionRef {
+            name: "div".into(),
+            signature: "await div(html: string): Promise<void>".into(),
+            description: "Display HTML content in a panel.".into(),
+            category: "prompts".into(),
+        },
+        SdkFunctionRef {
+            name: "editor".into(),
+            signature: "await editor(options?: EditorOptions): Promise<string>".into(),
+            description: "Open a full-screen code editor and return the content.".into(),
+            category: "prompts".into(),
+        },
+        SdkFunctionRef {
+            name: "term".into(),
+            signature: "await term(command?: string): Promise<string>".into(),
+            description: "Open an interactive terminal, optionally running a command.".into(),
+            category: "prompts".into(),
+        },
+        SdkFunctionRef {
+            name: "drop".into(),
+            signature: "await drop(options?: DropOptions): Promise<DroppedItem[]>".into(),
+            description: "Accept drag-and-drop files from the user.".into(),
+            category: "prompts".into(),
+        },
+        SdkFunctionRef {
+            name: "template".into(),
+            signature: "await template(template: string): Promise<string>".into(),
+            description: "Fill in a template string with user-provided values.".into(),
+            category: "prompts".into(),
+        },
+        SdkFunctionRef {
+            name: "exec".into(),
+            signature: "await exec(command: string, args?: string[]): Promise<ExecResult>".into(),
+            description: "Execute a shell command and return its output.".into(),
+            category: "system".into(),
+        },
+        SdkFunctionRef {
+            name: "clipboard".into(),
+            signature: "await clipboard.readText(): Promise<string>".into(),
+            description: "Read the current clipboard text content.".into(),
+            category: "clipboard".into(),
+        },
+        SdkFunctionRef {
+            name: "copy".into(),
+            signature: "await copy(text: string): Promise<void>".into(),
+            description: "Copy text to the clipboard.".into(),
+            category: "clipboard".into(),
+        },
+        SdkFunctionRef {
+            name: "paste".into(),
+            signature: "await paste(text: string): Promise<void>".into(),
+            description: "Paste text to the focused application.".into(),
+            category: "clipboard".into(),
+        },
+        SdkFunctionRef {
+            name: "notify".into(),
+            signature: "await notify(message: string): Promise<void>".into(),
+            description: "Show a system notification.".into(),
+            category: "feedback".into(),
+        },
+        SdkFunctionRef {
+            name: "setSelectedText".into(),
+            signature: "await setSelectedText(text: string): Promise<void>".into(),
+            description: "Replace the selected text in the focused application.".into(),
+            category: "system".into(),
+        },
+        SdkFunctionRef {
+            name: "getSelectedText".into(),
+            signature: "await getSelectedText(): Promise<string>".into(),
+            description: "Read the selected text from the focused application.".into(),
+            category: "system".into(),
+        },
+        SdkFunctionRef {
+            name: "readFile".into(),
+            signature: "await readFile(path: string): Promise<string>".into(),
+            description: "Read a file's contents as UTF-8 text.".into(),
+            category: "filesystem".into(),
+        },
+        SdkFunctionRef {
+            name: "writeFile".into(),
+            signature: "await writeFile(path: string, content: string): Promise<void>".into(),
+            description: "Write UTF-8 text content to a file.".into(),
+            category: "filesystem".into(),
+        },
+        SdkFunctionRef {
+            name: "home".into(),
+            signature: "home(...paths: string[]): string".into(),
+            description: "Resolve a path relative to the user's home directory.".into(),
+            category: "filesystem".into(),
+        },
+    ]
+}
+
+fn build_sdk_reference_document() -> SdkReferenceDocument {
+    SdkReferenceDocument {
+        schema_version: SDK_REFERENCE_SCHEMA_VERSION,
+        sdk_package: "@johnlindquist/kit".into(),
+        script_directory: "~/.scriptkit/scripts/".into(),
+        scriptlet_pattern: "~/.scriptkit/kit/*/extensions/*.md".into(),
+        metadata_format: "// Name: My Script\n// Description: What it does\n// Shortcut: opt i".into(),
+        functions: build_sdk_function_refs(),
+    }
+}
+
+/// Read kit://scripts schema-versioned resource
+fn read_kit_scripts_resource(scripts: &[Arc<Script>]) -> Result<ResourceContent, String> {
+    let entries: Vec<ScriptResourceEntry> = scripts
+        .iter()
+        .map(|s| ScriptResourceEntry::from(s.as_ref()))
+        .collect();
+    let doc = ScriptsResourceDocument {
+        schema_version: SCRIPTS_RESOURCE_SCHEMA_VERSION,
+        count: entries.len(),
+        scripts: entries,
+    };
+    let json = serde_json::to_string_pretty(&doc)
+        .map_err(|e| format!("Failed to serialize scripts document: {e}"))?;
+    Ok(ResourceContent {
+        uri: "kit://scripts".to_string(),
+        mime_type: "application/json".to_string(),
+        text: json,
+    })
+}
+
+/// Read kit://scriptlets schema-versioned resource
+fn read_kit_scriptlets_resource(scriptlets: &[Arc<Scriptlet>]) -> Result<ResourceContent, String> {
+    let entries: Vec<ScriptletResourceEntry> = scriptlets
+        .iter()
+        .map(|s| ScriptletResourceEntry::from(s.as_ref()))
+        .collect();
+    let doc = ScriptletsResourceDocument {
+        schema_version: SCRIPTLETS_RESOURCE_SCHEMA_VERSION,
+        count: entries.len(),
+        scriptlets: entries,
+    };
+    let json = serde_json::to_string_pretty(&doc)
+        .map_err(|e| format!("Failed to serialize scriptlets document: {e}"))?;
+    Ok(ResourceContent {
+        uri: "kit://scriptlets".to_string(),
+        mime_type: "application/json".to_string(),
+        text: json,
+    })
+}
+
+/// Read kit://sdk-reference resource
+fn read_sdk_reference_resource() -> Result<ResourceContent, String> {
+    let doc = build_sdk_reference_document();
+    let json = serde_json::to_string_pretty(&doc)
+        .map_err(|e| format!("Failed to serialize SDK reference: {e}"))?;
+    Ok(ResourceContent {
+        uri: "kit://sdk-reference".to_string(),
         mime_type: "application/json".to_string(),
         text: json,
     })
@@ -376,6 +623,8 @@ fn supported_context_examples() -> Vec<&'static str> {
         "kit://context?profile=minimal",
         "kit://context?profile=minimal&diagnostics=1",
         "kit://context?selectedText=0&browserUrl=1&focusedWindow=1",
+        "kit://context?screenshot=1",
+        "kit://context?screenshot=1&diagnostics=1",
         "kit://context/schema",
     ]
 }
@@ -389,6 +638,7 @@ fn supported_context_param_names() -> &'static [&'static str] {
         "menuBar",
         "browserUrl",
         "focusedWindow",
+        "screenshot",
     ]
 }
 
@@ -488,6 +738,10 @@ fn parse_context_resource_request(uri: &str) -> Result<ContextResourceRequest, S
                 options.include_focused_window = parse_bool_param(v)?;
                 saw_override = true;
             }
+            ("screenshot", v) => {
+                options.include_screenshot = parse_bool_param(v)?;
+                saw_override = true;
+            }
             _ => return Err(invalid_context_param(key, value)),
         }
     }
@@ -574,6 +828,13 @@ fn build_context_schema_document() -> ContextSchemaDocument {
                 default_value: "1",
                 allowed_values: vec!["1", "0", "true", "false"],
             },
+            ContextParameterDescriptor {
+                name: "screenshot",
+                value_type: "boolean",
+                description: "Include focused-window screenshot bytes as base64 PNG in focusedWindowImage.",
+                default_value: "false",
+                allowed_values: vec!["1", "0", "true", "false"],
+            },
         ],
         examples: supported_context_examples(),
     }
@@ -586,6 +847,7 @@ fn context_warning_code(field: &str) -> &'static str {
         "menuBar" => "menu_bar_capture_failed",
         "browserUrl" => "browser_url_capture_failed",
         "focusedWindow" => "focused_window_capture_failed",
+        "screenshot" => "screenshot_capture_failed",
         _ => "capture_failed",
     }
 }
@@ -663,6 +925,12 @@ fn build_context_field_statuses(
             snapshot.focused_window.is_some(),
             warnings_by_field,
         ),
+        build_context_field_status(
+            "screenshot",
+            options.include_screenshot,
+            snapshot.focused_window_image.is_some(),
+            warnings_by_field,
+        ),
     ]
 }
 
@@ -690,6 +958,7 @@ fn build_context_diagnostics_document(
         request.options.include_menu_bar,
         request.options.include_browser_url,
         request.options.include_focused_window,
+        request.options.include_screenshot,
     ]
     .into_iter()
     .filter(|enabled| *enabled)
@@ -879,7 +1148,7 @@ mod tests {
         // REQUIREMENT: resources/list returns all three resources
         let resources = get_resource_definitions();
 
-        assert_eq!(resources.len(), 7, "Should have exactly 7 resources");
+        assert_eq!(resources.len(), 10, "Should have exactly 10 resources");
 
         let uris: Vec<&str> = resources.iter().map(|r| r.uri.as_str()).collect();
         assert!(uris.contains(&"kit://state"), "Should include kit://state");
@@ -1067,7 +1336,7 @@ mod tests {
         assert!(resource_array.is_some());
 
         let resource_array = resource_array.unwrap();
-        assert_eq!(resource_array.len(), 7);
+        assert_eq!(resource_array.len(), 10);
 
         // First resource should have expected fields
         let first = &resource_array[0];
@@ -1364,5 +1633,141 @@ mod tests {
             });
 
         assert!(has_diagnostics_example);
+    }
+
+    // =======================================================
+    // Schema-versioned script/scriptlet/sdk-reference resources
+    // =======================================================
+
+    #[test]
+    fn kit_scripts_resource_returns_schema_versioned_envelope() {
+        let scripts = wrap_scripts(vec![
+            test_script("Hello World", Some("A greeting script")),
+            test_script("Fetch Data", None),
+        ]);
+
+        let content = read_resource("kit://scripts", &scripts, &[], None).expect("should resolve");
+        assert_eq!(content.uri, "kit://scripts");
+        assert_eq!(content.mime_type, "application/json");
+
+        let doc: ScriptsResourceDocument =
+            serde_json::from_str(&content.text).expect("valid JSON");
+        assert_eq!(doc.schema_version, SCRIPTS_RESOURCE_SCHEMA_VERSION);
+        assert_eq!(doc.count, 2);
+        assert_eq!(doc.scripts.len(), 2);
+        assert_eq!(doc.scripts[0].name, "Hello World");
+        assert_eq!(
+            doc.scripts[0].description,
+            Some("A greeting script".to_string())
+        );
+    }
+
+    #[test]
+    fn kit_scripts_resource_empty_returns_zero_count() {
+        let content = read_resource("kit://scripts", &[], &[], None).expect("should resolve");
+        let doc: ScriptsResourceDocument =
+            serde_json::from_str(&content.text).expect("valid JSON");
+        assert_eq!(doc.schema_version, SCRIPTS_RESOURCE_SCHEMA_VERSION);
+        assert_eq!(doc.count, 0);
+        assert!(doc.scripts.is_empty());
+    }
+
+    #[test]
+    fn kit_scriptlets_resource_returns_schema_versioned_envelope() {
+        let scriptlets = wrap_scriptlets(vec![
+            test_scriptlet("Open URL", "open", Some("Opens a URL")),
+            test_scriptlet("Paste Text", "paste", None),
+        ]);
+
+        let content =
+            read_resource("kit://scriptlets", &[], &scriptlets, None).expect("should resolve");
+        assert_eq!(content.uri, "kit://scriptlets");
+
+        let doc: ScriptletsResourceDocument =
+            serde_json::from_str(&content.text).expect("valid JSON");
+        assert_eq!(doc.schema_version, SCRIPTLETS_RESOURCE_SCHEMA_VERSION);
+        assert_eq!(doc.count, 2);
+        assert_eq!(doc.scriptlets.len(), 2);
+        assert_eq!(doc.scriptlets[0].name, "Open URL");
+        assert_eq!(doc.scriptlets[0].tool, "open");
+    }
+
+    #[test]
+    fn kit_scriptlets_resource_empty_returns_zero_count() {
+        let content = read_resource("kit://scriptlets", &[], &[], None).expect("should resolve");
+        let doc: ScriptletsResourceDocument =
+            serde_json::from_str(&content.text).expect("valid JSON");
+        assert_eq!(doc.count, 0);
+        assert!(doc.scriptlets.is_empty());
+    }
+
+    #[test]
+    fn sdk_reference_resource_returns_valid_document() {
+        let content = read_resource("kit://sdk-reference", &[], &[], None).expect("should resolve");
+        assert_eq!(content.uri, "kit://sdk-reference");
+
+        let doc: SdkReferenceDocument =
+            serde_json::from_str(&content.text).expect("valid JSON");
+        assert_eq!(doc.schema_version, SDK_REFERENCE_SCHEMA_VERSION);
+        assert_eq!(doc.sdk_package, "@johnlindquist/kit");
+        assert!(!doc.functions.is_empty());
+
+        // Verify key functions are present
+        let names: Vec<&str> = doc.functions.iter().map(|f| f.name.as_str()).collect();
+        assert!(names.contains(&"arg"), "should include arg()");
+        assert!(names.contains(&"div"), "should include div()");
+        assert!(names.contains(&"exec"), "should include exec()");
+        assert!(names.contains(&"copy"), "should include copy()");
+    }
+
+    #[test]
+    fn sdk_reference_has_categories() {
+        let doc = build_sdk_reference_document();
+        let categories: Vec<&str> = doc
+            .functions
+            .iter()
+            .map(|f| f.category.as_str())
+            .collect::<std::collections::HashSet<_>>()
+            .into_iter()
+            .collect();
+
+        assert!(categories.contains(&"prompts"));
+        assert!(categories.contains(&"system"));
+        assert!(categories.contains(&"clipboard"));
+        assert!(categories.contains(&"filesystem"));
+    }
+
+    #[test]
+    fn kit_scripts_resource_json_uses_camel_case() {
+        let scripts = wrap_scripts(vec![test_script("Test", None)]);
+        let content = read_resource("kit://scripts", &scripts, &[], None).unwrap();
+        assert!(content.text.contains("\"schemaVersion\""));
+        assert!(!content.text.contains("\"schema_version\""));
+    }
+
+    #[test]
+    fn resource_definitions_include_new_resources() {
+        let resources = get_resource_definitions();
+        let uris: Vec<&str> = resources.iter().map(|r| r.uri.as_str()).collect();
+        assert!(uris.contains(&"kit://scripts"));
+        assert!(uris.contains(&"kit://scriptlets"));
+        assert!(uris.contains(&"kit://sdk-reference"));
+    }
+
+    #[test]
+    fn sdk_reference_includes_metadata_format() {
+        let doc = build_sdk_reference_document();
+        assert!(doc.metadata_format.contains("// Name:"));
+        assert!(doc.metadata_format.contains("// Description:"));
+        assert!(doc.script_directory.contains("scripts"));
+        assert!(doc.scriptlet_pattern.contains("extensions"));
+    }
+
+    #[test]
+    fn sdk_reference_roundtrips_through_json() {
+        let doc = build_sdk_reference_document();
+        let json = serde_json::to_string(&doc).expect("serialize");
+        let parsed: SdkReferenceDocument = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(doc, parsed);
     }
 }

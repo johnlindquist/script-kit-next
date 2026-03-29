@@ -2433,8 +2433,8 @@ impl ProviderRegistry {
     fn detect_acp_claude_provider(
         config: Option<&crate::config::Config>,
     ) -> Option<crate::ai::acp::AcpProvider> {
-        use crate::ai::acp::{AcpAgentConfig, AcpProvider};
         use super::config::env_vars;
+        use crate::ai::acp::{AcpAgentConfig, AcpProvider};
 
         // Try config first, then env vars — same priority as the legacy path.
         let (enabled, claude_path) = if let Some(cfg) = config {
@@ -2445,8 +2445,8 @@ impl ProviderRegistry {
             let enabled = std::env::var(env_vars::CLAUDE_CODE_ENABLED)
                 .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
                 .unwrap_or(false);
-            let path = std::env::var(env_vars::CLAUDE_CODE_PATH)
-                .unwrap_or_else(|_| "claude".to_string());
+            let path =
+                std::env::var(env_vars::CLAUDE_CODE_PATH).unwrap_or_else(|_| "claude".to_string());
             (enabled, path)
         };
 

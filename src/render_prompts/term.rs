@@ -192,9 +192,14 @@ impl ScriptListApp {
                             return true;
                         }
 
-                        // For QuickTerminalView, plain Escape belongs to the terminal so TUIs can use it.
-                        // Only Cmd+W is handled by the outer wrapper.
+                        // For QuickTerminalView (Tab AI harness):
+                        // - Escape returns to the previous view
+                        // - Cmd+W closes the window
                         if is_quick_terminal {
+                            if ui_foundation::is_key_escape(key) && !this.show_actions_popup {
+                                this.close_tab_ai_harness_terminal(cx);
+                                return true;
+                            }
                             if has_cmd && key.eq_ignore_ascii_case("w") {
                                 logging::log("KEY", "Cmd+W - closing window");
                                 this.close_and_reset_window(cx);

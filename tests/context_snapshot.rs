@@ -53,15 +53,25 @@ fn context_snapshot_types_are_public() {
 fn context_option_profiles_are_stable() {
     let full = script_kit_gpui::context_snapshot::CaptureContextOptions::default();
     let minimal = script_kit_gpui::context_snapshot::CaptureContextOptions::minimal();
+    let tab_ai = script_kit_gpui::context_snapshot::CaptureContextOptions::tab_ai();
 
     assert!(full.include_selected_text);
     assert!(full.include_menu_bar);
+    assert!(!full.include_screenshot, "full profile must not include screenshot by default");
 
     assert!(!minimal.include_selected_text);
     assert!(!minimal.include_menu_bar);
     assert!(minimal.include_frontmost_app);
     assert!(minimal.include_browser_url);
     assert!(minimal.include_focused_window);
+    assert!(!minimal.include_screenshot, "minimal profile must not include screenshot");
+
+    assert!(tab_ai.include_selected_text);
+    assert!(tab_ai.include_menu_bar);
+    assert!(tab_ai.include_frontmost_app);
+    assert!(tab_ai.include_browser_url);
+    assert!(tab_ai.include_focused_window);
+    assert!(tab_ai.include_screenshot, "tab_ai profile must include screenshot");
 }
 
 #[test]
@@ -172,6 +182,32 @@ fn inspect_current_context_builtin_is_registered() {
     assert!(
         entry.keywords.iter().any(|keyword| keyword == "context"),
         "Inspect Current Context must be discoverable by 'context'"
+    );
+}
+
+#[test]
+fn context_resource_schema_lists_screenshot_parameter() {
+    init();
+    let scripts: Vec<std::sync::Arc<script_kit_gpui::scripts::Script>> = Vec::new();
+    let scriptlets: Vec<std::sync::Arc<script_kit_gpui::scripts::Scriptlet>> = Vec::new();
+
+    let content = script_kit_gpui::mcp_resources::read_resource(
+        "kit://context/schema",
+        &scripts,
+        &scriptlets,
+        None,
+    )
+    .expect("schema resource should resolve");
+
+    let parsed: serde_json::Value =
+        serde_json::from_str(&content.text).expect("schema must be valid JSON");
+
+    let params = parsed["parameters"]
+        .as_array()
+        .expect("parameters array");
+    assert!(
+        params.iter().any(|param| param["name"] == "screenshot"),
+        "schema must list screenshot parameter"
     );
 }
 

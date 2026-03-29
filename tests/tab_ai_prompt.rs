@@ -20,6 +20,7 @@ fn minimal_context() -> TabAiContextBlob {
         vec![],
         None,
         vec![],
+        vec![],
         "2026-03-28T00:00:00Z".to_string(),
     )
 }
@@ -54,6 +55,7 @@ fn rich_context() -> TabAiContextBlob {
             preview: "clipboard text preview".to_string(),
             ocr_text: None,
         }),
+        vec![],
         vec![],
         "2026-03-28T12:00:00Z".to_string(),
     )
@@ -198,6 +200,7 @@ fn public_ai_exports_cover_tab_ai_prompt_and_context_types() {
         },
         vec!["force quit".to_string()],
         None,
+        vec![],
         vec![],
         "2026-03-28T00:00:00Z".to_string(),
     );

@@ -1,5 +1,6 @@
 use super::types::*;
 use anyhow::Context;
+use base64::Engine;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 /// When set to `true`, `capture_context_snapshot` uses a default empty seed
@@ -36,6 +37,7 @@ pub(crate) struct CaptureContextSeed {
     pub(crate) menu_bar_items: Result<Vec<MenuBarItemSummary>, String>,
     pub(crate) browser: Result<Option<BrowserContext>, String>,
     pub(crate) focused_window: Result<Option<FocusedWindowContext>, String>,
+    pub(crate) focused_window_image: Result<Option<Base64PngContext>, String>,
 }
 
 impl Default for CaptureContextSeed {
@@ -46,6 +48,7 @@ impl Default for CaptureContextSeed {
             menu_bar_items: Ok(Vec::new()),
             browser: Ok(None),
             focused_window: Ok(None),
+            focused_window_image: Ok(None),
         }
     }
 }
@@ -97,6 +100,14 @@ pub(crate) fn capture_context_snapshot_from_seed(
         }
     }
 
+    if options.include_screenshot {
+        match seed.focused_window_image {
+            Ok(Some(img)) => snapshot.focused_window_image = Some(img),
+            Ok(None) => {}
+            Err(error) => snapshot.warnings.push(format!("screenshot: {error}")),
+        }
+    }
+
     tracing::info!(
         schema_version = snapshot.schema_version,
         warnings = snapshot.warnings.len(),
@@ -105,6 +116,7 @@ pub(crate) fn capture_context_snapshot_from_seed(
         menu_bar_count = snapshot.menu_bar_items.len(),
         has_browser = snapshot.browser.is_some(),
         has_focused_window = snapshot.focused_window.is_some(),
+        has_screenshot = snapshot.focused_window_image.is_some(),
         "context_snapshot: seed capture complete"
     );
 
@@ -179,23 +191,36 @@ fn capture_browser_live() -> Result<Option<BrowserContext>, String> {
     }
 }
 
-fn capture_focused_window_live() -> Result<Option<FocusedWindowContext>, String> {
-    if let Some(app) = crate::frontmost_app_tracker::get_last_real_app() {
-        if let Some(title) = app.window_title {
-            let title = title.trim().to_string();
-            if !title.is_empty() {
-                tracing::info!(
-                    pid = app.pid,
-                    bundle_id = %app.bundle_id,
-                    title = %title,
-                    "context_snapshot: captured focused window from tracker cache"
-                );
-                return Ok(Some(FocusedWindowContext {
-                    title,
-                    width: 0,
-                    height: 0,
-                    used_fallback: false,
-                }));
+/// Capture focused-window metadata and optionally its PNG image bytes.
+///
+/// When `include_image` is false, tries the fast path (tracker cache with
+/// metadata only). When true, always goes through `capture_focused_window_screenshot`
+/// to obtain pixel data alongside metadata.
+fn capture_focused_window_with_image_live(
+    include_image: bool,
+) -> Result<(Option<FocusedWindowContext>, Option<Base64PngContext>), String> {
+    // Fast path: when screenshot is not needed, use cached metadata
+    if !include_image {
+        if let Some(app) = crate::frontmost_app_tracker::get_last_real_app() {
+            if let Some(title) = app.window_title {
+                let title = title.trim().to_string();
+                if !title.is_empty() {
+                    tracing::info!(
+                        pid = app.pid,
+                        bundle_id = %app.bundle_id,
+                        title = %title,
+                        "context_snapshot: captured focused window from tracker cache"
+                    );
+                    return Ok((
+                        Some(FocusedWindowContext {
+                            title,
+                            width: 0,
+                            height: 0,
+                            used_fallback: false,
+                        }),
+                        None,
+                    ));
+                }
             }
         }
     }
@@ -206,14 +231,28 @@ fn capture_focused_window_live() -> Result<Option<FocusedWindowContext>, String>
                 title = %capture.window_title,
                 width = capture.width,
                 height = capture.height,
+                include_image,
                 "context_snapshot: captured focused window"
             );
-            Ok(Some(FocusedWindowContext {
-                title: capture.window_title,
+            let window = FocusedWindowContext {
+                title: capture.window_title.clone(),
                 width: capture.width,
                 height: capture.height,
                 used_fallback: capture.used_fallback,
-            }))
+            };
+            let image = if include_image {
+                Some(Base64PngContext {
+                    mime_type: "image/png".to_string(),
+                    width: capture.width,
+                    height: capture.height,
+                    base64_data: base64::engine::general_purpose::STANDARD
+                        .encode(&capture.png_data),
+                    title: Some(capture.window_title),
+                })
+            } else {
+                None
+            };
+            Ok((Some(window), image))
         }
         Err(error) => Err(error.to_string()),
     }
@@ -228,6 +267,32 @@ pub fn capture_context_snapshot(options: &CaptureContextOptions) -> AiContextSna
         tracing::info!("context_snapshot: using deterministic seed (test mode)");
         CaptureContextSeed::default()
     } else {
+        // When both focused_window and screenshot are requested, capture once
+        // and split metadata from image bytes to avoid a double capture.
+        let (focused_window, focused_window_image) =
+            if options.include_focused_window || options.include_screenshot {
+                match capture_focused_window_with_image_live(options.include_screenshot) {
+                    Ok((window, image)) => (Ok(window), Ok(image)),
+                    Err(error) => {
+                        let err_str = error.to_string();
+                        (
+                            if options.include_focused_window {
+                                Err(err_str.clone())
+                            } else {
+                                Ok(None)
+                            },
+                            if options.include_screenshot {
+                                Err(err_str)
+                            } else {
+                                Ok(None)
+                            },
+                        )
+                    }
+                }
+            } else {
+                (Ok(None), Ok(None))
+            };
+
         CaptureContextSeed {
             selected_text: if options.include_selected_text {
                 capture_selected_text_live()
@@ -249,11 +314,8 @@ pub fn capture_context_snapshot(options: &CaptureContextOptions) -> AiContextSna
             } else {
                 Ok(None)
             },
-            focused_window: if options.include_focused_window {
-                capture_focused_window_live()
-            } else {
-                Ok(None)
-            },
+            focused_window,
+            focused_window_image,
         }
     };
 

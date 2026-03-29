@@ -36,7 +36,7 @@ fn app_view_state_no_longer_declares_tab_ai_overlay_state() {
 fn tab_ai_mode_no_longer_renders_overlay() {
     assert!(
         !TAB_AI_MODE_SOURCE.contains("render_tab_ai_overlay"),
-        "Tab AI should render only through AppView::TabAiChat, not the overlay"
+        "Tab AI should route through the harness terminal, not the overlay"
     );
 }
 
@@ -174,53 +174,126 @@ fn script_list_tab_fallback_no_longer_opens_inline_ai_chat() {
     );
 }
 
-// --- ChatPrompt-style entity ownership ---
+// --- Harness terminal routing ---
+
+const HARNESS_SOURCE: &str = include_str!("../src/ai/harness/mod.rs");
+const TERM_RENDER_SOURCE: &str = include_str!("../src/render_prompts/term.rs");
 
 #[test]
-fn tab_ai_chat_owns_text_input_state() {
+fn tab_ai_uses_persistent_harness_session_state() {
     assert!(
-        APP_VIEW_STATE_SOURCE.contains("input: TextInputState"),
-        "TabAiChat must own input via TextInputState, not raw String"
+        APP_STATE_SOURCE.contains("tab_ai_harness: Option<crate::ai::TabAiHarnessSessionState>"),
+        "app_state.rs must persist the Tab AI harness session"
     );
 }
 
 #[test]
-fn tab_ai_chat_owns_list_state() {
+fn tab_ai_creates_quick_terminal_view() {
     assert!(
-        APP_VIEW_STATE_SOURCE.contains("turns_list_state: ListState"),
-        "TabAiChat must own a ListState for scrollable turns"
+        TAB_AI_MODE_SOURCE.contains("AppView::QuickTerminalView"),
+        "open_tab_ai_chat must switch to QuickTerminalView"
     );
 }
 
 #[test]
-fn tab_ai_chat_owns_focus_handle() {
+fn tab_ai_reads_harness_config() {
     assert!(
-        APP_VIEW_STATE_SOURCE.contains("focus_handle: FocusHandle"),
-        "TabAiChat must own a FocusHandle for focus tracking"
+        TAB_AI_MODE_SOURCE.contains("read_tab_ai_harness_config"),
+        "open_tab_ai_chat must load harness configuration before spawning"
     );
 }
 
 #[test]
-fn tab_ai_chat_implements_focusable() {
+fn harness_submission_uses_script_kit_context_block() {
     assert!(
-        TAB_AI_MODE_SOURCE.contains("impl Focusable for TabAiChat")
-            || APP_VIEW_STATE_SOURCE.contains("impl Focusable for TabAiChat"),
-        "TabAiChat must implement Focusable"
+        HARNESS_SOURCE.contains("<scriptKitContext schemaVersion="),
+        "harness submission must wrap context in a structured scriptKitContext block"
     );
 }
 
 #[test]
-fn tab_ai_chat_key_handler_uses_text_input_state() {
+fn quick_terminal_has_escape_to_previous_view() {
     assert!(
-        TAB_AI_MODE_SOURCE.contains("chat.input.handle_key("),
-        "Key handling must route through TextInputState::handle_key()"
+        TERM_RENDER_SOURCE.contains("close_tab_ai_harness_terminal"),
+        "Escape in QuickTerminalView must restore the previous surface"
     );
 }
 
 #[test]
-fn tab_ai_chat_no_longer_uses_raw_intent_string() {
+fn app_state_tracks_tab_ai_harness_return_target() {
     assert!(
-        !APP_VIEW_STATE_SOURCE.contains("intent: String"),
-        "TabAiChat should use TextInputState, not a raw intent String"
+        APP_STATE_SOURCE.contains("tab_ai_harness_return_view"),
+        "app_state.rs must store the view to restore when leaving the Tab AI terminal"
+    );
+    assert!(
+        APP_STATE_SOURCE.contains("tab_ai_harness_return_focus_target"),
+        "app_state.rs must store the focus target to restore when leaving the Tab AI terminal"
+    );
+}
+
+#[test]
+fn tab_ai_reentry_uses_saved_originating_view() {
+    assert!(
+        TAB_AI_MODE_SOURCE.contains("tab_ai_harness_return_view"),
+        "warm-session reentry must use the saved originating view, not QuickTerminalView"
+    );
+}
+
+#[test]
+fn harness_injection_supports_paste_only_mode() {
+    assert!(
+        TAB_AI_MODE_SOURCE.contains("send_text_as_paste"),
+        "PasteOnly injection must use send_text_as_paste, not send_line"
+    );
+}
+
+// --- Harness config validation ---
+
+#[test]
+fn harness_startup_validates_config_before_spawn() {
+    assert!(
+        TAB_AI_MODE_SOURCE.contains("validate_tab_ai_harness_config"),
+        "ensure_tab_ai_harness_terminal must validate config before spawning the PTY"
+    );
+}
+
+#[test]
+fn harness_validation_checks_empty_command() {
+    let config = script_kit_gpui::ai::HarnessConfig {
+        command: "".to_string(),
+        ..Default::default()
+    };
+    let err = script_kit_gpui::ai::validate_tab_ai_harness_config(&config)
+        .expect_err("empty command must fail");
+    assert!(
+        err.contains("harness.json"),
+        "error must mention config file path for setup guidance: {err}"
+    );
+}
+
+#[test]
+fn harness_validation_checks_missing_cli() {
+    let config = script_kit_gpui::ai::HarnessConfig {
+        command: "nonexistent-harness-cli-abc123".to_string(),
+        ..Default::default()
+    };
+    let err = script_kit_gpui::ai::validate_tab_ai_harness_config(&config)
+        .expect_err("missing CLI must fail");
+    assert!(
+        err.contains("not found on PATH"),
+        "error must mention PATH: {err}"
+    );
+    assert!(
+        err.contains("harness.json"),
+        "error must mention config file for setup guidance: {err}"
+    );
+}
+
+#[test]
+fn harness_startup_failure_toast_mentions_setup_guidance() {
+    // The toast on harness start failure must mention the config file or CLI installation
+    assert!(
+        TAB_AI_MODE_SOURCE.contains("harness.json"),
+        "harness startup failure toast must mention the config file for user guidance"
     );
 }

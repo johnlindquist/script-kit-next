@@ -9,7 +9,7 @@
 use serde::{Deserialize, Serialize};
 
 /// Schema version for `TabAiContextBlob`. Bump when adding/removing/renaming fields.
-pub const TAB_AI_CONTEXT_SCHEMA_VERSION: u32 = 2;
+pub const TAB_AI_CONTEXT_SCHEMA_VERSION: u32 = 3;
 
 /// Snapshot of the Script Kit UI state at the moment Tab AI was invoked.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -42,6 +42,35 @@ pub struct TabAiClipboardContext {
     /// OCR text extracted from clipboard image, if available.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ocr_text: Option<String>,
+}
+
+/// Hydrated clipboard history entry for Tab AI context (v3+).
+///
+/// Provides richer data than `TabAiClipboardContext` — full text for text
+/// entries, timestamps, image dimensions, and OCR text.
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct TabAiClipboardHistoryEntry {
+    /// Unique entry ID from the clipboard history store.
+    pub id: String,
+    /// Content type (e.g. "text", "image", "link", "file", "color").
+    pub content_type: String,
+    /// Unix timestamp in milliseconds when the entry was captured.
+    pub timestamp: i64,
+    /// Truncated preview of the content.
+    pub preview: String,
+    /// Full text content (up to 1000 chars) for text-like entries.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub full_text: Option<String>,
+    /// OCR text extracted from image entries, if available.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ocr_text: Option<String>,
+    /// Image width in pixels, if this is an image entry.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub image_width: Option<u32>,
+    /// Image height in pixels, if this is an image entry.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub image_height: Option<u32>,
 }
 
 /// Truncate a string to at most `limit` characters, appending `…` if truncated.
@@ -182,6 +211,9 @@ pub struct TabAiContextBlob {
     /// Structured clipboard context (content type, preview, optional OCR).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub clipboard: Option<TabAiClipboardContext>,
+    /// Hydrated clipboard history entries (last N, most recent first).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub clipboard_history: Vec<TabAiClipboardHistoryEntry>,
     /// Prior automation suggestions from the Tab AI memory index.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub prior_automations: Vec<TabAiMemorySuggestion>,
@@ -197,6 +229,7 @@ impl TabAiContextBlob {
         desktop: crate::context_snapshot::AiContextSnapshot,
         recent_inputs: Vec<String>,
         clipboard: Option<TabAiClipboardContext>,
+        clipboard_history: Vec<TabAiClipboardHistoryEntry>,
         prior_automations: Vec<TabAiMemorySuggestion>,
         timestamp: String,
     ) -> Self {
@@ -209,6 +242,7 @@ impl TabAiContextBlob {
             desktop,
             recent_inputs,
             clipboard,
+            clipboard_history,
             prior_automations,
         }
     }
@@ -221,6 +255,7 @@ impl TabAiContextBlob {
         desktop: crate::context_snapshot::AiContextSnapshot,
         recent_inputs: Vec<String>,
         clipboard: Option<TabAiClipboardContext>,
+        clipboard_history: Vec<TabAiClipboardHistoryEntry>,
         prior_automations: Vec<TabAiMemorySuggestion>,
         timestamp: String,
     ) -> Self {
@@ -231,6 +266,7 @@ impl TabAiContextBlob {
             desktop,
             recent_inputs,
             clipboard,
+            clipboard_history,
             prior_automations,
             timestamp,
         )
@@ -1064,6 +1100,216 @@ pub fn resolve_tab_ai_memory_suggestions_from_path(
 }
 
 // ---------------------------------------------------------------------------
+// Tab AI suggested intents — deterministic "next best action" generation
+// ---------------------------------------------------------------------------
+
+/// A deterministic, pre-computed intent suggestion surfaced in the Tab AI empty state.
+///
+/// At most 3 suggestions are returned, preferring app-specific verbs when the
+/// focused target has `kind == "app"`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TabAiSuggestedIntentSpec {
+    pub label: String,
+    pub intent: String,
+}
+
+impl TabAiSuggestedIntentSpec {
+    pub fn new(label: impl Into<String>, intent: impl Into<String>) -> Self {
+        Self {
+            label: label.into(),
+            intent: intent.into(),
+        }
+    }
+}
+
+/// Build deterministic suggested intents based on the focused target, clipboard,
+/// and prior automations.  Returns at most 3 suggestions and prefers app-specific
+/// verbs when `kind == "app"`.
+pub fn build_tab_ai_suggested_intents(
+    focused_target: Option<&TabAiTargetContext>,
+    clipboard: Option<&TabAiClipboardContext>,
+    prior_automations: &[TabAiMemorySuggestion],
+) -> Vec<TabAiSuggestedIntentSpec> {
+    let mut suggestions = Vec::new();
+
+    if let Some(target) = focused_target {
+        match target.kind.as_str() {
+            "app" => {
+                suggestions.push(TabAiSuggestedIntentSpec::new(
+                    "Focus",
+                    "focus on this app",
+                ));
+                suggestions.push(TabAiSuggestedIntentSpec::new(
+                    "Explain",
+                    "what does this app do?",
+                ));
+                suggestions.push(TabAiSuggestedIntentSpec::new(
+                    "Automate",
+                    "create a quick automation for this app",
+                ));
+            }
+            "file" => {
+                suggestions.push(TabAiSuggestedIntentSpec::new(
+                    "Summarize",
+                    "summarize this file",
+                ));
+                suggestions.push(TabAiSuggestedIntentSpec::new(
+                    "Rename",
+                    "rename this file",
+                ));
+                suggestions.push(TabAiSuggestedIntentSpec::new(
+                    "Open",
+                    "open this file with the right app",
+                ));
+            }
+            "directory" => {
+                suggestions.push(TabAiSuggestedIntentSpec::new(
+                    "Inspect",
+                    "what is in this folder?",
+                ));
+                suggestions.push(TabAiSuggestedIntentSpec::new(
+                    "Organize",
+                    "organize this folder",
+                ));
+                suggestions.push(TabAiSuggestedIntentSpec::new(
+                    "Batch Rename",
+                    "rename the files in this folder",
+                ));
+            }
+            "window" => {
+                suggestions.push(TabAiSuggestedIntentSpec::new(
+                    "Focus",
+                    "focus on this window",
+                ));
+                suggestions.push(TabAiSuggestedIntentSpec::new(
+                    "Tile",
+                    "tile this window",
+                ));
+                suggestions.push(TabAiSuggestedIntentSpec::new(
+                    "Explain",
+                    "what is this window for?",
+                ));
+            }
+            _ => {
+                suggestions.push(TabAiSuggestedIntentSpec::new(
+                    "Act on Selection",
+                    "do something useful with what is selected",
+                ));
+                suggestions.push(TabAiSuggestedIntentSpec::new(
+                    "Explain Selection",
+                    "what is currently selected?",
+                ));
+            }
+        }
+    } else if let Some(clipboard) = clipboard {
+        match clipboard.content_type.as_str() {
+            "image" => {
+                suggestions.push(TabAiSuggestedIntentSpec::new(
+                    "Extract Text",
+                    "extract the text from this image",
+                ));
+                suggestions.push(TabAiSuggestedIntentSpec::new(
+                    "Describe",
+                    "describe this image",
+                ));
+            }
+            _ => {
+                suggestions.push(TabAiSuggestedIntentSpec::new(
+                    "Transform",
+                    "transform this clipboard text",
+                ));
+                suggestions.push(TabAiSuggestedIntentSpec::new(
+                    "Summarize",
+                    "summarize this clipboard text",
+                ));
+            }
+        }
+    } else {
+        suggestions.push(TabAiSuggestedIntentSpec::new(
+            "What Can I Do?",
+            "what can I do with what is currently selected?",
+        ));
+        suggestions.push(TabAiSuggestedIntentSpec::new(
+            "Automate Here",
+            "create a quick automation for the current surface",
+        ));
+    }
+
+    if let Some(memory) = prior_automations.first() {
+        suggestions.push(TabAiSuggestedIntentSpec::new(
+            format!("Repeat {}", memory.slug),
+            memory.effective_query.clone(),
+        ));
+    }
+
+    suggestions.truncate(3);
+    suggestions
+}
+
+// ---------------------------------------------------------------------------
+// Tab AI recent automations by bundle — most-recent-first lookup
+// ---------------------------------------------------------------------------
+
+/// Return recent Tab AI automations matching a bundle ID, most-recent first.
+///
+/// Uses the default memory index path.
+pub fn recent_tab_ai_automations_for_bundle(
+    bundle_id: Option<&str>,
+    limit: usize,
+) -> Result<Vec<TabAiMemorySuggestion>, String> {
+    recent_tab_ai_automations_for_bundle_from_path(
+        bundle_id,
+        limit,
+        &tab_ai_memory_index_path()?,
+    )
+}
+
+/// Return recent Tab AI automations matching a bundle ID from an explicit path.
+///
+/// Returns most-recent-first, capped to `limit`.  Does not change the existing
+/// memory schema — reads `TabAiMemoryEntry` and converts to `TabAiMemorySuggestion`.
+pub fn recent_tab_ai_automations_for_bundle_from_path(
+    bundle_id: Option<&str>,
+    limit: usize,
+    path: &std::path::Path,
+) -> Result<Vec<TabAiMemorySuggestion>, String> {
+    let bundle_id_norm = normalize_tab_ai_match_text(bundle_id.unwrap_or_default());
+    if bundle_id_norm.is_empty() || limit == 0 || !path.exists() {
+        return Ok(Vec::new());
+    }
+
+    let mut suggestions: Vec<TabAiMemorySuggestion> = read_tab_ai_memory_index_from_path(path)?
+        .into_iter()
+        .filter(|entry| {
+            entry
+                .bundle_id
+                .as_ref()
+                .map(|value| normalize_tab_ai_match_text(value) == bundle_id_norm)
+                .unwrap_or(false)
+        })
+        .map(|entry| TabAiMemorySuggestion {
+            slug: entry.slug,
+            bundle_id: entry.bundle_id.unwrap_or_default(),
+            raw_query: entry.intent.clone(),
+            effective_query: entry.intent,
+            prompt_type: entry.prompt_type,
+            written_at: entry.written_at,
+            score: 1.0,
+        })
+        .collect();
+
+    suggestions.sort_by(|left, right| {
+        right
+            .written_at
+            .cmp(&left.written_at)
+            .then_with(|| left.slug.cmp(&right.slug))
+    });
+
+    suggestions.truncate(limit);
+    Ok(suggestions)
+}
+
+// ---------------------------------------------------------------------------
 // Tab AI invocation receipt — machine-readable richness/degradation signal
 // ---------------------------------------------------------------------------
 
@@ -1415,7 +1661,7 @@ mod tests {
         let ts = "2026-03-28T12:00:00Z".to_string();
 
         let blob =
-            TabAiContextBlob::from_parts(ui, desktop, recent_inputs, None, vec![], ts.clone());
+            TabAiContextBlob::from_parts(ui, desktop, recent_inputs, None, vec![], vec![], ts.clone());
 
         assert_eq!(blob.schema_version, TAB_AI_CONTEXT_SCHEMA_VERSION);
         assert_eq!(blob.timestamp, ts);
@@ -1448,6 +1694,7 @@ mod tests {
                 preview: "clipboard text".to_string(),
                 ocr_text: None,
             }),
+            vec![],
             vec![],
             "2026-03-28T00:00:00Z".to_string(),
         );
@@ -1505,6 +1752,7 @@ mod tests {
                 ocr_text: None,
             }),
             vec![],
+            vec![],
             "2026-03-28T18:30:00Z".to_string(),
         );
 
@@ -1530,8 +1778,8 @@ mod tests {
     }
 
     #[test]
-    fn tab_ai_context_schema_version_is_two() {
-        assert_eq!(TAB_AI_CONTEXT_SCHEMA_VERSION, 2);
+    fn tab_ai_context_schema_version_is_three() {
+        assert_eq!(TAB_AI_CONTEXT_SCHEMA_VERSION, 3);
     }
 
     #[test]
@@ -1545,10 +1793,11 @@ mod tests {
             vec![],
             None,
             vec![],
+            vec![],
             "2026-03-28T00:00:00Z".to_string(),
         );
         let json = serde_json::to_string(&blob).expect("serialize");
-        assert!(json.contains("\"schemaVersion\":2"));
+        assert!(json.contains("\"schemaVersion\":3"));
         assert!(
             !json.contains("recentInputs"),
             "empty Vec should be omitted"
@@ -2431,6 +2680,7 @@ mod target_context_tests {
             vec![],
             None,
             vec![],
+            vec![],
             "2026-03-28T13:37:35Z".to_string(),
         );
         let json = serde_json::to_value(&blob).expect("serialize context blob");
@@ -2469,6 +2719,7 @@ mod target_context_tests {
             vec![],
             None,
             vec![],
+            vec![],
             "2026-03-28T00:00:00Z".to_string(),
         );
         assert!(blob.focused_target.is_none());
@@ -2506,6 +2757,7 @@ mod target_context_tests {
             crate::context_snapshot::AiContextSnapshot::default(),
             vec![],
             None,
+            vec![],
             vec![],
             "2026-03-28T00:00:00Z".to_string(),
         );

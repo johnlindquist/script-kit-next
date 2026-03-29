@@ -75,6 +75,18 @@ fn tab_ai_stream_chunks(body: &str, code: bool) -> Vec<String> {
     chunks
 }
 
+/// Maximum visible elements captured per UI snapshot for Tab AI context.
+const TAB_AI_VISIBLE_ELEMENT_LIMIT: usize = 24;
+
+/// Maximum visible targets resolved per surface for Tab AI context.
+const TAB_AI_VISIBLE_TARGET_LIMIT: usize = 10;
+
+/// Maximum clipboard history entries included in the Tab AI context blob.
+const TAB_AI_CLIPBOARD_HISTORY_LIMIT: usize = 8;
+
+/// Maximum character length for hydrated clipboard text entries.
+const TAB_AI_CLIPBOARD_TEXT_LIMIT: usize = 1000;
+
 impl ScriptListApp {
     /// Open the Tab AI surface.
     ///
@@ -92,7 +104,10 @@ impl ScriptListApp {
                 let entity = session.entity.clone();
                 if entity.read(cx).is_alive() {
                     let (ui_snapshot, invocation_receipt) = self.snapshot_tab_ai_ui(cx);
-                    let source_view = self.current_view.clone();
+                    let source_view = self
+                        .tab_ai_harness_return_view
+                        .clone()
+                        .unwrap_or(AppView::ScriptList);
                     let resolved = self.build_tab_ai_context_from(
                         String::new(),
                         source_view,
@@ -101,9 +116,13 @@ impl ScriptListApp {
                         cx,
                     );
                     if let Ok(submission) =
-                        crate::ai::build_tab_ai_harness_submission(&resolved.context, None)
+                        crate::ai::build_tab_ai_harness_submission(
+                            &resolved.context,
+                            None,
+                            crate::ai::TabAiHarnessSubmissionMode::PasteOnly,
+                        )
                     {
-                        self.inject_tab_ai_harness_submission(entity, submission, false, cx);
+                        self.inject_tab_ai_harness_submission(entity, submission, false, false, cx);
                     }
                     return;
                 }
@@ -144,7 +163,7 @@ impl ScriptListApp {
                 );
                 self.toast_manager.push(
                     crate::components::toast::Toast::error(
-                        format!("Failed to start harness: {error}"),
+                        format!("Failed to start harness: {error}. Install the configured CLI or update ~/.scriptkit/harness.json"),
                         &self.theme,
                     )
                     .duration_ms(Some(TOAST_ERROR_MS)),
@@ -153,6 +172,10 @@ impl ScriptListApp {
                 return;
             }
         };
+
+        // Save the originating surface so Escape and re-entry can use it
+        self.tab_ai_harness_return_view = Some(source_view.clone());
+        self.tab_ai_harness_return_focus_target = Some(self.tab_ai_return_focus_target());
 
         self.current_view = AppView::QuickTerminalView {
             entity: entity.clone(),
@@ -178,9 +201,13 @@ impl ScriptListApp {
             cx,
         );
 
-        match crate::ai::build_tab_ai_harness_submission(&resolved.context, None) {
+        match crate::ai::build_tab_ai_harness_submission(
+            &resolved.context,
+            None,
+            crate::ai::TabAiHarnessSubmissionMode::PasteOnly,
+        ) {
             Ok(submission) => {
-                self.inject_tab_ai_harness_submission(entity, submission, was_cold_start, cx);
+                self.inject_tab_ai_harness_submission(entity, submission, was_cold_start, false, cx);
             }
             Err(error) => {
                 tracing::warn!(
@@ -213,6 +240,7 @@ impl ScriptListApp {
         }
 
         let config = crate::ai::read_tab_ai_harness_config()?;
+        crate::ai::validate_tab_ai_harness_config(&config)?;
 
         let submit_callback: std::sync::Arc<dyn Fn(String, Option<String>) + Send + Sync> =
             std::sync::Arc::new(move |_id: String, _value: Option<String>| {});
@@ -250,11 +278,16 @@ impl ScriptListApp {
 
     /// Inject the context submission into the harness PTY, with a startup
     /// delay for cold starts.
+    ///
+    /// When `submit` is true, the payload is sent as a full line (appends CR).
+    /// When false, the payload is pasted without a trailing CR so the user
+    /// can type their intent before pressing Enter.
     fn inject_tab_ai_harness_submission(
         &self,
         entity: gpui::Entity<crate::term_prompt::TermPrompt>,
         submission: String,
         was_cold_start: bool,
+        submit: bool,
         cx: &mut Context<Self>,
     ) {
         let app = cx.entity().downgrade();
@@ -273,8 +306,14 @@ impl ScriptListApp {
                 let Some(entity) = entity_weak.upgrade() else {
                     return;
                 };
-                let result =
-                    entity.update(cx, |term, _cx| term.send_line(&submission).map_err(|e| e.to_string()));
+                let result = entity.update(cx, |term, _cx| {
+                    if submit {
+                        term.send_line(&submission).map_err(|e| e.to_string())
+                    } else {
+                        term.send_text_as_paste(&submission)
+                            .map_err(|e| e.to_string())
+                    }
+                });
                 if let Err(error) = result {
                     if let Some(app) = app.upgrade() {
                         app.update(cx, |this, cx| {
@@ -307,6 +346,35 @@ impl ScriptListApp {
         self.current_view = return_view;
         self.tab_ai_task = None;
         self.pending_focus = Some(return_focus_target);
+        cx.notify();
+    }
+
+    /// Close the Tab AI harness terminal and restore the previous view + focus.
+    pub(crate) fn close_tab_ai_harness_terminal(&mut self, cx: &mut Context<Self>) {
+        if !matches!(self.current_view, AppView::QuickTerminalView { .. }) {
+            return;
+        }
+        let return_view = self
+            .tab_ai_harness_return_view
+            .take()
+            .unwrap_or(AppView::ScriptList);
+        let return_focus_target = self
+            .tab_ai_harness_return_focus_target
+            .take()
+            .unwrap_or(FocusTarget::MainFilter);
+
+        tracing::info!(
+            event = "tab_ai_harness_terminal_close",
+            focus_target = %format!("{return_focus_target:?}"),
+        );
+
+        self.current_view = return_view;
+        self.pending_focus = Some(return_focus_target);
+        self.focused_input = match return_focus_target {
+            FocusTarget::MainFilter => FocusedInput::MainFilter,
+            FocusTarget::ActionsDialog => FocusedInput::ActionsSearch,
+            _ => FocusedInput::None,
+        };
         cx.notify();
     }
 
@@ -444,7 +512,7 @@ impl ScriptListApp {
         _cx: &Context<Self>,
     ) -> TabAiResolvedContext {
         let desktop = crate::context_snapshot::capture_context_snapshot(
-            &crate::context_snapshot::CaptureContextOptions::recommendation(),
+            &crate::context_snapshot::CaptureContextOptions::tab_ai(),
         );
         let bundle_id = desktop
             .frontmost_app
@@ -452,7 +520,21 @@ impl ScriptListApp {
             .map(|app| app.bundle_id.clone());
         let context_warning_count = desktop.warnings.len();
         let recent_inputs = self.input_history.recent_entries(5);
-        let clipboard = self.resolve_tab_ai_clipboard_context_for_view(&source_view);
+        let clipboard_selected_index = match &source_view {
+            AppView::ClipboardHistoryView { selected_index, .. } => Some(*selected_index),
+            _ => None,
+        };
+        let clipboard_history = self.resolve_tab_ai_clipboard_history(
+            clipboard_selected_index,
+            TAB_AI_CLIPBOARD_HISTORY_LIMIT,
+        );
+        let clipboard = clipboard_history.first().map(|entry| {
+            crate::ai::TabAiClipboardContext {
+                content_type: entry.content_type.clone(),
+                preview: entry.preview.clone(),
+                ocr_text: entry.ocr_text.clone(),
+            }
+        });
         let prior_automations = match crate::ai::resolve_tab_ai_memory_suggestions_with_outcome(
             &intent_for_lookup,
             bundle_id.as_deref(),
@@ -473,6 +555,7 @@ impl ScriptListApp {
             desktop,
             recent_inputs,
             clipboard,
+            clipboard_history,
             prior_automations,
             chrono::Utc::now().to_rfc3339(),
         );
@@ -853,48 +936,101 @@ impl ScriptListApp {
         }
     }
 
-    /// Source-view-aware clipboard resolution: extracts the selected index from
-    /// an explicit view instead of `self.current_view`.
-    fn resolve_tab_ai_clipboard_context_for_view(
+    /// Resolve a bounded clipboard history with hydrated content from the
+    /// clipboard database. The selected entry (if any) is always first,
+    /// followed by other recent entries in order, deduplicated by content.
+    fn resolve_tab_ai_clipboard_history(
         &self,
-        view: &AppView,
-    ) -> Option<crate::ai::TabAiClipboardContext> {
-        let selected_index = match view {
-            AppView::ClipboardHistoryView { selected_index, .. } => Some(*selected_index),
-            _ => None,
-        };
-        self.resolve_tab_ai_clipboard_context(selected_index)
+        selected_index: Option<usize>,
+        limit: usize,
+    ) -> Vec<crate::ai::TabAiClipboardHistoryEntry> {
+        let mut ordered: Vec<&crate::clipboard_history::ClipboardEntryMeta> = Vec::new();
+
+        // Selected entry goes first
+        if let Some(selected) =
+            selected_index.and_then(|index| self.cached_clipboard_entries.get(index))
+        {
+            ordered.push(selected);
+        }
+
+        for entry in &self.cached_clipboard_entries {
+            if ordered.iter().any(|candidate| candidate.id == entry.id) {
+                continue;
+            }
+            ordered.push(entry);
+            if ordered.len() >= limit {
+                break;
+            }
+        }
+
+        let mut last_dedupe_key: Option<String> = None;
+        let mut result = Vec::new();
+
+        for entry in ordered {
+            // Hydrate text content from the database for text-like entries
+            let full_text = match entry.content_type {
+                crate::clipboard_history::ContentType::Text
+                | crate::clipboard_history::ContentType::Link
+                | crate::clipboard_history::ContentType::File
+                | crate::clipboard_history::ContentType::Color => {
+                    crate::clipboard_history::get_entry_content(&entry.id)
+                        .filter(|content| !content.trim().is_empty())
+                        .map(|content| {
+                            crate::ai::truncate_tab_ai_text(&content, TAB_AI_CLIPBOARD_TEXT_LIMIT)
+                        })
+                }
+                crate::clipboard_history::ContentType::Image => None,
+            };
+
+            let preview_source = full_text
+                .clone()
+                .or_else(|| entry.ocr_text.clone())
+                .unwrap_or_else(|| entry.display_preview());
+
+            // Deduplicate consecutive identical entries
+            let dedupe_key = format!("{}::{}", entry.content_type.as_str(), preview_source);
+            if last_dedupe_key.as_deref() == Some(dedupe_key.as_str()) {
+                continue;
+            }
+            last_dedupe_key = Some(dedupe_key);
+
+            result.push(crate::ai::TabAiClipboardHistoryEntry {
+                id: entry.id.clone(),
+                content_type: entry.content_type.as_str().to_string(),
+                timestamp: entry.timestamp,
+                preview: crate::ai::truncate_tab_ai_text(
+                    &preview_source,
+                    TAB_AI_CLIPBOARD_TEXT_LIMIT,
+                ),
+                full_text,
+                ocr_text: entry
+                    .ocr_text
+                    .clone()
+                    .filter(|text| !text.trim().is_empty())
+                    .map(|text| {
+                        crate::ai::truncate_tab_ai_text(&text, TAB_AI_CLIPBOARD_TEXT_LIMIT)
+                    }),
+                image_width: entry.image_width,
+                image_height: entry.image_height,
+            });
+        }
+
+        result
     }
 
-    /// Build a clipboard context summary from the most recent cached clipboard entry.
-    /// Uses only cached data — no new clipboard reads or screenshot capture.
+    /// Build a single clipboard context summary (legacy compat for context cards).
     fn resolve_tab_ai_clipboard_context(
         &self,
         selected_index: Option<usize>,
     ) -> Option<crate::ai::TabAiClipboardContext> {
-        let entry = selected_index
-            .and_then(|index| self.cached_clipboard_entries.get(index))
-            .or_else(|| self.cached_clipboard_entries.first())?;
-
-        let preview = if entry.content_type.as_str() == "image" {
-            entry
-                .ocr_text
-                .clone()
-                .filter(|text| !text.trim().is_empty())
-                .unwrap_or_else(|| entry.display_preview())
-        } else {
-            entry.display_preview()
-        };
-
-        Some(crate::ai::TabAiClipboardContext {
-            content_type: entry.content_type.as_str().to_string(),
-            preview: crate::ai::truncate_tab_ai_text(&preview, 240),
-            ocr_text: entry
-                .ocr_text
-                .clone()
-                .filter(|text| !text.trim().is_empty())
-                .map(|text| crate::ai::truncate_tab_ai_text(&text, 240)),
-        })
+        self.resolve_tab_ai_clipboard_history(selected_index, 1)
+            .into_iter()
+            .next()
+            .map(|entry| crate::ai::TabAiClipboardContext {
+                content_type: entry.content_type,
+                preview: entry.preview,
+                ocr_text: entry.ocr_text,
+            })
     }
 
     fn tab_ai_target_from_element(
@@ -966,16 +1102,20 @@ impl ScriptListApp {
                                 ),
                                 label: preview.clone(),
                                 metadata: Some(serde_json::json!({
+                                    "id": entry.id.clone(),
+                                    "timestamp": entry.timestamp,
                                     "contentType": entry.content_type.as_str(),
                                     "preview": preview,
                                     "ocrText": entry.ocr_text.clone(),
+                                    "imageWidth": entry.image_width,
+                                    "imageHeight": entry.image_height,
                                 })),
                             }
                         });
                 let visible_targets = self
                     .cached_clipboard_entries
                     .iter()
-                    .take(5)
+                    .take(TAB_AI_VISIBLE_TARGET_LIMIT)
                     .enumerate()
                     .map(|(index, entry)| {
                         let preview = if entry.content_type.as_str() == "image" {
@@ -997,9 +1137,13 @@ impl ScriptListApp {
                             ),
                             label: preview.clone(),
                             metadata: Some(serde_json::json!({
+                                "id": entry.id.clone(),
+                                "timestamp": entry.timestamp,
                                 "contentType": entry.content_type.as_str(),
                                 "preview": preview,
                                 "ocrText": entry.ocr_text.clone(),
+                                "imageWidth": entry.image_width,
+                                "imageHeight": entry.image_height,
                             })),
                         }
                     })
@@ -1030,7 +1174,7 @@ impl ScriptListApp {
                 let visible_targets = self
                     .cached_file_results
                     .iter()
-                    .take(5)
+                    .take(TAB_AI_VISIBLE_TARGET_LIMIT)
                     .enumerate()
                     .map(|(index, entry)| crate::ai::TabAiTargetContext {
                         source: "FileSearch".to_string(),
@@ -1074,7 +1218,7 @@ impl ScriptListApp {
                 let visible_targets = self
                     .cached_windows
                     .iter()
-                    .take(5)
+                    .take(TAB_AI_VISIBLE_TARGET_LIMIT)
                     .enumerate()
                     .map(|(index, entry)| {
                         let label = format!("{} — {}", entry.app, entry.title);
@@ -1115,7 +1259,7 @@ impl ScriptListApp {
                 let visible_targets = self
                     .apps
                     .iter()
-                    .take(5)
+                    .take(TAB_AI_VISIBLE_TARGET_LIMIT)
                     .enumerate()
                     .map(|(index, app)| crate::ai::TabAiTargetContext {
                         source: "AppLauncher".to_string(),
@@ -1153,7 +1297,7 @@ impl ScriptListApp {
                 let visible_targets = self
                     .cached_processes
                     .iter()
-                    .take(5)
+                    .take(TAB_AI_VISIBLE_TARGET_LIMIT)
                     .enumerate()
                     .map(|(index, process)| crate::ai::TabAiTargetContext {
                         source: "ProcessManager".to_string(),
@@ -1191,7 +1335,7 @@ impl ScriptListApp {
                 let visible_targets = self
                     .cached_current_app_entries
                     .iter()
-                    .take(5)
+                    .take(TAB_AI_VISIBLE_TARGET_LIMIT)
                     .enumerate()
                     .map(|(index, entry)| crate::ai::TabAiTargetContext {
                         source: "CurrentAppCommands".to_string(),
@@ -1213,7 +1357,7 @@ impl ScriptListApp {
                 let visible_targets: Vec<crate::ai::TabAiTargetContext> = ui
                     .visible_elements
                     .iter()
-                    .take(5)
+                    .take(TAB_AI_VISIBLE_TARGET_LIMIT)
                     .map(|element| Self::tab_ai_target_from_element(&ui.prompt_type, element))
                     .collect();
 
@@ -1256,8 +1400,8 @@ impl ScriptListApp {
     ) -> (crate::ai::TabAiUiSnapshot, crate::ai::TabAiInvocationReceipt) {
         let prompt_type = self.app_view_name();
 
-        // Collect visible elements (capped to keep token cost low)
-        let outcome = self.collect_visible_elements(12, cx);
+        // Collect visible elements
+        let outcome = self.collect_visible_elements(TAB_AI_VISIBLE_ELEMENT_LIMIT, cx);
 
         let input_text = self.current_input_text(cx);
         let focused_id = outcome.focused_semantic_id();
@@ -2073,6 +2217,7 @@ mod tests {
             Default::default(),
             vec!["recent1".to_string()],
             None,
+            vec![],
             vec![],
             "2026-03-28T00:00:00Z".to_string(),
         ))

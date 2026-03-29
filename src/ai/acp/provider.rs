@@ -79,10 +79,7 @@ impl AiProvider for AcpProvider {
             None,
         )?;
 
-        Ok(full_text
-            .lock()
-            .map(|buf| buf.clone())
-            .unwrap_or_default())
+        Ok(full_text.lock().map(|buf| buf.clone()).unwrap_or_default())
     }
 
     fn stream_message(

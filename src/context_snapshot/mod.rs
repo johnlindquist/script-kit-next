@@ -19,8 +19,9 @@ pub use inspection::{
 };
 #[allow(unused_imports)] // Public API surface for lib consumers and MCP
 pub use types::{
-    AiContextSnapshot, BrowserContext, CaptureContextOptions, FocusedWindowContext,
-    FrontmostAppContext, MenuBarItemSummary, AI_CONTEXT_SNAPSHOT_SCHEMA_VERSION,
+    AiContextSnapshot, Base64PngContext, BrowserContext, CaptureContextOptions,
+    FocusedWindowContext, FrontmostAppContext, MenuBarItemSummary,
+    AI_CONTEXT_SNAPSHOT_SCHEMA_VERSION,
 };
 
 #[cfg(test)]

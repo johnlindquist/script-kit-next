@@ -9,12 +9,13 @@ fn default_capture_options_enable_all_sections() {
     assert!(options.include_menu_bar);
     assert!(options.include_browser_url);
     assert!(options.include_focused_window);
+    assert!(!options.include_screenshot, "screenshot off by default");
 }
 
 #[test]
-fn snapshot_default_has_schema_version_1() {
+fn snapshot_default_has_schema_version_3() {
     let snapshot = AiContextSnapshot::default();
-    assert_eq!(snapshot.schema_version, 1);
+    assert_eq!(snapshot.schema_version, 3);
     assert!(snapshot.selected_text.is_none());
     assert!(snapshot.frontmost_app.is_none());
     assert!(snapshot.menu_bar_items.is_empty());
@@ -26,7 +27,7 @@ fn snapshot_default_has_schema_version_1() {
 #[test]
 fn snapshot_serializes_to_stable_camel_case_json() {
     let snapshot = AiContextSnapshot {
-        schema_version: 1,
+        schema_version: 3,
         selected_text: Some("fn render(...) -> impl IntoElement".to_string()),
         frontmost_app: Some(FrontmostAppContext {
             pid: 4242,
@@ -53,11 +54,12 @@ fn snapshot_serializes_to_stable_camel_case_json() {
             height: 900,
             used_fallback: false,
         }),
+        focused_window_image: None,
         warnings: vec![],
     };
 
     let json = serde_json::to_string(&snapshot).expect("snapshot should serialize");
-    assert!(json.contains("\"schemaVersion\":1"));
+    assert!(json.contains("\"schemaVersion\":3"));
     assert!(
         json.contains("\"selectedText\":\"fn render(...) -> impl IntoElement\""),
         "should use camelCase for selectedText"
@@ -98,13 +100,13 @@ fn snapshot_omits_none_fields_in_json() {
         "None fields should be omitted"
     );
     // Only schemaVersion should remain
-    assert!(json.contains("\"schemaVersion\":1"));
+    assert!(json.contains("\"schemaVersion\":3"));
 }
 
 #[test]
 fn snapshot_roundtrips_through_serde() {
     let original = AiContextSnapshot {
-        schema_version: 1,
+        schema_version: 3,
         selected_text: Some("hello".to_string()),
         frontmost_app: Some(FrontmostAppContext {
             pid: 1,
@@ -114,6 +116,7 @@ fn snapshot_roundtrips_through_serde() {
         menu_bar_items: vec![],
         browser: None,
         focused_window: None,
+        focused_window_image: None,
         warnings: vec!["test warning".to_string()],
     };
 
@@ -130,6 +133,7 @@ fn capture_options_roundtrip_through_serde() {
         include_menu_bar: true,
         include_browser_url: false,
         include_focused_window: true,
+        include_screenshot: false,
     };
 
     let json = serde_json::to_string(&original).expect("serialize");
@@ -195,6 +199,7 @@ fn full_seed() -> CaptureContextSeed {
             height: 800,
             used_fallback: false,
         })),
+        focused_window_image: Ok(None),
     }
 }
 
@@ -245,6 +250,7 @@ fn capture_from_seed_keeps_partial_success_and_records_warnings() {
             url: "https://example.com".into(),
         })),
         focused_window: Err("no focused window".into()),
+        focused_window_image: Ok(None),
     };
 
     let snapshot = capture_context_snapshot_from_seed(&CaptureContextOptions::all(), seed);
@@ -272,6 +278,7 @@ fn capture_from_seed_skips_warnings_for_disabled_providers() {
         menu_bar_items: Err("would also fail".into()),
         browser: Ok(None),
         focused_window: Ok(None),
+        focused_window_image: Ok(None),
     };
 
     // minimal disables selected_text and menu_bar, so their errors are silent
@@ -296,6 +303,7 @@ fn capture_from_seed_preserves_metadata_only_focused_window() {
             height: 0,
             used_fallback: false,
         })),
+        focused_window_image: Ok(None),
     };
 
     let snapshot = capture_context_snapshot_from_seed(&CaptureContextOptions::minimal(), seed);
