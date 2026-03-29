@@ -518,6 +518,60 @@ mod tests {
         assert!(validate_tab_ai_harness_config(&config).is_ok());
     }
 
+    fn sample_context_with_focused_window() -> crate::ai::TabAiContextBlob {
+        crate::ai::TabAiContextBlob::from_parts(
+            crate::ai::TabAiUiSnapshot {
+                prompt_type: "ScriptList".to_string(),
+                input_text: Some("finder".to_string()),
+                ..Default::default()
+            },
+            crate::context_snapshot::AiContextSnapshot {
+                focused_window: Some(crate::context_snapshot::FocusedWindowContext {
+                    title: "Finder — Downloads".to_string(),
+                    width: 1440,
+                    height: 900,
+                    used_fallback: false,
+                }),
+                ..Default::default()
+            },
+            Vec::new(),
+            None,
+            Vec::new(),
+            Vec::new(),
+            "2026-03-29T18:10:15Z".to_string(),
+        )
+    }
+
+    #[test]
+    fn paste_only_submission_stages_context_without_sentinel() {
+        let submission = build_tab_ai_harness_submission(
+            &sample_context_with_focused_window(),
+            None,
+            TabAiHarnessSubmissionMode::PasteOnly,
+        )
+        .expect("submission");
+        let expected_open = format!(
+            "<scriptKitContext schemaVersion=\"{}\">",
+            TAB_AI_HARNESS_CONTEXT_SCHEMA_VERSION
+        );
+        assert!(submission.contains(&expected_open));
+        assert!(submission.contains("\"focusedWindow\""));
+        assert!(!submission.contains("\"focusedWindowImage\""));
+        assert!(!submission.contains("Await the user's next terminal input."));
+        assert!(!submission.contains("User intent:"));
+    }
+
+    #[test]
+    fn submit_without_intent_appends_wait_sentinel() {
+        let submission = build_tab_ai_harness_submission(
+            &sample_context_with_focused_window(),
+            None,
+            TabAiHarnessSubmissionMode::Submit,
+        )
+        .expect("submission");
+        assert!(submission.contains("Await the user's next terminal input."));
+    }
+
     #[test]
     fn shell_quote_handles_edge_cases() {
         // Safe string passes through

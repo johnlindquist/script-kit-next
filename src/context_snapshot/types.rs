@@ -196,3 +196,20 @@ pub struct MenuBarItemSummary {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub children: Vec<MenuBarItemSummary>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tab_ai_submit_profile_stays_text_safe() {
+        let options = CaptureContextOptions::tab_ai_submit();
+        assert!(options.include_selected_text);
+        assert!(options.include_frontmost_app);
+        assert!(options.include_menu_bar);
+        assert!(options.include_browser_url);
+        assert!(options.include_focused_window);
+        assert!(!options.include_screenshot);
+        assert!(!options.include_panel_screenshot);
+    }
+}
