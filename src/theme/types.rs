@@ -1857,6 +1857,7 @@ mod tests {
             theme: ThemeSelectionPreferences {
                 preset_id: preset_id.map(ToString::to_string),
             },
+            dictation: Default::default(),
         }
     }
 

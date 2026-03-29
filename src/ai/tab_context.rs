@@ -2446,6 +2446,41 @@ pub fn recent_tab_ai_automations_for_bundle_from_path(
 }
 
 // ---------------------------------------------------------------------------
+// Tab AI entry-aware prior automation resolution
+// ---------------------------------------------------------------------------
+
+/// Resolve prior automations for a Tab AI entry.  When `raw_query` is empty
+/// (zero-intent open), falls back to `recent_tab_ai_automations_for_bundle`
+/// so the harness always receives bundle-matched suggestions even before the
+/// user types anything.
+pub fn resolve_tab_ai_prior_automations_for_entry(
+    raw_query: &str,
+    bundle_id: Option<&str>,
+    limit: usize,
+) -> Result<Vec<TabAiMemorySuggestion>, String> {
+    resolve_tab_ai_prior_automations_for_entry_from_path(
+        raw_query,
+        bundle_id,
+        limit,
+        &tab_ai_memory_index_path()?,
+    )
+}
+
+/// Path-parameterized variant for testability.
+pub fn resolve_tab_ai_prior_automations_for_entry_from_path(
+    raw_query: &str,
+    bundle_id: Option<&str>,
+    limit: usize,
+    path: &std::path::Path,
+) -> Result<Vec<TabAiMemorySuggestion>, String> {
+    let query = raw_query.trim();
+    if query.is_empty() {
+        return recent_tab_ai_automations_for_bundle_from_path(bundle_id, limit, path);
+    }
+    resolve_tab_ai_memory_suggestions_from_path(query, bundle_id, limit, path)
+}
+
+// ---------------------------------------------------------------------------
 // Tab AI invocation receipt — machine-readable richness/degradation signal
 // ---------------------------------------------------------------------------
 
@@ -3553,6 +3588,137 @@ mod tab_ai_memory_resolution_tests {
         let entries = read_tab_ai_memory_index_from_path(&path).expect("read");
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].slug, "copy-url-two");
+    }
+}
+
+#[cfg(test)]
+mod tab_ai_entry_resolution_tests {
+    use super::*;
+
+    #[test]
+    fn empty_entry_query_uses_recent_bundle_automations() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("tab-ai-memory.json");
+
+        let entries = vec![
+            TabAiMemoryEntry {
+                schema_version: TAB_AI_MEMORY_ENTRY_SCHEMA_VERSION,
+                intent: "rename this file".to_string(),
+                generated_source: "code".to_string(),
+                slug: "older".to_string(),
+                prompt_type: "FileSearch".to_string(),
+                bundle_id: Some("com.apple.finder".to_string()),
+                written_at: "2026-03-29T10:00:00Z".to_string(),
+            },
+            TabAiMemoryEntry {
+                schema_version: TAB_AI_MEMORY_ENTRY_SCHEMA_VERSION,
+                intent: "summarize this file".to_string(),
+                generated_source: "code".to_string(),
+                slug: "newer".to_string(),
+                prompt_type: "FileSearch".to_string(),
+                bundle_id: Some("com.apple.finder".to_string()),
+                written_at: "2026-03-29T11:00:00Z".to_string(),
+            },
+        ];
+
+        std::fs::write(
+            &path,
+            serde_json::to_string_pretty(&entries).expect("serialize"),
+        )
+        .expect("write");
+
+        let items = resolve_tab_ai_prior_automations_for_entry_from_path(
+            "",
+            Some("com.apple.finder"),
+            2,
+            &path,
+        )
+        .expect("resolve");
+
+        assert_eq!(items.len(), 2);
+        assert_eq!(items[0].slug, "newer");
+        assert_eq!(items[1].slug, "older");
+    }
+
+    #[test]
+    fn non_empty_entry_query_uses_fuzzy_matching() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("tab-ai-memory.json");
+
+        let entries = vec![
+            TabAiMemoryEntry {
+                schema_version: TAB_AI_MEMORY_ENTRY_SCHEMA_VERSION,
+                intent: "rename this file".to_string(),
+                generated_source: "code".to_string(),
+                slug: "rename-entry".to_string(),
+                prompt_type: "FileSearch".to_string(),
+                bundle_id: Some("com.apple.finder".to_string()),
+                written_at: "2026-03-29T10:00:00Z".to_string(),
+            },
+            TabAiMemoryEntry {
+                schema_version: TAB_AI_MEMORY_ENTRY_SCHEMA_VERSION,
+                intent: "summarize this file".to_string(),
+                generated_source: "code".to_string(),
+                slug: "summarize-entry".to_string(),
+                prompt_type: "FileSearch".to_string(),
+                bundle_id: Some("com.apple.finder".to_string()),
+                written_at: "2026-03-29T11:00:00Z".to_string(),
+            },
+        ];
+
+        std::fs::write(
+            &path,
+            serde_json::to_string_pretty(&entries).expect("serialize"),
+        )
+        .expect("write");
+
+        // Non-empty query should use fuzzy matching, not recent-bundle fallback
+        let items = resolve_tab_ai_prior_automations_for_entry_from_path(
+            "rename",
+            Some("com.apple.finder"),
+            2,
+            &path,
+        )
+        .expect("resolve");
+
+        // Should match the rename entry via query matching
+        assert!(
+            items.iter().any(|item| item.slug == "rename-entry"),
+            "expected rename-entry in results: {items:?}"
+        );
+    }
+
+    #[test]
+    fn whitespace_only_query_treated_as_empty() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("tab-ai-memory.json");
+
+        let entries = vec![TabAiMemoryEntry {
+            schema_version: TAB_AI_MEMORY_ENTRY_SCHEMA_VERSION,
+            intent: "open terminal".to_string(),
+            generated_source: "code".to_string(),
+            slug: "open-term".to_string(),
+            prompt_type: "ScriptList".to_string(),
+            bundle_id: Some("com.apple.Terminal".to_string()),
+            written_at: "2026-03-29T12:00:00Z".to_string(),
+        }];
+
+        std::fs::write(
+            &path,
+            serde_json::to_string_pretty(&entries).expect("serialize"),
+        )
+        .expect("write");
+
+        let items = resolve_tab_ai_prior_automations_for_entry_from_path(
+            "   ",
+            Some("com.apple.Terminal"),
+            5,
+            &path,
+        )
+        .expect("resolve");
+
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].slug, "open-term");
     }
 }
 

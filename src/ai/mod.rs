@@ -99,6 +99,8 @@ pub use self::tab_context::{
     build_tab_ai_suggested_intents, build_tab_ai_user_prompt, cleanup_tab_ai_temp_script,
     read_tab_ai_memory_index, read_tab_ai_memory_index_from_path,
     recent_tab_ai_automations_for_bundle, recent_tab_ai_automations_for_bundle_from_path,
+    resolve_tab_ai_prior_automations_for_entry,
+    resolve_tab_ai_prior_automations_for_entry_from_path,
     resolve_tab_ai_memory_suggestions, resolve_tab_ai_memory_suggestions_from_path,
     resolve_tab_ai_memory_suggestions_with_outcome,
     resolve_tab_ai_memory_suggestions_with_outcome_from_path, should_offer_save,

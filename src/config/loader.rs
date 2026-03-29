@@ -161,6 +161,7 @@ fn recover_user_preferences_fields(value: Value, correlation_id: &str) -> Script
     ScriptKitUserPreferences {
         layout: parse_required_field(object, "layout", defaults.layout, correlation_id),
         theme: parse_required_field(object, "theme", defaults.theme, correlation_id),
+        dictation: parse_required_field(object, "dictation", defaults.dictation, correlation_id),
     }
 }
 
@@ -227,6 +228,37 @@ pub fn load_user_preferences() -> ScriptKitUserPreferences {
             ScriptKitUserPreferences::default()
         }
     }
+}
+
+/// Persist user preferences to `<SK_PATH>/kit/settings.json`.
+///
+/// Reads the existing file first, merges the new preferences on top (to avoid
+/// clobbering unknown keys), and writes back pretty-printed JSON.
+pub fn save_user_preferences(prefs: &ScriptKitUserPreferences) -> anyhow::Result<()> {
+    let path = settings_json_path();
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+
+    // Read existing JSON to preserve unknown keys from other tools.
+    let mut root: serde_json::Map<String, Value> = if path.exists() {
+        let text = std::fs::read_to_string(&path).unwrap_or_default();
+        serde_json::from_str(&text).unwrap_or_default()
+    } else {
+        serde_json::Map::new()
+    };
+
+    // Overlay our strongly-typed preferences.
+    let overlay = serde_json::to_value(prefs)?;
+    if let Value::Object(map) = overlay {
+        for (k, v) in map {
+            root.insert(k, v);
+        }
+    }
+
+    let json = serde_json::to_string_pretty(&root)?;
+    std::fs::write(&path, json)?;
+    Ok(())
 }
 
 /// Load configuration from `<SK_PATH>/kit/config.ts` (or `~/.scriptkit/kit/config.ts`)

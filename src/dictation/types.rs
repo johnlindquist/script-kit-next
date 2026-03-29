@@ -53,3 +53,28 @@ pub enum DictationCaptureEvent {
     Level(DictationLevel),
     EndOfStream,
 }
+
+// --- Session / transcription types ---
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DictationDestination {
+    ActivePrompt,
+    FrontmostApp,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DictationSessionPhase {
+    Idle,
+    Recording,
+    Transcribing,
+    Delivering,
+    Finished,
+    Failed(String),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DictationSessionResult {
+    pub transcript: String,
+    pub destination: DictationDestination,
+    pub audio_duration: Duration,
+}

@@ -3515,7 +3515,6 @@ impl ScriptListApp {
                 self.open_file_search(String::new(), cx);
                 Self::builtin_success(dctx, "open_file_search")
             }
-
             // =========================================================================
             // Settings Hub
             // =========================================================================

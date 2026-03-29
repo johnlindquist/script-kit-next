@@ -273,6 +273,15 @@ pub struct ThemeSelectionPreferences {
     pub preset_id: Option<String>,
 }
 
+/// Dictation preferences loaded from user settings.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct DictationPreferences {
+    /// Persisted microphone device ID. `None` means use system default.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub selected_device_id: Option<String>,
+}
+
 /// User preferences loaded from `<SK_PATH>/kit/settings.json`.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
@@ -283,6 +292,9 @@ pub struct ScriptKitUserPreferences {
     /// Theme selection settings.
     #[serde(default)]
     pub theme: ThemeSelectionPreferences,
+    /// Dictation / microphone settings.
+    #[serde(default)]
+    pub dictation: DictationPreferences,
 }
 
 // ============================================
