@@ -5,10 +5,16 @@
 //! in place and do not regress.
 
 const AI_ACTIONS_SOURCE: &str = include_str!("../src/ai/window/render_message_actions.rs");
+const AI_MESSAGES_SOURCE: &str = include_str!("../src/ai/window/render_messages.rs");
 const CHAT_STATE_SOURCE: &str = include_str!("../src/prompts/chat/state.rs");
 const CHAT_RENDER_CORE_SOURCE: &str = include_str!("../src/prompts/chat/render_core.rs");
 const ACTIONS_DIALOG_SOURCE: &str = include_str!("../src/actions/dialog.rs");
 const LIST_ITEM_SOURCE: &str = include_str!("../src/list_item/mod.rs");
+const FILE_SEARCH_SOURCE: &str = include_str!("../src/render_builtins/file_search.rs");
+const THEME_CHOOSER_SOURCE: &str = include_str!("../src/render_builtins/theme_chooser.rs");
+const THEME_CHOOSER_HEADER_SOURCE: &str =
+    include_str!("../src/render_builtins/theme_chooser_list_header.rs");
+const KIT_STORE_SOURCE: &str = include_str!("../src/render_builtins/kit_store.rs");
 
 // ---------------------------------------------------------------------------
 // AI action strip: unconditional GPUI hover
@@ -71,6 +77,28 @@ fn chat_prompt_follow_paths_do_not_use_manual_item_scrolling() {
 }
 
 // ---------------------------------------------------------------------------
+// AI window: native follow-tail via ListState::set_follow_tail
+// ---------------------------------------------------------------------------
+
+#[test]
+fn ai_window_uses_native_follow_tail() {
+    assert!(
+        AI_MESSAGES_SOURCE
+            .contains(".set_follow_tail(!self.user_has_scrolled_up && item_count > 0);"),
+        "AI window append/stream path should drive native follow-tail"
+    );
+    assert!(
+        AI_MESSAGES_SOURCE.contains("self.messages_list_state.set_follow_tail(item_count > 0);"),
+        "AI window force-scroll path should use native follow-tail"
+    );
+    assert!(
+        !AI_MESSAGES_SOURCE.contains("scroll_to_item(")
+            && !AI_MESSAGES_SOURCE.contains("scroll_to_reveal_item("),
+        "AI window follow-tail paths should not use manual item scrolling"
+    );
+}
+
+// ---------------------------------------------------------------------------
 // ActionsDialog: direct GPUI hover without local state machine
 // ---------------------------------------------------------------------------
 
@@ -125,4 +153,89 @@ fn list_item_relies_on_gpui_hover_without_custom_toggle() {
             .contains("inner_content = inner_content.hover(move |s| s.bg(hover_bg));"),
         "hover styling should be unconditional for non-selected rows"
     );
+}
+
+// ---------------------------------------------------------------------------
+// File search: direct GPUI hover without manual hover bookkeeping
+// ---------------------------------------------------------------------------
+
+#[test]
+fn file_search_rows_use_direct_gpui_hover() {
+    assert!(
+        FILE_SEARCH_SOURCE.contains(".when(!is_selected, |d| d.hover(move |s| s.bg(hover_bg)))"),
+        "file search rows should use direct GPUI hover styling"
+    );
+    for needle in [
+        "file_input_mode == InputMode::Mouse",
+        "let hover_entity_handle = cx.entity().downgrade();",
+        ".on_hover(hover_handler)",
+    ] {
+        assert!(
+            !FILE_SEARCH_SOURCE.contains(needle),
+            "unexpected legacy file-search hover pattern still present: {needle}"
+        );
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Theme chooser: direct GPUI hover without manual hover bookkeeping
+// ---------------------------------------------------------------------------
+
+#[test]
+fn theme_chooser_rows_use_direct_gpui_hover() {
+    assert!(
+        THEME_CHOOSER_SOURCE.contains("d.hover(move |s| s.bg(theme_row_hover_bg))"),
+        "theme chooser rows should use direct GPUI hover styling"
+    );
+    for needle in [
+        "current_input_mode == InputMode::Mouse",
+        "let hover_entity_handle = entity_handle.clone();",
+        ".on_hover(hover_handler)",
+    ] {
+        assert!(
+            !THEME_CHOOSER_SOURCE.contains(needle),
+            "unexpected legacy theme-chooser hover pattern still present: {needle}"
+        );
+    }
+}
+
+#[test]
+fn theme_chooser_header_rows_use_direct_gpui_hover() {
+    assert!(
+        THEME_CHOOSER_HEADER_SOURCE.contains("d.hover(move |s| s.bg(hover_bg))"),
+        "theme chooser header rows should use direct GPUI hover styling"
+    );
+    for needle in [
+        "current_input_mode == InputMode::Mouse",
+        "this.input_mode = InputMode::Mouse;",
+        "this.hovered_index = Some(ix);",
+        ".on_hover(hover_handler)",
+    ] {
+        assert!(
+            !THEME_CHOOSER_HEADER_SOURCE.contains(needle),
+            "unexpected legacy theme-chooser-header hover pattern still present: {needle}"
+        );
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Kit store: direct GPUI hover without manual hover bookkeeping
+// ---------------------------------------------------------------------------
+
+#[test]
+fn kit_store_rows_use_direct_gpui_hover() {
+    assert!(
+        KIT_STORE_SOURCE
+            .contains(".when(!is_selected, |row| row.hover(move |style| style.bg(row_bg)))"),
+        "kit store rows should use direct GPUI hover styling"
+    );
+    for needle in [
+        "hovered_row == Some(ix) && input_mode == InputMode::Mouse",
+        ".on_hover(move |is_hovered, _window, cx|",
+    ] {
+        assert!(
+            !KIT_STORE_SOURCE.contains(needle),
+            "unexpected legacy kit-store hover pattern still present: {needle}"
+        );
+    }
 }

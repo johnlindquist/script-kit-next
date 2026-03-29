@@ -143,10 +143,10 @@ fn script_list_tab_fallback_routes_to_tab_ai_overlay() {
     let render_source = read_source("src/render_script_list/mod.rs");
     let tab_block = slice_from(&render_source, "key if sk_is_key_tab(key) => {");
 
-    // Tab fallback must route to Tab AI overlay, not the old inline AI chat
+    // Tab fallback must route to Tab AI chat (full-view), not the old inline AI chat
     assert!(
-        tab_block.contains("open_tab_ai_overlay(cx)"),
-        "ScriptList Tab fallback must route to Tab AI overlay"
+        tab_block.contains("open_tab_ai_chat(cx)"),
+        "ScriptList Tab fallback must route to Tab AI chat"
     );
     assert!(
         !tab_block.contains("open_ai_chat_from_main_window_query"),

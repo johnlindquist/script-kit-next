@@ -3,14 +3,11 @@
         let preset_descs: Vec<String> = presets.iter().map(|p| p.description.to_string()).collect();
         let preset_is_dark: Vec<bool> = presets.iter().map(|p| p.is_dark).collect();
         let selected = selected_index;
-        let hovered = self.hovered_index;
-        let current_input_mode = self.input_mode;
         let orig_idx = original_index;
         let first_light_idx = first_light;
         let hover_bg = rgba((selection_bg << 8) | hover_alpha);
         let filtered_indices_for_list = filtered_indices.clone();
         let entity_handle_for_customize = entity_handle.clone();
-        let hover_entity_handle = entity_handle.clone();
 
         // ── Theme list ─────────────────────────────────────────────
         let list = uniform_list(
@@ -21,7 +18,6 @@
                     .map(|ix| {
                         let preset_idx = filtered_indices_for_list[ix];
                         let is_selected = ix == selected;
-                        let is_hovered = !is_selected && hovered == Some(ix) && current_input_mode == InputMode::Mouse;
                         let is_original = preset_idx == orig_idx;
                         let name = &preset_names[preset_idx];
                         let desc = &preset_descs[preset_idx];
@@ -152,8 +148,6 @@
 
                                             this.theme_chooser_scroll_handle
                                                 .scroll_to_item(ix, ScrollStrategy::Nearest);
-                                            this.input_mode = InputMode::Mouse;
-                                            this.hovered_index = Some(ix);
                                             this.theme = std::sync::Arc::new(
                                                 preset.create_theme(),
                                             );
@@ -165,27 +159,7 @@
                             }
                         };
 
-                        // Hover handler for mouse tracking
-                        let hover_entity = hover_entity_handle.clone();
-                        let hover_handler = move |hov: &bool, _window: &mut Window, cx: &mut gpui::App| {
-                            if let Some(app) = hover_entity.upgrade() {
-                                app.update(cx, |this, cx| {
-                                    if *hov {
-                                        this.input_mode = InputMode::Mouse;
-                                        if this.hovered_index != Some(ix) {
-                                            this.hovered_index = Some(ix);
-                                            cx.notify();
-                                        }
-                                    } else if this.hovered_index == Some(ix) {
-                                        this.hovered_index = None;
-                                        cx.notify();
-                                    }
-                                });
-                            }
-                        };
-
                         // Build item row
-                        let is_mouse_mode = current_input_mode == InputMode::Mouse;
                         let row = div()
                             .id(ix)
                             .w_full()
@@ -199,10 +173,8 @@
                             .when(is_selected, |d| {
                                 d.bg(sel_bg).border_l_2().border_color(rgb(accent_color))
                             })
-                            .when(is_hovered, |d| d.bg(hover_bg))
-                            .when(!is_selected && is_mouse_mode, |d| d.hover(move |s| s.bg(hover_bg)))
+                            .when(!is_selected, |d| d.hover(move |s| s.bg(hover_bg)))
                             .on_click(click_handler)
-                            .on_hover(hover_handler)
                             .child(indicator)
                             .child(palette)
                             .child(

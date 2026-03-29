@@ -590,11 +590,8 @@ impl ScriptListApp {
         );
 
         let selected_row = selected_index;
-        let hovered_row = self.hovered_index;
-        let input_mode = self.input_mode;
         let click_entity = cx.entity().downgrade();
         let install_entity = cx.entity().downgrade();
-        let hover_entity = cx.entity().downgrade();
         let results_for_list = results.clone();
 
         let list: AnyElement = if results_for_list.is_empty() {
@@ -623,12 +620,9 @@ impl ScriptListApp {
                         .map(|ix| {
                             if let Some(result) = results_for_list.get(ix) {
                                 let is_selected = ix == selected_row;
-                                let is_hovered =
-                                    hovered_row == Some(ix) && input_mode == InputMode::Mouse;
                                 let row_bg = rgba((accent_subtle << 8) | selected_alpha);
 
                                 let row_entity = click_entity.clone();
-                                let row_hover_entity = hover_entity.clone();
                                 let install_btn_entity = install_entity.clone();
                                 let result_for_install = result.clone();
 
@@ -643,24 +637,9 @@ impl ScriptListApp {
                                     .items_center()
                                     .justify_between()
                                     .gap(px(12.0))
-                                    .when(is_selected || is_hovered, |row| row.bg(row_bg))
+                                    .when(is_selected, |row| row.bg(row_bg))
+                                    .when(!is_selected, |row| row.hover(move |style| style.bg(row_bg)))
                                     .cursor_pointer()
-                                    .on_hover(move |is_hovered, _window, cx| {
-                                        if let Some(entity) = row_hover_entity.upgrade() {
-                                            entity.update(cx, |this, cx| {
-                                                if *is_hovered {
-                                                    this.input_mode = InputMode::Mouse;
-                                                    if this.hovered_index != Some(ix) {
-                                                        this.hovered_index = Some(ix);
-                                                        cx.notify();
-                                                    }
-                                                } else if this.hovered_index == Some(ix) {
-                                                    this.hovered_index = None;
-                                                    cx.notify();
-                                                }
-                                            });
-                                        }
-                                    })
                                     .on_click(move |_event, _window, cx| {
                                         if let Some(entity) = row_entity.upgrade() {
                                             entity.update(cx, |this, cx| {
@@ -940,12 +919,9 @@ impl ScriptListApp {
         );
 
         let selected_row = selected_index;
-        let hovered_row = self.hovered_index;
-        let input_mode = self.input_mode;
         let click_entity = cx.entity().downgrade();
         let update_entity = cx.entity().downgrade();
         let remove_entity = cx.entity().downgrade();
-        let hover_entity = cx.entity().downgrade();
         let kits_for_list = kits.clone();
 
         let list: AnyElement = if kits_for_list.is_empty() {
@@ -974,12 +950,9 @@ impl ScriptListApp {
                         .map(|ix| {
                             if let Some(kit) = kits_for_list.get(ix) {
                                 let is_selected = ix == selected_row;
-                                let is_hovered =
-                                    hovered_row == Some(ix) && input_mode == InputMode::Mouse;
                                 let row_bg = rgba((accent_subtle << 8) | selected_alpha);
 
                                 let row_entity = click_entity.clone();
-                                let row_hover_entity = hover_entity.clone();
                                 let update_btn_entity = update_entity.clone();
                                 let remove_btn_entity = remove_entity.clone();
                                 let kit_for_update = kit.clone();
@@ -996,24 +969,9 @@ impl ScriptListApp {
                                     .items_center()
                                     .justify_between()
                                     .gap(px(12.0))
-                                    .when(is_selected || is_hovered, |row| row.bg(row_bg))
+                                    .when(is_selected, |row| row.bg(row_bg))
+                                    .when(!is_selected, |row| row.hover(move |style| style.bg(row_bg)))
                                     .cursor_pointer()
-                                    .on_hover(move |is_hovered, _window, cx| {
-                                        if let Some(entity) = row_hover_entity.upgrade() {
-                                            entity.update(cx, |this, cx| {
-                                                if *is_hovered {
-                                                    this.input_mode = InputMode::Mouse;
-                                                    if this.hovered_index != Some(ix) {
-                                                        this.hovered_index = Some(ix);
-                                                        cx.notify();
-                                                    }
-                                                } else if this.hovered_index == Some(ix) {
-                                                    this.hovered_index = None;
-                                                    cx.notify();
-                                                }
-                                            });
-                                        }
-                                    })
                                     .on_click(move |_event, _window, cx| {
                                         if let Some(entity) = row_entity.upgrade() {
                                             entity.update(cx, |this, cx| {

@@ -383,29 +383,6 @@ struct AliasInputState {
     alias_text: String,
 }
 
-/// State for the Tab AI overlay — a mini natural-language input that
-/// floats above any current view.
-///
-/// When this is `Some`, the overlay is visible and captures keyboard input.
-#[derive(Debug, Clone)]
-#[allow(dead_code)] // Overlay path — retained for incremental migration
-struct TabAiOverlayState {
-    /// User-typed natural-language intent (e.g. "force quit this app").
-    intent: String,
-    /// UI snapshot captured the moment Tab was pressed.
-    ui_snapshot: crate::ai::TabAiUiSnapshot,
-    /// Cheap frontmost-app identifier captured when the overlay opens.
-    frontmost_bundle_id: Option<String>,
-    /// Best prior automation hint for the current app + intent.
-    memory_hint: Option<crate::ai::TabAiMemorySuggestion>,
-    /// Whether the AI call is in-flight.
-    running: bool,
-    /// Error message from the last failed attempt, if any.
-    error: Option<SharedString>,
-    /// Machine-readable richness/degradation receipt captured at open time.
-    invocation_receipt: crate::ai::TabAiInvocationReceipt,
-}
-
 /// State for the Tab AI save-offer overlay, shown after a successful ephemeral
 /// script execution when the user is prompted to persist the script.
 #[derive(Debug, Clone)]
@@ -441,12 +418,19 @@ struct TabAiTurn {
 }
 
 /// Full-view Tab AI chat entity. Replaces the overlay approach with a proper
-/// entity-backed view that stores return state and chat turns.
+/// entity-backed view that stores return state, input via `TextInputState`,
+/// scrollable turns via `ListState`, and focus via `FocusHandle`.
 struct TabAiChat {
     /// The view to restore when closing the chat.
     return_view: AppView,
     /// The focus target to restore when closing the chat.
     return_focus_target: FocusTarget,
+    /// Focus handle for this entity (tracked in render).
+    focus_handle: FocusHandle,
+    /// Single-line text input with selection, clipboard, and undo support.
+    input: TextInputState,
+    /// Variable-height list state for chat turns (bottom-anchored).
+    turns_list_state: ListState,
     /// UI snapshot captured when Tab was pressed.
     ui_snapshot: crate::ai::TabAiUiSnapshot,
     /// Machine-readable invocation receipt.
@@ -457,10 +441,10 @@ struct TabAiChat {
     memory_hint: Option<crate::ai::TabAiMemorySuggestion>,
     /// Context cards shown as the empty state before the user types.
     context_cards: Vec<TabAiContextCard>,
-    /// User-typed natural-language intent.
-    intent: String,
     /// Chat turns (user messages and AI responses).
     turns: Vec<TabAiTurn>,
+    /// Cursor blink visibility (toggled by timer).
+    cursor_visible: bool,
     /// Whether an AI call is in-flight.
     running: bool,
     /// Error message from the last failed attempt.
@@ -475,17 +459,21 @@ impl TabAiChat {
         invocation_receipt: crate::ai::TabAiInvocationReceipt,
         frontmost_bundle_id: Option<String>,
         context_cards: Vec<TabAiContextCard>,
+        focus_handle: FocusHandle,
     ) -> Self {
         Self {
             return_view,
             return_focus_target,
+            focus_handle,
+            input: TextInputState::new(),
+            turns_list_state: ListState::new(0, ListAlignment::Bottom, px(1024.0)),
             ui_snapshot,
             invocation_receipt,
             frontmost_bundle_id,
             memory_hint: None,
             context_cards,
-            intent: String::new(),
             turns: Vec::new(),
+            cursor_visible: true,
             running: false,
             error: None,
         }
@@ -496,11 +484,11 @@ impl TabAiChat {
     }
 
     fn current_intent(&self) -> String {
-        self.intent.clone()
+        self.input.text().to_string()
     }
 
     fn can_submit(&self) -> bool {
-        !self.running && !self.intent.trim().is_empty()
+        !self.running && !self.input.text().trim().is_empty()
     }
 
     fn submission_payload(
@@ -511,31 +499,14 @@ impl TabAiChat {
         crate::ai::TabAiInvocationReceipt,
     ) {
         (
-            self.intent.clone(),
+            self.input.text().to_string(),
             self.ui_snapshot.clone(),
             self.invocation_receipt.clone(),
         )
     }
 
-    fn push_text(&mut self, text: &str) {
-        if self.running {
-            return;
-        }
-        self.intent.push_str(text);
-        self.error = None;
-        self.refresh_memory_hint();
-    }
-
-    fn backspace(&mut self) {
-        if self.running {
-            return;
-        }
-        self.intent.pop();
-        self.refresh_memory_hint();
-    }
-
     fn refresh_memory_hint(&mut self) {
-        let intent = self.intent.trim().to_string();
+        let intent = self.input.text().trim().to_string();
         self.memory_hint = match crate::ai::resolve_tab_ai_memory_suggestions_with_outcome(
             &intent,
             self.frontmost_bundle_id.as_deref(),
@@ -549,25 +520,36 @@ impl TabAiChat {
         };
     }
 
-    fn append_user_turn(&mut self, body: impl Into<SharedString>) {
+    fn sync_turns_list_state(&mut self) {
+        let old_count = self.turns_list_state.item_count();
+        let new_count = self.turns.len();
+        if old_count != new_count {
+            self.turns_list_state.splice(0..old_count, new_count);
+        }
+    }
+
+    fn clear_input(&mut self) {
+        self.input.clear();
+    }
+
+    fn append_turn(&mut self, kind: TabAiTurnKind, body: impl Into<SharedString>) {
         self.turns.push(TabAiTurn {
-            kind: TabAiTurnKind::User,
+            kind,
             body: body.into(),
         });
+        self.sync_turns_list_state();
+    }
+
+    fn append_user_turn(&mut self, body: impl Into<SharedString>) {
+        self.append_turn(TabAiTurnKind::User, body);
     }
 
     fn append_assistant_text_turn(&mut self, body: impl Into<SharedString>) {
-        self.turns.push(TabAiTurn {
-            kind: TabAiTurnKind::AssistantText,
-            body: body.into(),
-        });
+        self.append_turn(TabAiTurnKind::AssistantText, body);
     }
 
     fn append_assistant_code_turn(&mut self, body: impl Into<SharedString>) {
-        self.turns.push(TabAiTurn {
-            kind: TabAiTurnKind::AssistantCode,
-            body: body.into(),
-        });
+        self.append_turn(TabAiTurnKind::AssistantCode, body);
     }
 
     fn set_running(&mut self, running: bool) {
@@ -585,7 +567,7 @@ impl TabAiChat {
         if elements.len() < limit {
             elements.push(crate::protocol::ElementInfo::input(
                 "tab-ai-input",
-                Some(self.intent.as_str()),
+                Some(self.input.text()),
                 true,
             ));
         }
@@ -612,5 +594,11 @@ impl TabAiChat {
         }
 
         ElementCollectionOutcome::new(elements, total_count)
+    }
+}
+
+impl Focusable for TabAiChat {
+    fn focus_handle(&self, _cx: &gpui::App) -> FocusHandle {
+        self.focus_handle.clone()
     }
 }

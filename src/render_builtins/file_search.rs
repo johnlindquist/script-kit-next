@@ -493,11 +493,8 @@ impl ScriptListApp {
             .filter_map(|&idx| self.cached_file_results.get(idx).map(|f| (idx, f.clone())))
             .collect();
         let current_selected = selected_index;
-        let file_hovered = self.hovered_index;
-        let file_input_mode = self.input_mode;
         let is_loading = self.file_search_loading;
         let click_entity_handle = cx.entity().downgrade();
-        let hover_entity_handle = cx.entity().downgrade();
 
         // Use uniform_list for virtualized scrolling
         // Skeleton loading: show placeholder rows while loading and no results yet
@@ -569,18 +566,14 @@ impl ScriptListApp {
                         .map(|ix| {
                             if let Some((_result_idx, file)) = files_for_closure.get(ix) {
                                 let is_selected = ix == current_selected;
-                                let is_hovered = !is_selected && file_hovered == Some(ix) && file_input_mode == InputMode::Mouse;
 
                                 // Use theme opacity for vibrancy-compatible selection
                                 let bg = if is_selected {
                                     rgba((list_selected << 8) | selected_alpha)
-                                } else if is_hovered {
-                                    rgba((list_hover << 8) | hover_alpha)
                                 } else {
                                     gpui::transparent_black().into()
                                 };
                                 let hover_bg = rgba((list_hover << 8) | hover_alpha);
-                                let is_mouse_mode = file_input_mode == InputMode::Mouse;
                                 let show_thumbnail =
                                     file_search::is_thumbnail_preview_supported(&file.path);
                                 let thumbnail_path = file.path.clone();
@@ -622,25 +615,6 @@ impl ScriptListApp {
                                     }
                                 };
 
-                                // Hover handler for mouse tracking
-                                let hover_entity = hover_entity_handle.clone();
-                                let hover_handler = move |hov: &bool, _window: &mut Window, cx: &mut gpui::App| {
-                                    if let Some(app) = hover_entity.upgrade() {
-                                        app.update(cx, |this, cx| {
-                                            if *hov {
-                                                this.input_mode = InputMode::Mouse;
-                                                if this.hovered_index != Some(ix) {
-                                                    this.hovered_index = Some(ix);
-                                                    cx.notify();
-                                                }
-                                            } else if this.hovered_index == Some(ix) {
-                                                this.hovered_index = None;
-                                                cx.notify();
-                                            }
-                                        });
-                                    }
-                                };
-
                                 div()
                                     .id(ix)
                                     .w_full()
@@ -652,7 +626,7 @@ impl ScriptListApp {
                                     .gap(px(12.))
                                     .bg(bg)
                                     .cursor_pointer()
-                                    .when(is_mouse_mode, |d| d.hover(move |s| s.bg(hover_bg)))
+                                    .when(!is_selected, |d| d.hover(move |s| s.bg(hover_bg)))
                                     .tooltip(|window, cx| {
                                         gpui_component::tooltip::Tooltip::new(
                                             "Open selected file",
@@ -665,7 +639,6 @@ impl ScriptListApp {
                                         .build(window, cx)
                                     })
                                     .on_click(click_handler)
-                                    .on_hover(hover_handler)
                                     .child(if show_thumbnail {
                                         let fallback_icon = fallback_icon.clone();
                                         div()

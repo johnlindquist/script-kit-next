@@ -492,13 +492,10 @@ impl ScriptListApp {
         // ── Pre-compute data for list closure ──────────────────────
         let presets_for_list = presets;
         let selected = selected_index;
-        let hovered = self.hovered_index;
-        let current_input_mode = self.input_mode;
         let orig_idx = original_index;
         let first_light_idx = first_light;
         let filtered_indices_for_list = filtered_indices.clone();
         let entity_handle_for_customize = entity_handle.clone();
-        let hover_entity_handle = entity_handle.clone();
 
         // ── Theme list ─────────────────────────────────────────────
         let list = uniform_list(
@@ -509,9 +506,6 @@ impl ScriptListApp {
                     .map(|ix| {
                         let preset_idx = filtered_indices_for_list[ix];
                         let is_selected = ix == selected;
-                        let is_hovered = !is_selected
-                            && hovered == Some(ix)
-                            && current_input_mode == InputMode::Mouse;
                         let is_original = preset_idx == orig_idx;
                         let preset = &presets_for_list[preset_idx];
                         let name = preset.name;
@@ -640,28 +634,7 @@ impl ScriptListApp {
                                 }
                             };
 
-                        // Hover handler for mouse tracking
-                        let hover_entity = hover_entity_handle.clone();
-                        let hover_handler =
-                            move |hov: &bool, _window: &mut Window, cx: &mut gpui::App| {
-                                if let Some(app) = hover_entity.upgrade() {
-                                    app.update(cx, |this, cx| {
-                                        if *hov {
-                                            this.input_mode = InputMode::Mouse;
-                                            if this.hovered_index != Some(ix) {
-                                                this.hovered_index = Some(ix);
-                                                cx.notify();
-                                            }
-                                        } else if this.hovered_index == Some(ix) {
-                                            this.hovered_index = None;
-                                            cx.notify();
-                                        }
-                                    });
-                                }
-                            };
-
                         // Build item row
-                        let is_mouse_mode = current_input_mode == InputMode::Mouse;
                         let row = div()
                             .id(ix)
                             .w_full()
@@ -677,12 +650,10 @@ impl ScriptListApp {
                                     .border_l_2()
                                     .border_color(rgb(accent_color))
                             })
-                            .when(is_hovered, |d| d.bg(theme_row_hover_bg))
-                            .when(!is_selected && is_mouse_mode, |d| {
+                            .when(!is_selected, |d| {
                                 d.hover(move |s| s.bg(theme_row_hover_bg))
                             })
                             .on_click(click_handler)
-                            .on_hover(hover_handler)
                             .child(indicator)
                             .child(palette)
                             .child(
