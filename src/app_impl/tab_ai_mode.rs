@@ -1,5 +1,16 @@
 use super::*;
 
+/// Result of the AI worker thread: either a runnable script, a conversational
+/// text response, or a hard failure (provider error, empty response, etc.).
+enum TabAiWorkerResult {
+    /// AI returned a fenced TypeScript block that parsed into a runnable script.
+    Script { slug: String, source: String },
+    /// AI returned prose or a non-script response — render as assistant text.
+    Text(String),
+    /// Hard failure: provider error, empty response, or channel issue.
+    Error(String),
+}
+
 /// Resolved context returned by `build_tab_ai_context`, carrying bundle metadata
 /// and warning counts alongside the serializable blob.
 #[derive(Debug, Clone)]
@@ -210,14 +221,20 @@ impl ScriptListApp {
             return;
         }
 
+        // Let ⌘K propagate so the Actions dialog can open.
+        if event.keystroke.modifiers.platform && key.eq_ignore_ascii_case("k") {
+            cx.propagate();
+            return;
+        }
+
         // Delegate all other keys to TextInputState (handles backspace, delete,
         // arrows, word-jump, select-all, copy, cut, paste, undo, redo, and
         // printable character insertion).
         let key_lower = event.keystroke.key.to_ascii_lowercase();
         let key_char = event.keystroke.key_char.as_deref();
-        entity.update(cx, |chat, cx| {
+        let handled = entity.update(cx, |chat, cx| {
             if chat.running {
-                return;
+                return false;
             }
             let handled = chat.input.handle_key(
                 key_lower.as_str(),
@@ -233,14 +250,22 @@ impl ScriptListApp {
                 chat.refresh_memory_hint();
                 cx.notify();
             }
+            handled
         });
-        cx.stop_propagation();
+        if handled {
+            cx.stop_propagation();
+        } else {
+            cx.propagate();
+        }
     }
 
-    /// Build context from explicit inputs (not from overlay state).
+    /// Build context from explicit inputs, resolving targets and clipboard
+    /// against the provided `source_view` (the view that was active when Tab
+    /// was pressed) rather than `self.current_view` (which is now `TabAiChat`).
     fn build_tab_ai_context_from(
         &self,
         intent_for_lookup: String,
+        source_view: AppView,
         ui: crate::ai::TabAiUiSnapshot,
         invocation_receipt: crate::ai::TabAiInvocationReceipt,
         _cx: &Context<Self>,
@@ -254,11 +279,7 @@ impl ScriptListApp {
             .map(|app| app.bundle_id.clone());
         let context_warning_count = desktop.warnings.len();
         let recent_inputs = self.input_history.recent_entries(5);
-        let clipboard_selected_index = match &self.current_view {
-            AppView::ClipboardHistoryView { selected_index, .. } => Some(*selected_index),
-            _ => None,
-        };
-        let clipboard = self.resolve_tab_ai_clipboard_context(clipboard_selected_index);
+        let clipboard = self.resolve_tab_ai_clipboard_context_for_view(&source_view);
         let prior_automations = match crate::ai::resolve_tab_ai_memory_suggestions_with_outcome(
             &intent_for_lookup,
             bundle_id.as_deref(),
@@ -270,7 +291,8 @@ impl ScriptListApp {
                 Vec::new()
             }
         };
-        let (focused_target, visible_targets) = self.resolve_tab_ai_surface_targets(&ui);
+        let (focused_target, visible_targets) =
+            self.resolve_tab_ai_surface_targets_for_view(&source_view, &ui);
         let context = crate::ai::TabAiContextBlob::from_parts_with_targets(
             ui,
             focused_target,
@@ -297,7 +319,8 @@ impl ScriptListApp {
         entity: Entity<TabAiChat>,
         cx: &mut Context<Self>,
     ) {
-        let (intent, ui_snapshot, invocation_receipt) = entity.read(cx).submission_payload();
+        let (intent, source_view, ui_snapshot, invocation_receipt) =
+            entity.read(cx).submission_payload();
 
         if intent.trim().is_empty() {
             return;
@@ -313,8 +336,13 @@ impl ScriptListApp {
             cx.notify();
         });
 
-        let resolved_context =
-            self.build_tab_ai_context_from(intent.clone(), ui_snapshot, invocation_receipt, cx);
+        let resolved_context = self.build_tab_ai_context_from(
+            intent.clone(),
+            source_view,
+            ui_snapshot,
+            invocation_receipt,
+            cx,
+        );
 
         // Reject implicit-object intents when no stable target exists
         if resolved_context.context.focused_target.is_none()
@@ -403,7 +431,7 @@ impl ScriptListApp {
         let provider_id = provider.provider_id().to_string();
 
         // Channel for worker thread → async GPUI task
-        let (tx, rx) = async_channel::bounded::<Result<(String, String), String>>(1);
+        let (tx, rx) = async_channel::bounded::<TabAiWorkerResult>(1);
 
         let worker_model_id = model_id.clone();
         std::thread::spawn(move || {
@@ -416,18 +444,24 @@ impl ScriptListApp {
 
             let result = match provider.send_message(&messages, &worker_model_id) {
                 Ok(raw_response) => {
-                    match crate::ai::script_generation::prepare_script_from_ai_response(
-                        &user_prompt,
-                        &raw_response,
-                    ) {
-                        Ok((slug, source)) => Ok((slug, source)),
-                        Err(_) => Err(
-                            "AI returned no runnable script. Retry with a clearer verb and target."
+                    if raw_response.trim().is_empty() {
+                        TabAiWorkerResult::Error(
+                            "AI returned an empty response. Retry with a clearer intent."
                                 .to_string(),
-                        ),
+                        )
+                    } else {
+                        match crate::ai::script_generation::prepare_script_from_ai_response(
+                            &user_prompt,
+                            &raw_response,
+                        ) {
+                            Ok((slug, source)) => {
+                                TabAiWorkerResult::Script { slug, source }
+                            }
+                            Err(_) => TabAiWorkerResult::Text(raw_response),
+                        }
                     }
                 }
-                Err(error) => Err(format!(
+                Err(error) => TabAiWorkerResult::Error(format!(
                     "tab_ai_send_message model_id={worker_model_id}: {error:#}"
                 )),
             };
@@ -458,7 +492,7 @@ impl ScriptListApp {
                     return;
                 };
                 app.update(cx, |this, cx| match response {
-                    Ok((slug, source)) => {
+                    TabAiWorkerResult::Script { slug, source } => {
                         tracing::info!(
                             event = "tab_ai_script_extracted",
                             source_len = source.len(),
@@ -524,7 +558,18 @@ impl ScriptListApp {
                             }
                         }
                     }
-                    Err(e) => {
+                    TabAiWorkerResult::Text(text) => {
+                        tracing::info!(
+                            event = "tab_ai_text_response",
+                            text_len = text.len(),
+                        );
+                        chat_entity.update(cx, |chat, cx| {
+                            chat.append_assistant_text_turn(text);
+                            chat.set_running(false);
+                            cx.notify();
+                        });
+                    }
+                    TabAiWorkerResult::Error(e) => {
                         set_tab_ai_chat_error(
                             &chat_entity,
                             cx,
@@ -594,6 +639,19 @@ impl ScriptListApp {
         }
     }
 
+    /// Source-view-aware clipboard resolution: extracts the selected index from
+    /// an explicit view instead of `self.current_view`.
+    fn resolve_tab_ai_clipboard_context_for_view(
+        &self,
+        view: &AppView,
+    ) -> Option<crate::ai::TabAiClipboardContext> {
+        let selected_index = match view {
+            AppView::ClipboardHistoryView { selected_index, .. } => Some(*selected_index),
+            _ => None,
+        };
+        self.resolve_tab_ai_clipboard_context(selected_index)
+    }
+
     /// Build a clipboard context summary from the most recent cached clipboard entry.
     /// Uses only cached data — no new clipboard reads or screenshot capture.
     fn resolve_tab_ai_clipboard_context(
@@ -655,7 +713,21 @@ impl ScriptListApp {
         Option<crate::ai::TabAiTargetContext>,
         Vec<crate::ai::TabAiTargetContext>,
     ) {
-        match &self.current_view {
+        self.resolve_tab_ai_surface_targets_for_view(&self.current_view, ui)
+    }
+
+    /// Source-view-aware variant: resolves targets against an explicit view
+    /// instead of `self.current_view`. Used at submit time when `current_view`
+    /// has already switched to `TabAiChat`.
+    fn resolve_tab_ai_surface_targets_for_view(
+        &self,
+        view: &AppView,
+        ui: &crate::ai::TabAiUiSnapshot,
+    ) -> (
+        Option<crate::ai::TabAiTargetContext>,
+        Vec<crate::ai::TabAiTargetContext>,
+    ) {
+        match view {
             AppView::ClipboardHistoryView { selected_index, .. } => {
                 let focused_target =
                     self.cached_clipboard_entries

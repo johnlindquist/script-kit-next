@@ -18,7 +18,7 @@ use agent_client_protocol::{
 };
 
 use super::config::AcpAgentConfig;
-use super::handlers::ScriptKitAcpClient;
+use super::handlers::{ApprovalFn, ScriptKitAcpClient};
 use super::types::{build_prompt_blocks, AcpCommand, AcpSessionBinding};
 
 /// Handle to the ACP worker thread. Send commands via the bounded channel.
@@ -33,6 +33,14 @@ impl AcpRuntime {
     /// subprocess, completes the `initialize` handshake, and then loops
     /// waiting for `AcpCommand` messages.
     pub(crate) fn spawn(agent: AcpAgentConfig) -> Result<Self> {
+        Self::spawn_with_approval(agent, None)
+    }
+
+    /// Spawn with a custom approval function for permission/write/terminal gates.
+    pub(crate) fn spawn_with_approval(
+        agent: AcpAgentConfig,
+        approve: Option<ApprovalFn>,
+    ) -> Result<Self> {
         let (tx, rx) = async_channel::bounded::<AcpCommand>(8);
 
         std::thread::Builder::new()
@@ -51,7 +59,7 @@ impl AcpRuntime {
 
                 let local = tokio::task::LocalSet::new();
                 local.block_on(&runtime, async move {
-                    if let Err(e) = run_acp_event_loop(agent, rx).await {
+                    if let Err(e) = run_acp_event_loop(agent, rx, approve).await {
                         tracing::error!(error = %e, "acp_event_loop_exited_with_error");
                     }
                 });
@@ -91,6 +99,25 @@ impl AcpRuntime {
     }
 }
 
+/// Build the ACP initialize request with full capability advertisement.
+///
+/// Advertises read + write filesystem access and terminal support.
+pub(crate) fn build_initialize_request() -> InitializeRequest {
+    InitializeRequest::new(ProtocolVersion::V1)
+        .client_capabilities(
+            ClientCapabilities::new()
+                .fs(
+                    FileSystemCapabilities::new()
+                        .read_text_file(true)
+                        .write_text_file(true),
+                )
+                .terminal(true),
+        )
+        .client_info(
+            Implementation::new("script-kit", env!("CARGO_PKG_VERSION")).title("Script Kit"),
+        )
+}
+
 /// The main event loop running on the ACP worker thread.
 ///
 /// 1. Spawns the agent subprocess.
@@ -100,6 +127,7 @@ impl AcpRuntime {
 async fn run_acp_event_loop(
     agent: AcpAgentConfig,
     rx: async_channel::Receiver<AcpCommand>,
+    approve: Option<ApprovalFn>,
 ) -> Result<()> {
     // ── Spawn the agent subprocess ──────────────────────────────────
     let mut cmd = tokio::process::Command::new(&agent.command);
@@ -137,7 +165,10 @@ async fn run_acp_event_loop(
     }
 
     // ── Create ACP connection ───────────────────────────────────────
-    let client = ScriptKitAcpClient::new();
+    let client = match approve {
+        Some(approve_fn) => ScriptKitAcpClient::with_approval(approve_fn),
+        None => ScriptKitAcpClient::new(),
+    };
     let on_chunk_handle = client.on_chunk.clone();
 
     let (connection, io_task) = ClientSideConnection::new(
@@ -157,17 +188,7 @@ async fn run_acp_event_loop(
     });
 
     // ── Initialize ──────────────────────────────────────────────────
-    let init_request = InitializeRequest::new(ProtocolVersion::V1)
-        .client_capabilities(
-            ClientCapabilities::new()
-                .fs(FileSystemCapabilities::new()
-                    .read_text_file(true)
-                    .write_text_file(false))
-                .terminal(false),
-        )
-        .client_info(
-            Implementation::new("script-kit", env!("CARGO_PKG_VERSION")).title("Script Kit"),
-        );
+    let init_request = build_initialize_request();
 
     let init_response = connection
         .initialize(init_request)
@@ -289,6 +310,32 @@ async fn handle_stream_prompt(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn initialize_request_advertises_full_fs_and_terminal() {
+        let init = build_initialize_request();
+        let value = serde_json::to_value(&init).expect("serialize init request");
+        assert_eq!(
+            value["clientCapabilities"]["fs"]["readTextFile"],
+            serde_json::json!(true)
+        );
+        assert_eq!(
+            value["clientCapabilities"]["fs"]["writeTextFile"],
+            serde_json::json!(true)
+        );
+        assert_eq!(
+            value["clientCapabilities"]["terminal"],
+            serde_json::json!(true)
+        );
+    }
+
+    #[test]
+    fn initialize_request_includes_client_info() {
+        let init = build_initialize_request();
+        let value = serde_json::to_value(&init).expect("serialize init request");
+        assert_eq!(value["clientInfo"]["name"], serde_json::json!("script-kit"));
+        assert_eq!(value["clientInfo"]["title"], serde_json::json!("Script Kit"));
+    }
 
     #[test]
     #[ignore] // Hangs for 60s+ waiting for subprocess timeout

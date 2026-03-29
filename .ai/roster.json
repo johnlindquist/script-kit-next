@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-03-28T19:42:19.110Z",
+  "updatedAt": "2026-03-29T02:41:16.685Z",
   "agents": {
     "tab-ai-instant-context-a1": {
       "id": "tab-ai-instant-context-a1",
@@ -17,6 +17,48 @@
       "host": "Johns-MacBook-Pro.local",
       "startSha": "1d892fedf6c3dd1cbd7d19595b2c68524419f2fe",
       "notes": "[auto] timed out after 1800s — task too broad",
+      "claimed_at": {}
+    },
+    "claude-code-builtin-a1": {
+      "id": "claude-code-builtin-a1",
+      "kind": "codex",
+      "mode": "exec",
+      "model": "openai/gpt-5.4",
+      "task": "Add a new 'Claude Code' built-in command that opens an instant Claude Code terminal session. This reuses the existing QuickTerminal infrastructure. Changes needed:\n\n1. src/builtins/mod.rs — Add ClaudeCode variant to UtilityCommandType enum. Register a new built-in entry near QuickTerminal:\n   entries.push(BuiltInEntry::new_with_icon(\"builtin-claude-code\", \"Claude Code\", \"Open Claude Code in an instant terminal session\", vec![\"claude\", \"code\", \"terminal\", \"cli\", \"repl\", \"anthropic\"], BuiltInFeature::UtilityCommand(UtilityCommandType::ClaudeCode), \"🤖\"));\n\n2. src/app_execute/builtin_execution.rs — Add match arm for UtilityCommandType::ClaudeCode in the existing UtilityCommand match block. Pattern after QuickTerminal: set self.opened_from_main_menu = true, call self.open_claude_code_terminal(cx), return Self::builtin_success(dctx, \"open_claude_code_terminal\").\n\n3. src/app_execute/utility_views.rs — Add a new method open_claude_code_terminal that creates a shell command string: zsh -lc 'mkdir -p \"$HOME/.scriptkit/sessions\" && cd \"$HOME/.scriptkit/sessions\" && exec claude' and passes it to self.open_terminal_with_command(command, cx). Pattern after existing open_quick_terminal or similar helpers in this file.\n\nKey anchors: UtilityCommandType enum in builtins/mod.rs, execute_builtin_inner() match in builtin_execution.rs, open_terminal_with_command() helper in utility_views.rs. AppView::QuickTerminalView is reused — no new AppView variant needed.\n\nAfter changes, run: cargo check && cargo clippy --lib -- -D warnings && cargo nextest run --lib (with 120s timeout). Fix any compilation or lint errors.",
+      "scope": "src/builtins/mod.rs,src/app_execute/builtin_execution.rs,src/app_execute/utility_views.rs",
+      "readonly": false,
+      "status": "done",
+      "claims": [],
+      "createdAt": "2026-03-29T02:37:59.365Z",
+      "lastSeenAt": "2026-03-29T02:41:15.931Z",
+      "host": "johns.macbook.pro.lan",
+      "startSha": "3ba3c1ad0093bf227e6b07bbeded78f46a2af50d",
+      "notes": "done. exit=0. final=.ai/logs/claude-code-builtin-a1.final.md. See final message file.",
+      "report": {
+        "schema": "opex.agent_report.v1",
+        "agentId": "claude-code-builtin-a1",
+        "taskSummary": "Added a new Claude Code utility built-in that launches an instant Claude terminal session through the existing Quick Terminal infrastructure.",
+        "tests": [
+          {
+            "cmd": "cargo check && cargo clippy --lib -- -D warnings && cargo nextest run --lib",
+            "result": "pass"
+          }
+        ],
+        "changedFiles": [
+          "src/builtins/mod.rs",
+          "src/app_execute/builtin_execution.rs",
+          "src/app_execute/utility_views.rs"
+        ],
+        "commitCount": 1,
+        "commitShas": [
+          "6352d2e479d34142f44d6c3f7f1e205078da1a41"
+        ],
+        "commitFiles": [
+          "src/app_execute/builtin_execution.rs",
+          "src/app_execute/utility_views.rs",
+          "src/builtins/mod.rs"
+        ]
+      },
       "claimed_at": {}
     }
   }

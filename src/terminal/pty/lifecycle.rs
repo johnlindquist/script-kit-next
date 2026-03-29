@@ -107,7 +107,15 @@ impl PtyManager {
             ("CLICOLOR_FORCE", "1".to_string()),
         ];
 
-        for key in ["HOME", "USER", "PATH", "SHELL", "TMPDIR", "LANG"] {
+        for key in [
+            "HOME",
+            "USER",
+            "PATH",
+            "SHELL",
+            "TMPDIR",
+            "LANG",
+            "TERM_PROGRAM",
+        ] {
             if let Ok(value) = std::env::var(key) {
                 env_vars.push((key, value));
             }
@@ -164,6 +172,7 @@ mod tests {
             "SHELL",
             "TMPDIR",
             "LANG",
+            "TERM_PROGRAM",
         ]
         .into_iter()
         .collect();
