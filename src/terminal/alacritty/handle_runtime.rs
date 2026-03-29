@@ -55,7 +55,24 @@ impl TerminalHandle {
             );
         }
 
-        let events = self.event_proxy.take_events();
+        let mut events = self.event_proxy.take_events();
+
+        // Process PtyWrite events: write terminal emulator responses back to the PTY.
+        // This handles protocol responses like device attributes and Kitty keyboard
+        // mode queries that alacritty_terminal generates in response to escape sequences
+        // from the child process.
+        events.retain(|event| {
+            if let TerminalEvent::PtyWrite(ref text) = event {
+                if let Err(e) = self.pty.write_all(text.as_bytes()) {
+                    debug!(error = %e, "Failed to write terminal response to PTY");
+                }
+                let _ = self.pty.flush();
+                false // Remove PtyWrite from the returned events
+            } else {
+                true
+            }
+        });
+
         (had_output, events)
     }
 

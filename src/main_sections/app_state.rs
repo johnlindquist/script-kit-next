@@ -268,6 +268,8 @@ struct ScriptListApp {
     pending_tab_ai_execution: Option<crate::ai::TabAiExecutionRecord>,
     /// Tab AI save-offer overlay state — when Some, prompts to persist the last successful ephemeral script.
     tab_ai_save_offer_state: Option<TabAiSaveOfferState>,
+    /// Persistent harness terminal session — reused across Tab presses.
+    pub(crate) tab_ai_harness: Option<crate::ai::TabAiHarnessSessionState>,
     /// Input history for shell-like up/down navigation through previous inputs
     input_history: input_history::InputHistory,
     /// Pending API key configuration - tracks which provider is being configured

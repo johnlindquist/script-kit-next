@@ -127,8 +127,8 @@ impl EventListener for EventProxy {
                 None
             }
             AlacrittyEvent::PtyWrite(text) => {
-                trace!(bytes = text.len(), "PTY write request");
-                None
+                debug!(bytes = text.len(), "PTY write request from terminal emulator");
+                Some(TerminalEvent::PtyWrite(text))
             }
             AlacrittyEvent::MouseCursorDirty => {
                 trace!("Mouse cursor dirty");

@@ -76,20 +76,46 @@ fn tab_ai_stream_chunks(body: &str, code: bool) -> Vec<String> {
 }
 
 impl ScriptListApp {
-    /// Open the Tab AI chat as a full-view replacement (not an overlay).
+    /// Open the Tab AI surface.
     ///
-    /// Captures a UI snapshot, builds context cards, creates the `TabAiChat`
-    /// entity, and sets `current_view = AppView::TabAiChat { entity }`.
+    /// Routes through the harness terminal path: captures context from the
+    /// current view, ensures a warm harness PTY is running, injects the
+    /// context block, and switches to `AppView::QuickTerminalView`.
     pub(crate) fn open_tab_ai_chat(&mut self, cx: &mut Context<Self>) {
-        // Already open or save-offer visible — do nothing
-        if matches!(self.current_view, AppView::TabAiChat { .. })
-            || self.tab_ai_save_offer_state.is_some()
-        {
+        // Already showing the harness terminal or save-offer — do nothing
+        if self.tab_ai_save_offer_state.is_some() {
             return;
         }
+        // If we're already in the harness terminal, just re-inject context
+        if let Some(ref session) = self.tab_ai_harness {
+            if matches!(self.current_view, AppView::QuickTerminalView { .. }) {
+                let entity = session.entity.clone();
+                if entity.read(cx).is_alive() {
+                    let (ui_snapshot, invocation_receipt) = self.snapshot_tab_ai_ui(cx);
+                    let source_view = self.current_view.clone();
+                    let resolved = self.build_tab_ai_context_from(
+                        String::new(),
+                        source_view,
+                        ui_snapshot,
+                        invocation_receipt,
+                        cx,
+                    );
+                    if let Ok(submission) =
+                        crate::ai::build_tab_ai_harness_submission(&resolved.context, None)
+                    {
+                        self.inject_tab_ai_harness_submission(entity, submission, false, cx);
+                    }
+                    return;
+                }
+            }
+        }
 
-        let return_view = self.current_view.clone();
-        let return_focus_target = self.tab_ai_return_focus_target();
+        self.open_tab_ai_harness_terminal(cx);
+    }
+
+    /// Core harness-terminal open: snapshot context, ensure PTY, switch view, inject.
+    fn open_tab_ai_harness_terminal(&mut self, cx: &mut Context<Self>) {
+        let source_view = self.current_view.clone();
         let (ui_snapshot, invocation_receipt) = self.snapshot_tab_ai_ui(cx);
 
         // Emit the receipt as a standalone structured log line for agent/test consumption
@@ -109,48 +135,163 @@ impl ScriptListApp {
             receipt_json = %serde_json::to_string(&invocation_receipt).unwrap_or_default(),
         );
 
-        // Cheap frontmost-app capture — no screenshots, no selected text
-        let frontmost_bundle_id = crate::context_snapshot::capture_context_snapshot(
-            &crate::context_snapshot::CaptureContextOptions {
-                include_selected_text: false,
-                include_frontmost_app: true,
-                include_menu_bar: false,
-                include_browser_url: false,
-                include_focused_window: false,
-            },
-        )
-        .frontmost_app
-        .map(|app| app.bundle_id);
+        let (entity, was_cold_start) = match self.ensure_tab_ai_harness_terminal(cx) {
+            Ok(result) => result,
+            Err(error) => {
+                tracing::error!(
+                    event = "tab_ai_harness_start_failed",
+                    error = %error,
+                );
+                self.toast_manager.push(
+                    crate::components::toast::Toast::error(
+                        format!("Failed to start harness: {error}"),
+                        &self.theme,
+                    )
+                    .duration_ms(Some(TOAST_ERROR_MS)),
+                );
+                cx.notify();
+                return;
+            }
+        };
 
-        let context_cards = self.build_tab_ai_context_cards(&ui_snapshot);
-
-        tracing::info!(
-            event = "tab_ai_chat_open",
-            prompt_type = %ui_snapshot.prompt_type,
-            has_frontmost_bundle_id = frontmost_bundle_id.is_some(),
-            context_card_count = context_cards.len(),
-        );
-
-        let entity = cx.new(|cx| {
-            TabAiChat::new(
-                return_view,
-                return_focus_target,
-                ui_snapshot,
-                invocation_receipt,
-                frontmost_bundle_id,
-                context_cards,
-                cx.focus_handle(),
-            )
-        });
-        entity.update(cx, |chat, cx| {
-            chat.start_cursor_blink(cx);
-        });
-
-        self.current_view = AppView::TabAiChat { entity };
+        self.current_view = AppView::QuickTerminalView {
+            entity: entity.clone(),
+        };
+        self.focused_input = FocusedInput::None;
         self.show_actions_popup = false;
         self.actions_dialog = None;
-        self.pending_focus = Some(FocusTarget::TabAiChat);
+        self.pending_focus = Some(FocusTarget::TermPrompt);
+
+        // Deferred resize to avoid RefCell borrow error
+        cx.spawn(async move |_this, _cx| {
+            resize_to_view_sync(ViewType::TermPrompt, 0);
+        })
+        .detach();
         cx.notify();
+
+        // Build and inject context
+        let resolved = self.build_tab_ai_context_from(
+            String::new(),
+            source_view,
+            ui_snapshot,
+            invocation_receipt,
+            cx,
+        );
+
+        match crate::ai::build_tab_ai_harness_submission(&resolved.context, None) {
+            Ok(submission) => {
+                self.inject_tab_ai_harness_submission(entity, submission, was_cold_start, cx);
+            }
+            Err(error) => {
+                tracing::warn!(
+                    event = "tab_ai_harness_context_build_failed",
+                    error = %error,
+                );
+                self.toast_manager.push(
+                    crate::components::toast::Toast::error(
+                        format!("Failed to build harness context: {error}"),
+                        &self.theme,
+                    )
+                    .duration_ms(Some(TOAST_ERROR_MS)),
+                );
+                cx.notify();
+            }
+        }
+    }
+
+    /// Ensure a harness terminal session exists and is alive.
+    /// Returns the entity and whether this was a cold start (newly created).
+    fn ensure_tab_ai_harness_terminal(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) -> Result<(gpui::Entity<crate::term_prompt::TermPrompt>, bool), String> {
+        // Reuse existing session if alive
+        if let Some(existing) = &self.tab_ai_harness {
+            if existing.entity.read(cx).is_alive() {
+                return Ok((existing.entity.clone(), false));
+            }
+        }
+
+        let config = crate::ai::read_tab_ai_harness_config()?;
+
+        let submit_callback: std::sync::Arc<dyn Fn(String, Option<String>) + Send + Sync> =
+            std::sync::Arc::new(move |_id: String, _value: Option<String>| {});
+
+        let term_height = crate::window_resize::layout::MAX_HEIGHT
+            - gpui::px(crate::window_resize::layout::FOOTER_HEIGHT);
+
+        let prompt = crate::term_prompt::TermPrompt::with_height(
+            "tab-ai-harness".to_string(),
+            Some(config.command_line()),
+            self.focus_handle.clone(),
+            submit_callback,
+            std::sync::Arc::clone(&self.theme),
+            std::sync::Arc::new(self.config.clone()),
+            Some(term_height),
+        )
+        .map_err(|e| format!("tab_ai_harness_terminal_create_failed: {e}"))?;
+
+        let entity = cx.new(|_| prompt);
+
+        tracing::info!(
+            event = "tab_ai_harness_terminal_created",
+            backend = ?config.backend,
+            command = %config.command,
+        );
+
+        self.tab_ai_harness = Some(crate::ai::TabAiHarnessSessionState::new(
+            config,
+            entity.clone(),
+            "tab-ai-harness",
+        ));
+
+        Ok((entity, true))
+    }
+
+    /// Inject the context submission into the harness PTY, with a startup
+    /// delay for cold starts.
+    fn inject_tab_ai_harness_submission(
+        &self,
+        entity: gpui::Entity<crate::term_prompt::TermPrompt>,
+        submission: String,
+        was_cold_start: bool,
+        cx: &mut Context<Self>,
+    ) {
+        let app = cx.entity().downgrade();
+        let entity_weak = entity.downgrade();
+        // Give new processes a moment to render their prompt
+        let delay_ms: u64 = if was_cold_start { 120 } else { 0 };
+
+        cx.spawn(async move |_this, cx| {
+            if delay_ms > 0 {
+                cx.background_executor()
+                    .timer(std::time::Duration::from_millis(delay_ms))
+                    .await;
+            }
+
+            let _ = cx.update(|cx| {
+                let Some(entity) = entity_weak.upgrade() else {
+                    return;
+                };
+                let result =
+                    entity.update(cx, |term, _cx| term.send_line(&submission).map_err(|e| e.to_string()));
+                if let Err(error) = result {
+                    if let Some(app) = app.upgrade() {
+                        app.update(cx, |this, cx| {
+                            this.toast_manager.push(
+                                crate::components::toast::Toast::error(
+                                    format!("Failed to inject Tab AI context: {error}"),
+                                    &this.theme,
+                                )
+                                .duration_ms(Some(TOAST_ERROR_MS)),
+                            );
+                            cx.notify();
+                        });
+                    }
+                }
+            });
+        })
+        .detach();
     }
 
     /// Close the Tab AI chat and restore the previous view + focus.

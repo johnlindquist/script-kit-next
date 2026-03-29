@@ -71,6 +71,11 @@ impl TerminalHandle {
 
         let config = TermConfig {
             scrolling_history: scrollback_lines,
+            // Enable Kitty keyboard protocol so TUI apps like Claude Code can
+            // negotiate enhanced key encoding. Without this, alacritty_terminal
+            // silently ignores CSI > u push/query sequences and apps fall into
+            // a broken input state where Enter acts as newline instead of submit.
+            kitty_keyboard: true,
             ..TermConfig::default()
         };
 

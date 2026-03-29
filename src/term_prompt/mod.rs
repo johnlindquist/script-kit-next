@@ -155,6 +155,38 @@ impl TermPrompt {
         })
     }
 
+    /// Whether the terminal process is still alive.
+    pub fn is_alive(&self) -> bool {
+        !self.exited
+    }
+
+    /// Send text into the PTY, wrapping in bracketed-paste escapes when the
+    /// terminal has that mode enabled.
+    pub fn send_text_as_paste(&mut self, text: &str) -> anyhow::Result<()> {
+        if !self.is_alive() {
+            anyhow::bail!("term_prompt_not_running");
+        }
+        let payload = if self.terminal.is_bracketed_paste_mode() {
+            format!("\x1b[200~{text}\x1b[201~")
+        } else {
+            text.to_string()
+        };
+        self.terminal
+            .input(payload.as_bytes())
+            .map_err(|e| anyhow::anyhow!("term_prompt_input_failed: {e}"))?;
+        Ok(())
+    }
+
+    /// Send a line of text (appends `\n` if missing) via `send_text_as_paste`.
+    pub fn send_line(&mut self, text: &str) -> anyhow::Result<()> {
+        let payload = text.strip_suffix('\n').unwrap_or(text);
+        self.send_text_as_paste(payload)?;
+        self.terminal
+            .input(b"\r")
+            .map_err(|e| anyhow::anyhow!("term_prompt_input_failed: {e}"))?;
+        Ok(())
+    }
+
     /// Execute a terminal action.
     ///
     /// This method handles all terminal actions from the command bar,
@@ -562,6 +594,7 @@ impl TermPrompt {
                                             needs_render = true;
                                         }
                                         TerminalEvent::Output(_) => { /* handled by had_output */ }
+                                        TerminalEvent::PtyWrite(_) => { /* handled in process() */ }
                                     }
                                 }
                             }

@@ -502,6 +502,7 @@ impl ScriptListApp {
             tab_ai_task: None,
             pending_tab_ai_execution: None,
             tab_ai_save_offer_state: None,
+            tab_ai_harness: None,
             // Input history for shell-like up/down navigation
             input_history: {
                 let mut history = input_history::InputHistory::new();
