@@ -436,10 +436,7 @@ fn tab_ai_context_blob_serializes_schema_v3_clipboard_history_and_targets() {
     let json = serde_json::to_value(&blob).expect("serialize context blob");
     assert_eq!(json["schemaVersion"], TAB_AI_CONTEXT_SCHEMA_VERSION);
     assert_eq!(json["focusedTarget"]["semanticId"], "choice:0:report");
-    assert_eq!(
-        json["focusedTarget"]["label"],
-        "Quarterly Report Final.png"
-    );
+    assert_eq!(json["focusedTarget"]["label"], "Quarterly Report Final.png");
     assert_eq!(json["focusedTarget"]["kind"], "clipboard_entry");
     assert_eq!(json["visibleTargets"][0]["source"], "ClipboardHistory");
     assert_eq!(json["clipboardHistory"][0]["id"], "clip-1");
@@ -613,12 +610,8 @@ fn recent_tab_ai_automations_for_bundle_returns_most_recent_first() {
     )
     .expect("write memory index");
 
-    let recent = recent_tab_ai_automations_for_bundle_from_path(
-        Some("com.apple.Safari"),
-        2,
-        &path,
-    )
-    .expect("read recent bundle automations");
+    let recent = recent_tab_ai_automations_for_bundle_from_path(Some("com.apple.Safari"), 2, &path)
+        .expect("read recent bundle automations");
     assert_eq!(recent.len(), 2);
     assert_eq!(recent[0].slug, "summarize-current-tab");
     assert_eq!(recent[1].slug, "copy-current-url");
@@ -666,21 +659,15 @@ fn recent_tab_ai_automations_for_bundle_filters_other_bundles() {
     )
     .expect("write");
 
-    let safari = recent_tab_ai_automations_for_bundle_from_path(
-        Some("com.apple.Safari"),
-        10,
-        &path,
-    )
-    .expect("read");
+    let safari =
+        recent_tab_ai_automations_for_bundle_from_path(Some("com.apple.Safari"), 10, &path)
+            .expect("read");
     assert_eq!(safari.len(), 1);
     assert_eq!(safari[0].slug, "copy-url");
 
-    let vscode = recent_tab_ai_automations_for_bundle_from_path(
-        Some("com.microsoft.VSCode"),
-        10,
-        &path,
-    )
-    .expect("read");
+    let vscode =
+        recent_tab_ai_automations_for_bundle_from_path(Some("com.microsoft.VSCode"), 10, &path)
+            .expect("read");
     assert_eq!(vscode.len(), 1);
     assert_eq!(vscode[0].slug, "open-project");
 
@@ -691,12 +678,8 @@ fn recent_tab_ai_automations_for_bundle_filters_other_bundles() {
 #[test]
 fn recent_tab_ai_automations_for_bundle_returns_empty_for_missing_path() {
     let path = std::path::Path::new("/tmp/nonexistent-tab-ai-memory-12345.json");
-    let result = recent_tab_ai_automations_for_bundle_from_path(
-        Some("com.apple.Safari"),
-        10,
-        path,
-    )
-    .expect("should succeed with empty result");
+    let result = recent_tab_ai_automations_for_bundle_from_path(Some("com.apple.Safari"), 10, path)
+        .expect("should succeed with empty result");
     assert!(result.is_empty());
 }
 

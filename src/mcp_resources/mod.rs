@@ -488,7 +488,8 @@ fn build_sdk_function_refs() -> Vec<SdkFunctionRef> {
         SdkFunctionRef {
             name: "arg".into(),
             signature: "await arg(prompt: string, choices?: Choice[]): Promise<string>".into(),
-            description: "Prompt the user with an input field, optionally with a list of choices.".into(),
+            description: "Prompt the user with an input field, optionally with a list of choices."
+                .into(),
             category: "prompts".into(),
         },
         SdkFunctionRef {
@@ -590,7 +591,8 @@ fn build_sdk_reference_document() -> SdkReferenceDocument {
         sdk_package: "@johnlindquist/kit".into(),
         script_directory: "~/.scriptkit/scripts/".into(),
         scriptlet_pattern: "~/.scriptkit/kit/*/extensions/*.md".into(),
-        metadata_format: "// Name: My Script\n// Description: What it does\n// Shortcut: opt i".into(),
+        metadata_format: "// Name: My Script\n// Description: What it does\n// Shortcut: opt i"
+            .into(),
         functions: build_sdk_function_refs(),
         harness_workflow: build_harness_workflow(),
     }
@@ -704,7 +706,9 @@ fn parse_clipboard_history_request(uri: &str) -> Result<(usize, bool), String> {
             "limit" => {
                 limit = value
                     .parse::<usize>()
-                    .map_err(|_| format!("Invalid limit value: {value}. Expected a positive integer."))?
+                    .map_err(|_| {
+                        format!("Invalid limit value: {value}. Expected a positive integer.")
+                    })?
                     .min(CLIPBOARD_HISTORY_MAX_LIMIT);
             }
             "diagnostics" => diagnostics = parse_bool_param(value)?,
@@ -818,7 +822,10 @@ fn read_focused_item_data() -> (Option<FocusedItemInfo>, Vec<String>) {
     let guard = FOCUSED_ITEM_SLOT.lock();
     match guard.as_ref() {
         Some(item) => (Some(item.clone()), Vec::new()),
-        None => (None, vec!["no_active_surface: No surface has published a focused item.".to_string()]),
+        None => (
+            None,
+            vec!["no_active_surface: No surface has published a focused item.".to_string()],
+        ),
     }
 }
 
@@ -2059,8 +2066,7 @@ mod tests {
         assert_eq!(content.uri, "kit://scripts");
         assert_eq!(content.mime_type, "application/json");
 
-        let doc: ScriptsResourceDocument =
-            serde_json::from_str(&content.text).expect("valid JSON");
+        let doc: ScriptsResourceDocument = serde_json::from_str(&content.text).expect("valid JSON");
         assert_eq!(doc.schema_version, SCRIPTS_RESOURCE_SCHEMA_VERSION);
         assert_eq!(doc.count, 2);
         assert_eq!(doc.scripts.len(), 2);
@@ -2074,8 +2080,7 @@ mod tests {
     #[test]
     fn kit_scripts_resource_empty_returns_zero_count() {
         let content = read_resource("kit://scripts", &[], &[], None).expect("should resolve");
-        let doc: ScriptsResourceDocument =
-            serde_json::from_str(&content.text).expect("valid JSON");
+        let doc: ScriptsResourceDocument = serde_json::from_str(&content.text).expect("valid JSON");
         assert_eq!(doc.schema_version, SCRIPTS_RESOURCE_SCHEMA_VERSION);
         assert_eq!(doc.count, 0);
         assert!(doc.scripts.is_empty());
@@ -2115,8 +2120,7 @@ mod tests {
         let content = read_resource("kit://sdk-reference", &[], &[], None).expect("should resolve");
         assert_eq!(content.uri, "kit://sdk-reference");
 
-        let doc: SdkReferenceDocument =
-            serde_json::from_str(&content.text).expect("valid JSON");
+        let doc: SdkReferenceDocument = serde_json::from_str(&content.text).expect("valid JSON");
         assert_eq!(doc.schema_version, SDK_REFERENCE_SCHEMA_VERSION);
         assert_eq!(doc.sdk_package, "@johnlindquist/kit");
         assert!(!doc.functions.is_empty());
@@ -2193,10 +2197,9 @@ mod tests {
 
     #[test]
     fn diagnostics_surface_reports_panel_screenshot_state() {
-        let request = parse_context_resource_request(
-            "kit://context?panelScreenshot=1&diagnostics=1",
-        )
-        .expect("request");
+        let request =
+            parse_context_resource_request("kit://context?panelScreenshot=1&diagnostics=1")
+                .expect("request");
 
         let snapshot = crate::context_snapshot::AiContextSnapshot {
             schema_version: crate::context_snapshot::AI_CONTEXT_SNAPSHOT_SCHEMA_VERSION,
@@ -2216,22 +2219,24 @@ mod tests {
             &snapshot,
             1,
         );
-        assert!(
-            doc.meta
-                .field_statuses
-                .iter()
-                .any(|field| field.field == "panelScreenshot"
-                    && field.enabled
-                    && field.present
-                    && matches!(field.state, ContextFieldCaptureState::Captured))
-        );
+        assert!(doc
+            .meta
+            .field_statuses
+            .iter()
+            .any(|field| field.field == "panelScreenshot"
+                && field.enabled
+                && field.present
+                && matches!(field.state, ContextFieldCaptureState::Captured)));
     }
 
     #[test]
     fn schema_document_includes_panel_screenshot_parameter() {
         let schema = build_context_schema_document();
         assert!(
-            schema.parameters.iter().any(|p| p.name == "panelScreenshot"),
+            schema
+                .parameters
+                .iter()
+                .any(|p| p.name == "panelScreenshot"),
             "schema must list panelScreenshot parameter"
         );
     }
@@ -2251,14 +2256,17 @@ mod tests {
 
     #[test]
     fn clipboard_history_resource_resolves_with_valid_schema() {
-        let content = read_resource("kit://clipboard-history", &[], &[], None)
-            .expect("should resolve");
+        let content =
+            read_resource("kit://clipboard-history", &[], &[], None).expect("should resolve");
         assert_eq!(content.uri, "kit://clipboard-history");
         assert_eq!(content.mime_type, "application/json");
 
         let doc: ClipboardHistoryDocument =
             serde_json::from_str(&content.text).expect("valid JSON");
-        assert_eq!(doc.schema_version, CLIPBOARD_HISTORY_RESOURCE_SCHEMA_VERSION);
+        assert_eq!(
+            doc.schema_version,
+            CLIPBOARD_HISTORY_RESOURCE_SCHEMA_VERSION
+        );
         assert_eq!(doc.count, doc.entries.len());
     }
 
@@ -2279,21 +2287,21 @@ mod tests {
 
     #[test]
     fn clipboard_history_parse_rejects_unknown_param() {
-        let err =
-            parse_clipboard_history_request("kit://clipboard-history?foo=1").unwrap_err();
+        let err = parse_clipboard_history_request("kit://clipboard-history?foo=1").unwrap_err();
         assert!(err.contains("Invalid kit://clipboard-history parameter"));
     }
 
     #[test]
     fn clipboard_history_diagnostics_returns_wrapper() {
-        let content =
-            read_resource("kit://clipboard-history?diagnostics=1", &[], &[], None)
-                .expect("should resolve");
+        let content = read_resource("kit://clipboard-history?diagnostics=1", &[], &[], None)
+            .expect("should resolve");
 
-        let value: serde_json::Value =
-            serde_json::from_str(&content.text).expect("valid JSON");
+        let value: serde_json::Value = serde_json::from_str(&content.text).expect("valid JSON");
         assert_eq!(value["kind"], "clipboard_history_diagnostics");
-        assert_eq!(value["document"]["schemaVersion"], CLIPBOARD_HISTORY_RESOURCE_SCHEMA_VERSION);
+        assert_eq!(
+            value["document"]["schemaVersion"],
+            CLIPBOARD_HISTORY_RESOURCE_SCHEMA_VERSION
+        );
         assert_eq!(value["meta"]["source"], "cached_entries");
     }
 
@@ -2332,16 +2340,17 @@ mod tests {
         // Ensure slot is clear
         clear_focused_item();
 
-        let content = read_resource("kit://focused-item", &[], &[], None)
-            .expect("should resolve");
+        let content = read_resource("kit://focused-item", &[], &[], None).expect("should resolve");
         assert_eq!(content.uri, "kit://focused-item");
 
-        let doc: FocusedItemDocument =
-            serde_json::from_str(&content.text).expect("valid JSON");
+        let doc: FocusedItemDocument = serde_json::from_str(&content.text).expect("valid JSON");
         assert_eq!(doc.schema_version, FOCUSED_ITEM_RESOURCE_SCHEMA_VERSION);
         assert!(!doc.has_focused_item);
         assert!(doc.focused_item.is_none());
-        assert!(!doc.warnings.is_empty(), "should have a warning when no item");
+        assert!(
+            !doc.warnings.is_empty(),
+            "should have a warning when no item"
+        );
     }
 
     #[test]
@@ -2354,11 +2363,9 @@ mod tests {
             metadata: Some(serde_json::json!({"contentType": "text"})),
         });
 
-        let content = read_resource("kit://focused-item", &[], &[], None)
-            .expect("should resolve");
+        let content = read_resource("kit://focused-item", &[], &[], None).expect("should resolve");
 
-        let doc: FocusedItemDocument =
-            serde_json::from_str(&content.text).expect("valid JSON");
+        let doc: FocusedItemDocument = serde_json::from_str(&content.text).expect("valid JSON");
         assert!(doc.has_focused_item);
         let item = doc.focused_item.expect("item present");
         assert_eq!(item.source, "ClipboardHistory");
@@ -2379,14 +2386,15 @@ mod tests {
     fn focused_item_diagnostics_returns_wrapper() {
         clear_focused_item();
 
-        let content =
-            read_resource("kit://focused-item?diagnostics=1", &[], &[], None)
-                .expect("should resolve");
+        let content = read_resource("kit://focused-item?diagnostics=1", &[], &[], None)
+            .expect("should resolve");
 
-        let value: serde_json::Value =
-            serde_json::from_str(&content.text).expect("valid JSON");
+        let value: serde_json::Value = serde_json::from_str(&content.text).expect("valid JSON");
         assert_eq!(value["kind"], "focused_item_diagnostics");
-        assert_eq!(value["document"]["schemaVersion"], FOCUSED_ITEM_RESOURCE_SCHEMA_VERSION);
+        assert_eq!(
+            value["document"]["schemaVersion"],
+            FOCUSED_ITEM_RESOURCE_SCHEMA_VERSION
+        );
         assert_eq!(value["meta"]["source"], "focused_item_slot");
         assert_eq!(value["meta"]["hasFocusedItem"], false);
         assert!(value["meta"]["warningCount"].as_u64().unwrap_or(0) > 0);

@@ -57,24 +57,42 @@ fn context_option_profiles_are_stable() {
 
     assert!(full.include_selected_text);
     assert!(full.include_menu_bar);
-    assert!(!full.include_screenshot, "full profile must not include screenshot by default");
-    assert!(!full.include_panel_screenshot, "full profile must not include panel screenshot by default");
+    assert!(
+        !full.include_screenshot,
+        "full profile must not include screenshot by default"
+    );
+    assert!(
+        !full.include_panel_screenshot,
+        "full profile must not include panel screenshot by default"
+    );
 
     assert!(!minimal.include_selected_text);
     assert!(!minimal.include_menu_bar);
     assert!(minimal.include_frontmost_app);
     assert!(minimal.include_browser_url);
     assert!(minimal.include_focused_window);
-    assert!(!minimal.include_screenshot, "minimal profile must not include screenshot");
-    assert!(!minimal.include_panel_screenshot, "minimal profile must not include panel screenshot");
+    assert!(
+        !minimal.include_screenshot,
+        "minimal profile must not include screenshot"
+    );
+    assert!(
+        !minimal.include_panel_screenshot,
+        "minimal profile must not include panel screenshot"
+    );
 
     assert!(tab_ai.include_selected_text);
     assert!(tab_ai.include_menu_bar);
     assert!(tab_ai.include_frontmost_app);
     assert!(tab_ai.include_browser_url);
     assert!(tab_ai.include_focused_window);
-    assert!(tab_ai.include_screenshot, "tab_ai profile must include screenshot");
-    assert!(tab_ai.include_panel_screenshot, "tab_ai profile must include panel screenshot");
+    assert!(
+        tab_ai.include_screenshot,
+        "tab_ai profile must include screenshot"
+    );
+    assert!(
+        tab_ai.include_panel_screenshot,
+        "tab_ai profile must include panel screenshot"
+    );
 }
 
 #[test]
@@ -205,9 +223,7 @@ fn context_resource_schema_lists_screenshot_parameter() {
     let parsed: serde_json::Value =
         serde_json::from_str(&content.text).expect("schema must be valid JSON");
 
-    let params = parsed["parameters"]
-        .as_array()
-        .expect("parameters array");
+    let params = parsed["parameters"].as_array().expect("parameters array");
     assert!(
         params.iter().any(|param| param["name"] == "screenshot"),
         "schema must list screenshot parameter"
@@ -231,9 +247,7 @@ fn context_schema_lists_screenshot_param_and_examples() {
     let value: serde_json::Value =
         serde_json::from_str(&content.text).expect("schema must be valid JSON");
 
-    let parameters = value["parameters"]
-        .as_array()
-        .expect("parameters array");
+    let parameters = value["parameters"].as_array().expect("parameters array");
     assert!(
         parameters
             .iter()
@@ -241,9 +255,7 @@ fn context_schema_lists_screenshot_param_and_examples() {
         "schema should advertise screenshot parameter"
     );
 
-    let examples = value["examples"]
-        .as_array()
-        .expect("examples array");
+    let examples = value["examples"].as_array().expect("examples array");
     assert!(
         examples
             .iter()
@@ -299,13 +311,9 @@ fn versioned_resources_are_listed_and_resolve() {
     let scripts: Vec<std::sync::Arc<script_kit_gpui::scripts::Script>> = Vec::new();
     let scriptlets: Vec<std::sync::Arc<script_kit_gpui::scripts::Scriptlet>> = Vec::new();
 
-    let scripts_doc = script_kit_gpui::mcp_resources::read_resource(
-        "kit://scripts",
-        &scripts,
-        &scriptlets,
-        None,
-    )
-    .expect("kit://scripts should resolve");
+    let scripts_doc =
+        script_kit_gpui::mcp_resources::read_resource("kit://scripts", &scripts, &scriptlets, None)
+            .expect("kit://scripts should resolve");
     let scripts_json: serde_json::Value =
         serde_json::from_str(&scripts_doc.text).expect("kit://scripts must be valid JSON");
     assert_eq!(scripts_json["schemaVersion"], 1);
@@ -318,8 +326,8 @@ fn versioned_resources_are_listed_and_resolve() {
         None,
     )
     .expect("kit://scriptlets should resolve");
-    let scriptlets_json: serde_json::Value = serde_json::from_str(&scriptlets_doc.text)
-        .expect("kit://scriptlets must be valid JSON");
+    let scriptlets_json: serde_json::Value =
+        serde_json::from_str(&scriptlets_doc.text).expect("kit://scriptlets must be valid JSON");
     assert_eq!(scriptlets_json["schemaVersion"], 1);
     assert_eq!(scriptlets_json["count"], 0);
 
@@ -345,9 +353,7 @@ fn versioned_resources_are_listed_and_resolve() {
         "harnessWorkflow must include testScriptDirectory"
     );
     assert!(
-        sdk_json["harnessWorkflow"]["runCommand"]
-            .as_str()
-            .is_some(),
+        sdk_json["harnessWorkflow"]["runCommand"].as_str().is_some(),
         "harnessWorkflow must include runCommand"
     );
 }
@@ -388,17 +394,15 @@ fn context_schema_lists_panel_screenshot_parameter() {
     let parsed: serde_json::Value =
         serde_json::from_str(&content.text).expect("schema must be valid JSON");
 
-    let params = parsed["parameters"]
-        .as_array()
-        .expect("parameters array");
+    let params = parsed["parameters"].as_array().expect("parameters array");
     assert!(
-        params.iter().any(|param| param["name"] == "panelScreenshot"),
+        params
+            .iter()
+            .any(|param| param["name"] == "panelScreenshot"),
         "schema must list panelScreenshot parameter"
     );
 
-    let examples = parsed["examples"]
-        .as_array()
-        .expect("examples array");
+    let examples = parsed["examples"].as_array().expect("examples array");
     assert!(
         examples
             .iter()
@@ -468,8 +472,7 @@ fn clipboard_history_resource_resolves_and_returns_valid_json() {
     assert_eq!(content.uri, "kit://clipboard-history");
     assert_eq!(content.mime_type, "application/json");
 
-    let value: serde_json::Value =
-        serde_json::from_str(&content.text).expect("must be valid JSON");
+    let value: serde_json::Value = serde_json::from_str(&content.text).expect("must be valid JSON");
     assert_eq!(
         value["schemaVersion"],
         script_kit_gpui::mcp_resources::CLIPBOARD_HISTORY_RESOURCE_SCHEMA_VERSION
@@ -490,8 +493,7 @@ fn clipboard_history_resource_supports_limit_param() {
     )
     .expect("should resolve with limit param");
 
-    let value: serde_json::Value =
-        serde_json::from_str(&content.text).expect("must be valid JSON");
+    let value: serde_json::Value = serde_json::from_str(&content.text).expect("must be valid JSON");
     assert_eq!(value["schemaVersion"], 1);
 }
 
@@ -508,8 +510,7 @@ fn clipboard_history_diagnostics_returns_meta() {
     )
     .expect("diagnostics should resolve");
 
-    let value: serde_json::Value =
-        serde_json::from_str(&content.text).expect("must be valid JSON");
+    let value: serde_json::Value = serde_json::from_str(&content.text).expect("must be valid JSON");
     assert_eq!(value["kind"], "clipboard_history_diagnostics");
     assert!(value["meta"]["durationMs"].is_number());
     assert_eq!(value["meta"]["source"], "cached_entries");
@@ -546,8 +547,7 @@ fn focused_item_resource_resolves_and_returns_valid_json() {
     assert_eq!(content.uri, "kit://focused-item");
     assert_eq!(content.mime_type, "application/json");
 
-    let value: serde_json::Value =
-        serde_json::from_str(&content.text).expect("must be valid JSON");
+    let value: serde_json::Value = serde_json::from_str(&content.text).expect("must be valid JSON");
     assert_eq!(
         value["schemaVersion"],
         script_kit_gpui::mcp_resources::FOCUSED_ITEM_RESOURCE_SCHEMA_VERSION
@@ -578,8 +578,7 @@ fn focused_item_resource_returns_published_item() {
     )
     .expect("should resolve");
 
-    let value: serde_json::Value =
-        serde_json::from_str(&content.text).expect("must be valid JSON");
+    let value: serde_json::Value = serde_json::from_str(&content.text).expect("must be valid JSON");
     assert_eq!(value["hasFocusedItem"], true);
     assert_eq!(value["focusedItem"]["source"], "TestSurface");
     assert_eq!(value["focusedItem"]["semanticId"], "choice:0:test");
@@ -603,8 +602,7 @@ fn focused_item_diagnostics_returns_meta() {
     )
     .expect("diagnostics should resolve");
 
-    let value: serde_json::Value =
-        serde_json::from_str(&content.text).expect("must be valid JSON");
+    let value: serde_json::Value = serde_json::from_str(&content.text).expect("must be valid JSON");
     assert_eq!(value["kind"], "focused_item_diagnostics");
     assert!(value["meta"]["durationMs"].is_number());
     assert_eq!(value["meta"]["hasFocusedItem"], false);
