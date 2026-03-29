@@ -15,6 +15,7 @@ const THEME_CHOOSER_SOURCE: &str = include_str!("../src/render_builtins/theme_ch
 const THEME_CHOOSER_HEADER_SOURCE: &str =
     include_str!("../src/render_builtins/theme_chooser_list_header.rs");
 const KIT_STORE_SOURCE: &str = include_str!("../src/render_builtins/kit_store.rs");
+const SELECT_RENDER_SOURCE: &str = include_str!("../src/prompts/select/render.rs");
 
 // ---------------------------------------------------------------------------
 // AI action strip: unconditional GPUI hover
@@ -237,4 +238,52 @@ fn kit_store_rows_use_direct_gpui_hover() {
             "unexpected legacy kit-store hover pattern still present: {needle}"
         );
     }
+}
+
+// ---------------------------------------------------------------------------
+// ListItem: modality-aware hover disclosure via Window input modality
+// ---------------------------------------------------------------------------
+
+#[test]
+fn list_item_masks_hover_driven_disclosure_with_window_input_modality() {
+    assert!(
+        LIST_ITEM_SOURCE
+            .contains("let hover_visible = self.hovered && !window.last_input_was_keyboard();"),
+        "ListItem should derive a modality-aware hover flag from Window"
+    );
+    for needle in [
+        "should_show_search_description(self.selected, hover_visible, has_description_match)",
+        "should_show_search_shortcut(is_filtering, self.selected, hover_visible)",
+        "} else if hover_visible {",
+        "self.selected || hover_visible || is_filtering",
+    ] {
+        assert!(
+            LIST_ITEM_SOURCE.contains(needle),
+            "ListItem should route hover-driven disclosure through hover_visible: {needle}"
+        );
+    }
+}
+
+// ---------------------------------------------------------------------------
+// SelectPrompt: modality-aware hover via visual_row_state_for_input_modality
+// ---------------------------------------------------------------------------
+
+#[test]
+fn select_prompt_masks_stateful_hover_with_window_input_modality() {
+    assert!(
+        SELECT_RENDER_SOURCE.contains("window.last_input_was_keyboard()"),
+        "SelectPrompt should read GPUI input modality from Window"
+    );
+    assert!(
+        SELECT_RENDER_SOURCE.contains("visual_row_state_for_input_modality("),
+        "SelectPrompt should normalize row state before painting hover-driven visuals"
+    );
+    assert!(
+        !SELECT_RENDER_SOURCE.contains("let is_hovered = row_state.is_hovered;"),
+        "SelectPrompt should not paint hover from raw row_state anymore"
+    );
+    assert!(
+        SELECT_RENDER_SOURCE.contains("let is_hovered = visual_row_state.is_hovered;"),
+        "SelectPrompt should drive UnifiedListItem hover state from modality-adjusted row state"
+    );
 }
