@@ -334,3 +334,89 @@ pub fn capture_context_snapshot_json(options: &CaptureContextOptions) -> anyhow:
     serde_json::to_string_pretty(&capture_context_snapshot(options))
         .context("Failed to serialize context snapshot")
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn seed_capture_includes_screenshot_when_enabled() {
+        let snapshot = capture_context_snapshot_from_seed(
+            &CaptureContextOptions {
+                include_selected_text: false,
+                include_frontmost_app: false,
+                include_menu_bar: false,
+                include_browser_url: false,
+                include_focused_window: true,
+                include_screenshot: true,
+            },
+            CaptureContextSeed {
+                focused_window: Ok(Some(FocusedWindowContext {
+                    title: "Finder - Test".to_string(),
+                    width: 640,
+                    height: 480,
+                    used_fallback: false,
+                })),
+                focused_window_image: Ok(Some(Base64PngContext {
+                    mime_type: "image/png".to_string(),
+                    width: 640,
+                    height: 480,
+                    base64_data: "ZmFrZQ==".to_string(),
+                    title: Some("Finder - Test".to_string()),
+                })),
+                ..Default::default()
+            },
+        );
+        assert_eq!(
+            snapshot
+                .focused_window
+                .as_ref()
+                .expect("focused window")
+                .title,
+            "Finder - Test"
+        );
+        assert_eq!(
+            snapshot
+                .focused_window_image
+                .as_ref()
+                .expect("focused window image")
+                .base64_data,
+            "ZmFrZQ=="
+        );
+    }
+
+    #[test]
+    fn seed_capture_omits_screenshot_when_disabled() {
+        let snapshot = capture_context_snapshot_from_seed(
+            &CaptureContextOptions {
+                include_selected_text: false,
+                include_frontmost_app: false,
+                include_menu_bar: false,
+                include_browser_url: false,
+                include_focused_window: true,
+                include_screenshot: false,
+            },
+            CaptureContextSeed {
+                focused_window: Ok(Some(FocusedWindowContext {
+                    title: "Finder - Test".to_string(),
+                    width: 640,
+                    height: 480,
+                    used_fallback: false,
+                })),
+                focused_window_image: Ok(Some(Base64PngContext {
+                    mime_type: "image/png".to_string(),
+                    width: 640,
+                    height: 480,
+                    base64_data: "ZmFrZQ==".to_string(),
+                    title: Some("Finder - Test".to_string()),
+                })),
+                ..Default::default()
+            },
+        );
+        assert!(snapshot.focused_window.is_some());
+        assert!(
+            snapshot.focused_window_image.is_none(),
+            "focused_window_image must be omitted when include_screenshot=false"
+        );
+    }
+}

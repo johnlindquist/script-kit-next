@@ -212,6 +212,128 @@ fn context_resource_schema_lists_screenshot_parameter() {
 }
 
 #[test]
+fn context_schema_lists_screenshot_param_and_examples() {
+    init();
+    let scripts: Vec<std::sync::Arc<script_kit_gpui::scripts::Script>> = Vec::new();
+    let scriptlets: Vec<std::sync::Arc<script_kit_gpui::scripts::Scriptlet>> = Vec::new();
+
+    let content = script_kit_gpui::mcp_resources::read_resource(
+        "kit://context/schema",
+        &scripts,
+        &scriptlets,
+        None,
+    )
+    .expect("kit://context/schema should resolve");
+
+    let value: serde_json::Value =
+        serde_json::from_str(&content.text).expect("schema must be valid JSON");
+
+    let parameters = value["parameters"]
+        .as_array()
+        .expect("parameters array");
+    assert!(
+        parameters
+            .iter()
+            .any(|p| p["name"].as_str() == Some("screenshot")),
+        "schema should advertise screenshot parameter"
+    );
+
+    let examples = value["examples"]
+        .as_array()
+        .expect("examples array");
+    assert!(
+        examples
+            .iter()
+            .any(|e| e.as_str() == Some("kit://context?screenshot=1")),
+        "schema should advertise kit://context?screenshot=1 example"
+    );
+}
+
+#[test]
+fn context_diagnostics_reflects_screenshot_override() {
+    script_kit_gpui::context_snapshot::enable_deterministic_context_capture();
+
+    let scripts: Vec<std::sync::Arc<script_kit_gpui::scripts::Script>> = Vec::new();
+    let scriptlets: Vec<std::sync::Arc<script_kit_gpui::scripts::Scriptlet>> = Vec::new();
+
+    let content = script_kit_gpui::mcp_resources::read_resource(
+        "kit://context?screenshot=1&diagnostics=1",
+        &scripts,
+        &scriptlets,
+        None,
+    )
+    .expect("diagnostics resource should resolve");
+
+    let value: serde_json::Value =
+        serde_json::from_str(&content.text).expect("diagnostics must be valid JSON");
+
+    assert_eq!(value["kind"], "context_diagnostics");
+    assert_eq!(value["uri"], "kit://context?screenshot=1&diagnostics=1");
+    assert_eq!(value["meta"]["options"]["includeScreenshot"], true);
+
+    let field_statuses = value["meta"]["fieldStatuses"]
+        .as_array()
+        .expect("fieldStatuses array");
+    assert!(
+        field_statuses
+            .iter()
+            .any(|s| s["field"].as_str() == Some("screenshot") && s["enabled"] == true),
+        "screenshot field status should be enabled"
+    );
+}
+
+#[test]
+fn versioned_resources_are_listed_and_resolve() {
+    let resources = script_kit_gpui::mcp_resources::get_resource_definitions();
+
+    for uri in ["kit://scripts", "kit://scriptlets", "kit://sdk-reference"] {
+        assert!(
+            resources.iter().any(|r| r.uri == uri),
+            "{uri} should be listed in resource definitions"
+        );
+    }
+
+    let scripts: Vec<std::sync::Arc<script_kit_gpui::scripts::Script>> = Vec::new();
+    let scriptlets: Vec<std::sync::Arc<script_kit_gpui::scripts::Scriptlet>> = Vec::new();
+
+    let scripts_doc = script_kit_gpui::mcp_resources::read_resource(
+        "kit://scripts",
+        &scripts,
+        &scriptlets,
+        None,
+    )
+    .expect("kit://scripts should resolve");
+    let scripts_json: serde_json::Value =
+        serde_json::from_str(&scripts_doc.text).expect("kit://scripts must be valid JSON");
+    assert_eq!(scripts_json["schemaVersion"], 1);
+    assert_eq!(scripts_json["count"], 0);
+
+    let scriptlets_doc = script_kit_gpui::mcp_resources::read_resource(
+        "kit://scriptlets",
+        &scripts,
+        &scriptlets,
+        None,
+    )
+    .expect("kit://scriptlets should resolve");
+    let scriptlets_json: serde_json::Value = serde_json::from_str(&scriptlets_doc.text)
+        .expect("kit://scriptlets must be valid JSON");
+    assert_eq!(scriptlets_json["schemaVersion"], 1);
+    assert_eq!(scriptlets_json["count"], 0);
+
+    let sdk_doc = script_kit_gpui::mcp_resources::read_resource(
+        "kit://sdk-reference",
+        &scripts,
+        &scriptlets,
+        None,
+    )
+    .expect("kit://sdk-reference should resolve");
+    let sdk_json: serde_json::Value =
+        serde_json::from_str(&sdk_doc.text).expect("kit://sdk-reference must be valid JSON");
+    assert_eq!(sdk_json["schemaVersion"], 1);
+    assert_eq!(sdk_json["sdkPackage"], "@johnlindquist/kit");
+}
+
+#[test]
 fn context_snapshot_inspection_receipt_is_stable() {
     let snapshot = script_kit_gpui::context_snapshot::AiContextSnapshot::default();
     let receipt = script_kit_gpui::context_snapshot::build_inspection_receipt(&snapshot, 64);
