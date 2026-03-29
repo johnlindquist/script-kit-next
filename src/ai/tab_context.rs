@@ -227,6 +227,66 @@ pub enum TabAiExperiencePack {
     GenericSelection,
 }
 
+/// A resolved experience spec ready for display in the empty-state card.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TabAiExperienceSpec {
+    pub pack: TabAiExperiencePack,
+    pub title: String,
+    pub subtitle: String,
+    pub intents: Vec<TabAiExperienceIntent>,
+}
+
+pub fn tab_ai_experience_pack_subtitle(pack: TabAiExperiencePack) -> &'static str {
+    match pack {
+        TabAiExperiencePack::DesktopGeneral => {
+            "Use the current desktop state as the live subject."
+        }
+        TabAiExperiencePack::ClipboardStudio => {
+            "Transform copied content without opening another tool."
+        }
+        TabAiExperiencePack::FileStudio => "Act on the selected file in-place.",
+        TabAiExperiencePack::FolderStudio => "Understand or reshape this folder quickly.",
+        TabAiExperiencePack::CommandAlchemy => {
+            "Teach the selected app command into something reusable."
+        }
+        TabAiExperiencePack::AppPilot => {
+            "Steer the current app like a custom operator console."
+        }
+        TabAiExperiencePack::WindowPilot => "Operate on this exact window, not the whole app.",
+        TabAiExperiencePack::ProcessPilot => "Inspect or tame a live automation process.",
+        TabAiExperiencePack::GenericSelection => "Use the selected thing as the subject.",
+    }
+}
+
+/// Build a display-ready experience spec from the current context.
+///
+/// Returns `None` when no intents can be generated (nothing useful to show).
+/// Intents are truncated to the first 3 for a focused empty-state card.
+pub fn build_tab_ai_experience_spec(
+    focused_target: Option<&TabAiTargetContext>,
+    visible_targets: &[TabAiTargetContext],
+    clipboard: Option<&TabAiClipboardContext>,
+    prior_automations: &[TabAiMemorySuggestion],
+) -> Option<TabAiExperienceSpec> {
+    let pack = TabAiExperiencePack::from_target(focused_target);
+    let mut intents = build_tab_ai_experience_intents(
+        focused_target,
+        visible_targets,
+        clipboard,
+        prior_automations,
+    );
+    intents.truncate(3);
+    if intents.is_empty() {
+        return None;
+    }
+    Some(TabAiExperienceSpec {
+        pack,
+        title: tab_ai_experience_pack_name(pack).to_string(),
+        subtitle: tab_ai_experience_pack_subtitle(pack).to_string(),
+        intents,
+    })
+}
+
 pub fn tab_ai_experience_pack_name(pack: TabAiExperiencePack) -> &'static str {
     match pack {
         TabAiExperiencePack::DesktopGeneral => "Next Move",
@@ -708,6 +768,50 @@ mod tab_ai_experience_tests {
         let spec = intent.into_spec();
         assert_eq!(spec.label, "Test Label");
         assert_eq!(spec.intent, "test intent");
+    }
+
+    #[test]
+    fn experience_spec_uses_file_studio_for_focused_file() {
+        let focused = target("file", "tab_ai_mode.rs");
+        let visible = vec![focused.clone()];
+        let spec = build_tab_ai_experience_spec(Some(&focused), &visible, None, &[])
+            .expect("file experience spec");
+        assert_eq!(spec.title, "File Studio");
+        assert_eq!(spec.subtitle, "Act on the selected file in-place.");
+        assert_eq!(spec.intents.len(), 3);
+        assert_eq!(spec.intents[0].label, "Summarize File");
+        assert_eq!(spec.intents[1].label, "Rename By Purpose");
+        assert_eq!(spec.intents[2].label, "Find Matching Test");
+    }
+
+    #[test]
+    fn experience_spec_uses_command_alchemy_for_menu_command() {
+        let focused = target("menu_command", "New Private Window");
+        let visible = vec![focused.clone()];
+        let spec = build_tab_ai_experience_spec(Some(&focused), &visible, None, &[])
+            .expect("command experience spec");
+        assert_eq!(spec.title, "Command Alchemy");
+        let labels: Vec<&str> = spec.intents.iter().map(|item| item.label.as_str()).collect();
+        assert_eq!(
+            labels,
+            vec!["Run This Command", "Explain This Command", "Teach This Command"]
+        );
+    }
+
+    #[test]
+    fn experience_spec_uses_clipboard_studio_for_copied_color() {
+        let focused = target("clipboard_entry", "Copied Color");
+        let visible = vec![focused.clone()];
+        let spec = build_tab_ai_experience_spec(
+            Some(&focused),
+            &visible,
+            Some(&clipboard("color")),
+            &[],
+        )
+        .expect("clipboard color experience spec");
+        assert_eq!(spec.title, "Clipboard Studio");
+        let labels: Vec<&str> = spec.intents.iter().map(|item| item.label.as_str()).collect();
+        assert!(labels.contains(&"Build Palette"));
     }
 }
 

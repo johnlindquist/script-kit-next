@@ -400,6 +400,7 @@ struct TabAiSaveOfferState {
 /// The kind of context a Tab AI card represents.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum TabAiContextCardKind {
+    ExperienceStrip,
     SelectedItem,
     FilterText,
     VisibleItems,
@@ -550,13 +551,32 @@ impl TabAiChat {
         !self.running && !self.input.text().trim().is_empty()
     }
 
-    /// Collect up to 3 suggestion pills across all context cards.
+    /// Collect up to 3 suggestion pills across all context cards, prioritising
+    /// the Experience card so its intents appear first in the keyboard path.
     fn context_suggestions(&self) -> Vec<TabAiSuggestedIntent> {
-        self.context_cards
-            .iter()
-            .flat_map(|card| card.suggestions.iter().cloned())
-            .take(3)
-            .collect()
+        const PRIORITY_ORDER: &[TabAiContextCardKind] = &[
+            TabAiContextCardKind::ExperienceStrip,
+            TabAiContextCardKind::SelectedItem,
+            TabAiContextCardKind::Desktop,
+            TabAiContextCardKind::PriorAutomations,
+            TabAiContextCardKind::Clipboard,
+            TabAiContextCardKind::FilterText,
+            TabAiContextCardKind::VisibleItems,
+        ];
+        let mut ordered = Vec::new();
+        for kind in PRIORITY_ORDER {
+            ordered.extend(
+                self.context_cards
+                    .iter()
+                    .filter(|card| card.kind == *kind)
+                    .flat_map(|card| card.suggestions.iter().cloned()),
+            );
+            if ordered.len() >= 3 {
+                break;
+            }
+        }
+        ordered.truncate(3);
+        ordered
     }
 
     /// Cycle the selected suggestion index by `delta` (wrapping).
