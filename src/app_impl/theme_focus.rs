@@ -226,6 +226,11 @@ impl ScriptListApp {
                 focus_coordinator::FocusTarget::TemplatePrompt => FocusTarget::TemplatePrompt,
                 focus_coordinator::FocusTarget::TermPrompt => FocusTarget::TermPrompt,
                 focus_coordinator::FocusTarget::ChatPrompt => FocusTarget::ChatPrompt,
+                focus_coordinator::FocusTarget::DivPrompt
+                    if matches!(self.current_view, AppView::TabAiChat { .. }) =>
+                {
+                    FocusTarget::TabAiChat
+                }
                 focus_coordinator::FocusTarget::DivPrompt => FocusTarget::AppRoot, // DivPrompt uses AppRoot
                 focus_coordinator::FocusTarget::ScratchPad => FocusTarget::EditorPrompt,
                 focus_coordinator::FocusTarget::QuickTerminal => FocusTarget::TermPrompt,
@@ -336,6 +341,13 @@ impl ScriptListApp {
             }
             FocusTarget::ChatPrompt => {
                 if let AppView::ChatPrompt { entity, .. } = &self.current_view {
+                    let fh = entity.read(cx).focus_handle(cx);
+                    window.focus(&fh, cx);
+                    self.focused_input = FocusedInput::None;
+                }
+            }
+            FocusTarget::TabAiChat => {
+                if let AppView::TabAiChat { entity } = &self.current_view {
                     let fh = entity.read(cx).focus_handle(cx);
                     window.focus(&fh, cx);
                     self.focused_input = FocusedInput::None;

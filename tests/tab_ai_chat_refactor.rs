@@ -476,3 +476,71 @@ fn empty_response_is_hard_error_not_text() {
         "worker must check for empty responses before attempting script parse"
     );
 }
+
+// ---------------------------------------------------------------------------
+// Full-view footer contract (regression lock)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn tab_ai_chat_uses_full_view_footer_contract() {
+    const TAB_AI_SOURCE: &str = include_str!("../src/app_impl/tab_ai_mode.rs");
+    assert!(
+        TAB_AI_SOURCE.contains(r#""\u{21B5} Send"#),
+        "tab ai chat footer must show the Send hint"
+    );
+    assert!(
+        TAB_AI_SOURCE.contains(r#""\u{2318}K Actions"#),
+        "tab ai chat footer must show the Actions hint"
+    );
+    assert!(
+        TAB_AI_SOURCE.contains(r#""Esc Back"#),
+        "tab ai chat footer must show the Esc Back hint"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Streaming helper path (regression lock)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn tab_ai_chat_uses_streaming_and_markdown_paths() {
+    const TAB_AI_SOURCE: &str = include_str!("../src/app_impl/tab_ai_mode.rs");
+    assert!(
+        TAB_AI_SOURCE.contains("start_assistant_turn("),
+        "tab ai must use start_assistant_turn for streaming"
+    );
+    assert!(
+        TAB_AI_SOURCE.contains("append_turn_chunk("),
+        "tab ai must use append_turn_chunk for progressive reveal"
+    );
+    assert!(
+        TAB_AI_SOURCE.contains("complete_turn_stream("),
+        "tab ai must use complete_turn_stream to finalize"
+    );
+    assert!(
+        TAB_AI_SOURCE.contains("render_markdown("),
+        "tab ai must use render_markdown for assistant output"
+    );
+    assert!(
+        TAB_AI_SOURCE.contains(r#""Thinking\u{2026}""#)
+            || TAB_AI_SOURCE.contains(r#""Thinking...""#),
+        "tab ai must show a thinking indicator while streaming"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Overlay symbols are gone (regression lock)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn tab_ai_overlay_symbols_are_gone() {
+    const TAB_AI_SOURCE: &str = include_str!("../src/app_impl/tab_ai_mode.rs");
+    assert!(
+        !TAB_AI_SOURCE.contains("render_tab_ai_overlay"),
+        "render_tab_ai_overlay must not exist in tab_ai_mode.rs"
+    );
+    assert!(
+        !TAB_AI_SOURCE.contains("submit_tab_ai_overlay"),
+        "submit_tab_ai_overlay must not exist in tab_ai_mode.rs"
+    );
+}

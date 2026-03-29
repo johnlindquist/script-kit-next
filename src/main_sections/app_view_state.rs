@@ -270,6 +270,8 @@ enum FocusTarget {
     TermPrompt,
     /// Focus the chat prompt
     ChatPrompt,
+    /// Focus the Tab AI chat prompt
+    TabAiChat,
     /// Focus the naming prompt
     NamingPrompt,
 }
@@ -415,6 +417,8 @@ enum TabAiTurnKind {
 struct TabAiTurn {
     kind: TabAiTurnKind,
     body: SharedString,
+    /// Whether this turn is currently being streamed (assistant response in progress).
+    streaming: bool,
 }
 
 /// Full-view Tab AI chat entity. Replaces the overlay approach with a proper
@@ -527,6 +531,56 @@ impl TabAiChat {
         let new_count = self.turns.len();
         if old_count != new_count {
             self.turns_list_state.splice(0..old_count, new_count);
+        } else if self
+            .turns
+            .last()
+            .map(|turn| turn.streaming)
+            .unwrap_or(false)
+            && new_count > 0
+        {
+            // Re-measure the last item when streaming content into it
+            let last = new_count - 1;
+            self.turns_list_state.splice(last..new_count, 1);
+        }
+        if new_count > 0 {
+            self.turns_list_state.set_follow_tail(true);
+        }
+    }
+
+    /// Start a new assistant turn that will be streamed into progressively.
+    /// Returns the turn index for use with `append_turn_chunk` and `complete_turn_stream`.
+    fn start_assistant_turn(&mut self, kind: TabAiTurnKind) -> usize {
+        self.turns.push(TabAiTurn {
+            kind,
+            body: SharedString::from(String::new()),
+            streaming: true,
+        });
+        self.sync_turns_list_state();
+        self.turns.len() - 1
+    }
+
+    /// Change the kind of an existing turn (e.g. from AssistantText to AssistantCode).
+    fn set_turn_kind(&mut self, turn_index: usize, kind: TabAiTurnKind) {
+        if let Some(turn) = self.turns.get_mut(turn_index) {
+            turn.kind = kind;
+        }
+    }
+
+    /// Append a text chunk to a streaming assistant turn.
+    fn append_turn_chunk(&mut self, turn_index: usize, chunk: &str) {
+        if let Some(turn) = self.turns.get_mut(turn_index) {
+            let mut next = turn.body.to_string();
+            next.push_str(chunk);
+            turn.body = next.into();
+            self.sync_turns_list_state();
+        }
+    }
+
+    /// Mark a streaming assistant turn as complete.
+    fn complete_turn_stream(&mut self, turn_index: usize) {
+        if let Some(turn) = self.turns.get_mut(turn_index) {
+            turn.streaming = false;
+            self.sync_turns_list_state();
         }
     }
 
@@ -538,6 +592,7 @@ impl TabAiChat {
         self.turns.push(TabAiTurn {
             kind,
             body: body.into(),
+            streaming: false,
         });
         self.sync_turns_list_state();
     }
@@ -550,16 +605,47 @@ impl TabAiChat {
         self.append_turn(TabAiTurnKind::AssistantText, body);
     }
 
-    fn append_assistant_code_turn(&mut self, body: impl Into<SharedString>) {
-        self.append_turn(TabAiTurnKind::AssistantCode, body);
-    }
-
     fn set_running(&mut self, running: bool) {
         self.running = running;
     }
 
     fn set_error(&mut self, error: Option<SharedString>) {
         self.error = error;
+    }
+
+    /// Start the cursor blink timer. Spawns a detached async task that toggles
+    /// `cursor_visible` every 530ms. Skips toggling while running or streaming.
+    /// Exits cleanly when the entity is dropped.
+    fn start_cursor_blink(&mut self, cx: &mut Context<Self>) {
+        cx.spawn(async move |this, cx| {
+            loop {
+                cx.background_executor()
+                    .timer(std::time::Duration::from_millis(530))
+                    .await;
+                if !crate::is_main_window_visible() {
+                    continue;
+                }
+                let result = cx.update(|cx| {
+                    this.update(cx, |chat, cx| {
+                        if chat.running
+                            || chat
+                                .turns
+                                .last()
+                                .map(|turn| turn.streaming)
+                                .unwrap_or(false)
+                        {
+                            return;
+                        }
+                        chat.cursor_visible = !chat.cursor_visible;
+                        cx.notify();
+                    })
+                });
+                if result.is_err() {
+                    break;
+                }
+            }
+        })
+        .detach();
     }
 
     fn collect_elements(&self, limit: usize) -> ElementCollectionOutcome {

@@ -46,6 +46,35 @@ fn set_tab_ai_chat_error(
     });
 }
 
+/// Split a completed AI response body into word-boundary chunks for progressive
+/// reveal in the chat UI. Returns one chunk per whitespace boundary (text) or
+/// newline (code). The caller feeds these into `append_turn_chunk` with a small
+/// timer between each to simulate streaming.
+fn tab_ai_stream_chunks(body: &str, code: bool) -> Vec<String> {
+    if code {
+        let mut chunks: Vec<String> = body
+            .split_inclusive('\n')
+            .map(ToString::to_string)
+            .collect();
+        if chunks.is_empty() {
+            chunks.push(body.to_string());
+        }
+        return chunks;
+    }
+    let mut chunks = Vec::new();
+    let mut current = String::new();
+    for ch in body.chars() {
+        current.push(ch);
+        if ch.is_whitespace() || current.len() >= 24 {
+            chunks.push(std::mem::take(&mut current));
+        }
+    }
+    if !current.is_empty() {
+        chunks.push(current);
+    }
+    chunks
+}
+
 impl ScriptListApp {
     /// Open the Tab AI chat as a full-view replacement (not an overlay).
     ///
@@ -113,11 +142,14 @@ impl ScriptListApp {
                 cx.focus_handle(),
             )
         });
+        entity.update(cx, |chat, cx| {
+            chat.start_cursor_blink(cx);
+        });
 
         self.current_view = AppView::TabAiChat { entity };
         self.show_actions_popup = false;
         self.actions_dialog = None;
-        self.pending_focus = Some(FocusTarget::AppRoot);
+        self.pending_focus = Some(FocusTarget::TabAiChat);
         cx.notify();
     }
 
@@ -433,6 +465,14 @@ impl ScriptListApp {
         // Channel for worker thread → async GPUI task
         let (tx, rx) = async_channel::bounded::<TabAiWorkerResult>(1);
 
+        // Create a placeholder assistant turn before the worker starts so the UI
+        // shows "Thinking…" immediately while the provider is processing.
+        let assistant_turn_index = entity.update(cx, |chat, cx| {
+            let ix = chat.start_assistant_turn(TabAiTurnKind::AssistantText);
+            cx.notify();
+            ix
+        });
+
         let worker_model_id = model_id.clone();
         std::thread::spawn(move || {
             let messages = vec![
@@ -498,6 +538,15 @@ impl ScriptListApp {
                             source_len = source.len(),
                         );
 
+                        // Reveal the code into the pre-created assistant turn
+                        chat_entity.update(cx, |chat, cx| {
+                            chat.set_turn_kind(assistant_turn_index, TabAiTurnKind::AssistantCode);
+                            chat.append_turn_chunk(assistant_turn_index, &source);
+                            chat.complete_turn_stream(assistant_turn_index);
+                            chat.set_running(false);
+                            cx.notify();
+                        });
+
                         match crate::execution_scripts::create_interactive_temp_script(
                             &source,
                             ".ts",
@@ -505,12 +554,6 @@ impl ScriptListApp {
                         ) {
                             Ok(temp_path) => {
                                 let path_str: String = temp_path.to_string_lossy().to_string();
-
-                                chat_entity.update(cx, |chat, cx| {
-                                    chat.append_assistant_code_turn(source.clone());
-                                    chat.set_running(false);
-                                    cx.notify();
-                                });
 
                                 let prompt_type =
                                     chat_entity.read(cx).ui_snapshot.prompt_type.clone();
@@ -563,13 +606,43 @@ impl ScriptListApp {
                             event = "tab_ai_text_response",
                             text_len = text.len(),
                         );
+
+                        // Progressively reveal text chunks into the pre-created
+                        // assistant turn to simulate streaming.
+                        let chunks = tab_ai_stream_chunks(&text, false);
+                        let ce = chat_entity.clone();
+                        cx.spawn(async move |_this, cx| {
+                            for chunk in chunks {
+                                cx.background_executor()
+                                    .timer(std::time::Duration::from_millis(16))
+                                    .await;
+                                cx.update(|cx| {
+                                    ce.update(cx, |chat, cx| {
+                                        chat.append_turn_chunk(
+                                            assistant_turn_index,
+                                            &chunk,
+                                        );
+                                        cx.notify();
+                                    });
+                                });
+                            }
+                            cx.update(|cx| {
+                                ce.update(cx, |chat, cx| {
+                                    chat.complete_turn_stream(assistant_turn_index);
+                                    chat.set_running(false);
+                                    cx.notify();
+                                });
+                            });
+                        })
+                        .detach();
+                    }
+                    TabAiWorkerResult::Error(e) => {
+                        // Complete the placeholder turn before showing the error
                         chat_entity.update(cx, |chat, cx| {
-                            chat.append_assistant_text_turn(text);
+                            chat.complete_turn_stream(assistant_turn_index);
                             chat.set_running(false);
                             cx.notify();
                         });
-                    }
-                    TabAiWorkerResult::Error(e) => {
                         set_tab_ai_chat_error(
                             &chat_entity,
                             cx,
@@ -632,7 +705,7 @@ impl ScriptListApp {
 
             AppView::ChatPrompt { .. } => FocusTarget::ChatPrompt,
             AppView::NamingPrompt { .. } => FocusTarget::NamingPrompt,
-            AppView::TabAiChat { .. } => FocusTarget::AppRoot,
+            AppView::TabAiChat { .. } => FocusTarget::TabAiChat,
 
             #[cfg(feature = "storybook")]
             AppView::DesignExplorerView { .. } => FocusTarget::AppRoot,
@@ -1361,7 +1434,7 @@ impl ScriptListApp {
         if self.tab_ai_save_offer_state.take().is_some() {
             tracing::info!(event = "tab_ai_save_offer_dismissed");
             self.pending_focus = Some(match self.current_view {
-                AppView::TabAiChat { .. } => FocusTarget::AppRoot,
+                AppView::TabAiChat { .. } => FocusTarget::TabAiChat,
                 _ => FocusTarget::MainFilter,
             });
             cx.notify();
@@ -1659,28 +1732,70 @@ impl Render for TabAiChat {
                 ));
                 let _ = &entity; // prevent entity from being dropped
 
+                let prompt_colors =
+                    crate::theme::PromptColors::from_theme(&theme);
+
                 if let Some(turn) = turns.get(ix) {
-                    let mono = matches!(turn.kind, TabAiTurnKind::AssistantCode);
                     let title: SharedString = match turn.kind {
                         TabAiTurnKind::User => "You".into(),
                         TabAiTurnKind::AssistantText => "AI".into(),
                         TabAiTurnKind::AssistantCode => "Generated Script".into(),
                     };
+
+                    let body_element: gpui::AnyElement =
+                        if matches!(turn.kind, TabAiTurnKind::User) {
+                            div()
+                                .mt(px(4.))
+                                .text_sm()
+                                .text_color(text_rgb)
+                                .child(turn.body.clone())
+                                .into_any_element()
+                        } else if turn.streaming
+                            && turn.body.to_string().is_empty()
+                        {
+                            div()
+                                .mt(px(4.))
+                                .text_xs()
+                                .opacity(0.6)
+                                .child("Thinking\u{2026}")
+                                .into_any_element()
+                        } else {
+                            let markdown_source = match turn.kind {
+                                TabAiTurnKind::AssistantCode => {
+                                    format!(
+                                        "```ts\n{}\n```",
+                                        turn.body.to_string()
+                                    )
+                                }
+                                _ => turn.body.to_string(),
+                            };
+                            div()
+                                .mt(px(4.))
+                                .w_full()
+                                .min_w_0()
+                                .overflow_x_hidden()
+                                .child(
+                                    crate::prompts::markdown::render_markdown(
+                                        markdown_source.as_str(),
+                                        &prompt_colors,
+                                    ),
+                                )
+                                .into_any_element()
+                        };
+
                     div()
                         .w_full()
                         .mb(px(8.))
                         .px(px(12.))
                         .py(px(10.))
                         .bg(card_bg)
-                        .child(div().text_xs().text_color(hint_rgba).child(title))
                         .child(
                             div()
-                                .mt(px(4.))
-                                .text_sm()
-                                .text_color(text_rgb)
-                                .when(mono, |d| d.font_family(crate::list_item::FONT_MONO))
-                                .child(turn.body.clone()),
+                                .text_xs()
+                                .text_color(hint_rgba)
+                                .child(title),
                         )
+                        .child(body_element)
                         .into_any_element()
                 } else {
                     div().w_full().into_any_element()

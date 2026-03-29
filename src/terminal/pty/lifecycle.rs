@@ -107,15 +107,12 @@ impl PtyManager {
             ("CLICOLOR_FORCE", "1".to_string()),
         ];
 
-        for key in [
-            "HOME",
-            "USER",
-            "PATH",
-            "SHELL",
-            "TMPDIR",
-            "LANG",
-            "TERM_PROGRAM",
-        ] {
+        // Intentionally do NOT forward TERM_PROGRAM. Our embedded terminal
+        // uses a legacy key encoder (manual \r, \x1b[A, etc.), not a full
+        // Kitty-protocol-aware frontend. Forwarding the host terminal name
+        // (e.g. "ghostty") causes TUI apps like Claude Code to enable Kitty
+        // keyboard mode, which breaks input on our non-Kitty terminal.
+        for key in ["HOME", "USER", "PATH", "SHELL", "TMPDIR", "LANG"] {
             if let Ok(value) = std::env::var(key) {
                 env_vars.push((key, value));
             }
@@ -172,7 +169,6 @@ mod tests {
             "SHELL",
             "TMPDIR",
             "LANG",
-            "TERM_PROGRAM",
         ]
         .into_iter()
         .collect();
