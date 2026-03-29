@@ -139,8 +139,8 @@ impl TerminalHandle {
                 cmd = %cmd,
                 "Sending initial command to interactive shell"
             );
-            let cmd_with_newline = format!("{}\n", cmd);
-            if let Err(e) = handle.input(cmd_with_newline.as_bytes()) {
+            let cmd_with_cr = format!("{}\r", cmd);
+            if let Err(e) = handle.input(cmd_with_cr.as_bytes()) {
                 warn!(error = %e, cmd = %cmd, "Failed to send initial command to terminal");
             }
         }

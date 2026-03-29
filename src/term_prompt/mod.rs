@@ -99,6 +99,8 @@ pub struct TermPrompt {
     click_count: u8,
     /// When true, ignore all key events (used when actions panel is open)
     pub suppress_keys: bool,
+    /// When true, Escape cancels the prompt instead of passing through to the PTY.
+    pub escape_cancels: bool,
 }
 
 // --- merged from part_001.rs ---
@@ -152,6 +154,7 @@ impl TermPrompt {
             last_click_position: None,
             click_count: 0,
             suppress_keys: false,
+            escape_cancels: true,
         })
     }
 
@@ -669,6 +672,159 @@ impl TermPrompt {
             _ => None,
         }
     }
+
+    #[inline]
+    fn is_known_special_key(key: &str) -> bool {
+        matches!(
+            key,
+            "enter"
+                | "return"
+                | "backspace"
+                | "tab"
+                | "escape"
+                | "esc"
+                | "up"
+                | "arrowup"
+                | "down"
+                | "arrowdown"
+                | "left"
+                | "arrowleft"
+                | "right"
+                | "arrowright"
+                | "home"
+                | "end"
+                | "pageup"
+                | "pagedown"
+                | "delete"
+                | "insert"
+        ) || key.strip_prefix('f').is_some_and(|suffix| {
+            !suffix.is_empty() && suffix.chars().all(|ch| ch.is_ascii_digit())
+        })
+    }
+
+    #[inline]
+    fn should_use_printable_key_char(key: &str, key_char: Option<&str>) -> bool {
+        key_char.is_some_and(|key_char| {
+            !Self::is_known_special_key(key) && key_char.bytes().all(|byte| byte >= 0x20)
+        })
+    }
+
+    #[inline]
+    fn csi_modifier_parameter(modifiers: &gpui::Modifiers) -> Option<u8> {
+        let mut modifier_bits = 0u8;
+        if modifiers.shift {
+            modifier_bits += 1;
+        }
+        if modifiers.alt {
+            modifier_bits += 2;
+        }
+        if modifiers.control {
+            modifier_bits += 4;
+        }
+        if modifiers.platform {
+            modifier_bits += 8;
+        }
+
+        if modifier_bits == 0 {
+            None
+        } else {
+            Some(1 + modifier_bits)
+        }
+    }
+
+    #[inline]
+    fn encode_csi_cursor(final_byte: u8, modifiers: &gpui::Modifiers) -> Vec<u8> {
+        if let Some(param) = Self::csi_modifier_parameter(modifiers) {
+            format!("\x1b[1;{param}{}", final_byte as char).into_bytes()
+        } else {
+            [b'\x1b', b'[', final_byte].to_vec()
+        }
+    }
+
+    #[inline]
+    fn encode_csi_tilde(code: u8, modifiers: &gpui::Modifiers) -> Vec<u8> {
+        if let Some(param) = Self::csi_modifier_parameter(modifiers) {
+            format!("\x1b[{code};{param}~").into_bytes()
+        } else {
+            format!("\x1b[{code}~").into_bytes()
+        }
+    }
+
+    fn encode_special_key_bytes(
+        key: &str,
+        modifiers: &gpui::Modifiers,
+        app_cursor: bool,
+    ) -> Option<Vec<u8>> {
+        let has_modifiers = Self::csi_modifier_parameter(modifiers).is_some();
+
+        match key {
+            "enter" | "return" => Some(vec![b'\r']),
+            "backspace" if modifiers.alt => Some(vec![b'\x1b', b'\x7f']),
+            "backspace" => Some(vec![b'\x7f']),
+            "tab" if modifiers.shift => Some(b"\x1b[Z".to_vec()),
+            "tab" => Some(vec![b'\t']),
+            "escape" | "esc" => Some(vec![b'\x1b']),
+            "up" | "arrowup" => Some(if has_modifiers {
+                Self::encode_csi_cursor(b'A', modifiers)
+            } else if app_cursor {
+                b"\x1bOA".to_vec()
+            } else {
+                b"\x1b[A".to_vec()
+            }),
+            "down" | "arrowdown" => Some(if has_modifiers {
+                Self::encode_csi_cursor(b'B', modifiers)
+            } else if app_cursor {
+                b"\x1bOB".to_vec()
+            } else {
+                b"\x1b[B".to_vec()
+            }),
+            "right" | "arrowright" => Some(if has_modifiers {
+                Self::encode_csi_cursor(b'C', modifiers)
+            } else if app_cursor {
+                b"\x1bOC".to_vec()
+            } else {
+                b"\x1b[C".to_vec()
+            }),
+            "left" | "arrowleft" => Some(if has_modifiers {
+                Self::encode_csi_cursor(b'D', modifiers)
+            } else if app_cursor {
+                b"\x1bOD".to_vec()
+            } else {
+                b"\x1b[D".to_vec()
+            }),
+            "home" => Some(if has_modifiers {
+                Self::encode_csi_cursor(b'H', modifiers)
+            } else if app_cursor {
+                b"\x1bOH".to_vec()
+            } else {
+                b"\x1b[H".to_vec()
+            }),
+            "end" => Some(if has_modifiers {
+                Self::encode_csi_cursor(b'F', modifiers)
+            } else if app_cursor {
+                b"\x1bOF".to_vec()
+            } else {
+                b"\x1b[F".to_vec()
+            }),
+            "pageup" => Some(Self::encode_csi_tilde(5, modifiers)),
+            "pagedown" => Some(Self::encode_csi_tilde(6, modifiers)),
+            "delete" => Some(Self::encode_csi_tilde(3, modifiers)),
+            "insert" => Some(Self::encode_csi_tilde(2, modifiers)),
+            "f1" => Some(b"\x1bOP".to_vec()),
+            "f2" => Some(b"\x1bOQ".to_vec()),
+            "f3" => Some(b"\x1bOR".to_vec()),
+            "f4" => Some(b"\x1bOS".to_vec()),
+            "f5" => Some(b"\x1b[15~".to_vec()),
+            "f6" => Some(b"\x1b[17~".to_vec()),
+            "f7" => Some(b"\x1b[18~".to_vec()),
+            "f8" => Some(b"\x1b[19~".to_vec()),
+            "f9" => Some(b"\x1b[20~".to_vec()),
+            "f10" => Some(b"\x1b[21~".to_vec()),
+            "f11" => Some(b"\x1b[23~".to_vec()),
+            "f12" => Some(b"\x1b[24~".to_vec()),
+            _ => None,
+        }
+    }
 }
 
 // --- merged from part_001_impl/methods_002.rs ---
@@ -891,9 +1047,10 @@ impl Render for TermPrompt {
                 let has_ctrl = event.keystroke.modifiers.control;
                 let has_meta = event.keystroke.modifiers.platform;
                 let has_shift = event.keystroke.modifiers.shift;
+                let has_alt = event.keystroke.modifiers.alt;
 
-                // Escape always cancels
-                if is_term_prompt_escape_key_variant(&key_str) {
+                // SDK terminals remain non-dismissable; quick terminals pass Escape through.
+                if this.escape_cancels && is_term_prompt_escape_key_variant(&key_str) {
                     this.submit_cancel();
                     return;
                 }
@@ -990,11 +1147,20 @@ impl Render for TermPrompt {
                     return;
                 }
 
+                let key_char = event.keystroke.key_char.as_deref();
+
+                let has_escape_prefix = has_alt || has_meta;
+
                 // Handle Ctrl+key combinations first
                 if has_ctrl {
                     if let Some(ctrl_byte) = Self::ctrl_key_to_byte(&key_str) {
                         debug!(key = %key_str, byte = ctrl_byte, "Sending Ctrl+key");
-                        if let Err(e) = this.terminal.input(&[ctrl_byte]) {
+                        let ctrl_bytes = if has_escape_prefix {
+                            vec![b'\x1b', ctrl_byte]
+                        } else {
+                            vec![ctrl_byte]
+                        };
+                        if let Err(e) = this.terminal.input(&ctrl_bytes) {
                             // Only warn if unexpected error
                             if !this.exited {
                                 warn!(error = %e, "Failed to send Ctrl+key to terminal");
@@ -1005,15 +1171,16 @@ impl Render for TermPrompt {
                     }
                 }
 
-                // Forward regular input to terminal.
-                // IMPORTANT: Skip key_char for Enter/Tab/Backspace — GPUI sets
-                // key_char="\n" for Enter but terminals expect \r (0x0d). These
-                // keys must fall through to the special key match below.
-                let use_key_char = event.keystroke.key_char.is_some()
-                    && !matches!(key_str.as_str(), "enter" | "return" | "tab" | "backspace");
+                if Self::should_use_printable_key_char(&key_str, key_char) {
+                    let mut bytes = Vec::new();
+                    if has_escape_prefix {
+                        bytes.push(b'\x1b');
+                    }
+                    if let Some(key_char) = key_char {
+                        bytes.extend_from_slice(key_char.as_bytes());
+                    }
 
-                if let (true, Some(key_char)) = (use_key_char, &event.keystroke.key_char) {
-                    if let Err(e) = this.terminal.input(key_char.as_bytes()) {
+                    if let Err(e) = this.terminal.input(&bytes) {
                         if !this.exited {
                             warn!(error = %e, "Failed to send input to terminal");
                         }
@@ -1025,48 +1192,12 @@ impl Render for TermPrompt {
                     // Many apps (vim, less, htop, fzf) enable this mode for arrow keys
                     let app_cursor = this.terminal.is_application_cursor_mode();
 
-                    // Arrow keys and Home/End have different sequences in application mode:
-                    // Normal mode: \x1b[A (CSI A)
-                    // Application mode: \x1bOA (SS3 A)
-                    let bytes: Option<&[u8]> = match key_str.as_str() {
-                        "enter" | "return" => Some(b"\r"),
-                        "backspace" => Some(b"\x7f"),
-                        "tab" => Some(b"\t"),
-                        // Arrow keys: use application mode sequences when DECCKM is set
-                        "up" | "arrowup" => Some(if app_cursor { b"\x1bOA" } else { b"\x1b[A" }),
-                        "down" | "arrowdown" => {
-                            Some(if app_cursor { b"\x1bOB" } else { b"\x1b[B" })
-                        }
-                        "right" | "arrowright" => {
-                            Some(if app_cursor { b"\x1bOC" } else { b"\x1b[C" })
-                        }
-                        "left" | "arrowleft" => {
-                            Some(if app_cursor { b"\x1bOD" } else { b"\x1b[D" })
-                        }
-                        // Home/End also have application mode variants
-                        "home" => Some(if app_cursor { b"\x1bOH" } else { b"\x1b[H" }),
-                        "end" => Some(if app_cursor { b"\x1bOF" } else { b"\x1b[F" }),
-                        "pageup" => Some(b"\x1b[5~"),
-                        "pagedown" => Some(b"\x1b[6~"),
-                        "delete" => Some(b"\x1b[3~"),
-                        "insert" => Some(b"\x1b[2~"),
-                        "f1" => Some(b"\x1bOP"),
-                        "f2" => Some(b"\x1bOQ"),
-                        "f3" => Some(b"\x1bOR"),
-                        "f4" => Some(b"\x1bOS"),
-                        "f5" => Some(b"\x1b[15~"),
-                        "f6" => Some(b"\x1b[17~"),
-                        "f7" => Some(b"\x1b[18~"),
-                        "f8" => Some(b"\x1b[19~"),
-                        "f9" => Some(b"\x1b[20~"),
-                        "f10" => Some(b"\x1b[21~"),
-                        "f11" => Some(b"\x1b[23~"),
-                        "f12" => Some(b"\x1b[24~"),
-                        _ => None,
-                    };
-
-                    if let Some(bytes) = bytes {
-                        if let Err(e) = this.terminal.input(bytes) {
+                    if let Some(bytes) = Self::encode_special_key_bytes(
+                        &key_str,
+                        &event.keystroke.modifiers,
+                        app_cursor,
+                    ) {
+                        if let Err(e) = this.terminal.input(&bytes) {
                             if !this.exited {
                                 warn!(error = %e, "Failed to send special key to terminal");
                             }
@@ -1402,6 +1533,111 @@ mod tests {
         assert!(is_term_prompt_escape_key_variant("Esc"));
         assert!(!is_term_prompt_escape_key_variant("enter"));
     }
+
+    #[test]
+    fn test_should_use_printable_key_char_only_for_printable_non_special_keys() {
+        assert!(TermPrompt::should_use_printable_key_char("a", Some("a")));
+        assert!(TermPrompt::should_use_printable_key_char(
+            "space",
+            Some(" ")
+        ));
+        assert!(TermPrompt::should_use_printable_key_char(
+            "slash",
+            Some("/")
+        ));
+        assert!(!TermPrompt::should_use_printable_key_char(
+            "enter",
+            Some("\n")
+        ));
+        assert!(!TermPrompt::should_use_printable_key_char(
+            "tab",
+            Some("\t")
+        ));
+        assert!(!TermPrompt::should_use_printable_key_char(
+            "backspace",
+            None
+        ));
+        assert!(!TermPrompt::should_use_printable_key_char("escape", None));
+    }
+
+    #[test]
+    fn test_csi_modifier_parameter_encodes_standard_xterm_values() {
+        let shift = gpui::Modifiers {
+            shift: true,
+            ..gpui::Modifiers::none()
+        };
+        let alt = gpui::Modifiers {
+            alt: true,
+            ..gpui::Modifiers::none()
+        };
+        let ctrl = gpui::Modifiers {
+            control: true,
+            ..gpui::Modifiers::none()
+        };
+        let ctrl_shift = gpui::Modifiers {
+            control: true,
+            shift: true,
+            ..gpui::Modifiers::none()
+        };
+
+        assert_eq!(TermPrompt::csi_modifier_parameter(&shift), Some(2));
+        assert_eq!(TermPrompt::csi_modifier_parameter(&alt), Some(3));
+        assert_eq!(TermPrompt::csi_modifier_parameter(&ctrl), Some(5));
+        assert_eq!(TermPrompt::csi_modifier_parameter(&ctrl_shift), Some(6));
+    }
+
+    #[test]
+    fn test_encode_special_key_bytes_supports_modified_terminal_sequences() {
+        let shift = gpui::Modifiers {
+            shift: true,
+            ..gpui::Modifiers::none()
+        };
+        let alt = gpui::Modifiers {
+            alt: true,
+            ..gpui::Modifiers::none()
+        };
+        let ctrl = gpui::Modifiers {
+            control: true,
+            ..gpui::Modifiers::none()
+        };
+
+        assert_eq!(
+            TermPrompt::encode_special_key_bytes("tab", &shift, false),
+            Some(b"\x1b[Z".to_vec())
+        );
+        assert_eq!(
+            TermPrompt::encode_special_key_bytes("left", &ctrl, false),
+            Some(b"\x1b[1;5D".to_vec())
+        );
+        assert_eq!(
+            TermPrompt::encode_special_key_bytes("up", &shift, false),
+            Some(b"\x1b[1;2A".to_vec())
+        );
+        assert_eq!(
+            TermPrompt::encode_special_key_bytes("right", &alt, false),
+            Some(b"\x1b[1;3C".to_vec())
+        );
+        assert_eq!(
+            TermPrompt::encode_special_key_bytes("delete", &ctrl, false),
+            Some(b"\x1b[3;5~".to_vec())
+        );
+        assert_eq!(
+            TermPrompt::encode_special_key_bytes("home", &ctrl, false),
+            Some(b"\x1b[1;5H".to_vec())
+        );
+        assert_eq!(
+            TermPrompt::encode_special_key_bytes("end", &ctrl, false),
+            Some(b"\x1b[1;5F".to_vec())
+        );
+        assert_eq!(
+            TermPrompt::encode_special_key_bytes("backspace", &alt, false),
+            Some(vec![b'\x1b', b'\x7f'])
+        );
+        assert_eq!(
+            TermPrompt::encode_special_key_bytes("escape", &gpui::Modifiers::none(), false),
+            Some(vec![b'\x1b'])
+        );
+    }
     // ========================================================================
     // Cell Dimension Tests
     // ========================================================================
@@ -1642,10 +1878,17 @@ mod tests {
                 total_used <= total_height,
                 "INVARIANT VIOLATED for height={}, top={}, bottom={}: \
                 content ({} rows × {:.1}px = {:.1}px) + padding ({:.1}+{:.1}={:.1}px) = {:.1}px > {:.1}px!",
-                total_height, padding_top, padding_bottom,
-                rows, CELL_HEIGHT, content_height,
-                padding_top, padding_bottom, padding_top + padding_bottom,
-                total_used, total_height
+                total_height,
+                padding_top,
+                padding_bottom,
+                rows,
+                CELL_HEIGHT,
+                content_height,
+                padding_top,
+                padding_bottom,
+                padding_top + padding_bottom,
+                total_used,
+                total_height
             );
         }
     }
