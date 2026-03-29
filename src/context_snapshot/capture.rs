@@ -38,6 +38,7 @@ pub(crate) struct CaptureContextSeed {
     pub(crate) browser: Result<Option<BrowserContext>, String>,
     pub(crate) focused_window: Result<Option<FocusedWindowContext>, String>,
     pub(crate) focused_window_image: Result<Option<Base64PngContext>, String>,
+    pub(crate) script_kit_panel_image: Result<Option<Base64PngContext>, String>,
 }
 
 impl Default for CaptureContextSeed {
@@ -49,6 +50,7 @@ impl Default for CaptureContextSeed {
             browser: Ok(None),
             focused_window: Ok(None),
             focused_window_image: Ok(None),
+            script_kit_panel_image: Ok(None),
         }
     }
 }
@@ -108,6 +110,14 @@ pub(crate) fn capture_context_snapshot_from_seed(
         }
     }
 
+    if options.include_panel_screenshot {
+        match seed.script_kit_panel_image {
+            Ok(Some(img)) => snapshot.script_kit_panel_image = Some(img),
+            Ok(None) => {}
+            Err(error) => snapshot.warnings.push(format!("panelScreenshot: {error}")),
+        }
+    }
+
     tracing::info!(
         schema_version = snapshot.schema_version,
         warnings = snapshot.warnings.len(),
@@ -117,6 +127,7 @@ pub(crate) fn capture_context_snapshot_from_seed(
         has_browser = snapshot.browser.is_some(),
         has_focused_window = snapshot.focused_window.is_some(),
         has_screenshot = snapshot.focused_window_image.is_some(),
+        has_panel_screenshot = snapshot.script_kit_panel_image.is_some(),
         "context_snapshot: seed capture complete"
     );
 
@@ -258,6 +269,31 @@ fn capture_focused_window_with_image_live(
     }
 }
 
+/// Attempt to capture Script Kit's own panel window as a base64 PNG.
+///
+/// Returns `Ok(None)` when the platform helper is unavailable or the panel
+/// cannot be found, `Err` when capture was attempted but failed.
+fn capture_script_kit_panel_image_live() -> Result<Option<Base64PngContext>, String> {
+    match crate::platform::capture_script_kit_panel_screenshot() {
+        Ok(capture) => {
+            tracing::info!(
+                title = %capture.window_title,
+                width = capture.width,
+                height = capture.height,
+                "context_snapshot: captured script kit panel"
+            );
+            Ok(Some(Base64PngContext {
+                mime_type: "image/png".to_string(),
+                width: capture.width,
+                height: capture.height,
+                base64_data: base64::engine::general_purpose::STANDARD.encode(&capture.png_data),
+                title: Some(capture.window_title),
+            }))
+        }
+        Err(error) => Err(error.to_string()),
+    }
+}
+
 /// Capture a deterministic snapshot of AI-relevant desktop context.
 ///
 /// Individual providers that fail produce a warning string rather than
@@ -293,6 +329,12 @@ pub fn capture_context_snapshot(options: &CaptureContextOptions) -> AiContextSna
                 (Ok(None), Ok(None))
             };
 
+        let script_kit_panel_image = if options.include_panel_screenshot {
+            capture_script_kit_panel_image_live()
+        } else {
+            Ok(None)
+        };
+
         CaptureContextSeed {
             selected_text: if options.include_selected_text {
                 capture_selected_text_live()
@@ -316,6 +358,7 @@ pub fn capture_context_snapshot(options: &CaptureContextOptions) -> AiContextSna
             },
             focused_window,
             focused_window_image,
+            script_kit_panel_image,
         }
     };
 
@@ -349,6 +392,7 @@ mod tests {
                 include_browser_url: false,
                 include_focused_window: true,
                 include_screenshot: true,
+                include_panel_screenshot: false,
             },
             CaptureContextSeed {
                 focused_window: Ok(Some(FocusedWindowContext {
@@ -395,6 +439,7 @@ mod tests {
                 include_browser_url: false,
                 include_focused_window: true,
                 include_screenshot: false,
+                include_panel_screenshot: false,
             },
             CaptureContextSeed {
                 focused_window: Ok(Some(FocusedWindowContext {
@@ -417,6 +462,81 @@ mod tests {
         assert!(
             snapshot.focused_window_image.is_none(),
             "focused_window_image must be omitted when include_screenshot=false"
+        );
+    }
+
+    #[test]
+    fn seed_capture_includes_panel_screenshot_when_enabled() {
+        let snapshot = capture_context_snapshot_from_seed(
+            &CaptureContextOptions {
+                include_selected_text: false,
+                include_frontmost_app: false,
+                include_menu_bar: false,
+                include_browser_url: false,
+                include_focused_window: true,
+                include_screenshot: true,
+                include_panel_screenshot: true,
+            },
+            CaptureContextSeed {
+                focused_window: Ok(Some(FocusedWindowContext {
+                    title: "Finder - Test".to_string(),
+                    width: 640,
+                    height: 480,
+                    used_fallback: false,
+                })),
+                focused_window_image: Ok(Some(Base64PngContext {
+                    mime_type: "image/png".to_string(),
+                    width: 640,
+                    height: 480,
+                    base64_data: "Zm9jdXNlZA==".to_string(),
+                    title: Some("Finder - Test".to_string()),
+                })),
+                script_kit_panel_image: Ok(Some(Base64PngContext {
+                    mime_type: "image/png".to_string(),
+                    width: 700,
+                    height: 520,
+                    base64_data: "cGFuZWw=".to_string(),
+                    title: Some("Script Kit - Clipboard History".to_string()),
+                })),
+                ..Default::default()
+            },
+        );
+        assert_eq!(
+            snapshot
+                .script_kit_panel_image
+                .as_ref()
+                .expect("panel image")
+                .base64_data,
+            "cGFuZWw="
+        );
+    }
+
+    #[test]
+    fn seed_capture_omits_panel_screenshot_when_disabled() {
+        let snapshot = capture_context_snapshot_from_seed(
+            &CaptureContextOptions {
+                include_selected_text: false,
+                include_frontmost_app: false,
+                include_menu_bar: false,
+                include_browser_url: false,
+                include_focused_window: true,
+                include_screenshot: true,
+                include_panel_screenshot: false,
+            },
+            CaptureContextSeed {
+                script_kit_panel_image: Ok(Some(Base64PngContext {
+                    mime_type: "image/png".to_string(),
+                    width: 700,
+                    height: 520,
+                    base64_data: "cGFuZWw=".to_string(),
+                    title: Some("Script Kit - Clipboard History".to_string()),
+                })),
+                ..Default::default()
+            },
+        );
+        assert!(
+            snapshot.script_kit_panel_image.is_none(),
+            "script_kit_panel_image must be omitted when include_panel_screenshot=false"
         );
     }
 }

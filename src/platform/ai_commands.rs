@@ -182,6 +182,93 @@ pub fn capture_focused_window_screenshot(
     })
 }
 
+/// Capture a screenshot of Script Kit's own visible panel window.
+///
+/// Unlike `capture_focused_window_screenshot()`, this helper intentionally
+/// targets our own window so Tab AI can send the launcher state to the harness.
+///
+/// # Returns
+/// A `FocusedWindowCapture` on success with `used_fallback = false`.
+pub fn capture_script_kit_panel_screenshot(
+) -> Result<FocusedWindowCapture, Box<dyn std::error::Error + Send + Sync>> {
+    use image::codecs::png::PngEncoder;
+    use image::ImageEncoder;
+    use xcap::Window;
+
+    let windows = Window::all()?;
+
+    let mut best: Option<(u32, xcap::Window)> = None;
+    for window in windows {
+        let app_name = window.app_name().unwrap_or_else(|_| String::new());
+        let is_minimized = window.is_minimized().unwrap_or(true);
+        let width = window.width().unwrap_or(0);
+        let height = window.height().unwrap_or(0);
+        let area = width.saturating_mul(height);
+
+        let is_our_app = app_name.contains("script-kit-gpui")
+            || app_name == "Script Kit"
+            || app_name.contains("Script Kit");
+
+        if !is_our_app || is_minimized || width < 100 || height < 100 {
+            continue;
+        }
+
+        let should_replace = best
+            .as_ref()
+            .map(|(best_area, _)| area > *best_area)
+            .unwrap_or(true);
+        if should_replace {
+            best = Some((area, window));
+        }
+    }
+
+    let (_, window) = best.ok_or("No Script Kit panel window found")?;
+    let title = window.title().unwrap_or_else(|_| "Panel".to_string());
+    let app_name = window.app_name().unwrap_or_else(|_| "Script Kit".to_string());
+
+    tracing::debug!(
+        app_name = %app_name,
+        title = %title,
+        "Capturing Script Kit panel screenshot"
+    );
+
+    let image = window.capture_image()?;
+    let original_width = image.width();
+    let original_height = image.height();
+
+    // Scale down to 1x for efficiency (retina)
+    let width = (original_width / 2).max(1);
+    let height = (original_height / 2).max(1);
+    let resized = image::imageops::resize(
+        &image,
+        width,
+        height,
+        image::imageops::FilterType::Lanczos3,
+    );
+
+    let mut png_data = Vec::new();
+    let encoder = PngEncoder::new(&mut png_data);
+    encoder.write_image(&resized, width, height, image::ExtendedColorType::Rgba8)?;
+
+    let display_title = format!("Script Kit - {}", title);
+
+    tracing::debug!(
+        width = width,
+        height = height,
+        file_size = png_data.len(),
+        title = %display_title,
+        "Script Kit panel screenshot captured"
+    );
+
+    Ok(FocusedWindowCapture {
+        png_data,
+        width,
+        height,
+        window_title: display_title,
+        used_fallback: false,
+    })
+}
+
 /// Get the URL of the currently focused browser tab.
 ///
 /// Supports Safari, Google Chrome, Arc, Brave, Firefox, and Edge.
