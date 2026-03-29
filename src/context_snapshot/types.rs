@@ -69,6 +69,21 @@ impl CaptureContextOptions {
         }
     }
 
+    /// Rich submit-time Tab AI capture without screenshots.
+    /// Includes menu bar and focused-window metadata for higher-precision
+    /// actions while keeping the primary Tab AI path fast.
+    pub const fn tab_ai_submit() -> Self {
+        Self {
+            include_selected_text: true,
+            include_frontmost_app: true,
+            include_menu_bar: true,
+            include_browser_url: true,
+            include_focused_window: true,
+            include_screenshot: false,
+            include_panel_screenshot: false,
+        }
+    }
+
     /// Submit-time Tab AI capture. This is the only built-in profile that
     /// requests pixel data — all others keep screenshots disabled.
     pub const fn tab_ai() -> Self {

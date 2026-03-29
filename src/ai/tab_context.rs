@@ -7,6 +7,7 @@
 //! input history.
 
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeSet;
 
 /// Schema version for `TabAiContextBlob`. Bump when adding/removing/renaming fields.
 pub const TAB_AI_CONTEXT_SCHEMA_VERSION: u32 = 3;
@@ -184,6 +185,529 @@ impl TabAiTargetAudit {
             focused_semantic_id = ?self.focused_semantic_id,
             visible_kinds = ?self.visible_kinds,
         );
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Tab AI experience packs — named, surface-native intent planning
+// ---------------------------------------------------------------------------
+
+/// A single experience-pack suggestion with a human label and full intent string.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TabAiExperienceIntent {
+    pub label: String,
+    pub intent: String,
+}
+
+impl TabAiExperienceIntent {
+    pub fn new(label: impl Into<String>, intent: impl Into<String>) -> Self {
+        Self {
+            label: label.into(),
+            intent: intent.into(),
+        }
+    }
+
+    /// Convert into a [`TabAiSuggestedIntentSpec`] for the card suggestion system.
+    pub fn into_spec(self) -> TabAiSuggestedIntentSpec {
+        TabAiSuggestedIntentSpec::new(self.label, self.intent)
+    }
+}
+
+/// Named experience packs that map surfaces to distinct power-user moments.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TabAiExperiencePack {
+    DesktopGeneral,
+    ClipboardStudio,
+    FileStudio,
+    FolderStudio,
+    CommandAlchemy,
+    AppPilot,
+    WindowPilot,
+    ProcessPilot,
+    GenericSelection,
+}
+
+pub fn tab_ai_experience_pack_name(pack: TabAiExperiencePack) -> &'static str {
+    match pack {
+        TabAiExperiencePack::DesktopGeneral => "Next Move",
+        TabAiExperiencePack::ClipboardStudio => "Clipboard Studio",
+        TabAiExperiencePack::FileStudio => "File Studio",
+        TabAiExperiencePack::FolderStudio => "Folder Studio",
+        TabAiExperiencePack::CommandAlchemy => "Command Alchemy",
+        TabAiExperiencePack::AppPilot => "App Pilot",
+        TabAiExperiencePack::WindowPilot => "Window Pilot",
+        TabAiExperiencePack::ProcessPilot => "Process Pilot",
+        TabAiExperiencePack::GenericSelection => "Selected Item",
+    }
+}
+
+impl TabAiExperiencePack {
+    pub fn from_target(target: Option<&TabAiTargetContext>) -> Self {
+        match target.map(|t| t.kind.as_str()) {
+            Some("clipboard_entry") => Self::ClipboardStudio,
+            Some("file") => Self::FileStudio,
+            Some("directory") => Self::FolderStudio,
+            Some("menu_command") => Self::CommandAlchemy,
+            Some("app") => Self::AppPilot,
+            Some("window") => Self::WindowPilot,
+            Some("process") => Self::ProcessPilot,
+            Some(_) => Self::GenericSelection,
+            None => Self::DesktopGeneral,
+        }
+    }
+}
+
+fn push_unique_tab_ai_experience(
+    out: &mut Vec<TabAiExperienceIntent>,
+    seen: &mut BTreeSet<String>,
+    label: impl Into<String>,
+    intent: impl Into<String>,
+) {
+    let item = TabAiExperienceIntent::new(label, intent);
+    let key = format!("{}::{}", item.label, item.intent);
+    if seen.insert(key) {
+        out.push(item);
+    }
+}
+
+fn focused_content_type<'a>(
+    focused_target: Option<&'a TabAiTargetContext>,
+    clipboard: Option<&'a TabAiClipboardContext>,
+) -> Option<&'a str> {
+    focused_target
+        .and_then(|target| target.metadata.as_ref())
+        .and_then(|metadata| metadata.get("contentType"))
+        .and_then(|value| value.as_str())
+        .or_else(|| clipboard.map(|entry| entry.content_type.as_str()))
+}
+
+/// Build surface-native experience intents based on the focused target, visible
+/// targets, clipboard, and prior automations.  Returns at most 5 suggestions.
+pub fn build_tab_ai_experience_intents(
+    focused_target: Option<&TabAiTargetContext>,
+    visible_targets: &[TabAiTargetContext],
+    clipboard: Option<&TabAiClipboardContext>,
+    prior_automations: &[TabAiMemorySuggestion],
+) -> Vec<TabAiExperienceIntent> {
+    let pack = TabAiExperiencePack::from_target(focused_target);
+    let mut out = Vec::new();
+    let mut seen = BTreeSet::new();
+
+    match pack {
+        TabAiExperiencePack::ClipboardStudio => {
+            match focused_content_type(focused_target, clipboard) {
+                Some("image") => {
+                    push_unique_tab_ai_experience(
+                        &mut out,
+                        &mut seen,
+                        "Describe Image",
+                        "Describe this copied image, extract any useful text, and suggest the best next action.",
+                    );
+                    push_unique_tab_ai_experience(
+                        &mut out,
+                        &mut seen,
+                        "Make Alt Text",
+                        "Write concise alt text for this copied image and copy the result.",
+                    );
+                    push_unique_tab_ai_experience(
+                        &mut out,
+                        &mut seen,
+                        "Turn Into Script Input",
+                        "Turn the useful text in this copied image into a clean Script Kit input value.",
+                    );
+                }
+                Some("link") => {
+                    push_unique_tab_ai_experience(
+                        &mut out,
+                        &mut seen,
+                        "Open Best App",
+                        "Open this copied link in the best app and tell me the fastest next step.",
+                    );
+                    push_unique_tab_ai_experience(
+                        &mut out,
+                        &mut seen,
+                        "Summarize Link",
+                        "Summarize what this copied link is likely for and suggest a command I can save.",
+                    );
+                    push_unique_tab_ai_experience(
+                        &mut out,
+                        &mut seen,
+                        "Make Link Command",
+                        "Create a reusable Script Kit command that works on copied links like this one.",
+                    );
+                }
+                Some("color") => {
+                    push_unique_tab_ai_experience(
+                        &mut out,
+                        &mut seen,
+                        "Build Palette",
+                        "Turn this copied color into a five-color palette with CSS variables.",
+                    );
+                    push_unique_tab_ai_experience(
+                        &mut out,
+                        &mut seen,
+                        "Theme Tokens",
+                        "Generate light and dark theme tokens from this copied color.",
+                    );
+                    push_unique_tab_ai_experience(
+                        &mut out,
+                        &mut seen,
+                        "Name This Color",
+                        "Give this copied color a useful human name and a good design-token name.",
+                    );
+                }
+                _ => {
+                    push_unique_tab_ai_experience(
+                        &mut out,
+                        &mut seen,
+                        "Clean Clipboard",
+                        "Clean up this copied text and preserve the meaning.",
+                    );
+                    push_unique_tab_ai_experience(
+                        &mut out,
+                        &mut seen,
+                        "Turn Into Checklist",
+                        "Turn this copied text into a tight checklist.",
+                    );
+                    push_unique_tab_ai_experience(
+                        &mut out,
+                        &mut seen,
+                        "Make Command",
+                        "Turn this copied content into a reusable Script Kit command.",
+                    );
+                }
+            }
+        }
+        TabAiExperiencePack::FileStudio => {
+            push_unique_tab_ai_experience(
+                &mut out,
+                &mut seen,
+                "Summarize File",
+                "Summarize this file, tell me what it is for, and suggest the next edit.",
+            );
+            push_unique_tab_ai_experience(
+                &mut out,
+                &mut seen,
+                "Rename By Purpose",
+                "Rename this file to better match what it does.",
+            );
+            push_unique_tab_ai_experience(
+                &mut out,
+                &mut seen,
+                "Find Matching Test",
+                "Find the matching test, implementation, or sibling file for this file.",
+            );
+        }
+        TabAiExperiencePack::FolderStudio => {
+            push_unique_tab_ai_experience(
+                &mut out,
+                &mut seen,
+                "Explain Folder",
+                "Explain what this folder contains and where I should look first.",
+            );
+            push_unique_tab_ai_experience(
+                &mut out,
+                &mut seen,
+                "Generate README",
+                "Generate a concise README for this folder.",
+            );
+            push_unique_tab_ai_experience(
+                &mut out,
+                &mut seen,
+                "Find Entrypoint",
+                "Find the most likely entrypoint in this folder.",
+            );
+        }
+        TabAiExperiencePack::CommandAlchemy => {
+            push_unique_tab_ai_experience(
+                &mut out,
+                &mut seen,
+                "Run This Command",
+                "Run this selected current-app command.",
+            );
+            push_unique_tab_ai_experience(
+                &mut out,
+                &mut seen,
+                "Explain This Command",
+                "Explain what this selected current-app command probably does and when to use it.",
+            );
+            push_unique_tab_ai_experience(
+                &mut out,
+                &mut seen,
+                "Teach This Command",
+                "Turn this selected current-app command into a reusable Script Kit command.",
+            );
+        }
+        TabAiExperiencePack::AppPilot => {
+            push_unique_tab_ai_experience(
+                &mut out,
+                &mut seen,
+                "Set Up Workspace",
+                "Open this app in the most useful working state for me right now.",
+            );
+            push_unique_tab_ai_experience(
+                &mut out,
+                &mut seen,
+                "Show Automation Ideas",
+                "Show the best automation ideas for this app right now.",
+            );
+            push_unique_tab_ai_experience(
+                &mut out,
+                &mut seen,
+                "Find Right Window",
+                "Find or open the best window for the task I am trying to do in this app.",
+            );
+        }
+        TabAiExperiencePack::WindowPilot => {
+            push_unique_tab_ai_experience(
+                &mut out,
+                &mut seen,
+                "Explain Window",
+                "Explain what this window is for from its app and title.",
+            );
+            push_unique_tab_ai_experience(
+                &mut out,
+                &mut seen,
+                "Use Clipboard Here",
+                "Use the copied content in this selected window in the fastest safe way.",
+            );
+            push_unique_tab_ai_experience(
+                &mut out,
+                &mut seen,
+                "Close Similar Windows",
+                "Close the other windows from this app and keep this one.",
+            );
+        }
+        TabAiExperiencePack::ProcessPilot => {
+            push_unique_tab_ai_experience(
+                &mut out,
+                &mut seen,
+                "Explain Process",
+                "Explain what this running Script Kit process is doing and whether it looks healthy.",
+            );
+            push_unique_tab_ai_experience(
+                &mut out,
+                &mut seen,
+                "Stop Safely",
+                "Stop this running Script Kit process and tell me what I should run next.",
+            );
+            push_unique_tab_ai_experience(
+                &mut out,
+                &mut seen,
+                "Make It Reusable",
+                "Turn what this running Script Kit process does into a reusable launcher command.",
+            );
+        }
+        TabAiExperiencePack::GenericSelection => {
+            push_unique_tab_ai_experience(
+                &mut out,
+                &mut seen,
+                "Act On Selection",
+                "Act on this selected item using the most direct Script Kit action.",
+            );
+            push_unique_tab_ai_experience(
+                &mut out,
+                &mut seen,
+                "Explain Selection",
+                "Explain what this selected item is and what I can do with it.",
+            );
+            push_unique_tab_ai_experience(
+                &mut out,
+                &mut seen,
+                "Make Command",
+                "Turn this selection into a reusable Script Kit command.",
+            );
+        }
+        TabAiExperiencePack::DesktopGeneral => {
+            push_unique_tab_ai_experience(
+                &mut out,
+                &mut seen,
+                "Act On Frontmost App",
+                "Do the fastest useful thing in the current app.",
+            );
+            push_unique_tab_ai_experience(
+                &mut out,
+                &mut seen,
+                "Use Current Selection",
+                "Use the current selected text or frontmost context to help me continue.",
+            );
+            push_unique_tab_ai_experience(
+                &mut out,
+                &mut seen,
+                "Make Me a Command",
+                "Turn what I am doing right now into a reusable Script Kit command.",
+            );
+        }
+    }
+
+    // Visible-target batch suggestions
+    if visible_targets.len() > 1 {
+        let all_files = visible_targets
+            .iter()
+            .all(|target| target.kind == "file" || target.kind == "directory");
+        let all_menu_commands = visible_targets
+            .iter()
+            .all(|target| target.kind == "menu_command");
+
+        if all_files {
+            push_unique_tab_ai_experience(
+                &mut out,
+                &mut seen,
+                "Sweep Visible Files",
+                "Act on the visible files as a set, not just the selected file.",
+            );
+        } else if all_menu_commands {
+            push_unique_tab_ai_experience(
+                &mut out,
+                &mut seen,
+                "Pick Best Command",
+                "Compare the visible current-app commands and pick the best one for my goal.",
+            );
+        } else {
+            push_unique_tab_ai_experience(
+                &mut out,
+                &mut seen,
+                "Use Visible Items",
+                "Use the visible items on this surface, not just the selected one.",
+            );
+        }
+    }
+
+    // Cross-context fusion (focused target + clipboard)
+    if let (Some(target), Some(entry)) = (focused_target, clipboard) {
+        match (target.kind.as_str(), entry.content_type.as_str()) {
+            ("file", "text") | ("file", "link") => {
+                push_unique_tab_ai_experience(
+                    &mut out,
+                    &mut seen,
+                    "Rename From Clipboard",
+                    "Rename this file using the clipboard text as the source of truth.",
+                );
+            }
+            ("window", "link") | ("app", "link") => {
+                push_unique_tab_ai_experience(
+                    &mut out,
+                    &mut seen,
+                    "Send Link Here",
+                    "Use the copied link in this selected app or window and continue the task.",
+                );
+            }
+            ("menu_command", "text") => {
+                push_unique_tab_ai_experience(
+                    &mut out,
+                    &mut seen,
+                    "Apply Clipboard Then Run",
+                    "Use the clipboard text with this selected current-app command if it helps complete the task.",
+                );
+            }
+            _ => {}
+        }
+    }
+
+    // Prior automation adaptation
+    if let Some(last) = prior_automations.first() {
+        push_unique_tab_ai_experience(
+            &mut out,
+            &mut seen,
+            format!("Adapt {}", last.slug),
+            format!(
+                "Adapt my previous successful automation '{}' to the current context.",
+                last.effective_query
+            ),
+        );
+    }
+
+    out.truncate(5);
+    out
+}
+
+#[cfg(test)]
+mod tab_ai_experience_tests {
+    use super::*;
+
+    fn target(kind: &str, label: &str) -> TabAiTargetContext {
+        TabAiTargetContext {
+            source: "TestSurface".to_string(),
+            kind: kind.to_string(),
+            semantic_id: format!("choice:0:{label}"),
+            label: label.to_string(),
+            metadata: None,
+        }
+    }
+
+    fn clipboard(kind: &str) -> TabAiClipboardContext {
+        TabAiClipboardContext {
+            content_type: kind.to_string(),
+            preview: "example".to_string(),
+            ocr_text: None,
+        }
+    }
+
+    #[test]
+    fn command_alchemy_prioritizes_teachable_actions() {
+        let focused = target("menu_command", "New Private Window");
+        let visible = vec![focused.clone()];
+        let intents = build_tab_ai_experience_intents(Some(&focused), &visible, None, &[]);
+        let labels: Vec<&str> = intents.iter().map(|item| item.label.as_str()).collect();
+        assert_eq!(
+            labels,
+            vec![
+                "Run This Command",
+                "Explain This Command",
+                "Teach This Command"
+            ]
+        );
+    }
+
+    #[test]
+    fn file_studio_adds_clipboard_fusion() {
+        let focused = target("file", "tab_ai_mode.rs");
+        let visible = vec![focused.clone()];
+        let intents = build_tab_ai_experience_intents(
+            Some(&focused),
+            &visible,
+            Some(&clipboard("text")),
+            &[],
+        );
+        let labels: Vec<&str> = intents.iter().map(|item| item.label.as_str()).collect();
+        assert!(labels.contains(&"Rename From Clipboard"));
+    }
+
+    #[test]
+    fn desktop_general_uses_visible_file_batching() {
+        let visible = vec![target("file", "a.rs"), target("file", "b.rs")];
+        let intents = build_tab_ai_experience_intents(None, &visible, None, &[]);
+        let labels: Vec<&str> = intents.iter().map(|item| item.label.as_str()).collect();
+        assert!(labels.contains(&"Sweep Visible Files"));
+    }
+
+    #[test]
+    fn truncates_to_five_suggestions() {
+        let focused = target("file", "main.rs");
+        let visible = vec![focused.clone(), target("file", "lib.rs")];
+        let intents = build_tab_ai_experience_intents(
+            Some(&focused),
+            &visible,
+            Some(&clipboard("text")),
+            &[TabAiMemorySuggestion {
+                slug: "prev".to_string(),
+                bundle_id: "com.test".to_string(),
+                raw_query: "test".to_string(),
+                effective_query: "test query".to_string(),
+                prompt_type: "arg".to_string(),
+                written_at: "2026-01-01T00:00:00Z".to_string(),
+                score: 1.0,
+            }],
+        );
+        assert!(intents.len() <= 5);
+    }
+
+    #[test]
+    fn experience_intent_converts_to_spec() {
+        let intent = TabAiExperienceIntent::new("Test Label", "test intent");
+        let spec = intent.into_spec();
+        assert_eq!(spec.label, "Test Label");
+        assert_eq!(spec.intent, "test intent");
     }
 }
 
@@ -1135,10 +1659,7 @@ pub fn build_tab_ai_suggested_intents(
     if let Some(target) = focused_target {
         match target.kind.as_str() {
             "app" => {
-                suggestions.push(TabAiSuggestedIntentSpec::new(
-                    "Focus",
-                    "focus on this app",
-                ));
+                suggestions.push(TabAiSuggestedIntentSpec::new("Focus", "focus on this app"));
                 suggestions.push(TabAiSuggestedIntentSpec::new(
                     "Explain",
                     "what does this app do?",
@@ -1153,10 +1674,7 @@ pub fn build_tab_ai_suggested_intents(
                     "Summarize",
                     "summarize this file",
                 ));
-                suggestions.push(TabAiSuggestedIntentSpec::new(
-                    "Rename",
-                    "rename this file",
-                ));
+                suggestions.push(TabAiSuggestedIntentSpec::new("Rename", "rename this file"));
                 suggestions.push(TabAiSuggestedIntentSpec::new(
                     "Open",
                     "open this file with the right app",
@@ -1181,10 +1699,7 @@ pub fn build_tab_ai_suggested_intents(
                     "Focus",
                     "focus on this window",
                 ));
-                suggestions.push(TabAiSuggestedIntentSpec::new(
-                    "Tile",
-                    "tile this window",
-                ));
+                suggestions.push(TabAiSuggestedIntentSpec::new("Tile", "tile this window"));
                 suggestions.push(TabAiSuggestedIntentSpec::new(
                     "Explain",
                     "what is this window for?",
@@ -1257,11 +1772,7 @@ pub fn recent_tab_ai_automations_for_bundle(
     bundle_id: Option<&str>,
     limit: usize,
 ) -> Result<Vec<TabAiMemorySuggestion>, String> {
-    recent_tab_ai_automations_for_bundle_from_path(
-        bundle_id,
-        limit,
-        &tab_ai_memory_index_path()?,
-    )
+    recent_tab_ai_automations_for_bundle_from_path(bundle_id, limit, &tab_ai_memory_index_path()?)
 }
 
 /// Return recent Tab AI automations matching a bundle ID from an explicit path.
@@ -1660,8 +2171,15 @@ mod tests {
         let recent_inputs = vec!["copy url".to_string(), "open finder".to_string()];
         let ts = "2026-03-28T12:00:00Z".to_string();
 
-        let blob =
-            TabAiContextBlob::from_parts(ui, desktop, recent_inputs, None, vec![], vec![], ts.clone());
+        let blob = TabAiContextBlob::from_parts(
+            ui,
+            desktop,
+            recent_inputs,
+            None,
+            vec![],
+            vec![],
+            ts.clone(),
+        );
 
         assert_eq!(blob.schema_version, TAB_AI_CONTEXT_SCHEMA_VERSION);
         assert_eq!(blob.timestamp, ts);

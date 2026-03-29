@@ -447,25 +447,35 @@ impl ScriptListApp {
 
         let mut cards = Vec::new();
 
-        // -- Selected item card (with suggestions) --
+        let focused_pack =
+            crate::ai::TabAiExperiencePack::from_target(focused_target.as_ref());
+        let experience_suggestions =
+            |focused: Option<&crate::ai::TabAiTargetContext>| {
+                crate::ai::build_tab_ai_experience_intents(
+                    focused,
+                    &visible_targets,
+                    clipboard.as_ref(),
+                    &prior_automations,
+                )
+                .into_iter()
+                .map(|ei| -> TabAiSuggestedIntent {
+                    ei.into_spec().into()
+                })
+                .collect::<Vec<TabAiSuggestedIntent>>()
+            };
+
+        // -- Selected item card (with experience-pack suggestions) --
         if let Some(target) = focused_target.as_ref() {
             cards.push(TabAiContextCard {
                 kind: TabAiContextCardKind::SelectedItem,
-                label: "Selected Item".into(),
+                label: crate::ai::tab_ai_experience_pack_name(focused_pack).into(),
                 title: target.label.clone().into(),
                 body: Some(format!("{} \u{00B7} {}", target.kind, target.source).into()),
                 rows: vec![TabAiContextRow::new(
                     "Semantic ID",
                     target.semantic_id.clone(),
                 )],
-                suggestions: crate::ai::build_tab_ai_suggested_intents(
-                    Some(target),
-                    clipboard.as_ref(),
-                    &prior_automations,
-                )
-                .into_iter()
-                .map(Into::into)
-                .collect(),
+                suggestions: experience_suggestions(Some(target)),
             });
         }
 
@@ -528,26 +538,24 @@ impl ScriptListApp {
             ));
         }
         if !desktop_rows.is_empty() {
-            // If no focused target, put default suggestions on the desktop card
-            let desktop_suggestions = if focused_target.is_none() {
-                crate::ai::build_tab_ai_suggested_intents(
-                    None,
-                    clipboard.as_ref(),
-                    &prior_automations,
-                )
-                .into_iter()
-                .map(Into::into)
-                .collect()
-            } else {
-                Vec::new()
-            };
             cards.push(TabAiContextCard {
                 kind: TabAiContextCardKind::Desktop,
-                label: "Desktop".into(),
+                label: if focused_target.is_none() {
+                    crate::ai::tab_ai_experience_pack_name(
+                        crate::ai::TabAiExperiencePack::DesktopGeneral,
+                    )
+                    .into()
+                } else {
+                    "Desktop".into()
+                },
                 title: "Current Context".into(),
                 body: None,
                 rows: desktop_rows,
-                suggestions: desktop_suggestions,
+                suggestions: if focused_target.is_none() {
+                    experience_suggestions(None)
+                } else {
+                    Vec::new()
+                },
             });
         }
 
@@ -794,6 +802,28 @@ impl ScriptListApp {
     }
 
     /// Submit an explicit intent string (from typed input or a selected suggestion).
+    /// Choose the best desktop snapshot for submit-time.  If a live capture
+    /// has richer signal than the cached preview, use it.  Otherwise fall back
+    /// to the preview snapshot captured at open-time.
+    fn choose_tab_ai_submit_snapshot(
+        &self,
+        preview: crate::context_snapshot::AiContextSnapshot,
+    ) -> crate::context_snapshot::AiContextSnapshot {
+        let live = crate::context_snapshot::capture_context_snapshot(
+            &crate::context_snapshot::CaptureContextOptions::tab_ai_submit(),
+        );
+        let live_has_signal = live.selected_text.is_some()
+            || live.frontmost_app.is_some()
+            || !live.menu_bar_items.is_empty()
+            || live.browser.is_some()
+            || live.focused_window.is_some();
+        if live_has_signal {
+            live
+        } else {
+            preview
+        }
+    }
+
     fn submit_tab_ai_chat_with_intent(
         &mut self,
         entity: Entity<TabAiChat>,
@@ -808,7 +838,7 @@ impl ScriptListApp {
             return;
         }
 
-        let (source_view, ui_snapshot, desktop_snapshot, invocation_receipt) = {
+        let (source_view, ui_snapshot, preview_desktop_snapshot, invocation_receipt) = {
             let chat = entity.read(cx);
             (
                 chat.restore_target().0,
@@ -817,6 +847,8 @@ impl ScriptListApp {
                 chat.invocation_receipt.clone(),
             )
         };
+        let desktop_snapshot =
+            self.choose_tab_ai_submit_snapshot(preview_desktop_snapshot);
 
         tracing::info!(event = "tab_ai_submit", intent = %intent);
 
