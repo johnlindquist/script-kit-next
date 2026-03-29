@@ -180,13 +180,15 @@ impl Render for SelectPrompt {
                 cx.processor(
                     move |this: &mut SelectPrompt,
                           visible_range: std::ops::Range<usize>,
-                          _window,
+                          window,
                           cx| {
                         let item_colors = UnifiedListItemColors {
                             selected_opacity: 0.0,
                             hover_opacity: 0.0,
                             ..UnifiedListItemColors::from_theme(&this.theme)
                         };
+                        let hover_allowed = !window.last_input_was_keyboard();
+                        let effective_hovered = if hover_allowed { this.hovered_index } else { None };
                         let mut rows = Vec::with_capacity(visible_range.len());
 
                         for display_idx in visible_range {
@@ -199,7 +201,7 @@ impl Render for SelectPrompt {
                                             this.focused_index,
                                             choice_idx,
                                             &this.selected,
-                                            this.hovered_index,
+                                            effective_hovered,
                                         );
                                         let is_focused = row_state.is_focused;
                                         let is_selected = row_state.is_selected;

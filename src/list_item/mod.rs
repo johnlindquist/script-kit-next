@@ -946,12 +946,16 @@ impl ListItem {
     }
 }
 impl RenderOnce for ListItem {
-    fn render(self, _window: &mut Window, _cx: &mut App) -> impl IntoElement {
+    fn render(self, window: &mut Window, _cx: &mut App) -> impl IntoElement {
         let colors = self.colors;
         let index = self.index;
         let item_index = index.unwrap_or(0);
         let on_hover_callback = self.on_hover;
         let semantic_id = self.semantic_id;
+
+        // GPUI input modality: suppress hover visuals during keyboard navigation.
+        // This replaces per-view InputMode::Mouse gating — GPUI tracks modality natively.
+        let hover_visible = self.hovered && !window.last_input_was_keyboard();
 
         // Selection colors with alpha from theme opacity settings
         // This allows vibrancy blur to show through selected/hovered items
@@ -1142,9 +1146,9 @@ impl RenderOnce for ListItem {
         if let Some(desc) = self.description {
             let has_description_match = self.description_highlight_indices.is_some();
             let show_description = if is_filtering {
-                should_show_search_description(self.selected, self.hovered, has_description_match)
+                should_show_search_description(self.selected, hover_visible, has_description_match)
             } else {
-                self.selected || self.hovered
+                self.selected || hover_visible
             };
 
             if show_description {
@@ -1228,7 +1232,7 @@ impl RenderOnce for ListItem {
         // Uses macOS-native modifier symbols (⌘, ⇧, ⌥, ⌃) for a native feel
         let shortcut_element = if let Some(sc) = self.shortcut {
             let show_shortcut =
-                should_show_search_shortcut(is_filtering, self.selected, self.hovered);
+                should_show_search_shortcut(is_filtering, self.selected, hover_visible);
             if show_shortcut {
                 let display_text = format_shortcut_display(&sc);
                 if is_filtering {
@@ -1264,7 +1268,7 @@ impl RenderOnce for ListItem {
         // Note: For non-selected items, we ALSO apply GPUI's .hover() modifier for instant feedback
         let bg_color: Hsla = if self.selected {
             selected_bg // 15% opacity - subtle selection with vibrancy
-        } else if self.hovered {
+        } else if hover_visible {
             hover_bg // 10% opacity - subtle hover feedback (state-based)
         } else {
             Hsla::transparent_black() // fully transparent
@@ -1306,7 +1310,7 @@ impl RenderOnce for ListItem {
 
                 // Tool badge, source hint, and type tag use progressive disclosure.
                 // Search mode intentionally strips noisy metadata to keep rows calm.
-                let show_accessories = self.selected || self.hovered || is_filtering;
+                let show_accessories = self.selected || hover_visible || is_filtering;
 
                 // Tool/language badge for scriptlets (e.g., "ts", "bash")
                 if show_accessories && !is_filtering {

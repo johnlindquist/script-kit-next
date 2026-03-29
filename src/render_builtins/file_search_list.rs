@@ -7,7 +7,6 @@
             .collect();
         let current_selected = selected_index;
         let file_hovered = self.hovered_index;
-        let file_input_mode = self.input_mode;
         let is_loading = self.file_search_loading;
         let click_entity_handle = cx.entity().downgrade();
         let hover_entity_handle = cx.entity().downgrade();
@@ -77,12 +76,13 @@
             uniform_list(
                 "file-search-list",
                 filtered_len,
-                move |visible_range, _window, _cx| {
+                move |visible_range, window, _cx| {
+                    let hover_allowed = !window.last_input_was_keyboard();
                     visible_range
                         .map(|ix| {
                             if let Some((_result_idx, file)) = files_for_closure.get(ix) {
                                 let is_selected = ix == current_selected;
-                                let is_hovered = !is_selected && file_hovered == Some(ix) && file_input_mode == InputMode::Mouse;
+                                let is_hovered = !is_selected && hover_allowed && file_hovered == Some(ix);
 
                                 // Use theme opacity for vibrancy-compatible selection
                                 let bg = if is_selected {
@@ -93,7 +93,6 @@
                                     gpui::transparent_black().into()
                                 };
                                 let hover_bg = rgba((list_hover << 8) | hover_alpha);
-                                let is_mouse_mode = file_input_mode == InputMode::Mouse;
 
                                 // Click handler: select on click, open file on double-click
                                 let click_entity = click_entity_handle.clone();
@@ -160,7 +159,7 @@
                                     .gap(px(12.))
                                     .bg(bg)
                                     .cursor_pointer()
-                                    .when(is_mouse_mode, |d| d.hover(move |s| s.bg(hover_bg)))
+                                    .when(hover_allowed, |d| d.hover(move |s| s.bg(hover_bg)))
                                     .on_click(click_handler)
                                     .on_hover(hover_handler)
                                     .child(

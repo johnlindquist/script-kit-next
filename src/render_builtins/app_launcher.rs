@@ -197,7 +197,6 @@ impl ScriptListApp {
                 .collect();
             let selected = selected_index;
             let hovered = self.hovered_index;
-            let current_input_mode = self.input_mode;
             let click_entity_handle = cx.entity().downgrade();
             let hover_entity_handle = cx.entity().downgrade();
 
@@ -209,7 +208,7 @@ impl ScriptListApp {
                         .map(|ix| {
                             if let Some((_, app)) = apps_for_closure.get(ix) {
                                 let is_selected = ix == selected;
-                                let is_hovered = hovered == Some(ix) && current_input_mode == InputMode::Mouse;
+                                let is_hovered = hovered == Some(ix);
 
                                 // Format app path for description
                                 let path_str = app.path.to_string_lossy();
