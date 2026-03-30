@@ -1027,7 +1027,7 @@ fn prewarm_does_not_switch_view() {
 // =========================================================================
 
 #[test]
-fn open_path_unconditionally_forces_fresh_after_prewarm() {
+fn open_path_reuses_fresh_prewarm_once_then_forces_fresh() {
     let open_fn_start = TAB_AI_MODE_SOURCE
         .find("fn open_tab_ai_harness_terminal_from_request(")
         .expect("open_tab_ai_harness_terminal_from_request must exist");
@@ -1037,9 +1037,18 @@ fn open_path_unconditionally_forces_fresh_after_prewarm() {
         .unwrap_or(open_fn_body.len());
     let open_fn_body = &open_fn_body[..next_fn];
 
+    // The open path reuses a fresh prewarmed session exactly once, then forces fresh.
     assert!(
-        open_fn_body.contains("ensure_tab_ai_harness_terminal(true, cx)"),
-        "open path must unconditionally force_fresh=true so each explicit Tab gets a clean PTY"
+        open_fn_body.contains("is_fresh_prewarm()"),
+        "open path must check is_fresh_prewarm to decide whether to reuse"
+    );
+    assert!(
+        open_fn_body.contains("mark_consumed()"),
+        "open path must mark_consumed after reusing a fresh prewarm"
+    );
+    assert!(
+        open_fn_body.contains("ensure_tab_ai_harness_terminal(!reuse_fresh_prewarm, cx)"),
+        "open path must pass !reuse_fresh_prewarm so first Tab reuses the warm PTY"
     );
     assert!(
         TAB_AI_MODE_SOURCE.contains("FreshPrewarm"),
@@ -1070,8 +1079,8 @@ fn prewarm_tags_cold_start_as_fresh_prewarm() {
 }
 
 #[test]
-fn open_path_always_forces_fresh_session() {
-    // Every explicit Tab invocation must force a fresh PTY session.
+fn open_path_reuses_prewarm_or_forces_fresh() {
+    // The open path reuses a silently prewarmed session once, otherwise forces fresh.
     let open_fn_start = TAB_AI_MODE_SOURCE
         .find("fn open_tab_ai_harness_terminal_from_request(")
         .expect("open_tab_ai_harness_terminal_from_request must exist");
@@ -1082,24 +1091,24 @@ fn open_path_always_forces_fresh_session() {
     let open_fn_body = &open_fn_body[..next_fn];
 
     assert!(
-        open_fn_body.contains("ensure_tab_ai_harness_terminal(true, cx)"),
-        "open path must unconditionally force_fresh=true for a clean session each time"
+        open_fn_body.contains("ensure_tab_ai_harness_terminal(!reuse_fresh_prewarm, cx)"),
+        "open path must reuse fresh prewarm (force_fresh=false) or force fresh (true)"
     );
     assert!(
-        !open_fn_body.contains("is_fresh_prewarm"),
-        "open path must not check is_fresh_prewarm — always force fresh"
+        open_fn_body.contains("is_fresh_prewarm()"),
+        "open path must check is_fresh_prewarm to decide reuse"
     );
     assert!(
-        !open_fn_body.contains("mark_consumed"),
-        "open path must not call mark_consumed — always force fresh"
+        open_fn_body.contains("mark_consumed()"),
+        "open path must mark_consumed after reusing a fresh prewarm"
     );
 }
 
 #[test]
-fn close_then_prewarm_then_fresh_session_lifecycle_contract() {
+fn close_then_prewarm_then_reuse_once_lifecycle_contract() {
     // End-to-end contract: close clears session → prewarm creates FreshPrewarm
-    // → open always forces a fresh PTY (prewarm only improves first-open latency
-    // for ensure_tab_ai_harness_terminal's cold-start path).
+    // → open reuses the fresh prewarm once (instant first open), then forces fresh
+    // on subsequent opens without a fresh prewarm.
 
     // 1. close_tab_ai_harness_terminal clears session and schedules prewarm
     let close_fn_start = TAB_AI_MODE_SOURCE
@@ -1123,12 +1132,11 @@ fn close_then_prewarm_then_fresh_session_lifecycle_contract() {
 
     // 2. warm_tab_ai_harness_on_startup tags cold starts as FreshPrewarm
     assert!(
-        TAB_AI_MODE_SOURCE.contains("TabAiHarnessWarmState::FreshPrewarm")
-            || TAB_AI_MODE_SOURCE.contains("WarmState::FreshPrewarm"),
-        "prewarm path must set FreshPrewarm on cold-start sessions"
+        TAB_AI_MODE_SOURCE.contains("mark_fresh_prewarm()"),
+        "prewarm path must tag cold-start sessions via mark_fresh_prewarm()"
     );
 
-    // 3. open path always forces fresh — no prewarm reuse, no mark_consumed
+    // 3. open path reuses fresh prewarm once, then forces fresh
     let open_fn_start = TAB_AI_MODE_SOURCE
         .find("fn open_tab_ai_harness_terminal_from_request(")
         .expect("open_tab_ai_harness_terminal_from_request must exist");
@@ -1139,8 +1147,8 @@ fn close_then_prewarm_then_fresh_session_lifecycle_contract() {
     let open_fn_body = &open_fn_body[..next_fn];
 
     assert!(
-        open_fn_body.contains("ensure_tab_ai_harness_terminal(true, cx)"),
-        "open path must unconditionally force_fresh=true"
+        open_fn_body.contains("ensure_tab_ai_harness_terminal(!reuse_fresh_prewarm, cx)"),
+        "open path must reuse fresh prewarm once, then force fresh"
     );
 }
 
@@ -2660,6 +2668,48 @@ fn search_result_helper_maps_all_result_kinds() {
     }
 }
 
+// =========================================================================
+// Harness close lifecycle: full contract assertions
+// =========================================================================
+
+#[test]
+fn close_tab_ai_harness_terminal_clears_session_and_schedules_fresh_prewarm() {
+    assert!(
+        TAB_AI_MODE_SOURCE.contains("self.tab_ai_harness_capture_generation += 1;"),
+        "close must invalidate in-flight deferred capture results",
+    );
+    assert!(
+        TAB_AI_MODE_SOURCE.contains("self.tab_ai_harness_apply_back_route = None;"),
+        "close must clear apply-back routing state",
+    );
+    assert!(
+        TAB_AI_MODE_SOURCE.contains("let session = self.tab_ai_harness.take();"),
+        "close must clear app state by taking tab_ai_harness",
+    );
+    assert!(
+        TAB_AI_MODE_SOURCE.contains("term.terminate_session().map_err(|e| e.to_string())"),
+        "close must terminate the PTY session",
+    );
+    assert!(
+        TAB_AI_MODE_SOURCE.contains(
+            "self.schedule_tab_ai_harness_prewarm(std::time::Duration::from_millis(250), cx);"
+        ),
+        "close must schedule a fresh harness prewarm after teardown",
+    );
+}
+
+#[test]
+fn quick_terminal_cmd_w_routes_to_harness_close() {
+    assert!(
+        TERM_RENDER_SOURCE.contains("key.eq_ignore_ascii_case(\"w\")"),
+        "QuickTerminalView must reserve Cmd+W as the wrapper close gesture",
+    );
+    assert!(
+        TERM_RENDER_SOURCE.contains("this.close_tab_ai_harness_terminal(cx);"),
+        "Cmd+W must call close_tab_ai_harness_terminal",
+    );
+}
+
 #[test]
 fn search_result_helper_includes_script_metadata() {
     // Script-type results must include path and description in metadata.
@@ -2679,5 +2729,116 @@ fn search_result_helper_includes_script_metadata() {
     assert!(
         fn_body.contains("\"shortcut\"") && fn_body.contains("\"alias\""),
         "Script metadata must include shortcut and alias"
+    );
+}
+
+// =========================================================================
+// SendScreenAreaToAi: removed from registration, unavailable at execution
+// =========================================================================
+
+#[test]
+fn send_screen_area_not_registered_in_builtin_entries() {
+    let fn_start = BUILTINS_SOURCE
+        .find("pub fn get_builtin_entries(")
+        .expect("get_builtin_entries must exist");
+    let fn_body = &BUILTINS_SOURCE[fn_start..];
+    let fn_end = fn_body.find("\n#[cfg(test)]").unwrap_or(fn_body.len());
+    let registration_section = &fn_body[..fn_end];
+
+    assert!(
+        !registration_section.contains("\"builtin-send-screen-area-to-ai\""),
+        "builtin-send-screen-area-to-ai must not be registered until harness attachment exists",
+    );
+}
+
+#[test]
+fn send_screen_area_execution_returns_stable_unavailable_result() {
+    // The execution arm must still exist for stale invocations...
+    assert!(
+        BUILTIN_EXECUTION_SOURCE.contains("AiCommandType::SendScreenAreaToAi => {"),
+        "stale invocations of SendScreenAreaToAi still need a deterministic execution handler",
+    );
+    // ...and must fail with a stable unavailable result code...
+    assert!(
+        BUILTIN_EXECUTION_SOURCE.contains("ai_send_screen_area_unavailable"),
+        "stale invocations must fail with a stable unavailable result code",
+    );
+    // ...and must explain the exact missing capability.
+    assert!(
+        BUILTIN_EXECUTION_SOURCE
+            .contains("selected-area capture is attached to the harness"),
+        "the unavailable path must explain the exact missing harness capability",
+    );
+}
+
+// =========================================================================
+// Script-generation compat shims: harness-only, no legacy ChatPrompt
+// =========================================================================
+
+#[test]
+fn script_generation_compat_shims_documented_as_harness_only() {
+    assert!(
+        PROMPT_AI_SOURCE
+            .contains("Compatibility shim \u{2014} routes script generation requests"),
+        "prompt_ai.rs must document the harness-only compatibility shim",
+    );
+}
+
+#[test]
+fn script_generation_compat_shims_do_not_reconstruct_legacy_surface() {
+    // The old script-generation ChatPrompt surface used "script-generation"
+    // as its ID. The compat shims must not recreate that surface.
+    assert!(
+        !PROMPT_AI_SOURCE.contains("\"script-generation\""),
+        "prompt_ai.rs must not recreate the old script-generation ChatPrompt surface",
+    );
+}
+
+// =========================================================================
+// "Send to AI" fallback: priority 0, harness-native, inline execution
+// =========================================================================
+
+const FALLBACK_BUILTINS_SOURCE: &str = include_str!("../src/fallbacks/builtins.rs");
+const SELECTION_FALLBACK_SOURCE: &str = include_str!("../src/app_impl/selection_fallback.rs");
+
+#[test]
+fn send_to_ai_fallback_label_is_constant() {
+    assert!(
+        FALLBACK_BUILTINS_SOURCE
+            .contains("pub const SEND_TO_AI_FALLBACK_LABEL: &str = \"Send to AI\""),
+        "the top fallback label must be the constant 'Send to AI'",
+    );
+}
+
+#[test]
+fn send_to_ai_fallback_is_harness_native() {
+    assert!(
+        FALLBACK_BUILTINS_SOURCE.contains("action: FallbackAction::SendToAiHarness"),
+        "the top fallback must use FallbackAction::SendToAiHarness",
+    );
+}
+
+#[test]
+fn send_to_ai_fallback_is_priority_zero() {
+    assert!(
+        FALLBACK_BUILTINS_SOURCE.contains("priority: 0"),
+        "the harness fallback must be priority 0 (first in no-results list)",
+    );
+}
+
+#[test]
+fn selection_fallback_recognizes_harness_result() {
+    assert!(
+        SELECTION_FALLBACK_SOURCE.contains("FallbackResult::SendToAiHarness { query }"),
+        "selection fallback execution must recognize the SendToAiHarness result variant",
+    );
+}
+
+#[test]
+fn selection_fallback_opens_harness_with_entry_intent() {
+    assert!(
+        SELECTION_FALLBACK_SOURCE
+            .contains("self.open_tab_ai_chat_with_entry_intent(Some(normalized), cx);"),
+        "non-empty Send to AI fallback input must open the harness with entry intent",
     );
 }
