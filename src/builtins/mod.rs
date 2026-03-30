@@ -967,7 +967,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
-            "builtin-send-window-to-ai",
+            "builtin-send-focused-window-to-ai",
             "Send Focused Window to AI",
             "Capture the focused window and send it to the AI harness",
             vec![
@@ -2981,7 +2981,7 @@ mod tests {
             "builtin-generate-script-with-ai",
             "builtin-generate-script-from-current-app",
             "builtin-send-screen-to-ai",
-            "builtin-send-window-to-ai",
+            "builtin-send-focused-window-to-ai",
             "builtin-send-selected-text-to-ai",
             "builtin-send-browser-tab-to-ai",
             "builtin-new-script",
