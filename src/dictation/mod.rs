@@ -34,9 +34,9 @@ pub use types::{
 };
 pub use visualizer::{bars_for_level, compute_level};
 pub use window::{
-    close_dictation_overlay, is_dictation_overlay_open, open_dictation_overlay,
-    overlay_generation, set_overlay_abort_callback, update_dictation_overlay, DictationOverlay,
-    DictationOverlayState,
+    begin_overlay_session, close_dictation_overlay, is_dictation_overlay_open,
+    open_dictation_overlay, overlay_generation, set_overlay_abort_callback,
+    update_dictation_overlay, DictationOverlay, DictationOverlayState,
 };
 
 #[cfg(test)]

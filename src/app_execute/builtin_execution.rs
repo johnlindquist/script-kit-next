@@ -9,6 +9,11 @@ const BUILTIN_MIC_SELECT_PROMPT_ID: &str = "builtin:select-microphone";
 /// Choice value representing "use system default" in the mic-selection prompt.
 const BUILTIN_MIC_DEFAULT_VALUE: &str = "__system_default__";
 
+/// Prevent overlapping Parakeet model downloads when the dictation hotkey is
+/// pressed repeatedly while the model is still missing.
+static PARAKEET_MODEL_DOWNLOAD_IN_PROGRESS: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
 #[cfg(test)]
 fn ai_open_failure_message(error: impl std::fmt::Display) -> String {
     format!("Failed to open AI: {}", error)
@@ -3512,11 +3517,21 @@ impl ScriptListApp {
                     trace_id = %dctx.trace_id,
                     "Opening Dictation"
                 );
-                self.opened_from_main_menu = true;
 
                 // Preflight: on the start edge, verify we have somewhere to
                 // deliver transcribed text before beginning capture.
                 if !crate::dictation::is_dictation_recording() {
+                    // Check that the Parakeet model is downloaded before
+                    // starting capture — no silent Whisper fallback.
+                    if !crate::dictation::is_parakeet_model_available() {
+                        tracing::warn!(
+                            category = "DICTATION",
+                            "Parakeet model not downloaded, starting background download"
+                        );
+                        self.start_parakeet_model_download(cx);
+                        return Self::builtin_success(dctx, "dictation_model_download_started");
+                    }
+
                     if let Err(error) = self.ensure_dictation_delivery_target_available() {
                         let error_text = error.to_string();
                         tracing::error!(
@@ -3534,6 +3549,11 @@ impl ScriptListApp {
 
                 match crate::dictation::toggle_dictation() {
                     Ok(crate::dictation::DictationToggleOutcome::Started) => {
+                        // Bump generation at logical session start — not at
+                        // window creation — so stale delayed closes from a
+                        // prior session see a mismatch even when the overlay
+                        // window handle is reused.
+                        let _ = crate::dictation::begin_overlay_session();
                         crate::dictation::set_overlay_abort_callback(|cx| {
                             if let Err(error) = crate::dictation::abort_dictation() {
                                 tracing::error!(
@@ -3895,7 +3915,7 @@ impl ScriptListApp {
             }
             Err(error) => {
                 let error_text = error.to_string();
-                let model_path = crate::dictation::resolve_whisper_model_path();
+                let model_path = crate::dictation::resolve_default_model_path();
                 tracing::error!(
                     category = "DICTATION",
                     error = %error_text,
@@ -3903,14 +3923,9 @@ impl ScriptListApp {
                     "Transcription failed"
                 );
 
-                if error_text.contains("Whisper model not found")
-                    || error_text.contains("Whisper model path is not a regular file")
-                {
+                if error_text.contains("Parakeet model not downloaded") {
                     self.show_error_toast(
-                        format!(
-                            "Dictation model missing. Download whisper-medium-q4_1.bin to {} and try again.",
-                            model_path.display()
-                        ),
+                        "Dictation model not downloaded. Press the dictation hotkey again to start the download.".to_string(),
                         cx,
                     );
                 } else {
@@ -3949,6 +3964,114 @@ impl ScriptListApp {
 
     fn dictation_focus_settle_duration() -> std::time::Duration {
         std::time::Duration::from_millis(Self::DICTATION_FOCUS_SETTLE_MS)
+    }
+
+    /// Start downloading the Parakeet model in the background, showing
+    /// progress via HUD updates and a final success/error toast.
+    fn start_parakeet_model_download(&mut self, cx: &mut Context<Self>) {
+        if PARAKEET_MODEL_DOWNLOAD_IN_PROGRESS
+            .compare_exchange(
+                false,
+                true,
+                std::sync::atomic::Ordering::AcqRel,
+                std::sync::atomic::Ordering::Acquire,
+            )
+            .is_err()
+        {
+            self.show_hud(
+                "Dictation model download already in progress".to_string(),
+                Some(HUD_MEDIUM_MS),
+                cx,
+            );
+            return;
+        }
+
+        self.show_hud(
+            "Downloading dictation model…".to_string(),
+            Some(HUD_MEDIUM_MS),
+            cx,
+        );
+
+        let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        cx.spawn(async move |this, cx| {
+            let result = cx
+                .background_executor()
+                .spawn({
+                    let cancel = cancel.clone();
+                    async move {
+                        let last_pct = std::sync::Arc::new(
+                            std::sync::atomic::AtomicU8::new(0),
+                        );
+                        crate::dictation::download::download_parakeet_model(
+                            {
+                                let last_pct = last_pct.clone();
+                                move |phase, progress| {
+                                    match phase {
+                                        crate::dictation::download::DownloadPhase::Downloading => {
+                                            let pct = progress.percentage();
+                                            let prev = last_pct.load(
+                                                std::sync::atomic::Ordering::Relaxed,
+                                            );
+                                            // Log every 10% to avoid spam.
+                                            if pct >= prev + 10 || pct == 100 {
+                                                last_pct.store(
+                                                    pct,
+                                                    std::sync::atomic::Ordering::Relaxed,
+                                                );
+                                                tracing::info!(
+                                                    category = "DICTATION",
+                                                    pct,
+                                                    "Model download progress"
+                                                );
+                                            }
+                                        }
+                                        crate::dictation::download::DownloadPhase::Extracting => {
+                                            tracing::info!(
+                                                category = "DICTATION",
+                                                "Extracting dictation model"
+                                            );
+                                        }
+                                        _ => {}
+                                    }
+                                }
+                            },
+                            cancel,
+                        )
+                    }
+                })
+                .await;
+
+            let _ = this.update(cx, |this, cx| {
+                PARAKEET_MODEL_DOWNLOAD_IN_PROGRESS
+                    .store(false, std::sync::atomic::Ordering::Release);
+                match result {
+                    Ok(_path) => {
+                        tracing::info!(
+                            category = "DICTATION",
+                            "Parakeet model download complete"
+                        );
+                        this.show_hud(
+                            "Dictation model ready — press hotkey to dictate".to_string(),
+                            Some(HUD_MEDIUM_MS),
+                            cx,
+                        );
+                    }
+                    Err(error) => {
+                        let error_text = error.to_string();
+                        tracing::error!(
+                            category = "DICTATION",
+                            error = %error_text,
+                            "Parakeet model download failed"
+                        );
+                        this.show_error_toast(
+                            format!("Dictation model download failed: {error_text}"),
+                            cx,
+                        );
+                    }
+                }
+            });
+        })
+        .detach();
     }
 
     /// Ensure a new dictation session has somewhere valid to send text.
@@ -4055,8 +4178,7 @@ impl ScriptListApp {
         .detach();
     }
 
-    /// Schedule the cached Whisper transcriber to be unloaded after an idle
-    /// timeout.
+    /// Schedule the cached transcriber to be unloaded after an idle timeout.
     fn schedule_dictation_transcriber_cleanup(
         &mut self,
         cx: &mut Context<Self>,

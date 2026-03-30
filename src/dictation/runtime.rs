@@ -3,7 +3,7 @@ use crate::dictation::device::{list_input_devices, resolve_selected_input_device
 use crate::dictation::transcription::{
     captured_duration, is_parakeet_model_available, merge_captured_chunks,
     should_skip_transcription, DictationTranscriber, DictationTranscriptionConfig,
-    ParakeetDictationEngine, WhisperDictationEngine,
+    ParakeetDictationEngine,
 };
 use crate::dictation::types::{
     CapturedAudioChunk, CompletedDictationCapture, DictationCaptureConfig, DictationCaptureEvent,
@@ -184,40 +184,23 @@ pub fn transcribe_captured_audio(chunks: &[CapturedAudioChunk]) -> Result<Option
     );
 
     if should_rebuild {
+        if !is_parakeet_model_available() {
+            anyhow::bail!(
+                "Parakeet model not downloaded. Use the dictation settings to download it."
+            );
+        }
+        tracing::info!(
+            category = "DICTATION",
+            model_path = %config.model_path.display(),
+            "Initializing Parakeet ONNX dictation engine"
+        );
         let engine: Box<dyn crate::dictation::transcription::DictationEngine> =
-            if is_parakeet_model_available() {
-                tracing::info!(
-                    category = "DICTATION",
-                    model_path = %config.model_path.display(),
-                    "Initializing Parakeet ONNX dictation engine"
-                );
-                let parakeet = ParakeetDictationEngine::new(&config.model_path)
-                    .with_context(|| {
-                        format!(
-                            "failed to initialize Parakeet engine from {}",
-                            config.model_path.display()
-                        )
-                    })?;
-                Box::new(parakeet)
-            } else {
-                tracing::info!(
-                    category = "DICTATION",
-                    "Parakeet model not available, falling back to Whisper"
-                );
-                let whisper_path =
-                    crate::dictation::transcription::resolve_whisper_model_path();
-                let whisper_config = DictationTranscriptionConfig {
-                    model_path: whisper_path,
-                    ..config.clone()
-                };
-                let whisper = WhisperDictationEngine::new(&whisper_config).with_context(|| {
-                    format!(
-                        "failed to initialize Whisper engine from {}",
-                        whisper_config.model_path.display()
-                    )
-                })?;
-                Box::new(whisper)
-            };
+            Box::new(ParakeetDictationEngine::new(&config.model_path).with_context(|| {
+                format!(
+                    "failed to initialize Parakeet engine from {}",
+                    config.model_path.display()
+                )
+            })?);
         *guard = Some(DictationTranscriber::new(config.clone(), engine));
     }
 

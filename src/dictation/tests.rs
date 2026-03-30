@@ -904,7 +904,7 @@ fn transcribe_captured_audio_returns_none_for_silent_input_without_model() {
     }];
 
     let result = crate::dictation::transcribe_captured_audio(&chunks)
-        .expect("silent input should short-circuit before Whisper init");
+        .expect("silent input should short-circuit before engine init");
 
     assert_eq!(result, None);
 
@@ -1351,7 +1351,7 @@ fn dictation_transcription_logs_skip_reasons_and_model_path() {
     );
     assert!(
         runtime_src.contains("model_path = %config.model_path.display()"),
-        "runtime must log the Whisper model path"
+        "runtime must log the model path"
     );
     assert!(
         runtime_src.contains("Dictation transcription succeeded"),
@@ -1360,17 +1360,17 @@ fn dictation_transcription_logs_skip_reasons_and_model_path() {
 }
 
 #[test]
-fn dictation_surfaces_missing_model_with_toast() {
+fn dictation_surfaces_missing_model_with_download() {
     let builtin_src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
         .expect("read builtin_execution.rs");
 
     assert!(
-        builtin_src.contains("Dictation model missing."),
-        "missing Whisper model must produce a download-oriented toast"
+        builtin_src.contains("is_parakeet_model_available()"),
+        "dictation start path must check Parakeet model availability"
     );
     assert!(
-        builtin_src.contains("resolve_whisper_model_path()"),
-        "missing-model toast must use the resolved Whisper model path"
+        builtin_src.contains("start_parakeet_model_download"),
+        "missing Parakeet model must trigger a background download"
     );
 }
 
@@ -3355,37 +3355,23 @@ fn escape_confirming_escape_abort_never_reaches_transcript_handler() {
 // Regression: missing-model toast includes download guidance
 // ---------------------------------------------------------------------------
 
-/// When the Whisper model file is absent, the error toast must include:
-/// 1. A recognizable "model missing" message,
-/// 2. The resolved default model path so the user knows where to place the file,
-/// 3. No paste attempt (verified separately above).
+/// When the Parakeet model is missing at transcription time, the error toast
+/// must include a recognizable message and the resolved model path.
 #[test]
-fn missing_model_toast_includes_path_and_download_guidance() {
+fn missing_model_toast_includes_parakeet_download_guidance() {
     let src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
         .expect("read builtin_execution.rs");
 
     let handler_src = dictation_handler_source(&src);
 
-    // Find the missing-model branch inside the Err arm.
+    // The error arm must detect the Parakeet-specific model-missing string.
     assert!(
-        handler_src.contains("Whisper model not found"),
-        "handler must detect the 'Whisper model not found' error string"
+        handler_src.contains("Parakeet model not downloaded"),
+        "handler must detect the 'Parakeet model not downloaded' error string"
     );
     assert!(
-        handler_src.contains("Whisper model path is not a regular file"),
-        "handler must also detect the 'not a regular file' error string"
-    );
-    assert!(
-        handler_src.contains("Dictation model missing."),
-        "missing-model toast must begin with a clear 'model missing' message"
-    );
-    assert!(
-        handler_src.contains("Download whisper-medium-q4_1.bin to"),
-        "missing-model toast must tell the user which file to download"
-    );
-    assert!(
-        handler_src.contains("resolve_whisper_model_path()"),
-        "missing-model toast must include the resolved Whisper path"
+        handler_src.contains("resolve_default_model_path()"),
+        "error handler must use the resolved Parakeet model path"
     );
 }
 
@@ -3586,7 +3572,7 @@ fn parakeet_model_archive_size_is_reasonable() {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn runtime_has_parakeet_fallback_logic() {
+fn runtime_uses_parakeet_only() {
     let runtime_src = std::fs::read_to_string("src/dictation/runtime.rs").expect("read runtime.rs");
 
     assert!(
@@ -3598,8 +3584,12 @@ fn runtime_has_parakeet_fallback_logic() {
         "runtime must reference ParakeetDictationEngine"
     );
     assert!(
-        runtime_src.contains("WhisperDictationEngine"),
-        "runtime must still reference WhisperDictationEngine as fallback"
+        !runtime_src.contains("WhisperDictationEngine"),
+        "runtime must not fall back to Whisper — Parakeet is the only engine"
+    );
+    assert!(
+        runtime_src.contains("Parakeet model not downloaded"),
+        "runtime must bail with a clear message when Parakeet is missing"
     );
 }
 
@@ -3665,7 +3655,98 @@ fn dictation_transcription_logs_model_resolution_details() {
         "transcription log must include model_is_file"
     );
     assert!(
-        src.contains("Parakeet model not available, falling back to Whisper"),
-        "runtime must log Whisper fallback explicitly"
+        src.contains("Parakeet model not downloaded"),
+        "runtime must bail with a clear message when Parakeet is missing"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Overlay lifecycle regression tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn overlay_generation_is_bumped_from_started_path_not_window_creation() {
+    let window_source =
+        std::fs::read_to_string("src/dictation/window.rs").expect("read window.rs");
+    let builtin_source = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("read builtin_execution.rs");
+
+    assert!(
+        window_source.contains("pub fn begin_overlay_session()"),
+        "dictation overlay must expose a session-scoped generation bump"
+    );
+    assert!(
+        builtin_source.contains("begin_overlay_session()"),
+        "dictation start path must bump generation before opening/reusing the overlay"
+    );
+}
+
+#[test]
+fn open_dictation_overlay_does_not_bump_generation_itself() {
+    let window_source =
+        std::fs::read_to_string("src/dictation/window.rs").expect("read window.rs");
+
+    // Extract just the open_dictation_overlay function body to check it
+    // doesn't contain its own generation bump.
+    let fn_start = window_source
+        .find("pub fn open_dictation_overlay(")
+        .expect("open_dictation_overlay must exist");
+    let fn_body = &window_source[fn_start..];
+    // Take up to the next top-level `pub fn` after the opening one.
+    let fn_end = fn_body[1..]
+        .find("\npub fn ")
+        .unwrap_or(fn_body.len() - 1);
+    let fn_text = &fn_body[..fn_end + 1];
+
+    assert!(
+        !fn_text.contains("OVERLAY_GENERATION.fetch_add"),
+        "open_dictation_overlay must not bump generation — \
+         that is begin_overlay_session's job"
+    );
+}
+
+#[test]
+fn hidden_main_window_path_does_not_always_key_overlay() {
+    let window_source =
+        std::fs::read_to_string("src/dictation/window.rs").expect("read window.rs");
+    assert!(
+        window_source.contains("let should_key_overlay = crate::is_main_window_visible()"),
+        "overlay keying must depend on whether the main window is already visible"
+    );
+}
+
+#[test]
+fn dictation_builtin_does_not_set_opened_from_main_menu() {
+    let src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("read builtin_execution.rs");
+
+    // Extract the Dictation arm of the match.
+    let arm_start = src
+        .find("builtins::BuiltInFeature::Dictation =>")
+        .expect("Dictation arm must exist");
+    let tail = &src[arm_start..];
+    // The arm ends at the next BuiltInFeature variant.
+    let arm_end = tail[1..]
+        .find("builtins::BuiltInFeature::")
+        .unwrap_or(tail.len() - 1);
+    let arm_text = &tail[..arm_end + 1];
+
+    assert!(
+        !arm_text.contains("opened_from_main_menu = true"),
+        "dictation builtin must not set opened_from_main_menu — \
+         that would cause the main window to appear on the dictation hotkey path"
+    );
+}
+
+#[test]
+fn overlay_render_uses_outer_wrapper_for_full_bounds() {
+    let window_source =
+        std::fs::read_to_string("src/dictation/window.rs").expect("read window.rs");
+
+    // The render must have a dedicated outer root div that claims full bounds
+    // with the pill surface as a child — not the pill div as root.
+    assert!(
+        window_source.contains(".w_full()\n            .h_full()\n            .child(surface)"),
+        "overlay render must use an outer wrapper div with w_full().h_full().child(surface)"
     );
 }
