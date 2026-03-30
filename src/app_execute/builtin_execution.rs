@@ -1,7 +1,7 @@
 /// Delay between hiding the main window and starting a synchronous screenshot capture.
 const AI_CAPTURE_HIDE_SETTLE_MS: u64 = 150;
 
-/// Synthetic prompt ID used when the microphone-selection ArgPrompt is open.
+/// Synthetic prompt ID used when the microphone-selection MiniPrompt is open.
 /// Checked in `submit_arg_prompt_from_current_state` to intercept the submit
 /// and persist the chosen device instead of sending a protocol message.
 const BUILTIN_MIC_SELECT_PROMPT_ID: &str = "builtin:select-microphone";
@@ -2333,11 +2333,10 @@ impl ScriptListApp {
                         self.opened_from_main_menu = true;
                         self.arg_selected_index = start_index;
                         self.open_builtin_filterable_view(
-                            AppView::ArgPrompt {
+                            AppView::MiniPrompt {
                                 id: BUILTIN_MIC_SELECT_PROMPT_ID.to_string(),
                                 placeholder: "Select microphone...".to_string(),
                                 choices,
-                                actions: None,
                             },
                             "Select microphone...",
                             cx,
@@ -3682,11 +3681,31 @@ impl ScriptListApp {
                         return;
                     }
 
-                    let target_bundle_id =
-                        crate::frontmost_app_tracker::get_last_real_app_bundle_id();
+                    let Some(target_bundle_id) =
+                        crate::frontmost_app_tracker::get_last_real_app_bundle_id()
+                    else {
+                        tracing::error!(
+                            category = "DICTATION",
+                            "Frontmost-app dictation target disappeared before paste"
+                        );
+                        self.show_error_toast(
+                            "Dictation paste failed: no tracked frontmost app is available"
+                                .to_string(),
+                            cx,
+                        );
+                        self.schedule_dictation_overlay_close(
+                            cx,
+                            std::time::Duration::from_millis(150),
+                        );
+                        self.schedule_dictation_transcriber_cleanup(
+                            cx,
+                            std::time::Duration::from_secs(300),
+                        );
+                        return;
+                    };
                     tracing::info!(
                         category = "DICTATION",
-                        target_bundle_id = ?target_bundle_id,
+                        target_bundle_id = %target_bundle_id,
                         transcript_len = transcript.len(),
                         "Preparing frontmost-app dictation paste"
                     );
@@ -3709,12 +3728,12 @@ impl ScriptListApp {
                             .timer(Self::dictation_done_state_duration())
                             .await;
 
-                        // Close overlay and hide Script Kit windows so macOS
-                        // returns keyboard focus to the target app before
-                        // the CGEvent Cmd+V fires.
+                        // Close overlay, hide Script Kit, and explicitly
+                        // activate the tracked target app so macOS moves
+                        // keyboard focus there before the CGEvent paste.
                         let yield_focus_result = match this.update(
                             cx,
-                            |this, cx| this.yield_focus_for_dictation_paste(cx),
+                            |this, cx| this.yield_focus_for_dictation_paste(&target_bundle_id, cx),
                         ) {
                             Ok(result) => result,
                             Err(error) => Err(anyhow::anyhow!(
@@ -3757,8 +3776,9 @@ impl ScriptListApp {
 
                         tracing::info!(
                             category = "DICTATION",
+                            target_bundle_id = %target_bundle_id,
                             transcript_len = transcript.len(),
-                            "Focus yielded; waiting before frontmost-app paste"
+                            "Focus yielded to target app; pasting transcript"
                         );
 
                         let paste_result = cx
@@ -3899,10 +3919,48 @@ impl ScriptListApp {
         Ok(())
     }
 
-    /// Close the dictation overlay and hide the main window, propagating
-    /// errors so the caller can abort the paste if either step fails.
+    /// Activate the tracked target app via AppleScript so macOS moves
+    /// keyboard focus there before the CGEvent Cmd+V paste fires.
+    #[cfg(target_os = "macos")]
+    fn activate_bundle_id_for_dictation_paste(bundle_id: &str) -> anyhow::Result<()> {
+        use anyhow::Context as _;
+        let escaped = bundle_id.replace('\\', "\\\\").replace('"', "\\\"");
+        let script = format!("tell application id \"{escaped}\" to activate");
+        let output = std::process::Command::new("osascript")
+            .arg("-e")
+            .arg(&script)
+            .output()
+            .context("failed to spawn osascript for dictation app activation")?;
+        if output.status.success() {
+            tracing::info!(
+                category = "DICTATION",
+                target_bundle_id = %bundle_id,
+                "Target app activated via osascript"
+            );
+            return Ok(());
+        }
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        if stderr.is_empty() {
+            anyhow::bail!(
+                "failed to activate target app {bundle_id} before dictation paste"
+            );
+        }
+        anyhow::bail!(
+            "failed to activate target app {bundle_id} before dictation paste: {stderr}"
+        );
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    fn activate_bundle_id_for_dictation_paste(_bundle_id: &str) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    /// Close the dictation overlay, hide Script Kit, and explicitly activate
+    /// the tracked target app so macOS moves keyboard focus there before
+    /// the CGEvent Cmd+V paste fires.
     fn yield_focus_for_dictation_paste(
         &mut self,
+        target_bundle_id: &str,
         cx: &mut Context<Self>,
     ) -> anyhow::Result<()> {
         use anyhow::Context as _;
@@ -3912,6 +3970,11 @@ impl ScriptListApp {
             script_kit_gpui::set_main_window_visible(false);
             platform::defer_hide_main_window(cx);
         }
+        Self::activate_bundle_id_for_dictation_paste(target_bundle_id).with_context(|| {
+            format!(
+                "failed to activate target app {target_bundle_id} before dictation paste"
+            )
+        })?;
         Ok(())
     }
 

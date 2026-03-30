@@ -194,7 +194,9 @@ impl DictationOverlay {
                     category = "DICTATION",
                     "Escape pressed during recording, entering confirming state"
                 );
-                self.state.phase = DictationSessionPhase::Confirming;
+                let phase = DictationSessionPhase::Confirming;
+                let _ = crate::dictation::set_overlay_phase(phase.clone());
+                self.state.phase = phase;
                 cx.notify();
                 cx.stop_propagation();
             }
@@ -215,7 +217,9 @@ impl DictationOverlay {
                     key,
                     "Non-Escape key pressed during confirming, resuming recording"
                 );
-                self.state.phase = DictationSessionPhase::Recording;
+                let phase = DictationSessionPhase::Recording;
+                let _ = crate::dictation::set_overlay_phase(phase.clone());
+                self.state.phase = phase;
                 cx.notify();
                 cx.stop_propagation();
             }
@@ -468,12 +472,21 @@ fn render_transcribing_dots() -> impl IntoElement {
 
 /// Calculate bottom-center bounds for the overlay on the active display.
 ///
-/// Uses `get_macos_visible_displays()` to find the primary display's visible
-/// area (excluding menu bar and dock), then positions the pill centered
-/// horizontally and `OVERLAY_BOTTOM_OFFSET_PX` above the bottom edge.
+/// Resolves the active display by finding which screen contains the current
+/// mouse cursor position (via `get_global_mouse_position()` + `display_for_point()`).
+/// Falls back to the first visible display, then to a hardcoded 1920×1080 default.
+/// Positions the pill centered horizontally and `OVERLAY_BOTTOM_OFFSET_PX` above
+/// the bottom edge of the chosen display's visible area.
 fn calculate_overlay_bottom_center_bounds() -> gpui::Bounds<gpui::Pixels> {
     let displays = crate::platform::get_macos_visible_displays();
-    let (vis_x, vis_y, vis_w, vis_h) = if let Some(display) = displays.first() {
+
+    // Resolve the active display: prefer the one under the mouse cursor,
+    // fall back to the first display (primary).
+    let active_display = crate::platform::get_global_mouse_position()
+        .and_then(|mouse_pt| crate::platform::display_for_point(mouse_pt, &displays))
+        .or_else(|| displays.first().cloned());
+
+    let (vis_x, vis_y, vis_w, vis_h) = if let Some(display) = active_display {
         let v = &display.visible_area;
         (
             v.origin_x as f32,
