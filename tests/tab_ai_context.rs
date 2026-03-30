@@ -1139,3 +1139,171 @@ fn apply_back_route_focused_target_is_optional_for_desktop_types() {
         );
     }
 }
+
+// =========================================================================
+// sourceType ↔ applyBackHint alignment for all five source classifications
+// =========================================================================
+
+#[test]
+fn apply_back_route_clipboard_entry_aligns_with_copy_to_clipboard() {
+    use script_kit_gpui::ai::build_tab_ai_apply_back_hint_from_source;
+
+    let hint = build_tab_ai_apply_back_hint_from_source(Some(&TabAiSourceType::ClipboardEntry))
+        .expect("ClipboardEntry must produce a hint");
+
+    assert_eq!(
+        hint.action, "copyToClipboard",
+        "ClipboardEntry must route to copyToClipboard action"
+    );
+
+    let route = TabAiApplyBackRoute {
+        source_type: TabAiSourceType::ClipboardEntry,
+        hint: hint.clone(),
+        focused_target: None,
+    };
+    let json = serde_json::to_string(&route).expect("serialize");
+    assert!(json.contains("\"sourceType\":\"clipboardEntry\""));
+    assert!(json.contains("\"action\":\"copyToClipboard\""));
+    assert!(
+        !json.contains("focusedTarget"),
+        "ClipboardEntry route does not require a focused target"
+    );
+}
+
+#[test]
+fn apply_back_route_generic_desktop_aligns_with_paste_to_frontmost_app() {
+    use script_kit_gpui::ai::build_tab_ai_apply_back_hint_from_source;
+
+    let hint = build_tab_ai_apply_back_hint_from_source(Some(&TabAiSourceType::Desktop))
+        .expect("Desktop must produce a hint");
+
+    assert_eq!(
+        hint.action, "pasteToFrontmostApp",
+        "Desktop must route to pasteToFrontmostApp action"
+    );
+
+    let route = TabAiApplyBackRoute {
+        source_type: TabAiSourceType::Desktop,
+        hint: hint.clone(),
+        focused_target: None,
+    };
+    let json = serde_json::to_string(&route).expect("serialize");
+    assert!(json.contains("\"sourceType\":\"desktop\""));
+    assert!(json.contains("\"action\":\"pasteToFrontmostApp\""));
+}
+
+#[test]
+fn all_source_types_produce_aligned_apply_back_hints() {
+    use script_kit_gpui::ai::build_tab_ai_apply_back_hint_from_source;
+
+    let expected_alignment: Vec<(TabAiSourceType, &str, &str)> = vec![
+        (
+            TabAiSourceType::DesktopSelection,
+            "replaceSelectedText",
+            "Frontmost selection",
+        ),
+        (
+            TabAiSourceType::ScriptListItem,
+            "runGeneratedScript",
+            "Focused script",
+        ),
+        (
+            TabAiSourceType::RunningCommand,
+            "pasteToPrompt",
+            "Active prompt",
+        ),
+        (
+            TabAiSourceType::ClipboardEntry,
+            "copyToClipboard",
+            "Clipboard",
+        ),
+        (
+            TabAiSourceType::Desktop,
+            "pasteToFrontmostApp",
+            "Frontmost app",
+        ),
+    ];
+
+    for (source_type, expected_action, expected_label) in &expected_alignment {
+        let hint = build_tab_ai_apply_back_hint_from_source(Some(source_type))
+            .unwrap_or_else(|| panic!("{source_type:?} must produce a hint"));
+
+        assert_eq!(
+            hint.action, *expected_action,
+            "{source_type:?} → action mismatch"
+        );
+        assert_eq!(
+            hint.target_label.as_deref(),
+            Some(*expected_label),
+            "{source_type:?} → target_label mismatch"
+        );
+
+        // Round-trip: build a route, serialize, deserialize, verify alignment holds
+        let route = TabAiApplyBackRoute {
+            source_type: source_type.clone(),
+            hint,
+            focused_target: None,
+        };
+        let json = serde_json::to_string(&route).expect("serialize");
+        let parsed: TabAiApplyBackRoute = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(
+            parsed.source_type, *source_type,
+            "round-trip sourceType mismatch for {source_type:?}"
+        );
+        assert_eq!(
+            parsed.hint.action, *expected_action,
+            "round-trip action mismatch for {source_type:?}"
+        );
+    }
+}
+
+// =========================================================================
+// Screenshot-backed context: path format and optional-field compatibility
+// =========================================================================
+
+#[test]
+fn screenshot_backed_context_emits_png_file_path() {
+    let blob = full_blob().with_deferred_capture_fields(
+        Some(TabAiSourceType::Desktop),
+        Some("/Users/test/.scriptkit/tmp/tab-ai-screenshot-20260330T125352Z-41231.png".to_string()),
+        Some(TabAiApplyBackHint {
+            action: "pasteToFrontmostApp".to_string(),
+            target_label: Some("Frontmost app".to_string()),
+        }),
+    );
+
+    let path = blob
+        .screenshot_path
+        .as_ref()
+        .expect("screenshot_path must be Some");
+    assert!(
+        path.ends_with(".png"),
+        "screenshot path must end with .png extension"
+    );
+    assert!(
+        path.contains("tab-ai-screenshot-"),
+        "screenshot path must contain the tab-ai-screenshot prefix"
+    );
+    assert!(
+        path.starts_with('/'),
+        "screenshot path must be an absolute filesystem path"
+    );
+
+    // Verify the JSON field is present and correct
+    let json = serde_json::to_string(&blob).expect("serialize");
+    let parsed: serde_json::Value = serde_json::from_str(&json).expect("parse");
+    assert_eq!(
+        parsed["screenshotPath"].as_str().expect("screenshotPath"),
+        path.as_str(),
+        "screenshotPath in JSON must match the struct field"
+    );
+}
+
+#[test]
+fn screenshot_retention_cap_is_ten() {
+    use script_kit_gpui::ai::TAB_AI_SCREENSHOT_MAX_KEEP;
+    assert_eq!(
+        TAB_AI_SCREENSHOT_MAX_KEEP, 10,
+        "screenshot retention cap must be 10"
+    );
+}

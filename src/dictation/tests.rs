@@ -3744,3 +3744,137 @@ fn overlay_render_uses_outer_wrapper_for_full_bounds() {
         "overlay render must use an outer wrapper div with w_full().h_full().child(surface)"
     );
 }
+
+// ---------------------------------------------------------------------------
+// Source-contract coverage: singleton, non-activating, edge-to-edge fill,
+// and generation guards
+// ---------------------------------------------------------------------------
+
+fn extract_delta_contract_section<'a>(
+    source: &'a str,
+    start_pat: &str,
+    end_pat: &str,
+) -> &'a str {
+    let start = source
+        .find(start_pat)
+        .unwrap_or_else(|| panic!("missing section start: {start_pat}"));
+    let tail = &source[start..];
+    let end = tail
+        .find(end_pat)
+        .map(|offset| start + offset)
+        .unwrap_or(source.len());
+    &source[start..end]
+}
+
+fn compact_delta_contract(s: &str) -> String {
+    s.chars().filter(|c| !c.is_whitespace()).collect()
+}
+
+#[test]
+fn dictation_overlay_singleton_nonactivating_contract() {
+    let src =
+        std::fs::read_to_string("src/dictation/window.rs").expect("read window.rs");
+    let body = compact_delta_contract(extract_delta_contract_section(
+        &src,
+        "pub fn open_dictation_overlay(",
+        "pub fn update_dictation_overlay(",
+    ));
+
+    // Live-handle reuse: probe handle liveness before reuse
+    assert!(
+        body.contains(&compact_delta_contract(
+            "let alive = handle.update(cx, |_view, _window, _cx| {}).is_ok();"
+        )),
+        "overlay open path must probe handle liveness before reuse"
+    );
+
+    // Singleton reuse: return existing live handle
+    assert!(
+        body.contains(&compact_delta_contract("if alive { return Ok(handle); }")),
+        "overlay must reuse the live singleton window instead of spawning duplicates"
+    );
+
+    // Stale-handle clearing
+    assert!(
+        body.contains(&compact_delta_contract("*guard = None;")),
+        "stale overlay handles must be cleared before recreation"
+    );
+
+    // Non-activating open: focus: false
+    assert!(
+        body.contains(&compact_delta_contract("focus: false,")),
+        "overlay window must stay non-activating on open"
+    );
+
+    // Order front without activating
+    assert!(
+        body.contains(&compact_delta_contract(
+            "let () = msg_send![ns_window, orderFrontRegardless];"
+        )),
+        "overlay must order front without activating the app"
+    );
+
+    // Re-hide main window when Script Kit was hidden
+    assert!(
+        body.contains(&compact_delta_contract(
+            "if !main_was_visible {"
+        )),
+        "overlay open path must check main window visibility and re-hide when it was hidden"
+    );
+
+    // Singleton slot storage
+    assert!(
+        body.contains(&compact_delta_contract("*guard = Some(handle);")),
+        "overlay handle must be stored into the singleton slot"
+    );
+}
+
+#[test]
+fn dictation_overlay_claims_full_popup_bounds_contract() {
+    let src =
+        std::fs::read_to_string("src/dictation/window.rs").expect("read window.rs");
+    let body = compact_delta_contract(extract_delta_contract_section(
+        &src,
+        "let surface = div()",
+        "pub(crate) fn finished_label",
+    ));
+
+    // Inner pill surface must claim full popup content bounds
+    assert!(
+        body.contains(&compact_delta_contract(
+            "let surface = div().flex().flex_row().items_center().justify_center().w_full().h_full()"
+        )),
+        "inner dictation pill must fill the popup content bounds"
+    );
+
+    // Root overlay node must fill the popup window edge-to-edge
+    assert!(
+        body.contains(&compact_delta_contract(
+            "div().track_focus(&self.focus_handle).on_key_down(cx.listener(Self::handle_key_down)).w_full().h_full().child(surface)"
+        )),
+        "root overlay node must fill the popup window edge-to-edge"
+    );
+}
+
+#[test]
+fn dictation_overlay_generation_guards_pump_and_delayed_close_contract() {
+    let src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("read builtin_execution.rs");
+    let body = compact_delta_contract(&src);
+
+    // Session start must bump generation
+    assert!(
+        body.contains(&compact_delta_contract(
+            "let _ = crate::dictation::begin_overlay_session();"
+        )),
+        "dictation start edge must bump overlay generation"
+    );
+
+    // Overlay pump and delayed close must bail on generation mismatch
+    assert!(
+        body.contains(&compact_delta_contract(
+            "if crate::dictation::overlay_generation() != gen {"
+        )),
+        "overlay pump and delayed close must bail when a newer session exists"
+    );
+}
