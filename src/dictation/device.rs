@@ -3,6 +3,113 @@ use crate::dictation::types::{DictationDeviceId, DictationDeviceInfo};
 use anyhow::Context;
 use anyhow::Result;
 
+// ---------------------------------------------------------------------------
+// Device selection types
+// ---------------------------------------------------------------------------
+
+/// Action produced by the microphone picker UI.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DictationDeviceSelectionAction {
+    UseSystemDefault,
+    UseDevice(DictationDeviceId),
+}
+
+/// A single row in the microphone picker list.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DictationDeviceMenuItem {
+    pub title: String,
+    pub subtitle: String,
+    pub action: DictationDeviceSelectionAction,
+    pub is_selected: bool,
+}
+
+// ---------------------------------------------------------------------------
+// Pure selection helpers (no I/O — easy to test)
+// ---------------------------------------------------------------------------
+
+/// Resolve a microphone from the device list using a saved preference.
+///
+/// Returns the device matching `selected_device_id` when present, otherwise
+/// falls back to the system default (the device with `is_default == true`).
+pub fn resolve_selected_input_device(
+    devices: &[DictationDeviceInfo],
+    selected_device_id: Option<&str>,
+) -> Option<DictationDeviceInfo> {
+    if let Some(saved) = selected_device_id {
+        if let Some(device) = devices.iter().find(|d| d.id.0 == saved) {
+            return Some(device.clone());
+        }
+    }
+    devices.iter().find(|d| d.is_default).cloned()
+}
+
+/// Build the full menu item list for the microphone picker.
+///
+/// Always includes a "System Default" row at the top, followed by one row per
+/// enumerated device.  Exactly one row will have `is_selected == true`.
+pub fn build_device_menu_items(
+    devices: &[DictationDeviceInfo],
+    selected_device_id: Option<&str>,
+) -> Vec<DictationDeviceMenuItem> {
+    let saved_exists = selected_device_id
+        .map(|saved| devices.iter().any(|d| d.id.0 == saved))
+        .unwrap_or(false);
+
+    let mut items = Vec::with_capacity(devices.len() + 1);
+
+    items.push(DictationDeviceMenuItem {
+        title: "System Default".to_string(),
+        subtitle: devices
+            .iter()
+            .find(|d| d.is_default)
+            .map(|d| format!("Use macOS default microphone ({})", d.name))
+            .unwrap_or_else(|| "Use macOS default microphone".to_string()),
+        action: DictationDeviceSelectionAction::UseSystemDefault,
+        is_selected: selected_device_id.is_none() || !saved_exists,
+    });
+
+    for device in devices {
+        items.push(DictationDeviceMenuItem {
+            title: if device.is_default {
+                format!("{} \u{00b7} default", device.name)
+            } else {
+                device.name.clone()
+            },
+            subtitle: if device.is_default {
+                "Currently the macOS default input".to_string()
+            } else {
+                "Use this microphone for dictation".to_string()
+            },
+            action: DictationDeviceSelectionAction::UseDevice(device.id.clone()),
+            is_selected: selected_device_id == Some(device.id.0.as_str()),
+        });
+    }
+
+    items
+}
+
+// ---------------------------------------------------------------------------
+// I/O wrappers (thin shells over the pure helpers + persistence)
+// ---------------------------------------------------------------------------
+
+/// Enumerate input devices and build a ready-to-render menu item list.
+pub fn list_input_device_menu_items(
+    selected_device_id: Option<&str>,
+) -> Result<Vec<DictationDeviceMenuItem>> {
+    let devices = list_input_devices().context("failed to enumerate microphones")?;
+    Ok(build_device_menu_items(&devices, selected_device_id))
+}
+
+/// Persist a picker selection to user preferences.
+pub fn apply_device_selection(action: &DictationDeviceSelectionAction) -> Result<()> {
+    match action {
+        DictationDeviceSelectionAction::UseSystemDefault => save_dictation_device_id(None),
+        DictationDeviceSelectionAction::UseDevice(device_id) => {
+            save_dictation_device_id(Some(device_id.0.as_str()))
+        }
+    }
+}
+
 /// Persist the selected microphone device ID to user preferences.
 ///
 /// Pass `None` to clear the preference and revert to the system default.

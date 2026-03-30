@@ -1,5 +1,5 @@
 use crate::dictation::capture::{start_capture, DictationCaptureHandle};
-use crate::dictation::device::{default_input_device, list_input_devices};
+use crate::dictation::device::{list_input_devices, resolve_selected_input_device};
 use crate::dictation::transcription::{
     captured_duration, DictationTranscriber, DictationTranscriptionConfig, WhisperDictationEngine,
 };
@@ -230,48 +230,70 @@ fn stop_capture_and_collect(session: &mut DictationSession) -> Result<()> {
 /// Reads `ScriptKitUserPreferences.dictation.selected_device_id` and, if the
 /// device is still present, returns its ID.  Falls back to the system default
 /// when the preference is unset or the device has disappeared.
+///
+/// Delegates the pure selection logic to [`resolve_selected_input_device`] so
+/// the behavior is deterministic and testable without I/O.
 pub(crate) fn resolve_preferred_device() -> Result<Option<DictationDeviceId>> {
     let prefs = crate::config::load_user_preferences();
     let preferred_id = prefs.dictation.selected_device_id.clone();
 
-    let Some(preferred) = preferred_id else {
-        // No preference saved — use system default.
-        let default = default_input_device()?;
-        tracing::info!(
-            category = "DICTATION",
-            device = ?default.as_ref().map(|d| &d.name),
-            "No saved mic preference, using system default"
-        );
-        return Ok(default.map(|d| d.id));
-    };
-
-    // Check whether the saved device is still connected.
     let devices = list_input_devices()?;
-    if let Some(found) = devices.iter().find(|d| d.id.0 == preferred) {
-        tracing::info!(
-            category = "DICTATION",
-            device_id = %found.id.0,
-            device_name = %found.name,
-            "Using saved microphone preference"
-        );
-        return Ok(Some(found.id.clone()));
+    let selected = resolve_selected_input_device(&devices, preferred_id.as_deref());
+
+    match (preferred_id.as_deref(), &selected) {
+        (Some(saved_id), Some(device)) if device.id.0 == saved_id => {
+            tracing::info!(
+                category = "DICTATION",
+                device_id = %device.id.0,
+                device_name = %device.name,
+                "Using saved microphone preference"
+            );
+        }
+        (Some(saved_id), Some(device)) => {
+            tracing::warn!(
+                category = "DICTATION",
+                missing_device_id = %saved_id,
+                fallback_device_id = %device.id.0,
+                fallback_device_name = %device.name,
+                "Saved microphone device not found, falling back to system default"
+            );
+            if let Err(error) = crate::dictation::save_dictation_device_id(None) {
+                tracing::warn!(
+                    category = "DICTATION",
+                    error = %error,
+                    "Failed to clear stale microphone preference"
+                );
+            }
+        }
+        (Some(saved_id), None) => {
+            tracing::warn!(
+                category = "DICTATION",
+                missing_device_id = %saved_id,
+                "Saved microphone device not found and no default input device is available"
+            );
+            if let Err(error) = crate::dictation::save_dictation_device_id(None) {
+                tracing::warn!(
+                    category = "DICTATION",
+                    error = %error,
+                    "Failed to clear stale microphone preference"
+                );
+            }
+        }
+        (None, Some(device)) => {
+            tracing::info!(
+                category = "DICTATION",
+                device_id = %device.id.0,
+                device_name = %device.name,
+                "No saved mic preference, using system default"
+            );
+        }
+        (None, None) => {
+            tracing::warn!(
+                category = "DICTATION",
+                "No saved mic preference and no default input device is available"
+            );
+        }
     }
 
-    // Saved device is no longer available — fall back and self-heal.
-    tracing::warn!(
-        category = "DICTATION",
-        missing_device_id = %preferred,
-        "Saved microphone device not found, falling back to system default"
-    );
-
-    if let Err(error) = crate::dictation::save_dictation_device_id(None) {
-        tracing::warn!(
-            category = "DICTATION",
-            error = %error,
-            "Failed to clear stale microphone preference"
-        );
-    }
-
-    let default = default_input_device()?;
-    Ok(default.map(|d| d.id))
+    Ok(selected.map(|d| d.id))
 }
