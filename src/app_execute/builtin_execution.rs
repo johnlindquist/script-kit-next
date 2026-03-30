@@ -3744,65 +3744,88 @@ impl ScriptListApp {
     ) {
         match result {
             Ok(Some(transcript)) => {
-                let destination =
-                    if self.try_set_prompt_input(transcript.clone(), cx) {
-                        crate::dictation::DictationDestination::ActivePrompt
-                    } else {
-                        match crate::text_injector::TextInjector::new().paste_text(&transcript) {
-                            Ok(()) => crate::dictation::DictationDestination::FrontmostApp,
-                            Err(error) => {
-                                tracing::error!(
-                                    category = "DICTATION",
-                                    error = %error,
-                                    "Failed to paste transcript to frontmost app"
-                                );
-                                let _ = crate::dictation::update_dictation_overlay(
-                                    crate::dictation::DictationOverlayState {
-                                        phase: crate::dictation::DictationSessionPhase::Failed(
-                                            error.to_string(),
-                                        ),
-                                        elapsed: audio_duration,
-                                        ..Default::default()
-                                    },
-                                    cx,
-                                );
-                                self.schedule_dictation_overlay_close(
-                                    cx,
-                                    std::time::Duration::from_millis(800),
-                                );
-                                self.schedule_dictation_transcriber_cleanup(
-                                    cx,
-                                    std::time::Duration::from_secs(300),
-                                );
-                                return;
+                if self.try_set_prompt_input(transcript.clone(), cx) {
+                    tracing::info!(
+                        category = "DICTATION",
+                        destination = ?crate::dictation::DictationDestination::ActivePrompt,
+                        transcript_len = transcript.len(),
+                        "Transcript delivered"
+                    );
+
+                    let _ = crate::dictation::update_dictation_overlay(
+                        crate::dictation::DictationOverlayState {
+                            phase: crate::dictation::DictationSessionPhase::Finished,
+                            elapsed: audio_duration,
+                            transcript: transcript.into(),
+                            ..Default::default()
+                        },
+                        cx,
+                    );
+                    self.schedule_dictation_overlay_close(
+                        cx,
+                        std::time::Duration::from_millis(400),
+                    );
+                    self.schedule_dictation_transcriber_cleanup(
+                        cx,
+                        std::time::Duration::from_secs(300),
+                    );
+                } else {
+                    // Paste to frontmost app: hide Script Kit's windows first
+                    // so macOS returns keyboard focus to the target app before
+                    // the CGEvent Cmd+V fires.
+                    let _ = crate::dictation::close_dictation_overlay(cx);
+                    if script_kit_gpui::is_main_window_visible() {
+                        script_kit_gpui::set_main_window_visible(false);
+                        platform::defer_hide_main_window(cx);
+                    }
+
+                    cx.spawn(async move |this, cx| {
+                        // Let macOS settle focus back to the target app.
+                        cx.background_executor()
+                            .timer(std::time::Duration::from_millis(100))
+                            .await;
+
+                        let paste_result = cx
+                            .background_executor()
+                            .spawn({
+                                let transcript = transcript.clone();
+                                async move {
+                                    crate::text_injector::TextInjector::new()
+                                        .paste_text(&transcript)
+                                }
+                            })
+                            .await;
+
+                        let _ = this.update(cx, |this, cx| {
+                            match paste_result {
+                                Ok(()) => {
+                                    tracing::info!(
+                                        category = "DICTATION",
+                                        destination = ?crate::dictation::DictationDestination::FrontmostApp,
+                                        transcript_len = transcript.len(),
+                                        "Transcript delivered"
+                                    );
+                                }
+                                Err(ref error) => {
+                                    tracing::error!(
+                                        category = "DICTATION",
+                                        error = %error,
+                                        "Failed to paste dictation transcript"
+                                    );
+                                    this.show_error_toast(
+                                        format!("Dictation paste failed: {error}"),
+                                        cx,
+                                    );
+                                }
                             }
-                        }
-                    };
-
-                tracing::info!(
-                    category = "DICTATION",
-                    destination = ?destination,
-                    transcript_len = transcript.len(),
-                    "Transcript delivered"
-                );
-
-                let _ = crate::dictation::update_dictation_overlay(
-                    crate::dictation::DictationOverlayState {
-                        phase: crate::dictation::DictationSessionPhase::Finished,
-                        elapsed: audio_duration,
-                        transcript: transcript.into(),
-                        ..Default::default()
-                    },
-                    cx,
-                );
-                self.schedule_dictation_overlay_close(
-                    cx,
-                    std::time::Duration::from_millis(400),
-                );
-                self.schedule_dictation_transcriber_cleanup(
-                    cx,
-                    std::time::Duration::from_secs(300),
-                );
+                            this.schedule_dictation_transcriber_cleanup(
+                                cx,
+                                std::time::Duration::from_secs(300),
+                            );
+                        });
+                    })
+                    .detach();
+                }
             }
             Ok(None) => {
                 // No speech detected — close overlay quietly.
