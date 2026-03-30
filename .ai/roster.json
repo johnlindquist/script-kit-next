@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-03-29T19:16:18.600Z",
+  "updatedAt": "2026-03-30T12:15:56.458Z",
   "agents": {
     "tab-ai-instant-context-a1": {
       "id": "tab-ai-instant-context-a1",
@@ -259,6 +259,76 @@
           "src/dictation/visualizer.rs",
           "src/lib.rs",
           "src/main.rs"
+        ]
+      },
+      "claimed_at": {}
+    },
+    "device-model-readiness-a1": {
+      "id": "device-model-readiness-a1",
+      "kind": "codex",
+      "mode": "exec",
+      "model": "openai/gpt-5.4",
+      "task": "Confirm and stabilize microphone selection persistence and Whisper model readiness on the integrated dictation path. This is iteration 12 of an ongoing dictation migration from vercel-voice into Script Kit GPUI.\n\nACCEPTANCE CRITERIA:\n1. A valid saved selectedDeviceId is resolved and used; a missing saved device falls back to the system default; a stale saved device is cleared without blocking dictation start.\n2. list_input_device_menu_items(...) and apply_device_selection(...) behave consistently with the persisted settings shape under dictation.selectedDeviceId in ScriptKitUserPreferences (src/config/types.rs).\n3. resolve_default_model_path() and WhisperDictationEngine::new(&DictationTranscriptionConfig::default()) either initialize successfully with a valid model or return a surfaced error for a missing/invalid model, and silent input still resolves to Ok(None).\n\nKEY FILES:\n- src/dictation/device.rs — mic enumeration, resolve_selected_input_device, build_device_menu_items, list_input_device_menu_items, apply_device_selection, save_dictation_device_id\n- src/dictation/runtime.rs — toggle_dictation, resolve_preferred_device (loads pref, clears stale), transcribe_captured_audio (lazy Whisper init)\n- src/dictation/transcription.rs — WhisperDictationEngine::new (validates model path), resolve_default_model_path, DictationTranscriber, DictationTranscriptionConfig\n- src/config/types.rs — DictationPreferences { selected_device_id: Option<String> }, ScriptKitUserPreferences\n- src/config/loader.rs — load_user_preferences, save_user_preferences (merge strategy preserving unknown keys)\n- src/dictation/tests.rs — existing test suite (~85KB, 70+ tests)\n\nARCHITECTURE ANCHORS:\n- DictationPreferences lives at dictation.selectedDeviceId in settings.json (camelCase serde)\n- resolve_preferred_device() in runtime.rs loads prefs, calls list_input_devices + resolve_selected_input_device, and clears stale prefs via save_dictation_device_id(None)\n- WhisperDictationEngine::new validates model_path exists and is a regular file (lazy load on first transcribe)\n- Default model path: get_kit_path()/models/whisper-medium-q4_1.bin\n- Settings persistence uses save_user_preferences which does JSON merge to preserve unknown keys\n\nCONSTRAINTS:\n- Do NOT add cpal; stay on AVFoundation capture path\n- Do NOT add settings UI; only stabilize persistence and fallback behavior\n- Do NOT use unwrap()/expect() in production code\n- Use ? + anyhow::Context for error handling\n- All tests must pass: cargo check && cargo clippy --lib -- -D warnings && cargo nextest run --lib\n- If tests already pass with no changes needed, verify and confirm that each acceptance criterion is met by the existing code\n\nAPPROACH: Read each key file carefully. Verify the device selection persistence round-trip (save -> load -> resolve). Verify stale device fallback clears the pref. Verify WhisperDictationEngine::new returns proper errors for missing/invalid model. Verify silent input returns Ok(None). Add or fix tests if any acceptance criterion is not covered. Fix any bugs found. Run the full verification gate.",
+      "scope": "src/dictation/{device,runtime,transcription,tests,mod}.rs,src/config/{types,loader}.rs",
+      "readonly": false,
+      "status": "needs_split",
+      "claims": [],
+      "createdAt": "2026-03-30T12:03:44.747Z",
+      "lastSeenAt": "2026-03-30T12:15:46.751Z",
+      "host": "johns.macbook.pro.lan",
+      "startSha": "51a107417ebcad7df6e480dc6ac01ade23c158eb",
+      "notes": "[policy] commits touch files outside declared scope",
+      "report": {
+        "schema": "opex.agent_report.v1",
+        "agentId": "device-model-readiness-a1",
+        "taskSummary": "Stabilized integrated dictation so silent input skips Whisper initialization, preserved and regression-tested selected microphone persistence behavior, and verified default/missing model-path readiness handling.",
+        "tests": [
+          {
+            "cmd": "cargo test --lib dictation::tests::transcribe_captured_audio_returns_none_for_silent_input_without_model -- --exact",
+            "result": "pass"
+          },
+          {
+            "cmd": "cargo test --lib dictation::tests::apply_device_selection_persists_selected_device_id_and_clears_to_default -- --exact",
+            "result": "pass"
+          },
+          {
+            "cmd": "cargo test --lib dictation::tests::whisper_engine_new_with_default_config_surfaces_path_or_succeeds -- --exact",
+            "result": "pass"
+          },
+          {
+            "cmd": "cargo test --lib dictation::tests::dictation_preferences_serialize_selected_device_id_as_camel_case -- --exact",
+            "result": "pass"
+          },
+          {
+            "cmd": "cargo test --lib dictation::tests::save_user_preferences_preserves_unknown_keys_and_round_trips_dictation_preference -- --exact",
+            "result": "pass"
+          },
+          {
+            "cmd": "cargo check",
+            "result": "pass"
+          },
+          {
+            "cmd": "cargo clippy --lib -- -D warnings",
+            "result": "pass"
+          },
+          {
+            "cmd": "cargo nextest run --lib",
+            "result": "pass"
+          }
+        ],
+        "changedFiles": [
+          "src/dictation/runtime.rs",
+          "src/dictation/transcription.rs",
+          "src/dictation/tests.rs"
+        ],
+        "commitCount": 1,
+        "commitShas": [
+          "347a93e3cb7e57a999450bf4ef3be9b6862d3397"
+        ],
+        "commitFiles": [
+          "src/dictation/runtime.rs",
+          "src/dictation/tests.rs",
+          "src/dictation/transcription.rs"
         ]
       },
       "claimed_at": {}

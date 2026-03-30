@@ -3827,7 +3827,7 @@ impl ScriptListApp {
 
                         if let Err(error) = yield_focus_result {
                             let error_text = error.to_string();
-                            let _ = this.update(cx, |this, cx| {
+                            if this.update(cx, |this, cx| {
                                 tracing::error!(
                                     category = "DICTATION",
                                     error = %error_text,
@@ -3843,7 +3843,13 @@ impl ScriptListApp {
                                     cx,
                                     std::time::Duration::from_secs(300),
                                 );
-                            });
+                            }).is_err() {
+                                tracing::warn!(
+                                    category = "DICTATION",
+                                    error = %error_text,
+                                    "Yield-focus failure could not be surfaced (entity released)"
+                                );
+                            }
                             return;
                         }
 
@@ -3863,7 +3869,7 @@ impl ScriptListApp {
                             })
                             .await;
 
-                        let _ = this.update(cx, |this, cx| {
+                        if this.update(cx, |this, cx| {
                             match paste_result {
                                 Ok(()) => {
                                     tracing::info!(
@@ -3889,7 +3895,13 @@ impl ScriptListApp {
                                 cx,
                                 std::time::Duration::from_secs(300),
                             );
-                        });
+                        }).is_err() {
+                            tracing::warn!(
+                                category = "DICTATION",
+                                transcript_len = transcript.len(),
+                                "Paste result could not be reported (entity released)"
+                            );
+                        }
                     })
                     .detach();
                 }
@@ -3934,7 +3946,7 @@ impl ScriptListApp {
     }
 
     const DICTATION_DONE_STATE_MS: u64 = 75;
-    const DICTATION_FOCUS_SETTLE_MS: u64 = 100;
+    const DICTATION_FOCUS_SETTLE_MS: u64 = 150;
 
     fn dictation_done_state_duration() -> std::time::Duration {
         std::time::Duration::from_millis(Self::DICTATION_DONE_STATE_MS)

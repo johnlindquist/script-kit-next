@@ -2100,10 +2100,7 @@ mod tab_ai_agent_doc_contract_tests {
             "InputNotExtractable",
             "InputNotApplicable",
         ] {
-            assert!(
-                source.contains(needle),
-                "{label} must contain `{needle}`"
-            );
+            assert!(source.contains(needle), "{label} must contain `{needle}`");
         }
 
         for stale in [
