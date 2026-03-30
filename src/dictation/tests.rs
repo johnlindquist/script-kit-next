@@ -3622,3 +3622,50 @@ fn dictation_model_status_variants() {
     assert_eq!(statuses.len(), 5);
     assert_ne!(statuses[0], statuses[1]);
 }
+
+// ---------------------------------------------------------------------------
+// Source-contract regression tests
+// ---------------------------------------------------------------------------
+
+/// Ensure the overlay window opens without activating the app and receives
+/// key events (Escape) via orderFrontRegardless + makeKeyWindow + GPUI focus.
+/// These invariants protect the hotkey-only overlay goal and the Escape-confirm flow.
+#[test]
+fn overlay_requests_key_delivery_without_app_activation() {
+    let src = std::fs::read_to_string("src/dictation/window.rs").expect("read window.rs");
+    assert!(
+        src.contains("focus: false"),
+        "overlay must not activate the app when it opens"
+    );
+    assert!(
+        src.contains("orderFrontRegardless"),
+        "overlay must raise itself without activating the app"
+    );
+    assert!(
+        src.contains("makeKeyWindow"),
+        "overlay must request key-window status so Escape is delivered"
+    );
+    assert!(
+        src.contains("view.focus_handle.focus(window, cx);"),
+        "overlay must focus the GPUI focus handle after opening"
+    );
+}
+
+/// Ensure the transcription pipeline logs model resolution details so that
+/// second-hotkey failures are diagnosable from logs alone.
+#[test]
+fn dictation_transcription_logs_model_resolution_details() {
+    let src = std::fs::read_to_string("src/dictation/runtime.rs").expect("read runtime.rs");
+    assert!(
+        src.contains("model_exists = config.model_path.exists()"),
+        "transcription log must include model_exists"
+    );
+    assert!(
+        src.contains("model_is_file = config.model_path.is_file()"),
+        "transcription log must include model_is_file"
+    );
+    assert!(
+        src.contains("Parakeet model not available, falling back to Whisper"),
+        "runtime must log Whisper fallback explicitly"
+    );
+}
