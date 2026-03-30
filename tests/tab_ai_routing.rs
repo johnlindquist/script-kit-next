@@ -649,9 +649,12 @@ fn schedule_tab_ai_harness_prewarm_exists_and_uses_timer() {
         fn_body.contains("background_executor().timer("),
         "prewarm scheduler must use background_executor timer for the delay"
     );
+    // The scheduler delegates to the post-close prewarm helper, which
+    // internally calls warm_tab_ai_harness_silently.
     assert!(
-        fn_body.contains("warm_tab_ai_harness_on_startup"),
-        "prewarm scheduler must call warm_tab_ai_harness_on_startup"
+        fn_body.contains("warm_tab_ai_harness_after_close")
+            || fn_body.contains("warm_tab_ai_harness_on_startup"),
+        "prewarm scheduler must call a prewarm helper"
     );
     assert!(
         fn_body.contains(".detach()"),
@@ -863,13 +866,15 @@ fn startup_prewarm_is_async_and_detached() {
 
 #[test]
 fn prewarm_checks_warm_on_startup_flag() {
-    // The warm method must respect the config's warm_on_startup field.
+    // The warm_on_startup check lives in warm_tab_ai_harness_silently,
+    // which warm_tab_ai_harness_on_startup delegates to.
     let warm_fn_start = TAB_AI_MODE_SOURCE
-        .find("fn warm_tab_ai_harness_on_startup(")
-        .expect("warm_tab_ai_harness_on_startup must exist");
+        .find("fn warm_tab_ai_harness_silently(")
+        .expect("warm_tab_ai_harness_silently must exist");
     let warm_fn_body = &TAB_AI_MODE_SOURCE[warm_fn_start..];
     let next_fn = warm_fn_body[1..]
         .find("\n    fn ")
+        .or_else(|| warm_fn_body[1..].find("\n    pub"))
         .unwrap_or(warm_fn_body.len());
     let warm_fn_body = &warm_fn_body[..next_fn];
 
@@ -885,14 +890,16 @@ fn prewarm_checks_warm_on_startup_flag() {
 
 #[test]
 fn prewarm_reuses_ensure_harness_terminal() {
-    // Prewarm must call the same session constructor that Tab uses,
-    // so the first Tab press reuses the prewarmed session.
+    // Prewarm must call the same session constructor that Tab uses.
+    // The logic lives in warm_tab_ai_harness_silently, which both
+    // warm_tab_ai_harness_on_startup and warm_tab_ai_harness_after_close delegate to.
     let warm_fn_start = TAB_AI_MODE_SOURCE
-        .find("fn warm_tab_ai_harness_on_startup(")
-        .expect("warm_tab_ai_harness_on_startup must exist");
+        .find("fn warm_tab_ai_harness_silently(")
+        .expect("warm_tab_ai_harness_silently must exist");
     let warm_fn_body = &TAB_AI_MODE_SOURCE[warm_fn_start..];
     let next_fn = warm_fn_body[1..]
         .find("\n    fn ")
+        .or_else(|| warm_fn_body[1..].find("\n    pub"))
         .unwrap_or(warm_fn_body.len());
     let warm_fn_body = &warm_fn_body[..next_fn];
 
@@ -905,12 +912,14 @@ fn prewarm_reuses_ensure_harness_terminal() {
 #[test]
 fn prewarm_skips_if_session_already_alive() {
     // If a harness session is already live, prewarm should no-op.
+    // The logic lives in warm_tab_ai_harness_silently.
     let warm_fn_start = TAB_AI_MODE_SOURCE
-        .find("fn warm_tab_ai_harness_on_startup(")
-        .expect("warm_tab_ai_harness_on_startup must exist");
+        .find("fn warm_tab_ai_harness_silently(")
+        .expect("warm_tab_ai_harness_silently must exist");
     let warm_fn_body = &TAB_AI_MODE_SOURCE[warm_fn_start..];
     let next_fn = warm_fn_body[1..]
         .find("\n    fn ")
+        .or_else(|| warm_fn_body[1..].find("\n    pub"))
         .unwrap_or(warm_fn_body.len());
     let warm_fn_body = &warm_fn_body[..next_fn];
 
@@ -927,12 +936,14 @@ fn prewarm_skips_if_session_already_alive() {
 #[test]
 fn prewarm_handles_config_read_failure_silently() {
     // If config cannot be read, prewarm must log and return — no toast, no panic.
+    // The logic lives in warm_tab_ai_harness_silently.
     let warm_fn_start = TAB_AI_MODE_SOURCE
-        .find("fn warm_tab_ai_harness_on_startup(")
-        .expect("warm_tab_ai_harness_on_startup must exist");
+        .find("fn warm_tab_ai_harness_silently(")
+        .expect("warm_tab_ai_harness_silently must exist");
     let warm_fn_body = &TAB_AI_MODE_SOURCE[warm_fn_start..];
     let next_fn = warm_fn_body[1..]
         .find("\n    fn ")
+        .or_else(|| warm_fn_body[1..].find("\n    pub"))
         .unwrap_or(warm_fn_body.len());
     let warm_fn_body = &warm_fn_body[..next_fn];
 
@@ -954,12 +965,14 @@ fn prewarm_handles_config_read_failure_silently() {
 #[test]
 fn prewarm_handles_invalid_config_silently() {
     // If config is invalid (e.g. missing binary), prewarm must log and return.
+    // The logic lives in warm_tab_ai_harness_silently.
     let warm_fn_start = TAB_AI_MODE_SOURCE
-        .find("fn warm_tab_ai_harness_on_startup(")
-        .expect("warm_tab_ai_harness_on_startup must exist");
+        .find("fn warm_tab_ai_harness_silently(")
+        .expect("warm_tab_ai_harness_silently must exist");
     let warm_fn_body = &TAB_AI_MODE_SOURCE[warm_fn_start..];
     let next_fn = warm_fn_body[1..]
         .find("\n    fn ")
+        .or_else(|| warm_fn_body[1..].find("\n    pub"))
         .unwrap_or(warm_fn_body.len());
     let warm_fn_body = &warm_fn_body[..next_fn];
 
@@ -977,12 +990,14 @@ fn prewarm_handles_invalid_config_silently() {
 fn prewarm_logs_structured_events() {
     // All prewarm paths must use tracing with structured event fields
     // so SCRIPT_KIT_AI_LOG=1 output is machine-parseable.
+    // The logic lives in warm_tab_ai_harness_silently.
     let warm_fn_start = TAB_AI_MODE_SOURCE
-        .find("fn warm_tab_ai_harness_on_startup(")
-        .expect("warm_tab_ai_harness_on_startup must exist");
+        .find("fn warm_tab_ai_harness_silently(")
+        .expect("warm_tab_ai_harness_silently must exist");
     let warm_fn_body = &TAB_AI_MODE_SOURCE[warm_fn_start..];
     let next_fn = warm_fn_body[1..]
         .find("\n    fn ")
+        .or_else(|| warm_fn_body[1..].find("\n    pub"))
         .unwrap_or(warm_fn_body.len());
     let warm_fn_body = &warm_fn_body[..next_fn];
 
@@ -1028,7 +1043,8 @@ fn prewarm_does_not_switch_view() {
 // =========================================================================
 
 #[test]
-fn open_path_reuses_fresh_prewarm_once_then_forces_fresh() {
+fn open_path_always_forces_fresh_session() {
+    // Every explicit Tab entry gets a fresh harness session — no prewarm reuse.
     let open_fn_start = TAB_AI_MODE_SOURCE
         .find("fn open_tab_ai_harness_terminal_from_request(")
         .expect("open_tab_ai_harness_terminal_from_request must exist");
@@ -1038,34 +1054,28 @@ fn open_path_reuses_fresh_prewarm_once_then_forces_fresh() {
         .unwrap_or(open_fn_body.len());
     let open_fn_body = &open_fn_body[..next_fn];
 
-    // The open path reuses a fresh prewarmed session exactly once, then forces fresh.
     assert!(
-        open_fn_body.contains("is_fresh_prewarm()"),
-        "open path must check is_fresh_prewarm to decide whether to reuse"
+        open_fn_body.contains("ensure_tab_ai_harness_terminal(true, cx)"),
+        "open path must always force a fresh session (force_fresh=true)"
     );
-    assert!(
-        open_fn_body.contains("mark_consumed()"),
-        "open path must mark_consumed after reusing a fresh prewarm"
-    );
-    assert!(
-        open_fn_body.contains("ensure_tab_ai_harness_terminal(!reuse_fresh_prewarm, cx)"),
-        "open path must pass !reuse_fresh_prewarm so first Tab reuses the warm PTY"
-    );
+    // FreshPrewarm is still used by the prewarm path itself (not the open path).
     assert!(
         TAB_AI_MODE_SOURCE.contains("FreshPrewarm"),
-        "tab ai lifecycle must still distinguish prewarmed sessions for the startup prewarm path"
+        "tab ai lifecycle must still distinguish prewarmed sessions for the prewarm path"
     );
 }
 
 #[test]
 fn prewarm_tags_cold_start_as_fresh_prewarm() {
     // After a cold-start prewarm, the session must be tagged FreshPrewarm.
+    // The logic lives in warm_tab_ai_harness_silently.
     let warm_fn_start = TAB_AI_MODE_SOURCE
-        .find("fn warm_tab_ai_harness_on_startup(")
-        .expect("warm_tab_ai_harness_on_startup must exist");
+        .find("fn warm_tab_ai_harness_silently(")
+        .expect("warm_tab_ai_harness_silently must exist");
     let warm_fn_body = &TAB_AI_MODE_SOURCE[warm_fn_start..];
     let next_fn = warm_fn_body[1..]
         .find("\n    fn ")
+        .or_else(|| warm_fn_body[1..].find("\n    pub"))
         .unwrap_or(warm_fn_body.len());
     let warm_fn_body = &warm_fn_body[..next_fn];
 
@@ -1080,8 +1090,8 @@ fn prewarm_tags_cold_start_as_fresh_prewarm() {
 }
 
 #[test]
-fn open_path_reuses_prewarm_or_forces_fresh() {
-    // The open path reuses a silently prewarmed session once, otherwise forces fresh.
+fn open_path_forces_fresh_not_conditional() {
+    // Every explicit Tab entry always forces a fresh session.
     let open_fn_start = TAB_AI_MODE_SOURCE
         .find("fn open_tab_ai_harness_terminal_from_request(")
         .expect("open_tab_ai_harness_terminal_from_request must exist");
@@ -1092,24 +1102,20 @@ fn open_path_reuses_prewarm_or_forces_fresh() {
     let open_fn_body = &open_fn_body[..next_fn];
 
     assert!(
-        open_fn_body.contains("ensure_tab_ai_harness_terminal(!reuse_fresh_prewarm, cx)"),
-        "open path must reuse fresh prewarm (force_fresh=false) or force fresh (true)"
+        open_fn_body.contains("ensure_tab_ai_harness_terminal(true, cx)"),
+        "open path must always force fresh (no conditional prewarm reuse)"
     );
+    // The old conditional reuse pattern must be gone.
     assert!(
-        open_fn_body.contains("is_fresh_prewarm()"),
-        "open path must check is_fresh_prewarm to decide reuse"
-    );
-    assert!(
-        open_fn_body.contains("mark_consumed()"),
-        "open path must mark_consumed after reusing a fresh prewarm"
+        !open_fn_body.contains("!reuse_fresh_prewarm"),
+        "open path must not use the old conditional reuse_fresh_prewarm pattern"
     );
 }
 
 #[test]
-fn close_then_prewarm_then_reuse_once_lifecycle_contract() {
-    // End-to-end contract: close clears session → prewarm creates FreshPrewarm
-    // → open reuses the fresh prewarm once (instant first open), then forces fresh
-    // on subsequent opens without a fresh prewarm.
+fn close_then_prewarm_then_fresh_open_lifecycle_contract() {
+    // End-to-end contract: close clears session → prewarm seeds a warm PTY
+    // → open always forces a fresh session (no stale context reuse).
 
     // 1. close_tab_ai_harness_terminal clears session and schedules prewarm
     let close_fn_start = TAB_AI_MODE_SOURCE
@@ -1131,13 +1137,13 @@ fn close_then_prewarm_then_reuse_once_lifecycle_contract() {
         "close must schedule a deferred prewarm"
     );
 
-    // 2. warm_tab_ai_harness_on_startup tags cold starts as FreshPrewarm
+    // 2. warm_tab_ai_harness_silently tags cold starts as FreshPrewarm
     assert!(
         TAB_AI_MODE_SOURCE.contains("mark_fresh_prewarm()"),
         "prewarm path must tag cold-start sessions via mark_fresh_prewarm()"
     );
 
-    // 3. open path reuses fresh prewarm once, then forces fresh
+    // 3. open path always forces a fresh session
     let open_fn_start = TAB_AI_MODE_SOURCE
         .find("fn open_tab_ai_harness_terminal_from_request(")
         .expect("open_tab_ai_harness_terminal_from_request must exist");
@@ -1148,8 +1154,8 @@ fn close_then_prewarm_then_reuse_once_lifecycle_contract() {
     let open_fn_body = &open_fn_body[..next_fn];
 
     assert!(
-        open_fn_body.contains("ensure_tab_ai_harness_terminal(!reuse_fresh_prewarm, cx)"),
-        "open path must reuse fresh prewarm once, then force fresh"
+        open_fn_body.contains("ensure_tab_ai_harness_terminal(true, cx)"),
+        "open path must always force fresh — no conditional prewarm reuse"
     );
 }
 
