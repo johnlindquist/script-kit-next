@@ -318,7 +318,7 @@ impl ScriptListApp {
         // Small buffer (4) prevents blocking, more than enough for normal use
         let (api_key_tx, api_key_rx) = mpsc::sync_channel(4);
 
-        // Legacy chat channels (retained for TabAiChat compatibility — not the primary Tab AI surface)
+        // Legacy chat channels (retained for inline chat compatibility — not the primary Tab AI surface)
         let (inline_chat_escape_tx, inline_chat_escape_rx) = mpsc::sync_channel(4);
         let (inline_chat_continue_tx, inline_chat_continue_rx) = mpsc::sync_channel(4);
         let (inline_chat_configure_tx, inline_chat_configure_rx) = mpsc::sync_channel(4);
