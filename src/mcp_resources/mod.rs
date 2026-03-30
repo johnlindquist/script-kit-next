@@ -131,7 +131,7 @@ pub fn get_resource_definitions() -> Vec<McpResource> {
         McpResource {
             uri: "scripts://".to_string(),
             name: "Scripts".to_string(),
-            description: Some("List of all available scripts in ~/.scriptkit/scripts/".to_string()),
+            description: Some("List of all available scripts in ~/.scriptkit/kit/main/scripts/".to_string()),
             mime_type: "application/json".to_string(),
         },
         McpResource {
@@ -162,7 +162,7 @@ pub fn get_resource_definitions() -> Vec<McpResource> {
             uri: "kit://scripts".to_string(),
             name: "Scripts (versioned)".to_string(),
             description: Some(
-                "Schema-versioned list of all scripts in ~/.scriptkit/scripts/ with metadata. Safe for repeated reads."
+                "Schema-versioned list of all scripts in ~/.scriptkit/kit/main/scripts/ with metadata. Safe for repeated reads."
                     .to_string(),
             ),
             mime_type: "application/json".to_string(),
@@ -649,12 +649,22 @@ fn build_harness_workflow() -> HarnessWorkflow {
             "console.log(result);\n",
         ).into(),
         example_scriptlet: concat!(
-            "## Copy Date\n",
+            "---\n",
+            "name: Date Tools\n",
+            "description: Helpful date utilities\n",
+            "---\n",
             "\n",
-            "```js\n",
-            "// Shortcut: opt d\n",
-            "// Description: Copy today's date\n",
+            "# Date Tools\n",
+            "\n",
+            "## Copy Date\n",
+            "<!-- description: Copy today's date -->\n",
+            "<!-- shortcut: opt d -->\n",
+            "\n",
+            "```tool:copy-date\n",
+            "import \"@scriptkit/sdk\";\n",
+            "\n",
             "await copy(new Date().toISOString().slice(0, 10));\n",
+            "await notify(\"Copied today's date\");\n",
             "```\n",
         ).into(),
     }

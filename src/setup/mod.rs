@@ -2067,10 +2067,7 @@ mod tab_ai_agent_doc_contract_tests {
             "Cmd+W",
             "Escape",
         ] {
-            assert!(
-                source.contains(needle),
-                "{label} must contain `{needle}`"
-            );
+            assert!(source.contains(needle), "{label} must contain `{needle}`");
         }
 
         assert!(

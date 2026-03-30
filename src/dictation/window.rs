@@ -4,6 +4,13 @@ use std::time::Duration;
 use crate::dictation::types::{DictationLevel, DictationSessionPhase};
 use crate::dictation::visualizer::bars_for_level;
 
+/// Vercel-voice overlay color constants.
+/// Green for active audio, red for silence.
+const OVERLAY_ACTIVE_COLOR: u32 = 0x52c41a;
+const OVERLAY_INACTIVE_COLOR: u32 = 0xff4d4f;
+/// Threshold: if any bar exceeds this, we treat audio as "active" (green).
+const SOUND_THRESHOLD: f32 = 0.15;
+
 /// Snapshot of the dictation overlay's visual state.
 ///
 /// Updated on every level/phase change and consumed by the overlay renderer.
@@ -39,7 +46,7 @@ use gpui::{
 };
 
 use crate::theme::get_cached_theme;
-use crate::theme::opacity::{OPACITY_ACTIVE, OPACITY_GHOST, OPACITY_MUTED, OPACITY_TEXT_MUTED};
+use crate::theme::opacity::OPACITY_ACTIVE;
 use crate::ui_foundation::HexColorExt;
 
 use std::sync::{Mutex, OnceLock};
@@ -79,89 +86,149 @@ impl Render for DictationOverlay {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
         let theme = get_cached_theme();
 
-        // Surface: ghost-opacity background, compact pill (36px tall).
-        let surface_bg = theme.colors.background.main.with_opacity(OPACITY_GHOST);
+        // Vercel-voice surface: dark translucent pill with border + shadow.
+        // Primary uses rgba(18,18,22, 0.42) fallback; with vibrancy rgba(18,18,22, 0.24).
+        let surface_bg = if theme.is_vibrancy_enabled() {
+            gpui::rgba(0x1212163D) // ~0.24 alpha
+        } else {
+            gpui::rgba(0x1212166B) // ~0.42 alpha
+        };
+        let border_color = gpui::rgba(0xFFFFFF2E); // rgba(255,255,255,0.18)
+
+        let timer_color = gpui::rgba(0xFFFFFF80); // rgba(255,255,255,0.50)
+        let muted_text = gpui::rgba(0xFFFFFFA6); // rgba(255,255,255,0.65)
         let text_color = theme.colors.text.primary.with_opacity(OPACITY_ACTIVE);
-        let muted_text = theme.colors.text.primary.with_opacity(OPACITY_TEXT_MUTED);
-        let bar_hex = theme.colors.text.primary;
 
         let phase = &self.state.phase;
         let bars = &self.state.bars;
         let elapsed = &self.state.elapsed;
 
-        // Build the inner content based on current phase.
+        // 3-column inner content matching vercel-voice grid layout:
+        //   left (timer) | center (bars/dots/status) | right (spacer)
         let inner = match phase {
             DictationSessionPhase::Recording => {
                 let elapsed_secs = elapsed.as_secs();
                 let timer_text: SharedString =
-                    format!("{:02}:{:02}", elapsed_secs / 60, elapsed_secs % 60).into();
+                    format!("{}:{:02}", elapsed_secs / 60, elapsed_secs % 60).into();
+                let has_sound = bars.iter().any(|&b| b > SOUND_THRESHOLD);
 
                 div()
                     .flex()
                     .flex_row()
                     .items_center()
-                    .gap(px(6.))
-                    .child(render_waveform_bars(bars, bar_hex))
+                    .w_full()
+                    // Left: timer
                     .child(
                         div()
-                            .text_size(px(13.))
-                            .text_color(text_color)
-                            .child(timer_text),
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .gap(px(8.))
+                            .child(
+                                div()
+                                    .text_size(px(11.5))
+                                    .text_color(timer_color)
+                                    .child(timer_text),
+                            ),
                     )
+                    // Center: waveform bars (flex-grow to fill)
+                    .child(
+                        div()
+                            .flex_1()
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .justify_center()
+                            .child(render_waveform_bars(bars, has_sound)),
+                    )
+                    // Right: spacer to balance the timer width
+                    .child(div().w(px(32.)))
             }
             DictationSessionPhase::Transcribing => {
-                div().flex().flex_row().items_center().gap(px(6.)).child(
-                    div()
-                        .text_size(px(13.))
-                        .text_color(muted_text)
-                        .child(SharedString::from("Transcribing…")),
-                )
-            }
-            DictationSessionPhase::Finished => div().flex().flex_row().items_center().child(
+                // 3 green dots matching vercel-voice .transcribing-dots
                 div()
-                    .text_size(px(13.))
-                    .text_color(text_color)
-                    .child(self.state.transcript.clone()),
-            ),
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .justify_center()
+                    .w_full()
+                    .child(render_transcribing_dots())
+            }
+            DictationSessionPhase::Finished => div()
+                .flex()
+                .flex_row()
+                .items_center()
+                .justify_center()
+                .w_full()
+                .child(
+                    div()
+                        .text_size(px(11.5))
+                        .text_color(text_color)
+                        .overflow_hidden()
+                        .child(self.state.transcript.clone()),
+                ),
             DictationSessionPhase::Failed(ref msg) => {
                 let err_text: SharedString = format!("Error: {msg}").into();
-                div().flex().flex_row().items_center().child(
-                    div()
-                        .text_size(px(13.))
-                        .text_color(muted_text)
-                        .child(err_text),
-                )
+                div()
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .justify_center()
+                    .w_full()
+                    .child(
+                        div()
+                            .text_size(px(11.5))
+                            .text_color(muted_text)
+                            .overflow_hidden()
+                            .child(err_text),
+                    )
             }
             // Idle / Delivering — render nothing meaningful
             _ => div(),
         };
 
+        // Compact pill: 36px tall, fully-rounded (18px), border stroke.
         div()
             .flex()
             .flex_row()
             .items_center()
             .justify_center()
             .h(px(36.))
-            .px(px(12.))
+            .px(px(16.))
+            .gap(px(12.))
             .bg(surface_bg)
-            .rounded(px(8.))
+            .rounded(px(18.))
+            .border_1()
+            .border_color(border_color)
             .child(inner)
     }
 }
 
-/// Render 9 waveform bars as a tiny inline element.
-fn render_waveform_bars(bars: &[f32; 9], text_hex: u32) -> impl IntoElement {
+/// Render 9 waveform bars matching vercel-voice `.bars-container` styling.
+///
+/// Bars are 4px wide, 4px gap, 4px min-height, 20px max-height, fully rounded.
+/// Green (`#52c41a`) when sound is detected, red (`#ff4d4f`) when silent.
+fn render_waveform_bars(bars: &[f32; 9], has_sound: bool) -> impl IntoElement {
+    let bar_hex = if has_sound {
+        OVERLAY_ACTIVE_COLOR
+    } else {
+        OVERLAY_INACTIVE_COLOR
+    };
+
     let bar_elements: Vec<_> = bars
         .iter()
         .map(|&height| {
-            let bar_opacity = OPACITY_MUTED + height * (OPACITY_ACTIVE - OPACITY_MUTED);
-            let bar_color = text_hex.with_opacity(bar_opacity);
+            // Opacity: clamp(0.3, value * 1.5, 1.0) — matching vercel-voice JS
+            let bar_opacity = (height * 1.5).clamp(0.3, 1.0);
+            let bar_color = bar_hex.with_opacity(bar_opacity);
+            // Height: 4 + pow(v, 0.7) * 16 — matching vercel-voice JS, clamped to 20px
+            let bar_h = (4.0 + height.powf(0.7) * 16.0).min(20.0);
             div()
-                .w(px(3.))
-                .h(px(height * 20.0))
-                .min_h(px(2.))
+                .w(px(4.))
+                .h(px(bar_h))
+                .min_h(px(4.))
                 .bg(bar_color)
-                .rounded(px(1.))
+                .rounded(px(4.))
         })
         .collect();
 
@@ -169,11 +236,39 @@ fn render_waveform_bars(bars: &[f32; 9], text_hex: u32) -> impl IntoElement {
         .flex()
         .flex_row()
         .items_center()
-        .gap(px(2.))
-        .h(px(24.));
+        .gap(px(4.))
+        .h(px(20.));
 
     for bar in bar_elements {
         container = container.child(bar);
+    }
+
+    container
+}
+
+/// Render 3 green dots for the transcribing state.
+///
+/// Matches vercel-voice `.transcribing-dots` — 4px circles with the active
+/// green color at staggered opacities to suggest pulsing motion.
+fn render_transcribing_dots() -> impl IntoElement {
+    let opacities = [0.5_f32, 0.85, 0.5];
+
+    let mut container = div()
+        .flex()
+        .flex_row()
+        .items_center()
+        .gap(px(4.))
+        .h(px(20.));
+
+    for &opacity in &opacities {
+        let dot_color = OVERLAY_ACTIVE_COLOR.with_opacity(opacity);
+        container = container.child(
+            div()
+                .w(px(4.))
+                .h(px(4.))
+                .rounded(px(2.))
+                .bg(dot_color),
+        );
     }
 
     container

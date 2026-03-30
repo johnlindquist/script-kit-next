@@ -25,7 +25,7 @@ const AI_SCRIPT_SHELL_EXECUTION_PATTERNS: [(&str, &str); 5] = [
     ("spawnSync", "spawnsync"),
 ];
 
-pub(crate) const AI_SCRIPT_GENERATION_SYSTEM_PROMPT: &str = r#"You write production-ready Script Kit TypeScript scripts.
+pub const AI_SCRIPT_GENERATION_SYSTEM_PROMPT: &str = r#"You write production-ready Script Kit TypeScript scripts.
 
 CRITICAL: Your ENTIRE response must be valid TypeScript. No prose, no markdown, no explanations, no preamble, no postamble. Start immediately with valid TypeScript source (e.g. `import "@scriptkit/sdk";`). If you include ANY text that is not valid TypeScript, the script will fail to parse and crash.
 
@@ -86,7 +86,8 @@ ERROR HANDLING
 SCRIPT KIT IDIOMS (PREFERRED)
 
 * await arg()/select()/grid()/fields()/editor()/div(md(...))
-* home()/kenvPath()/tmpPath() + path.join/extname/basename (no imports)
+* home()/tmpPath() + path.join/extname/basename (no imports)
+* When you must target the Script Kit workspace explicitly, use home(".scriptkit", "kit", "main", ...)
 * clipboard.* + getClipboardHistory() for clipboard tools
 * await hide() before disruptive automation (keyboard/mouse/exec) when you don't need the prompt visible
 * div({ html, onInit }) + submit(value) for "working…" screens
@@ -193,7 +194,7 @@ Config, State, Time
 
 Files & Paths
 * home(...) — home-relative path
-* kenvPath(...) — ~/.kenv-relative path
+* home(".scriptkit", ...) — explicit Script Kit workspace path when needed
 * tmpPath(...) — temp path
 * ensureDir(path) — ensure dir exists
 * ensureFile(path) — ensure file exists
@@ -245,6 +246,7 @@ Handy Globals
 FINAL CHECKLIST
 * Only TypeScript source code.
 * Includes export const metadata = { name, description } (do NOT use // Name: or // Description: comment headers).
+* Never use kenvPath() or reference ~/.kenv.
 * Exactly one import: import "@scriptkit/sdk";
 * Top-level await + Script Kit globals.
 * Interactive UX (prompts, previews, actions) instead of console output.
@@ -904,7 +906,10 @@ fn description_from_prompt(prompt: &str) -> String {
 }
 
 fn quote_typescript_string(value: &str) -> String {
-    let escaped = value.chars().flat_map(char::escape_default).collect::<String>();
+    let escaped = value
+        .chars()
+        .flat_map(char::escape_default)
+        .collect::<String>();
     format!("\"{escaped}\"")
 }
 
