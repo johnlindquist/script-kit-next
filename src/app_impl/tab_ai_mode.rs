@@ -190,8 +190,20 @@ impl ScriptListApp {
         capture_rx: TabAiDeferredCaptureRx,
         cx: &mut Context<Self>,
     ) {
+        // Reuse a silently prewarmed session exactly once; otherwise force fresh.
+        let reuse_fresh_prewarm = self
+            .tab_ai_harness
+            .as_ref()
+            .map_or(false, |s| s.is_fresh_prewarm());
+
+        if reuse_fresh_prewarm {
+            if let Some(session) = self.tab_ai_harness.as_mut() {
+                session.mark_consumed();
+            }
+        }
+
         let (entity, _was_cold_start) =
-            match self.ensure_tab_ai_harness_terminal(true, cx) {
+            match self.ensure_tab_ai_harness_terminal(!reuse_fresh_prewarm, cx) {
                 Ok(result) => result,
                 Err(error) => {
                     tracing::error!(
