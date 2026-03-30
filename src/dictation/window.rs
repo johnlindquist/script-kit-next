@@ -4,8 +4,82 @@ use std::time::Duration;
 use crate::dictation::types::{DictationLevel, DictationSessionPhase};
 use crate::dictation::visualizer::bars_for_level;
 
+// ---------------------------------------------------------------------------
+// Overlay geometry & waveform contract constants
+// ---------------------------------------------------------------------------
+
+/// Compact pill width in pixels.
+pub(crate) const OVERLAY_WIDTH_PX: f32 = 220.0;
+/// Compact pill height in pixels (matches vercel-voice 36px overlay).
+pub(crate) const OVERLAY_HEIGHT_PX: f32 = 36.0;
+/// Fully-rounded corner radius (half of height for pill shape).
+pub(crate) const OVERLAY_RADIUS_PX: f32 = 18.0;
+/// Horizontal padding inside the pill.
+pub(crate) const OVERLAY_HORIZONTAL_PADDING_PX: f32 = 16.0;
+/// Gap between inner content columns.
+pub(crate) const OVERLAY_CONTENT_GAP_PX: f32 = 12.0;
+/// Font size for timer, status, and transcript text.
+pub(crate) const STATUS_TEXT_SIZE_PX: f32 = 11.5;
+/// Right-side spacer width to balance the timer column.
+pub(crate) const TIMER_SPACER_WIDTH_PX: f32 = 32.0;
+
+/// Number of waveform bars (matches vercel-voice 9-bar visualizer).
+pub(crate) const WAVEFORM_BAR_COUNT: usize = 9;
+/// Width of each waveform bar in pixels.
+pub(crate) const WAVEFORM_BAR_WIDTH_PX: f32 = 4.0;
+/// Gap between waveform bars in pixels.
+pub(crate) const WAVEFORM_BAR_GAP_PX: f32 = 4.0;
+/// Minimum waveform bar height (silent level).
+pub(crate) const WAVEFORM_BAR_MIN_HEIGHT_PX: f32 = 4.0;
+/// Maximum waveform bar height (peak level).
+pub(crate) const WAVEFORM_BAR_MAX_HEIGHT_PX: f32 = 20.0;
+
+/// Number of transcribing-state dots.
+pub(crate) const TRANSCRIBING_DOT_COUNT: usize = 3;
+/// Diameter of each transcribing dot.
+pub(crate) const TRANSCRIBING_DOT_SIZE_PX: f32 = 4.0;
+/// Gap between transcribing dots.
+pub(crate) const TRANSCRIBING_DOT_GAP_PX: f32 = 4.0;
+
 /// Threshold: if any bar exceeds this, we treat audio as "active" (green).
 const SOUND_THRESHOLD: f32 = 0.15;
+
+// ---------------------------------------------------------------------------
+// Overlay helper functions
+// ---------------------------------------------------------------------------
+
+/// Format elapsed duration as `M:SS` for the compact timer display.
+pub(crate) fn format_elapsed(elapsed: Duration) -> SharedString {
+    let elapsed_secs = elapsed.as_secs();
+    format!("{}:{:02}", elapsed_secs / 60, elapsed_secs % 60).into()
+}
+
+/// Compute waveform bar opacity from a 0.0–1.0 audio level.
+///
+/// Matches vercel-voice JS: `clamp(0.3, value * 1.5, 1.0)`.
+pub(crate) fn waveform_bar_opacity(level: f32) -> f32 {
+    (level.clamp(0.0, 1.0) * 1.5).clamp(0.3, 1.0)
+}
+
+/// Compute waveform bar height from a 0.0–1.0 audio level.
+///
+/// Matches vercel-voice JS: `4 + pow(v, 0.7) * 16`, clamped to max height.
+pub(crate) fn waveform_bar_height(level: f32) -> f32 {
+    (WAVEFORM_BAR_MIN_HEIGHT_PX
+        + level.clamp(0.0, 1.0).powf(0.7)
+            * (WAVEFORM_BAR_MAX_HEIGHT_PX - WAVEFORM_BAR_MIN_HEIGHT_PX))
+    .min(WAVEFORM_BAR_MAX_HEIGHT_PX)
+}
+
+/// Returns true if any bar exceeds the sound threshold.
+pub(crate) fn has_sound(bars: &[f32; WAVEFORM_BAR_COUNT]) -> bool {
+    bars.iter().any(|&bar| bar > SOUND_THRESHOLD)
+}
+
+/// Staggered opacities for the 3-dot transcribing animation.
+pub(crate) fn transcribing_dot_opacities() -> [f32; TRANSCRIBING_DOT_COUNT] {
+    [OPACITY_SELECTED, OPACITY_ACTIVE, OPACITY_SELECTED]
+}
 
 /// Snapshot of the dictation overlay's visual state.
 ///
@@ -14,7 +88,7 @@ const SOUND_THRESHOLD: f32 = 0.15;
 pub struct DictationOverlayState {
     pub phase: DictationSessionPhase,
     pub elapsed: Duration,
-    pub bars: [f32; 9],
+    pub bars: [f32; WAVEFORM_BAR_COUNT],
     pub transcript: SharedString,
 }
 
@@ -106,10 +180,8 @@ impl Render for DictationOverlay {
         //   left (timer) | center (bars/dots/status) | right (spacer)
         let inner = match phase {
             DictationSessionPhase::Recording => {
-                let elapsed_secs = elapsed.as_secs();
-                let timer_text: SharedString =
-                    format!("{}:{:02}", elapsed_secs / 60, elapsed_secs % 60).into();
-                let has_sound = bars.iter().any(|&b| b > SOUND_THRESHOLD);
+                let timer_text = format_elapsed(*elapsed);
+                let active = has_sound(bars);
 
                 div()
                     .flex()
@@ -120,7 +192,7 @@ impl Render for DictationOverlay {
                     .child(
                         div().flex().flex_row().items_center().gap(px(8.)).child(
                             div()
-                                .text_size(px(11.5))
+                                .text_size(px(STATUS_TEXT_SIZE_PX))
                                 .font_family(FONT_MONO)
                                 .text_color(timer_color)
                                 .child(timer_text),
@@ -134,10 +206,10 @@ impl Render for DictationOverlay {
                             .flex_row()
                             .items_center()
                             .justify_center()
-                            .child(render_waveform_bars(bars, has_sound)),
+                            .child(render_waveform_bars(bars, active)),
                     )
                     // Right: spacer to balance the timer width
-                    .child(div().w(px(32.)))
+                    .child(div().w(px(TIMER_SPACER_WIDTH_PX)))
             }
             DictationSessionPhase::Transcribing => {
                 // 3 green dots matching vercel-voice .transcribing-dots
@@ -157,7 +229,7 @@ impl Render for DictationOverlay {
                 .w_full()
                 .child(
                     div()
-                        .text_size(px(11.5))
+                        .text_size(px(STATUS_TEXT_SIZE_PX))
                         .font_family(FONT_MONO)
                         .text_color(text_color)
                         .overflow_hidden()
@@ -173,7 +245,7 @@ impl Render for DictationOverlay {
                     .w_full()
                     .child(
                         div()
-                            .text_size(px(11.5))
+                            .text_size(px(STATUS_TEXT_SIZE_PX))
                             .font_family(FONT_MONO)
                             .text_color(muted_text)
                             .overflow_hidden()
@@ -184,17 +256,17 @@ impl Render for DictationOverlay {
             _ => div(),
         };
 
-        // Compact pill: 36px tall, fully-rounded (18px), border stroke.
+        // Compact pill: OVERLAY_HEIGHT_PX tall, fully-rounded, border stroke.
         div()
             .flex()
             .flex_row()
             .items_center()
             .justify_center()
-            .h(px(36.))
-            .px(px(16.))
-            .gap(px(12.))
+            .h(px(OVERLAY_HEIGHT_PX))
+            .px(px(OVERLAY_HORIZONTAL_PADDING_PX))
+            .gap(px(OVERLAY_CONTENT_GAP_PX))
             .bg(surface_bg)
-            .rounded(px(18.))
+            .rounded(px(OVERLAY_RADIUS_PX))
             .border_1()
             .border_color(border_color)
             .child(inner)
@@ -228,66 +300,61 @@ pub(crate) fn finished_label(transcript: &SharedString) -> SharedString {
     }
 }
 
-/// Render 9 waveform bars matching vercel-voice `.bars-container` styling.
+/// Render waveform bars matching vercel-voice `.bars-container` styling.
 ///
-/// Bars are 4px wide, 4px gap, 4px min-height, 20px max-height, fully rounded.
 /// Uses theme success color when sound is detected, error color when silent.
-fn render_waveform_bars(bars: &[f32; 9], has_sound: bool) -> impl IntoElement {
+fn render_waveform_bars(bars: &[f32; WAVEFORM_BAR_COUNT], active: bool) -> impl IntoElement {
     let theme = get_cached_theme();
-    let bar_hex = if has_sound {
+    let bar_hex = if active {
         theme.colors.ui.success
     } else {
         theme.colors.ui.error
     };
 
-    let bar_elements: Vec<_> = bars
-        .iter()
-        .map(|&height| {
-            // Opacity: clamp(0.3, value * 1.5, 1.0) — matching vercel-voice JS
-            let bar_opacity = (height * 1.5).clamp(0.3, 1.0);
-            let bar_color = bar_hex.with_opacity(bar_opacity);
-            // Height: 4 + pow(v, 0.7) * 16 — matching vercel-voice JS, clamped to 20px
-            let bar_h = (4.0 + height.powf(0.7) * 16.0).min(20.0);
-            div()
-                .w(px(4.))
-                .h(px(bar_h))
-                .min_h(px(4.))
-                .bg(bar_color)
-                .rounded(px(4.))
-        })
-        .collect();
-
     let mut container = div()
         .flex()
         .flex_row()
         .items_center()
-        .gap(px(4.))
-        .h(px(20.));
+        .gap(px(WAVEFORM_BAR_GAP_PX))
+        .h(px(WAVEFORM_BAR_MAX_HEIGHT_PX));
 
-    for bar in bar_elements {
-        container = container.child(bar);
+    for &level in bars {
+        let bar_color = bar_hex.with_opacity(waveform_bar_opacity(level));
+        container = container.child(
+            div()
+                .w(px(WAVEFORM_BAR_WIDTH_PX))
+                .h(px(waveform_bar_height(level)))
+                .min_h(px(WAVEFORM_BAR_MIN_HEIGHT_PX))
+                .bg(bar_color)
+                .rounded(px(WAVEFORM_BAR_WIDTH_PX)),
+        );
     }
 
     container
 }
 
-/// Render 3 dots for the transcribing state.
+/// Render dots for the transcribing state.
 ///
 /// Uses theme success color at staggered opacities to suggest pulsing motion.
 fn render_transcribing_dots() -> impl IntoElement {
     let theme = get_cached_theme();
-    let opacities = [OPACITY_SELECTED, OPACITY_ACTIVE, OPACITY_SELECTED];
 
     let mut container = div()
         .flex()
         .flex_row()
         .items_center()
-        .gap(px(4.))
-        .h(px(20.));
+        .gap(px(TRANSCRIBING_DOT_GAP_PX))
+        .h(px(WAVEFORM_BAR_MAX_HEIGHT_PX));
 
-    for &opacity in &opacities {
+    for &opacity in &transcribing_dot_opacities() {
         let dot_color = theme.colors.ui.success.with_opacity(opacity);
-        container = container.child(div().w(px(4.)).h(px(4.)).rounded(px(2.)).bg(dot_color));
+        container = container.child(
+            div()
+                .w(px(TRANSCRIBING_DOT_SIZE_PX))
+                .h(px(TRANSCRIBING_DOT_SIZE_PX))
+                .rounded(px(TRANSCRIBING_DOT_SIZE_PX / 2.0))
+                .bg(dot_color),
+        );
     }
 
     container
@@ -322,15 +389,15 @@ pub fn open_dictation_overlay(
         gpui::WindowBackgroundAppearance::Opaque
     };
 
-    // Compact pill: 220x36, centered near top of screen.
+    // Compact pill: OVERLAY_WIDTH_PX x OVERLAY_HEIGHT_PX, centered near top of screen.
     let bounds = gpui::Bounds {
         origin: gpui::Point {
             x: px(0.),
             y: px(80.),
         },
         size: gpui::Size {
-            width: px(220.),
-            height: px(36.),
+            width: px(OVERLAY_WIDTH_PX),
+            height: px(OVERLAY_HEIGHT_PX),
         },
     };
 
@@ -411,9 +478,13 @@ pub fn close_dictation_overlay(cx: &mut App) -> anyhow::Result<()> {
     };
 
     if let Some(handle) = handle {
-        let _ = handle.update(cx, |_view, window, _cx| {
-            window.remove_window();
-        });
+        handle
+            .update(cx, |_view, window, _cx| {
+                window.remove_window();
+            })
+            .map_err(|error| {
+                anyhow::anyhow!("failed to close dictation overlay window: {error}")
+            })?;
         tracing::info!(category = "DICTATION", "Dictation overlay window closed");
     }
 

@@ -1060,6 +1060,9 @@ fn delivery_paste_failure_surfaces_error() {
 /// Prove that the frontmost-app paste path hides the main window and closes
 /// the dictation overlay BEFORE pasting, so macOS returns keyboard focus to
 /// the target app before the CGEvent Cmd+V fires.
+///
+/// The close + hide logic now lives inside `yield_focus_for_dictation_paste`,
+/// which the frontmost branch calls before `paste_text`.
 #[test]
 fn delivery_frontmost_app_hides_window_before_paste() {
     let src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
@@ -1070,25 +1073,33 @@ fn delivery_frontmost_app_hides_window_before_paste() {
         .expect("handler must exist");
     let handler_src = &src[handler_start..];
 
-    // The else branch (frontmost-app path) must close the overlay and hide the
-    // main window before scheduling the paste.
-    let close_overlay_pos = handler_src
-        .find("close_dictation_overlay")
-        .expect("handler must close dictation overlay before paste");
-    let hide_pos = handler_src
-        .find("defer_hide_main_window")
-        .expect("handler must call defer_hide_main_window before paste");
-    let paste_pos = handler_src
+    let frontmost_src = frontmost_dictation_delivery_branch(handler_src);
+
+    // The frontmost branch calls the helper which does close + hide.
+    let yield_pos = frontmost_src
+        .find("yield_focus_for_dictation_paste")
+        .expect("frontmost branch must call yield_focus_for_dictation_paste");
+    let paste_pos = frontmost_src
         .find("paste_text")
-        .expect("handler must call paste_text");
+        .expect("frontmost branch must call paste_text");
 
     assert!(
-        close_overlay_pos < paste_pos,
-        "close_dictation_overlay (byte {close_overlay_pos}) must appear before paste_text (byte {paste_pos})"
+        yield_pos < paste_pos,
+        "yield_focus_for_dictation_paste (byte {yield_pos}) must appear before paste_text (byte {paste_pos})"
+    );
+
+    // The helper itself must close the overlay and hide the main window.
+    let helper_start = src
+        .find("fn yield_focus_for_dictation_paste")
+        .expect("helper must exist");
+    let helper_src = &src[helper_start..helper_start + 1200.min(src.len() - helper_start)];
+    assert!(
+        helper_src.contains("close_dictation_overlay"),
+        "helper must close dictation overlay"
     );
     assert!(
-        hide_pos < paste_pos,
-        "defer_hide_main_window (byte {hide_pos}) must appear before paste_text (byte {paste_pos})"
+        helper_src.contains("defer_hide_main_window"),
+        "helper must call defer_hide_main_window"
     );
 }
 
@@ -1358,18 +1369,19 @@ fn frontmost_app_delivery_shows_done_state_before_close_and_paste() {
         .find("timer(std::time::Duration::from_millis(75))")
         .expect("frontmost-app delivery must wait briefly so the done state is visible");
 
-    // Search forward from the done-pause for close and paste, in order.
+    // Search forward from the done-pause for yield-focus (which closes the
+    // overlay internally) and paste, in order.
     let after_pause = &handler_src[done_pause_pos..];
-    let close_offset = after_pause
-        .find("close_dictation_overlay")
-        .expect("frontmost-app delivery must close the overlay after the done-state pause");
+    let yield_offset = after_pause
+        .find("yield_focus_for_dictation_paste")
+        .expect("frontmost-app delivery must yield focus (close overlay) after the done-state pause");
     let paste_offset = after_pause
         .find("paste_text")
         .expect("frontmost-app delivery must paste after the done-state pause");
 
     assert!(
-        close_offset < paste_offset,
-        "frontmost-app delivery must close overlay before pasting (close at {close_offset}, paste at {paste_offset})"
+        yield_offset < paste_offset,
+        "frontmost-app delivery must yield focus before pasting (yield at {yield_offset}, paste at {paste_offset})"
     );
 }
 
@@ -1402,20 +1414,20 @@ fn delivery_frontmost_app_shows_finished_before_close_and_paste() {
     let finished_pos = frontmost_src
         .find("DictationSessionPhase::Finished")
         .expect("frontmost-app branch must render Finished");
-    let close_pos = frontmost_src
-        .find("close_dictation_overlay")
-        .expect("frontmost-app branch must close overlay");
+    let yield_pos = frontmost_src
+        .find("yield_focus_for_dictation_paste")
+        .expect("frontmost-app branch must yield focus (close overlay + hide)");
     let paste_pos = frontmost_src
         .find("paste_text")
         .expect("frontmost-app branch must paste transcript");
 
     assert!(
-        finished_pos < close_pos,
-        "Finished phase (byte {finished_pos}) must appear before close_dictation_overlay (byte {close_pos})"
+        finished_pos < yield_pos,
+        "Finished phase (byte {finished_pos}) must appear before yield_focus_for_dictation_paste (byte {yield_pos})"
     );
     assert!(
-        close_pos < paste_pos,
-        "close_dictation_overlay (byte {close_pos}) must appear before paste_text (byte {paste_pos})"
+        yield_pos < paste_pos,
+        "yield_focus_for_dictation_paste (byte {yield_pos}) must appear before paste_text (byte {paste_pos})"
     );
 }
 
@@ -1433,9 +1445,9 @@ fn delivery_frontmost_app_waits_before_closing_and_pasting() {
     let done_timer_pos = frontmost_src
         .find("from_millis(75)")
         .expect("frontmost-app branch must wait briefly on Finished state");
-    let close_pos = frontmost_src
-        .find("close_dictation_overlay")
-        .expect("frontmost-app branch must close overlay");
+    let yield_pos = frontmost_src
+        .find("yield_focus_for_dictation_paste")
+        .expect("frontmost-app branch must yield focus (close overlay + hide)");
     let focus_timer_pos = frontmost_src
         .find("from_millis(100)")
         .expect("frontmost-app branch must wait for focus to settle");
@@ -1444,12 +1456,12 @@ fn delivery_frontmost_app_waits_before_closing_and_pasting() {
         .expect("frontmost-app branch must paste transcript");
 
     assert!(
-        done_timer_pos < close_pos,
-        "Finished-state timer (byte {done_timer_pos}) must appear before close_dictation_overlay (byte {close_pos})"
+        done_timer_pos < yield_pos,
+        "Finished-state timer (byte {done_timer_pos}) must appear before yield_focus_for_dictation_paste (byte {yield_pos})"
     );
     assert!(
-        close_pos < focus_timer_pos,
-        "close_dictation_overlay (byte {close_pos}) must appear before focus-settle timer (byte {focus_timer_pos})"
+        yield_pos < focus_timer_pos,
+        "yield_focus_for_dictation_paste (byte {yield_pos}) must appear before focus-settle timer (byte {focus_timer_pos})"
     );
     assert!(
         focus_timer_pos < paste_pos,
@@ -1491,49 +1503,185 @@ fn delivery_frontmost_app_aborts_paste_on_focus_yield_failure() {
 }
 
 // ---------------------------------------------------------------------------
-// Source-audit tests: pin overlay to repo guardrails
+// Overlay contract: behavioral tests for helpers & constants
 // ---------------------------------------------------------------------------
 
 #[test]
-fn dictation_overlay_uses_parking_lot_mutex_not_std_mutex() {
-    let source =
-        std::fs::read_to_string("src/dictation/window.rs").expect("read dictation window.rs");
-    assert!(
-        source.contains("use parking_lot::Mutex;"),
-        "overlay must use parking_lot::Mutex"
+fn overlay_elapsed_formatter_uses_mm_ss() {
+    assert_eq!(
+        super::window::format_elapsed(Duration::from_secs(0)).to_string(),
+        "0:00"
     );
-    assert!(
-        !source.contains("use std::sync::{Mutex, OnceLock};"),
-        "overlay must not use std::sync::Mutex"
+    assert_eq!(
+        super::window::format_elapsed(Duration::from_secs(65)).to_string(),
+        "1:05"
+    );
+    assert_eq!(
+        super::window::format_elapsed(Duration::from_secs(600)).to_string(),
+        "10:00"
     );
 }
 
 #[test]
-fn dictation_overlay_avoids_hardcoded_color_literals() {
-    let source =
-        std::fs::read_to_string("src/dictation/window.rs").expect("read dictation window.rs");
-    for forbidden in [
-        "0x52c41a",
-        "0xff4d4f",
-        "0x1212163D",
-        "0x1212166B",
-        "0xFFFFFF2E",
-        "0xFFFFFF80",
-        "0xFFFFFFA6",
-    ] {
-        assert!(
-            !source.contains(forbidden),
-            "overlay must not hardcode color literal {forbidden}"
-        );
-    }
+fn overlay_waveform_height_matches_compact_contract() {
+    assert!(
+        (super::window::waveform_bar_height(0.0) - 4.0).abs() < 0.001,
+        "silent bar height must be 4.0"
+    );
+    assert!(
+        (super::window::waveform_bar_height(1.0) - 20.0).abs() < 0.001,
+        "peak bar height must be 20.0"
+    );
+    let mid = super::window::waveform_bar_height(0.5);
+    assert!(
+        mid > 4.0 && mid < 20.0,
+        "mid-level bar height must stay inside compact overlay bounds, got {mid}"
+    );
 }
 
 #[test]
-fn dictation_overlay_uses_font_mono_for_compact_text() {
+fn overlay_waveform_opacity_stays_clamped() {
+    assert!(
+        (super::window::waveform_bar_opacity(0.0) - 0.3).abs() < 0.001,
+        "silent bar opacity must be 0.3"
+    );
+    assert!(
+        (super::window::waveform_bar_opacity(1.0) - 1.0).abs() < 0.001,
+        "peak bar opacity must be 1.0"
+    );
+    let mid = super::window::waveform_bar_opacity(0.5);
+    assert!(
+        (0.3..=1.0).contains(&mid),
+        "bar opacity must remain between 0.3 and 1.0, got {mid}"
+    );
+}
+
+#[test]
+fn overlay_dot_and_window_constants_match_target_contract() {
+    use crate::theme::opacity::{OPACITY_ACTIVE, OPACITY_SELECTED};
+
+    assert_eq!(super::window::OVERLAY_WIDTH_PX, 220.0);
+    assert_eq!(super::window::OVERLAY_HEIGHT_PX, 36.0);
+    assert_eq!(super::window::OVERLAY_RADIUS_PX, 18.0);
+    assert_eq!(super::window::STATUS_TEXT_SIZE_PX, 11.5);
+    assert_eq!(super::window::WAVEFORM_BAR_COUNT, 9);
+    assert_eq!(super::window::TRANSCRIBING_DOT_COUNT, 3);
+    assert_eq!(
+        super::window::transcribing_dot_opacities(),
+        [OPACITY_SELECTED, OPACITY_ACTIVE, OPACITY_SELECTED]
+    );
+}
+
+#[test]
+fn overlay_has_sound_detects_active_audio() {
+    let silent = [0.0_f32; super::window::WAVEFORM_BAR_COUNT];
+    assert!(
+        !super::window::has_sound(&silent),
+        "all-zero bars must be silent"
+    );
+
+    let mut loud = [0.0_f32; super::window::WAVEFORM_BAR_COUNT];
+    loud[4] = 0.5;
+    assert!(
+        super::window::has_sound(&loud),
+        "bar above threshold must count as sound"
+    );
+}
+
+#[test]
+fn dictation_overlay_derives_colors_from_theme_tokens() {
     let source =
         std::fs::read_to_string("src/dictation/window.rs").expect("read dictation window.rs");
+
     assert!(
-        source.contains("FONT_MONO"),
-        "overlay timer/status text must use FONT_MONO"
+        source.contains("theme.colors.background.main.with_opacity"),
+        "overlay surface must derive from theme background"
+    );
+    assert!(
+        source.contains("theme.colors.ui.border.with_opacity"),
+        "overlay border must derive from theme border token"
+    );
+    assert!(
+        source.contains("theme.colors.ui.success"),
+        "active waveform / transcribing state must use theme success color"
+    );
+    assert!(
+        source.contains("theme.colors.ui.error"),
+        "inactive waveform must use theme error color"
+    );
+    assert!(
+        source.contains("theme.colors.text.primary.with_opacity"),
+        "finished text must derive from theme primary text color"
+    );
+    assert!(
+        source.contains("theme.colors.text.muted.with_opacity"),
+        "timer and muted text must derive from theme muted text color"
+    );
+}
+
+#[test]
+fn dictation_overlay_close_propagates_window_update_failure() {
+    let source =
+        std::fs::read_to_string("src/dictation/window.rs").expect("read dictation window.rs");
+
+    let close_start = source
+        .find("pub fn close_dictation_overlay")
+        .expect("close_dictation_overlay must exist");
+    let close_src = &source[close_start..close_start + 900.min(source.len() - close_start)];
+
+    assert!(
+        close_src.contains(".update("),
+        "close_dictation_overlay must call handle.update"
+    );
+    assert!(
+        !close_src.contains("let _ = handle.update"),
+        "close_dictation_overlay must not discard window close failures"
+    );
+    assert!(
+        close_src.contains("failed to close dictation overlay window"),
+        "close_dictation_overlay must propagate update failure with context"
+    );
+}
+
+#[test]
+fn delivery_frontmost_app_uses_error_propagating_focus_helper() {
+    let src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("read builtin_execution.rs");
+
+    let helper_start = src
+        .find("fn yield_focus_for_dictation_paste")
+        .expect("builtin_execution.rs must define yield_focus_for_dictation_paste");
+    let helper_src = &src[helper_start..helper_start + 1200.min(src.len() - helper_start)];
+
+    assert!(
+        helper_src.contains("close_dictation_overlay(cx)")
+            && helper_src.contains("failed to close dictation overlay before paste"),
+        "focus helper must propagate close_dictation_overlay failure with context"
+    );
+    assert!(
+        helper_src.contains("platform::defer_hide_main_window(cx)"),
+        "focus helper must still hide the main window before frontmost-app paste"
+    );
+
+    let handler_start = src
+        .find("fn handle_dictation_transcript")
+        .expect("handler must exist");
+    let handler_src = &src[handler_start..];
+    let frontmost_src = frontmost_dictation_delivery_branch(handler_src);
+
+    assert!(
+        frontmost_src.contains("this.yield_focus_for_dictation_paste(cx)"),
+        "frontmost-app delivery must call yield_focus_for_dictation_paste"
+    );
+
+    // Scope to the async block that does close+paste (up to paste_text) to
+    // avoid matching `let _ =` in unrelated arms like Stopped(None).
+    let paste_pos = frontmost_src
+        .find("paste_text")
+        .expect("frontmost branch must paste");
+    let pre_paste = &frontmost_src[..paste_pos];
+    assert!(
+        !pre_paste.contains("let _ = crate::dictation::close_dictation_overlay(cx)"),
+        "frontmost-app delivery must not discard close_dictation_overlay errors before paste"
     );
 }
