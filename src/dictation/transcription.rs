@@ -151,10 +151,7 @@ impl WhisperDictationEngine {
     pub fn new(config: &DictationTranscriptionConfig) -> anyhow::Result<Self> {
         let path = &config.model_path;
         if !path.exists() {
-            anyhow::bail!(
-                "Whisper model not found at {}",
-                path.display()
-            );
+            anyhow::bail!("Whisper model not found at {}", path.display());
         }
         if !path.is_file() {
             anyhow::bail!(

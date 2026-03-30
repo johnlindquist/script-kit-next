@@ -452,7 +452,10 @@ fn whisper_engine_new_fails_for_missing_model() {
         ..Default::default()
     };
     let result = WhisperDictationEngine::new(&config);
-    assert!(result.is_err(), "WhisperDictationEngine::new must fail for a missing model path");
+    assert!(
+        result.is_err(),
+        "WhisperDictationEngine::new must fail for a missing model path"
+    );
     let err_msg = result.unwrap_err().to_string();
     assert!(
         err_msg.contains("not found"),
@@ -469,7 +472,10 @@ fn whisper_engine_new_fails_for_directory_path() {
         ..Default::default()
     };
     let result = WhisperDictationEngine::new(&config);
-    assert!(result.is_err(), "WhisperDictationEngine::new must fail for a directory path");
+    assert!(
+        result.is_err(),
+        "WhisperDictationEngine::new must fail for a directory path"
+    );
     let err_msg = result.unwrap_err().to_string();
     assert!(
         err_msg.contains("not a regular file"),
@@ -483,8 +489,7 @@ fn whisper_engine_new_fails_for_directory_path() {
 
 #[test]
 fn dictation_delivery_uses_existing_prompt_and_paste_paths() {
-    let runtime_src =
-        std::fs::read_to_string("src/dictation/runtime.rs").expect("read runtime.rs");
+    let runtime_src = std::fs::read_to_string("src/dictation/runtime.rs").expect("read runtime.rs");
     let transcription_src =
         std::fs::read_to_string("src/dictation/transcription.rs").expect("read transcription.rs");
     let combined = format!("{runtime_src}{transcription_src}");
@@ -545,8 +550,7 @@ fn dictation_goal_critical_paths_exist() {
 
 #[test]
 fn runtime_resolves_mic_preference_from_settings() {
-    let runtime_src =
-        std::fs::read_to_string("src/dictation/runtime.rs").expect("read runtime.rs");
+    let runtime_src = std::fs::read_to_string("src/dictation/runtime.rs").expect("read runtime.rs");
 
     assert!(
         runtime_src.contains("load_user_preferences"),

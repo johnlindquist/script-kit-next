@@ -178,10 +178,7 @@ fn tab_ai_routing_shift_tab_routes_through_harness() {
 /// Assert that a startup interceptor file gates the Shift+Tab ScriptList
 /// path on the expected preconditions and routes through the harness
 /// entry-intent path (not the legacy inline script-generation dispatch).
-fn assert_shift_tab_script_list_routes_query_to_harness_entry_intent(
-    source: &str,
-    label: &str,
-) {
+fn assert_shift_tab_script_list_routes_query_to_harness_entry_intent(source: &str, label: &str) {
     assert!(
         source.contains("has_shift")
             && source.contains("matches!(this.current_view, AppView::ScriptList)")

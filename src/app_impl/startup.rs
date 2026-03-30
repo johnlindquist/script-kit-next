@@ -318,13 +318,10 @@ impl ScriptListApp {
         // Small buffer (4) prevents blocking, more than enough for normal use
         let (api_key_tx, api_key_rx) = mpsc::sync_channel(4);
 
-        // Create channel for inline chat escape signals
+        // Legacy chat channels (retained for TabAiChat compatibility — not the primary Tab AI surface)
         let (inline_chat_escape_tx, inline_chat_escape_rx) = mpsc::sync_channel(4);
-        // Create channel for inline chat continue signals (Continue in AI Chat → hide main window)
         let (inline_chat_continue_tx, inline_chat_continue_rx) = mpsc::sync_channel(4);
-        // Create channel for inline chat configure signals (when user wants to set up API key)
         let (inline_chat_configure_tx, inline_chat_configure_rx) = mpsc::sync_channel(4);
-        // Create channel for inline chat Claude Code signals (when user wants to enable Claude Code)
         let (inline_chat_claude_code_tx, inline_chat_claude_code_rx) = mpsc::sync_channel(4);
         // Create channel for naming dialog completion signals
         let (naming_submit_tx, naming_submit_rx) = mpsc::sync_channel(4);
@@ -782,11 +779,43 @@ impl ScriptListApp {
                                 return;
                             }
 
-                            // Never steal Tab from the harness terminal; once
-                            // QuickTerminalView is open, the terminal TUI owns
-                            // Tab navigation/completion.
-                            if matches!(this.current_view, AppView::QuickTerminalView { .. }) {
-                                cx.propagate();
+                            // Forward Tab/Shift+Tab directly to the harness
+                            // terminal PTY.  We must NOT call cx.propagate()
+                            // here because GPUI's built-in focus-traversal
+                            // would consume the Tab keystroke before it reaches
+                            // the TermPrompt key handler.  Instead, write the
+                            // raw byte to the PTY and stop propagation.
+                            if let AppView::QuickTerminalView { entity, .. } = &this.current_view {
+                                entity.update(cx, |term, _cx| {
+                                    let running = term.terminal.is_running();
+                                    let bytes: &[u8] = if has_shift {
+                                        b"\x1b[Z" // Shift+Tab (backtab)
+                                    } else {
+                                        b"\t" // Tab
+                                    };
+                                    if !running {
+                                        tracing::warn!(
+                                            event = "quick_terminal_tab_pty_dead",
+                                            has_shift,
+                                            "Tab intercepted but PTY is not running"
+                                        );
+                                        return;
+                                    }
+                                    match term.terminal.input(bytes) {
+                                        Ok(()) => tracing::debug!(
+                                            event = "quick_terminal_tab_sent",
+                                            has_shift,
+                                            "Tab byte written to PTY"
+                                        ),
+                                        Err(e) => tracing::warn!(
+                                            event = "quick_terminal_tab_write_failed",
+                                            error = %e,
+                                            has_shift,
+                                            "Failed to write Tab to PTY"
+                                        ),
+                                    }
+                                });
+                                cx.stop_propagation();
                                 return;
                             }
 

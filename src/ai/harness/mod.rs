@@ -775,4 +775,51 @@ mod tests {
         assert!(!submission.contains("<scriptKitHints>"));
         assert!(submission.contains("<scriptKitContext"));
     }
+
+    #[test]
+    fn claude_md_documents_quick_terminal_as_primary_tab_surface() {
+        let doc = include_str!("../../../CLAUDE.md");
+        assert!(
+            doc.contains("Shift+Tab in `AppView::ScriptList` with non-empty filter text"),
+            "CLAUDE.md must document Shift+Tab entry-intent routing"
+        );
+        assert!(
+            doc.contains("Tab / Shift+Tab inside `AppView::QuickTerminalView`"),
+            "CLAUDE.md must document PTY-owned Tab handling inside QuickTerminalView"
+        );
+        assert!(
+            doc.contains("Legacy compatibility only"),
+            "CLAUDE.md must describe TabAiChat as compatibility-only"
+        );
+    }
+
+    #[test]
+    fn standard_startup_shift_tab_routes_into_harness_entry_intent() {
+        let source = include_str!("../../app_impl/startup.rs");
+        assert!(
+            source.contains("open_tab_ai_chat_with_entry_intent(Some(query), cx)"),
+            "Shift+Tab in ScriptList must route the filter text into harness entry intent"
+        );
+        assert!(
+            !source.contains("dispatch_ai_script_generation_from_query(query, cx)"),
+            "Standard startup must not keep the legacy Shift+Tab script-generation path"
+        );
+    }
+
+    #[test]
+    fn standard_startup_quick_terminal_tab_writes_directly_to_pty() {
+        let source = include_str!("../../app_impl/startup.rs");
+        assert!(
+            source.contains("b\"\\t\""),
+            "QuickTerminal must forward Tab directly to the PTY"
+        );
+        assert!(
+            source.contains("b\"\\x1b[Z\""),
+            "QuickTerminal must forward Shift+Tab/backtab directly to the PTY"
+        );
+        assert!(
+            source.contains("term.terminal.input(bytes)"),
+            "QuickTerminal Tab handling must write raw bytes to the PTY"
+        );
+    }
 }
