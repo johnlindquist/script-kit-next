@@ -1181,8 +1181,8 @@ mod cleanup_contract_audits {
     fn prewarm_tags_cold_start_sessions_as_fresh() {
         let source = include_str!("../../app_impl/tab_ai_mode.rs");
         let start = source
-            .find("pub(crate) fn warm_tab_ai_harness_on_startup")
-            .expect("warm_tab_ai_harness_on_startup should exist");
+            .find("fn warm_tab_ai_harness_silently")
+            .expect("warm_tab_ai_harness_silently should exist");
         let rest = &source[start..];
         let end = rest[1..]
             .find("\n    fn ")
@@ -1192,11 +1192,11 @@ mod cleanup_contract_audits {
 
         assert!(
             body.contains("mark_fresh_prewarm"),
-            "prewarm must use the encapsulated mark_fresh_prewarm() helper"
+            "silent prewarm must use the encapsulated mark_fresh_prewarm() helper"
         );
         assert!(
             body.contains(&compact("ensure_tab_ai_harness_terminal(false, cx)")),
-            "prewarm must use force_fresh=false to avoid killing existing sessions"
+            "silent prewarm must use force_fresh=false to avoid killing existing sessions"
         );
     }
 
@@ -1227,7 +1227,7 @@ mod cleanup_contract_audits {
     }
 
     #[test]
-    fn startup_prewarm_uses_encapsulated_helper_not_raw_field_write() {
+    fn startup_prewarm_delegates_to_silent_helper_with_opt_out() {
         let source = include_str!("../../app_impl/tab_ai_mode.rs");
         let start = source
             .find("pub(crate) fn warm_tab_ai_harness_on_startup")
@@ -1237,15 +1237,34 @@ mod cleanup_contract_audits {
             .find("\n    fn ")
             .or_else(|| rest[1..].find("\n    pub"))
             .unwrap_or(rest.len());
+        let body = compact(&rest[..end]);
+
+        assert!(
+            body.contains(&compact("self.warm_tab_ai_harness_silently(true, cx);")),
+            "startup prewarm must delegate to silent helper with respect_startup_opt_out=true"
+        );
+    }
+
+    #[test]
+    fn silent_prewarm_helper_uses_encapsulated_helpers_not_raw_field_writes() {
+        let source = include_str!("../../app_impl/tab_ai_mode.rs");
+        let start = source
+            .find("fn warm_tab_ai_harness_silently")
+            .expect("warm_tab_ai_harness_silently should exist");
+        let rest = &source[start..];
+        let end = rest[1..]
+            .find("\n    fn ")
+            .or_else(|| rest[1..].find("\n    pub"))
+            .unwrap_or(rest.len());
         let body = &rest[..end];
 
         assert!(
             !body.contains("warm_state ="),
-            "startup prewarm must not directly write warm_state — use mark_fresh_prewarm() instead"
+            "silent prewarm must not directly write warm_state — use mark_fresh_prewarm() instead"
         );
         assert!(
             body.contains("mark_fresh_prewarm()"),
-            "startup prewarm must use the encapsulated mark_fresh_prewarm() helper"
+            "silent prewarm must use the encapsulated mark_fresh_prewarm() helper"
         );
     }
 
@@ -1378,19 +1397,23 @@ mod cleanup_contract_audits {
     }
 
     #[test]
-    fn tab_ai_startup_prewarm_is_marked_fresh_on_cold_start_contract() {
+    fn tab_ai_silent_prewarm_is_marked_fresh_on_cold_start_contract() {
         let source = include_str!("../../app_impl/tab_ai_mode.rs");
         let body = compact(&extract_fn_body(
             source,
-            "pub(crate) fn warm_tab_ai_harness_on_startup",
+            "fn warm_tab_ai_harness_silently",
         ));
         assert!(
             body.contains(&compact("if was_cold_start {")),
-            "startup prewarm must gate FreshPrewarm tagging on a newly created session"
+            "silent prewarm helper must gate FreshPrewarm tagging on a newly created session"
         );
         assert!(
             body.contains(&compact("session.mark_fresh_prewarm();")),
             "cold-started prewarm must be marked reusable once"
+        );
+        assert!(
+            body.contains(&compact("self.ensure_tab_ai_harness_terminal(false, cx)")),
+            "silent prewarm helper must never force-fresh kill an existing live session"
         );
     }
 
@@ -1444,6 +1467,109 @@ mod cleanup_contract_audits {
         assert!(
             notify < capture_wait,
             "the terminal must become visible before waiting for deferred capture"
+        );
+    }
+
+    // ── Post-close prewarm split contracts ─────────────────────
+
+    #[test]
+    fn post_close_prewarm_uses_dedicated_helper_contract() {
+        let source = include_str!("../../app_impl/tab_ai_mode.rs");
+        let schedule_body = compact(&extract_fn_body(
+            source,
+            "fn schedule_tab_ai_harness_prewarm",
+        ));
+
+        assert!(
+            schedule_body.contains(&compact("this.warm_tab_ai_harness_after_close(cx);")),
+            "close-cycle scheduler must call warm_tab_ai_harness_after_close()"
+        );
+        assert!(
+            !schedule_body.contains(&compact("this.warm_tab_ai_harness_on_startup(cx);")),
+            "close-cycle scheduler must not route through startup-only prewarm"
+        );
+    }
+
+    #[test]
+    fn startup_and_post_close_prewarm_split_opt_out_contract() {
+        let source = include_str!("../../app_impl/tab_ai_mode.rs");
+
+        let startup_body = compact(&extract_fn_body(
+            source,
+            "pub(crate) fn warm_tab_ai_harness_on_startup",
+        ));
+        assert!(
+            startup_body.contains(&compact("self.warm_tab_ai_harness_silently(true, cx);")),
+            "startup prewarm must continue respecting warmOnStartup=false via true arg"
+        );
+
+        let after_close_body = compact(&extract_fn_body(
+            source,
+            "fn warm_tab_ai_harness_after_close",
+        ));
+        assert!(
+            after_close_body.contains(&compact("self.warm_tab_ai_harness_silently(false, cx);")),
+            "post-close prewarm must bypass the startup-only opt-out via false arg"
+        );
+    }
+
+    #[test]
+    fn silent_prewarm_helper_still_marks_cold_start_as_fresh_contract() {
+        let source = include_str!("../../app_impl/tab_ai_mode.rs");
+        let body = compact(&extract_fn_body(
+            source,
+            "fn warm_tab_ai_harness_silently",
+        ));
+
+        assert!(
+            body.contains(&compact("if was_cold_start {")),
+            "silent prewarm helper must still gate fresh tagging on newly created sessions"
+        );
+        assert!(
+            body.contains(&compact("session.mark_fresh_prewarm();")),
+            "silent prewarm helper must still mark cold-started sessions as reusable once"
+        );
+        assert!(
+            body.contains(&compact("self.ensure_tab_ai_harness_terminal(false, cx)")),
+            "silent prewarm helper must never force-fresh kill an existing live session"
+        );
+    }
+
+    // ── Source/apply-back provenance unification contracts ─────
+
+    #[test]
+    fn detect_source_type_delegates_to_canonical_function() {
+        let source = include_str!("../../app_impl/tab_ai_mode.rs");
+        let body = compact(&extract_fn_body(
+            source,
+            "fn detect_tab_ai_source_type(",
+        ));
+
+        assert!(
+            body.contains(&compact(
+                "crate::ai::detect_tab_ai_source_type_from_prompt("
+            )),
+            "detect_tab_ai_source_type must delegate to canonical crate::ai function"
+        );
+        assert!(
+            body.contains(&compact("app_view_to_prompt_type_str(source_view),")),
+            "detect_tab_ai_source_type must convert AppView via app_view_to_prompt_type_str"
+        );
+    }
+
+    #[test]
+    fn build_apply_back_hint_delegates_to_canonical_function() {
+        let source = include_str!("../../app_impl/tab_ai_mode.rs");
+        let body = compact(&extract_fn_body(
+            source,
+            "fn build_tab_ai_apply_back_hint(",
+        ));
+
+        assert!(
+            body.contains(&compact(
+                "crate::ai::build_tab_ai_apply_back_hint_from_source(source_type)"
+            )),
+            "build_tab_ai_apply_back_hint must delegate to canonical crate::ai function"
         );
     }
 }

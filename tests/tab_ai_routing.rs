@@ -2643,6 +2643,106 @@ fn script_list_item_apply_back_uses_focused_target_label() {
 }
 
 // =========================================================================
+// ClipboardEntry apply-back contract
+// =========================================================================
+
+#[test]
+fn clipboard_entry_apply_back_closes_harness_first() {
+    let apply_fn_start = TAB_AI_MODE_SOURCE
+        .find("fn apply_tab_ai_result_from_clipboard(")
+        .expect("apply_tab_ai_result_from_clipboard must exist");
+    let apply_fn_body = &TAB_AI_MODE_SOURCE[apply_fn_start..];
+
+    let arm_start = apply_fn_body
+        .find("ClipboardEntry =>")
+        .expect("ClipboardEntry match arm must exist in apply-back");
+    let arm_body = &apply_fn_body[arm_start..];
+
+    let close_pos = arm_body
+        .find("close_tab_ai_harness_terminal")
+        .expect("ClipboardEntry apply-back must close the harness");
+    let clipboard_pos = arm_body
+        .find("write_tab_ai_apply_back_clipboard_text")
+        .expect("ClipboardEntry apply-back must write to clipboard");
+
+    assert!(
+        close_pos < clipboard_pos,
+        "Harness must close before writing clipboard result"
+    );
+}
+
+#[test]
+fn clipboard_entry_apply_back_writes_to_clipboard() {
+    let apply_fn_start = TAB_AI_MODE_SOURCE
+        .find("fn apply_tab_ai_result_from_clipboard(")
+        .expect("apply_tab_ai_result_from_clipboard must exist");
+    let apply_fn_body = &TAB_AI_MODE_SOURCE[apply_fn_start..];
+
+    let arm_start = apply_fn_body
+        .find("ClipboardEntry =>")
+        .expect("ClipboardEntry match arm must exist");
+    let arm_body = &apply_fn_body[arm_start..];
+
+    assert!(
+        arm_body.contains("write_tab_ai_apply_back_clipboard_text"),
+        "ClipboardEntry apply-back must use write_tab_ai_apply_back_clipboard_text"
+    );
+}
+
+// =========================================================================
+// Desktop / DesktopSelection apply-back contract
+// =========================================================================
+
+#[test]
+fn desktop_selection_apply_back_uses_set_selected_text() {
+    let apply_fn_start = TAB_AI_MODE_SOURCE
+        .find("fn apply_tab_ai_result_from_clipboard(")
+        .expect("apply_tab_ai_result_from_clipboard must exist");
+    let apply_fn_body = &TAB_AI_MODE_SOURCE[apply_fn_start..];
+
+    // The DesktopSelection arm should call set_selected_text
+    assert!(
+        apply_fn_body.contains("selected_text::set_selected_text(&text_for_apply)"),
+        "DesktopSelection apply-back must replace via set_selected_text"
+    );
+}
+
+#[test]
+fn generic_desktop_apply_back_uses_paste_text() {
+    let apply_fn_start = TAB_AI_MODE_SOURCE
+        .find("fn apply_tab_ai_result_from_clipboard(")
+        .expect("apply_tab_ai_result_from_clipboard must exist");
+    let apply_fn_body = &TAB_AI_MODE_SOURCE[apply_fn_start..];
+
+    // The Desktop arm should use TextInjector::paste_text
+    assert!(
+        apply_fn_body.contains(".paste_text(&text_for_apply)"),
+        "Desktop (generic) apply-back must paste via TextInjector"
+    );
+}
+
+#[test]
+fn apply_back_match_covers_all_five_source_types() {
+    let apply_fn_start = TAB_AI_MODE_SOURCE
+        .find("fn apply_tab_ai_result_from_clipboard(")
+        .expect("apply_tab_ai_result_from_clipboard must exist");
+    let apply_fn_body = &TAB_AI_MODE_SOURCE[apply_fn_start..];
+
+    for arm in &[
+        "RunningCommand =>",
+        "ClipboardEntry =>",
+        "ScriptListItem =>",
+        "DesktopSelection",
+        "Desktop =>",
+    ] {
+        assert!(
+            apply_fn_body.contains(arm),
+            "apply_tab_ai_result_from_clipboard must handle {arm}"
+        );
+    }
+}
+
+// =========================================================================
 // Script List context shaping: explicit branch in target resolution
 // =========================================================================
 

@@ -419,7 +419,16 @@ impl ScriptListApp {
     ///
     /// This must be silent: no view switch, no focus change, no toast.
     /// User-facing errors still belong to the explicit Tab path.
-    pub(crate) fn warm_tab_ai_harness_on_startup(&mut self, cx: &mut Context<Self>) {
+    ///
+    /// When `respect_startup_opt_out` is `true`, the `warmOnStartup` config
+    /// flag is honoured — set for startup prewarm only.  The post-close
+    /// reseed path passes `false` so the next Tab always feels instant even
+    /// when startup warming is disabled.
+    fn warm_tab_ai_harness_silently(
+        &mut self,
+        respect_startup_opt_out: bool,
+        cx: &mut Context<Self>,
+    ) {
         if let Some(existing) = &self.tab_ai_harness {
             if existing.entity.read(cx).is_alive() {
                 tracing::debug!(
@@ -442,7 +451,7 @@ impl ScriptListApp {
             }
         };
 
-        if !config.warm_on_startup {
+        if respect_startup_opt_out && !config.warm_on_startup {
             tracing::debug!(
                 event = "tab_ai_harness_prewarm_skipped",
                 reason = "disabled",
@@ -473,6 +482,7 @@ impl ScriptListApp {
                     backend = ?config.backend,
                     command = %config.command,
                     was_cold_start,
+                    source = if respect_startup_opt_out { "startup" } else { "post_close" },
                 );
             }
             Err(error) => {
@@ -482,6 +492,17 @@ impl ScriptListApp {
                 );
             }
         }
+    }
+
+    /// Startup prewarm: respects `warmOnStartup=false`.
+    pub(crate) fn warm_tab_ai_harness_on_startup(&mut self, cx: &mut Context<Self>) {
+        self.warm_tab_ai_harness_silently(true, cx);
+    }
+
+    /// Post-close prewarm: bypasses the startup opt-out so the next Tab
+    /// always gets an instant fresh session after a close cycle.
+    fn warm_tab_ai_harness_after_close(&mut self, cx: &mut Context<Self>) {
+        self.warm_tab_ai_harness_silently(false, cx);
     }
 
     /// Ensure a harness terminal session exists and is alive.
@@ -745,7 +766,7 @@ impl ScriptListApp {
             let _ = cx.update(|cx| {
                 if let Some(app) = app_weak.upgrade() {
                     app.update(cx, |this, cx| {
-                        this.warm_tab_ai_harness_on_startup(cx);
+                        this.warm_tab_ai_harness_after_close(cx);
                     });
                 }
             });
@@ -1926,78 +1947,53 @@ impl ScriptListApp {
 /// 3. ClipboardHistoryView → `ClipboardEntry`
 /// 4. Prompt-like active surfaces → `RunningCommand`
 /// 5. Fallback → `Desktop`
+/// Convert an `AppView` variant to the prompt-type string that the canonical
+/// source-type detector in `crate::ai` understands.
+fn app_view_to_prompt_type_str(view: &AppView) -> &'static str {
+    match view {
+        AppView::ScriptList => "ScriptList",
+        AppView::ClipboardHistoryView { .. } => "ClipboardHistory",
+        AppView::ArgPrompt { .. } => "ArgPrompt",
+        AppView::MiniPrompt { .. } => "MiniPrompt",
+        AppView::MicroPrompt { .. } => "MicroPrompt",
+        AppView::DivPrompt { .. } => "DivPrompt",
+        AppView::FormPrompt { .. } => "FormPrompt",
+        AppView::EditorPrompt { .. } => "EditorPrompt",
+        AppView::SelectPrompt { .. } => "SelectPrompt",
+        AppView::PathPrompt { .. } => "PathPrompt",
+        AppView::DropPrompt { .. } => "DropPrompt",
+        AppView::TemplatePrompt { .. } => "TemplatePrompt",
+        AppView::TermPrompt { .. } => "TermPrompt",
+        AppView::EnvPrompt { .. } => "EnvPrompt",
+        AppView::ChatPrompt { .. } => "ChatPrompt",
+        AppView::NamingPrompt { .. } => "NamingPrompt",
+        _ => "Other",
+    }
+}
+
+/// Detect source type by delegating to the canonical mapping in
+/// `crate::ai::detect_tab_ai_source_type_from_prompt` so classification
+/// logic lives in one place.
 fn detect_tab_ai_source_type(
     source_view: &AppView,
     desktop: &crate::context_snapshot::AiContextSnapshot,
     focused_target: Option<&crate::ai::TabAiTargetContext>,
 ) -> Option<crate::ai::TabAiSourceType> {
-    // Desktop selected text takes priority — it means the user had something
-    // highlighted outside of Script Kit.
-    if desktop
-        .selected_text
-        .as_ref()
-        .is_some_and(|t| !t.trim().is_empty())
-    {
-        return Some(crate::ai::TabAiSourceType::DesktopSelection);
-    }
-
-    match source_view {
-        // Only classify as ScriptListItem when context resolution actually
-        // resolved a focused target. Without a target the apply-back hint
-        // would claim "focused script" when there is none.
-        AppView::ScriptList if focused_target.is_some() => {
-            Some(crate::ai::TabAiSourceType::ScriptListItem)
-        }
-
-        AppView::ClipboardHistoryView { .. } => {
-            Some(crate::ai::TabAiSourceType::ClipboardEntry)
-        }
-
-        // Prompt-like surfaces: the user was interacting with a running command
-        AppView::ArgPrompt { .. }
-        | AppView::MiniPrompt { .. }
-        | AppView::MicroPrompt { .. }
-        | AppView::DivPrompt { .. }
-        | AppView::FormPrompt { .. }
-        | AppView::EditorPrompt { .. }
-        | AppView::SelectPrompt { .. }
-        | AppView::PathPrompt { .. }
-        | AppView::DropPrompt { .. }
-        | AppView::TemplatePrompt { .. }
-        | AppView::TermPrompt { .. }
-        | AppView::EnvPrompt { .. }
-        | AppView::ChatPrompt { .. }
-        | AppView::NamingPrompt { .. } => Some(crate::ai::TabAiSourceType::RunningCommand),
-
-        _ => Some(crate::ai::TabAiSourceType::Desktop),
-    }
+    crate::ai::detect_tab_ai_source_type_from_prompt(
+        app_view_to_prompt_type_str(source_view),
+        desktop,
+        focused_target,
+    )
 }
 
 /// Build an apply-back hint from the detected source type.
+///
+/// Delegates to the canonical mapping in `crate::ai::build_tab_ai_apply_back_hint_from_source`
+/// so source classification and apply-back routing share a single truth.
 fn build_tab_ai_apply_back_hint(
     source_type: Option<&crate::ai::TabAiSourceType>,
 ) -> Option<crate::ai::TabAiApplyBackHint> {
-    let (action, label) = match source_type? {
-        crate::ai::TabAiSourceType::DesktopSelection => {
-            ("replaceSelectedText", "Frontmost selection")
-        }
-        crate::ai::TabAiSourceType::ScriptListItem => {
-            ("runGeneratedScript", "Focused script")
-        }
-        crate::ai::TabAiSourceType::RunningCommand => {
-            ("pasteToPrompt", "Active prompt")
-        }
-        crate::ai::TabAiSourceType::ClipboardEntry => {
-            ("copyToClipboard", "Clipboard")
-        }
-        crate::ai::TabAiSourceType::Desktop => {
-            ("pasteToFrontmostApp", "Frontmost app")
-        }
-    };
-    Some(crate::ai::TabAiApplyBackHint {
-        action: action.to_string(),
-        target_label: Some(label.to_string()),
-    })
+    crate::ai::build_tab_ai_apply_back_hint_from_source(source_type)
 }
 
 // ---------------------------------------------------------------------------
@@ -2505,18 +2501,19 @@ mod tests {
     #[test]
     fn tab_ai_startup_prewarm_marks_new_session_fresh() {
         let source = include_str!("tab_ai_mode.rs");
+        // The shared silent helper contains the actual prewarm logic.
         let body = tab_ai_prewarm_fn_block(
             source,
-            "pub(crate) fn warm_tab_ai_harness_on_startup(",
+            "fn warm_tab_ai_harness_silently(",
         );
 
         assert!(
             body.contains("self.ensure_tab_ai_harness_terminal(false, cx)"),
-            "startup prewarm must seed the silent session without forcing a teardown"
+            "silent prewarm must seed the session without forcing a teardown"
         );
         assert!(
             body.contains("session.mark_fresh_prewarm();"),
-            "startup prewarm must explicitly tag a newly created session as FreshPrewarm"
+            "silent prewarm must explicitly tag a newly created session as FreshPrewarm"
         );
     }
 
@@ -2607,14 +2604,15 @@ mod tests {
     #[test]
     fn tab_ai_startup_prewarm_is_marked_fresh_on_cold_start_contract() {
         let source = include_str!("tab_ai_mode.rs");
+        // The shared silent helper is where cold-start tagging lives.
         let body = tab_ai_contract_compact(&tab_ai_extract_fn_body(
             source,
-            "pub(crate) fn warm_tab_ai_harness_on_startup(",
+            "fn warm_tab_ai_harness_silently(",
         ));
 
         assert!(
             body.contains(&tab_ai_contract_compact("if was_cold_start {")),
-            "startup prewarm must gate FreshPrewarm tagging on a newly created session"
+            "silent prewarm helper must gate FreshPrewarm tagging on a newly created session"
         );
         assert!(
             body.contains(&tab_ai_contract_compact("session.mark_fresh_prewarm();")),
