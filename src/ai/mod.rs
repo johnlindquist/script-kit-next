@@ -67,9 +67,10 @@ pub use self::harness::{
     build_tab_ai_harness_context_block, build_tab_ai_harness_submission,
     cleanup_old_tab_ai_screenshot_files_in_dir, read_tab_ai_harness_config,
     tab_ai_harness_config_path, tab_ai_screenshot_prefix, validate_tab_ai_harness_config,
-    HarnessBackendKind, HarnessConfig, TabAiHarnessSessionState, TabAiHarnessSubmissionMode,
-    TabAiHarnessWarmState, TabAiScreenshotFile, TAB_AI_HARNESS_CONFIG_SCHEMA_VERSION,
-    TAB_AI_HARNESS_CONTEXT_SCHEMA_VERSION, TAB_AI_SCREENSHOT_MAX_KEEP,
+    HarnessBackendKind, HarnessConfig, TabAiCaptureKind, TabAiHarnessSessionState,
+    TabAiHarnessSubmissionMode, TabAiHarnessWarmState, TabAiScreenshotFile,
+    TAB_AI_HARNESS_CONFIG_SCHEMA_VERSION, TAB_AI_HARNESS_CONTEXT_SCHEMA_VERSION,
+    TAB_AI_SCREENSHOT_MAX_KEEP,
 };
 pub use self::message_parts::{
     file_path_parts, merge_context_parts, prepare_user_message_with_receipt,

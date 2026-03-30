@@ -2308,20 +2308,28 @@ fn generate_script_from_current_app_preserves_explicit_harness_intent() {
 
 #[test]
 fn legacy_screenshot_commands_preserve_requested_capture_kind() {
-    // SendScreenToAi must carry a full-screen intent
+    // SendScreenToAi must carry a full-screen intent and capture kind
     let screen_arm = find_execution_arm("AiCommandType::SendScreenToAi");
     assert!(
-        screen_arm.contains("open_tab_ai_chat_with_entry_intent(")
+        screen_arm.contains("open_tab_ai_chat_with_capture_kind(")
             && screen_arm.contains("full screen"),
         "SendScreenToAi must request full-screen capture via explicit intent"
     );
+    assert!(
+        screen_arm.contains("TabAiCaptureKind::FullScreen"),
+        "SendScreenToAi must request FullScreen capture kind"
+    );
 
-    // SendFocusedWindowToAi must carry a focused-window intent
+    // SendFocusedWindowToAi must carry a focused-window intent and capture kind
     let focused_arm = find_execution_arm("AiCommandType::SendFocusedWindowToAi");
     assert!(
-        focused_arm.contains("open_tab_ai_chat_with_entry_intent(")
+        focused_arm.contains("open_tab_ai_chat_with_capture_kind(")
             && focused_arm.contains("focused window"),
         "SendFocusedWindowToAi must request focused-window capture via explicit intent"
+    );
+    assert!(
+        focused_arm.contains("TabAiCaptureKind::FocusedWindow"),
+        "SendFocusedWindowToAi must request FocusedWindow capture kind"
     );
 
     // SendScreenAreaToAi must fail with an explicit error — no real region capture yet.
@@ -2349,12 +2357,16 @@ fn legacy_screenshot_commands_preserve_requested_capture_kind() {
 fn send_selected_text_to_ai_submits_explicit_intent() {
     let arm = find_execution_arm("AiCommandType::SendSelectedTextToAi");
     assert!(
-        arm.contains("open_tab_ai_chat_with_entry_intent("),
+        arm.contains("open_tab_ai_chat_with_capture_kind("),
         "SendSelectedTextToAi must open the harness with an explicit intent"
     );
     assert!(
         arm.contains("selected text"),
         "SendSelectedTextToAi must include 'selected text' in the intent string"
+    );
+    assert!(
+        arm.contains("TabAiCaptureKind::SelectedText"),
+        "SendSelectedTextToAi must request SelectedText capture kind"
     );
 }
 
@@ -2362,12 +2374,82 @@ fn send_selected_text_to_ai_submits_explicit_intent() {
 fn send_browser_tab_to_ai_submits_explicit_intent() {
     let arm = find_execution_arm("AiCommandType::SendBrowserTabToAi");
     assert!(
-        arm.contains("open_tab_ai_chat_with_entry_intent("),
+        arm.contains("open_tab_ai_chat_with_capture_kind("),
         "SendBrowserTabToAi must open the harness with an explicit intent"
     );
     assert!(
         arm.contains("browser tab"),
         "SendBrowserTabToAi must include 'browser tab' in the intent string"
+    );
+    assert!(
+        arm.contains("TabAiCaptureKind::BrowserTab"),
+        "SendBrowserTabToAi must request BrowserTab capture kind"
+    );
+}
+
+// =========================================================================
+// Capture kind plumbing regression coverage
+// =========================================================================
+
+#[test]
+fn deferred_capture_stops_ignoring_launch_request() {
+    let fn_start = TAB_AI_MODE_SOURCE
+        .find("fn spawn_tab_ai_pre_switch_capture(")
+        .expect("spawn_tab_ai_pre_switch_capture must exist");
+    let fn_body = &TAB_AI_MODE_SOURCE[fn_start..];
+    let next_fn = fn_body[1..].find("\n    fn ").unwrap_or(fn_body.len());
+    let fn_body = &fn_body[..next_fn];
+
+    assert!(
+        !fn_body.contains("_request: &TabAiLaunchRequest"),
+        "deferred capture must stop ignoring the launch request"
+    );
+    assert!(
+        fn_body.contains("request.capture_kind"),
+        "deferred capture must branch on request.capture_kind"
+    );
+}
+
+#[test]
+fn explicit_ai_capture_commands_use_capture_kind_plumbing() {
+    assert!(
+        BUILTIN_EXECUTION_SOURCE.contains("TabAiCaptureKind::FullScreen"),
+        "SendScreenToAi must request FullScreen capture"
+    );
+    assert!(
+        BUILTIN_EXECUTION_SOURCE.contains("TabAiCaptureKind::FocusedWindow"),
+        "SendFocusedWindowToAi must request FocusedWindow capture"
+    );
+    assert!(
+        BUILTIN_EXECUTION_SOURCE.contains("TabAiCaptureKind::SelectedText"),
+        "SendSelectedTextToAi must request SelectedText capture"
+    );
+    assert!(
+        BUILTIN_EXECUTION_SOURCE.contains("TabAiCaptureKind::BrowserTab"),
+        "SendBrowserTabToAi must request BrowserTab capture"
+    );
+}
+
+#[test]
+fn capture_kind_enum_is_exported_from_ai_module() {
+    assert!(
+        AI_MOD_SOURCE.contains("TabAiCaptureKind"),
+        "TabAiCaptureKind must be re-exported from the ai module"
+    );
+}
+
+#[test]
+fn launch_request_carries_capture_kind_field() {
+    let struct_start = TAB_AI_MODE_SOURCE
+        .find("struct TabAiLaunchRequest")
+        .expect("TabAiLaunchRequest must exist");
+    let struct_body = &TAB_AI_MODE_SOURCE[struct_start..];
+    let struct_end = struct_body.find("\n}").unwrap_or(struct_body.len());
+    let struct_body = &struct_body[..struct_end];
+
+    assert!(
+        struct_body.contains("capture_kind"),
+        "TabAiLaunchRequest must carry a capture_kind field"
     );
 }
 
@@ -2765,8 +2847,7 @@ fn send_screen_area_execution_returns_stable_unavailable_result() {
     );
     // ...and must explain the exact missing capability.
     assert!(
-        BUILTIN_EXECUTION_SOURCE
-            .contains("selected-area capture is attached to the harness"),
+        BUILTIN_EXECUTION_SOURCE.contains("selected-area capture is attached to the harness"),
         "the unavailable path must explain the exact missing harness capability",
     );
 }
@@ -2778,8 +2859,7 @@ fn send_screen_area_execution_returns_stable_unavailable_result() {
 #[test]
 fn script_generation_compat_shims_documented_as_harness_only() {
     assert!(
-        PROMPT_AI_SOURCE
-            .contains("Compatibility shim \u{2014} routes script generation requests"),
+        PROMPT_AI_SOURCE.contains("Compatibility shim \u{2014} routes script generation requests"),
         "prompt_ai.rs must document the harness-only compatibility shim",
     );
 }
