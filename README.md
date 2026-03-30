@@ -222,12 +222,32 @@ export default {
 };
 ```
 
+### Tab AI Harness Configuration
+
+Script Kit reads Tab AI harness settings from `~/.scriptkit/harness.json`.
+
+```json
+{
+  "schemaVersion": 1,
+  "backend": "claudeCode",
+  "command": "claude",
+  "args": [],
+  "warmOnStartup": true,
+  "workingDirectory": "~/.scriptkit/kit",
+  "env": {}
+}
+```
+
+Supported backends: `claudeCode`, `codex`, `geminiCli`, `copilotCli`, `custom`.
+
+`warmOnStartup` defaults to `true`, so the harness is prewarmed at app launch for instant Tab response. If the harness crashes or exits, the next Tab press respawns it automatically.
+
 ### Environment Variables (API Keys)
 
 Set these in your shell profile (`~/.zshrc` or `~/.bashrc`) to enable AI features:
 
 ```bash
-# AI Chat providers (at least one required for AI window)
+# AI providers (used by Tab AI harness and AI chat window)
 export SCRIPT_KIT_OPENAI_API_KEY="sk-..."
 export SCRIPT_KIT_ANTHROPIC_API_KEY="sk-ant-..."
 
@@ -280,7 +300,7 @@ script-kit-gpui/
 │   ├── prompts/           # Prompt implementations
 │   ├── terminal/          # Terminal emulator
 │   ├── notes/             # Notes window feature
-│   └── ai/                # AI chat window (BYOK)
+│   └── ai/                # Tab AI harness + context assembly
 ├── scripts/
 │   └── kit-sdk.ts         # The SDK (preloaded into scripts)
 ├── tests/
@@ -324,7 +344,7 @@ cargo bundle --release
 - **App Launcher** - Quick launch applications
 - **Window Switcher** - Switch between open windows (enable in config)
 - **Notes Window** - Floating notes with Markdown support (`Cmd+Shift+N`)
-- **AI Chat** - BYOK chat interface (`Cmd+Shift+Space`, supports OpenAI, Anthropic, Google, Groq, OpenRouter, Vercel AI Gateway)
+- **Tab AI** - Press Tab to open a quick terminal connected to a warm CLI harness (Claude Code, Codex, Gemini CLI, Copilot CLI, or custom). Script Kit captures hierarchical context and injects it into the harness session automatically
 - **System Tray** - Menu bar icon with quick actions
 - **Global Hotkeys** - Trigger scripts from anywhere
 
@@ -416,9 +436,9 @@ Script Kit exposes desktop context as an MCP resource that AI agents can read to
 
 Per-field flags: `selectedText`, `frontmostApp`, `menuBar`, `browserUrl`, `focusedWindow` — each accepts `0`/`1`/`true`/`false`.
 
-### Context Parts in AI Chat
+### Context Parts
 
-The AI chat window supports attaching structured context to messages via slash commands:
+Context parts attach structured desktop state to AI interactions. Tab AI injects context automatically into the harness terminal; the AI chat window also supports attaching context via slash commands:
 
 | Command | Context Attached |
 |---------|-----------------|
