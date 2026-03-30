@@ -1,16 +1,17 @@
 use crate::dictation::capture::{mix_to_mono, normalize_chunk, resample_linear, run_processor};
 use crate::dictation::transcription::{
     build_session_result, merge_captured_chunks, DictationEngine, DictationTranscriber,
-    DictationTranscriptionConfig,
+    DictationTranscriptionConfig, WhisperDictationEngine,
 };
 use crate::dictation::types::{
     CapturedAudioChunk, CompletedDictationCapture, DictationCaptureConfig, DictationCaptureEvent,
     DictationDestination, DictationLevel, RawAudioChunk,
 };
-use crate::dictation::DictationOverlayState;
 use crate::dictation::visualizer::{bars_for_level, compute_level};
+use crate::dictation::DictationOverlayState;
 use anyhow::Result;
 use parking_lot::Mutex;
+use serde_json::json;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -446,8 +447,6 @@ fn transcriber_not_idle_immediately_after_use() -> Result<()> {
 
 #[test]
 fn whisper_engine_new_fails_for_missing_model() {
-    use crate::dictation::transcription::{DictationTranscriptionConfig, WhisperDictationEngine};
-
     let config = DictationTranscriptionConfig {
         model_path: std::path::PathBuf::from("/definitely/missing-model.bin"),
         ..Default::default()
@@ -466,8 +465,6 @@ fn whisper_engine_new_fails_for_missing_model() {
 
 #[test]
 fn whisper_engine_new_fails_for_directory_path() {
-    use crate::dictation::transcription::{DictationTranscriptionConfig, WhisperDictationEngine};
-
     let config = DictationTranscriptionConfig {
         model_path: std::path::PathBuf::from("/tmp"),
         ..Default::default()
@@ -486,8 +483,6 @@ fn whisper_engine_new_fails_for_directory_path() {
 
 #[test]
 fn whisper_engine_missing_model_error_names_attempted_path() {
-    use crate::dictation::transcription::{DictationTranscriptionConfig, WhisperDictationEngine};
-
     let explicit_path = std::path::PathBuf::from("/nonexistent/dir/model.bin");
     let config = DictationTranscriptionConfig {
         model_path: explicit_path.clone(),
@@ -500,6 +495,40 @@ fn whisper_engine_missing_model_error_names_attempted_path() {
         err_msg.contains(explicit_path.to_str().unwrap()),
         "error must name the attempted model path, got: {err_msg}"
     );
+}
+
+#[test]
+fn whisper_engine_new_accepts_regular_file_model_path() {
+    let temp_file = tempfile::NamedTempFile::new().expect("create temp model file");
+    let config = DictationTranscriptionConfig {
+        model_path: temp_file.path().to_path_buf(),
+        ..Default::default()
+    };
+
+    WhisperDictationEngine::new(&config)
+        .expect("WhisperDictationEngine::new should accept a regular file path");
+}
+
+#[test]
+fn whisper_engine_new_with_default_config_surfaces_path_or_succeeds() {
+    let config = DictationTranscriptionConfig::default();
+    let result = WhisperDictationEngine::new(&config);
+
+    if config.model_path.is_file() {
+        assert!(
+            result.is_ok(),
+            "default model path should initialize when the file exists: {}",
+            config.model_path.display()
+        );
+    } else {
+        let error = result
+            .expect_err("default model path should fail when the file is missing or invalid")
+            .to_string();
+        assert!(
+            error.contains(&config.model_path.display().to_string()),
+            "default-path init error should name the attempted path, got: {error}"
+        );
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -841,6 +870,24 @@ fn stop_path_errors_when_channel_closes_without_eos() {
         "should not have received EndOfStream when sender dropped early"
     );
     assert_eq!(chunks.len(), 1, "should still collect chunks before close");
+}
+
+#[test]
+fn transcribe_captured_audio_returns_none_for_silent_input_without_model() {
+    crate::dictation::runtime::reset_cached_transcriber_for_tests();
+
+    let chunks = vec![CapturedAudioChunk {
+        sample_rate_hz: 16_000,
+        samples: vec![0.0; 1_600],
+        duration: Duration::from_millis(100),
+    }];
+
+    let result = crate::dictation::transcribe_captured_audio(&chunks)
+        .expect("silent input should short-circuit before Whisper init");
+
+    assert_eq!(result, None);
+
+    crate::dictation::runtime::reset_cached_transcriber_for_tests();
 }
 
 // ---------------------------------------------------------------------------
@@ -1309,10 +1356,7 @@ fn finished_label_formats_short_and_long_transcripts() {
 #[test]
 fn finished_label_returns_done_for_empty_transcript() {
     let empty: gpui::SharedString = "".into();
-    assert_eq!(
-        super::window::finished_label(&empty).to_string(),
-        "Done"
-    );
+    assert_eq!(super::window::finished_label(&empty).to_string(), "Done");
 
     let whitespace: gpui::SharedString = "   ".into();
     assert_eq!(
@@ -1349,9 +1393,9 @@ fn frontmost_app_delivery_shows_done_state_before_close_and_paste() {
     // Search forward from the done-pause for yield-focus (which closes the
     // overlay internally) and paste, in order.
     let after_pause = &handler_src[done_pause_pos..];
-    let yield_offset = after_pause
-        .find("yield_focus_for_dictation_paste")
-        .expect("frontmost-app delivery must yield focus (close overlay) after the done-state pause");
+    let yield_offset = after_pause.find("yield_focus_for_dictation_paste").expect(
+        "frontmost-app delivery must yield focus (close overlay) after the done-state pause",
+    );
     let paste_offset = after_pause
         .find("paste_text")
         .expect("frontmost-app delivery must paste after the done-state pause");
@@ -1688,11 +1732,9 @@ fn dictation_yield_focus_helper_source(src: &str) -> &str {
         .find("fn yield_focus_for_dictation_paste(")
         .expect("yield_focus_for_dictation_paste must exist");
     let tail = &src[start..];
-    let end = tail
-        .find("fn schedule_dictation_overlay_close(")
-        .expect(
-            "yield_focus_for_dictation_paste must be followed by schedule_dictation_overlay_close",
-        );
+    let end = tail.find("fn schedule_dictation_overlay_close(").expect(
+        "yield_focus_for_dictation_paste must be followed by schedule_dictation_overlay_close",
+    );
     &tail[..end]
 }
 
@@ -1822,9 +1864,8 @@ fn delivery_frontmost_app_surfaces_missing_tracked_target() {
     let handler_src = dictation_handler_source(&src);
 
     assert!(
-        handler_src.contains(
-            "no previously tracked frontmost app is available for dictation paste"
-        ),
+        handler_src
+            .contains("no previously tracked frontmost app is available for dictation paste"),
         "frontmost-app path must surface a missing tracked-target error"
     );
     assert!(
@@ -1952,7 +1993,10 @@ fn build_device_menu_items_marks_saved_device_when_present() {
     ];
     let items = build_device_menu_items(&devices, Some("usb"));
     assert_eq!(items.len(), 3);
-    assert!(!items[0].is_selected, "System Default should not be selected");
+    assert!(
+        !items[0].is_selected,
+        "System Default should not be selected"
+    );
     assert!(!items[1].is_selected, "builtin should not be selected");
     assert!(items[2].is_selected, "USB Mic should be selected");
 }
@@ -2014,14 +2058,104 @@ fn build_device_menu_items_actions_match_device_ids() {
     );
 }
 
+#[test]
+fn apply_device_selection_persists_selected_device_id_and_clears_to_default() {
+    let lock = crate::test_utils::SK_PATH_TEST_LOCK
+        .get_or_init(|| std::sync::Mutex::new(()))
+        .lock()
+        .unwrap_or_else(|error| error.into_inner());
+    let temp_dir = tempfile::tempdir().expect("create temp Script Kit dir");
+    std::env::set_var(crate::setup::SK_PATH_ENV, temp_dir.path());
+
+    crate::dictation::apply_device_selection(&DictationDeviceSelectionAction::UseDevice(
+        DictationDeviceId("usb-mic".to_string()),
+    ))
+    .expect("persist selected microphone");
+
+    let selected = crate::config::load_user_preferences();
+    assert_eq!(
+        selected.dictation.selected_device_id.as_deref(),
+        Some("usb-mic")
+    );
+
+    crate::dictation::apply_device_selection(&DictationDeviceSelectionAction::UseSystemDefault)
+        .expect("clear selected microphone");
+
+    let cleared = crate::config::load_user_preferences();
+    assert_eq!(cleared.dictation.selected_device_id, None);
+
+    std::env::remove_var(crate::setup::SK_PATH_ENV);
+    drop(lock);
+}
+
+#[test]
+fn dictation_preferences_serialize_selected_device_id_as_camel_case() {
+    let preferences = crate::config::ScriptKitUserPreferences {
+        dictation: crate::config::DictationPreferences {
+            selected_device_id: Some("usb-mic".to_string()),
+        },
+        ..Default::default()
+    };
+
+    let value = serde_json::to_value(&preferences).expect("serialize user preferences");
+    assert_eq!(value["dictation"]["selectedDeviceId"], "usb-mic");
+    assert!(value["dictation"].get("selected_device_id").is_none());
+}
+
+#[test]
+fn save_user_preferences_preserves_unknown_keys_and_round_trips_dictation_preference() {
+    let lock = crate::test_utils::SK_PATH_TEST_LOCK
+        .get_or_init(|| std::sync::Mutex::new(()))
+        .lock()
+        .unwrap_or_else(|error| error.into_inner());
+    let temp_dir = tempfile::tempdir().expect("create temp Script Kit dir");
+    let kit_dir = temp_dir.path().join("kit");
+    std::fs::create_dir_all(&kit_dir).expect("create kit dir");
+    std::env::set_var(crate::setup::SK_PATH_ENV, temp_dir.path());
+
+    let settings_path = kit_dir.join("settings.json");
+    let original = json!({
+        "theme": { "presetId": "nord" },
+        "customTool": { "enabled": true }
+    });
+    std::fs::write(
+        &settings_path,
+        serde_json::to_string_pretty(&original).expect("serialize original settings"),
+    )
+    .expect("write settings file");
+
+    let preferences = crate::config::ScriptKitUserPreferences {
+        dictation: crate::config::DictationPreferences {
+            selected_device_id: Some("usb-mic".to_string()),
+        },
+        ..Default::default()
+    };
+    crate::config::save_user_preferences(&preferences).expect("save merged user preferences");
+
+    let raw: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(&settings_path).expect("read saved settings"),
+    )
+    .expect("parse saved settings");
+    assert_eq!(raw["dictation"]["selectedDeviceId"], "usb-mic");
+    assert_eq!(raw["customTool"]["enabled"], true);
+
+    let loaded = crate::config::load_user_preferences();
+    assert_eq!(
+        loaded.dictation.selected_device_id.as_deref(),
+        Some("usb-mic")
+    );
+
+    std::env::remove_var(crate::setup::SK_PATH_ENV);
+    drop(lock);
+}
+
 // ---------------------------------------------------------------------------
 // Delivery-target preflight tests
 // ---------------------------------------------------------------------------
 
 #[test]
 fn dictation_runtime_exposes_is_recording_helper() {
-    let runtime_src =
-        std::fs::read_to_string("src/dictation/runtime.rs").expect("read runtime.rs");
+    let runtime_src = std::fs::read_to_string("src/dictation/runtime.rs").expect("read runtime.rs");
     let fn_start = runtime_src
         .find("pub fn is_dictation_recording() -> bool")
         .expect("runtime must expose is_dictation_recording");
@@ -2275,7 +2409,9 @@ fn overlay_state_transitions_recording_to_transcribing_to_failed() {
         elapsed: recording.elapsed,
         ..Default::default()
     };
-    assert!(matches!(failed.phase, DictationSessionPhase::Failed(ref msg) if msg.contains("model load")));
+    assert!(
+        matches!(failed.phase, DictationSessionPhase::Failed(ref msg) if msg.contains("model load"))
+    );
 }
 
 /// Prove that overlay state for a silent/empty recording closes without
