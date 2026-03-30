@@ -205,12 +205,23 @@ pub fn validate_tab_ai_harness_config(config: &HarnessConfig) -> Result<(), Stri
 // Session state
 // ---------------------------------------------------------------------------
 
+/// Whether a harness session is a fresh prewarm (reusable once) or has been
+/// consumed by a user-initiated Tab entry.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TabAiHarnessWarmState {
+    /// Silently prewarmed — can be reused exactly once by the next Tab press.
+    FreshPrewarm,
+    /// Already consumed by a user interaction — must be torn down before reuse.
+    Consumed,
+}
+
 /// Runtime state for a live harness terminal session.
 #[derive(Clone)]
 pub struct TabAiHarnessSessionState {
     pub config: HarnessConfig,
     pub entity: gpui::Entity<crate::term_prompt::TermPrompt>,
     pub id: String,
+    pub warm_state: TabAiHarnessWarmState,
 }
 
 impl TabAiHarnessSessionState {
@@ -223,7 +234,19 @@ impl TabAiHarnessSessionState {
             config,
             entity,
             id: id.into(),
+            warm_state: TabAiHarnessWarmState::Consumed,
         }
+    }
+
+    /// Returns `true` if this session is a fresh prewarm that has not yet been
+    /// consumed by a user Tab press.
+    pub fn is_fresh_prewarm(&self) -> bool {
+        matches!(self.warm_state, TabAiHarnessWarmState::FreshPrewarm)
+    }
+
+    /// Mark the session as consumed so it cannot be reused again.
+    pub fn mark_consumed(&mut self) {
+        self.warm_state = TabAiHarnessWarmState::Consumed;
     }
 }
 
@@ -1092,13 +1115,42 @@ mod cleanup_contract_audits {
             .expect("warm_tab_ai_harness_on_startup should follow open fn");
         let body = compact(&rest[..end]);
 
+        // The open path must NOT unconditionally force_fresh=true.
+        // It should check for a fresh prewarm first.
         assert!(
-            body.contains(&compact("self.ensure_tab_ai_harness_terminal(true, cx)")),
-            "explicit Tab entry must force-fresh the harness PTY for a clean session"
+            !body.contains(&compact("self.ensure_tab_ai_harness_terminal(true, cx)")),
+            "open path must not unconditionally force_fresh=true or the post-close prewarm is wasted"
         );
         assert!(
-            !body.contains(&compact("self.ensure_tab_ai_harness_terminal(false, cx)")),
-            "explicit Tab entry must not reuse stale harness sessions"
+            body.contains("is_fresh_prewarm"),
+            "open path must check for fresh prewarm before deciding force_fresh"
+        );
+        assert!(
+            body.contains("mark_consumed"),
+            "open path must mark the session as consumed after reuse"
+        );
+    }
+
+    #[test]
+    fn prewarm_tags_cold_start_sessions_as_fresh() {
+        let source = include_str!("../../app_impl/tab_ai_mode.rs");
+        let start = source
+            .find("pub(crate) fn warm_tab_ai_harness_on_startup")
+            .expect("warm_tab_ai_harness_on_startup should exist");
+        let rest = &source[start..];
+        let end = rest[1..]
+            .find("\n    fn ")
+            .or_else(|| rest[1..].find("\n    pub"))
+            .unwrap_or(rest.len());
+        let body = compact(&rest[..end]);
+
+        assert!(
+            body.contains("FreshPrewarm"),
+            "prewarm must tag cold-start sessions as FreshPrewarm"
+        );
+        assert!(
+            body.contains(&compact("ensure_tab_ai_harness_terminal(false, cx)")),
+            "prewarm must use force_fresh=false to avoid killing existing sessions"
         );
     }
 

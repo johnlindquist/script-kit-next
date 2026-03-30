@@ -190,24 +190,37 @@ impl ScriptListApp {
         capture_rx: TabAiDeferredCaptureRx,
         cx: &mut Context<Self>,
     ) {
-        let (entity, _was_cold_start) = match self.ensure_tab_ai_harness_terminal(true, cx) {
-            Ok(result) => result,
-            Err(error) => {
-                tracing::error!(
-                    event = "tab_ai_harness_start_failed",
-                    error = %error,
-                );
-                self.toast_manager.push(
-                    crate::components::toast::Toast::error(
-                        format!("Failed to start harness: {error}. Install the configured CLI or update ~/.scriptkit/harness.json"),
-                        &self.theme,
-                    )
-                    .duration_ms(Some(TOAST_ERROR_MS)),
-                );
-                cx.notify();
-                return;
-            }
-        };
+        // Reuse a fresh prewarm exactly once; otherwise force a clean PTY.
+        let reuse_fresh_prewarm = self
+            .tab_ai_harness
+            .as_ref()
+            .map(|s| s.is_fresh_prewarm() && s.entity.read(cx).is_alive())
+            .unwrap_or(false);
+
+        let (entity, _was_cold_start) =
+            match self.ensure_tab_ai_harness_terminal(!reuse_fresh_prewarm, cx) {
+                Ok(result) => result,
+                Err(error) => {
+                    tracing::error!(
+                        event = "tab_ai_harness_start_failed",
+                        error = %error,
+                    );
+                    self.toast_manager.push(
+                        crate::components::toast::Toast::error(
+                            format!("Failed to start harness: {error}. Install the configured CLI or update ~/.scriptkit/harness.json"),
+                            &self.theme,
+                        )
+                        .duration_ms(Some(TOAST_ERROR_MS)),
+                    );
+                    cx.notify();
+                    return;
+                }
+            };
+
+        // Mark the session as consumed so it cannot be reused again.
+        if let Some(session) = self.tab_ai_harness.as_mut() {
+            session.mark_consumed();
+        }
 
         // Determine readiness based on actual PTY output, not cold-start flag.
         let wait_for_readiness = Self::tab_ai_harness_needs_readiness_wait(&entity, cx);
@@ -400,6 +413,13 @@ impl ScriptListApp {
 
         match self.ensure_tab_ai_harness_terminal(false, cx) {
             Ok((_entity, was_cold_start)) => {
+                // Tag newly created sessions as FreshPrewarm so the next Tab
+                // reuses them exactly once instead of immediately killing them.
+                if was_cold_start {
+                    if let Some(session) = self.tab_ai_harness.as_mut() {
+                        session.warm_state = crate::ai::TabAiHarnessWarmState::FreshPrewarm;
+                    }
+                }
                 tracing::info!(
                     event = "tab_ai_harness_prewarmed",
                     backend = ?config.backend,
@@ -420,9 +440,9 @@ impl ScriptListApp {
     /// Returns the entity and whether this was a cold start (newly created).
     ///
     /// When `force_fresh` is `true`, any existing alive session is terminated
-    /// first so the caller gets a brand-new PTY.  User-initiated Tab presses
-    /// pass `true`; the prewarm path passes `false` to reuse an existing
-    /// session.
+    /// first so the caller gets a brand-new PTY. Explicit prewarm reuse passes
+    /// `false` so a fresh prewarmed session can be consumed exactly once;
+    /// otherwise callers pass `true` to force a clean PTY.
     fn ensure_tab_ai_harness_terminal(
         &mut self,
         force_fresh: bool,

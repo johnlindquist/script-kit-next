@@ -68,6 +68,7 @@ pub use self::harness::{
     cleanup_old_tab_ai_screenshot_files_in_dir, read_tab_ai_harness_config,
     tab_ai_harness_config_path, tab_ai_screenshot_prefix, validate_tab_ai_harness_config,
     HarnessBackendKind, HarnessConfig, TabAiHarnessSessionState, TabAiHarnessSubmissionMode,
+    TabAiHarnessWarmState,
     TabAiScreenshotFile, TAB_AI_HARNESS_CONFIG_SCHEMA_VERSION,
     TAB_AI_HARNESS_CONTEXT_SCHEMA_VERSION, TAB_AI_SCREENSHOT_MAX_KEEP,
 };
