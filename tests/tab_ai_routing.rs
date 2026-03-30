@@ -1992,18 +1992,26 @@ fn legacy_ai_window_commands_route_to_harness() {
 #[test]
 fn legacy_ai_window_builtins_removed_from_registration() {
     // OpenAi, MiniAi, NewConversation must not appear as registered builtins.
-    assert!(
-        !BUILTINS_SOURCE.contains("\"builtin-open-ai\","),
-        "builtin-open-ai should be removed from registration"
-    );
-    assert!(
-        !BUILTINS_SOURCE.contains("\"builtin-mini-ai\","),
-        "builtin-mini-ai should be removed from registration"
-    );
-    assert!(
-        !BUILTINS_SOURCE.contains("\"builtin-new-conversation\","),
-        "builtin-new-conversation should be removed from registration"
-    );
+    // Scope the search to the get_builtin_entries function body so we don't
+    // false-positive on the string appearing inside test assertions.
+    let fn_start = BUILTINS_SOURCE
+        .find("pub fn get_builtin_entries(")
+        .expect("get_builtin_entries must exist");
+    let fn_body = &BUILTINS_SOURCE[fn_start..];
+    let fn_end = fn_body.find("\n#[cfg(test)]").unwrap_or(fn_body.len());
+    let registration_section = &fn_body[..fn_end];
+
+    for legacy_id in [
+        "builtin-open-ai-chat",
+        "builtin-mini-ai-chat",
+        "builtin-new-conversation",
+        "builtin-clear-conversation",
+    ] {
+        assert!(
+            !registration_section.contains(legacy_id),
+            "{legacy_id} should be removed from get_builtin_entries registration"
+        );
+    }
 }
 
 #[test]
@@ -2048,6 +2056,38 @@ fn dispatch_ai_script_generation_routes_to_harness() {
     assert!(
         !dispatch_fn_body.contains("show_script_generation_chat"),
         "dispatch must not call the legacy show_script_generation_chat"
+    );
+}
+
+#[test]
+fn show_script_generation_chat_is_only_a_harness_shim() {
+    // show_script_generation_chat must delegate to the harness entry points
+    // and must NOT construct a ChatPrompt or reference ProviderRegistry.
+    let fn_start = PROMPT_AI_SOURCE
+        .find("pub fn show_script_generation_chat(")
+        .expect("show_script_generation_chat must exist");
+    let fn_body = &PROMPT_AI_SOURCE[fn_start..];
+    let next_fn = fn_body[1..]
+        .find("\n    pub")
+        .or_else(|| fn_body[1..].find("\n    fn "))
+        .unwrap_or(fn_body.len());
+    let fn_body = &fn_body[..next_fn];
+
+    assert!(
+        fn_body.contains("open_tab_ai_chat"),
+        "show_script_generation_chat must delegate to open_tab_ai_chat"
+    );
+    assert!(
+        !fn_body.contains("ChatPrompt::new"),
+        "show_script_generation_chat must not construct a ChatPrompt"
+    );
+    assert!(
+        !fn_body.contains("ProviderRegistry"),
+        "show_script_generation_chat must not reference ProviderRegistry"
+    );
+    assert!(
+        !fn_body.contains("AppView::ChatPrompt"),
+        "show_script_generation_chat must not set the view to ChatPrompt"
     );
 }
 
@@ -2194,7 +2234,8 @@ fn builtin_ai_chat_does_not_open_legacy_ai_window() {
     let arm_start = BUILTIN_EXECUTION_SOURCE
         .find("builtins::BuiltInFeature::AiChat =>")
         .expect("AiChat arm must exist in builtin_execution.rs");
-    let arm = &BUILTIN_EXECUTION_SOURCE[arm_start..BUILTIN_EXECUTION_SOURCE.len().min(arm_start + 500)];
+    let arm =
+        &BUILTIN_EXECUTION_SOURCE[arm_start..BUILTIN_EXECUTION_SOURCE.len().min(arm_start + 500)];
     assert!(
         !arm.contains("open_ai_window_after_main_hide("),
         "AiChat entry must no longer open the legacy AI window"
@@ -2236,8 +2277,7 @@ fn generate_script_from_current_app_preserves_explicit_harness_intent() {
     let arm = find_execution_arm("AiCommandType::GenerateScriptFromCurrentApp");
 
     assert!(
-        arm.contains("query_override")
-            && arm.contains("open_tab_ai_chat_with_entry_intent(Some("),
+        arm.contains("query_override") && arm.contains("open_tab_ai_chat_with_entry_intent(Some("),
         "GenerateScriptFromCurrentApp must preserve explicit harness intent \
          instead of flattening to open_tab_ai_chat(cx)"
     );
@@ -2349,8 +2389,7 @@ fn tab_ai_apply_back_route_cleared_on_harness_close() {
 fn tab_ai_apply_back_hint_strip_visible_in_quick_terminal() {
     // The hint strip must advertise the ⌘⏎ Apply action so users know about it.
     assert!(
-        TERM_RENDER_SOURCE.contains("Apply")
-            && TERM_RENDER_SOURCE.contains("Close"),
+        TERM_RENDER_SOURCE.contains("Apply") && TERM_RENDER_SOURCE.contains("Close"),
         "QuickTerminalView hint strip must show both Apply and Close actions"
     );
 }
@@ -2476,9 +2515,7 @@ fn resolve_targets_has_explicit_script_list_branch() {
         .find("fn resolve_tab_ai_surface_targets_for_view(")
         .expect("resolve_tab_ai_surface_targets_for_view must exist");
     let fn_body = &TAB_AI_MODE_SOURCE[fn_start..];
-    let next_fn = fn_body[1..]
-        .find("\n    fn ")
-        .unwrap_or(fn_body.len());
+    let next_fn = fn_body[1..].find("\n    fn ").unwrap_or(fn_body.len());
     let fn_body = &fn_body[..next_fn];
 
     assert!(
@@ -2493,9 +2530,7 @@ fn script_list_branch_uses_grouped_results_cache() {
         .find("fn resolve_tab_ai_surface_targets_for_view(")
         .expect("resolve_tab_ai_surface_targets_for_view must exist");
     let fn_body = &TAB_AI_MODE_SOURCE[fn_start..];
-    let next_fn = fn_body[1..]
-        .find("\n    fn ")
-        .unwrap_or(fn_body.len());
+    let next_fn = fn_body[1..].find("\n    fn ").unwrap_or(fn_body.len());
     let fn_body = &fn_body[..next_fn];
 
     // The ScriptList arm must read from the same grouped results cache
@@ -2516,9 +2551,7 @@ fn script_list_branch_delegates_to_search_result_helper() {
         .find("fn resolve_tab_ai_surface_targets_for_view(")
         .expect("resolve_tab_ai_surface_targets_for_view must exist");
     let fn_body = &TAB_AI_MODE_SOURCE[fn_start..];
-    let next_fn = fn_body[1..]
-        .find("\n    fn ")
-        .unwrap_or(fn_body.len());
+    let next_fn = fn_body[1..].find("\n    fn ").unwrap_or(fn_body.len());
     let fn_body = &fn_body[..next_fn];
 
     assert!(
@@ -2543,9 +2576,7 @@ fn search_result_helper_produces_script_list_source() {
         .find("fn tab_ai_target_from_search_result(")
         .expect("tab_ai_target_from_search_result must exist");
     let fn_body = &TAB_AI_MODE_SOURCE[fn_start..];
-    let next_fn = fn_body[1..]
-        .find("\n    fn ")
-        .unwrap_or(fn_body.len());
+    let next_fn = fn_body[1..].find("\n    fn ").unwrap_or(fn_body.len());
     let fn_body = &fn_body[..next_fn];
 
     assert!(
@@ -2561,9 +2592,7 @@ fn search_result_helper_maps_all_result_kinds() {
         .find("fn tab_ai_target_from_search_result(")
         .expect("tab_ai_target_from_search_result must exist");
     let fn_body = &TAB_AI_MODE_SOURCE[fn_start..];
-    let next_fn = fn_body[1..]
-        .find("\n    fn ")
-        .unwrap_or(fn_body.len());
+    let next_fn = fn_body[1..].find("\n    fn ").unwrap_or(fn_body.len());
     let fn_body = &fn_body[..next_fn];
 
     for kind in &[
@@ -2589,9 +2618,7 @@ fn search_result_helper_includes_script_metadata() {
         .find("fn tab_ai_target_from_search_result(")
         .expect("tab_ai_target_from_search_result must exist");
     let fn_body = &TAB_AI_MODE_SOURCE[fn_start..];
-    let next_fn = fn_body[1..]
-        .find("\n    fn ")
-        .unwrap_or(fn_body.len());
+    let next_fn = fn_body[1..].find("\n    fn ").unwrap_or(fn_body.len());
     let fn_body = &fn_body[..next_fn];
 
     // Script metadata must include path and description for AI context.
