@@ -307,21 +307,32 @@ Tab AI is not the old inline chat surface anymore. The primary Tab AI experience
 - Generic PTY backends use `CaptureContextOptions::tab_ai_submit()` (text-safe, no screenshots — base64 PNG in PTY stdin is fragile).
 - The richer `tab_ai()` profile with screenshots is reserved for a future Claude-specific SDK path.
 
-**Schema-versioned types** (all in `src/ai/tab_context.rs`, bump version constants when changing fields):
+**Schema-versioned types** (primary PTY-backed Tab AI contract in `src/ai/tab_context.rs`):
 
 | Type | Purpose |
 |------|---------|
-| `TabAiContextBlob` (v2) | Top-level context sent to AI: UI snapshot + desktop snapshot + targets + clipboard + memory |
-| `TabAiTargetContext` | Source, kind, semantic_id, label, metadata for a resolved target |
+| `TabAiContextBlob` (v2) | Top-level context injected into the harness: UI snapshot + desktop snapshot + targets + clipboard + prior automations |
+| `TabAiTargetContext` | Source, kind, `semanticId`, label, metadata for a resolved target |
 | `TabAiTargetAudit` (v1) | Structured log of target resolution with `from_targets()` / `emit()` |
 | `TabAiUiSnapshot` | Prompt type, input text, focused/selected semantic IDs, visible elements |
-| `TabAiExecutionRecord` (v1) | Intent, generated script, target bundle_id, timestamps |
-| `TabAiExecutionReceipt` (v1) | Post-execution audit: record + status + output + duration |
-| `TabAiInvocationReceipt` (v1) | Per-field capture status (`TabAiFieldStatus`) + degradation reasons |
-| `TabAiMemoryResolution` | Suggestions + `TabAiMemoryResolutionOutcome` (candidate/match counts, reason) |
-| `TabAiMemoryEntry` (v1) | Persisted memory: intent, script, target bundle_id, outcome |
-| `TabAiFieldStatus` | Enum: `Unavailable`, `Degraded`, `Captured` — per-field telemetry |
-| `TabAiDegradationReason` | Enum: `PanelOnlyWarning`, `CollectorFallback`, `MissingInput`, etc. |
+| `TabAiInvocationReceipt` (v1) | Per-field capture quality: `inputStatus`, `focusStatus`, `elementsStatus`, `degradationReasons`, and `rich` |
+| `TabAiMemoryResolution` | Prior-automation suggestions plus `TabAiMemoryResolutionOutcome` |
+| `TabAiFieldStatus` | Enum: `Unavailable`, `Degraded`, `Captured` |
+| `TabAiDegradationReason` | Enum: `PanelOnlyElements`, `CollectorFallback`, `NoSemanticElements`, `MissingFocusTarget`, `InputNotExtractable`, `InputNotApplicable` |
+
+**Compatibility-only types still present in `src/ai/tab_context.rs`:**
+
+| Type | Purpose |
+|------|---------|
+| `TabAiExecutionRecord` (v2) | Legacy script-execution dispatch record: `intent`, `generatedSource`, `tempScriptPath`, `slug`, `promptType`, `bundleId`, `modelId`, `providerId`, `contextWarningCount`, `executedAt` |
+| `TabAiExecutionReceipt` (v1) | Legacy append-only audit receipt: `status`, save/memory eligibility, cleanup outcome, optional `error`, and `writtenAt` |
+| `TabAiMemoryEntry` (v1) | Persisted prior-automation memory entry: `intent`, `generatedSource`, `slug`, `promptType`, `bundleId`, `writtenAt` |
+
+**Compatibility-only helpers:**
+- `build_tab_ai_user_prompt()`
+- `build_tab_ai_execution_receipt()`
+- `write_tab_ai_memory_entry()`
+These remain for non-primary flows and historical data. Do not describe them as the default Tab entry path.
 
 **Harness lifecycle:**
 - Default path — `warmOnStartup` defaults to `true`, so Script Kit silently prewarms the configured harness at app launch.

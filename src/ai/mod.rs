@@ -1,32 +1,34 @@
-//! AI Chat Module
+//! AI surfaces and shared contracts.
 //!
-//! This module provides the data layer for the AI chat window feature.
-//! It includes data models, SQLite storage with FTS5 search support,
-//! and provider abstraction for BYOK (Bring Your Own Key) AI integration.
+//! This module contains both:
+//! - the legacy AI window/chat stack (`model`, `storage`, `providers`, `window`)
+//! - the current Tab AI harness/context stack (`harness`, `tab_context`, `message_parts`, `context_contract`, `current_app_automation_memory`)
+//!
+//! The primary Tab-triggered AI experience is **not** the old inline chat UI.
+//! Pressing Tab routes to a warm harness terminal in `AppView::QuickTerminalView`
+//! and injects `TabAiContextBlob` into the running CLI harness via
+//! `build_tab_ai_harness_submission()` and PTY-backed text injection.
 //!
 //! # Architecture
 //!
 //! ```text
 //! src/ai/
-//! ├── mod.rs       - Module exports and documentation
-//! ├── model.rs     - Data models (Chat, Message, ChatId, MessageRole)
-//! ├── storage.rs   - SQLite persistence layer
-//! ├── config.rs    - Environment variable detection and model configuration
-//! └── providers.rs - Provider trait and implementations (OpenAI, Anthropic, etc.)
+//! ├── harness/     - Harness config + `<scriptKitContext>` / `<scriptKitHints>` formatting
+//! ├── tab_context.rs - Tab AI context, receipts, memory lookup, compatibility types
+//! ├── message_parts.rs - MCP/file context-part composition
+//! ├── context_contract.rs - Shared context contract enforcement
+//! ├── current_app_automation_memory.rs - Bundle-scoped prior-automation memory
+//! ├── model.rs / storage.rs / providers.rs - Legacy AI window data + BYOK providers
+//! └── window/      - Legacy AI window UI and interactions
 //! ```
 //!
-//! # Database Location
+//! # Primary Tab AI contract
 //!
-//! The AI chats database is stored at `~/.scriptkit/ai-chats.db`.
-//!
-//!
-//! # Features
-//!
-//! - **BYOK (Bring Your Own Key)**: Stores model and provider info per chat
-//! - **FTS5 Search**: Full-text search across chat titles and message content
-//! - **Soft Delete**: Chats can be moved to trash and restored
-//! - **Token Tracking**: Optional token usage tracking per message
-//! - **Auto-Pruning**: Old deleted chats can be automatically pruned
+//! - Entry path: `open_tab_ai_chat()` → `open_tab_ai_chat_with_entry_intent()` → `open_tab_ai_harness_terminal()`
+//! - Surface: `AppView::QuickTerminalView` rendered by `TermPrompt`
+//! - Submission modes: `TabAiHarnessSubmissionMode::PasteOnly` and `TabAiHarnessSubmissionMode::Submit`
+//! - Capture profile: `CaptureContextOptions::tab_ai_submit()` for the landed PTY path
+//! - Legacy chat/window code still exists, but it is not the default Tab AI surface.
 
 // Re-exports intentionally cover the module's API surface.
 #![allow(unused_imports)]
