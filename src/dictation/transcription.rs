@@ -1,4 +1,5 @@
 use crate::dictation::types::{CapturedAudioChunk, DictationDestination, DictationSessionResult};
+use crate::setup::get_kit_path;
 use anyhow::{Context as _, Result};
 use parking_lot::Mutex;
 use std::path::{Path, PathBuf};
@@ -26,10 +27,23 @@ pub struct DictationTranscriptionConfig {
     pub minimum_samples: usize,
 }
 
+/// Default Whisper model filename (relative to the models directory).
+const DEFAULT_WHISPER_MODEL: &str = "whisper-medium-q4_1.bin";
+
+/// Resolve the default Whisper model path.
+///
+/// Anchors the model path to `get_kit_path()/models/` so it works
+/// regardless of the process working directory.  The returned path is
+/// always absolute (assuming `get_kit_path()` returns an absolute path,
+/// which it does for every documented configuration).
+pub fn resolve_default_model_path() -> PathBuf {
+    get_kit_path().join("models").join(DEFAULT_WHISPER_MODEL)
+}
+
 impl Default for DictationTranscriptionConfig {
     fn default() -> Self {
         Self {
-            model_path: PathBuf::from("models/whisper-medium-q4_1.bin"),
+            model_path: resolve_default_model_path(),
             initial_prompt: None,
             idle_unload_after: Duration::from_secs(300),
             // 100 ms at 16 kHz

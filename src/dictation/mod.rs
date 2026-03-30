@@ -15,8 +15,8 @@ pub use runtime::{
     maybe_unload_transcriber, snapshot_overlay_state, toggle_dictation, transcribe_captured_audio,
 };
 pub use transcription::{
-    build_session_result, captured_duration, merge_captured_chunks, DictationEngine,
-    DictationTranscriber, DictationTranscriptionConfig, WhisperDictationEngine,
+    build_session_result, captured_duration, merge_captured_chunks, resolve_default_model_path,
+    DictationEngine, DictationTranscriber, DictationTranscriptionConfig, WhisperDictationEngine,
 };
 pub use types::{
     CapturedAudioChunk, CompletedDictationCapture, DictationCaptureConfig, DictationCaptureEvent,

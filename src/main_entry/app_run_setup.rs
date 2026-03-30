@@ -744,6 +744,24 @@ app.run(move |cx: &mut App| {
             logging::log("HOTKEY", "AI hotkey listener exiting (channel closed)");
         }).detach();
 
+        // Dictation hotkey listener - event-driven via async_channel
+        // Routes through the same BuiltInFeature::Dictation path as the main menu
+        let app_entity_for_dictation = app_entity.clone();
+        cx.spawn(async move |cx: &mut gpui::AsyncApp| {
+            logging::log("HOTKEY", "Dictation hotkey listener started (event-driven)");
+            while let Ok(hotkey_event) = hotkeys::dictation_hotkey_channel().1.recv().await {
+                let _guard = logging::set_correlation_id(hotkey_event.correlation_id.clone());
+                logging::log("HOTKEY", "Dictation hotkey triggered - toggling dictation via builtin");
+                let app_entity_inner = app_entity_for_dictation.clone();
+                cx.update(move |cx: &mut gpui::App| {
+                    app_entity_inner.update(cx, |view, ctx| {
+                        view.execute_by_command_id_or_path("builtin-dictation", ctx);
+                    });
+                });
+            }
+            logging::log("HOTKEY", "Dictation hotkey listener exiting (channel closed)");
+        }).detach();
+
         // Script/Scriptlet/App hotkey listener - event-driven via async_channel
         // Handles shortcuts from shortcuts.json for scriptlets, builtins, and apps
         let app_entity_for_scripts = app_entity.clone();

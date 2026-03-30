@@ -215,9 +215,9 @@ C) Background Task
    Use async functions and status updates for longer work.
 */
 
-// Quick starter: input prompt
+// Quick starter: input prompt → show result in a HUD
 const result = await arg("What should this script do?");
-console.log(result);
+await div(md(`## ${{result}}`));
 "#
     )
 }
@@ -240,7 +240,7 @@ icon: wrench
   - description: short summary shown in UI
   - icon: choose a lucide icon name (for example: wrench, code, zap)
 
-  Learn more about creating extensions: ~/.scriptkit/kit/GUIDE.md
+  Learn more about creating extensions: ~/.scriptkit/GUIDE.md
 -->
 
 # {title}
@@ -255,7 +255,7 @@ echo "Hello from {title}!"
 "#
     )
 }
-/// Create a new script file in ~/.scriptkit/scripts/
+/// Create a new script file in ~/.scriptkit/kit/main/scripts/
 ///
 /// # Arguments
 ///
@@ -533,7 +533,7 @@ mod tests {
         assert!(template.contains("# My Extension"));
         assert!(template.contains("Scriptlets in this bundle"));
         assert!(template.contains("```bash"));
-        assert!(template.contains("~/.scriptkit/kit/GUIDE.md"));
+        assert!(template.contains("~/.scriptkit/GUIDE.md"));
     }
 
     #[test]
