@@ -356,6 +356,13 @@ impl ScriptListApp {
 
                 // Intercept dictation model download consent prompt.
                 if prompt_id == BUILTIN_DICTATION_MODEL_PROMPT_ID {
+                    if !matches!(
+                        value.as_str(),
+                        BUILTIN_DICTATION_MODEL_DOWNLOAD | BUILTIN_DICTATION_MODEL_CANCEL
+                    ) {
+                        self.show_error_toast("Choose Download or Not now", cx);
+                        return;
+                    }
                     self.handle_dictation_model_selection(&value, cx);
                     return;
                 }
