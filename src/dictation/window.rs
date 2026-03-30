@@ -160,7 +160,7 @@ impl Render for DictationOverlay {
                         .text_size(px(11.5))
                         .text_color(text_color)
                         .overflow_hidden()
-                        .child(self.state.transcript.clone()),
+                        .child(finished_label(&self.state.transcript)),
                 ),
             DictationSessionPhase::Failed(ref msg) => {
                 let err_text: SharedString = format!("Error: {msg}").into();
@@ -196,6 +196,33 @@ impl Render for DictationOverlay {
             .border_1()
             .border_color(border_color)
             .child(inner)
+    }
+}
+
+/// Format a human-readable label for the finished overlay state.
+///
+/// - Empty/whitespace transcript → `"Done"`
+/// - Short transcript (≤28 chars) → `"Done · <transcript>"`
+/// - Long transcript (>28 chars) → `"Done · <first 28 chars>…"`
+pub(crate) fn finished_label(transcript: &SharedString) -> SharedString {
+    let owned = transcript.to_string();
+    let trimmed = owned.trim();
+    if trimmed.is_empty() {
+        return "Done".into();
+    }
+    const MAX_CHARS: usize = 28;
+    let mut preview = String::new();
+    let mut chars = trimmed.chars();
+    for _ in 0..MAX_CHARS {
+        let Some(ch) = chars.next() else {
+            break;
+        };
+        preview.push(ch);
+    }
+    if chars.next().is_some() {
+        format!("Done · {preview}…").into()
+    } else {
+        format!("Done · {preview}").into()
     }
 }
 

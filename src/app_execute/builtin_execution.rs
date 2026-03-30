@@ -3770,16 +3770,35 @@ impl ScriptListApp {
                         std::time::Duration::from_secs(300),
                     );
                 } else {
-                    // Paste to frontmost app: hide Script Kit's windows first
-                    // so macOS returns keyboard focus to the target app before
-                    // the CGEvent Cmd+V fires.
-                    let _ = crate::dictation::close_dictation_overlay(cx);
-                    if script_kit_gpui::is_main_window_visible() {
-                        script_kit_gpui::set_main_window_visible(false);
-                        platform::defer_hide_main_window(cx);
-                    }
+                    // Show a brief done state before closing and pasting to
+                    // the frontmost app, matching the prompt-first path UX.
+                    let _ = crate::dictation::update_dictation_overlay(
+                        crate::dictation::DictationOverlayState {
+                            phase: crate::dictation::DictationSessionPhase::Finished,
+                            elapsed: audio_duration,
+                            transcript: transcript.clone().into(),
+                            ..Default::default()
+                        },
+                        cx,
+                    );
 
                     cx.spawn(async move |this, cx| {
+                        // Brief pause so the user sees the done state.
+                        cx.background_executor()
+                            .timer(std::time::Duration::from_millis(75))
+                            .await;
+
+                        // Close overlay and hide Script Kit windows so macOS
+                        // returns keyboard focus to the target app before
+                        // the CGEvent Cmd+V fires.
+                        let _ = this.update(cx, |_this, cx| {
+                            let _ = crate::dictation::close_dictation_overlay(cx);
+                            if script_kit_gpui::is_main_window_visible() {
+                                script_kit_gpui::set_main_window_visible(false);
+                                platform::defer_hide_main_window(cx);
+                            }
+                        });
+
                         // Let macOS settle focus back to the target app.
                         cx.background_executor()
                             .timer(std::time::Duration::from_millis(100))
