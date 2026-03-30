@@ -168,6 +168,22 @@ impl TermPrompt {
         !self.exited
     }
 
+    /// Tear down the backing PTY session.
+    ///
+    /// Kills the child process and signals the reader thread to stop.
+    /// Safe to call multiple times — returns `Ok(())` if already exited.
+    pub fn terminate_session(&mut self) -> anyhow::Result<()> {
+        if self.exited {
+            return Ok(());
+        }
+        self.terminal
+            .kill()
+            .map_err(|e| anyhow::anyhow!("term_prompt_kill_failed: {e}"))?;
+        self.exited = true;
+        self.exit_code = None;
+        Ok(())
+    }
+
     /// Send text into the PTY, wrapping in bracketed-paste escapes when the
     /// terminal has that mode enabled.
     pub fn send_text_as_paste(&mut self, text: &str) -> anyhow::Result<()> {

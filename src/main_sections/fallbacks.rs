@@ -162,6 +162,16 @@ fn execute_fallback_action(
 
                     app.execute_builtin_with_query(&entry, Some(input), cx);
                 }
+
+                FallbackResult::SendToAiHarness { query } => {
+                    logging::log("FALLBACK", &format!("SendToAiHarness: {}", query));
+                    let normalized = query.trim().to_string();
+                    if normalized.is_empty() {
+                        app.open_tab_ai_chat(cx);
+                    } else {
+                        app.open_tab_ai_chat_with_entry_intent(Some(normalized), cx);
+                    }
+                }
             }
         }
         Err(e) => {

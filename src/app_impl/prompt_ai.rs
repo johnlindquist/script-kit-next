@@ -736,8 +736,8 @@ impl ScriptListApp {
             return;
         }
 
-        self.filter_text.clear();
-        self.show_script_generation_chat(Some(query), cx);
+        // Route through the instant harness terminal instead of the legacy ChatPrompt.
+        self.open_tab_ai_chat_with_entry_intent(Some(query), cx);
     }
 
     /// Generate a Script Kit script from a natural-language prompt using the built-in AI backend.

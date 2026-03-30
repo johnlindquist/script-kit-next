@@ -1,7 +1,7 @@
 //! Contract tests verifying Tab AI routes to the harness terminal surface.
 //!
 //! The primary Tab AI entry path is:
-//!   Tab key → `open_tab_ai_chat()` → `open_tab_ai_harness_terminal()` →
+//!   Tab key → `open_tab_ai_chat()` → `open_tab_ai_harness_terminal_from_request()` →
 //!   `AppView::QuickTerminalView` rendered via `TermPrompt`.
 //!
 //! Tests in this file validate that the harness-terminal contract is the
@@ -17,6 +17,9 @@ const APP_VIEW_STATE_SOURCE: &str = include_str!("../src/main_sections/app_view_
 const HARNESS_SOURCE: &str = include_str!("../src/ai/harness/mod.rs");
 const TERM_RENDER_SOURCE: &str = include_str!("../src/render_prompts/term.rs");
 const AI_MOD_SOURCE: &str = include_str!("../src/ai/mod.rs");
+const BUILTIN_EXECUTION_SOURCE: &str = include_str!("../src/app_execute/builtin_execution.rs");
+const PROMPT_AI_SOURCE: &str = include_str!("../src/app_impl/prompt_ai.rs");
+const BUILTINS_SOURCE: &str = include_str!("../src/builtins/mod.rs");
 
 // =========================================================================
 // Primary contract: Tab → harness terminal (QuickTerminalView)
@@ -36,7 +39,7 @@ fn open_tab_ai_chat_routes_to_harness_terminal() {
 
     assert!(
         open_fn_body.contains("open_tab_ai_chat_with_entry_intent(None, cx)")
-            || open_fn_body.contains("open_tab_ai_harness_terminal("),
+            || open_fn_body.contains("begin_tab_ai_harness_entry("),
         "open_tab_ai_chat must delegate to the harness terminal as the primary surface"
     );
     assert!(
@@ -83,8 +86,8 @@ fn startup_routes_tab_into_harness_terminal() {
 fn tab_ai_creates_quick_terminal_view() {
     // The harness terminal function must switch to QuickTerminalView.
     let open_fn_start = TAB_AI_MODE_SOURCE
-        .find("fn open_tab_ai_harness_terminal(")
-        .expect("open_tab_ai_harness_terminal must exist");
+        .find("fn open_tab_ai_harness_terminal_from_request(")
+        .expect("open_tab_ai_harness_terminal_from_request must exist");
     let open_fn_body = &TAB_AI_MODE_SOURCE[open_fn_start..];
     let next_fn = open_fn_body[1..]
         .find("\n    fn ")
@@ -93,7 +96,7 @@ fn tab_ai_creates_quick_terminal_view() {
 
     assert!(
         open_fn_body.contains("AppView::QuickTerminalView"),
-        "open_tab_ai_harness_terminal must switch to QuickTerminalView"
+        "open_tab_ai_harness_terminal_from_request must switch to QuickTerminalView"
     );
 }
 
@@ -228,7 +231,7 @@ fn entry_intent_is_trimmed_before_submit_mode_is_selected() {
         "whitespace-only entry intent must collapse to None",
     );
     assert!(
-        TAB_AI_MODE_SOURCE.contains("let submission_mode = if entry_intent.is_some()"),
+        TAB_AI_MODE_SOURCE.contains("let submission_mode = if request.entry_intent.is_some()"),
         "submission mode must branch on the normalized entry intent",
     );
     assert!(
@@ -240,7 +243,7 @@ fn entry_intent_is_trimmed_before_submit_mode_is_selected() {
         "empty normalized entry intent must use PasteOnly mode",
     );
     assert!(
-        TAB_AI_MODE_SOURCE.contains("entry_intent.as_deref()"),
+        TAB_AI_MODE_SOURCE.contains("request.entry_intent.as_deref()"),
         "the normalized entry intent must be what gets passed into harness submission construction",
     );
 }
@@ -321,32 +324,32 @@ fn open_tab_ai_chat_guards_save_offer_state() {
 
 #[test]
 fn harness_terminal_uses_text_safe_capture_profile() {
-    // The harness terminal path must use tab_ai_submit() (no screenshots)
-    // not tab_ai() (includes base64 screenshots that bloat PTY payloads).
-    let open_fn_start = TAB_AI_MODE_SOURCE
-        .find("fn open_tab_ai_harness_terminal(")
-        .expect("open_tab_ai_harness_terminal must exist");
-    let open_fn_body = &TAB_AI_MODE_SOURCE[open_fn_start..];
-    let next_fn = open_fn_body[1..]
+    // The deferred capture pipeline must use tab_ai_submit() (no screenshots
+    // in the blob) not tab_ai() (includes base64 screenshots that bloat PTY).
+    let capture_fn_start = TAB_AI_MODE_SOURCE
+        .find("fn spawn_tab_ai_pre_switch_capture(")
+        .expect("spawn_tab_ai_pre_switch_capture must exist");
+    let capture_fn_body = &TAB_AI_MODE_SOURCE[capture_fn_start..];
+    let next_fn = capture_fn_body[1..]
         .find("\n    fn ")
-        .unwrap_or(open_fn_body.len());
-    let open_fn_body = &open_fn_body[..next_fn];
+        .unwrap_or(capture_fn_body.len());
+    let capture_fn_body = &capture_fn_body[..next_fn];
 
     assert!(
-        open_fn_body.contains("tab_ai_submit()"),
-        "harness terminal must use tab_ai_submit() (text-safe, no screenshots) for generic PTY"
+        capture_fn_body.contains("tab_ai_submit()"),
+        "deferred capture must use tab_ai_submit() (text-safe, no screenshots) for generic PTY"
     );
     assert!(
-        !open_fn_body.contains("CaptureContextOptions::tab_ai()"),
-        "harness terminal must NOT use tab_ai() (includes screenshots) for generic PTY backends"
+        !capture_fn_body.contains("CaptureContextOptions::tab_ai()"),
+        "deferred capture must NOT use tab_ai() (includes screenshots) for generic PTY backends"
     );
 }
 
 #[test]
 fn harness_terminal_entry_derives_mode_from_intent() {
     let open_fn_start = TAB_AI_MODE_SOURCE
-        .find("fn open_tab_ai_harness_terminal(")
-        .expect("open_tab_ai_harness_terminal must exist");
+        .find("fn open_tab_ai_harness_terminal_from_request(")
+        .expect("open_tab_ai_harness_terminal_from_request must exist");
     let open_fn_body = &TAB_AI_MODE_SOURCE[open_fn_start..];
     let next_fn = open_fn_body[1..]
         .find("\n    fn ")
@@ -358,7 +361,7 @@ fn harness_terminal_entry_derives_mode_from_intent() {
         "Zero-intent Tab entry must use PasteOnly so context is staged without auto-submitting"
     );
     assert!(
-        open_fn_body.contains("let submission_mode = if entry_intent.is_some()"),
+        open_fn_body.contains("let submission_mode = if request.entry_intent.is_some()"),
         "tab_ai_mode.rs must derive submission mode from entry-intent presence"
     );
     assert!(
@@ -552,6 +555,106 @@ fn close_harness_terminal_restores_return_view() {
     assert!(
         close_fn_body.contains("self.pending_focus = Some(return_focus_target)"),
         "close must restore the pending focus target"
+    );
+}
+
+#[test]
+fn close_tab_ai_harness_terminal_clears_cached_session() {
+    let close_fn_start = TAB_AI_MODE_SOURCE
+        .find("fn close_tab_ai_harness_terminal(")
+        .expect("close_tab_ai_harness_terminal must exist");
+    let close_fn_body = &TAB_AI_MODE_SOURCE[close_fn_start..];
+    let next_fn = close_fn_body[1..]
+        .find("\n    fn ")
+        .unwrap_or(close_fn_body.len());
+    let close_fn_body = &close_fn_body[..next_fn];
+
+    assert!(
+        close_fn_body.contains("self.tab_ai_harness.take()"),
+        "close must clear cached harness session via take()"
+    );
+    assert!(
+        close_fn_body.contains("terminate_session"),
+        "close must tear down the PTY session via terminate_session()"
+    );
+    assert!(
+        close_fn_body.contains("tab_ai_harness_capture_generation += 1"),
+        "close must invalidate in-flight deferred capture generations"
+    );
+    assert!(
+        close_fn_body.contains("warm_tab_ai_harness_on_startup")
+            || close_fn_body.contains("schedule_tab_ai_harness_prewarm"),
+        "close must schedule a fresh prewarm after teardown"
+    );
+}
+
+#[test]
+fn close_tab_ai_harness_logs_session_cleared() {
+    let close_fn_start = TAB_AI_MODE_SOURCE
+        .find("fn close_tab_ai_harness_terminal(")
+        .expect("close_tab_ai_harness_terminal must exist");
+    let close_fn_body = &TAB_AI_MODE_SOURCE[close_fn_start..];
+    let next_fn = close_fn_body[1..]
+        .find("\n    fn ")
+        .unwrap_or(close_fn_body.len());
+    let close_fn_body = &close_fn_body[..next_fn];
+
+    assert!(
+        close_fn_body.contains("session_cleared = true"),
+        "close log must include session_cleared = true for observability"
+    );
+}
+
+#[test]
+fn term_prompt_exposes_terminate_session() {
+    let term_source = include_str!("../src/term_prompt/mod.rs");
+    assert!(
+        term_source.contains("pub fn terminate_session(&mut self) -> anyhow::Result<()>"),
+        "TermPrompt must expose a public terminate_session method"
+    );
+    // Must not use unwrap/expect in production code
+    let term_fn_start = term_source
+        .find("pub fn terminate_session(")
+        .expect("terminate_session must exist");
+    let term_fn_body = &term_source[term_fn_start..];
+    let next_fn = term_fn_body[1..]
+        .find("\n    pub fn ")
+        .unwrap_or(term_fn_body.len());
+    let term_fn_body = &term_fn_body[..next_fn];
+
+    assert!(
+        !term_fn_body.contains(".unwrap()") && !term_fn_body.contains(".expect("),
+        "terminate_session must not use unwrap/expect in production code"
+    );
+}
+
+#[test]
+fn schedule_tab_ai_harness_prewarm_exists_and_uses_timer() {
+    assert!(
+        TAB_AI_MODE_SOURCE.contains("fn schedule_tab_ai_harness_prewarm("),
+        "schedule_tab_ai_harness_prewarm helper must exist"
+    );
+    let fn_start = TAB_AI_MODE_SOURCE
+        .find("fn schedule_tab_ai_harness_prewarm(")
+        .expect("schedule_tab_ai_harness_prewarm must exist");
+    let fn_body = &TAB_AI_MODE_SOURCE[fn_start..];
+    let next_fn = fn_body[1..]
+        .find("\n    fn ")
+        .or_else(|| fn_body[1..].find("\n    pub"))
+        .unwrap_or(fn_body.len());
+    let fn_body = &fn_body[..next_fn];
+
+    assert!(
+        fn_body.contains("background_executor().timer("),
+        "prewarm scheduler must use background_executor timer for the delay"
+    );
+    assert!(
+        fn_body.contains("warm_tab_ai_harness_on_startup"),
+        "prewarm scheduler must call warm_tab_ai_harness_on_startup"
+    );
+    assert!(
+        fn_body.contains(".detach()"),
+        "prewarm task must be detached"
     );
 }
 
@@ -1072,8 +1175,8 @@ fn harness_readiness_gate_applies_to_prewarmed_sessions() {
     // still take the readiness-wait path before context paste. The gate
     // must NOT be conditioned on was_cold_start alone.
     let open_fn_start = TAB_AI_MODE_SOURCE
-        .find("fn open_tab_ai_harness_terminal(")
-        .expect("open_tab_ai_harness_terminal must exist");
+        .find("fn open_tab_ai_harness_terminal_from_request(")
+        .expect("open_tab_ai_harness_terminal_from_request must exist");
     let open_fn_body = &TAB_AI_MODE_SOURCE[open_fn_start..];
     let next_fn = open_fn_body[1..]
         .find("\n    fn ")
@@ -1083,14 +1186,14 @@ fn harness_readiness_gate_applies_to_prewarmed_sessions() {
     // The open function must call the readiness check method
     assert!(
         open_fn_body.contains("tab_ai_harness_needs_readiness_wait"),
-        "open_tab_ai_harness_terminal must call tab_ai_harness_needs_readiness_wait \
+        "open_tab_ai_harness_terminal_from_request must call tab_ai_harness_needs_readiness_wait \
          to determine readiness independent of cold-start status"
     );
 
     // The readiness check must be based on has_received_output, not was_cold_start
     assert!(
         open_fn_body.contains("wait_for_readiness"),
-        "open_tab_ai_harness_terminal must use wait_for_readiness from the readiness check"
+        "open_tab_ai_harness_terminal_from_request must use wait_for_readiness from the readiness check"
     );
 }
 
@@ -1140,11 +1243,11 @@ fn harness_injection_uses_wait_for_readiness_not_cold_start() {
 
 #[test]
 fn harness_submission_planned_event_logged() {
-    // open_tab_ai_harness_terminal must log a structured submission_planned event
+    // open_tab_ai_harness_terminal_from_request must log a structured submission_planned event
     // with the wait_for_readiness flag for diagnostics.
     let open_fn_start = TAB_AI_MODE_SOURCE
-        .find("fn open_tab_ai_harness_terminal(")
-        .expect("open_tab_ai_harness_terminal must exist");
+        .find("fn open_tab_ai_harness_terminal_from_request(")
+        .expect("open_tab_ai_harness_terminal_from_request must exist");
     let open_fn_body = &TAB_AI_MODE_SOURCE[open_fn_start..];
     let next_fn = open_fn_body[1..]
         .find("\n    fn ")
@@ -1484,8 +1587,8 @@ fn legacy_tab_ai_chat_not_in_primary_entry_path() {
 
     // open_tab_ai_harness_terminal: the harness launcher
     let harness_fn_start = TAB_AI_MODE_SOURCE
-        .find("fn open_tab_ai_harness_terminal(")
-        .expect("open_tab_ai_harness_terminal must exist");
+        .find("fn open_tab_ai_harness_terminal_from_request(")
+        .expect("open_tab_ai_harness_terminal_from_request must exist");
     let harness_fn_body = &TAB_AI_MODE_SOURCE[harness_fn_start..];
     let next_fn = harness_fn_body[1..]
         .find("\n    fn ")
@@ -1493,7 +1596,7 @@ fn legacy_tab_ai_chat_not_in_primary_entry_path() {
     let harness_fn_body = &harness_fn_body[..next_fn];
     assert!(
         !harness_fn_body.contains("TabAiChat"),
-        "open_tab_ai_harness_terminal must not reference TabAiChat"
+        "open_tab_ai_harness_terminal_from_request must not reference TabAiChat"
     );
 
     // close_tab_ai_harness_terminal: the close handler
@@ -1666,5 +1769,177 @@ fn entry_intent_is_trimmed_and_empty_filtered() {
     assert!(
         TAB_AI_MODE_SOURCE.contains(".filter(|value| !value.is_empty())"),
         "empty trimmed intent must be filtered to None"
+    );
+}
+
+// =========================================================================
+// Legacy AI command redirection: all active AI builtins → harness terminal
+// =========================================================================
+
+#[test]
+fn generate_script_builtin_routes_to_harness_not_chat_prompt() {
+    // The GenerateScript match arm must open the harness terminal, not the legacy ChatPrompt.
+    assert!(
+        BUILTIN_EXECUTION_SOURCE.contains("ai_generate_script_routed_to_harness"),
+        "GenerateScript must use harness routing success label"
+    );
+    assert!(
+        BUILTIN_EXECUTION_SOURCE.contains("open_tab_ai_chat_with_entry_intent(Some(trimmed), cx)"),
+        "GenerateScript must route typed query to harness entry intent"
+    );
+}
+
+#[test]
+fn send_to_ai_commands_route_to_harness_not_legacy_window() {
+    // All SendXToAi commands must route to the harness terminal.
+    assert!(
+        BUILTIN_EXECUTION_SOURCE.contains("ai_{cmd_type:?}_routed_to_harness"),
+        "Send-to-AI commands must use harness routing success label"
+    );
+    // The AI command match block must not invoke legacy hide-then-capture calls.
+    // We scope to the AiCommand match block (starts at "AiCommand(cmd_type)").
+    let ai_block_start = BUILTIN_EXECUTION_SOURCE
+        .find("BuiltInFeature::AiCommand(cmd_type) =>")
+        .expect("AiCommand match arm must exist");
+    // Grab ~4000 chars of the match block (enough to cover all arms).
+    let ai_block = &BUILTIN_EXECUTION_SOURCE
+        [ai_block_start..(ai_block_start + 4000).min(BUILTIN_EXECUTION_SOURCE.len())];
+
+    assert!(
+        !ai_block.contains("spawn_send_screen_to_ai_after_hide"),
+        "AI command block must not call the legacy spawn_send_screen_to_ai_after_hide"
+    );
+    assert!(
+        !ai_block.contains("spawn_send_focused_window_to_ai_after_hide"),
+        "AI command block must not call the legacy spawn_send_focused_window_to_ai_after_hide"
+    );
+    assert!(
+        !ai_block.contains("spawn_send_selected_text_to_ai_after_hide"),
+        "AI command block must not call the legacy spawn_send_selected_text_to_ai_after_hide"
+    );
+    assert!(
+        !ai_block.contains("spawn_send_browser_tab_to_ai_after_hide"),
+        "AI command block must not call the legacy spawn_send_browser_tab_to_ai_after_hide"
+    );
+    assert!(
+        !ai_block.contains("spawn_send_screen_area_to_ai_after_hide"),
+        "AI command block must not call the legacy spawn_send_screen_area_to_ai_after_hide"
+    );
+}
+
+#[test]
+fn legacy_ai_window_commands_route_to_harness() {
+    // OpenAi, MiniAi, NewConversation, ClearConversation must all route to harness.
+    // Scope to the AI command match block.
+    let ai_block_start = BUILTIN_EXECUTION_SOURCE
+        .find("BuiltInFeature::AiCommand(cmd_type) =>")
+        .expect("AiCommand match arm must exist");
+    let ai_block = &BUILTIN_EXECUTION_SOURCE
+        [ai_block_start..(ai_block_start + 4000).min(BUILTIN_EXECUTION_SOURCE.len())];
+
+    assert!(
+        !ai_block.contains("open_ai_window_after_already_hidden"),
+        "AI command block must not call the legacy open_ai_window_after_already_hidden"
+    );
+    assert!(
+        !ai_block.contains("open_mini_ai_window_from"),
+        "AI command block must not call the legacy open_mini_ai_window_from"
+    );
+    assert!(
+        !ai_block.contains("clear_all_chats"),
+        "AI command block must not call legacy clear_all_chats"
+    );
+}
+
+#[test]
+fn legacy_ai_window_builtins_removed_from_registration() {
+    // OpenAi, MiniAi, NewConversation must not appear as registered builtins.
+    assert!(
+        !BUILTINS_SOURCE.contains("\"builtin-open-ai\","),
+        "builtin-open-ai should be removed from registration"
+    );
+    assert!(
+        !BUILTINS_SOURCE.contains("\"builtin-mini-ai\","),
+        "builtin-mini-ai should be removed from registration"
+    );
+    assert!(
+        !BUILTINS_SOURCE.contains("\"builtin-new-conversation\","),
+        "builtin-new-conversation should be removed from registration"
+    );
+}
+
+#[test]
+fn generate_script_and_send_builtins_still_registered() {
+    // These builtins remain registered (but route to harness now).
+    assert!(
+        BUILTINS_SOURCE.contains("\"builtin-generate-script-with-ai\""),
+        "builtin-generate-script-with-ai should still be registered"
+    );
+    assert!(
+        BUILTINS_SOURCE.contains("\"builtin-generate-script-from-current-app\""),
+        "builtin-generate-script-from-current-app should still be registered"
+    );
+    assert!(
+        BUILTINS_SOURCE.contains("\"builtin-send-screen-to-ai\""),
+        "builtin-send-screen-to-ai should still be registered"
+    );
+    assert!(
+        BUILTINS_SOURCE.contains("\"builtin-send-selected-text-to-ai\""),
+        "builtin-send-selected-text-to-ai should still be registered"
+    );
+}
+
+#[test]
+fn dispatch_ai_script_generation_routes_to_harness() {
+    // The legacy dispatch function must now route to the harness, not show_script_generation_chat.
+    assert!(
+        PROMPT_AI_SOURCE.contains("open_tab_ai_chat_with_entry_intent(Some(query), cx)"),
+        "dispatch_ai_script_generation_from_query must route to harness entry intent"
+    );
+    // Must NOT call the legacy ChatPrompt path
+    let dispatch_fn_start = PROMPT_AI_SOURCE
+        .find("fn dispatch_ai_script_generation_from_query(")
+        .expect("dispatch function must exist");
+    let dispatch_fn_body = &PROMPT_AI_SOURCE[dispatch_fn_start..];
+    let next_fn = dispatch_fn_body[1..]
+        .find("\n    pub")
+        .or_else(|| dispatch_fn_body[1..].find("\n    fn "))
+        .unwrap_or(dispatch_fn_body.len());
+    let dispatch_fn_body = &dispatch_fn_body[..next_fn];
+
+    assert!(
+        !dispatch_fn_body.contains("show_script_generation_chat"),
+        "dispatch must not call the legacy show_script_generation_chat"
+    );
+}
+
+#[test]
+fn all_ai_commands_keep_main_window_visible_for_harness() {
+    // Since all active AI commands route to the harness terminal (a view
+    // inside the main window), they must all keep the window visible.
+    assert!(
+        BUILTIN_EXECUTION_SOURCE.contains(
+            "builtins::AiCommandType::GenerateScript\n        | builtins::AiCommandType::GenerateScriptFromCurrentApp"
+        ),
+        "visibility function must list GenerateScript and GenerateScriptFromCurrentApp as keeping window visible"
+    );
+    assert!(
+        BUILTIN_EXECUTION_SOURCE.contains(
+            "builtins::AiCommandType::OpenAi\n        | builtins::AiCommandType::MiniAi"
+        ),
+        "visibility function must list OpenAi and MiniAi as keeping window visible"
+    );
+}
+
+#[test]
+fn manual_creation_paths_unaffected_by_ai_redirect() {
+    // NewScript and NewExtension must remain registered as non-AI creation paths.
+    assert!(
+        BUILTINS_SOURCE.contains("ScriptCommandType::NewScript"),
+        "NewScript must still be registered"
+    );
+    assert!(
+        BUILTINS_SOURCE.contains("ScriptCommandType::NewExtension"),
+        "NewExtension must still be registered"
     );
 }

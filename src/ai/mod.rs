@@ -24,7 +24,7 @@
 //!
 //! # Primary Tab AI contract
 //!
-//! - Entry path: `open_tab_ai_chat()` → `open_tab_ai_chat_with_entry_intent()` → `open_tab_ai_harness_terminal()`
+//! - Entry path: `open_tab_ai_chat()` → `begin_tab_ai_harness_entry()` → `open_tab_ai_harness_terminal_from_request()`
 //! - Surface: `AppView::QuickTerminalView` rendered by `TermPrompt`
 //! - Submission modes: `TabAiHarnessSubmissionMode::PasteOnly` and `TabAiHarnessSubmissionMode::Submit`
 //! - Capture profile: `CaptureContextOptions::tab_ai_submit()` for the landed PTY path
@@ -67,7 +67,8 @@ pub use self::harness::{
     build_tab_ai_harness_context_block, build_tab_ai_harness_submission,
     read_tab_ai_harness_config, tab_ai_harness_config_path, validate_tab_ai_harness_config,
     HarnessBackendKind, HarnessConfig, TabAiHarnessSessionState, TabAiHarnessSubmissionMode,
-    TAB_AI_HARNESS_CONFIG_SCHEMA_VERSION, TAB_AI_HARNESS_CONTEXT_SCHEMA_VERSION,
+    TabAiScreenshotFile, TAB_AI_HARNESS_CONFIG_SCHEMA_VERSION,
+    TAB_AI_HARNESS_CONTEXT_SCHEMA_VERSION, TAB_AI_SCREENSHOT_MAX_KEEP,
 };
 pub use self::message_parts::{
     file_path_parts, merge_context_parts, prepare_user_message_with_receipt,
@@ -114,8 +115,9 @@ pub use self::tab_context::{
     TabAiExecutionRecord, TabAiExecutionStatus, TabAiExperienceIntent, TabAiExperiencePack,
     TabAiExperienceSpec, TabAiFieldStatus, TabAiInvocationReceipt, TabAiMemoryEntry,
     TabAiMemoryResolution, TabAiMemoryResolutionOutcome, TabAiMemoryResolutionReason,
-    TabAiMemorySuggestion, TabAiSuggestedIntentSpec, TabAiTargetAudit, TabAiTargetContext,
-    TabAiUiSnapshot, TAB_AI_CONTEXT_SCHEMA_VERSION, TAB_AI_EXECUTION_RECEIPT_SCHEMA_VERSION,
+    TabAiApplyBackHint, TabAiMemorySuggestion, TabAiSourceType, TabAiSuggestedIntentSpec,
+    TabAiTargetAudit, TabAiTargetContext, TabAiUiSnapshot, TAB_AI_CONTEXT_SCHEMA_VERSION,
+    TAB_AI_EXECUTION_RECEIPT_SCHEMA_VERSION,
     TAB_AI_EXECUTION_RECORD_SCHEMA_VERSION, TAB_AI_INVOCATION_RECEIPT_SCHEMA_VERSION,
     TAB_AI_MEMORY_ENTRY_SCHEMA_VERSION, TAB_AI_TARGET_AUDIT_SCHEMA_VERSION,
 };

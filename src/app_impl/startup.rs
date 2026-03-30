@@ -499,6 +499,7 @@ impl ScriptListApp {
             pending_tab_ai_execution: None,
             tab_ai_save_offer_state: None,
             tab_ai_harness: None,
+            tab_ai_harness_capture_generation: 0,
             tab_ai_harness_return_view: None,
             tab_ai_harness_return_focus_target: None,
             // Input history for shell-like up/down navigation

@@ -907,37 +907,13 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         // AI Commands
         // =========================================================================
 
-        entries.push(BuiltInEntry::new_with_icon(
-            "builtin-open-ai",
-            "Open AI Chat",
-            "Open the AI Chat window",
-            vec!["open", "ai", "chat", "assistant", "window"],
-            BuiltInFeature::AiCommand(AiCommandType::OpenAi),
-            "🤖",
-        ));
-
-        entries.push(BuiltInEntry::new_with_icon(
-            "builtin-mini-ai",
-            "Mini AI Chat",
-            "Open a compact AI chat window",
-            vec!["mini", "ai", "chat", "compact", "quick", "assistant", "ask"],
-            BuiltInFeature::AiCommand(AiCommandType::MiniAi),
-            "✨",
-        ));
-
-        entries.push(BuiltInEntry::new_with_icon(
-            "builtin-new-conversation",
-            "New AI Conversation",
-            "Start a new AI conversation",
-            vec!["new", "conversation", "chat", "ai"],
-            BuiltInFeature::AiCommand(AiCommandType::NewConversation),
-            "💬",
-        ));
+        // Legacy AI window commands (OpenAi, MiniAi, NewConversation, ClearConversation)
+        // are no longer registered — all AI entry points route to the harness terminal.
 
         entries.push(BuiltInEntry::new_with_icon(
             "builtin-generate-script-with-ai",
             "Generate Script with AI",
-            "Generate a Script Kit script from your current prompt text",
+            "Open the AI harness to generate a Script Kit script from your prompt text",
             vec![
                 "generate",
                 "script",
@@ -975,8 +951,8 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
 
         entries.push(BuiltInEntry::new_with_icon(
             "builtin-send-screen-to-ai",
-            "Send Screen to AI Chat",
-            "Capture the full screen and send it to AI Chat",
+            "Send Screen to AI",
+            "Capture the full screen and send it to the AI harness",
             vec![
                 "send",
                 "screen",
@@ -992,8 +968,8 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
 
         entries.push(BuiltInEntry::new_with_icon(
             "builtin-send-window-to-ai",
-            "Send Focused Window to AI Chat",
-            "Capture the focused window and send it to AI Chat",
+            "Send Focused Window to AI",
+            "Capture the focused window and send it to the AI harness",
             vec![
                 "send",
                 "window",
@@ -1009,8 +985,8 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
 
         entries.push(BuiltInEntry::new_with_icon(
             "builtin-send-selected-text-to-ai",
-            "Send Selected Text to AI Chat",
-            "Send the currently selected text to AI Chat",
+            "Send Selected Text to AI",
+            "Send the currently selected text to the AI harness",
             vec![
                 "send",
                 "selected",
@@ -1026,8 +1002,8 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
 
         entries.push(BuiltInEntry::new_with_icon(
             "builtin-send-browser-tab-to-ai",
-            "Send Focused Browser Tab to AI Chat",
-            "Send the current browser tab URL to AI Chat",
+            "Send Focused Browser Tab to AI",
+            "Send the current browser tab URL to the AI harness",
             vec![
                 "send", "browser", "tab", "url", "safari", "chrome", "ai", "chat", "web",
             ],
@@ -1040,8 +1016,8 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         {
             entries.push(BuiltInEntry::new_with_icon(
                 "builtin-send-screen-area-to-ai",
-                "Send Screen Area to AI Chat",
-                "Capture a selected screen area and send it to AI Chat (coming soon)",
+                "Send Screen Area to AI",
+                "Capture a selected screen area and send it to the AI harness (coming soon)",
                 vec![
                     "send",
                     "screen",
@@ -2240,7 +2216,7 @@ mod tests {
         assert!(entries.iter().any(|e| e.id == "builtin-quick-capture"));
     }
     #[test]
-    fn test_get_builtin_entries_includes_open_notes_and_open_ai_commands() {
+    fn test_get_builtin_entries_includes_open_notes_and_generate_script() {
         let config = BuiltInConfig::default();
         let entries = get_builtin_entries(&config);
 
@@ -2251,27 +2227,21 @@ mod tests {
             BuiltInFeature::NotesCommand(NotesCommandType::OpenNotes)
         );
 
-        let open_ai = entries.iter().find(|e| e.id == "builtin-open-ai");
-        assert!(open_ai.is_some(), "builtin-open-ai should exist");
-        assert_eq!(
-            open_ai.unwrap().feature,
-            BuiltInFeature::AiCommand(AiCommandType::OpenAi)
-        );
-
-        let mini_ai = entries.iter().find(|e| e.id == "builtin-mini-ai");
-        assert!(mini_ai.is_some(), "builtin-mini-ai should exist");
-        let mini_ai = mini_ai.unwrap();
-        assert_eq!(
-            mini_ai.feature,
-            BuiltInFeature::AiCommand(AiCommandType::MiniAi)
-        );
-        assert_eq!(mini_ai.icon.as_deref(), Some("✨"));
+        // Legacy AI window commands (OpenAi, MiniAi, NewConversation) are no longer registered.
         assert!(
-            mini_ai
-                .keywords
+            entries.iter().find(|e| e.id == "builtin-open-ai").is_none(),
+            "builtin-open-ai should be removed (routes to harness now)"
+        );
+        assert!(
+            entries.iter().find(|e| e.id == "builtin-mini-ai").is_none(),
+            "builtin-mini-ai should be removed (routes to harness now)"
+        );
+        assert!(
+            entries
                 .iter()
-                .any(|keyword| keyword.eq_ignore_ascii_case("compact")),
-            "Mini AI command should be discoverable via 'compact'"
+                .find(|e| e.id == "builtin-new-conversation")
+                .is_none(),
+            "builtin-new-conversation should be removed (routes to harness now)"
         );
 
         let generate_script = entries
@@ -2279,19 +2249,12 @@ mod tests {
             .find(|e| e.id == "builtin-generate-script-with-ai");
         assert!(
             generate_script.is_some(),
-            "builtin-generate-script-with-ai should exist"
+            "builtin-generate-script-with-ai should still exist (routes to harness)"
         );
         let generate_script = generate_script.unwrap();
         assert_eq!(
             generate_script.feature,
             BuiltInFeature::AiCommand(AiCommandType::GenerateScript)
-        );
-        assert!(
-            generate_script
-                .keywords
-                .iter()
-                .any(|keyword| keyword.eq_ignore_ascii_case("shift")),
-            "Generate Script command should be discoverable via Shift+Tab wording"
         );
     }
     #[test]

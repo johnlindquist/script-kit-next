@@ -1335,6 +1335,38 @@ mod tab_ai_experience_shortlist_tests {
     }
 }
 
+/// What kind of source the user was focused on when Tab was pressed.
+///
+/// Used by the harness backend to understand the provenance of the context
+/// and by the apply-back flow to route the result back to the right target.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum TabAiSourceType {
+    /// User had text selected on the desktop (not inside Script Kit).
+    DesktopSelection,
+    /// User was focused on a script in the main list.
+    ScriptListItem,
+    /// User was inside a running command with a focused choice or prompt.
+    RunningCommand,
+    /// User was focused on a clipboard history entry.
+    ClipboardEntry,
+    /// Fallback: user was on the desktop with nothing specific selected.
+    Desktop,
+}
+
+/// Hint for the apply-back flow: what action to take when the user finishes
+/// in the harness and wants to push the result back to the source.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct TabAiApplyBackHint {
+    /// Action identifier (e.g. "replaceSelectedText", "runGeneratedScript",
+    /// "pasteToPrompt", "copyToClipboard", "pasteToFrontmostApp").
+    pub action: String,
+    /// Optional human-readable label for the target (e.g. "Frontmost selection").
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub target_label: Option<String>,
+}
+
 /// Complete context blob sent alongside the user's natural-language intent.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
@@ -1365,6 +1397,15 @@ pub struct TabAiContextBlob {
     /// Prior automation suggestions from the Tab AI memory index.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub prior_automations: Vec<TabAiMemorySuggestion>,
+    /// What kind of source the user was focused on when Tab was pressed.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_type: Option<TabAiSourceType>,
+    /// Absolute path to a screenshot of the focused window captured at invocation time.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub screenshot_path: Option<String>,
+    /// Hint for the apply-back flow: what action to take when the user finishes in the harness.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub apply_back_hint: Option<TabAiApplyBackHint>,
 }
 
 impl TabAiContextBlob {
@@ -1392,7 +1433,28 @@ impl TabAiContextBlob {
             clipboard,
             clipboard_history,
             prior_automations,
+            source_type: None,
+            screenshot_path: None,
+            apply_back_hint: None,
         }
+    }
+
+    /// Apply deferred-capture fields after the initial blob was constructed.
+    ///
+    /// This is the extension point for the async capture pipeline: the blob
+    /// is built synchronously with UI + desktop data, then enriched with
+    /// screenshot path, source type, and apply-back hint once the deferred
+    /// capture completes.
+    pub fn with_deferred_capture_fields(
+        mut self,
+        source_type: Option<TabAiSourceType>,
+        screenshot_path: Option<String>,
+        apply_back_hint: Option<TabAiApplyBackHint>,
+    ) -> Self {
+        self.source_type = source_type;
+        self.screenshot_path = screenshot_path;
+        self.apply_back_hint = apply_back_hint;
+        self
     }
 
     /// Build a context blob from provided parts — no system calls, fully
