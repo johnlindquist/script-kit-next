@@ -65,9 +65,9 @@ pub use self::current_app_automation_memory::{
 };
 pub use self::harness::{
     build_tab_ai_harness_context_block, build_tab_ai_harness_submission,
-    read_tab_ai_harness_config, tab_ai_harness_config_path, validate_tab_ai_harness_config,
+    cleanup_old_tab_ai_screenshot_files_in_dir, read_tab_ai_harness_config,
+    tab_ai_harness_config_path, tab_ai_screenshot_prefix, validate_tab_ai_harness_config,
     HarnessBackendKind, HarnessConfig, TabAiHarnessSessionState, TabAiHarnessSubmissionMode,
-    cleanup_old_tab_ai_screenshot_files_in_dir, tab_ai_screenshot_prefix,
     TabAiScreenshotFile, TAB_AI_HARNESS_CONFIG_SCHEMA_VERSION,
     TAB_AI_HARNESS_CONTEXT_SCHEMA_VERSION, TAB_AI_SCREENSHOT_MAX_KEEP,
 };
@@ -111,16 +111,16 @@ pub use self::tab_context::{
     resolve_tab_ai_prior_automations_for_entry_from_path, should_offer_save,
     tab_ai_execution_audit_path, tab_ai_experience_pack_name, tab_ai_experience_pack_subtitle,
     tab_ai_intent_uses_implicit_target, tab_ai_memory_index_path, truncate_tab_ai_text,
-    write_tab_ai_memory_entry, write_tab_ai_memory_entry_to_path, TabAiClipboardContext,
-    TabAiClipboardHistoryEntry, TabAiContextBlob, TabAiDegradationReason, TabAiExecutionReceipt,
-    TabAiExecutionRecord, TabAiExecutionStatus, TabAiExperienceIntent, TabAiExperiencePack,
-    TabAiExperienceSpec, TabAiFieldStatus, TabAiInvocationReceipt, TabAiMemoryEntry,
-    TabAiMemoryResolution, TabAiMemoryResolutionOutcome, TabAiMemoryResolutionReason,
-    TabAiApplyBackHint, TabAiMemorySuggestion, TabAiSourceType, TabAiSuggestedIntentSpec,
+    write_tab_ai_memory_entry, write_tab_ai_memory_entry_to_path, TabAiApplyBackHint,
+    TabAiClipboardContext, TabAiClipboardHistoryEntry, TabAiContextBlob, TabAiDegradationReason,
+    TabAiExecutionReceipt, TabAiExecutionRecord, TabAiExecutionStatus, TabAiExperienceIntent,
+    TabAiExperiencePack, TabAiExperienceSpec, TabAiFieldStatus, TabAiInvocationReceipt,
+    TabAiMemoryEntry, TabAiMemoryResolution, TabAiMemoryResolutionOutcome,
+    TabAiMemoryResolutionReason, TabAiMemorySuggestion, TabAiSourceType, TabAiSuggestedIntentSpec,
     TabAiTargetAudit, TabAiTargetContext, TabAiUiSnapshot, TAB_AI_CONTEXT_SCHEMA_VERSION,
-    TAB_AI_EXECUTION_RECEIPT_SCHEMA_VERSION,
-    TAB_AI_EXECUTION_RECORD_SCHEMA_VERSION, TAB_AI_INVOCATION_RECEIPT_SCHEMA_VERSION,
-    TAB_AI_MEMORY_ENTRY_SCHEMA_VERSION, TAB_AI_TARGET_AUDIT_SCHEMA_VERSION,
+    TAB_AI_EXECUTION_RECEIPT_SCHEMA_VERSION, TAB_AI_EXECUTION_RECORD_SCHEMA_VERSION,
+    TAB_AI_INVOCATION_RECEIPT_SCHEMA_VERSION, TAB_AI_MEMORY_ENTRY_SCHEMA_VERSION,
+    TAB_AI_TARGET_AUDIT_SCHEMA_VERSION,
 };
 pub use self::window::{
     add_ai_attachment, apply_ai_preset, close_ai_window, get_ai_window_state, is_ai_window,

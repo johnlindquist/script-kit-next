@@ -183,7 +183,9 @@ impl TerminalHandle {
         self.reader_stop_flag
             .store(true, std::sync::atomic::Ordering::Relaxed);
         if self.pty.is_running() {
-            self.pty.kill().context("Failed to kill PTY child process")?;
+            self.pty
+                .kill()
+                .context("Failed to kill PTY child process")?;
         }
         Ok(())
     }

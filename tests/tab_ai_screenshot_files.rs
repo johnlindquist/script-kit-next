@@ -3,7 +3,8 @@
 //! Validates screenshot temp file cleanup and retention cap.
 
 use script_kit_gpui::ai::{
-    cleanup_old_tab_ai_screenshot_files_in_dir, tab_ai_screenshot_prefix, TAB_AI_SCREENSHOT_MAX_KEEP,
+    cleanup_old_tab_ai_screenshot_files_in_dir, tab_ai_screenshot_prefix,
+    TAB_AI_SCREENSHOT_MAX_KEEP,
 };
 
 #[test]
@@ -25,7 +26,10 @@ fn screenshot_file_bridge_writes_png_and_caps_retention_at_ten() {
 
     // Verify we have 15 files
     let count_before = count_screenshot_files(dir, prefix);
-    assert_eq!(count_before, 15, "should have 15 screenshot files before cleanup");
+    assert_eq!(
+        count_before, 15,
+        "should have 15 screenshot files before cleanup"
+    );
 
     // Run cleanup
     cleanup_old_tab_ai_screenshot_files_in_dir(dir, TAB_AI_SCREENSHOT_MAX_KEEP)
@@ -98,9 +102,15 @@ fn cleanup_ignores_non_screenshot_files() {
         .expect("cleanup must succeed");
 
     // Only screenshot files should have been cleaned up
-    assert_eq!(count_screenshot_files(dir, prefix), TAB_AI_SCREENSHOT_MAX_KEEP);
+    assert_eq!(
+        count_screenshot_files(dir, prefix),
+        TAB_AI_SCREENSHOT_MAX_KEEP
+    );
     // Non-screenshot file should still exist
-    assert!(dir.join("other-file.txt").exists(), "non-screenshot file must not be removed");
+    assert!(
+        dir.join("other-file.txt").exists(),
+        "non-screenshot file must not be removed"
+    );
 }
 
 #[test]

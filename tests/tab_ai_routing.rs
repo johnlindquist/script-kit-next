@@ -1924,9 +1924,8 @@ fn all_ai_commands_keep_main_window_visible_for_harness() {
         "visibility function must list GenerateScript and GenerateScriptFromCurrentApp as keeping window visible"
     );
     assert!(
-        BUILTIN_EXECUTION_SOURCE.contains(
-            "builtins::AiCommandType::OpenAi\n        | builtins::AiCommandType::MiniAi"
-        ),
+        BUILTIN_EXECUTION_SOURCE
+            .contains("builtins::AiCommandType::OpenAi\n        | builtins::AiCommandType::MiniAi"),
         "visibility function must list OpenAi and MiniAi as keeping window visible"
     );
 }

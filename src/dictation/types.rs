@@ -88,6 +88,9 @@ pub enum DictationDestination {
 pub enum DictationSessionPhase {
     Idle,
     Recording,
+    /// Escape pressed during recording — overlay shows Abort/Resume affordances.
+    /// A second Escape aborts; any other key resumes recording.
+    Confirming,
     Transcribing,
     Delivering,
     Finished,

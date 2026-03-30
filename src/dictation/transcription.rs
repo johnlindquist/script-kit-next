@@ -256,7 +256,7 @@ pub(crate) fn should_skip_transcription(
     samples.len() < config.minimum_samples || rms(samples) < 0.01
 }
 
-fn rms(samples: &[f32]) -> f32 {
+pub(crate) fn rms(samples: &[f32]) -> f32 {
     if samples.is_empty() {
         return 0.0;
     }

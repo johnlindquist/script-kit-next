@@ -68,6 +68,20 @@ pub fn toggle_dictation() -> Result<DictationToggleOutcome> {
     Ok(DictationToggleOutcome::Started)
 }
 
+/// Abort the active dictation session without transcribing or delivering text.
+///
+/// This is used by the overlay's Escape confirmation flow, where the user has
+/// explicitly chosen to discard the current recording.
+pub fn abort_dictation() -> Result<()> {
+    if SESSION.lock().is_none() {
+        return Ok(());
+    }
+
+    let _ = stop_recording()?;
+    tracing::info!(category = "DICTATION", "Recording aborted");
+    Ok(())
+}
+
 /// Snapshot the current overlay visual state from the live session.
 ///
 /// Drains pending events (non-blocking) so the level/chunk data stays
@@ -100,31 +114,95 @@ pub fn snapshot_overlay_state() -> Option<DictationOverlayState> {
 /// silent.
 pub fn transcribe_captured_audio(chunks: &[CapturedAudioChunk]) -> Result<Option<String>> {
     let config = DictationTranscriptionConfig::default();
+    let audio_duration = captured_duration(chunks);
     let samples = merge_captured_chunks(chunks);
-    if should_skip_transcription(&config, &samples) {
+    let rms = crate::dictation::transcription::rms(&samples);
+
+    tracing::info!(
+        category = "DICTATION",
+        chunk_count = chunks.len(),
+        audio_duration_ms = audio_duration.as_millis() as u64,
+        sample_count = samples.len(),
+        rms,
+        minimum_samples = config.minimum_samples,
+        model_path = %config.model_path.display(),
+        model_exists = config.model_path.exists(),
+        model_is_file = config.model_path.is_file(),
+        "Starting dictation transcription"
+    );
+
+    if samples.len() < config.minimum_samples {
+        tracing::info!(
+            category = "DICTATION",
+            sample_count = samples.len(),
+            minimum_samples = config.minimum_samples,
+            "Skipping dictation transcription: audio too short"
+        );
+        return Ok(None);
+    }
+
+    if rms < 0.01 {
+        tracing::info!(
+            category = "DICTATION",
+            rms,
+            threshold = 0.01_f32,
+            "Skipping dictation transcription: audio too silent"
+        );
         return Ok(None);
     }
 
     let mut guard = TRANSCRIBER.lock();
 
-    if guard
+    let should_rebuild = guard
         .as_ref()
         .map(DictationTranscriber::is_idle)
-        .unwrap_or(true)
-    {
+        .unwrap_or(true);
+
+    tracing::debug!(
+        category = "DICTATION",
+        has_cached_transcriber = guard.is_some(),
+        should_rebuild,
+        "Resolving dictation transcriber"
+    );
+
+    if should_rebuild {
+        tracing::info!(
+            category = "DICTATION",
+            model_path = %config.model_path.display(),
+            "Initializing Whisper dictation engine"
+        );
         let engine = WhisperDictationEngine::new(&config).with_context(|| {
             format!(
                 "failed to initialize Whisper engine from {}",
                 config.model_path.display()
             )
         })?;
-        *guard = Some(DictationTranscriber::new(config, Box::new(engine)));
+        *guard = Some(DictationTranscriber::new(config.clone(), Box::new(engine)));
     }
 
-    guard
+    let result = guard
         .as_ref()
         .context("dictation transcriber unavailable")?
-        .transcribe_samples(&samples)
+        .transcribe_samples(&samples);
+
+    match &result {
+        Ok(Some(transcript)) => tracing::info!(
+            category = "DICTATION",
+            transcript_len = transcript.len(),
+            "Dictation transcription succeeded"
+        ),
+        Ok(None) => tracing::info!(
+            category = "DICTATION",
+            "Dictation transcription completed without text"
+        ),
+        Err(error) => tracing::error!(
+            category = "DICTATION",
+            error = %error,
+            "Dictation transcription failed"
+        ),
+    }
+
+    result
 }
 
 /// Unload the cached transcriber if it has been idle for longer than its

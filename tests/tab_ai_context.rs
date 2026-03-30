@@ -815,7 +815,10 @@ fn apply_back_hint_omits_target_label_when_none() {
         target_label: None,
     };
     let json = serde_json::to_string(&hint).expect("must serialize");
-    assert!(!json.contains("targetLabel"), "targetLabel must be omitted when None");
+    assert!(
+        !json.contains("targetLabel"),
+        "targetLabel must be omitted when None"
+    );
 }
 
 #[test]
@@ -831,11 +834,17 @@ fn with_deferred_capture_fields_preserves_existing_blob_data() {
     assert_eq!(enriched.schema_version, original.schema_version);
     assert_eq!(enriched.timestamp, original.timestamp);
     assert_eq!(enriched.ui.prompt_type, original.ui.prompt_type);
-    assert_eq!(enriched.desktop.selected_text, original.desktop.selected_text);
+    assert_eq!(
+        enriched.desktop.selected_text,
+        original.desktop.selected_text
+    );
 
     // New fields must be set
     assert_eq!(enriched.source_type, Some(TabAiSourceType::ClipboardEntry));
-    assert_eq!(enriched.screenshot_path.as_deref(), Some("/tmp/screenshot.png"));
+    assert_eq!(
+        enriched.screenshot_path.as_deref(),
+        Some("/tmp/screenshot.png")
+    );
     assert!(enriched.apply_back_hint.is_none());
 }
 
