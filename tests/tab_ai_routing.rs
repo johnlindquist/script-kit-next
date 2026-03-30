@@ -1043,8 +1043,9 @@ fn prewarm_does_not_switch_view() {
 // =========================================================================
 
 #[test]
-fn open_path_always_forces_fresh_session() {
-    // Every explicit Tab entry gets a fresh harness session — no prewarm reuse.
+fn open_path_reuses_fresh_prewarm_once() {
+    // First explicit Tab after a silent prewarm reuses the warm PTY once;
+    // subsequent opens force a fresh session via !reuse_fresh_prewarm.
     let open_fn_start = TAB_AI_MODE_SOURCE
         .find("fn open_tab_ai_harness_terminal_from_request(")
         .expect("open_tab_ai_harness_terminal_from_request must exist");
@@ -1055,13 +1056,21 @@ fn open_path_always_forces_fresh_session() {
     let open_fn_body = &open_fn_body[..next_fn];
 
     assert!(
-        open_fn_body.contains("ensure_tab_ai_harness_terminal(true, cx)"),
-        "open path must always force a fresh session (force_fresh=true)"
+        open_fn_body.contains("is_fresh_prewarm"),
+        "open path must check for a fresh silently-prewarmed session"
     );
-    // FreshPrewarm is still used by the prewarm path itself (not the open path).
+    assert!(
+        open_fn_body.contains("mark_consumed"),
+        "open path must consume a fresh prewarm exactly once"
+    );
+    assert!(
+        open_fn_body.contains("!reuse_fresh_prewarm"),
+        "open path must pass !reuse_fresh_prewarm to ensure_tab_ai_harness_terminal"
+    );
+    // FreshPrewarm is used by both the prewarm and open paths.
     assert!(
         TAB_AI_MODE_SOURCE.contains("FreshPrewarm"),
-        "tab ai lifecycle must still distinguish prewarmed sessions for the prewarm path"
+        "tab ai lifecycle must distinguish prewarmed sessions"
     );
 }
 
@@ -1090,8 +1099,9 @@ fn prewarm_tags_cold_start_as_fresh_prewarm() {
 }
 
 #[test]
-fn open_path_forces_fresh_not_conditional() {
-    // Every explicit Tab entry always forces a fresh session.
+fn open_path_reuses_fresh_prewarm_once_then_forces_fresh() {
+    // First explicit Tab after a silent prewarm reuses the warm PTY once;
+    // subsequent opens force a fresh session.
     let open_fn_start = TAB_AI_MODE_SOURCE
         .find("fn open_tab_ai_harness_terminal_from_request(")
         .expect("open_tab_ai_harness_terminal_from_request must exist");
@@ -1102,20 +1112,23 @@ fn open_path_forces_fresh_not_conditional() {
     let open_fn_body = &open_fn_body[..next_fn];
 
     assert!(
-        open_fn_body.contains("ensure_tab_ai_harness_terminal(true, cx)"),
-        "open path must always force fresh (no conditional prewarm reuse)"
+        open_fn_body.contains("is_fresh_prewarm"),
+        "open path must check for a fresh silently-prewarmed session"
     );
-    // The old conditional reuse pattern must be gone.
     assert!(
-        !open_fn_body.contains("!reuse_fresh_prewarm"),
-        "open path must not use the old conditional reuse_fresh_prewarm pattern"
+        open_fn_body.contains("mark_consumed"),
+        "open path must consume a fresh prewarm exactly once"
+    );
+    assert!(
+        open_fn_body.contains("!reuse_fresh_prewarm"),
+        "open path must pass !reuse_fresh_prewarm to ensure_tab_ai_harness_terminal"
     );
 }
 
 #[test]
-fn close_then_prewarm_then_fresh_open_lifecycle_contract() {
+fn close_then_prewarm_then_reuse_once_lifecycle_contract() {
     // End-to-end contract: close clears session → prewarm seeds a warm PTY
-    // → open always forces a fresh session (no stale context reuse).
+    // → first explicit Tab reuses the warm PTY once → later opens force fresh.
 
     // 1. close_tab_ai_harness_terminal clears session and schedules prewarm
     let close_fn_start = TAB_AI_MODE_SOURCE
@@ -1143,7 +1156,7 @@ fn close_then_prewarm_then_fresh_open_lifecycle_contract() {
         "prewarm path must tag cold-start sessions via mark_fresh_prewarm()"
     );
 
-    // 3. open path always forces a fresh session
+    // 3. open path reuses a fresh prewarm once, then forces fresh
     let open_fn_start = TAB_AI_MODE_SOURCE
         .find("fn open_tab_ai_harness_terminal_from_request(")
         .expect("open_tab_ai_harness_terminal_from_request must exist");
@@ -1154,8 +1167,16 @@ fn close_then_prewarm_then_fresh_open_lifecycle_contract() {
     let open_fn_body = &open_fn_body[..next_fn];
 
     assert!(
-        open_fn_body.contains("ensure_tab_ai_harness_terminal(true, cx)"),
-        "open path must always force fresh — no conditional prewarm reuse"
+        open_fn_body.contains("is_fresh_prewarm"),
+        "open path must check for a fresh silently-prewarmed session"
+    );
+    assert!(
+        open_fn_body.contains("mark_consumed"),
+        "open path must consume the prewarm once"
+    );
+    assert!(
+        open_fn_body.contains("!reuse_fresh_prewarm"),
+        "open path must conditionally reuse: !reuse_fresh_prewarm → force_fresh"
     );
 }
 
@@ -3112,4 +3133,38 @@ fn legacy_ai_window_entries_stay_removed_while_manual_paths_stay_present() {
             "{kept_id} should remain registered",
         );
     }
+}
+
+#[test]
+fn post_close_prewarm_feeds_the_next_explicit_tab_open() {
+    let source = include_str!("../src/app_impl/tab_ai_mode.rs");
+
+    // Close path must schedule a silent prewarm.
+    let close_start = source
+        .find("fn close_tab_ai_harness_terminal(")
+        .expect("close_tab_ai_harness_terminal must exist");
+    let close_body = &source[close_start..];
+    assert!(
+        close_body.contains("schedule_tab_ai_harness_prewarm"),
+        "close path must schedule a silent prewarm"
+    );
+
+    // Next explicit Tab must check for a fresh prewarm and consume it.
+    let open_start = source
+        .find("fn open_tab_ai_harness_terminal_from_request(")
+        .expect("open_tab_ai_harness_terminal_from_request must exist");
+    let open_body = &source[open_start..];
+    let next_fn = open_body[1..]
+        .find("\n    fn ")
+        .unwrap_or(open_body.len());
+    let open_body = &open_body[..next_fn];
+
+    assert!(
+        open_body.contains("is_fresh_prewarm"),
+        "next explicit Tab must check for a fresh prewarm"
+    );
+    assert!(
+        open_body.contains("mark_consumed"),
+        "next explicit Tab must consume the prewarm once"
+    );
 }
