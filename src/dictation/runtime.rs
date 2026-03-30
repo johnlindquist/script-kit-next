@@ -1,7 +1,8 @@
 use crate::dictation::capture::{start_capture, DictationCaptureHandle};
 use crate::dictation::device::{list_input_devices, resolve_selected_input_device};
 use crate::dictation::transcription::{
-    captured_duration, DictationTranscriber, DictationTranscriptionConfig, WhisperDictationEngine,
+    captured_duration, merge_captured_chunks, should_skip_transcription, DictationTranscriber,
+    DictationTranscriptionConfig, WhisperDictationEngine,
 };
 use crate::dictation::types::{
     CapturedAudioChunk, CompletedDictationCapture, DictationCaptureConfig, DictationCaptureEvent,
@@ -98,6 +99,12 @@ pub fn snapshot_overlay_state() -> Option<DictationOverlayState> {
 /// subsequent calls.  Returns `Ok(None)` when the audio is too short or
 /// silent.
 pub fn transcribe_captured_audio(chunks: &[CapturedAudioChunk]) -> Result<Option<String>> {
+    let config = DictationTranscriptionConfig::default();
+    let samples = merge_captured_chunks(chunks);
+    if should_skip_transcription(&config, &samples) {
+        return Ok(None);
+    }
+
     let mut guard = TRANSCRIBER.lock();
 
     if guard
@@ -105,7 +112,6 @@ pub fn transcribe_captured_audio(chunks: &[CapturedAudioChunk]) -> Result<Option
         .map(DictationTranscriber::is_idle)
         .unwrap_or(true)
     {
-        let config = DictationTranscriptionConfig::default();
         let engine = WhisperDictationEngine::new(&config).with_context(|| {
             format!(
                 "failed to initialize Whisper engine from {}",
@@ -118,7 +124,7 @@ pub fn transcribe_captured_audio(chunks: &[CapturedAudioChunk]) -> Result<Option
     guard
         .as_ref()
         .context("dictation transcriber unavailable")?
-        .transcribe_chunks(chunks)
+        .transcribe_samples(&samples)
 }
 
 /// Unload the cached transcriber if it has been idle for longer than its
@@ -132,6 +138,11 @@ pub fn maybe_unload_transcriber() {
     {
         *guard = None;
     }
+}
+
+#[cfg(test)]
+pub(crate) fn reset_cached_transcriber_for_tests() {
+    *TRANSCRIBER.lock() = None;
 }
 
 // ---------------------------------------------------------------------------

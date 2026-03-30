@@ -81,7 +81,7 @@ impl DictationTranscriber {
     /// Transcribe raw 16 kHz mono samples.  Returns `Ok(None)` when the audio
     /// is below the minimum sample count or energy threshold.
     pub fn transcribe_samples(&self, samples: &[f32]) -> Result<Option<String>> {
-        if samples.len() < self.config.minimum_samples || rms(samples) < 0.01 {
+        if should_skip_transcription(&self.config, samples) {
             return Ok(None);
         }
 
@@ -248,6 +248,13 @@ impl DictationEngine for WhisperDictationEngine {
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
+
+pub(crate) fn should_skip_transcription(
+    config: &DictationTranscriptionConfig,
+    samples: &[f32],
+) -> bool {
+    samples.len() < config.minimum_samples || rms(samples) < 0.01
+}
 
 fn rms(samples: &[f32]) -> f32 {
     if samples.is_empty() {
