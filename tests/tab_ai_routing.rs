@@ -20,6 +20,7 @@ const AI_MOD_SOURCE: &str = include_str!("../src/ai/mod.rs");
 const BUILTIN_EXECUTION_SOURCE: &str = include_str!("../src/app_execute/builtin_execution.rs");
 const PROMPT_AI_SOURCE: &str = include_str!("../src/app_impl/prompt_ai.rs");
 const BUILTINS_SOURCE: &str = include_str!("../src/builtins/mod.rs");
+const SCREENSHOT_FILES_SOURCE: &str = include_str!("../src/ai/harness/screenshot_files.rs");
 
 // =========================================================================
 // Primary contract: Tab → harness terminal (QuickTerminalView)
@@ -2921,4 +2922,88 @@ fn selection_fallback_opens_harness_with_entry_intent() {
             .contains("self.open_tab_ai_chat_with_entry_intent(Some(normalized), cx);"),
         "non-empty Send to AI fallback input must open the harness with entry intent",
     );
+}
+
+// =========================================================================
+// Full-screen capture helper: contract and metadata
+// =========================================================================
+
+#[test]
+fn full_screen_capture_helper_exists_and_uses_screen_api() {
+    assert!(
+        SCREENSHOT_FILES_SOURCE
+            .contains("pub fn capture_tab_ai_screen_screenshot_file()"),
+        "full-screen screenshot helper must exist as a public function",
+    );
+    assert!(
+        SCREENSHOT_FILES_SOURCE.contains("capture_screen_screenshot()"),
+        "full-screen helper must call the platform full-screen screenshot API",
+    );
+    assert!(
+        SCREENSHOT_FILES_SOURCE.contains("title: \"Full Screen\".to_string()"),
+        "full-screen helper must label the artifact as 'Full Screen'",
+    );
+}
+
+#[test]
+fn full_screen_capture_helper_preserves_screenshot_file_contract() {
+    assert!(
+        SCREENSHOT_FILES_SOURCE.contains("cleanup_old_tab_ai_screenshot_files"),
+        "full-screen helper must clean up old screenshot temp files",
+    );
+    assert!(
+        SCREENSHOT_FILES_SOURCE.contains("TAB_AI_SCREENSHOT_MAX_KEEP"),
+        "full-screen helper must use the shared screenshot retention limit",
+    );
+    assert!(
+        SCREENSHOT_FILES_SOURCE.contains("used_fallback: false"),
+        "full-screen helper must set used_fallback to false in screenshot metadata",
+    );
+}
+
+// =========================================================================
+// Builtin registry: legacy AI window entries removed, supported paths kept
+// =========================================================================
+
+#[test]
+fn legacy_ai_window_entries_stay_removed_while_manual_paths_stay_present() {
+    let fn_start = BUILTINS_SOURCE
+        .find("pub fn get_builtin_entries(")
+        .expect("get_builtin_entries must exist");
+    let fn_body = &BUILTINS_SOURCE[fn_start..];
+    let fn_end = fn_body.find("\n#[cfg(test)]").unwrap_or(fn_body.len());
+    let registration_section = &fn_body[..fn_end];
+
+    // Legacy window-style AI builtins must NOT be registered.
+    // Match quoted string literals to avoid false positives from comments.
+    for legacy_id in [
+        "builtin-open-ai-chat",
+        "builtin-mini-ai-chat",
+        "builtin-new-conversation",
+        "builtin-clear-conversation",
+        "builtin-send-screen-area-to-ai",
+    ] {
+        let quoted = format!("\"{}\"", legacy_id);
+        assert!(
+            !registration_section.contains(&quoted),
+            "{legacy_id} must not be registered in the main builtin list",
+        );
+    }
+
+    // Harness-first AI entries and manual creation paths must remain registered.
+    for kept_id in [
+        "builtin-generate-script-with-ai",
+        "builtin-generate-script-from-current-app",
+        "builtin-send-screen-to-ai",
+        "builtin-send-selected-text-to-ai",
+        "builtin-send-browser-tab-to-ai",
+        "builtin-new-script",
+        "builtin-new-extension",
+    ] {
+        let quoted = format!("\"{}\"", kept_id);
+        assert!(
+            registration_section.contains(&quoted),
+            "{kept_id} should remain registered",
+        );
+    }
 }
