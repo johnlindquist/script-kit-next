@@ -5,12 +5,33 @@
 //! data is pasted into the PTY.
 
 use anyhow::{Context, Result};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 /// Maximum number of screenshot files to retain in the temp directory.
 pub const TAB_AI_SCREENSHOT_MAX_KEEP: usize = 10;
 
 /// Filename prefix used for Tab AI screenshot temp files.
 const TAB_AI_SCREENSHOT_PREFIX: &str = "tab-ai-screenshot-";
+
+/// Monotonic sequence counter to prevent filename collisions when two
+/// captures happen within the same second in the same process.
+static TAB_AI_SCREENSHOT_SEQUENCE: AtomicU64 = AtomicU64::new(0);
+
+/// Build a collision-safe screenshot filename with millisecond precision
+/// and a monotonic sequence number.
+fn build_tab_ai_screenshot_filename(
+    now: chrono::DateTime<chrono::Utc>,
+    pid: u32,
+    sequence: u64,
+) -> String {
+    format!(
+        "{}{}-{}-{}.png",
+        TAB_AI_SCREENSHOT_PREFIX,
+        now.format("%Y%m%dT%H%M%S%.3fZ"),
+        pid,
+        sequence,
+    )
+}
 
 /// Result of writing a focused window screenshot to a temp file.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -53,11 +74,10 @@ pub fn capture_tab_ai_focused_window_screenshot_file() -> Result<Option<TabAiScr
     std::fs::create_dir_all(&tmp_dir)
         .with_context(|| format!("failed to create screenshot tmp dir: {}", tmp_dir.display()))?;
 
-    let filename = format!(
-        "{}{}-{}.png",
-        TAB_AI_SCREENSHOT_PREFIX,
-        chrono::Utc::now().format("%Y%m%dT%H%M%SZ"),
+    let filename = build_tab_ai_screenshot_filename(
+        chrono::Utc::now(),
         std::process::id(),
+        TAB_AI_SCREENSHOT_SEQUENCE.fetch_add(1, Ordering::Relaxed),
     );
     let file_path = tmp_dir.join(&filename);
 
@@ -206,4 +226,65 @@ pub fn cleanup_old_tab_ai_screenshot_files_in_dir(
 /// The screenshot filename prefix, exposed for tests.
 pub fn tab_ai_screenshot_prefix() -> &'static str {
     TAB_AI_SCREENSHOT_PREFIX
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn unique_test_dir(name: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "script-kit-gpui-{name}-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&dir).expect("create test dir");
+        dir
+    }
+
+    #[test]
+    fn screenshot_filename_is_unique_for_same_timestamp_and_pid() {
+        let now = chrono::DateTime::parse_from_rfc3339("2026-03-30T14:01:20.936Z")
+            .expect("must parse")
+            .with_timezone(&chrono::Utc);
+        let first = build_tab_ai_screenshot_filename(now, 41231, 0);
+        let second = build_tab_ai_screenshot_filename(now, 41231, 1);
+        assert_ne!(first, second);
+        assert!(first.starts_with(TAB_AI_SCREENSHOT_PREFIX));
+        assert!(first.ends_with(".png"));
+    }
+
+    #[test]
+    fn cleanup_keeps_newest_matching_pngs_only() {
+        let dir = unique_test_dir("tab-ai-screenshot-cleanup");
+        let now = chrono::DateTime::parse_from_rfc3339("2026-03-30T14:01:20.936Z")
+            .expect("must parse")
+            .with_timezone(&chrono::Utc);
+
+        for sequence in 0..12_u64 {
+            let path = dir.join(build_tab_ai_screenshot_filename(now, 41231, sequence));
+            std::fs::write(&path, b"png").expect("write screenshot");
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+
+        let ignored = dir.join("keep-me.txt");
+        std::fs::write(&ignored, b"keep").expect("write ignored file");
+
+        cleanup_old_tab_ai_screenshot_files_in_dir(&dir, 10).expect("cleanup");
+
+        let remaining_matching = std::fs::read_dir(&dir)
+            .expect("read dir")
+            .filter_map(|entry| entry.ok())
+            .filter(|entry| {
+                let name = entry.file_name().to_string_lossy().into_owned();
+                name.starts_with(TAB_AI_SCREENSHOT_PREFIX) && name.ends_with(".png")
+            })
+            .count();
+        assert_eq!(remaining_matching, 10);
+        assert!(ignored.exists());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

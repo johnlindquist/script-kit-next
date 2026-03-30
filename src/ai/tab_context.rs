@@ -1367,6 +1367,59 @@ pub struct TabAiApplyBackHint {
     pub target_label: Option<String>,
 }
 
+/// Detect the source type from the originating prompt type string and desktop snapshot.
+///
+/// This is the canonical detection logic, usable from both include!() files
+/// and proper module tests.
+///
+/// Priority order:
+/// 1. Desktop selected text present → `DesktopSelection`
+/// 2. `"ScriptList"` with a resolved focused target → `ScriptListItem`
+/// 3. `"ClipboardHistory"` → `ClipboardEntry`
+/// 4. Prompt-like surfaces → `RunningCommand`
+/// 5. Fallback → `Desktop`
+pub fn detect_tab_ai_source_type_from_prompt(
+    prompt_type: &str,
+    desktop: &crate::context_snapshot::AiContextSnapshot,
+    focused_target: Option<&TabAiTargetContext>,
+) -> Option<TabAiSourceType> {
+    if desktop
+        .selected_text
+        .as_ref()
+        .is_some_and(|t| !t.trim().is_empty())
+    {
+        return Some(TabAiSourceType::DesktopSelection);
+    }
+
+    match prompt_type {
+        "ScriptList" if focused_target.is_some() => Some(TabAiSourceType::ScriptListItem),
+        "ClipboardHistory" => Some(TabAiSourceType::ClipboardEntry),
+        "ArgPrompt" | "MiniPrompt" | "MicroPrompt" | "DivPrompt" | "FormPrompt"
+        | "EditorPrompt" | "SelectPrompt" | "PathPrompt" | "DropPrompt" | "TemplatePrompt"
+        | "TermPrompt" | "EnvPrompt" | "ChatPrompt" | "NamingPrompt" => {
+            Some(TabAiSourceType::RunningCommand)
+        }
+        _ => Some(TabAiSourceType::Desktop),
+    }
+}
+
+/// Build an apply-back hint from the detected source type.
+pub fn build_tab_ai_apply_back_hint_from_source(
+    source_type: Option<&TabAiSourceType>,
+) -> Option<TabAiApplyBackHint> {
+    let (action, label) = match source_type? {
+        TabAiSourceType::DesktopSelection => ("replaceSelectedText", "Frontmost selection"),
+        TabAiSourceType::ScriptListItem => ("runGeneratedScript", "Focused script"),
+        TabAiSourceType::RunningCommand => ("pasteToPrompt", "Active prompt"),
+        TabAiSourceType::ClipboardEntry => ("copyToClipboard", "Clipboard"),
+        TabAiSourceType::Desktop => ("pasteToFrontmostApp", "Frontmost app"),
+    };
+    Some(TabAiApplyBackHint {
+        action: action.to_string(),
+        target_label: Some(label.to_string()),
+    })
+}
+
 /// Complete context blob sent alongside the user's natural-language intent.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
@@ -4255,5 +4308,191 @@ mod target_audit_tests {
         let json = r#"{"schemaVersion":1,"promptType":"X","visibleTargetCount":0}"#;
         let result = serde_json::from_str::<TabAiTargetAudit>(json);
         assert!(result.is_err(), "should fail without hasFocusedTarget");
+    }
+}
+
+#[cfg(test)]
+mod tab_ai_source_type_tests {
+    use super::*;
+
+    #[test]
+    fn desktop_selection_beats_script_list_classification() {
+        let desktop = crate::context_snapshot::AiContextSnapshot {
+            selected_text: Some("hello".to_string()),
+            ..Default::default()
+        };
+        assert_eq!(
+            detect_tab_ai_source_type_from_prompt("ScriptList", &desktop, None),
+            Some(TabAiSourceType::DesktopSelection)
+        );
+    }
+
+    #[test]
+    fn script_list_requires_focused_target() {
+        let desktop = crate::context_snapshot::AiContextSnapshot::default();
+        assert_eq!(
+            detect_tab_ai_source_type_from_prompt("ScriptList", &desktop, None),
+            Some(TabAiSourceType::Desktop),
+            "ScriptList without a focused target should fall through to Desktop"
+        );
+
+        let target = TabAiTargetContext {
+            source: "ScriptList".to_string(),
+            kind: "script".to_string(),
+            semantic_id: "script:0".to_string(),
+            label: "hello-world".to_string(),
+            metadata: None,
+        };
+        assert_eq!(
+            detect_tab_ai_source_type_from_prompt("ScriptList", &desktop, Some(&target)),
+            Some(TabAiSourceType::ScriptListItem)
+        );
+    }
+
+    #[test]
+    fn clipboard_history_maps_to_clipboard_entry() {
+        let desktop = crate::context_snapshot::AiContextSnapshot::default();
+        assert_eq!(
+            detect_tab_ai_source_type_from_prompt("ClipboardHistory", &desktop, None),
+            Some(TabAiSourceType::ClipboardEntry)
+        );
+    }
+
+    #[test]
+    fn prompt_surfaces_map_to_running_command() {
+        let desktop = crate::context_snapshot::AiContextSnapshot::default();
+        for prompt_type in &[
+            "ArgPrompt",
+            "MiniPrompt",
+            "MicroPrompt",
+            "DivPrompt",
+            "FormPrompt",
+            "EditorPrompt",
+            "SelectPrompt",
+            "PathPrompt",
+            "DropPrompt",
+            "TemplatePrompt",
+            "TermPrompt",
+            "EnvPrompt",
+            "ChatPrompt",
+            "NamingPrompt",
+        ] {
+            assert_eq!(
+                detect_tab_ai_source_type_from_prompt(prompt_type, &desktop, None),
+                Some(TabAiSourceType::RunningCommand),
+                "{prompt_type} should map to RunningCommand"
+            );
+        }
+    }
+
+    #[test]
+    fn unknown_surface_falls_through_to_desktop() {
+        let desktop = crate::context_snapshot::AiContextSnapshot::default();
+        assert_eq!(
+            detect_tab_ai_source_type_from_prompt("SomeOtherView", &desktop, None),
+            Some(TabAiSourceType::Desktop)
+        );
+    }
+
+    #[test]
+    fn empty_or_whitespace_selected_text_does_not_trigger_desktop_selection() {
+        for text in &["", "   ", "\n\t  "] {
+            let desktop = crate::context_snapshot::AiContextSnapshot {
+                selected_text: Some(text.to_string()),
+                ..Default::default()
+            };
+            assert_ne!(
+                detect_tab_ai_source_type_from_prompt("ScriptList", &desktop, None),
+                Some(TabAiSourceType::DesktopSelection),
+                "whitespace-only selected_text should not trigger DesktopSelection"
+            );
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Source-text contract tests: verify structural invariants of tab_ai_mode.rs
+    // -----------------------------------------------------------------------
+
+    const TAB_AI_MODE_SRC: &str =
+        include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/app_impl/tab_ai_mode.rs"));
+
+    #[test]
+    fn quick_terminal_switch_and_notify_happen_before_capture_await() {
+        let open_idx = TAB_AI_MODE_SRC
+            .find("self.current_view = AppView::QuickTerminalView")
+            .expect("quick terminal view switch");
+        let notify_idx = TAB_AI_MODE_SRC[open_idx..]
+            .find("cx.notify();")
+            .map(|idx| open_idx + idx)
+            .expect("notify after view switch");
+        let await_idx = TAB_AI_MODE_SRC
+            .find("capture_rx.recv().await")
+            .expect("deferred capture await");
+        assert!(
+            open_idx < await_idx,
+            "QuickTerminalView must be visible before deferred capture is awaited"
+        );
+        assert!(
+            notify_idx < await_idx,
+            "cx.notify() must happen before deferred capture is awaited"
+        );
+    }
+
+    #[test]
+    fn deferred_capture_is_started_before_harness_open_call() {
+        let spawn_idx = TAB_AI_MODE_SRC
+            .find("let capture_rx = self.spawn_tab_ai_pre_switch_capture(&request);")
+            .expect("capture spawn");
+        let open_idx = TAB_AI_MODE_SRC
+            .find("self.open_tab_ai_harness_terminal_from_request(request, capture_rx, cx);")
+            .expect("harness open");
+        assert!(
+            spawn_idx < open_idx,
+            "capture must be started before the harness open call"
+        );
+    }
+
+    #[test]
+    fn pre_switch_capture_uses_immediate_thread_spawn() {
+        let fn_start = TAB_AI_MODE_SRC
+            .find("fn spawn_tab_ai_pre_switch_capture(")
+            .expect("function start");
+        let fn_end = TAB_AI_MODE_SRC[fn_start..]
+            .find("fn open_tab_ai_harness_terminal_from_request(")
+            .map(|idx| fn_start + idx)
+            .expect("next function");
+        let body = &TAB_AI_MODE_SRC[fn_start..fn_end];
+        assert!(
+            body.contains("std::thread::spawn(move ||"),
+            "capture must start immediately on its own thread"
+        );
+        assert!(
+            !body.contains("cx.background_executor().spawn(async move {"),
+            "do not add an extra scheduler hop before desktop capture begins"
+        );
+    }
+
+    #[test]
+    fn apply_back_hint_matches_source_type() {
+        let cases = [
+            (TabAiSourceType::DesktopSelection, "replaceSelectedText"),
+            (TabAiSourceType::ScriptListItem, "runGeneratedScript"),
+            (TabAiSourceType::RunningCommand, "pasteToPrompt"),
+            (TabAiSourceType::ClipboardEntry, "copyToClipboard"),
+            (TabAiSourceType::Desktop, "pasteToFrontmostApp"),
+        ];
+        for (source_type, expected_action) in &cases {
+            let hint = build_tab_ai_apply_back_hint_from_source(Some(source_type))
+                .expect("should produce a hint");
+            assert_eq!(
+                hint.action, *expected_action,
+                "wrong action for {source_type:?}"
+            );
+            assert!(
+                hint.target_label.is_some(),
+                "target_label should be set for {source_type:?}"
+            );
+        }
+        assert!(build_tab_ai_apply_back_hint_from_source(None).is_none());
     }
 }

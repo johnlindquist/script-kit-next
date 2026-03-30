@@ -100,11 +100,13 @@ pub use self::storage::{
 };
 pub use self::tab_context::{
     append_tab_ai_execution_receipt, append_tab_ai_execution_receipt_to_path,
-    build_tab_ai_execution_receipt, build_tab_ai_experience_intents, build_tab_ai_experience_spec,
+    build_tab_ai_apply_back_hint_from_source, build_tab_ai_execution_receipt,
+    build_tab_ai_experience_intents, build_tab_ai_experience_spec,
     build_tab_ai_suggested_intents, build_tab_ai_user_prompt, cleanup_tab_ai_temp_script,
-    read_tab_ai_memory_index, read_tab_ai_memory_index_from_path,
-    recent_tab_ai_automations_for_bundle, recent_tab_ai_automations_for_bundle_from_path,
-    resolve_tab_ai_memory_suggestions, resolve_tab_ai_memory_suggestions_from_path,
+    detect_tab_ai_source_type_from_prompt, read_tab_ai_memory_index,
+    read_tab_ai_memory_index_from_path, recent_tab_ai_automations_for_bundle,
+    recent_tab_ai_automations_for_bundle_from_path, resolve_tab_ai_memory_suggestions,
+    resolve_tab_ai_memory_suggestions_from_path,
     resolve_tab_ai_memory_suggestions_with_outcome,
     resolve_tab_ai_memory_suggestions_with_outcome_from_path,
     resolve_tab_ai_prior_automations_for_entry,
