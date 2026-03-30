@@ -598,11 +598,42 @@ fn build_sdk_reference_document() -> SdkReferenceDocument {
     }
 }
 
+/// Shell-quote a literal value for safe embedding in a command string.
+fn shell_quote_literal(value: &str) -> String {
+    if value
+        .chars()
+        .all(|ch| ch.is_ascii_alphanumeric() || "/._-:=@".contains(ch))
+    {
+        value.to_string()
+    } else {
+        format!("'{}'", value.replace('\'', r#"'"'"'"#))
+    }
+}
+
+/// Resolve the absolute path to the running binary, falling back to bare name.
+fn resolve_harness_run_binary() -> String {
+    match std::env::current_exe() {
+        Ok(path) => {
+            let text = path.to_string_lossy().into_owned();
+            shell_quote_literal(&text)
+        }
+        Err(_) => "script-kit-gpui".to_string(),
+    }
+}
+
+/// Build the harness run command using the resolved absolute binary path.
+fn build_harness_run_command() -> String {
+    format!(
+        "echo '{{\"type\":\"run\",\"path\":\"{{path}}\"}}' | {}",
+        resolve_harness_run_binary()
+    )
+}
+
 fn build_harness_workflow() -> HarnessWorkflow {
     HarnessWorkflow {
         test_script_directory: "~/.scriptkit/tmp/test-scripts/".into(),
         test_scriptlet_directory: "~/.scriptkit/tmp/test-scriptlets/".into(),
-        run_command: "echo '{\"type\":\"run\",\"path\":\"{path}\"}' | ./target/debug/script-kit-gpui".into(),
+        run_command: build_harness_run_command(),
         stdin_run_message: r#"{"type":"run","path":"/absolute/path/to/script.ts"}"#.into(),
         success_output_shape: "No dedicated success envelope is emitted for stdin `run`; successful scripts communicate through their normal stdout JSONL protocol and app logs.".into(),
         error_output_shape: "No dedicated error envelope is emitted for stdin `run`; failures surface through script error protocol messages, app logs, and HUD/toast feedback.".into(),
