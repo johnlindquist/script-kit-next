@@ -195,7 +195,7 @@ fn sdk_reference_returns_versioned_document() {
         serde_json::from_str(&content.text).expect("valid JSON document");
 
     assert_eq!(doc.schema_version, SDK_REFERENCE_SCHEMA_VERSION);
-    assert_eq!(doc.sdk_package, "@johnlindquist/kit");
+    assert_eq!(doc.sdk_package, "@scriptkit/sdk");
 }
 
 #[test]
@@ -231,9 +231,9 @@ fn sdk_reference_documents_script_directory_and_patterns() {
     let content = mcp_resources::read_resource("kit://sdk-reference", &[], &[], None).unwrap();
     let doc: SdkReferenceDocument = serde_json::from_str(&content.text).unwrap();
 
-    assert!(doc.script_directory.contains("scripts"));
+    assert!(doc.script_directory.contains("kit/main/scripts"));
     assert!(doc.scriptlet_pattern.contains("extensions"));
-    assert!(doc.metadata_format.contains("// Name:"));
+    assert!(doc.metadata_format.contains("export const metadata"));
 }
 
 #[test]

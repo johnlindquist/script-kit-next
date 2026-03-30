@@ -246,9 +246,9 @@ export default {
 
 ## DO NOT
 
-- Use `@johnlindquist/kit` — replaced by `@scriptkit/sdk`
-- Use `require()` — use ES `import`
+- Use the old v1 SDK package — replaced by `@scriptkit/sdk`
+- Use CommonJS imports — use ES `import`
 - Use Node.js `fs` / `child_process` — use Bun APIs
-- Use comment metadata (`// Name:`) — use `export const metadata`
+- Use comment-based metadata — use `export const metadata`
 - Edit `sdk/` files — managed by the app
-- Reference `~/.kenv` or `~/.scriptkit/scripts` — legacy v1 paths
+- Reference legacy v1 paths — scripts live in `kit/main/scripts/`
