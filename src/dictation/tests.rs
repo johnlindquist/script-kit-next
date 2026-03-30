@@ -483,6 +483,73 @@ fn whisper_engine_new_fails_for_directory_path() {
     );
 }
 
+#[test]
+fn whisper_engine_missing_model_error_names_attempted_path() {
+    use crate::dictation::transcription::{DictationTranscriptionConfig, WhisperDictationEngine};
+
+    let explicit_path = std::path::PathBuf::from("/nonexistent/dir/model.bin");
+    let config = DictationTranscriptionConfig {
+        model_path: explicit_path.clone(),
+        ..Default::default()
+    };
+    let err_msg = WhisperDictationEngine::new(&config)
+        .unwrap_err()
+        .to_string();
+    assert!(
+        err_msg.contains(explicit_path.to_str().unwrap()),
+        "error must name the attempted model path, got: {err_msg}"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Model path resolution tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn default_model_path_is_absolute() {
+    let config = DictationTranscriptionConfig::default();
+    assert!(
+        config.model_path.is_absolute(),
+        "default model path must be absolute, got: {}",
+        config.model_path.display()
+    );
+}
+
+#[test]
+fn default_model_path_lives_under_kit_path() {
+    use crate::setup::get_kit_path;
+    let config = DictationTranscriptionConfig::default();
+    let kit_path = get_kit_path();
+    assert!(
+        config.model_path.starts_with(&kit_path),
+        "default model path must be under kit_path ({}), got: {}",
+        kit_path.display(),
+        config.model_path.display()
+    );
+}
+
+#[test]
+fn resolve_default_model_path_matches_config_default() {
+    use crate::dictation::transcription::resolve_default_model_path;
+    let config = DictationTranscriptionConfig::default();
+    assert_eq!(
+        config.model_path,
+        resolve_default_model_path(),
+        "DictationTranscriptionConfig::default().model_path must equal resolve_default_model_path()"
+    );
+}
+
+#[test]
+fn resolve_default_model_path_ends_with_expected_filename() {
+    use crate::dictation::transcription::resolve_default_model_path;
+    let path = resolve_default_model_path();
+    assert!(
+        path.ends_with("models/whisper-medium-q4_1.bin"),
+        "resolved path must end with models/whisper-medium-q4_1.bin, got: {}",
+        path.display()
+    );
+}
+
 // ---------------------------------------------------------------------------
 // Runtime handoff architecture tests
 // ---------------------------------------------------------------------------
@@ -884,6 +951,227 @@ fn builtin_microphone_prompt_treats_missing_saved_device_as_system_default_curre
 }
 
 // ---------------------------------------------------------------------------
+// Delivery contract tests: prompt-first, frontmost-app-second
+// ---------------------------------------------------------------------------
+
+/// Prove that `handle_dictation_transcript` checks `try_set_prompt_input`
+/// BEFORE calling `paste_text`, so an active prompt always wins.
+#[test]
+fn delivery_checks_prompt_input_before_paste() {
+    let src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("read builtin_execution.rs");
+
+    let prompt_pos = src
+        .find("try_set_prompt_input")
+        .expect("handle_dictation_transcript must call try_set_prompt_input");
+    let paste_pos = src
+        .find("paste_text")
+        .expect("handle_dictation_transcript must call paste_text");
+
+    assert!(
+        prompt_pos < paste_pos,
+        "try_set_prompt_input (byte {prompt_pos}) must appear before paste_text (byte {paste_pos}) \
+         — active prompt takes priority over frontmost app paste"
+    );
+}
+
+/// Prove that when `try_set_prompt_input` returns true, the destination is
+/// `ActivePrompt` and no paste fallback occurs.
+#[test]
+fn delivery_active_prompt_sets_correct_destination() {
+    let src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("read builtin_execution.rs");
+
+    // The delivery block must assign ActivePrompt when try_set_prompt_input succeeds.
+    assert!(
+        src.contains("DictationDestination::ActivePrompt"),
+        "delivery must use DictationDestination::ActivePrompt when prompt accepts input"
+    );
+
+    // Verify ActivePrompt is set in the if-true branch (before paste_text).
+    let handler_start = src
+        .find("fn handle_dictation_transcript")
+        .expect("handler must exist");
+    let handler_src = &src[handler_start..];
+    let active_prompt_pos = handler_src
+        .find("DictationDestination::ActivePrompt")
+        .expect("ActivePrompt must be in handler");
+    let paste_pos = handler_src
+        .find("paste_text")
+        .expect("paste_text must be in handler");
+    assert!(
+        active_prompt_pos < paste_pos,
+        "ActivePrompt destination must be assigned BEFORE the paste fallback branch"
+    );
+}
+
+/// Prove that when `try_set_prompt_input` returns false, delivery falls
+/// through to `paste_text` and sets `FrontmostApp` on success.
+#[test]
+fn delivery_frontmost_app_sets_correct_destination() {
+    let src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("read builtin_execution.rs");
+
+    let handler_start = src
+        .find("fn handle_dictation_transcript")
+        .expect("handler must exist");
+    let handler_src = &src[handler_start..];
+
+    // paste_text must be in an else branch after try_set_prompt_input
+    assert!(
+        handler_src.contains("paste_text"),
+        "handler must call paste_text as fallback"
+    );
+    assert!(
+        handler_src.contains("DictationDestination::FrontmostApp"),
+        "handler must set FrontmostApp destination on successful paste"
+    );
+}
+
+/// Prove that paste failures are surfaced as `DictationSessionPhase::Failed`
+/// and not silently dropped.
+#[test]
+fn delivery_paste_failure_surfaces_as_failed_phase() {
+    let src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("read builtin_execution.rs");
+
+    let handler_start = src
+        .find("fn handle_dictation_transcript")
+        .expect("handler must exist");
+    let handler_src = &src[handler_start..];
+
+    // The Err branch of paste_text must set Failed phase.
+    let paste_pos = handler_src
+        .find("paste_text")
+        .expect("handler must call paste_text");
+    let after_paste = &handler_src[paste_pos..];
+
+    assert!(
+        after_paste.contains("DictationSessionPhase::Failed"),
+        "paste failure must surface as DictationSessionPhase::Failed"
+    );
+    assert!(
+        after_paste.contains("Failed to paste transcript"),
+        "paste failure must log an error describing what failed"
+    );
+    assert!(
+        after_paste.contains("return"),
+        "paste failure must early-return (not fall through to Finished phase)"
+    );
+}
+
+/// Prove that transcription errors also surface as Failed phase.
+#[test]
+fn delivery_transcription_error_surfaces_as_failed_phase() {
+    let src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("read builtin_execution.rs");
+
+    let handler_start = src
+        .find("fn handle_dictation_transcript")
+        .expect("handler must exist");
+    let handler_src = &src[handler_start..];
+
+    // The Err(error) arm must show Failed overlay.
+    assert!(
+        handler_src.contains("Err(error)"),
+        "handler must match on Err(error) for transcription failures"
+    );
+    assert!(
+        handler_src.contains("Transcription failed"),
+        "transcription error must be logged"
+    );
+}
+
+/// Prove delivery logic stays in builtin_execution, not in dictation/runtime.
+#[test]
+fn delivery_logic_not_in_runtime() {
+    let runtime_src = std::fs::read_to_string("src/dictation/runtime.rs").expect("read runtime.rs");
+
+    assert!(
+        !runtime_src.contains("try_set_prompt_input"),
+        "runtime must not call try_set_prompt_input — delivery is the caller's job"
+    );
+    assert!(
+        !runtime_src.contains("paste_text"),
+        "runtime must not call paste_text — delivery is the caller's job"
+    );
+    assert!(
+        !runtime_src.contains("TextInjector"),
+        "runtime must not reference TextInjector — delivery is the caller's job"
+    );
+    assert!(
+        !runtime_src.contains("handle_dictation_transcript"),
+        "runtime must not define or call handle_dictation_transcript"
+    );
+}
+
+/// Prove that `try_set_prompt_input` covers the main prompt types that
+/// should accept dictated text.
+#[test]
+fn try_set_prompt_input_covers_key_prompt_views() {
+    let src =
+        std::fs::read_to_string("src/app_impl/ui_window.rs").expect("read ui_window.rs");
+
+    let fn_start = src
+        .find("fn try_set_prompt_input")
+        .expect("try_set_prompt_input must exist");
+    let fn_src = &src[fn_start..fn_start + 3000.min(src.len() - fn_start)];
+
+    for view in &[
+        "AppView::ArgPrompt",
+        "AppView::MiniPrompt",
+        "AppView::MicroPrompt",
+        "AppView::PathPrompt",
+        "AppView::SelectPrompt",
+    ] {
+        assert!(
+            fn_src.contains(view),
+            "try_set_prompt_input must handle {view}"
+        );
+    }
+
+    // Must return false for unhandled views (the _ => false arm).
+    assert!(
+        fn_src.contains("_ => false"),
+        "try_set_prompt_input must return false for unhandled views"
+    );
+}
+
+/// Prove that the silent-audio path (Ok(None)) does not show an error and
+/// closes the overlay quickly without surfacing a failure.
+#[test]
+fn delivery_silent_audio_closes_without_error() {
+    let src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("read builtin_execution.rs");
+
+    let handler_start = src
+        .find("fn handle_dictation_transcript")
+        .expect("handler must exist");
+    let handler_src = &src[handler_start..];
+
+    // The Ok(None) arm must schedule close without showing Failed.
+    assert!(
+        handler_src.contains("Ok(None)"),
+        "handler must match Ok(None) for silent audio"
+    );
+
+    // Ok(None) must not produce a Failed phase.
+    let none_pos = handler_src
+        .find("Ok(None)")
+        .expect("Ok(None) arm must exist");
+    // Find the next match arm boundary (either Ok(Some(..)) or Err(..))
+    let next_arm = handler_src[none_pos..]
+        .find("Err(error)")
+        .unwrap_or(handler_src.len() - none_pos);
+    let none_arm = &handler_src[none_pos..none_pos + next_arm];
+
+    assert!(
+        !none_arm.contains("DictationSessionPhase::Failed"),
+        "silent audio must not surface as Failed — it should close quietly"
+    );
+}
+
+// ---------------------------------------------------------------------------
 // Stale mic preference self-heal regression test
 // ---------------------------------------------------------------------------
 
@@ -913,5 +1201,69 @@ fn runtime_clears_stale_mic_preference_on_missing_device() {
     assert!(
         fallback_pos > 0,
         "default_input_device must be called after clearing stale preference (offset {fallback_pos})"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Hotkey routing: dictation hotkey uses builtin toggle, not a duplicate path
+// ---------------------------------------------------------------------------
+
+#[test]
+fn dictation_hotkey_routes_through_builtin_toggle_flow() {
+    // Verify both entry-point files have a dictation hotkey listener that
+    // routes through execute_by_command_id_or_path("builtin-dictation"),
+    // ensuring one toggle path instead of a duplicate dictation implementation.
+    for (label, path) in [
+        (
+            "runtime_tray_hotkeys.rs",
+            "src/main_entry/runtime_tray_hotkeys.rs",
+        ),
+        ("app_run_setup.rs", "src/main_entry/app_run_setup.rs"),
+    ] {
+        let src = std::fs::read_to_string(path).unwrap_or_else(|_| panic!("read {label}"));
+
+        assert!(
+            src.contains("dictation_hotkey_channel"),
+            "{label} must consume the dictation hotkey channel"
+        );
+        assert!(
+            src.contains("builtin-dictation"),
+            "{label} must route dictation hotkey through builtin-dictation command"
+        );
+        // Must NOT contain a second toggle_dictation call — only the builtin path owns that.
+        let hotkey_section_start = src
+            .find("Dictation hotkey listener")
+            .unwrap_or_else(|| panic!("{label} must have a Dictation hotkey listener section"));
+        let hotkey_section_end = src[hotkey_section_start..]
+            .find(".detach()")
+            .unwrap_or(src.len() - hotkey_section_start);
+        let hotkey_section = &src[hotkey_section_start..hotkey_section_start + hotkey_section_end];
+
+        assert!(
+            !hotkey_section.contains("toggle_dictation()"),
+            "{label} dictation hotkey listener must NOT call toggle_dictation() directly — \
+             it must route through the builtin execution path"
+        );
+        assert!(
+            !hotkey_section.contains("open_dictation_overlay"),
+            "{label} dictation hotkey listener must NOT call open_dictation_overlay directly — \
+             it must route through the builtin execution path"
+        );
+    }
+}
+
+#[test]
+fn dictation_hotkey_channel_not_dead_code() {
+    // The hotkey channel must be consumed (receiver side) in at least one entry point.
+    let runtime = std::fs::read_to_string("src/main_entry/runtime_tray_hotkeys.rs")
+        .expect("read runtime_tray_hotkeys.rs");
+    let setup =
+        std::fs::read_to_string("src/main_entry/app_run_setup.rs").expect("read app_run_setup.rs");
+
+    let has_receiver = runtime.contains("dictation_hotkey_channel().1.recv()")
+        || setup.contains("dictation_hotkey_channel().1.recv()");
+    assert!(
+        has_receiver,
+        "dictation hotkey channel receiver must be consumed in at least one entry point"
     );
 }

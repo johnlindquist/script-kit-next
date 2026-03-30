@@ -27,48 +27,39 @@ const AI_SCRIPT_SHELL_EXECUTION_PATTERNS: [(&str, &str); 5] = [
 
 pub(crate) const AI_SCRIPT_GENERATION_SYSTEM_PROMPT: &str = r#"You write production-ready Script Kit TypeScript scripts.
 
-CRITICAL: Your ENTIRE response must be valid TypeScript. No prose, no markdown, no explanations, no preamble, no postamble. Start immediately with valid TypeScript source (for example `// Name:` comment headers or `import "@scriptkit/sdk";`). If you include ANY text that is not valid TypeScript, the script will fail to parse and crash.
+CRITICAL: Your ENTIRE response must be valid TypeScript. No prose, no markdown, no explanations, no preamble, no postamble. Start immediately with valid TypeScript source (e.g. `import "@scriptkit/sdk";`). If you include ANY text that is not valid TypeScript, the script will fail to parse and crash.
 
 WRONG (will crash):
 **Assumed:** You want a script that...
-// Name: My Script
+import "@scriptkit/sdk";
 
 WRONG (will crash):
 Here's a script that does X:
 ```typescript
-// Name: My Script
+import "@scriptkit/sdk";
 ```
 
-RIGHT (acceptable formats):
-// Name: My Script
-// Description: Does something useful
-import "@scriptkit/sdk";
-
-ALSO RIGHT:
+RIGHT:
 import "@scriptkit/sdk";
 export const metadata = { name: "My Script", description: "Does something useful" };
 
 NON-NEGOTIABLE OUTPUT FORMAT
 
-METADATA — use EITHER format (both are valid, pick one):
-
-Format A (comment headers):
-// Name: <short, clear, user-facing title>
-// Description: <one-line summary>
-import "@scriptkit/sdk";
-
-Format B (metadata export — preferred for new scripts):
+Every script MUST start with:
 import "@scriptkit/sdk";
 export const metadata = {
   name: "<short, clear, user-facing title>",
   description: "<one-line summary>",
 };
 
+Do NOT use legacy comment-header metadata (// Name:, // Description:). Always use export const metadata.
+
 RULES:
 1. Include EXACTLY ONE import (and no others): import "@scriptkit/sdk";
-2. Use top-level await (no main(), no async IIFE, no servers).
-3. Prefer Script Kit prompts + UI over console.log.
-4. NO markdown fences. NO explanations. NO commentary. ONLY TypeScript code.
+2. Follow the import with export const metadata = { name, description }.
+3. Use top-level await (no main(), no async IIFE, no servers).
+4. Prefer Script Kit prompts + UI over console.log.
+5. NO markdown fences. NO explanations. NO commentary. ONLY TypeScript code.
 
 RUNTIME ASSUMPTIONS
 
@@ -104,9 +95,8 @@ SCRIPT KIT IDIOMS (PREFERRED)
 TEACH BY EXAMPLE (REFERENCE ONLY — ADAPT PATTERNS, DO NOT COPY VERBATIM)
 
 Example 1 — Simple input → output (arg + file write)
-// Name: Save Note
-// Description: Prompt for a note and save it as a text file
 import "@scriptkit/sdk";
+export const metadata = { name: "Save Note", description: "Prompt for a note and save it as a text file" };
 const note = await arg("Note text");
 const outDir = home("Documents", "Notes");
 await ensureDir(outDir);
@@ -115,9 +105,8 @@ await writeFile(filePath, note, "utf8");
 await div(md(`✅ Saved to: \`${filePath}\``));
 
 Example 2 — List with choices + preview
-// Name: Clipboard Picker
-// Description: Search clipboard history, preview items, copy the selection
 import "@scriptkit/sdk";
+export const metadata = { name: "Clipboard Picker", description: "Search clipboard history, preview items, copy the selection" };
 const items = (await getClipboardHistory()).slice(0, 100);
 const value = await arg("Pick a clipboard item", items.map((i) => ({
   name: i.name || i.value.slice(0, 80),
@@ -129,9 +118,8 @@ await clipboard.writeText(value);
 toast("Copied");
 
 Example 3 — Multi-step workflow + rich HTML output (div(md()))
-// Name: Markdown Card Builder
-// Description: Collect fields, edit markdown, then render a styled preview
 import "@scriptkit/sdk";
+export const metadata = { name: "Markdown Card Builder", description: "Collect fields, edit markdown, then render a styled preview" };
 const [title, tags] = await fields(["Title", "Tags (comma-separated)"]);
 const initial = `# ${title}\n\nTags: ${tags}\n\nWrite your content here...\n`;
 const markdown = await editor(initial);
@@ -141,9 +129,8 @@ await div({ html: md(markdown), containerClasses: "p-6 prose dark:prose-invert" 
 ]);
 
 Example 4 — AI-powered helper (ai())
-// Name: AI Rewrite
-// Description: Rewrite text in a chosen tone using ai()
 import "@scriptkit/sdk";
+export const metadata = { name: "AI Rewrite", description: "Rewrite text in a chosen tone using ai()" };
 const tone = await arg("Tone", ["Concise", "Friendly", "Professional"]);
 const input = await editor("Paste text to rewrite...");
 const rewrite = ai(`Rewrite the text in a ${tone} tone. Return only the rewritten text.`);
@@ -151,9 +138,8 @@ const output = await rewrite(input);
 await editor(output);
 
 Example 5 — System automation (exec + readFile/writeFile)
-// Name: Quick Replace In File
-// Description: Replace text in a file, save, then open it
 import "@scriptkit/sdk";
+export const metadata = { name: "Quick Replace In File", description: "Replace text in a file, save, then open it" };
 const filePath = await path({ hint: "Select a text file to edit" });
 const findText = await arg("Find");
 const replaceText = await arg("Replace with");
@@ -258,7 +244,7 @@ Handy Globals
 
 FINAL CHECKLIST
 * Only TypeScript source code.
-* Includes metadata (// Name: + // Description: headers OR export const metadata = { name, description }).
+* Includes export const metadata = { name, description } (do NOT use // Name: or // Description: comment headers).
 * Exactly one import: import "@scriptkit/sdk";
 * Top-level await + Script Kit globals.
 * Interactive UX (prompts, previews, actions) instead of console output.
@@ -917,6 +903,11 @@ fn description_from_prompt(prompt: &str) -> String {
     shortened
 }
 
+fn quote_typescript_string(value: &str) -> String {
+    let escaped = value.chars().flat_map(char::escape_default).collect::<String>();
+    format!("\"{escaped}\"")
+}
+
 fn has_kit_import(script: &str) -> bool {
     script.lines().any(|line| {
         let trimmed = line.trim();
@@ -1075,17 +1066,48 @@ fn enforce_script_kit_conventions(script: &str, prompt: &str, slug: &str) -> Str
 
     let mut prefix_lines: Vec<String> = Vec::new();
 
-    // Only inject // Name: if neither comment header nor metadata export provides a name
-    if !has_name_contract(&body) {
-        prefix_lines.push(format!("// Name: {}", slug_to_title(slug)));
-    }
+    // When neither comment header nor metadata export provides name/description,
+    // inject a proper export const metadata block (canonical format).
+    let missing_name = !has_name_contract(&body);
+    let missing_description = !has_description_contract(&body);
 
-    // Only inject // Description: if neither comment header nor metadata export provides a description
-    if !has_description_contract(&body) {
-        prefix_lines.push(format!(
-            "// Description: {}",
-            description_from_prompt(prompt)
-        ));
+    if missing_name || missing_description {
+        // If there's already a metadata export, we only inject comment-header fallbacks
+        // for backwards compat. Otherwise, inject the canonical metadata export block.
+        let has_existing_metadata = body.contains("export const metadata");
+
+        if has_existing_metadata {
+            // Existing metadata export is missing one field — inject comment fallback
+            if missing_name {
+                prefix_lines.push(format!("// Name: {}", slug_to_title(slug)));
+            }
+            if missing_description {
+                prefix_lines.push(format!(
+                    "// Description: {}",
+                    description_from_prompt(prompt)
+                ));
+            }
+        } else if extract_name_comment(&body).is_some() || has_description_comment(&body) {
+            // Legacy comment headers already present — fill in missing fields as comments
+            if missing_name {
+                prefix_lines.push(format!("// Name: {}", slug_to_title(slug)));
+            }
+            if missing_description {
+                prefix_lines.push(format!(
+                    "// Description: {}",
+                    description_from_prompt(prompt)
+                ));
+            }
+        } else {
+            // No metadata at all — inject the canonical export const metadata block
+            let name = slug_to_title(slug);
+            let desc = description_from_prompt(prompt);
+            prefix_lines.push(format!(
+                "export const metadata = {{\n  name: {},\n  description: {},\n}};",
+                quote_typescript_string(&name),
+                quote_typescript_string(&desc)
+            ));
+        }
     }
 
     // Strip SDK import lines — the preload (--preload kit-sdk.ts) provides all
@@ -1212,12 +1234,30 @@ print("hello")
     }
 
     #[test]
-    fn test_enforce_script_kit_conventions_adds_missing_metadata_and_import() {
+    fn test_enforce_script_kit_conventions_adds_missing_metadata_as_export() {
         let script = "const name = await arg(\"Name?\");";
         let output = enforce_script_kit_conventions(script, "Ask for user name", "ask-user-name");
 
-        assert!(output.contains("// Name: Ask User Name"));
-        assert!(output.contains("// Description: Ask for user name"));
+        assert!(
+            output.contains("export const metadata = {"),
+            "should inject export const metadata when no metadata exists"
+        );
+        assert!(
+            output.contains("name: \"Ask User Name\""),
+            "metadata should contain name"
+        );
+        assert!(
+            output.contains("description: \"Ask for user name\""),
+            "metadata should contain description"
+        );
+        assert!(
+            !output.contains("// Name:"),
+            "should not inject legacy comment-header metadata"
+        );
+        assert!(
+            !output.contains("// Description:"),
+            "should not inject legacy comment-header metadata"
+        );
         assert!(
             !output.contains("import \"@scriptkit/sdk\";"),
             "SDK import should be stripped (preload provides globals)"
@@ -1304,6 +1344,15 @@ await div("ready");
                 .contains("typescript source code"),
             "system prompt must explicitly require TypeScript source output"
         );
+        // System prompt must NOT bless legacy comment-header metadata
+        assert!(
+            !prompt.contains("Format A (comment headers)"),
+            "system prompt must not document legacy comment-header format"
+        );
+        assert!(
+            prompt.contains("Do NOT use legacy comment-header metadata"),
+            "system prompt must explicitly forbid legacy comment headers"
+        );
     }
 
     #[test]
@@ -1320,6 +1369,11 @@ await div("ready");
         assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("ai("));
         assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("clipboard"));
         assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("home("));
+        // All examples must use export const metadata, not comment headers
+        assert!(
+            AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("export const metadata"),
+            "system prompt examples must use export const metadata"
+        );
     }
 
     #[test]
@@ -1329,13 +1383,46 @@ await div("ready");
 
         let (slug, source) = prepare_script_from_ai_response(prompt, response).unwrap();
         assert_eq!(slug, "create-a-weather-checker");
-        assert!(source.contains("// Name: Create A Weather Checker"));
-        assert!(source.contains("// Description: Create a weather checker"));
+        assert!(
+            source.contains("export const metadata = {"),
+            "should inject export const metadata"
+        );
+        assert!(
+            source.contains("name: \"Create A Weather Checker\""),
+            "metadata should contain name"
+        );
+        assert!(
+            source.contains("description: \"Create a weather checker\""),
+            "metadata should contain description"
+        );
+        assert!(
+            !source.contains("// Name:"),
+            "should not use legacy comment-header metadata"
+        );
         assert!(
             !source.contains("import \"@scriptkit/sdk\";"),
             "SDK import should be stripped (preload provides globals)"
         );
         assert!(source.contains("await div(\"Sunny\");"));
+    }
+
+    #[test]
+    fn test_enforce_script_kit_conventions_escapes_metadata_string_literals() {
+        let script = "await div(\"ok\");";
+        let output = enforce_script_kit_conventions(
+            script,
+            "Say \"hello\" from C:\\Temp\nnow",
+            "say-\"hello\"-tool",
+        );
+
+        assert!(
+            output.contains("name: \"Say \\\"hello\\\" Tool\""),
+            "metadata name should escape double quotes"
+        );
+        assert!(
+            output.contains("description: \"Say \\\"hello\\\" from C:\\\\Temp now\""),
+            "metadata description should escape quotes and backslashes"
+        );
     }
 
     #[test]
@@ -1553,7 +1640,9 @@ await arg("Pick an action");
     }
 
     #[test]
-    fn test_prepare_script_comment_header_takes_priority_over_metadata_export() {
+    fn test_prepare_script_comment_header_takes_priority_over_metadata_export_for_slug() {
+        // When both comment headers and metadata export are present (hybrid),
+        // the comment header name still wins for slug resolution (backwards compat).
         let prompt = "do something";
         let response = r#"// Name: Comment Winner
 // Description: from comment
