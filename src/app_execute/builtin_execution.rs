@@ -2421,10 +2421,18 @@ impl ScriptListApp {
                         let prefs = crate::config::load_user_preferences();
                         let current_id = prefs.dictation.selected_device_id;
 
+                        // Check whether the saved device is still physically present.
+                        let saved_device_available = current_id
+                            .as_deref()
+                            .map(|id| devices.iter().any(|device| device.id.0 == id))
+                            .unwrap_or(false);
+
                         let mut choices: Vec<Choice> = Vec::with_capacity(devices.len() + 1);
 
                         // "System Default" entry — clears the preference.
-                        let default_selected = current_id.is_none();
+                        // Falls back to current when no saved pref or saved device is missing.
+                        let default_selected =
+                            current_id.is_none() || !saved_device_available;
                         choices.push(Choice {
                             name: if default_selected {
                                 "System Default (current)".to_string()
@@ -2441,8 +2449,9 @@ impl ScriptListApp {
 
                         let mut start_index: usize = 0;
                         for device in &devices {
-                            let is_current =
-                                current_id.as_deref() == Some(device.id.0.as_str());
+                            let is_current = saved_device_available
+                                && current_id.as_deref()
+                                    == Some(device.id.0.as_str());
                             let suffix = if is_current {
                                 " (current)"
                             } else if device.is_default {

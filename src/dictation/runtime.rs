@@ -259,12 +259,21 @@ pub(crate) fn resolve_preferred_device() -> Result<Option<DictationDeviceId>> {
         return Ok(Some(found.id.clone()));
     }
 
-    // Saved device is no longer available — fall back.
+    // Saved device is no longer available — fall back and self-heal.
     tracing::warn!(
         category = "DICTATION",
         missing_device_id = %preferred,
         "Saved microphone device not found, falling back to system default"
     );
+
+    if let Err(error) = crate::dictation::save_dictation_device_id(None) {
+        tracing::warn!(
+            category = "DICTATION",
+            error = %error,
+            "Failed to clear stale microphone preference"
+        );
+    }
+
     let default = default_input_device()?;
     Ok(default.map(|d| d.id))
 }

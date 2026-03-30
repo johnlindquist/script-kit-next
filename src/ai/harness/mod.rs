@@ -58,13 +58,15 @@ fn default_tab_ai_harness_warm_on_startup() -> bool {
 
 impl Default for HarnessConfig {
     fn default() -> Self {
+        let working_directory =
+            Some(crate::setup::get_kit_path().to_string_lossy().into_owned());
         Self {
             schema_version: TAB_AI_HARNESS_CONFIG_SCHEMA_VERSION,
             backend: HarnessBackendKind::ClaudeCode,
             command: "claude".to_string(),
             args: Vec::new(),
             warm_on_startup: default_tab_ai_harness_warm_on_startup(),
-            working_directory: None,
+            working_directory,
             env: std::collections::BTreeMap::new(),
         }
     }
@@ -354,9 +356,17 @@ mod tests {
         assert_eq!(config.command, "claude");
         assert!(config.args.is_empty());
         assert!(config.warm_on_startup);
-        assert!(config.working_directory.is_none());
+        // Default working_directory resolves to the Script Kit root (~/.scriptkit)
+        assert!(
+            config.working_directory.is_some(),
+            "default working_directory should be set to scriptkit root"
+        );
+        let wd = config.working_directory.as_ref().unwrap();
+        assert!(
+            wd.contains("scriptkit") || wd.contains("script-kit"),
+            "working_directory should point to scriptkit root, got: {wd}"
+        );
         assert!(config.env.is_empty());
-        assert_eq!(config.command_line(), "claude");
     }
 
     #[test]
@@ -422,6 +432,7 @@ mod tests {
         let config = HarnessConfig {
             command: "codex".to_string(),
             args: vec!["--fast".to_string()],
+            working_directory: None,
             ..HarnessConfig::default()
         };
         assert_eq!(config.command_line(), "codex --fast");

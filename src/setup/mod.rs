@@ -55,6 +55,36 @@ const EMBEDDED_EXAMPLES_ADVANCED: &str =
     include_str!("../../kit-init/extensions/examples/advanced.md");
 /// Embedded Examples extension - howto guide (built-in extension that ships with the app)
 const EMBEDDED_EXAMPLES_HOWTO: &str = include_str!("../../kit-init/extensions/examples/howto.md");
+/// Root-level CLAUDE.md for the ~/.scriptkit workspace (the harness cwd)
+const EMBEDDED_ROOT_CLAUDE_MD: &str = include_str!("../../kit-init/ROOT_CLAUDE.md");
+/// Root-level AGENTS.md SDK reference for the ~/.scriptkit workspace
+const EMBEDDED_ROOT_AGENTS_MD: &str = include_str!("../../kit-init/ROOT_AGENTS.md");
+/// Skills README
+const EMBEDDED_SKILLS_README: &str = include_str!("../../kit-init/skills/README.md");
+/// Skill: script authoring
+const EMBEDDED_SKILL_SCRIPT_AUTHORING: &str =
+    include_str!("../../kit-init/skills/script-authoring/SKILL.md");
+/// Skill: scriptlets
+const EMBEDDED_SKILL_SCRIPTLETS: &str = include_str!("../../kit-init/skills/scriptlets/SKILL.md");
+/// Skill: config & theming
+const EMBEDDED_SKILL_CONFIG: &str = include_str!("../../kit-init/skills/config/SKILL.md");
+/// Skill: troubleshooting
+const EMBEDDED_SKILL_TROUBLESHOOTING: &str =
+    include_str!("../../kit-init/skills/troubleshooting/SKILL.md");
+/// Example script: hello-world
+const EMBEDDED_EXAMPLE_HELLO_WORLD: &str =
+    include_str!("../../kit-init/examples/scripts/hello-world.ts");
+/// Example script: choose-from-list
+const EMBEDDED_EXAMPLE_CHOOSE_FROM_LIST: &str =
+    include_str!("../../kit-init/examples/scripts/choose-from-list.ts");
+/// Example script: clipboard-transform
+const EMBEDDED_EXAMPLE_CLIPBOARD_TRANSFORM: &str =
+    include_str!("../../kit-init/examples/scripts/clipboard-transform.ts");
+/// Example script: path-picker
+const EMBEDDED_EXAMPLE_PATH_PICKER: &str =
+    include_str!("../../kit-init/examples/scripts/path-picker.ts");
+/// Examples README
+const EMBEDDED_EXAMPLES_README: &str = include_str!("../../kit-init/examples/README.md");
 // --- merged from part_001.rs ---
 /// Embedded AGENTS.md guide for AI agents writing user scripts
 const EMBEDDED_AGENTS_MD: &str = concat!(
@@ -513,6 +543,13 @@ pub fn ensure_kit_setup() -> SetupResult {
         kit_dir.join("kit").join("ai-text-tools").join("extensions"),
         // Built-in Examples extension kit (scriptlet pattern reference)
         kit_dir.join("kit").join("examples").join("extensions"),
+        // Root-level agent workspace directories
+        kit_dir.join("skills").join("script-authoring"),
+        kit_dir.join("skills").join("scriptlets"),
+        kit_dir.join("skills").join("config"),
+        kit_dir.join("skills").join("troubleshooting"),
+        kit_dir.join("examples").join("scripts"),
+        kit_dir.join("docs"),
         kit_dir.join("sdk"),
         kit_dir.join("db"),
         kit_dir.join("logs"),
@@ -703,6 +740,128 @@ pub fn ensure_kit_setup() -> SetupResult {
     // Comprehensive user guide for learning Script Kit
     let guide_md_path = kit_dir.join("GUIDE.md");
     write_string_if_missing(&guide_md_path, EMBEDDED_GUIDE_MD, &mut warnings, "GUIDE.md");
+
+    // Root-level CLAUDE.md — the canonical agent instructions file.
+    // Lives at ~/.scriptkit/CLAUDE.md so harnesses that cwd into ~/.scriptkit find it.
+    let root_claude_md_path = kit_dir.join("CLAUDE.md");
+    write_string_if_changed(
+        &root_claude_md_path,
+        EMBEDDED_ROOT_CLAUDE_MD,
+        &mut warnings,
+        "CLAUDE.md",
+    );
+
+    // Root-level AGENTS.md — SDK reference for all agents.
+    let root_agents_md_path = kit_dir.join("AGENTS.md");
+    write_string_if_changed(
+        &root_agents_md_path,
+        EMBEDDED_ROOT_AGENTS_MD,
+        &mut warnings,
+        "AGENTS.md",
+    );
+
+    // Redirect stubs for kit/CLAUDE.md and kit/AGENTS.md so agents that
+    // happen to look there are pointed to the root-level canonical files.
+    let kit_claude_redirect = "# See ../CLAUDE.md\n\n\
+        This file has moved to the workspace root for better agent discoverability.\n\
+        Read `~/.scriptkit/CLAUDE.md` instead.\n";
+    write_string_if_changed(
+        &kit_dir.join("kit").join("CLAUDE.md"),
+        kit_claude_redirect,
+        &mut warnings,
+        "kit/CLAUDE.md redirect",
+    );
+    let kit_agents_redirect = "# See ../AGENTS.md\n\n\
+        This file has moved to the workspace root for better agent discoverability.\n\
+        Read `~/.scriptkit/AGENTS.md` instead.\n";
+    write_string_if_changed(
+        &kit_dir.join("kit").join("AGENTS.md"),
+        kit_agents_redirect,
+        &mut warnings,
+        "kit/AGENTS.md redirect",
+    );
+
+    // App-managed: Skills library (refresh if changed)
+    write_string_if_changed(
+        &kit_dir.join("skills").join("README.md"),
+        EMBEDDED_SKILLS_README,
+        &mut warnings,
+        "skills/README.md",
+    );
+    write_string_if_changed(
+        &kit_dir
+            .join("skills")
+            .join("script-authoring")
+            .join("SKILL.md"),
+        EMBEDDED_SKILL_SCRIPT_AUTHORING,
+        &mut warnings,
+        "skills/script-authoring/SKILL.md",
+    );
+    write_string_if_changed(
+        &kit_dir.join("skills").join("scriptlets").join("SKILL.md"),
+        EMBEDDED_SKILL_SCRIPTLETS,
+        &mut warnings,
+        "skills/scriptlets/SKILL.md",
+    );
+    write_string_if_changed(
+        &kit_dir.join("skills").join("config").join("SKILL.md"),
+        EMBEDDED_SKILL_CONFIG,
+        &mut warnings,
+        "skills/config/SKILL.md",
+    );
+    write_string_if_changed(
+        &kit_dir
+            .join("skills")
+            .join("troubleshooting")
+            .join("SKILL.md"),
+        EMBEDDED_SKILL_TROUBLESHOOTING,
+        &mut warnings,
+        "skills/troubleshooting/SKILL.md",
+    );
+
+    // App-managed: Example scripts (refresh if changed)
+    write_string_if_changed(
+        &kit_dir.join("examples").join("README.md"),
+        EMBEDDED_EXAMPLES_README,
+        &mut warnings,
+        "examples/README.md",
+    );
+    write_string_if_changed(
+        &kit_dir
+            .join("examples")
+            .join("scripts")
+            .join("hello-world.ts"),
+        EMBEDDED_EXAMPLE_HELLO_WORLD,
+        &mut warnings,
+        "examples/scripts/hello-world.ts",
+    );
+    write_string_if_changed(
+        &kit_dir
+            .join("examples")
+            .join("scripts")
+            .join("choose-from-list.ts"),
+        EMBEDDED_EXAMPLE_CHOOSE_FROM_LIST,
+        &mut warnings,
+        "examples/scripts/choose-from-list.ts",
+    );
+    write_string_if_changed(
+        &kit_dir
+            .join("examples")
+            .join("scripts")
+            .join("clipboard-transform.ts"),
+        EMBEDDED_EXAMPLE_CLIPBOARD_TRANSFORM,
+        &mut warnings,
+        "examples/scripts/clipboard-transform.ts",
+    );
+    write_string_if_changed(
+        &kit_dir
+            .join("examples")
+            .join("scripts")
+            .join("path-picker.ts"),
+        EMBEDDED_EXAMPLE_PATH_PICKER,
+        &mut warnings,
+        "examples/scripts/path-picker.ts",
+    );
 
     // App-managed: .gitignore (refresh if changed)
     let gitignore_path = kit_dir.join(".gitignore");
@@ -1716,26 +1875,38 @@ mod tests {
             "package.json should enable ESM"
         );
 
-        // Verify AGENTS.md content
-        let agents_content = fs::read_to_string(kit_dir.join("AGENTS.md")).unwrap();
+        // kit/AGENTS.md and kit/CLAUDE.md are now redirect stubs
+        let kit_agents_content = fs::read_to_string(kit_dir.join("AGENTS.md")).unwrap();
+        assert!(
+            kit_agents_content.contains("../AGENTS.md"),
+            "kit/AGENTS.md should redirect to root"
+        );
+        let kit_claude_content = fs::read_to_string(kit_dir.join("CLAUDE.md")).unwrap();
+        assert!(
+            kit_claude_content.contains("../CLAUDE.md"),
+            "kit/CLAUDE.md should redirect to root"
+        );
+
+        // Root-level AGENTS.md has the actual SDK reference
+        let agents_content = fs::read_to_string(kit_root.join("AGENTS.md")).unwrap();
         assert!(
             agents_content.contains("Script Kit"),
-            "AGENTS.md should mention Script Kit"
+            "Root AGENTS.md should mention Script Kit"
         );
         assert!(
             agents_content.contains("~/.scriptkit/kit/config.ts"),
-            "AGENTS.md should have correct config path"
+            "Root AGENTS.md should have correct config path"
         );
 
-        // Verify CLAUDE.md content
-        let claude_content = fs::read_to_string(kit_dir.join("CLAUDE.md")).unwrap();
+        // Root-level CLAUDE.md has the actual agent instructions
+        let claude_content = fs::read_to_string(kit_root.join("CLAUDE.md")).unwrap();
         assert!(
-            claude_content.contains("Script Kit GPUI"),
-            "CLAUDE.md should mention Script Kit GPUI"
+            claude_content.contains("Script Kit"),
+            "Root CLAUDE.md should mention Script Kit"
         );
         assert!(
-            claude_content.contains("NOT the original Script Kit"),
-            "CLAUDE.md should warn about v1 vs v2"
+            claude_content.contains("@scriptkit/sdk"),
+            "Root CLAUDE.md should reference the SDK"
         );
 
         // Verify CleanShot X built-in extension
@@ -1830,7 +2001,8 @@ mod tests {
         std::env::set_var(SK_PATH_ENV, kit_root.to_str().unwrap());
         let _ = ensure_kit_setup();
 
-        let agents_content = fs::read_to_string(kit_root.join("kit").join("AGENTS.md")).unwrap();
+        // Root-level AGENTS.md is the canonical location now
+        let agents_content = fs::read_to_string(kit_root.join("AGENTS.md")).unwrap();
 
         // Verify documented paths actually exist
         let documented_paths = [
