@@ -134,33 +134,35 @@ See `examples/scripts/` for working examples:
 
 ## Tab AI — Quick Terminal with Context Injection
 
-You may be running inside a Script Kit harness terminal. When the user presses **Tab** in Script Kit, a pre-running CLI harness (Claude Code, Codex, Gemini CLI, Copilot CLI, or a custom command) receives hierarchical context via PTY stdin and renders its TUI directly in a `TermPrompt` widget.
+Tab AI is not the old inline chat surface anymore. The primary Tab AI experience is a warm harness terminal rendered in `AppView::QuickTerminalView` via `TermPrompt`.
 
-**How context reaches you:**
-- Script Kit captures UI state, selected items, frontmost app, browser URL, and clipboard
-- Context is formatted as a `<scriptKitContext>` / `<scriptKitHints>` block and injected into the harness PTY
-- Context assembly pipeline: `snapshot_tab_ai_ui()` + `capture_context_snapshot(CaptureContextOptions::tab_ai_submit())` + `build_tab_ai_context_from()` → `TabAiResolvedContext` (`context`, `invocationReceipt`, `suggestedIntents`)
-- Target resolution: `resolve_tab_ai_surface_targets_for_view()` extracts focused/visible targets per surface
-- Context injection: `build_tab_ai_harness_submission()` → `<scriptKitContext>` / `<scriptKitHints>` → `inject_tab_ai_harness_submission()` via PTY paste or line submit
+**Entry path:**
+- Plain `Tab` opens the harness terminal, captures hierarchical context, and stages a schema-versioned `<scriptKitContext>` block in the running harness using `TabAiHarnessSubmissionMode::PasteOnly`.
+- `Shift+Tab` in `AppView::ScriptList` with non-empty filter text opens the same harness surface and submits that filter text as `User intent:` using `TabAiHarnessSubmissionMode::Submit`.
+- `Tab` / `Shift+Tab` inside `AppView::QuickTerminalView` are forwarded to the PTY. Do not describe them as focus-navigation keys once the harness terminal is open.
 
-**Submission modes** (`TabAiHarnessSubmissionMode`):
-- `PasteOnly` — default for plain Tab entry and for any entry whose normalized intent is empty after trimming. Stages context in the PTY without submitting; user types intent next.
-- `Submit` — selected when an entry intent survives trimming. With a non-empty intent, Script Kit appends `User intent:` and submits immediately.
-- Sentinel behavior — `Await the user's next terminal input.` is emitted only when `TabAiHarnessSubmissionMode::Submit` is used without a non-empty intent.
+**Close semantics:**
+- `Cmd+W` closes the wrapper and restores the previous view and focus.
+- Plain `Escape` is forwarded to the PTY. The harness TUI owns Escape behavior.
+- The footer hint strip advertises only `⌘W Close`.
 
-**Harness configuration:**
-- `HarnessConfig` — persisted at `~/.scriptkit/harness.json`, supports Claude Code, Codex, Gemini CLI, Copilot CLI, Custom backends; `warmOnStartup` defaults to `true`
+**Runtime contract:**
+- Entry path: `open_tab_ai_chat()` → `open_tab_ai_chat_with_entry_intent()` → `open_tab_ai_harness_terminal()`
+- Harness session state: `TabAiHarnessSessionState`
+- Harness config: `~/.scriptkit/harness.json`
+- Supported backends: Claude Code, Codex, Gemini CLI, Copilot CLI, and custom commands
+- `warmOnStartup` defaults to `true`
+- Context assembly stays intact: `snapshot_tab_ai_ui()` + `capture_context_snapshot(CaptureContextOptions::tab_ai_submit())` + `build_tab_ai_context_from()`
+- The `kit://context` MCP resource system still exists, but the landed default Tab flow is PTY-backed text injection
+- `build_tab_ai_harness_submission()` emits `<scriptKitContext>` and optional `<scriptKitHints>`
+- `PasteOnly` stages context on a fresh line and does not auto-submit
+- `Submit` with a non-empty intent appends `User intent:` and submits immediately
+- `Submit` without a non-empty intent appends `Await the user's next terminal input.`
 
-**Harness lifecycle:**
-- Default path — `warmOnStartup` defaults to `true`, so Script Kit silently prewarms the configured harness at app launch.
-- Cold-start fallback — if prewarm is disabled, config validation fails, or the PTY has exited, the next Tab entry cold-starts the harness and waits for readiness before injecting context.
-- Reuse — while the PTY stays alive, subsequent Tab presses reuse the same session.
-- Recovery — if the harness crashes or exits, the next Tab entry respawns it.
-
-**Key bindings inside the terminal:**
-- `Cmd+W` closes the wrapper and restores the previous view/focus.
-- Plain `Escape` is forwarded to the PTY (harness TUI owns it).
-- Tab / Shift+Tab inside the terminal are forwarded to the PTY as raw bytes.
+**Do not describe as current behavior:**
+- Do not describe the old inline chat entity or custom streaming UI as the primary Tab AI surface
+- Do not describe the old inline chat or custom streaming UI as the default path
+- Do not describe Claude Agent SDK V2 or screenshot attachment support as already landed in the default Tab flow; today's default flow is PTY-backed text injection
 
 ## File Watching
 

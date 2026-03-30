@@ -344,7 +344,7 @@ cargo bundle --release
 - **App Launcher** - Quick launch applications
 - **Window Switcher** - Switch between open windows (enable in config)
 - **Notes Window** - Floating notes with Markdown support (`Cmd+Shift+N`)
-- **Tab AI** - Press Tab to open a quick terminal connected to a warm CLI harness (Claude Code, Codex, Gemini CLI, Copilot CLI, or custom). Script Kit captures hierarchical context and injects it into the harness session automatically
+- **Tab AI** - Press Tab to open a warm harness terminal (`AppView::QuickTerminalView`) with context already staged via PTY-backed text injection
 - **System Tray** - Menu bar icon with quick actions
 - **Global Hotkeys** - Trigger scripts from anywhere
 
@@ -368,6 +368,33 @@ cargo bundle --release
 ## AI & Context Features
 
 Script Kit exposes desktop context and UI state to scripts and AI agents through protocol commands and MCP resources.
+
+### Tab AI — Quick Terminal with Context Injection
+
+Tab AI is not the old inline chat surface anymore. The primary Tab AI experience is a warm harness terminal rendered in `AppView::QuickTerminalView` via `TermPrompt`.
+
+**Entry path:**
+- Plain `Tab` opens the harness terminal, captures hierarchical context, and stages a schema-versioned `<scriptKitContext>` block in the running harness using `TabAiHarnessSubmissionMode::PasteOnly`.
+- `Shift+Tab` in `AppView::ScriptList` with non-empty filter text opens the same harness surface and submits that filter text as `User intent:` using `TabAiHarnessSubmissionMode::Submit`.
+- `Tab` / `Shift+Tab` inside `AppView::QuickTerminalView` are forwarded to the PTY. Do not describe them as focus-navigation keys once the harness terminal is open.
+
+**Close semantics:**
+- `Cmd+W` closes the wrapper and restores the previous view and focus.
+- Plain `Escape` is forwarded to the PTY. The harness TUI owns Escape behavior.
+- The footer hint strip advertises only `⌘W Close`.
+
+**Runtime contract:**
+- Entry path: `open_tab_ai_chat()` → `open_tab_ai_chat_with_entry_intent()` → `open_tab_ai_harness_terminal()`
+- Harness session state: `TabAiHarnessSessionState`
+- Harness config: `~/.scriptkit/harness.json`
+- Supported backends: Claude Code, Codex, Gemini CLI, Copilot CLI, and custom commands
+- `warmOnStartup` defaults to `true`
+- Context assembly stays intact: `snapshot_tab_ai_ui()` + `capture_context_snapshot(CaptureContextOptions::tab_ai_submit())` + `build_tab_ai_context_from()`
+- The `kit://context` MCP resource system still exists, but the landed default Tab flow is PTY-backed text injection
+- `build_tab_ai_harness_submission()` emits `<scriptKitContext>` and optional `<scriptKitHints>`
+- `PasteOnly` stages context on a fresh line and does not auto-submit
+- `Submit` with a non-empty intent appends `User intent:` and submits immediately
+- `Submit` without a non-empty intent appends `Await the user's next terminal input.`
 
 ### Element Introspection (`getElements`)
 

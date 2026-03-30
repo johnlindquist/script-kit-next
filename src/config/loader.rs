@@ -116,6 +116,12 @@ fn recover_config_fields(value: Value, correlation_id: &str) -> Config {
         ai_hotkey_enabled: parse_optional_field(object, "aiHotkeyEnabled", correlation_id),
         logs_hotkey: parse_optional_field(object, "logsHotkey", correlation_id),
         logs_hotkey_enabled: parse_optional_field(object, "logsHotkeyEnabled", correlation_id),
+        dictation_hotkey: parse_optional_field(object, "dictationHotkey", correlation_id),
+        dictation_hotkey_enabled: parse_optional_field(
+            object,
+            "dictationHotkeyEnabled",
+            correlation_id,
+        ),
         watcher: parse_optional_field(object, "watcher", correlation_id),
         layout: parse_optional_field(object, "layout", correlation_id),
         commands: parse_optional_field(object, "commands", correlation_id),

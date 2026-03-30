@@ -25,6 +25,7 @@ pub const DEFAULT_APP_LAUNCHER: bool = true;
 pub const DEFAULT_WINDOW_SWITCHER: bool = true;
 pub const DEFAULT_AI_HOTKEY_ENABLED: bool = true;
 pub const DEFAULT_LOGS_HOTKEY_ENABLED: bool = true;
+pub const DEFAULT_DICTATION_HOTKEY_ENABLED: bool = true;
 
 /// Default max text length for clipboard history entries (bytes)
 pub const DEFAULT_CLIPBOARD_HISTORY_MAX_TEXT_LENGTH: usize = 100_000;

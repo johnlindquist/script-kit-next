@@ -569,6 +569,10 @@ fn default_logs_hotkey_enabled() -> bool {
     DEFAULT_LOGS_HOTKEY_ENABLED
 }
 
+fn default_dictation_hotkey_enabled() -> bool {
+    DEFAULT_DICTATION_HOTKEY_ENABLED
+}
+
 // ============================================
 // MAIN CONFIG
 // ============================================
@@ -652,6 +656,20 @@ pub struct Config {
         rename = "logsHotkeyEnabled"
     )]
     pub logs_hotkey_enabled: Option<bool>,
+    /// Hotkey for toggling dictation (user-configured; no default shortcut)
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "dictationHotkey"
+    )]
+    pub dictation_hotkey: Option<HotkeyConfig>,
+    /// Whether dictation hotkey registration is enabled (default: true)
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "dictationHotkeyEnabled"
+    )]
+    pub dictation_hotkey_enabled: Option<bool>,
     /// Watcher tuning settings
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub watcher: Option<WatcherConfig>,
@@ -691,6 +709,8 @@ impl Default for Config {
             ai_hotkey_enabled: None,  // Defaults to true via getter
             logs_hotkey: None,        // Will use HotkeyConfig::default_logs_hotkey() via getter
             logs_hotkey_enabled: None, // Defaults to true via getter
+            dictation_hotkey: None,   // No default shortcut; must be explicitly configured
+            dictation_hotkey_enabled: None, // Defaults to true via getter
             watcher: None,            // Will use WatcherConfig::default() via getter
             layout: None,             // Will use LayoutConfig::default() via getter
             commands: None,           // No per-command overrides by default
@@ -816,6 +836,22 @@ impl Config {
                 .clone()
                 .unwrap_or_else(HotkeyConfig::default_logs_hotkey),
         )
+    }
+
+    /// Returns true if dictation hotkey registration is enabled.
+    pub fn is_dictation_hotkey_enabled(&self) -> bool {
+        self.dictation_hotkey_enabled
+            .unwrap_or_else(default_dictation_hotkey_enabled)
+    }
+
+    /// Returns the dictation hotkey configuration when enabled.
+    /// No default shortcut is provided - users must explicitly configure one.
+    #[allow(dead_code)]
+    pub fn get_dictation_hotkey(&self) -> Option<HotkeyConfig> {
+        if !self.is_dictation_hotkey_enabled() {
+            return None;
+        }
+        self.dictation_hotkey.clone()
     }
 
     /// Returns watcher tuning config, or defaults.
@@ -1101,5 +1137,38 @@ mod tests {
         };
         assert!(config.is_command_hidden("script/hidden"));
         assert!(!config.is_command_hidden("script/visible"));
+    }
+
+    #[test]
+    fn test_get_dictation_hotkey_returns_none_when_unset() {
+        let config = Config::default();
+        assert_eq!(config.get_dictation_hotkey(), None);
+    }
+
+    #[test]
+    fn test_get_dictation_hotkey_returns_configured_value_when_enabled() {
+        let hotkey = HotkeyConfig {
+            modifiers: vec!["meta".to_string(), "shift".to_string()],
+            key: "KeyD".to_string(),
+        };
+        let config = Config {
+            dictation_hotkey: Some(hotkey.clone()),
+            dictation_hotkey_enabled: Some(true),
+            ..Config::default()
+        };
+        assert_eq!(config.get_dictation_hotkey(), Some(hotkey));
+    }
+
+    #[test]
+    fn test_get_dictation_hotkey_returns_none_when_disabled() {
+        let config = Config {
+            dictation_hotkey: Some(HotkeyConfig {
+                modifiers: vec!["meta".to_string()],
+                key: "KeyD".to_string(),
+            }),
+            dictation_hotkey_enabled: Some(false),
+            ..Config::default()
+        };
+        assert_eq!(config.get_dictation_hotkey(), None);
     }
 }
