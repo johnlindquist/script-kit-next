@@ -1021,6 +1021,144 @@ fn prewarm_does_not_switch_view() {
     );
 }
 
+// =========================================================================
+// Post-close prewarm reuse: fresh prewarm → single reuse → consumed
+// =========================================================================
+
+#[test]
+fn open_path_does_not_unconditionally_force_fresh_after_prewarm() {
+    let open_fn_start = TAB_AI_MODE_SOURCE
+        .find("fn open_tab_ai_harness_terminal_from_request(")
+        .expect("open_tab_ai_harness_terminal_from_request must exist");
+    let open_fn_body = &TAB_AI_MODE_SOURCE[open_fn_start..];
+    let next_fn = open_fn_body[1..]
+        .find("\n    fn ")
+        .unwrap_or(open_fn_body.len());
+    let open_fn_body = &open_fn_body[..next_fn];
+
+    assert!(
+        !open_fn_body.contains("ensure_tab_ai_harness_terminal(true, cx)"),
+        "open path must not unconditionally force_fresh=true or the post-close prewarm is wasted"
+    );
+    assert!(
+        TAB_AI_MODE_SOURCE.contains("FreshPrewarm"),
+        "tab ai lifecycle must distinguish a fresh prewarm from a consumed session"
+    );
+}
+
+#[test]
+fn prewarm_tags_cold_start_as_fresh_prewarm() {
+    // After a cold-start prewarm, the session must be tagged FreshPrewarm.
+    let warm_fn_start = TAB_AI_MODE_SOURCE
+        .find("fn warm_tab_ai_harness_on_startup(")
+        .expect("warm_tab_ai_harness_on_startup must exist");
+    let warm_fn_body = &TAB_AI_MODE_SOURCE[warm_fn_start..];
+    let next_fn = warm_fn_body[1..]
+        .find("\n    fn ")
+        .unwrap_or(warm_fn_body.len());
+    let warm_fn_body = &warm_fn_body[..next_fn];
+
+    assert!(
+        warm_fn_body.contains("FreshPrewarm"),
+        "prewarm must tag cold-start sessions as FreshPrewarm"
+    );
+    assert!(
+        warm_fn_body.contains("was_cold_start"),
+        "prewarm must only tag FreshPrewarm when was_cold_start is true"
+    );
+}
+
+#[test]
+fn open_path_marks_consumed_after_reuse() {
+    // After reusing a fresh prewarm, the session must be marked Consumed.
+    let open_fn_start = TAB_AI_MODE_SOURCE
+        .find("fn open_tab_ai_harness_terminal_from_request(")
+        .expect("open_tab_ai_harness_terminal_from_request must exist");
+    let open_fn_body = &TAB_AI_MODE_SOURCE[open_fn_start..];
+    let next_fn = open_fn_body[1..]
+        .find("\n    fn ")
+        .unwrap_or(open_fn_body.len());
+    let open_fn_body = &open_fn_body[..next_fn];
+
+    assert!(
+        open_fn_body.contains("mark_consumed"),
+        "open path must call mark_consumed() so a reused prewarm cannot be reused again"
+    );
+    assert!(
+        open_fn_body.contains("is_fresh_prewarm"),
+        "open path must check is_fresh_prewarm() before deciding to reuse"
+    );
+}
+
+#[test]
+fn close_then_prewarm_then_reuse_lifecycle_contract() {
+    // End-to-end contract: close clears session → prewarm creates FreshPrewarm
+    // → open reuses it and marks Consumed.
+
+    // 1. close_tab_ai_harness_terminal clears session and schedules prewarm
+    let close_fn_start = TAB_AI_MODE_SOURCE
+        .find("fn close_tab_ai_harness_terminal(")
+        .expect("close_tab_ai_harness_terminal must exist");
+    let close_fn_body = &TAB_AI_MODE_SOURCE[close_fn_start..];
+    let next_fn = close_fn_body[1..]
+        .find("\n    fn ")
+        .or_else(|| close_fn_body[1..].find("\n    pub"))
+        .unwrap_or(close_fn_body.len());
+    let close_fn_body = &close_fn_body[..next_fn];
+
+    assert!(
+        close_fn_body.contains("tab_ai_harness.take()"),
+        "close must take (clear) the harness session"
+    );
+    assert!(
+        close_fn_body.contains("schedule_tab_ai_harness_prewarm"),
+        "close must schedule a deferred prewarm"
+    );
+
+    // 2. warm_tab_ai_harness_on_startup tags cold starts as FreshPrewarm
+    assert!(
+        TAB_AI_MODE_SOURCE.contains("TabAiHarnessWarmState::FreshPrewarm")
+            || TAB_AI_MODE_SOURCE.contains("WarmState::FreshPrewarm"),
+        "prewarm path must set FreshPrewarm on cold-start sessions"
+    );
+
+    // 3. open path checks is_fresh_prewarm and marks consumed
+    assert!(
+        TAB_AI_MODE_SOURCE.contains("is_fresh_prewarm"),
+        "open path must check is_fresh_prewarm before deciding force_fresh"
+    );
+    assert!(
+        TAB_AI_MODE_SOURCE.contains("mark_consumed"),
+        "open path must mark session as consumed after reuse"
+    );
+}
+
+#[test]
+fn warm_state_enum_has_both_variants() {
+    // TabAiHarnessWarmState must exist in the harness source with both variants.
+    assert!(
+        HARNESS_SOURCE.contains("enum TabAiHarnessWarmState"),
+        "TabAiHarnessWarmState enum must exist in harness/mod.rs"
+    );
+    assert!(
+        HARNESS_SOURCE.contains("FreshPrewarm"),
+        "TabAiHarnessWarmState must have FreshPrewarm variant"
+    );
+    assert!(
+        HARNESS_SOURCE.contains("Consumed"),
+        "TabAiHarnessWarmState must have Consumed variant"
+    );
+}
+
+#[test]
+fn session_state_has_warm_state_field() {
+    // TabAiHarnessSessionState must include the warm_state field.
+    assert!(
+        HARNESS_SOURCE.contains("warm_state: TabAiHarnessWarmState"),
+        "TabAiHarnessSessionState must have a warm_state field of type TabAiHarnessWarmState"
+    );
+}
+
 #[test]
 fn harness_config_default_warm_on_startup_is_true() {
     // The default config must have warm_on_startup=true so prewarm is opt-out.
@@ -2322,5 +2460,148 @@ fn script_list_item_apply_back_uses_focused_target_label() {
     assert!(
         arm_body.contains("focused_target") && arm_body.contains("label"),
         "ScriptListItem apply-back must use the focused target's label for the prompt"
+    );
+}
+
+// =========================================================================
+// Script List context shaping: explicit branch in target resolution
+// =========================================================================
+
+#[test]
+fn resolve_targets_has_explicit_script_list_branch() {
+    // resolve_tab_ai_surface_targets_for_view must have an explicit
+    // AppView::ScriptList arm that uses script-native metadata, not
+    // the generic element-based fallback.
+    let fn_start = TAB_AI_MODE_SOURCE
+        .find("fn resolve_tab_ai_surface_targets_for_view(")
+        .expect("resolve_tab_ai_surface_targets_for_view must exist");
+    let fn_body = &TAB_AI_MODE_SOURCE[fn_start..];
+    let next_fn = fn_body[1..]
+        .find("\n    fn ")
+        .unwrap_or(fn_body.len());
+    let fn_body = &fn_body[..next_fn];
+
+    assert!(
+        fn_body.contains("AppView::ScriptList =>"),
+        "resolve_tab_ai_surface_targets_for_view must have an explicit ScriptList arm"
+    );
+}
+
+#[test]
+fn script_list_branch_uses_grouped_results_cache() {
+    let fn_start = TAB_AI_MODE_SOURCE
+        .find("fn resolve_tab_ai_surface_targets_for_view(")
+        .expect("resolve_tab_ai_surface_targets_for_view must exist");
+    let fn_body = &TAB_AI_MODE_SOURCE[fn_start..];
+    let next_fn = fn_body[1..]
+        .find("\n    fn ")
+        .unwrap_or(fn_body.len());
+    let fn_body = &fn_body[..next_fn];
+
+    // The ScriptList arm must read from the same grouped results cache
+    // that the main list renderer uses, not from UI snapshot elements.
+    assert!(
+        fn_body.contains("cached_grouped_items"),
+        "ScriptList branch must resolve from cached_grouped_items"
+    );
+    assert!(
+        fn_body.contains("cached_grouped_flat_results"),
+        "ScriptList branch must resolve from cached_grouped_flat_results"
+    );
+}
+
+#[test]
+fn script_list_branch_delegates_to_search_result_helper() {
+    let fn_start = TAB_AI_MODE_SOURCE
+        .find("fn resolve_tab_ai_surface_targets_for_view(")
+        .expect("resolve_tab_ai_surface_targets_for_view must exist");
+    let fn_body = &TAB_AI_MODE_SOURCE[fn_start..];
+    let next_fn = fn_body[1..]
+        .find("\n    fn ")
+        .unwrap_or(fn_body.len());
+    let fn_body = &fn_body[..next_fn];
+
+    assert!(
+        fn_body.contains("tab_ai_target_from_search_result"),
+        "ScriptList branch must use tab_ai_target_from_search_result for rich metadata"
+    );
+}
+
+#[test]
+fn tab_ai_target_from_search_result_helper_exists() {
+    assert!(
+        TAB_AI_MODE_SOURCE.contains("fn tab_ai_target_from_search_result("),
+        "tab_ai_target_from_search_result helper must exist in tab_ai_mode.rs"
+    );
+}
+
+#[test]
+fn search_result_helper_produces_script_list_source() {
+    // The helper must tag all targets with source "ScriptList" so that
+    // detect_tab_ai_source_type can classify them correctly.
+    let fn_start = TAB_AI_MODE_SOURCE
+        .find("fn tab_ai_target_from_search_result(")
+        .expect("tab_ai_target_from_search_result must exist");
+    let fn_body = &TAB_AI_MODE_SOURCE[fn_start..];
+    let next_fn = fn_body[1..]
+        .find("\n    fn ")
+        .unwrap_or(fn_body.len());
+    let fn_body = &fn_body[..next_fn];
+
+    assert!(
+        fn_body.contains("\"ScriptList\""),
+        "tab_ai_target_from_search_result must set source to \"ScriptList\""
+    );
+}
+
+#[test]
+fn search_result_helper_maps_all_result_kinds() {
+    // Every SearchResult variant must have a corresponding kind string.
+    let fn_start = TAB_AI_MODE_SOURCE
+        .find("fn tab_ai_target_from_search_result(")
+        .expect("tab_ai_target_from_search_result must exist");
+    let fn_body = &TAB_AI_MODE_SOURCE[fn_start..];
+    let next_fn = fn_body[1..]
+        .find("\n    fn ")
+        .unwrap_or(fn_body.len());
+    let fn_body = &fn_body[..next_fn];
+
+    for kind in &[
+        "\"script\"",
+        "\"scriptlet\"",
+        "\"builtin\"",
+        "\"app\"",
+        "\"window\"",
+        "\"agent\"",
+        "\"fallback\"",
+    ] {
+        assert!(
+            fn_body.contains(kind),
+            "tab_ai_target_from_search_result must map kind {kind}"
+        );
+    }
+}
+
+#[test]
+fn search_result_helper_includes_script_metadata() {
+    // Script-type results must include path and description in metadata.
+    let fn_start = TAB_AI_MODE_SOURCE
+        .find("fn tab_ai_target_from_search_result(")
+        .expect("tab_ai_target_from_search_result must exist");
+    let fn_body = &TAB_AI_MODE_SOURCE[fn_start..];
+    let next_fn = fn_body[1..]
+        .find("\n    fn ")
+        .unwrap_or(fn_body.len());
+    let fn_body = &fn_body[..next_fn];
+
+    // Script metadata must include path and description for AI context.
+    assert!(
+        fn_body.contains("\"path\"") && fn_body.contains("\"description\""),
+        "Script metadata must include path and description"
+    );
+    // Script metadata must include shortcut and alias for context.
+    assert!(
+        fn_body.contains("\"shortcut\"") && fn_body.contains("\"alias\""),
+        "Script metadata must include shortcut and alias"
     );
 }
