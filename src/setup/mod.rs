@@ -550,6 +550,9 @@ pub fn ensure_kit_setup() -> SetupResult {
         kit_dir.join("skills").join("troubleshooting"),
         kit_dir.join("examples").join("scripts"),
         kit_dir.join("docs"),
+        // Root-level harness temp workspace used by kit://sdk-reference
+        kit_dir.join("tmp").join("test-scripts"),
+        kit_dir.join("tmp").join("test-scriptlets"),
         kit_dir.join("sdk"),
         kit_dir.join("db"),
         kit_dir.join("logs"),

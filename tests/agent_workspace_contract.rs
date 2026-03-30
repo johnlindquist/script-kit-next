@@ -427,3 +427,85 @@ fn test_seeded_examples_are_sdk_based_and_bun_first() {
         );
     });
 }
+
+/// Fresh setup must create the harness temp directories advertised by kit://sdk-reference.
+#[test]
+fn test_setup_seeds_harness_workflow_temp_dirs() {
+    with_temp_sk_path(|kit_root| {
+        let _ = ensure_kit_setup();
+
+        let test_scripts = kit_root.join("tmp").join("test-scripts");
+        let test_scriptlets = kit_root.join("tmp").join("test-scriptlets");
+
+        assert!(
+            test_scripts.exists(),
+            "tmp/test-scripts must exist at {}",
+            test_scripts.display()
+        );
+        assert!(
+            test_scriptlets.exists(),
+            "tmp/test-scriptlets must exist at {}",
+            test_scriptlets.display()
+        );
+    });
+}
+
+/// kit://sdk-reference must publish a harness run_command that works from ~/.scriptkit,
+/// not only from the repository root.
+#[test]
+fn test_sdk_reference_run_command_is_cwd_safe() {
+    use script_kit_gpui::mcp_resources::{self, SdkReferenceDocument, SDK_REFERENCE_SCHEMA_VERSION};
+
+    let content = mcp_resources::read_resource("kit://sdk-reference", &[], &[], None)
+        .expect("kit://sdk-reference should resolve");
+    let doc: SdkReferenceDocument =
+        serde_json::from_str(&content.text).expect("valid JSON document");
+
+    assert_eq!(
+        doc.schema_version, SDK_REFERENCE_SCHEMA_VERSION,
+        "schema_version must match SDK_REFERENCE_SCHEMA_VERSION"
+    );
+
+    let run_command = &doc.harness_workflow.run_command;
+
+    assert!(
+        !run_command.contains("./target/"),
+        "run_command must not be repo-relative because harnesses cwd into ~/.scriptkit: {run_command}"
+    );
+    assert!(
+        run_command.contains("\"type\":\"run\""),
+        "run_command must send the stdin bridge run payload: {run_command}"
+    );
+    assert!(
+        run_command.contains("{path}"),
+        "run_command must preserve the {{path}} placeholder: {run_command}"
+    );
+}
+
+/// Root agent docs are the canonical agent entrypoint and must stay free of legacy v1 tokens.
+#[test]
+fn test_root_agent_docs_do_not_reference_legacy_v1_contract() {
+    with_temp_sk_path(|kit_root| {
+        let _ = ensure_kit_setup();
+
+        let legacy_patterns = [
+            "@johnlindquist/kit",
+            "~/.kenv",
+            "~/.scriptkit/scripts",
+            "// Name:",
+            "require(",
+        ];
+
+        for doc in &["CLAUDE.md", "AGENTS.md"] {
+            let path = kit_root.join(doc);
+            let content = fs::read_to_string(&path)
+                .unwrap_or_else(|_| panic!("Should read {}", path.display()));
+            for legacy in &legacy_patterns {
+                assert!(
+                    !content.contains(legacy),
+                    "{doc} must not contain legacy pattern '{legacy}'"
+                );
+            }
+        }
+    });
+}
