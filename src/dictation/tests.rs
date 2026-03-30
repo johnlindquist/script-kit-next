@@ -1685,3 +1685,123 @@ fn delivery_frontmost_app_uses_error_propagating_focus_helper() {
         "frontmost-app delivery must not discard close_dictation_overlay errors before paste"
     );
 }
+
+// ---------------------------------------------------------------------------
+// Strong source-level ordering proof for dictation focus handoff
+// ---------------------------------------------------------------------------
+
+/// Extract the body of `handle_dictation_transcript` from the source text.
+fn dictation_handler_source(src: &str) -> &str {
+    let start = src
+        .find("fn handle_dictation_transcript")
+        .expect("handle_dictation_transcript must exist");
+    &src[start..]
+}
+
+/// Extract the body of `yield_focus_for_dictation_paste` from the source text.
+/// Uses `schedule_dictation_overlay_close` as the end boundary.
+fn dictation_yield_focus_helper_source(src: &str) -> &str {
+    let start = src
+        .find("fn yield_focus_for_dictation_paste(")
+        .expect("yield_focus_for_dictation_paste must exist");
+    let tail = &src[start..];
+    let end = tail
+        .find("fn schedule_dictation_overlay_close(")
+        .expect(
+            "yield_focus_for_dictation_paste must be followed by schedule_dictation_overlay_close",
+        );
+    &tail[..end]
+}
+
+/// Extract the frontmost-app else branch from `handle_dictation_transcript`.
+/// Uses `Ok(None)` as the end boundary.
+fn dictation_frontmost_paste_source(src: &str) -> &str {
+    let handler_src = dictation_handler_source(src);
+    let else_pos = handler_src
+        .find("} else {")
+        .expect("handle_dictation_transcript must have a frontmost-app else branch");
+    let tail = &handler_src[else_pos..];
+    let end = tail
+        .find("Ok(None)")
+        .expect("frontmost-app else branch must end before the Ok(None) arm");
+    &tail[..end]
+}
+
+#[test]
+fn delivery_focus_helper_closes_overlay_before_hiding_main_window() {
+    let src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("read builtin_execution.rs");
+
+    let helper_src = dictation_yield_focus_helper_source(&src);
+
+    let close_pos = helper_src
+        .find("close_dictation_overlay")
+        .expect("focus helper must close dictation overlay");
+    let hide_pos = helper_src
+        .find("defer_hide_main_window")
+        .expect("focus helper must defer main-window hide");
+
+    assert!(
+        close_pos < hide_pos,
+        "close_dictation_overlay (byte {close_pos}) must appear before \
+         defer_hide_main_window (byte {hide_pos}) inside yield_focus_for_dictation_paste"
+    );
+}
+
+#[test]
+fn delivery_frontmost_app_calls_focus_helper_before_paste() {
+    let src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("read builtin_execution.rs");
+
+    let frontmost_src = dictation_frontmost_paste_source(&src);
+
+    let yield_pos = frontmost_src
+        .find("yield_focus_for_dictation_paste")
+        .expect("frontmost-app branch must call yield_focus_for_dictation_paste");
+    let paste_pos = frontmost_src
+        .find("paste_text")
+        .expect("frontmost-app branch must call paste_text");
+
+    assert!(
+        yield_pos < paste_pos,
+        "yield_focus_for_dictation_paste (byte {yield_pos}) must appear before \
+         paste_text (byte {paste_pos}) in the frontmost-app branch"
+    );
+}
+
+#[test]
+fn delivery_focus_yield_failure_surfaces_and_returns_before_paste() {
+    let src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("read builtin_execution.rs");
+
+    let frontmost_src = dictation_frontmost_paste_source(&src);
+
+    assert!(
+        frontmost_src.contains("failed to update app state before paste"),
+        "frontmost-app path must wrap update failures with a dictation-specific context"
+    );
+    assert!(
+        frontmost_src.contains("Dictation paste failed before paste step"),
+        "frontmost-app path must show a pre-paste failure toast"
+    );
+
+    let err_pos = frontmost_src
+        .find("if let Err(error) = yield_focus_result")
+        .expect("frontmost-app path must check yield_focus_result");
+    let return_pos = err_pos
+        + frontmost_src[err_pos..]
+            .find("return;")
+            .expect("pre-paste failure path must return before paste");
+    let paste_pos = frontmost_src
+        .find("paste_text")
+        .expect("frontmost-app path must eventually call paste_text");
+
+    assert!(
+        err_pos < paste_pos,
+        "yield_focus_result error handling must run before paste_text"
+    );
+    assert!(
+        return_pos < paste_pos,
+        "pre-paste failure path must return before paste_text"
+    );
+}
