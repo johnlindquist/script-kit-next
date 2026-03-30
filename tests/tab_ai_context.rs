@@ -904,3 +904,58 @@ fn source_type_detection_prefers_desktop_selection_over_generic_desktop() {
         "selected_text branch must early-return so it wins over any source_view match"
     );
 }
+
+// =========================================================================
+// Direct contract test: deferred capture fields in context blob (task gate)
+// =========================================================================
+
+/// Validates that `from_parts` + `with_deferred_capture_fields` produces a
+/// JSON blob containing `sourceType`, `screenshotPath`, and `applyBackHint`
+/// with the exact camelCase field names and values the harness expects.
+#[test]
+fn deferred_capture_fields_are_serialized_into_context_blob() {
+    let blob = TabAiContextBlob::from_parts(
+        TabAiUiSnapshot {
+            prompt_type: "ScriptList".to_string(),
+            input_text: Some("convert this CSV".to_string()),
+            ..Default::default()
+        },
+        Default::default(),
+        vec![],
+        None,
+        vec![],
+        vec![],
+        "2026-03-30T15:30:00Z".to_string(),
+    )
+    .with_deferred_capture_fields(
+        Some(TabAiSourceType::ScriptListItem),
+        Some("/tmp/tab-ai-123.png".to_string()),
+        Some(TabAiApplyBackHint {
+            action: "runGeneratedScript".to_string(),
+            target_label: Some("Focused script".to_string()),
+        }),
+    );
+
+    let json = serde_json::to_string(&blob).expect("context blob should serialize");
+
+    assert!(
+        json.contains("\"sourceType\":\"scriptListItem\""),
+        "sourceType must serialize as camelCase enum value"
+    );
+    assert!(
+        json.contains("\"screenshotPath\":\"/tmp/tab-ai-123.png\""),
+        "screenshotPath must appear with the exact path"
+    );
+    assert!(
+        json.contains("\"applyBackHint\""),
+        "applyBackHint object must be present"
+    );
+    assert!(
+        json.contains("\"action\":\"runGeneratedScript\""),
+        "applyBackHint.action must serialize correctly"
+    );
+    assert!(
+        json.contains("\"targetLabel\":\"Focused script\""),
+        "applyBackHint.targetLabel must serialize as camelCase"
+    );
+}

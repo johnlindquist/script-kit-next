@@ -567,3 +567,67 @@ fn open_harness_terminal_passes_receipt_and_suggestions_to_submission() {
         "open path must pass suggested_intents from resolved context to submission builder"
     );
 }
+
+// =========================================================================
+// Deferred capture fields in harness submission text
+// =========================================================================
+
+#[test]
+fn harness_submission_contains_source_type_screenshot_and_apply_back_hint() {
+    use script_kit_gpui::ai::{TabAiApplyBackHint, TabAiSourceType};
+
+    let blob = TabAiContextBlob::from_parts(
+        TabAiUiSnapshot {
+            prompt_type: "ClipboardHistory".to_string(),
+            ..Default::default()
+        },
+        Default::default(),
+        vec![],
+        None,
+        vec![],
+        vec![],
+        "2026-03-30T15:30:00Z".to_string(),
+    )
+    .with_deferred_capture_fields(
+        Some(TabAiSourceType::ClipboardEntry),
+        Some("/tmp/tab-ai-clip.png".to_string()),
+        Some(TabAiApplyBackHint {
+            action: "copyToClipboard".to_string(),
+            target_label: Some("Clipboard".to_string()),
+        }),
+    );
+
+    let submission = build_tab_ai_harness_submission(
+        &blob,
+        Some("Summarize this"),
+        TabAiHarnessSubmissionMode::Submit,
+        None,
+        &[],
+    )
+    .expect("submission should build");
+
+    assert!(
+        submission.contains("sourceType"),
+        "submission must include sourceType field from deferred capture"
+    );
+    assert!(
+        submission.contains("clipboardEntry"),
+        "submission must include the clipboardEntry source type value"
+    );
+    assert!(
+        submission.contains("screenshotPath"),
+        "submission must include screenshotPath field"
+    );
+    assert!(
+        submission.contains("/tmp/tab-ai-clip.png"),
+        "submission must include the exact screenshot path"
+    );
+    assert!(
+        submission.contains("applyBackHint"),
+        "submission must include applyBackHint object"
+    );
+    assert!(
+        submission.contains("copyToClipboard"),
+        "submission must include the applyBackHint action"
+    );
+}
