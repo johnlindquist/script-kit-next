@@ -606,28 +606,74 @@ fn harness_submission_contains_source_type_screenshot_and_apply_back_hint() {
     )
     .expect("submission should build");
 
+    // --- Assert against the rendered <scriptKitContext> payload, not just blob serialization ---
+
+    // The submission must wrap context in the schema-versioned XML block
     assert!(
-        submission.contains("sourceType"),
-        "submission must include sourceType field from deferred capture"
+        submission.contains("<scriptKitContext schemaVersion="),
+        "submission must contain the <scriptKitContext> wrapper"
     );
     assert!(
-        submission.contains("clipboardEntry"),
-        "submission must include the clipboardEntry source type value"
+        submission.contains("</scriptKitContext>"),
+        "submission must close the <scriptKitContext> block"
+    );
+
+    // sourceType must appear as a JSON key-value pair in the rendered payload
+    // (serde_json::to_string_pretty produces `"key": "value"` with a space after colon)
+    assert!(
+        submission.contains("\"sourceType\": \"clipboardEntry\""),
+        "rendered submission must contain the JSON pair \"sourceType\": \"clipboardEntry\""
+    );
+
+    // screenshotPath must appear as a JSON key-value pair with the exact path
+    assert!(
+        submission.contains("\"screenshotPath\": \"/tmp/tab-ai-clip.png\""),
+        "rendered submission must contain the JSON pair \"screenshotPath\": \"/tmp/tab-ai-clip.png\""
+    );
+
+    // applyBackHint must be a nested JSON object with action and targetLabel
+    assert!(
+        submission.contains("\"applyBackHint\":"),
+        "rendered submission must contain the \"applyBackHint\" object key"
     );
     assert!(
-        submission.contains("screenshotPath"),
-        "submission must include screenshotPath field"
+        submission.contains("\"action\": \"copyToClipboard\""),
+        "applyBackHint block must contain \"action\": \"copyToClipboard\""
     );
     assert!(
-        submission.contains("/tmp/tab-ai-clip.png"),
-        "submission must include the exact screenshot path"
+        submission.contains("\"targetLabel\": \"Clipboard\""),
+        "applyBackHint block must contain \"targetLabel\": \"Clipboard\""
+    );
+
+    // Verify structural ordering: sourceType and applyBackHint are inside the context block
+    let context_start = submission
+        .find("<scriptKitContext")
+        .expect("context block must exist");
+    let context_end = submission
+        .find("</scriptKitContext>")
+        .expect("context close must exist");
+    let source_type_pos = submission
+        .find("\"sourceType\": \"clipboardEntry\"")
+        .expect("sourceType pair must exist");
+    let apply_back_pos = submission
+        .find("\"applyBackHint\":")
+        .expect("applyBackHint must exist");
+
+    assert!(
+        source_type_pos > context_start && source_type_pos < context_end,
+        "sourceType must be inside the <scriptKitContext> block"
     );
     assert!(
-        submission.contains("applyBackHint"),
-        "submission must include applyBackHint object"
+        apply_back_pos > context_start && apply_back_pos < context_end,
+        "applyBackHint must be inside the <scriptKitContext> block"
     );
+
+    // The user intent must appear after the context block (not inside it)
+    let intent_pos = submission
+        .find("User intent:\nSummarize this")
+        .expect("user intent must be present");
     assert!(
-        submission.contains("copyToClipboard"),
-        "submission must include the applyBackHint action"
+        intent_pos > context_end,
+        "user intent must appear after the </scriptKitContext> block"
     );
 }

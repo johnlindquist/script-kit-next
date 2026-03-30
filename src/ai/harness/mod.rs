@@ -1003,3 +1003,102 @@ mod tests {
         );
     }
 }
+
+// -----------------------------------------------------------------
+// Source-level cleanup contract audits
+//
+// These tests use `include_str!` to verify that the harness-first
+// cleanup contracts remain intact: lifecycle teardown, prewarm,
+// fallback routing, and legacy command redirection.
+// -----------------------------------------------------------------
+#[cfg(test)]
+mod cleanup_contract_audits {
+    fn compact(text: &str) -> String {
+        text.chars().filter(|ch| !ch.is_whitespace()).collect()
+    }
+
+    #[test]
+    fn close_tab_ai_harness_terminal_clears_session_and_rewarms() {
+        let source = include_str!("../../app_impl/tab_ai_mode.rs");
+        let start = source
+            .find("pub(crate) fn close_tab_ai_harness_terminal")
+            .expect("close_tab_ai_harness_terminal should exist");
+        let rest = &source[start..];
+        // Scope to the next function definition so we only audit the close fn.
+        let end = rest
+            .find("fn schedule_tab_ai_harness_prewarm")
+            .expect("schedule_tab_ai_harness_prewarm should follow close fn");
+        let body = compact(&rest[..end]);
+
+        for needle in [
+            "self.tab_ai_harness_capture_generation+=1;",
+            "self.tab_ai_harness_apply_back_route=None;",
+            "letsession=self.tab_ai_harness.take();",
+            "term.terminate_session()",
+            "self.schedule_tab_ai_harness_prewarm(std::time::Duration::from_millis(250),cx);",
+        ] {
+            assert!(
+                body.contains(&compact(needle)),
+                "close_tab_ai_harness_terminal must contain: {needle}"
+            );
+        }
+    }
+
+    #[test]
+    fn selection_fallback_send_to_ai_opens_harness_with_query() {
+        let source = compact(include_str!("../../app_impl/selection_fallback.rs"));
+
+        assert!(
+            source.contains(&compact("FallbackResult::SendToAiHarness { query } =>")),
+            "selection fallback must handle the harness-native send-to-ai result"
+        );
+        assert!(
+            source.contains(&compact(
+                "self.open_tab_ai_chat_with_entry_intent(Some(normalized), cx);"
+            )),
+            "non-empty send-to-ai fallback queries must open the harness with entry intent"
+        );
+    }
+
+    #[test]
+    fn builtin_execution_routes_generate_script_to_harness() {
+        let source = compact(include_str!("../../app_execute/builtin_execution.rs"));
+
+        assert!(
+            source.contains(&compact("AiCommandType::GenerateScript =>")),
+            "GenerateScript arm should exist in builtin execution"
+        );
+        assert!(
+            source.contains(&compact(
+                "self.open_tab_ai_chat_with_entry_intent(Some(trimmed), cx);"
+            )),
+            "GenerateScript should submit through the harness"
+        );
+        assert!(
+            !source.contains("show_script_generation_chat"),
+            "builtin execution must not call the legacy script-generation chat"
+        );
+    }
+
+    #[test]
+    fn prompt_ai_dispatch_routes_script_generation_to_harness() {
+        let source = compact(include_str!("../../app_impl/prompt_ai.rs"));
+
+        assert!(
+            source.contains(&compact(
+                "pub(crate) fn dispatch_ai_script_generation_from_query("
+            )),
+            "dispatch_ai_script_generation_from_query should exist"
+        );
+        assert!(
+            source.contains(&compact(
+                "self.open_tab_ai_chat_with_entry_intent(Some(query), cx);"
+            )),
+            "dispatch_ai_script_generation_from_query must route to the harness"
+        );
+        assert!(
+            !source.contains(&compact("show_script_generation_chat()")),
+            "dispatch_ai_script_generation_from_query must not call the legacy chat"
+        );
+    }
+}
