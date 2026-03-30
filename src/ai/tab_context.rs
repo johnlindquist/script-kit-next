@@ -1421,12 +1421,14 @@ impl TabAiContextBlob {
     }
 }
 
-/// Build the user prompt sent to the AI model for Tab AI script generation.
+/// Legacy helper for the old inline script-generation flow.
 ///
-/// Combines the user's natural-language intent with a JSON context blob and
-/// instructions to return a fenced TypeScript code block.  The prompt teaches
-/// the model to use `focusedTarget` as the default subject for implicit-object
-/// intents and to never invent a target when one is absent.
+/// This is not the primary Tab AI surface anymore.
+/// The primary Tab AI path builds a `TabAiContextBlob` and injects it into the
+/// warm harness terminal via `build_tab_ai_harness_submission()`.
+///
+/// Keep this only for compatibility code paths that still need the older
+/// script-generation prompt contract.
 pub fn build_tab_ai_user_prompt(intent: &str, context_json: &str) -> String {
     format!(
         "User intent:\n{intent}\n\n\

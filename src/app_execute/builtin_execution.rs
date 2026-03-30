@@ -3509,10 +3509,17 @@ impl ScriptListApp {
                 tracing::info!(
                     category = "BUILTIN",
                     trace_id = %dctx.trace_id,
-                    "Dictation builtin triggered (not yet wired)"
+                    "Opening Dictation"
                 );
-                // TODO: wire to dictation toggle entrypoint
-                Self::builtin_success(dctx, "dictation_stub")
+                self.opened_from_main_menu = true;
+                if let Err(e) = crate::dictation::toggle_dictation() {
+                    tracing::error!(
+                        category = "DICTATION",
+                        error = %e,
+                        "Failed to toggle dictation"
+                    );
+                }
+                Self::builtin_success(dctx, "dictation_toggle")
             }
             builtins::BuiltInFeature::FileSearch => {
                 tracing::info!(

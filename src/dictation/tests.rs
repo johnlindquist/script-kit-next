@@ -438,3 +438,172 @@ fn transcriber_not_idle_immediately_after_use() -> Result<()> {
     assert!(!transcriber.is_idle());
     Ok(())
 }
+
+// ---------------------------------------------------------------------------
+// WhisperDictationEngine tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn whisper_engine_new_fails_for_missing_model() {
+    use crate::dictation::transcription::{DictationTranscriptionConfig, WhisperDictationEngine};
+
+    let config = DictationTranscriptionConfig {
+        model_path: std::path::PathBuf::from("/definitely/missing-model.bin"),
+        ..Default::default()
+    };
+    let result = WhisperDictationEngine::new(&config);
+    assert!(result.is_err(), "WhisperDictationEngine::new must fail for a missing model path");
+    let err_msg = result.unwrap_err().to_string();
+    assert!(
+        err_msg.contains("not found"),
+        "error should mention 'not found', got: {err_msg}"
+    );
+}
+
+#[test]
+fn whisper_engine_new_fails_for_directory_path() {
+    use crate::dictation::transcription::{DictationTranscriptionConfig, WhisperDictationEngine};
+
+    let config = DictationTranscriptionConfig {
+        model_path: std::path::PathBuf::from("/tmp"),
+        ..Default::default()
+    };
+    let result = WhisperDictationEngine::new(&config);
+    assert!(result.is_err(), "WhisperDictationEngine::new must fail for a directory path");
+    let err_msg = result.unwrap_err().to_string();
+    assert!(
+        err_msg.contains("not a regular file"),
+        "error should mention 'not a regular file', got: {err_msg}"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Delivery path source-audit tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn dictation_delivery_uses_existing_prompt_and_paste_paths() {
+    let runtime_src =
+        std::fs::read_to_string("src/dictation/runtime.rs").expect("read runtime.rs");
+    let transcription_src =
+        std::fs::read_to_string("src/dictation/transcription.rs").expect("read transcription.rs");
+    let combined = format!("{runtime_src}{transcription_src}");
+
+    assert!(
+        combined.contains("set_prompt_input("),
+        "delivery must reference set_prompt_input for active prompt delivery"
+    );
+    assert!(
+        combined.contains("paste_text(") || combined.contains("TextInjector::new()"),
+        "delivery must use TextInjector::paste_text for frontmost app delivery"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Dictation goal critical paths (regression guard)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn dictation_goal_critical_paths_exist() {
+    let mod_rs = std::fs::read_to_string("src/dictation/mod.rs").expect("read mod.rs");
+    let builtin =
+        std::fs::read_to_string("src/app_execute/builtin_execution.rs").expect("read builtin");
+    let hotkeys = std::fs::read_to_string("src/hotkeys/mod.rs").expect("read hotkeys");
+    let window = std::fs::read_to_string("src/dictation/window.rs").expect("read window.rs");
+    let transcription =
+        std::fs::read_to_string("src/dictation/transcription.rs").expect("read transcription.rs");
+
+    assert!(
+        mod_rs.contains("toggle_dictation"),
+        "mod.rs must export toggle_dictation"
+    );
+    assert!(
+        builtin.contains("dictation_toggle") || builtin.contains("toggle_dictation"),
+        "builtin_execution.rs must call dictation toggle"
+    );
+    assert!(
+        !builtin.contains("dictation_stub"),
+        "builtin_execution.rs must not contain 'dictation_stub'"
+    );
+    assert!(
+        !hotkeys.contains("TODO: wire dictation"),
+        "hotkeys/mod.rs must not contain 'TODO: wire dictation'"
+    );
+    assert!(
+        window.contains("WindowKind::PopUp"),
+        "window.rs must use WindowKind::PopUp"
+    );
+    assert!(
+        transcription.contains("WhisperDictationEngine"),
+        "transcription.rs must define WhisperDictationEngine"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Mic preference resolution source audit
+// ---------------------------------------------------------------------------
+
+#[test]
+fn runtime_resolves_mic_preference_from_settings() {
+    let runtime_src =
+        std::fs::read_to_string("src/dictation/runtime.rs").expect("read runtime.rs");
+
+    assert!(
+        runtime_src.contains("load_user_preferences"),
+        "runtime must read user preferences for mic selection"
+    );
+    assert!(
+        runtime_src.contains("selected_device_id"),
+        "runtime must check dictation.selected_device_id"
+    );
+    assert!(
+        runtime_src.contains("default_input_device"),
+        "runtime must fall back to default_input_device"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Regression: overlay window uses PopUp + Blurred + vibrancy
+// ---------------------------------------------------------------------------
+
+#[test]
+fn dictation_overlay_uses_popup_blur_and_vibrancy() {
+    let source =
+        std::fs::read_to_string("src/dictation/window.rs").expect("read dictation window.rs");
+    assert!(
+        source.contains("WindowKind::PopUp"),
+        "overlay must use WindowKind::PopUp"
+    );
+    assert!(
+        source.contains("WindowBackgroundAppearance::Blurred"),
+        "overlay must support blurred background"
+    );
+    assert!(
+        source.contains("configure_secondary_window_vibrancy"),
+        "overlay must configure vibrancy via platform helper"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Regression: dictation entrypoints must not be stubs
+// ---------------------------------------------------------------------------
+
+#[test]
+fn dictation_entrypoints_are_not_stubs() {
+    let builtin_src =
+        std::fs::read_to_string("src/app_execute/builtin_execution.rs").expect("read builtin");
+    let hotkeys_src = std::fs::read_to_string("src/hotkeys/mod.rs").expect("read hotkeys");
+
+    assert!(
+        !builtin_src.contains("dictation_stub"),
+        "builtin_execution.rs still contains 'dictation_stub'"
+    );
+    assert!(
+        !builtin_src.contains("not yet wired"),
+        "builtin_execution.rs still contains 'not yet wired'"
+    );
+    assert!(
+        !hotkeys_src.contains("TODO: wire dictation"),
+        "hotkeys/mod.rs still contains 'TODO: wire dictation'"
+    );
+}

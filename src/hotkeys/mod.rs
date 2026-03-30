@@ -987,6 +987,20 @@ pub(crate) fn ai_hotkey_channel() -> &'static (
 ) {
     &AI_HOTKEY_CHANNEL
 }
+// DICTATION_HOTKEY_CHANNEL: Channel for dictation toggle events
+#[allow(dead_code)]
+static DICTATION_HOTKEY_CHANNEL: LazyLock<(
+    async_channel::Sender<HotkeyEvent>,
+    async_channel::Receiver<HotkeyEvent>,
+)> = LazyLock::new(|| async_channel::bounded(10));
+/// Get the dictation hotkey channel, initializing it on first access.
+#[allow(dead_code)]
+pub(crate) fn dictation_hotkey_channel() -> &'static (
+    async_channel::Sender<HotkeyEvent>,
+    async_channel::Receiver<HotkeyEvent>,
+) {
+    &DICTATION_HOTKEY_CHANNEL
+}
 // LOGS_HOTKEY_CHANNEL: Channel for log capture toggle events
 #[allow(dead_code)]
 static LOGS_HOTKEY_CHANNEL: LazyLock<(
@@ -1385,7 +1399,13 @@ pub(crate) fn start_hotkey_listener(config: config::Config) {
                             "HOTKEY",
                             "Dictation hotkey pressed - dispatching to main thread",
                         );
-                        // TODO: wire dictation toggle dispatch channel
+                        if dictation_hotkey_channel()
+                            .0
+                            .try_send(HotkeyEvent { correlation_id })
+                            .is_err()
+                        {
+                            logging::log("HOTKEY", "Dictation hotkey channel full/closed");
+                        }
                     }
                     Some(HotkeyAction::Script(path)) => {
                         // Set correlation ID for this hotkey event
