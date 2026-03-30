@@ -1021,7 +1021,7 @@ impl App {
                     // On non-Windows platforms we always won the race to on_request_frame;
                     // on Windows we frequently lose and return a window that has never
                     // rendered, which leads to a DispatchTree::root_node_id assert.
-                    let arena_clear = window.draw(cx);
+                    let _arena_clear = window.draw(cx);
                     // On Windows, do NOT clear the arena immediately after the forced
                     // first draw. When another window (or WM_PAINT for this same window)
                     // triggers a second draw before the next frame, the still-valid
