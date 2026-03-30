@@ -1012,27 +1012,9 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         ));
 
         // Preview AI commands are currently stubs and should only appear in debug builds.
+        // NOTE: builtin-send-screen-area-to-ai removed — no real region-context attachment yet.
         #[cfg(debug_assertions)]
         {
-            entries.push(BuiltInEntry::new_with_icon(
-                "builtin-send-screen-area-to-ai",
-                "Send Screen Area to AI",
-                "Capture a selected screen area and send it to the AI harness (coming soon)",
-                vec![
-                    "send",
-                    "screen",
-                    "area",
-                    "selection",
-                    "capture",
-                    "ai",
-                    "chat",
-                    "coming",
-                    "soon",
-                ],
-                BuiltInFeature::AiCommand(AiCommandType::SendScreenAreaToAi),
-                "✂️",
-            ));
-
             entries.push(BuiltInEntry::new_with_icon(
                 "builtin-create-ai-preset",
                 "Create AI Preset",
@@ -2266,7 +2248,6 @@ mod tests {
             "builtin-browse-kit-store",
             "builtin-manage-installed-kits",
             "builtin-update-all-kits",
-            "builtin-send-screen-area-to-ai",
             "builtin-create-ai-preset",
             "builtin-import-ai-presets",
             "builtin-export-ai-presets",
@@ -2974,5 +2955,48 @@ mod tests {
         assert!(entry.keywords.contains(&"app".to_string()));
         assert!(entry.keywords.contains(&"menu".to_string()));
         assert!(entry.keywords.contains(&"browser".to_string()));
+    }
+
+    #[test]
+    fn harness_first_ai_entries_are_registered_and_legacy_window_entries_are_not() {
+        let entries = get_builtin_entries(&BuiltInConfig::default());
+        let ids: Vec<&str> = entries.iter().map(|entry| entry.id.as_str()).collect();
+
+        // Legacy AI window commands must not be registered
+        for legacy_id in [
+            "builtin-open-ai-chat",
+            "builtin-mini-ai-chat",
+            "builtin-new-conversation",
+            "builtin-clear-conversation",
+        ] {
+            assert!(
+                !ids.contains(&legacy_id),
+                "{legacy_id} should not be registered once AI is harness-first"
+            );
+        }
+
+        // Harness-first AI entries must remain registered
+        for expected_id in [
+            "builtin-ai-chat",
+            "builtin-generate-script-with-ai",
+            "builtin-generate-script-from-current-app",
+            "builtin-send-screen-to-ai",
+            "builtin-send-window-to-ai",
+            "builtin-send-selected-text-to-ai",
+            "builtin-send-browser-tab-to-ai",
+            "builtin-new-script",
+            "builtin-new-extension",
+        ] {
+            assert!(
+                ids.contains(&expected_id),
+                "{expected_id} should remain registered"
+            );
+        }
+
+        // Preview-only screen-area AI entry should be hidden until real region context works
+        assert!(
+            !ids.contains(&"builtin-send-screen-area-to-ai"),
+            "hide the preview-only screen-area AI entry until it can attach real region context"
+        );
     }
 }
