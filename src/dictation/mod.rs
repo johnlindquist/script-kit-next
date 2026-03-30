@@ -11,15 +11,17 @@ mod window;
 
 pub use capture::{start_capture, DictationCaptureHandle};
 pub use device::{default_input_device, list_input_devices};
-pub use runtime::toggle_dictation;
+pub use runtime::{
+    maybe_unload_transcriber, snapshot_overlay_state, toggle_dictation, transcribe_captured_audio,
+};
 pub use transcription::{
     build_session_result, captured_duration, merge_captured_chunks, DictationEngine,
     DictationTranscriber, DictationTranscriptionConfig, WhisperDictationEngine,
 };
 pub use types::{
-    CapturedAudioChunk, DictationCaptureConfig, DictationCaptureEvent, DictationDestination,
-    DictationDeviceId, DictationDeviceInfo, DictationLevel, DictationSessionPhase,
-    DictationSessionResult, RawAudioChunk,
+    CapturedAudioChunk, CompletedDictationCapture, DictationCaptureConfig, DictationCaptureEvent,
+    DictationDestination, DictationDeviceId, DictationDeviceInfo, DictationLevel,
+    DictationSessionPhase, DictationSessionResult, DictationToggleOutcome, RawAudioChunk,
 };
 pub use visualizer::{bars_for_level, compute_level};
 pub use window::{
