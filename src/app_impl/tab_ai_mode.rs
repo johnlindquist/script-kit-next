@@ -499,10 +499,14 @@ impl ScriptListApp {
     ) -> Result<(gpui::Entity<crate::term_prompt::TermPrompt>, bool), String> {
         if force_fresh {
             // Kill the existing session so the user gets a clean slate.
+            // Propagate failures so callers do not create a new session on
+            // top of a stale PTY.
             if let Some(existing) = self.tab_ai_harness.take() {
-                let _ = existing.entity.update(cx, |term, _cx| {
-                    term.terminate_session().map_err(|e| e.to_string())
-                });
+                existing
+                    .entity
+                    .update(cx, |term, _cx| {
+                        term.terminate_session().map_err(|e| e.to_string())
+                    })?;
                 tracing::info!(event = "tab_ai_harness_old_session_terminated");
             }
         } else {
@@ -688,9 +692,9 @@ impl ScriptListApp {
         // Tear down the existing PTY session so no stale context persists.
         let session = self.tab_ai_harness.take();
         if let Some(session) = session {
-            let result = session.entity.update(cx, |term, _cx| {
-                term.terminate_session().map_err(|e| e.to_string())
-            });
+            let result = session
+                .entity
+                .update(cx, |term, _cx| term.terminate_session().map_err(|e| e.to_string()));
             if let Err(error) = result {
                 tracing::warn!(
                     event = "tab_ai_harness_terminal_kill_failed",
