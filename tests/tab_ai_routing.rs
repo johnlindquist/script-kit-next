@@ -583,9 +583,8 @@ fn close_tab_ai_harness_terminal_clears_cached_session() {
         "close must invalidate in-flight deferred capture generations"
     );
     assert!(
-        close_fn_body.contains("warm_tab_ai_harness_on_startup")
-            || close_fn_body.contains("schedule_tab_ai_harness_prewarm"),
-        "close must schedule a fresh prewarm after teardown"
+        close_fn_body.contains("schedule_tab_ai_harness_prewarm"),
+        "close must schedule a fresh prewarm after teardown via schedule_tab_ai_harness_prewarm"
     );
 }
 
@@ -652,9 +651,8 @@ fn schedule_tab_ai_harness_prewarm_exists_and_uses_timer() {
     // The scheduler delegates to the post-close prewarm helper, which
     // internally calls warm_tab_ai_harness_silently.
     assert!(
-        fn_body.contains("warm_tab_ai_harness_after_close")
-            || fn_body.contains("warm_tab_ai_harness_on_startup"),
-        "prewarm scheduler must call a prewarm helper"
+        fn_body.contains("warm_tab_ai_harness_after_close"),
+        "prewarm scheduler must delegate to warm_tab_ai_harness_after_close"
     );
     assert!(
         fn_body.contains(".detach()"),
