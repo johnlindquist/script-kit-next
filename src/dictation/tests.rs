@@ -1271,6 +1271,104 @@ fn runtime_clears_stale_mic_preference_on_missing_device() {
 }
 
 // ---------------------------------------------------------------------------
+// Hotkey isolation: dictation hotkey must never show main window
+// ---------------------------------------------------------------------------
+
+#[test]
+fn dictation_hotkey_never_shows_main_window() {
+    let execution_src = std::fs::read_to_string("src/app_impl/execution_scripts.rs")
+        .expect("read execution_scripts.rs");
+    assert!(
+        execution_src.contains("\"builtin-dictation\""),
+        "builtin-dictation must be listed in NO_MAIN_WINDOW_BUILTINS"
+    );
+
+    for (label, path) in [
+        (
+            "runtime_tray_hotkeys.rs",
+            "src/main_entry/runtime_tray_hotkeys.rs",
+        ),
+        ("app_run_setup.rs", "src/main_entry/app_run_setup.rs"),
+    ] {
+        let src = std::fs::read_to_string(path).unwrap_or_else(|_| panic!("read {label}"));
+        let start = src
+            .find("Dictation hotkey listener")
+            .unwrap_or_else(|| panic!("{label} must have a Dictation hotkey listener section"));
+        let end = src[start..].find(".detach()").unwrap_or(src.len() - start);
+        let section = &src[start..start + end];
+
+        assert!(
+            section.contains("let should_show_window = app_entity_inner.update"),
+            "{label} must inspect the execute_by_command_id_or_path return value"
+        );
+        assert!(
+            !section.contains("show_main_window_helper"),
+            "{label} dictation hotkey must not show the main window"
+        );
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Transcription observability: skip reasons and model path are logged
+// ---------------------------------------------------------------------------
+
+#[test]
+fn dictation_transcription_logs_skip_reasons_and_model_path() {
+    let runtime_src = std::fs::read_to_string("src/dictation/runtime.rs").expect("read runtime.rs");
+
+    assert!(
+        runtime_src.contains("Starting dictation transcription"),
+        "runtime must log transcription entry"
+    );
+    assert!(
+        runtime_src.contains("Skipping dictation transcription: audio too short"),
+        "runtime must log the too-short skip branch"
+    );
+    assert!(
+        runtime_src.contains("Skipping dictation transcription: audio too silent"),
+        "runtime must log the too-silent skip branch"
+    );
+    assert!(
+        runtime_src.contains("model_path = %config.model_path.display()"),
+        "runtime must log the Whisper model path"
+    );
+    assert!(
+        runtime_src.contains("Dictation transcription succeeded"),
+        "runtime must log successful transcription"
+    );
+}
+
+#[test]
+fn dictation_surfaces_missing_model_with_toast() {
+    let builtin_src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("read builtin_execution.rs");
+
+    assert!(
+        builtin_src.contains("Dictation model missing."),
+        "missing Whisper model must produce a download-oriented toast"
+    );
+    assert!(
+        builtin_src.contains("resolve_default_model_path()"),
+        "missing-model toast must use the resolved default model path"
+    );
+}
+
+#[test]
+fn dictation_focus_settle_matches_reference_contract() {
+    let builtin_src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("read builtin_execution.rs");
+
+    assert!(
+        builtin_src.contains("const DICTATION_FOCUS_SETTLE_MS: u64 = 120;"),
+        "frontmost-app paste settle delay must match the 120ms reference"
+    );
+    assert!(
+        builtin_src.contains("Preparing frontmost-app dictation paste"),
+        "frontmost-app paste path must log the target handoff"
+    );
+}
+
+// ---------------------------------------------------------------------------
 // Hotkey routing: dictation hotkey uses builtin toggle, not a duplicate path
 // ---------------------------------------------------------------------------
 
@@ -1587,9 +1685,9 @@ fn overlay_waveform_opacity_stays_clamped() {
 fn overlay_dot_and_window_constants_match_target_contract() {
     use crate::theme::opacity::{OPACITY_ACTIVE, OPACITY_SELECTED};
 
-    assert_eq!(super::window::OVERLAY_WIDTH_PX, 220.0);
-    assert_eq!(super::window::OVERLAY_HEIGHT_PX, 36.0);
-    assert_eq!(super::window::OVERLAY_RADIUS_PX, 18.0);
+    assert_eq!(super::window::OVERLAY_WIDTH_PX, 392.0);
+    assert_eq!(super::window::OVERLAY_HEIGHT_PX, 40.0);
+    assert_eq!(super::window::OVERLAY_RADIUS_PX, 20.0);
     assert_eq!(super::window::STATUS_TEXT_SIZE_PX, 11.5);
     assert_eq!(super::window::WAVEFORM_BAR_COUNT, 9);
     assert_eq!(super::window::TRANSCRIBING_DOT_COUNT, 3);
@@ -1616,18 +1714,20 @@ fn overlay_has_sound_detects_active_audio() {
 }
 
 #[test]
-fn dictation_overlay_derives_colors_from_theme_tokens() {
+fn dictation_overlay_derives_colors_from_theme_and_glassmorphism() {
     let source =
         std::fs::read_to_string("src/dictation/window.rs").expect("read dictation window.rs");
 
+    // Glassmorphism constants for overlay surface and border.
     assert!(
-        source.contains("theme.colors.background.main.with_opacity"),
-        "overlay surface must derive from theme background"
+        source.contains("GLASSMORPHISM_BG"),
+        "overlay surface must use glassmorphism background constant"
     );
     assert!(
-        source.contains("theme.colors.ui.border.with_opacity"),
-        "overlay border must derive from theme border token"
+        source.contains("GLASSMORPHISM_BORDER"),
+        "overlay border must use glassmorphism border constant"
     );
+    // Theme tokens still used for content colors.
     assert!(
         source.contains("theme.colors.ui.success"),
         "active waveform / transcribing state must use theme success color"
@@ -2555,8 +2655,7 @@ fn dictation_start_preflight_surfaces_unavailable_target() {
 
 #[test]
 fn can_accept_dictation_into_prompt_stays_aligned_with_direct_delivery_views() {
-    let src = std::fs::read_to_string("src/app_impl/ui_window.rs")
-        .expect("read ui_window.rs");
+    let src = std::fs::read_to_string("src/app_impl/ui_window.rs").expect("read ui_window.rs");
 
     let helper_start = src
         .find("fn can_accept_dictation_into_prompt")
@@ -2588,4 +2687,169 @@ fn can_accept_dictation_into_prompt_stays_aligned_with_direct_delivery_views() {
             "try_set_prompt_input must include {view}"
         );
     }
+}
+
+// ---------------------------------------------------------------------------
+// Overlay: bottom-center positioning
+// ---------------------------------------------------------------------------
+
+#[test]
+fn overlay_positioned_bottom_center_of_screen() {
+    let window_src = std::fs::read_to_string("src/dictation/window.rs").expect("read window.rs");
+
+    assert!(
+        window_src.contains("calculate_overlay_bottom_center_bounds()"),
+        "overlay must use bottom-center positioning function"
+    );
+    assert!(
+        window_src.contains("OVERLAY_BOTTOM_OFFSET_PX"),
+        "overlay must define a bottom offset constant"
+    );
+    assert!(
+        window_src.contains("const OVERLAY_BOTTOM_OFFSET_PX: f32 = 15.0"),
+        "bottom offset must be 15px matching vercel-voice"
+    );
+    assert!(
+        !window_src.contains("y: px(80.)"),
+        "overlay must NOT use the old top-of-screen y=80 position"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Overlay: Escape confirmation state machine
+// ---------------------------------------------------------------------------
+
+#[test]
+fn overlay_has_confirming_phase_in_session_phase_enum() {
+    let types_src = std::fs::read_to_string("src/dictation/types.rs").expect("read types.rs");
+
+    assert!(
+        types_src.contains("Confirming"),
+        "DictationSessionPhase must include a Confirming variant"
+    );
+}
+
+#[test]
+fn overlay_handles_escape_key_for_confirmation() {
+    let window_src = std::fs::read_to_string("src/dictation/window.rs").expect("read window.rs");
+
+    assert!(
+        window_src.contains("handle_key_down"),
+        "overlay must have a key-down handler"
+    );
+    assert!(
+        window_src.contains("is_key_escape"),
+        "overlay must check for Escape key"
+    );
+    assert!(
+        window_src.contains("DictationSessionPhase::Confirming"),
+        "overlay must transition to Confirming phase"
+    );
+    assert!(
+        window_src.contains("on_key_down"),
+        "overlay must register the key-down handler in render"
+    );
+    assert!(
+        window_src.contains("track_focus"),
+        "overlay must track focus for key event delivery"
+    );
+}
+
+#[test]
+fn overlay_abort_confirmation_wires_runtime_abort() {
+    let builtin_src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("read builtin_execution.rs");
+    let runtime_src = std::fs::read_to_string("src/dictation/runtime.rs").expect("read runtime.rs");
+
+    assert!(
+        builtin_src.contains("set_overlay_abort_callback"),
+        "dictation start path must register an overlay abort callback"
+    );
+    assert!(
+        builtin_src.contains("crate::dictation::abort_dictation()"),
+        "overlay abort callback must discard the active recording"
+    );
+    assert!(
+        runtime_src.contains("pub fn abort_dictation() -> Result<()>"),
+        "dictation runtime must expose an explicit abort API"
+    );
+}
+
+#[test]
+fn overlay_confirming_phase_renders_abort_resume() {
+    let window_src = std::fs::read_to_string("src/dictation/window.rs").expect("read window.rs");
+
+    assert!(
+        window_src.contains("Esc Abort"),
+        "confirming phase must show Abort affordance"
+    );
+    assert!(
+        window_src.contains("Any key Resume"),
+        "confirming phase must show Resume affordance"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Overlay: glassmorphism styling
+// ---------------------------------------------------------------------------
+
+#[test]
+fn overlay_uses_glassmorphism_styling() {
+    let window_src = std::fs::read_to_string("src/dictation/window.rs").expect("read window.rs");
+
+    assert!(
+        window_src.contains("GLASSMORPHISM_BG"),
+        "overlay must define glassmorphism background constant"
+    );
+    assert!(
+        window_src.contains("GLASSMORPHISM_BORDER"),
+        "overlay must define glassmorphism border constant"
+    );
+    assert!(
+        window_src.contains("0x121216"),
+        "glassmorphism bg must match vercel-voice rgba(18,18,22)"
+    );
+    assert!(
+        window_src.contains("0xFFFFFF"),
+        "glassmorphism border must match vercel-voice rgba(255,255,255)"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Overlay: vercel-voice dimension parity
+// ---------------------------------------------------------------------------
+
+#[test]
+fn overlay_dimensions_match_vercel_voice_contract() {
+    assert_eq!(
+        super::window::OVERLAY_WIDTH_PX,
+        392.0,
+        "overlay width must be 392px matching vercel-voice"
+    );
+    assert_eq!(
+        super::window::OVERLAY_HEIGHT_PX,
+        40.0,
+        "overlay height must be 40px matching vercel-voice"
+    );
+    assert_eq!(
+        super::window::OVERLAY_RADIUS_PX,
+        20.0,
+        "overlay radius must be half of height for pill shape"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Overlay: focus enabled for key events
+// ---------------------------------------------------------------------------
+
+#[test]
+fn overlay_window_opens_with_focus_enabled() {
+    let window_src = std::fs::read_to_string("src/dictation/window.rs").expect("read window.rs");
+
+    // The overlay window must be created with focus: true so key events
+    // (Escape for confirmation) reach it.
+    assert!(
+        window_src.contains("focus: true"),
+        "overlay window must open with focus: true for key event delivery"
+    );
 }

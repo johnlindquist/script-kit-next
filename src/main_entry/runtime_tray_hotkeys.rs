@@ -270,7 +270,9 @@
         }).detach();
 
         // Dictation hotkey listener - event-driven via async_channel
-        // Routes through the same BuiltInFeature::Dictation path as the main menu
+        // Routes through the same BuiltInFeature::Dictation path as the main menu.
+        // Dictation is a no-main-window builtin: we capture the return value and
+        // suppress any main-window show call on this path.
         let app_entity_for_dictation = app_entity.clone();
         cx.spawn(async move |cx: &mut gpui::AsyncApp| {
             logging::log("HOTKEY", "Dictation hotkey listener started (event-driven)");
@@ -279,9 +281,15 @@
                 logging::log("HOTKEY", "Dictation hotkey triggered - toggling dictation via builtin");
                 let app_entity_inner = app_entity_for_dictation.clone();
                 let _ = cx.update(move |cx: &mut gpui::App| {
-                    app_entity_inner.update(cx, |view, ctx| {
-                        view.execute_by_command_id_or_path("builtin-dictation", ctx);
+                    let should_show_window = app_entity_inner.update(cx, |view, ctx| {
+                        view.execute_by_command_id_or_path("builtin-dictation", ctx)
                     });
+                    if should_show_window {
+                        logging::log(
+                            "HOTKEY",
+                            "Dictation returned should_show_window=true unexpectedly; suppressing main window",
+                        );
+                    }
                 });
             }
             logging::log("HOTKEY", "Dictation hotkey listener exiting (channel closed)");

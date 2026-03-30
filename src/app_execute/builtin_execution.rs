@@ -3491,6 +3491,16 @@ impl ScriptListApp {
 
                 match crate::dictation::toggle_dictation() {
                     Ok(crate::dictation::DictationToggleOutcome::Started) => {
+                        crate::dictation::set_overlay_abort_callback(|cx| {
+                            if let Err(error) = crate::dictation::abort_dictation() {
+                                tracing::error!(
+                                    category = "DICTATION",
+                                    error = %error,
+                                    "Failed to abort dictation from overlay"
+                                );
+                            }
+                            let _ = crate::dictation::close_dictation_overlay(cx);
+                        });
                         let _ = crate::dictation::open_dictation_overlay(cx);
                         let _ = crate::dictation::update_dictation_overlay(
                             crate::dictation::DictationOverlayState {
@@ -3672,6 +3682,15 @@ impl ScriptListApp {
                         return;
                     }
 
+                    let target_bundle_id =
+                        crate::frontmost_app_tracker::get_last_real_app_bundle_id();
+                    tracing::info!(
+                        category = "DICTATION",
+                        target_bundle_id = ?target_bundle_id,
+                        transcript_len = transcript.len(),
+                        "Preparing frontmost-app dictation paste"
+                    );
+
                     // Show a brief done state before closing and pasting to
                     // the frontmost app, matching the prompt-first path UX.
                     let _ = crate::dictation::update_dictation_overlay(
@@ -3736,6 +3755,12 @@ impl ScriptListApp {
                             .timer(Self::dictation_focus_settle_duration())
                             .await;
 
+                        tracing::info!(
+                            category = "DICTATION",
+                            transcript_len = transcript.len(),
+                            "Focus yielded; waiting before frontmost-app paste"
+                        );
+
                         let paste_result = cx
                             .background_executor()
                             .spawn({
@@ -3796,16 +3821,35 @@ impl ScriptListApp {
                 );
             }
             Err(error) => {
+                let error_text = error.to_string();
+                let model_path = crate::dictation::resolve_default_model_path();
                 tracing::error!(
                     category = "DICTATION",
-                    error = %error,
+                    error = %error_text,
+                    model_path = %model_path.display(),
                     "Transcription failed"
                 );
+
+                if error_text.contains("Whisper model not found")
+                    || error_text.contains("Whisper model path is not a regular file")
+                {
+                    self.show_error_toast(
+                        format!(
+                            "Dictation model missing. Download whisper-medium-q4_1.bin to {} and try again.",
+                            model_path.display()
+                        ),
+                        cx,
+                    );
+                } else {
+                    self.show_error_toast(
+                        format!("Dictation transcription failed: {error_text}"),
+                        cx,
+                    );
+                }
+
                 let _ = crate::dictation::update_dictation_overlay(
                     crate::dictation::DictationOverlayState {
-                        phase: crate::dictation::DictationSessionPhase::Failed(
-                            error.to_string(),
-                        ),
+                        phase: crate::dictation::DictationSessionPhase::Failed(error_text),
                         elapsed: audio_duration,
                         ..Default::default()
                     },
@@ -3824,7 +3868,7 @@ impl ScriptListApp {
     }
 
     const DICTATION_DONE_STATE_MS: u64 = 75;
-    const DICTATION_FOCUS_SETTLE_MS: u64 = 150;
+    const DICTATION_FOCUS_SETTLE_MS: u64 = 120;
 
     fn dictation_done_state_duration() -> std::time::Duration {
         std::time::Duration::from_millis(Self::DICTATION_DONE_STATE_MS)

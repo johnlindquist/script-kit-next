@@ -8,12 +8,12 @@ use crate::dictation::visualizer::bars_for_level;
 // Overlay geometry & waveform contract constants
 // ---------------------------------------------------------------------------
 
-/// Compact pill width in pixels.
-pub(crate) const OVERLAY_WIDTH_PX: f32 = 220.0;
-/// Compact pill height in pixels (matches vercel-voice 36px overlay).
-pub(crate) const OVERLAY_HEIGHT_PX: f32 = 36.0;
+/// Compact pill width in pixels (matches vercel-voice 392px overlay).
+pub(crate) const OVERLAY_WIDTH_PX: f32 = 392.0;
+/// Compact pill height in pixels (matches vercel-voice 40px overlay).
+pub(crate) const OVERLAY_HEIGHT_PX: f32 = 40.0;
 /// Fully-rounded corner radius (half of height for pill shape).
-pub(crate) const OVERLAY_RADIUS_PX: f32 = 18.0;
+pub(crate) const OVERLAY_RADIUS_PX: f32 = 20.0;
 /// Horizontal padding inside the pill.
 pub(crate) const OVERLAY_HORIZONTAL_PADDING_PX: f32 = 16.0;
 /// Gap between inner content columns.
@@ -43,6 +43,20 @@ pub(crate) const TRANSCRIBING_DOT_GAP_PX: f32 = 4.0;
 
 /// Threshold: if any bar exceeds this, we treat audio as "active" (green).
 const SOUND_THRESHOLD: f32 = 0.15;
+
+/// Bottom offset from the screen edge (dock clearance), matching vercel-voice.
+const OVERLAY_BOTTOM_OFFSET_PX: f32 = 15.0;
+
+// ---------------------------------------------------------------------------
+// Glassmorphism constants (matching vercel-voice RecordingOverlay.css)
+// ---------------------------------------------------------------------------
+
+/// Overlay background: rgba(18,18,22,0.24).
+const GLASSMORPHISM_BG: u32 = 0x121216;
+const GLASSMORPHISM_BG_OPACITY: f32 = 0.24;
+/// Border: rgba(255,255,255,0.18).
+const GLASSMORPHISM_BORDER: u32 = 0xFFFFFF;
+const GLASSMORPHISM_BORDER_OPACITY: f32 = 0.18;
 
 // ---------------------------------------------------------------------------
 // Overlay helper functions
@@ -111,8 +125,8 @@ impl Default for DictationOverlayState {
 // ---------------------------------------------------------------------------
 
 use gpui::{
-    div, prelude::*, px, App, Context, FocusHandle, Focusable, IntoElement, ParentElement, Render,
-    Styled, Window, WindowBounds, WindowOptions,
+    div, prelude::*, px, rgb, App, Context, FocusHandle, Focusable, IntoElement, KeyDownEvent,
+    ParentElement, Render, Styled, Window, WindowBounds, WindowOptions,
 };
 
 use crate::list_item::FONT_MONO;
@@ -126,6 +140,18 @@ use std::sync::OnceLock;
 /// Global handle so we can reach the overlay from any callsite.
 static DICTATION_OVERLAY_WINDOW: OnceLock<Mutex<Option<gpui::WindowHandle<DictationOverlay>>>> =
     OnceLock::new();
+
+/// Callback type for overlay escape actions (abort dictation).
+type OverlayAbortCallback = Box<dyn Fn(&mut App) + Send + Sync + 'static>;
+
+/// Global abort callback set by the dictation runtime.
+static OVERLAY_ABORT_CALLBACK: Mutex<Option<OverlayAbortCallback>> = Mutex::new(None);
+
+/// Register a callback to be invoked when the user confirms abort via
+/// double-Escape in the overlay.
+pub fn set_overlay_abort_callback(callback: impl Fn(&mut App) + Send + Sync + 'static) {
+    *OVERLAY_ABORT_CALLBACK.lock() = Some(Box::new(callback));
+}
 
 /// The GPUI entity that renders the compact dictation pill.
 pub struct DictationOverlay {
@@ -146,6 +172,58 @@ impl DictationOverlay {
         self.state = state;
         cx.notify();
     }
+
+    /// Handle key-down events for the overlay.
+    ///
+    /// State machine:
+    /// - Recording + Escape → Confirming (show Abort/Resume)
+    /// - Confirming + Escape → Abort (invoke callback, close overlay)
+    /// - Confirming + any other key → Resume Recording
+    fn handle_key_down(
+        &mut self,
+        event: &KeyDownEvent,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let key = event.keystroke.key.as_str();
+        let is_escape = crate::ui_foundation::is_key_escape(key);
+
+        match &self.state.phase {
+            DictationSessionPhase::Recording if is_escape => {
+                tracing::info!(
+                    category = "DICTATION",
+                    "Escape pressed during recording, entering confirming state"
+                );
+                self.state.phase = DictationSessionPhase::Confirming;
+                cx.notify();
+                cx.stop_propagation();
+            }
+            DictationSessionPhase::Confirming if is_escape => {
+                tracing::info!(
+                    category = "DICTATION",
+                    "Second Escape pressed, aborting dictation"
+                );
+                let callback = OVERLAY_ABORT_CALLBACK.lock().take();
+                if let Some(cb) = callback {
+                    cb(cx);
+                }
+                cx.stop_propagation();
+            }
+            DictationSessionPhase::Confirming => {
+                tracing::info!(
+                    category = "DICTATION",
+                    key,
+                    "Non-Escape key pressed during confirming, resuming recording"
+                );
+                self.state.phase = DictationSessionPhase::Recording;
+                cx.notify();
+                cx.stop_propagation();
+            }
+            _ => {
+                cx.propagate();
+            }
+        }
+    }
 }
 
 impl Focusable for DictationOverlay {
@@ -155,16 +233,15 @@ impl Focusable for DictationOverlay {
 }
 
 impl Render for DictationOverlay {
-    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = get_cached_theme();
 
-        // Translucent pill surface derived from theme background.
-        let surface_bg = if theme.is_vibrancy_enabled() {
-            theme.colors.background.main.with_opacity(OPACITY_SUBTLE)
-        } else {
-            theme.colors.background.main.with_opacity(OPACITY_SELECTED)
-        };
-        let border_color = theme.colors.ui.border.with_opacity(OPACITY_SUBTLE);
+        // Glassmorphism surface matching vercel-voice: rgba(18,18,22,0.24)
+        // with backdrop blur and rgba(255,255,255,0.18) border.
+        let mut surface_bg = rgb(GLASSMORPHISM_BG);
+        surface_bg.a = GLASSMORPHISM_BG_OPACITY;
+        let mut border_color = rgb(GLASSMORPHISM_BORDER);
+        border_color.a = GLASSMORPHISM_BORDER_OPACITY;
 
         let timer_color = theme.colors.text.muted.with_opacity(OPACITY_SELECTED);
         let muted_text = theme.colors.text.muted.with_opacity(OPACITY_TEXT_MUTED);
@@ -208,6 +285,31 @@ impl Render for DictationOverlay {
                     )
                     // Right: spacer to balance the timer width
                     .child(div().w(px(TIMER_SPACER_WIDTH_PX)))
+            }
+            DictationSessionPhase::Confirming => {
+                let abort_color = theme.colors.ui.error.with_opacity(OPACITY_ACTIVE);
+                let resume_color = theme.colors.text.muted.with_opacity(OPACITY_TEXT_MUTED);
+                div()
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .justify_center()
+                    .gap(px(16.))
+                    .w_full()
+                    .child(
+                        div()
+                            .text_size(px(STATUS_TEXT_SIZE_PX))
+                            .font_family(FONT_MONO)
+                            .text_color(abort_color)
+                            .child("Esc Abort"),
+                    )
+                    .child(
+                        div()
+                            .text_size(px(STATUS_TEXT_SIZE_PX))
+                            .font_family(FONT_MONO)
+                            .text_color(resume_color)
+                            .child("Any key Resume"),
+                    )
             }
             DictationSessionPhase::Transcribing => {
                 // 3 green dots matching vercel-voice .transcribing-dots
@@ -254,8 +356,10 @@ impl Render for DictationOverlay {
             _ => div(),
         };
 
-        // Compact pill: OVERLAY_HEIGHT_PX tall, fully-rounded, border stroke.
+        // Compact pill: OVERLAY_HEIGHT_PX tall, fully-rounded, glassmorphism.
         div()
+            .track_focus(&self.focus_handle)
+            .on_key_down(cx.listener(Self::handle_key_down))
             .flex()
             .flex_row()
             .items_center()
@@ -362,6 +466,49 @@ fn render_transcribing_dots() -> impl IntoElement {
 // Public window lifecycle API
 // ---------------------------------------------------------------------------
 
+/// Calculate bottom-center bounds for the overlay on the active display.
+///
+/// Uses `get_macos_visible_displays()` to find the primary display's visible
+/// area (excluding menu bar and dock), then positions the pill centered
+/// horizontally and `OVERLAY_BOTTOM_OFFSET_PX` above the bottom edge.
+fn calculate_overlay_bottom_center_bounds() -> gpui::Bounds<gpui::Pixels> {
+    let displays = crate::platform::get_macos_visible_displays();
+    let (vis_x, vis_y, vis_w, vis_h) = if let Some(display) = displays.first() {
+        let v = &display.visible_area;
+        (
+            v.origin_x as f32,
+            v.origin_y as f32,
+            v.width as f32,
+            v.height as f32,
+        )
+    } else {
+        // Fallback: assume 1920x1080 with 24px menu bar.
+        (0.0_f32, 24.0_f32, 1920.0_f32, 1056.0_f32)
+    };
+
+    let x = vis_x + (vis_w - OVERLAY_WIDTH_PX) / 2.0;
+    let y = vis_y + vis_h - OVERLAY_BOTTOM_OFFSET_PX - OVERLAY_HEIGHT_PX;
+
+    tracing::debug!(
+        category = "DICTATION",
+        x,
+        y,
+        vis_x,
+        vis_y,
+        vis_w,
+        vis_h,
+        "Calculated overlay bottom-center position"
+    );
+
+    gpui::Bounds {
+        origin: gpui::Point { x: px(x), y: px(y) },
+        size: gpui::Size {
+            width: px(OVERLAY_WIDTH_PX),
+            height: px(OVERLAY_HEIGHT_PX),
+        },
+    }
+}
+
 /// Open the dictation overlay as a compact floating pill.
 ///
 /// Creates a `WindowKind::PopUp` window with blurred background and vibrancy.
@@ -387,23 +534,15 @@ pub fn open_dictation_overlay(
         gpui::WindowBackgroundAppearance::Opaque
     };
 
-    // Compact pill: OVERLAY_WIDTH_PX x OVERLAY_HEIGHT_PX, centered near top of screen.
-    let bounds = gpui::Bounds {
-        origin: gpui::Point {
-            x: px(0.),
-            y: px(80.),
-        },
-        size: gpui::Size {
-            width: px(OVERLAY_WIDTH_PX),
-            height: px(OVERLAY_HEIGHT_PX),
-        },
-    };
+    // Bottom-center positioning matching vercel-voice: centered horizontally,
+    // 15px above the bottom of the active display's visible area.
+    let bounds = calculate_overlay_bottom_center_bounds();
 
     let window_options = WindowOptions {
         window_bounds: Some(WindowBounds::Windowed(bounds)),
         titlebar: None,
         window_background,
-        focus: false,
+        focus: true,
         show: true,
         kind: gpui::WindowKind::PopUp,
         ..Default::default()
@@ -439,6 +578,11 @@ pub fn open_dictation_overlay(
         });
     }
 
+    // Focus the overlay so key events (Escape) are delivered.
+    let _ = handle.update(cx, |view, window, cx| {
+        view.focus_handle.focus(window, cx);
+    });
+
     // Store handle.
     {
         let mut guard = slot.lock();
@@ -469,6 +613,8 @@ pub fn update_dictation_overlay(state: DictationOverlayState, cx: &mut App) -> a
 
 /// Close the dictation overlay window.
 pub fn close_dictation_overlay(cx: &mut App) -> anyhow::Result<()> {
+    *OVERLAY_ABORT_CALLBACK.lock() = None;
+
     let slot = DICTATION_OVERLAY_WINDOW.get_or_init(|| Mutex::new(None));
     let handle = {
         let mut guard = slot.lock();

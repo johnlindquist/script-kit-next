@@ -11,6 +11,7 @@ const NO_MAIN_WINDOW_BUILTINS: &[&str] = &[
     "builtin-search-notes",
     "builtin-quick-capture",
     "builtin-new-conversation",
+    "builtin-dictation",
 ];
 
 fn builtin_needs_main_window_for_command_id(identifier: &str) -> bool {

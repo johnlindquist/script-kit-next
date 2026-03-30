@@ -16,8 +16,8 @@ pub use device::{
     save_dictation_device_id, DictationDeviceMenuItem, DictationDeviceSelectionAction,
 };
 pub use runtime::{
-    is_dictation_recording, maybe_unload_transcriber, snapshot_overlay_state, toggle_dictation,
-    transcribe_captured_audio,
+    abort_dictation, is_dictation_recording, maybe_unload_transcriber, snapshot_overlay_state,
+    toggle_dictation, transcribe_captured_audio,
 };
 pub use transcription::{
     build_session_result, captured_duration, merge_captured_chunks, resolve_default_model_path,
@@ -31,7 +31,7 @@ pub use types::{
 pub use visualizer::{bars_for_level, compute_level};
 pub use window::{
     close_dictation_overlay, is_dictation_overlay_open, open_dictation_overlay,
-    update_dictation_overlay, DictationOverlay, DictationOverlayState,
+    set_overlay_abort_callback, update_dictation_overlay, DictationOverlay, DictationOverlayState,
 };
 
 #[cfg(test)]
