@@ -275,6 +275,8 @@ struct ScriptListApp {
     pub(crate) tab_ai_harness_return_view: Option<AppView>,
     /// Previous focus target to restore when leaving Tab AI quick terminal.
     pub(crate) tab_ai_harness_return_focus_target: Option<FocusTarget>,
+    /// Pending explicit apply-back route for the active Tab AI harness session.
+    pub(crate) tab_ai_harness_apply_back_route: Option<crate::ai::TabAiApplyBackRoute>,
     /// Input history for shell-like up/down navigation through previous inputs
     input_history: input_history::InputHistory,
     /// Pending API key configuration - tracks which provider is being configured

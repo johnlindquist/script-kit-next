@@ -2046,3 +2046,92 @@ fn deferred_capture_checks_generation_before_injection() {
         "deferred capture must check generation counter to drop stale results"
     );
 }
+
+// =========================================================================
+// BuiltInFeature::AiChat must route to harness, not legacy AI window
+// =========================================================================
+
+#[test]
+fn builtin_ai_chat_does_not_open_legacy_ai_window() {
+    let arm_start = BUILTIN_EXECUTION_SOURCE
+        .find("builtins::BuiltInFeature::AiChat =>")
+        .expect("AiChat arm must exist in builtin_execution.rs");
+    let arm = &BUILTIN_EXECUTION_SOURCE[arm_start..BUILTIN_EXECUTION_SOURCE.len().min(arm_start + 500)];
+    assert!(
+        !arm.contains("open_ai_window_after_main_hide("),
+        "AiChat entry must no longer open the legacy AI window"
+    );
+    assert!(
+        arm.contains("open_tab_ai_chat(cx)"),
+        "AiChat entry must route to the harness terminal"
+    );
+}
+
+#[test]
+fn builtin_ai_chat_entry_reflects_harness_label() {
+    assert!(
+        BUILTINS_SOURCE.contains("\"Open AI Harness\""),
+        "builtin-ai-chat entry must use the harness label, not the legacy AI Chat label"
+    );
+}
+
+// =========================================================================
+// Legacy command intent preservation
+// =========================================================================
+
+#[test]
+fn generate_script_from_current_app_preserves_explicit_harness_intent() {
+    let arm_start = BUILTIN_EXECUTION_SOURCE
+        .find("AiCommandType::GenerateScriptFromCurrentApp")
+        .expect("GenerateScriptFromCurrentApp arm must exist");
+    let arm = &BUILTIN_EXECUTION_SOURCE[arm_start..BUILTIN_EXECUTION_SOURCE.len().min(arm_start + 1200)];
+
+    assert!(
+        arm.contains("query_override") && arm.contains("open_tab_ai_chat_with_entry_intent(Some("),
+        "GenerateScriptFromCurrentApp must preserve explicit harness intent \
+         instead of flattening to open_tab_ai_chat(cx)"
+    );
+    assert!(
+        arm.contains("Generate a Script Kit script"),
+        "GenerateScriptFromCurrentApp must include a script-generation intent string"
+    );
+}
+
+#[test]
+fn legacy_screenshot_commands_preserve_requested_capture_kind() {
+    // SendScreenToAi must carry a full-screen intent
+    let screen_arm_start = BUILTIN_EXECUTION_SOURCE
+        .find("AiCommandType::SendScreenToAi")
+        .expect("SendScreenToAi arm must exist");
+    let screen_arm = &BUILTIN_EXECUTION_SOURCE
+        [screen_arm_start..BUILTIN_EXECUTION_SOURCE.len().min(screen_arm_start + 600)];
+    assert!(
+        screen_arm.contains("open_tab_ai_chat_with_entry_intent(")
+            && screen_arm.contains("full screen"),
+        "SendScreenToAi must request full-screen capture via explicit intent"
+    );
+
+    // SendFocusedWindowToAi must carry a focused-window intent
+    let focused_arm_start = BUILTIN_EXECUTION_SOURCE
+        .find("AiCommandType::SendFocusedWindowToAi")
+        .expect("SendFocusedWindowToAi arm must exist");
+    let focused_arm = &BUILTIN_EXECUTION_SOURCE
+        [focused_arm_start..BUILTIN_EXECUTION_SOURCE.len().min(focused_arm_start + 600)];
+    assert!(
+        focused_arm.contains("open_tab_ai_chat_with_entry_intent(")
+            && focused_arm.contains("focused window"),
+        "SendFocusedWindowToAi must request focused-window capture via explicit intent"
+    );
+
+    // SendScreenAreaToAi must carry a screen-area intent
+    let area_arm_start = BUILTIN_EXECUTION_SOURCE
+        .find("AiCommandType::SendScreenAreaToAi")
+        .expect("SendScreenAreaToAi arm must exist");
+    let area_arm = &BUILTIN_EXECUTION_SOURCE
+        [area_arm_start..BUILTIN_EXECUTION_SOURCE.len().min(area_arm_start + 600)];
+    assert!(
+        area_arm.contains("open_tab_ai_chat_with_entry_intent(")
+            && area_arm.contains("screen area"),
+        "SendScreenAreaToAi must request screen-area capture via explicit intent"
+    );
+}

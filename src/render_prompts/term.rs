@@ -77,7 +77,7 @@ fn is_term_prompt_actions_toggle_shortcut(has_cmd: bool, has_shift: bool, key: &
 
 #[inline]
 fn render_terminal_prompt_hint_strip() -> AnyElement {
-    crate::components::prompt_layout_shell::render_simple_hint_strip("⌘W Close", None)
+    crate::components::prompt_layout_shell::render_simple_hint_strip("⌘↩ Apply · ⌘W Close", None)
 }
 
 impl ScriptListApp {
@@ -198,6 +198,16 @@ impl ScriptListApp {
                         // - The footer hint strip advertises only "⌘W Close".
                         // This is intentional: CLI harnesses (Claude Code, Codex, etc.)
                         // use Escape for their own TUI navigation (cancel, dismiss, etc.).
+                        // ⌘⏎ applies clipboard content back to the source context.
+                        if is_quick_terminal
+                            && has_cmd
+                            && !has_shift
+                            && crate::ui_foundation::is_key_enter(key)
+                        {
+                            this.apply_tab_ai_result_from_clipboard(cx);
+                            return true;
+                        }
+
                         if is_quick_terminal
                             && has_cmd
                             && key.eq_ignore_ascii_case("w")

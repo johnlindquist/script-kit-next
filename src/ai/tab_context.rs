@@ -1367,6 +1367,16 @@ pub struct TabAiApplyBackHint {
     pub target_label: Option<String>,
 }
 
+/// Routing state for the apply-back flow: pairs the detected source classification
+/// with the apply-back hint so the app can execute the right action when the user
+/// presses ⌘⏎ in the harness terminal.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct TabAiApplyBackRoute {
+    pub source_type: TabAiSourceType,
+    pub hint: TabAiApplyBackHint,
+}
+
 /// Detect the source type from the originating prompt type string and desktop snapshot.
 ///
 /// This is the canonical detection logic, usable from both include!() files
@@ -4494,5 +4504,95 @@ mod tab_ai_source_type_tests {
             );
         }
         assert!(build_tab_ai_apply_back_hint_from_source(None).is_none());
+    }
+}
+
+#[cfg(test)]
+mod tab_ai_apply_back_route_tests {
+    use super::*;
+
+    #[test]
+    fn apply_back_route_serde_roundtrip() {
+        let route = TabAiApplyBackRoute {
+            source_type: TabAiSourceType::DesktopSelection,
+            hint: TabAiApplyBackHint {
+                action: "replaceSelectedText".to_string(),
+                target_label: Some("Frontmost selection".to_string()),
+            },
+        };
+        let json = serde_json::to_string(&route).expect("serialize");
+        let back: TabAiApplyBackRoute = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(route, back);
+    }
+
+    #[test]
+    fn tab_ai_harness_tracks_apply_back_route_state() {
+        let source =
+            std::fs::read_to_string("src/main_sections/app_state.rs").expect("read app_state.rs");
+        assert!(
+            source.contains("tab_ai_harness_apply_back_route"),
+            "ScriptListApp must persist apply-back routing state for the active harness session"
+        );
+    }
+
+    #[test]
+    fn quick_terminal_cmd_enter_routes_to_apply_back() {
+        let source =
+            std::fs::read_to_string("src/render_prompts/term.rs").expect("read term.rs");
+        assert!(
+            source.contains("this.apply_tab_ai_result_from_clipboard(cx);"),
+            "QuickTerminalView must route Cmd+Enter into apply-back"
+        );
+    }
+
+    #[test]
+    fn tab_ai_apply_back_uses_running_command_prompt_reinjection() {
+        let source =
+            std::fs::read_to_string("src/app_impl/tab_ai_mode.rs").expect("read tab_ai_mode.rs");
+        assert!(
+            source.contains("self.try_set_prompt_input(text.clone(), cx)"),
+            "RunningCommand apply-back must reuse try_set_prompt_input"
+        );
+    }
+
+    #[test]
+    fn tab_ai_frontmost_apply_back_hides_before_paste() {
+        let source =
+            std::fs::read_to_string("src/app_impl/tab_ai_mode.rs").expect("read tab_ai_mode.rs");
+        let hide_pos = source
+            .find("crate::platform::defer_hide_main_window(cx)")
+            .expect("apply-back must defer-hide the main window");
+        let replace_pos = source
+            .find("selected_text::set_selected_text(&text_for_apply)")
+            .expect("apply-back must support selected-text replacement");
+        let paste_pos = source
+            .find(".paste_text(&text_for_apply)")
+            .expect("apply-back must support frontmost-app paste");
+        assert!(
+            hide_pos < replace_pos,
+            "main window must hide before set_selected_text fires"
+        );
+        assert!(
+            hide_pos < paste_pos,
+            "main window must hide before TextInjector::paste_text fires"
+        );
+    }
+
+    #[test]
+    fn tab_ai_apply_back_route_cleared_on_close() {
+        let source =
+            std::fs::read_to_string("src/app_impl/tab_ai_mode.rs").expect("read tab_ai_mode.rs");
+        let close_fn_pos = source
+            .find("fn close_tab_ai_harness_terminal")
+            .expect("close_tab_ai_harness_terminal must exist");
+        let clear_pos = source[close_fn_pos..]
+            .find("self.tab_ai_harness_apply_back_route = None")
+            .expect("close must clear apply-back route");
+        let slice = &source[close_fn_pos..close_fn_pos + clear_pos];
+        let lines_between = slice.lines().count();
+        assert!(
+            lines_between < 60,
+            "route clear should be near the top of close_tab_ai_harness_terminal, found at line offset {lines_between}"
+        );
     }
 }
