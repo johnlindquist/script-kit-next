@@ -3,7 +3,9 @@ use anyhow::{Context as _, Result};
 use parking_lot::Mutex;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
-use transcribe_rs::whisper_cpp::{WhisperEngine as TranscribeWhisperEngine, WhisperInferenceParams};
+use transcribe_rs::whisper_cpp::{
+    WhisperEngine as TranscribeWhisperEngine, WhisperInferenceParams,
+};
 
 /// Version-agnostic transcription engine trait.
 ///

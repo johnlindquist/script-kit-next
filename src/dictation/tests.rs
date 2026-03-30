@@ -812,14 +812,12 @@ fn builtin_microphone_selection_command_is_wired() {
 
 #[test]
 fn builtin_microphone_submit_handler_persists_or_clears_preference() {
-    let helpers_src = std::fs::read_to_string("src/render_prompts/arg/helpers.rs")
-        .expect("read arg helpers");
-    let config_src =
-        std::fs::read_to_string("src/config/types.rs").expect("read config types");
+    let helpers_src =
+        std::fs::read_to_string("src/render_prompts/arg/helpers.rs").expect("read arg helpers");
+    let config_src = std::fs::read_to_string("src/config/types.rs").expect("read config types");
 
     assert!(
-        helpers_src
-            .contains("fn is_valid_builtin_mic_selection(&self, value: &str) -> bool"),
+        helpers_src.contains("fn is_valid_builtin_mic_selection(&self, value: &str) -> bool"),
         "arg helpers must validate built-in microphone selections"
     );
     assert!(

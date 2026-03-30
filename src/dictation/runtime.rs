@@ -92,9 +92,7 @@ pub fn snapshot_overlay_state() -> Option<DictationOverlayState> {
 /// Lazily initialises the Whisper engine on first use and caches it for
 /// subsequent calls.  Returns `Ok(None)` when the audio is too short or
 /// silent.
-pub fn transcribe_captured_audio(
-    chunks: &[CapturedAudioChunk],
-) -> Result<Option<String>> {
+pub fn transcribe_captured_audio(chunks: &[CapturedAudioChunk]) -> Result<Option<String>> {
     let mut guard = TRANSCRIBER.lock();
 
     if guard
