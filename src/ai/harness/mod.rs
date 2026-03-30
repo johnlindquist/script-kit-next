@@ -58,8 +58,7 @@ fn default_tab_ai_harness_warm_on_startup() -> bool {
 
 impl Default for HarnessConfig {
     fn default() -> Self {
-        let working_directory =
-            Some(crate::setup::get_kit_path().to_string_lossy().into_owned());
+        let working_directory = Some(crate::setup::get_kit_path().to_string_lossy().into_owned());
         Self {
             schema_version: TAB_AI_HARNESS_CONFIG_SCHEMA_VERSION,
             backend: HarnessBackendKind::ClaudeCode,
@@ -817,10 +816,7 @@ mod tests {
             production.contains("open_tab_ai_chat_with_entry_intent(Some(query), cx)"),
             "Shift+Tab in ScriptList must route the filter text into harness entry intent"
         );
-        let legacy_call = format!(
-            "{}(query, cx)",
-            "dispatch_ai_script_generation_from_query"
-        );
+        let legacy_call = format!("{}(query, cx)", "dispatch_ai_script_generation_from_query");
         assert!(
             !production.contains(&legacy_call),
             "Standard startup must not keep the legacy Shift+Tab script-generation path"
