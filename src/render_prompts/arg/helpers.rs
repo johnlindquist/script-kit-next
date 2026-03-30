@@ -365,7 +365,7 @@ impl ScriptListApp {
         value == BUILTIN_MIC_DEFAULT_VALUE
             || matches!(
                 &self.current_view,
-                AppView::ArgPrompt { choices, .. }
+                AppView::ArgPrompt { choices, .. } | AppView::MiniPrompt { choices, .. }
                     if choices.iter().any(|choice| choice.value == value)
             )
     }
@@ -385,7 +385,12 @@ impl ScriptListApp {
                 let label = match &action {
                     crate::dictation::DictationDeviceSelectionAction::UseDevice(_) => {
                         // Find the device name from the choices for a nicer HUD message.
-                        if let AppView::ArgPrompt { ref choices, .. } = self.current_view {
+                        let choices_ref = match &self.current_view {
+                            AppView::ArgPrompt { ref choices, .. }
+                            | AppView::MiniPrompt { ref choices, .. } => Some(choices),
+                            _ => None,
+                        };
+                        if let Some(choices) = choices_ref {
                             choices
                                 .iter()
                                 .find(|c| c.value == value)

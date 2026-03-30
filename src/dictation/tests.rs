@@ -909,15 +909,15 @@ fn builtin_microphone_selection_command_is_wired() {
     );
     assert!(
         builtin_src.contains("BUILTIN_MIC_SELECT_PROMPT_ID"),
-        "SelectMicrophone must open a dedicated synthetic ArgPrompt"
+        "SelectMicrophone must open a dedicated synthetic prompt"
     );
     assert!(
         builtin_src.contains("BUILTIN_MIC_DEFAULT_VALUE"),
         "SelectMicrophone must include a system-default choice value"
     );
     assert!(
-        builtin_src.contains("AppView::ArgPrompt"),
-        "SelectMicrophone must open an ArgPrompt"
+        builtin_src.contains("AppView::MiniPrompt"),
+        "SelectMicrophone must open a MiniPrompt"
     );
     assert!(
         builtin_src.contains("Select microphone..."),
@@ -1797,8 +1797,8 @@ fn delivery_frontmost_app_uses_error_propagating_focus_helper() {
     let frontmost_src = frontmost_dictation_delivery_branch(handler_src);
 
     assert!(
-        frontmost_src.contains("this.yield_focus_for_dictation_paste(cx)"),
-        "frontmost-app delivery must call yield_focus_for_dictation_paste"
+        frontmost_src.contains("this.yield_focus_for_dictation_paste(&target_bundle_id, cx)"),
+        "frontmost-app delivery must call yield_focus_for_dictation_paste with target bundle ID"
     );
 
     // Scope to the async block that does close+paste (up to paste_text) to
@@ -2851,5 +2851,77 @@ fn overlay_window_opens_with_focus_enabled() {
     assert!(
         window_src.contains("focus: true"),
         "overlay window must open with focus: true for key event delivery"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Runtime session owns overlay phase (confirm/resume/abort contract)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn runtime_session_has_overlay_phase_field() {
+    let runtime_src =
+        std::fs::read_to_string("src/dictation/runtime.rs").expect("read runtime.rs");
+
+    assert!(
+        runtime_src.contains("overlay_phase: DictationSessionPhase"),
+        "DictationSession must own overlay_phase field"
+    );
+}
+
+#[test]
+fn snapshot_overlay_state_reads_session_phase_not_hardcoded() {
+    let runtime_src =
+        std::fs::read_to_string("src/dictation/runtime.rs").expect("read runtime.rs");
+
+    // The old bug: snapshot_overlay_state() hardcoded `phase: Recording`.
+    // Verify it now reads from `session.overlay_phase`.
+    assert!(
+        runtime_src.contains("session.overlay_phase.clone()"),
+        "snapshot_overlay_state must read phase from session.overlay_phase, not hardcode it"
+    );
+    assert!(
+        !runtime_src.contains("phase: crate::dictation::DictationSessionPhase::Recording"),
+        "snapshot_overlay_state must not hardcode DictationSessionPhase::Recording"
+    );
+}
+
+#[test]
+fn set_overlay_phase_is_exported() {
+    let mod_src = std::fs::read_to_string("src/dictation/mod.rs").expect("read mod.rs");
+
+    assert!(
+        mod_src.contains("set_overlay_phase"),
+        "set_overlay_phase must be re-exported from dictation module"
+    );
+}
+
+#[test]
+fn overlay_key_handler_writes_through_to_runtime_phase() {
+    let window_src = std::fs::read_to_string("src/dictation/window.rs").expect("read window.rs");
+
+    // The overlay must call set_overlay_phase when transitioning to Confirming.
+    assert!(
+        window_src.contains("crate::dictation::set_overlay_phase(phase.clone())"),
+        "overlay key handler must write through to runtime via set_overlay_phase"
+    );
+
+    // Count occurrences — should appear for both Recording→Confirming and
+    // Confirming→Recording transitions.
+    let count = window_src.matches("set_overlay_phase").count();
+    assert!(
+        count >= 2,
+        "set_overlay_phase must be called for both Confirming and Resume transitions, found {count}"
+    );
+}
+
+#[test]
+fn start_recording_initialises_overlay_phase_to_recording() {
+    let runtime_src =
+        std::fs::read_to_string("src/dictation/runtime.rs").expect("read runtime.rs");
+
+    assert!(
+        runtime_src.contains("overlay_phase: DictationSessionPhase::Recording"),
+        "start_recording must initialise overlay_phase to Recording"
     );
 }

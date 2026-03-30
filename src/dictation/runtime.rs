@@ -6,7 +6,7 @@ use crate::dictation::transcription::{
 };
 use crate::dictation::types::{
     CapturedAudioChunk, CompletedDictationCapture, DictationCaptureConfig, DictationCaptureEvent,
-    DictationDeviceId, DictationLevel, DictationToggleOutcome,
+    DictationDeviceId, DictationLevel, DictationSessionPhase, DictationToggleOutcome,
 };
 use crate::dictation::visualizer::bars_for_level;
 use crate::dictation::window::DictationOverlayState;
@@ -26,6 +26,10 @@ struct DictationSession {
     chunks: Vec<CapturedAudioChunk>,
     last_level: DictationLevel,
     started_at: Instant,
+    /// The authoritative overlay phase — written by both the runtime (on start)
+    /// and the overlay key handler (on Escape transitions).  The pump reads this
+    /// on every tick so the overlay never drifts from shared state.
+    overlay_phase: DictationSessionPhase,
 }
 
 /// Global singleton guarded by a parking_lot Mutex.
@@ -45,6 +49,19 @@ static TRANSCRIBER: Mutex<Option<DictationTranscriber>> = Mutex::new(None);
 /// Returns `true` when a dictation capture session is currently active.
 pub fn is_dictation_recording() -> bool {
     SESSION.lock().is_some()
+}
+
+/// Update the overlay phase in the live session.
+///
+/// Called by the overlay key handler so the pump tick reads the correct phase
+/// instead of overwriting it.  Returns `false` when no session is active.
+pub fn set_overlay_phase(phase: DictationSessionPhase) -> bool {
+    let mut guard = SESSION.lock();
+    let Some(session) = guard.as_mut() else {
+        return false;
+    };
+    session.overlay_phase = phase;
+    true
 }
 
 /// Toggle dictation recording on/off.
@@ -100,7 +117,7 @@ pub fn snapshot_overlay_state() -> Option<DictationOverlayState> {
     }
 
     Some(DictationOverlayState {
-        phase: crate::dictation::DictationSessionPhase::Recording,
+        phase: session.overlay_phase.clone(),
         elapsed: session.started_at.elapsed(),
         bars: bars_for_level(session.last_level),
         transcript: SharedString::default(),
@@ -243,6 +260,7 @@ fn start_recording() -> Result<()> {
             peak: 0.0,
         },
         started_at: Instant::now(),
+        overlay_phase: DictationSessionPhase::Recording,
     };
 
     *SESSION.lock() = Some(session);
