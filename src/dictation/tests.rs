@@ -1372,3 +1372,51 @@ fn frontmost_app_delivery_shows_done_state_before_close_and_paste() {
         "frontmost-app delivery must close overlay before pasting (close at {close_offset}, paste at {paste_offset})"
     );
 }
+
+// ---------------------------------------------------------------------------
+// Source-audit tests: pin overlay to repo guardrails
+// ---------------------------------------------------------------------------
+
+#[test]
+fn dictation_overlay_uses_parking_lot_mutex_not_std_mutex() {
+    let source =
+        std::fs::read_to_string("src/dictation/window.rs").expect("read dictation window.rs");
+    assert!(
+        source.contains("use parking_lot::Mutex;"),
+        "overlay must use parking_lot::Mutex"
+    );
+    assert!(
+        !source.contains("use std::sync::{Mutex, OnceLock};"),
+        "overlay must not use std::sync::Mutex"
+    );
+}
+
+#[test]
+fn dictation_overlay_avoids_hardcoded_color_literals() {
+    let source =
+        std::fs::read_to_string("src/dictation/window.rs").expect("read dictation window.rs");
+    for forbidden in [
+        "0x52c41a",
+        "0xff4d4f",
+        "0x1212163D",
+        "0x1212166B",
+        "0xFFFFFF2E",
+        "0xFFFFFF80",
+        "0xFFFFFFA6",
+    ] {
+        assert!(
+            !source.contains(forbidden),
+            "overlay must not hardcode color literal {forbidden}"
+        );
+    }
+}
+
+#[test]
+fn dictation_overlay_uses_font_mono_for_compact_text() {
+    let source =
+        std::fs::read_to_string("src/dictation/window.rs").expect("read dictation window.rs");
+    assert!(
+        source.contains("FONT_MONO"),
+        "overlay timer/status text must use FONT_MONO"
+    );
+}
