@@ -8,6 +8,7 @@
 //! authoritative Tab AI surface.
 
 const TAB_SOURCE: &str = include_str!("../src/app_impl/startup.rs");
+const TAB_NEW_SOURCE: &str = include_str!("../src/app_impl/startup_new_tab.rs");
 const TAB_AI_MODE_SOURCE: &str = include_str!("../src/app_impl/tab_ai_mode.rs");
 const RENDER_IMPL_SOURCE: &str = include_str!("../src/main_sections/render_impl.rs");
 const SCRIPT_LIST_SOURCE: &str = include_str!("../src/render_script_list/mod.rs");
@@ -167,6 +168,83 @@ fn tab_ai_routing_shift_tab_routes_through_harness() {
     assert!(
         shift_tab_pos < ai_pos,
         "Shift+Tab harness route must come before universal Tab AI route"
+    );
+}
+
+// =========================================================================
+// Shift+Tab ScriptList routing: both startup interceptors
+// =========================================================================
+
+/// Assert that a startup interceptor file gates the Shift+Tab ScriptList
+/// path on the expected preconditions and routes through the harness
+/// entry-intent path (not the legacy inline script-generation dispatch).
+fn assert_shift_tab_script_list_routes_query_to_harness_entry_intent(
+    source: &str,
+    label: &str,
+) {
+    assert!(
+        source.contains("has_shift")
+            && source.contains("matches!(this.current_view, AppView::ScriptList)")
+            && source.contains("!this.filter_text.is_empty()")
+            && source.contains("!this.show_actions_popup"),
+        "{label} must guard the Shift+Tab ScriptList path with the expected preconditions",
+    );
+    assert!(
+        source.contains("let query = this.filter_text.clone();"),
+        "{label} must clone the ScriptList filter text before routing",
+    );
+    assert!(
+        source.contains("this.open_tab_ai_chat_with_entry_intent(Some(query), cx);"),
+        "{label} must route the typed query into the harness entry-intent path",
+    );
+    assert!(
+        !source.contains("dispatch_ai_script_generation_from_query(query, cx);"),
+        "{label} must not call the legacy inline script-generation path anymore",
+    );
+}
+
+#[test]
+fn startup_shift_tab_script_list_routes_query_to_harness_entry_intent() {
+    assert_shift_tab_script_list_routes_query_to_harness_entry_intent(TAB_SOURCE, "startup.rs");
+}
+
+#[test]
+fn startup_new_tab_shift_tab_script_list_routes_query_to_harness_entry_intent() {
+    assert_shift_tab_script_list_routes_query_to_harness_entry_intent(
+        TAB_NEW_SOURCE,
+        "startup_new_tab.rs",
+    );
+}
+
+// =========================================================================
+// Entry-intent normalization and submit mode selection
+// =========================================================================
+
+#[test]
+fn entry_intent_is_trimmed_before_submit_mode_is_selected() {
+    assert!(
+        TAB_AI_MODE_SOURCE.contains(".map(|value| value.trim().to_string())"),
+        "entry intent must be trimmed before mode selection",
+    );
+    assert!(
+        TAB_AI_MODE_SOURCE.contains(".filter(|value| !value.is_empty())"),
+        "whitespace-only entry intent must collapse to None",
+    );
+    assert!(
+        TAB_AI_MODE_SOURCE.contains("let submission_mode = if entry_intent.is_some()"),
+        "submission mode must branch on the normalized entry intent",
+    );
+    assert!(
+        TAB_AI_MODE_SOURCE.contains("crate::ai::TabAiHarnessSubmissionMode::Submit"),
+        "non-empty normalized entry intent must use Submit mode",
+    );
+    assert!(
+        TAB_AI_MODE_SOURCE.contains("crate::ai::TabAiHarnessSubmissionMode::PasteOnly"),
+        "empty normalized entry intent must use PasteOnly mode",
+    );
+    assert!(
+        TAB_AI_MODE_SOURCE.contains("entry_intent.as_deref()"),
+        "the normalized entry intent must be what gets passed into harness submission construction",
     );
 }
 

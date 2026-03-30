@@ -27,6 +27,7 @@ pub use types::{
 };
 
 // Re-export loader
+#[allow(unused_imports)]
 pub use loader::{load_config, load_user_preferences, save_user_preferences};
 
 // Re-export editor types for safe config writes (public API for other modules)

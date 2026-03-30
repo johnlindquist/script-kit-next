@@ -281,7 +281,9 @@ Composable context attachments for AI chat flows with deterministic resolution a
 Universal AI surface triggered by Tab from any view. Connects to a pre-running CLI harness (Claude Code, Codex, Gemini CLI, Copilot CLI, or a custom command) and injects hierarchical context via PTY stdin. The terminal surface renders the harness TUI directly in a `TermPrompt` widget.
 
 **Entry path:**
-- **Tab on any item** — user presses Tab from any view → harness terminal opens in `AppView::QuickTerminalView`, structured `<scriptKitContext>` block is pasted into the PTY (PasteOnly mode), user types intent and presses Enter.
+- **Tab** — open `AppView::QuickTerminalView`, capture hierarchical context, and stage a `<scriptKitContext>` block in the harness PTY without submitting (`PasteOnly`).
+- **Shift+Tab in `AppView::ScriptList` with non-empty filter text** — open the same harness surface and immediately submit that filter text as `User intent:` (`Submit`).
+- **Tab / Shift+Tab inside `AppView::QuickTerminalView`** — forward the raw key to the PTY; do not let GPUI focus traversal consume it.
 
 **Close semantics:**
 - `Cmd+W` closes the wrapper and restores the previous view/focus.
@@ -297,8 +299,8 @@ Universal AI surface triggered by Tab from any view. Connects to a pre-running C
 - Context injection: `build_tab_ai_harness_submission()` → `<scriptKitContext>` XML block → `inject_tab_ai_harness_submission()` via PTY paste
 
 **Submission modes** (`TabAiHarnessSubmissionMode`):
-- `PasteOnly` (default for Tab entry) — stages context in the PTY without submitting; user types intent next.
-- `Submit` — appends a sentinel asking the harness to wait, completing a full turn.
+- `PasteOnly` — default for plain Tab entry and for any entry whose normalized intent is empty after trimming. Stages context in the PTY without submitting; user types intent next.
+- `Submit` — used when a non-empty entry intent is supplied. Appends a sentinel asking the harness to wait, completing a full turn.
 
 **Capture profiles:**
 - Generic PTY backends use `CaptureContextOptions::tab_ai_submit()` (text-safe, no screenshots — base64 PNG in PTY stdin is fragile).
@@ -325,15 +327,16 @@ Universal AI surface triggered by Tab from any view. Connects to a pre-running C
 - Subsequent Tab presses reuse the live session if the PTY is still alive.
 - Crash/exit triggers a fresh spawn on next Tab press.
 
-**Legacy:** `TabAiChat` entity and `open_tab_ai_full_view_chat()` are retained for internal use but are no longer the implicit Tab entry point.
+**Legacy compatibility only:** `TabAiChat` and `open_tab_ai_full_view_chat()` still exist for non-primary flows. They are not the default Tab AI surface and should not be used to describe the pivot.
 
 **Key files:**
 - `src/ai/harness/mod.rs` — `HarnessConfig`, `TabAiHarnessSubmissionMode`, context formatting, config I/O
-- `src/ai/tab_context.rs` — all Tab AI types, context assembly, memory I/O, execution receipts
+- `src/ai/tab_context.rs` — Tab AI data types, context assembly, memory I/O, execution receipts
 - `src/ai/mod.rs` — re-exports
-- `src/app_impl/tab_ai_mode.rs` — orchestration: harness terminal open/close, context injection, legacy chat paths
-- `src/app_impl/startup_new_tab.rs` — Tab key interceptor routing
-- `src/render_prompts/term.rs` — QuickTerminalView rendering and key handling (Cmd+W close, Escape passthrough)
+- `src/app_impl/startup.rs` — standard startup Tab / Shift+Tab interceptor
+- `src/app_impl/startup_new_tab.rs` — new-tab startup Tab / Shift+Tab interceptor
+- `src/app_impl/tab_ai_mode.rs` — entry-intent normalization, context assembly, harness open/close, submission-mode selection
+- `src/render_prompts/term.rs` — QuickTerminalView rendering and PTY-owned key semantics
 - `src/context_snapshot/capture.rs` — desktop context providers
 
 **Integration tests:**
