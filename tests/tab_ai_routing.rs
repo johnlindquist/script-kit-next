@@ -1746,7 +1746,7 @@ fn typed_tab_entry_uses_submit_mode_in_harness() {
         "tab_ai_mode.rs must expose an entry-intent-aware harness entry point"
     );
     assert!(
-        TAB_AI_MODE_SOURCE.contains("let submission_mode = if entry_intent.is_some()"),
+        TAB_AI_MODE_SOURCE.contains("let submission_mode = if request.entry_intent.is_some()"),
         "tab_ai_mode.rs must derive submission mode from entry-intent presence"
     );
     assert!(
@@ -1754,7 +1754,7 @@ fn typed_tab_entry_uses_submit_mode_in_harness() {
         "typed Tab entry must submit immediately through the harness"
     );
     assert!(
-        TAB_AI_MODE_SOURCE.contains("entry_intent.as_deref()"),
+        TAB_AI_MODE_SOURCE.contains("request.entry_intent.as_deref()"),
         "typed Tab entry must pass the user's query into build_tab_ai_harness_submission"
     );
 }
@@ -1941,5 +1941,109 @@ fn manual_creation_paths_unaffected_by_ai_redirect() {
     assert!(
         BUILTINS_SOURCE.contains("ScriptCommandType::NewExtension"),
         "NewExtension must still be registered"
+    );
+}
+
+// =========================================================================
+// Deferred capture pipeline: "open first, inject later"
+// =========================================================================
+
+#[test]
+fn harness_terminal_open_path_defers_capture_until_after_view_switch() {
+    // open_tab_ai_harness_terminal_from_request must set AppView::QuickTerminalView
+    // and call cx.notify() BEFORE any deferred-capture await.
+    let open_fn_start = TAB_AI_MODE_SOURCE
+        .find("fn open_tab_ai_harness_terminal_from_request(")
+        .expect("open_tab_ai_harness_terminal_from_request must exist");
+    let open_fn_body = &TAB_AI_MODE_SOURCE[open_fn_start..];
+    let next_fn = open_fn_body[1..]
+        .find("\nfn ")
+        .or_else(|| open_fn_body[1..].find("\n    fn "))
+        .unwrap_or(open_fn_body.len());
+    let open_fn_body = &open_fn_body[..next_fn];
+
+    let view_switch_pos = open_fn_body
+        .find("AppView::QuickTerminalView")
+        .expect("must switch to QuickTerminalView");
+    let notify_pos = open_fn_body
+        .find("cx.notify()")
+        .expect("must call cx.notify()");
+
+    // The capture_rx.recv().await must come AFTER the view switch + notify
+    let capture_await_pos = open_fn_body
+        .find("capture_rx.recv().await")
+        .expect("must await capture_rx");
+
+    assert!(
+        view_switch_pos < capture_await_pos,
+        "view switch must happen before deferred capture await"
+    );
+    assert!(
+        notify_pos < capture_await_pos,
+        "cx.notify() must happen before deferred capture await"
+    );
+}
+
+#[test]
+fn harness_terminal_open_path_does_not_call_capture_context_snapshot_inline() {
+    // open_tab_ai_harness_terminal_from_request must NOT call
+    // capture_context_snapshot directly — that now happens in the
+    // deferred capture task (spawn_tab_ai_pre_switch_capture).
+    let open_fn_start = TAB_AI_MODE_SOURCE
+        .find("fn open_tab_ai_harness_terminal_from_request(")
+        .expect("open_tab_ai_harness_terminal_from_request must exist");
+    let open_fn_body = &TAB_AI_MODE_SOURCE[open_fn_start..];
+    // Find the end of this function (next fn at the same indentation)
+    let next_fn = open_fn_body[1..]
+        .find("\nfn ")
+        .or_else(|| open_fn_body[1..].find("\n    fn "))
+        .unwrap_or(open_fn_body.len());
+    let open_fn_body = &open_fn_body[..next_fn];
+
+    // The function body should NOT contain a direct call to capture_context_snapshot
+    // because it now receives capture results via capture_rx channel.
+    // However, capture_context_snapshot DOES appear inside the spawned async closure
+    // that receives results. We check that it doesn't appear before cx.notify().
+    let notify_pos = open_fn_body
+        .find("cx.notify()")
+        .expect("must call cx.notify()");
+    let before_notify = &open_fn_body[..notify_pos];
+
+    assert!(
+        !before_notify.contains("capture_context_snapshot("),
+        "open_tab_ai_harness_terminal_from_request must not call capture_context_snapshot \
+         inline before cx.notify() — capture is deferred to spawn_tab_ai_pre_switch_capture"
+    );
+}
+
+#[test]
+fn begin_tab_ai_harness_entry_increments_capture_generation() {
+    assert!(
+        TAB_AI_MODE_SOURCE.contains("tab_ai_harness_capture_generation += 1"),
+        "begin_tab_ai_harness_entry must increment the capture generation counter"
+    );
+}
+
+#[test]
+fn app_state_has_tab_ai_harness_capture_generation() {
+    assert!(
+        APP_STATE_SOURCE.contains("tab_ai_harness_capture_generation: u64"),
+        "app_state.rs must have a tab_ai_harness_capture_generation field"
+    );
+}
+
+#[test]
+fn deferred_capture_uses_bounded_channel() {
+    assert!(
+        TAB_AI_MODE_SOURCE.contains("async_channel::bounded"),
+        "spawn_tab_ai_pre_switch_capture must use a bounded channel"
+    );
+}
+
+#[test]
+fn deferred_capture_checks_generation_before_injection() {
+    assert!(
+        TAB_AI_MODE_SOURCE.contains("tab_ai_harness_capture_generation != capture_gen"),
+        "deferred capture must check generation counter to drop stale results"
     );
 }
