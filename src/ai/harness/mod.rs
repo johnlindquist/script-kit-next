@@ -1132,36 +1132,38 @@ mod cleanup_contract_audits {
     }
 
     #[test]
-    fn explicit_tab_entry_always_forces_fresh_session() {
+    fn explicit_tab_entry_reuses_fresh_prewarm_once_then_forces_fresh() {
         let source = include_str!("../../app_impl/tab_ai_mode.rs");
         let start = source
             .find("fn open_tab_ai_harness_terminal_from_request")
             .expect("open_tab_ai_harness_terminal_from_request should exist");
         let rest = &source[start..];
         let end = rest
-            .find("pub(crate) fn warm_tab_ai_harness_on_startup")
-            .expect("warm_tab_ai_harness_on_startup should follow open fn");
+            .find("fn warm_tab_ai_harness_silently")
+            .expect("warm_tab_ai_harness_silently should follow open fn");
         let body = compact(&rest[..end]);
 
-        // Every explicit Tab entry must always force a fresh harness session.
         assert!(
-            body.contains(&compact(
-                "match self.ensure_tab_ai_harness_terminal(true, cx)"
-            )),
-            "explicit Tab entry must always force a fresh harness session"
+            body.contains("is_fresh_prewarm"),
+            "explicit Tab must check for a fresh silently-prewarmed session"
         );
         assert!(
-            !body.contains("reuse_fresh_prewarm"),
-            "literal fresh-session contract must not keep one-time prewarm reuse in the explicit open path"
+            body.contains("mark_consumed"),
+            "explicit Tab must consume a fresh prewarm exactly once"
+        );
+        assert!(
+            body.contains(&compact(
+                "ensure_tab_ai_harness_terminal(!reuse_fresh_prewarm, cx)"
+            )),
+            "explicit Tab must reuse a fresh prewarm once, then force fresh thereafter"
         );
 
         // Verify the terminal becomes visible before deferred context injection.
-        let full_body = &rest[..end];
-        let view_switch = full_body
-            .find("self.current_view = AppView::QuickTerminalView")
+        let view_switch = body
+            .find(&compact("self.current_view=AppView::QuickTerminalView"))
             .expect("must switch to quick terminal");
-        let deferred_inject = full_body
-            .rfind("cx.spawn(async move |_this, cx|")
+        let deferred_inject = body
+            .rfind(&compact("cx.spawn(async move|_this,cx|"))
             .expect("must spawn deferred injection task");
         assert!(
             view_switch < deferred_inject,
@@ -1368,7 +1370,7 @@ mod cleanup_contract_audits {
     }
 
     #[test]
-    fn tab_ai_open_path_always_forces_fresh_session_contract() {
+    fn tab_ai_open_path_reuses_fresh_prewarm_once_contract() {
         let source = include_str!("../../app_impl/tab_ai_mode.rs");
         let body = compact(&extract_fn_body(
             source,
@@ -1376,14 +1378,18 @@ mod cleanup_contract_audits {
         ));
 
         assert!(
-            body.contains(&compact(
-                "match self.ensure_tab_ai_harness_terminal(true, cx)"
-            )),
-            "explicit Tab entry must always force a fresh harness session"
+            body.contains("is_fresh_prewarm"),
+            "explicit Tab must check for a fresh silently-prewarmed session"
         );
         assert!(
-            !body.contains("reuse_fresh_prewarm"),
-            "literal fresh-session contract must not keep one-time prewarm reuse in the explicit open path"
+            body.contains("mark_consumed"),
+            "explicit Tab must consume a fresh prewarm exactly once"
+        );
+        assert!(
+            body.contains(&compact(
+                "ensure_tab_ai_harness_terminal(!reuse_fresh_prewarm, cx)"
+            )),
+            "explicit Tab must reuse a fresh prewarm once, then force fresh thereafter"
         );
     }
 
