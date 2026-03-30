@@ -3,6 +3,21 @@ use crate::dictation::types::{DictationDeviceId, DictationDeviceInfo};
 use anyhow::Context;
 use anyhow::Result;
 
+/// Persist the selected microphone device ID to user preferences.
+///
+/// Pass `None` to clear the preference and revert to the system default.
+pub fn save_dictation_device_id(device_id: Option<&str>) -> Result<()> {
+    let mut prefs = crate::config::load_user_preferences();
+    prefs.dictation.selected_device_id = device_id.map(str::to_owned);
+    crate::config::save_user_preferences(&prefs)?;
+    tracing::info!(
+        category = "DICTATION",
+        device_id = ?device_id,
+        "Saved microphone preference"
+    );
+    Ok(())
+}
+
 #[cfg(target_os = "macos")]
 use objc::runtime::Object;
 #[cfg(target_os = "macos")]

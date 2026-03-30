@@ -343,12 +343,75 @@ impl ScriptListApp {
     fn submit_arg_prompt_from_current_state(&mut self, prompt_id: &str, cx: &mut Context<Self>) {
         match self.resolve_current_arg_submit_outcome() {
             ArgSubmitOutcome::SubmitChoice(value) | ArgSubmitOutcome::SubmitText(value) => {
+                // Intercept built-in mic selection prompt — persist device and
+                // return to the script list instead of sending to a script.
+                if prompt_id == BUILTIN_MIC_SELECT_PROMPT_ID {
+                    if !self.is_valid_builtin_mic_selection(&value) {
+                        self.show_error_toast("Select a microphone from the list", cx);
+                        return;
+                    }
+                    self.handle_builtin_mic_selection(&value, cx);
+                    return;
+                }
                 self.submit_prompt_response(prompt_id.to_string(), Some(value), cx);
             }
             ArgSubmitOutcome::InvalidEmpty => {
                 self.show_hud("Type a value to continue".to_string(), Some(HUD_SHORT_MS), cx);
             }
         }
+    }
+
+    fn is_valid_builtin_mic_selection(&self, value: &str) -> bool {
+        value == BUILTIN_MIC_DEFAULT_VALUE
+            || matches!(
+                &self.current_view,
+                AppView::ArgPrompt { choices, .. }
+                    if choices.iter().any(|choice| choice.value == value)
+            )
+    }
+
+    /// Persist the microphone selection and return to the script list.
+    fn handle_builtin_mic_selection(&mut self, value: &str, cx: &mut Context<Self>) {
+        let device_id = if value == BUILTIN_MIC_DEFAULT_VALUE {
+            None
+        } else {
+            Some(value)
+        };
+
+        match crate::dictation::save_dictation_device_id(device_id) {
+            Ok(()) => {
+                let label = if device_id.is_some() {
+                    // Find the device name from the choices for a nicer HUD message.
+                    if let AppView::ArgPrompt { ref choices, .. } = self.current_view {
+                        choices
+                            .iter()
+                            .find(|c| c.value == value)
+                            .map(|c| c.name.trim_end_matches(" (current)").to_string())
+                            .unwrap_or_else(|| "Selected".to_string())
+                    } else {
+                        "Selected".to_string()
+                    }
+                } else {
+                    "System Default".to_string()
+                };
+                self.show_hud(
+                    format!("Microphone: {label}"),
+                    Some(HUD_SHORT_MS),
+                    cx,
+                );
+            }
+            Err(error) => {
+                tracing::error!(
+                    category = "DICTATION",
+                    error = %error,
+                    "Failed to save microphone preference"
+                );
+                self.show_error_toast(format!("Failed to save microphone: {error}"), cx);
+            }
+        }
+
+        self.reset_to_script_list(cx);
+        cx.notify();
     }
 
     #[inline]
