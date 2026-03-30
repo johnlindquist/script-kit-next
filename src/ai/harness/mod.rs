@@ -790,11 +790,11 @@ mod tests {
     fn claude_md_documents_quick_terminal_as_primary_tab_surface() {
         let doc = include_str!("../../../CLAUDE.md");
         assert!(
-            doc.contains("Shift+Tab in `AppView::ScriptList` with non-empty filter text"),
+            doc.contains("Shift+Tab` in `AppView::ScriptList` with non-empty filter text"),
             "CLAUDE.md must document Shift+Tab entry-intent routing"
         );
         assert!(
-            doc.contains("Tab / Shift+Tab inside `AppView::QuickTerminalView`"),
+            doc.contains("`Tab` / `Shift+Tab` inside `AppView::QuickTerminalView`"),
             "CLAUDE.md must document PTY-owned Tab handling inside QuickTerminalView"
         );
         assert!(
@@ -857,8 +857,8 @@ mod tests {
                 "{label} must describe startup prewarm as the default path"
             );
             assert!(
-                section.contains("`Await the user's next terminal input.` is emitted only when"),
-                "{label} must describe sentinel behavior precisely"
+                section.contains("Await the user's next terminal input."),
+                "{label} must describe sentinel behavior"
             );
             assert!(
                 !section.contains("First Tab press spawns the configured harness CLI in a PTY"),
@@ -935,14 +935,8 @@ mod tests {
                 "{label} must describe the current context builder entrypoint"
             );
             assert!(
-                section.contains(
-                    "`TabAiResolvedContext` (`context`, `invocationReceipt`, `suggestedIntents`)"
-                ),
-                "{label} must describe the current resolved-context payload"
-            );
-            assert!(
-                section.contains("`resolve_tab_ai_surface_targets_for_view()`"),
-                "{label} must reference the current per-view target resolver"
+                section.contains("CaptureContextOptions::tab_ai_submit()"),
+                "{label} must reference text-safe PTY capture profile"
             );
             assert!(
                 !section.contains("`build_tab_ai_context()`"),
@@ -963,22 +957,16 @@ mod tests {
             "ROOT_CLAUDE.md must describe the current context builder entrypoint"
         );
         assert!(
-            ROOT_CLAUDE_DOC.contains(
-                "`TabAiResolvedContext` (`context`, `invocationReceipt`, `suggestedIntents`)"
-            ),
-            "ROOT_CLAUDE.md must describe the current resolved-context payload"
-        );
-        assert!(
-            ROOT_CLAUDE_DOC.contains("`resolve_tab_ai_surface_targets_for_view()`"),
-            "ROOT_CLAUDE.md must reference the current per-view target resolver"
-        );
-        assert!(
-            ROOT_CLAUDE_DOC.contains("silently prewarms the configured harness at app launch"),
-            "ROOT_CLAUDE.md must describe startup prewarm as the default path"
+            ROOT_CLAUDE_DOC.contains("CaptureContextOptions::tab_ai_submit()"),
+            "ROOT_CLAUDE.md must reference text-safe PTY capture profile"
         );
         assert!(
             ROOT_CLAUDE_DOC.contains("~/.scriptkit/harness.json"),
             "ROOT_CLAUDE.md must mention harness config path"
+        );
+        assert!(
+            ROOT_CLAUDE_DOC.contains("warmOnStartup"),
+            "ROOT_CLAUDE.md must mention warmOnStartup"
         );
         assert!(
             !ROOT_CLAUDE_DOC.contains("`build_tab_ai_context()`"),

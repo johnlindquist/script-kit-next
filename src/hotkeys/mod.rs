@@ -379,6 +379,20 @@ pub fn update_hotkeys(cfg: &config::Config) {
         }
     }
 
+    // Update dictation hotkey
+    if let Some(dictation_config) = cfg.get_dictation_hotkey() {
+        if let Some((mods, code)) = parse_hotkey_config(&dictation_config) {
+            let display = hotkey_config_to_display(&dictation_config);
+            rebind_hotkey_transactional(
+                &manager_guard,
+                HotkeyAction::Dictation,
+                mods,
+                code,
+                &display,
+            );
+        }
+    }
+
     // Update logs hotkey
     if let Some(logs_config) = cfg.get_logs_hotkey() {
         if let Some((mods, code)) = parse_hotkey_config(&logs_config) {
@@ -1167,9 +1181,16 @@ pub(crate) fn start_hotkey_listener(config: config::Config) {
         if let Some(notes_hotkey) = config.get_notes_hotkey() {
             register_builtin_hotkey(&manager_guard, HotkeyAction::Notes, &notes_hotkey);
         }
-        // Register AI and logs hotkeys
+        // Register AI, dictation, and logs hotkeys
         if let Some(ai_hotkey) = config.get_ai_hotkey() {
             register_builtin_hotkey(&manager_guard, HotkeyAction::Ai, &ai_hotkey);
+        }
+        if let Some(dictation_hotkey) = config.get_dictation_hotkey() {
+            register_builtin_hotkey(
+                &manager_guard,
+                HotkeyAction::Dictation,
+                &dictation_hotkey,
+            );
         }
         if let Some(logs_hotkey) = config.get_logs_hotkey() {
             register_builtin_hotkey(&manager_guard, HotkeyAction::ToggleLogs, &logs_hotkey);

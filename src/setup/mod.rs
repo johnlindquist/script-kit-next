@@ -2046,3 +2046,68 @@ mod tests {
         drop(lock);
     }
 }
+
+#[cfg(test)]
+mod tab_ai_agent_doc_contract_tests {
+    const ROOT_CLAUDE: &str = include_str!("../../kit-init/ROOT_CLAUDE.md");
+    const ROOT_AGENTS: &str = include_str!("../../kit-init/ROOT_AGENTS.md");
+    const REPO_CLAUDE: &str = include_str!("../../CLAUDE.md");
+    const REPO_AGENTS: &str = include_str!("../../AGENTS.md");
+
+    fn assert_tab_ai_doc_contract(source: &str, label: &str) {
+        for needle in [
+            "Quick Terminal with Context Injection",
+            "AppView::QuickTerminalView",
+            "TermPrompt",
+            "TabAiHarnessSubmissionMode",
+            "PasteOnly",
+            "Submit",
+            "~/.scriptkit/harness.json",
+            "CaptureContextOptions::tab_ai_submit()",
+            "Cmd+W",
+            "Escape",
+        ] {
+            assert!(
+                source.contains(needle),
+                "{label} must contain `{needle}`"
+            );
+        }
+
+        assert!(
+            source.contains("PTY") || source.contains("pty"),
+            "{label} must describe the landed PTY-backed path"
+        );
+
+        assert!(
+            !source.contains("instant terminal session"),
+            "{label} must not describe Claude Code as an instant terminal session"
+        );
+
+        if source.contains("TabAiChat") || source.contains("open_tab_ai_full_view_chat") {
+            assert!(
+                source.contains("Legacy compatibility only"),
+                "{label} may mention legacy Tab AI symbols only behind an explicit legacy notice"
+            );
+        }
+    }
+
+    #[test]
+    fn root_claude_doc_matches_landed_tab_ai_contract() {
+        assert_tab_ai_doc_contract(ROOT_CLAUDE, "kit-init/ROOT_CLAUDE.md");
+    }
+
+    #[test]
+    fn root_agents_doc_matches_landed_tab_ai_contract() {
+        assert_tab_ai_doc_contract(ROOT_AGENTS, "kit-init/ROOT_AGENTS.md");
+    }
+
+    #[test]
+    fn repo_claude_doc_matches_landed_tab_ai_contract() {
+        assert_tab_ai_doc_contract(REPO_CLAUDE, "CLAUDE.md");
+    }
+
+    #[test]
+    fn repo_agents_doc_matches_landed_tab_ai_contract() {
+        assert_tab_ai_doc_contract(REPO_AGENTS, "AGENTS.md");
+    }
+}
