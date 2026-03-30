@@ -317,8 +317,8 @@ pub const SCRIPTS_RESOURCE_SCHEMA_VERSION: u32 = 1;
 pub const SCRIPTLETS_RESOURCE_SCHEMA_VERSION: u32 = 1;
 
 /// Schema version for the `kit://sdk-reference` resource.
-/// Bumped to 2: added `harnessWorkflow` field with test paths and execution bridge.
-pub const SDK_REFERENCE_SCHEMA_VERSION: u32 = 2;
+/// Bumped to 3: migrated to @scriptkit/sdk, new paths, export const metadata format.
+pub const SDK_REFERENCE_SCHEMA_VERSION: u32 = 3;
 
 /// Schema-versioned envelope for script metadata.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -353,7 +353,7 @@ pub struct SdkFunctionRef {
 #[serde(rename_all = "camelCase")]
 pub struct HarnessWorkflow {
     /// Dedicated directory for test/temp scripts that won't pollute the user's
-    /// main `~/.scriptkit/scripts/` collection.
+    /// main `~/.scriptkit/kit/main/scripts/` collection.
     pub test_script_directory: String,
     /// Dedicated directory for test scriptlet extension files.
     pub test_scriptlet_directory: String,
@@ -588,11 +588,11 @@ fn build_sdk_function_refs() -> Vec<SdkFunctionRef> {
 fn build_sdk_reference_document() -> SdkReferenceDocument {
     SdkReferenceDocument {
         schema_version: SDK_REFERENCE_SCHEMA_VERSION,
-        sdk_package: "@johnlindquist/kit".into(),
-        script_directory: "~/.scriptkit/scripts/".into(),
+        sdk_package: "@scriptkit/sdk".into(),
+        script_directory: "~/.scriptkit/kit/main/scripts/".into(),
         scriptlet_pattern: "~/.scriptkit/kit/*/extensions/*.md".into(),
-        metadata_format: "// Name: My Script\n// Description: What it does\n// Shortcut: opt i"
-            .into(),
+        metadata_format:
+            "export const metadata = { name: \"My Script\", description: \"What it does\" }".into(),
         functions: build_sdk_function_refs(),
         harness_workflow: build_harness_workflow(),
     }
@@ -607,10 +607,12 @@ fn build_harness_workflow() -> HarnessWorkflow {
         success_output_shape: "No dedicated success envelope is emitted for stdin `run`; successful scripts communicate through their normal stdout JSONL protocol and app logs.".into(),
         error_output_shape: "No dedicated error envelope is emitted for stdin `run`; failures surface through script error protocol messages, app logs, and HUD/toast feedback.".into(),
         example_test_script: concat!(
-            "// Name: Harness Test\n",
-            "// Description: Automated test script\n",
+            "import \"@scriptkit/sdk\";\n",
             "\n",
-            "import \"@johnlindquist/kit\";\n",
+            "export const metadata = {\n",
+            "  name: \"Harness Test\",\n",
+            "  description: \"Automated test script\",\n",
+            "};\n",
             "\n",
             "const result = await arg(\"Pick one\", [\"a\", \"b\", \"c\"]);\n",
             "console.log(result);\n",
@@ -2122,7 +2124,7 @@ mod tests {
 
         let doc: SdkReferenceDocument = serde_json::from_str(&content.text).expect("valid JSON");
         assert_eq!(doc.schema_version, SDK_REFERENCE_SCHEMA_VERSION);
-        assert_eq!(doc.sdk_package, "@johnlindquist/kit");
+        assert_eq!(doc.sdk_package, "@scriptkit/sdk");
         assert!(!doc.functions.is_empty());
 
         // Verify key functions are present
@@ -2170,9 +2172,8 @@ mod tests {
     #[test]
     fn sdk_reference_includes_metadata_format() {
         let doc = build_sdk_reference_document();
-        assert!(doc.metadata_format.contains("// Name:"));
-        assert!(doc.metadata_format.contains("// Description:"));
-        assert!(doc.script_directory.contains("scripts"));
+        assert!(doc.metadata_format.contains("export const metadata"));
+        assert!(doc.script_directory.contains("kit/main/scripts"));
         assert!(doc.scriptlet_pattern.contains("extensions"));
     }
 

@@ -60,12 +60,12 @@ await div(`<h1>${choice}</h1>`);
 
 ## DO NOT
 
-- Use `require()` — use ES imports
-- Use `@johnlindquist/kit` — use `@scriptkit/sdk`
+- Use CommonJS imports — use ES `import` syntax
+- Use the old v1 SDK package — use `@scriptkit/sdk`
 - Use Node.js `fs` or `child_process` — use Bun APIs
-- Use comment-based metadata (`// Name:`) — use `export const metadata`
+- Use comment-based metadata — use `export const metadata`
 - Edit files in `sdk/` — they are managed by the app
-- Reference `~/.kenv` or `~/.scriptkit/scripts` — those are legacy v1 paths
+- Reference legacy v1 paths — scripts live in `kit/main/scripts/`
 - Create scripts outside `kit/main/scripts/`
 
 ## Core SDK Functions

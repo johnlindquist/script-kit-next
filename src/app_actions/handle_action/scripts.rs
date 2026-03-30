@@ -17,7 +17,7 @@ impl ScriptListApp {
         match action_id {
             "create_script" => {
                 tracing::info!(category = "UI", trace_id = %trace_id, "create script action - opening scripts folder");
-                let scripts_dir = shellexpand::tilde("~/.scriptkit/scripts").to_string();
+                let scripts_dir = crate::script_creation::scripts_dir().to_string_lossy().to_string();
                 let trace_id = trace_id.to_string();
                 let start = std::time::Instant::now();
                 cx.spawn(async move |this, cx| {

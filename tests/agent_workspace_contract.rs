@@ -284,3 +284,146 @@ fn test_seeded_skills_do_not_reference_legacy_v1_contract() {
         );
     });
 }
+
+/// kit://sdk-reference must use @scriptkit/sdk, new paths, and export const metadata.
+#[test]
+fn test_sdk_reference_uses_scriptkit_sdk_and_new_paths() {
+    use script_kit_gpui::mcp_resources::{self, SdkReferenceDocument};
+
+    let content = mcp_resources::read_resource("kit://sdk-reference", &[], &[], None)
+        .expect("kit://sdk-reference should resolve");
+    let doc: SdkReferenceDocument =
+        serde_json::from_str(&content.text).expect("valid JSON document");
+
+    // Must use @scriptkit/sdk — not @johnlindquist/kit
+    assert_eq!(
+        doc.sdk_package, "@scriptkit/sdk",
+        "sdk_package must be @scriptkit/sdk"
+    );
+
+    // Script directory must point to the new kit/main/scripts path
+    assert!(
+        doc.script_directory.contains("kit/main/scripts"),
+        "script_directory must use ~/.scriptkit/kit/main/scripts/, got: {}",
+        doc.script_directory
+    );
+
+    // Metadata format must use export const metadata
+    assert!(
+        doc.metadata_format.contains("export const metadata"),
+        "metadata_format must use export const metadata, got: {}",
+        doc.metadata_format
+    );
+
+    // Example test script must import @scriptkit/sdk, not @johnlindquist/kit
+    assert!(
+        doc.harness_workflow
+            .example_test_script
+            .contains("@scriptkit/sdk"),
+        "example_test_script must import @scriptkit/sdk"
+    );
+    assert!(
+        !doc.harness_workflow
+            .example_test_script
+            .contains("@johnlindquist/kit"),
+        "example_test_script must not reference @johnlindquist/kit"
+    );
+
+    // Example test script must not use legacy comment-header metadata
+    assert!(
+        !doc.harness_workflow
+            .example_test_script
+            .contains("// Name:"),
+        "example_test_script must not use legacy // Name: comment header"
+    );
+}
+
+/// The create-script action must open the canonical scripts_dir(), not a hardcoded legacy path.
+#[test]
+fn test_create_script_action_opens_current_scripts_dir() {
+    let source = include_str!("../src/app_actions/handle_action/scripts.rs");
+
+    // Must NOT contain the legacy hardcoded path
+    assert!(
+        !source.contains("~/.scriptkit/scripts"),
+        "create_script action must not hardcode ~/.scriptkit/scripts"
+    );
+
+    // Must use the canonical scripts_dir() source of truth
+    assert!(
+        source.contains("crate::script_creation::scripts_dir()"),
+        "create_script action must use crate::script_creation::scripts_dir()"
+    );
+}
+
+/// Every seeded example script must use `@scriptkit/sdk` and `export const metadata`,
+/// use Bun-first patterns (no Node-only APIs), and live under examples/scripts/.
+#[test]
+fn test_seeded_examples_are_sdk_based_and_bun_first() {
+    with_temp_sk_path(|kit_root| {
+        let _ = ensure_kit_setup();
+
+        let examples = [
+            "hello-world.ts",
+            "choose-from-list.ts",
+            "clipboard-transform.ts",
+            "path-picker.ts",
+        ];
+
+        let examples_dir = kit_root.join("examples").join("scripts");
+
+        for example in &examples {
+            let path = examples_dir.join(example);
+            let content = fs::read_to_string(&path)
+                .unwrap_or_else(|_| panic!("Should read {}", path.display()));
+
+            // Must import @scriptkit/sdk
+            assert!(
+                content.contains("import \"@scriptkit/sdk\""),
+                "{example} must import @scriptkit/sdk"
+            );
+
+            // Must export metadata
+            assert!(
+                content.contains("export const metadata"),
+                "{example} must use export const metadata"
+            );
+
+            // Must not use Node-only patterns
+            let node_only_patterns = [
+                "require(",
+                "fs.readFileSync",
+                "fs.writeFileSync",
+                "process.argv",
+                "__dirname",
+                "__filename",
+            ];
+            for pattern in &node_only_patterns {
+                assert!(
+                    !content.contains(pattern),
+                    "{example} must not use Node-only pattern '{pattern}'"
+                );
+            }
+        }
+
+        // Examples must NOT exist in kit/main/scripts/ (no pollution)
+        let main_scripts = kit_root.join("kit").join("main").join("scripts");
+        for example in &examples {
+            // The example filenames should not appear as auto-installed entries
+            // (hello-world.ts is a special case — the fresh-install sample script
+            // uses that name, which is acceptable since it's user-facing)
+            if *example != "hello-world.ts" {
+                assert!(
+                    !main_scripts.join(example).exists(),
+                    "{example} must not be auto-installed into kit/main/scripts/"
+                );
+            }
+        }
+
+        // README must exist alongside the scripts
+        assert!(
+            kit_root.join("examples").join("README.md").exists(),
+            "examples/README.md must exist"
+        );
+    });
+}
