@@ -929,6 +929,72 @@ mod tests {
     }
 
     #[test]
+    fn agent_docs_match_current_context_builder_contract() {
+        const CLAUDE_DOC: &str = include_str!("../../../CLAUDE.md");
+        const AGENTS_DOC: &str = include_str!("../../../AGENTS.md");
+        for (label, text) in [("CLAUDE.md", CLAUDE_DOC), ("AGENTS.md", AGENTS_DOC)] {
+            let section = extract_tab_ai_quick_terminal_section(text);
+            assert!(
+                section.contains("`build_tab_ai_context_from()`"),
+                "{label} must describe the current context builder entrypoint"
+            );
+            assert!(
+                section.contains(
+                    "`TabAiResolvedContext` (`context`, `invocationReceipt`, `suggestedIntents`)"
+                ),
+                "{label} must describe the current resolved-context payload"
+            );
+            assert!(
+                section.contains("`resolve_tab_ai_surface_targets_for_view()`"),
+                "{label} must reference the current per-view target resolver"
+            );
+            assert!(
+                !section.contains("`build_tab_ai_context()`"),
+                "{label} must not mention the removed build_tab_ai_context() wording"
+            );
+            assert!(
+                !section.contains("bundle_id + warning count"),
+                "{label} must not describe the old TabAiResolvedContext shape"
+            );
+        }
+    }
+
+    #[test]
+    fn install_time_root_claude_md_contains_current_quick_terminal_contract() {
+        const ROOT_CLAUDE_DOC: &str = include_str!("../../../kit-init/ROOT_CLAUDE.md");
+        assert!(
+            ROOT_CLAUDE_DOC.contains("`build_tab_ai_context_from()`"),
+            "ROOT_CLAUDE.md must describe the current context builder entrypoint"
+        );
+        assert!(
+            ROOT_CLAUDE_DOC.contains(
+                "`TabAiResolvedContext` (`context`, `invocationReceipt`, `suggestedIntents`)"
+            ),
+            "ROOT_CLAUDE.md must describe the current resolved-context payload"
+        );
+        assert!(
+            ROOT_CLAUDE_DOC.contains("`resolve_tab_ai_surface_targets_for_view()`"),
+            "ROOT_CLAUDE.md must reference the current per-view target resolver"
+        );
+        assert!(
+            ROOT_CLAUDE_DOC.contains("silently prewarms the configured harness at app launch"),
+            "ROOT_CLAUDE.md must describe startup prewarm as the default path"
+        );
+        assert!(
+            ROOT_CLAUDE_DOC.contains("~/.scriptkit/harness.json"),
+            "ROOT_CLAUDE.md must mention harness config path"
+        );
+        assert!(
+            !ROOT_CLAUDE_DOC.contains("`build_tab_ai_context()`"),
+            "ROOT_CLAUDE.md must not mention the removed build_tab_ai_context() wording"
+        );
+        assert!(
+            !ROOT_CLAUDE_DOC.contains("bundle_id + warning count"),
+            "ROOT_CLAUDE.md must not describe the old TabAiResolvedContext shape"
+        );
+    }
+
+    #[test]
     fn standard_startup_quick_terminal_tab_writes_directly_to_pty() {
         let source = include_str!("../../app_impl/startup.rs");
         assert!(

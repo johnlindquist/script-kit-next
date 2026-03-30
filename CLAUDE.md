@@ -291,12 +291,12 @@ Universal AI surface triggered by Tab from any view. Connects to a pre-running C
 - Footer hint strip advertises only "⌘W Close".
 
 **Architecture:**
-- `AppView::QuickTerminalView` — primary Tab AI destination (via `open_tab_ai_chat()` → `open_tab_ai_harness_terminal()`)
-- `HarnessConfig` — persisted at `~/.scriptkit/harness.json`, supports Claude Code, Codex, Gemini CLI, Copilot CLI, Custom backends; `warmOnStartup` defaults to `true` (pre-spawn harness at app launch)
+- `AppView::QuickTerminalView` — primary Tab AI destination (via `open_tab_ai_chat()` → `open_tab_ai_chat_with_entry_intent()` → `open_tab_ai_harness_terminal()`)
+- `HarnessConfig` — persisted at `~/.scriptkit/harness.json`, supports Claude Code, Codex, Gemini CLI, Copilot CLI, Custom backends; `warmOnStartup` defaults to `true`
 - `TabAiHarnessSessionState` — runtime state for a live harness PTY session (reused across Tab invocations)
-- Context assembly (unchanged): `build_tab_ai_context()` → `TabAiResolvedContext` (blob + bundle_id + warning count + invocation receipt)
-- Target resolution: `resolve_tab_ai_surface_targets()` extracts focused/visible targets per surface
-- Context injection: `build_tab_ai_harness_submission()` → `<scriptKitContext>` XML block → `inject_tab_ai_harness_submission()` via PTY paste
+- Context assembly (unchanged producer pipeline): `snapshot_tab_ai_ui()` + `capture_context_snapshot(CaptureContextOptions::tab_ai_submit())` + `build_tab_ai_context_from()` → `TabAiResolvedContext` (`context`, `invocationReceipt`, `suggestedIntents`)
+- Target resolution: `resolve_tab_ai_surface_targets_for_view()` extracts focused/visible targets per surface
+- Context injection: `build_tab_ai_harness_submission()` → `<scriptKitContext>` / `<scriptKitHints>` → `inject_tab_ai_harness_submission()` via PTY paste or line submit
 
 **Submission modes** (`TabAiHarnessSubmissionMode`):
 - `PasteOnly` — default for plain Tab entry and for any entry whose normalized intent is empty after trimming. Stages context in the PTY without submitting; user types intent next.

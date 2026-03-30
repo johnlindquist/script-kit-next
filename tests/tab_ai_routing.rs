@@ -253,11 +253,49 @@ fn entry_intent_is_trimmed_before_submit_mode_is_selected() {
 fn startup_tab_interceptor_does_not_steal_tab_from_quick_terminal() {
     assert!(
         TAB_SOURCE.contains("AppView::QuickTerminalView"),
+        "startup.rs must special-case QuickTerminalView"
+    );
+    // The QuickTerminalView Tab handler writes raw bytes directly to the PTY
+    // and stops propagation so GPUI focus traversal does not consume the Tab.
+    assert!(
+        TAB_SOURCE.contains("term.terminal.input(bytes)"),
+        "QuickTerminalView Tab handling must write raw bytes to the PTY"
+    );
+    assert!(
+        TAB_SOURCE.contains("b\"\\t\""),
+        "plain Tab must be written as a tab byte"
+    );
+    assert!(
+        TAB_SOURCE.contains("b\"\\x1b[Z\""),
+        "Shift+Tab must be written as a backtab escape sequence"
+    );
+    assert!(
+        TAB_SOURCE.contains("cx.stop_propagation();"),
+        "QuickTerminalView Tab handling must stop propagation so GPUI focus traversal does not consume the key"
+    );
+}
+
+#[test]
+fn startup_new_tab_interceptor_writes_tab_bytes_directly_to_quick_terminal_pty() {
+    assert!(
+        TAB_NEW_SOURCE.contains("AppView::QuickTerminalView"),
         "startup_new_tab.rs must special-case QuickTerminalView"
     );
     assert!(
-        TAB_SOURCE.contains("cx.propagate();"),
-        "QuickTerminalView Tab handling must propagate so the harness TUI receives Tab"
+        TAB_NEW_SOURCE.contains("term.terminal.input(bytes)"),
+        "QuickTerminalView Tab handling must write raw bytes to the PTY"
+    );
+    assert!(
+        TAB_NEW_SOURCE.contains("b\"\\t\""),
+        "plain Tab must be written as a tab byte"
+    );
+    assert!(
+        TAB_NEW_SOURCE.contains("b\"\\x1b[Z\""),
+        "Shift+Tab must be written as a backtab escape sequence"
+    );
+    assert!(
+        TAB_NEW_SOURCE.contains("cx.stop_propagation();"),
+        "QuickTerminalView Tab handling must stop propagation so GPUI focus traversal does not consume the key"
     );
 }
 
