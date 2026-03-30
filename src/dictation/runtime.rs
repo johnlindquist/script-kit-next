@@ -41,6 +41,11 @@ static TRANSCRIBER: Mutex<Option<DictationTranscriber>> = Mutex::new(None);
 // Public API
 // ---------------------------------------------------------------------------
 
+/// Returns `true` when a dictation capture session is currently active.
+pub fn is_dictation_recording() -> bool {
+    SESSION.lock().is_some()
+}
+
 /// Toggle dictation recording on/off.
 ///
 /// - When idle: starts a new capture session and returns `Started`.
