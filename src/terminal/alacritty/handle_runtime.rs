@@ -174,6 +174,20 @@ impl TerminalHandle {
         self.pty.is_running()
     }
 
+    /// Kill the PTY child process and signal the reader thread to stop.
+    ///
+    /// After this call, `is_running()` will return `false` and the
+    /// background reader thread will exit on its next iteration.
+    /// Safe to call multiple times — returns `Ok(())` if already stopped.
+    pub fn kill(&mut self) -> Result<()> {
+        self.reader_stop_flag
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+        if self.pty.is_running() {
+            self.pty.kill().context("Failed to kill PTY child process")?;
+        }
+        Ok(())
+    }
+
     /// Gets the configured scrollback buffer size.
     #[inline]
     pub fn scrollback_lines(&self) -> usize {

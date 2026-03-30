@@ -8,6 +8,36 @@ struct TabAiResolvedContext {
     suggested_intents: Vec<crate::ai::TabAiSuggestedIntentSpec>,
 }
 
+/// Pre-switch snapshot of the UI state captured at the Tab interception
+/// boundary, before the view flips to `QuickTerminalView`.
+///
+/// The deferred capture pipeline uses this to assemble context in the
+/// background while the harness terminal is already visible.
+#[derive(Debug, Clone)]
+struct TabAiLaunchRequest {
+    /// The `AppView` that was active when Tab was pressed.
+    source_view: AppView,
+    /// Optional user intent (from Shift+Tab typed query).
+    entry_intent: Option<String>,
+    /// UI snapshot taken synchronously before the view switch.
+    ui_snapshot: crate::ai::TabAiUiSnapshot,
+    /// Invocation receipt for logging and downstream consumption.
+    invocation_receipt: crate::ai::TabAiInvocationReceipt,
+    /// Monotonic generation counter — used to drop stale capture results.
+    capture_generation: u64,
+}
+
+/// Artifacts produced by the deferred background capture task.
+#[derive(Debug, Clone, Default)]
+struct TabAiDeferredCaptureArtifacts {
+    /// Desktop context snapshot (frontmost app, selected text, browser URL).
+    desktop: crate::context_snapshot::AiContextSnapshot,
+    /// Absolute path to the focused window screenshot file, if captured.
+    screenshot_path: Option<String>,
+}
+
+/// Channel receiver for deferred capture results.
+type TabAiDeferredCaptureRx = async_channel::Receiver<Result<TabAiDeferredCaptureArtifacts, String>>;
 
 /// Maximum visible elements captured per UI snapshot for Tab AI context.
 const TAB_AI_VISIBLE_ELEMENT_LIMIT: usize = 24;
@@ -43,11 +73,16 @@ impl ScriptListApp {
         if self.tab_ai_save_offer_state.is_some() {
             return;
         }
-        self.open_tab_ai_harness_terminal(entry_intent, cx);
+        self.begin_tab_ai_harness_entry(entry_intent, cx);
     }
 
-    /// Core harness-terminal open: snapshot context, ensure PTY, switch view, inject.
-    fn open_tab_ai_harness_terminal(
+    /// Deferred-capture entry point: build a launch request from pre-switch
+    /// state, start background capture, then immediately open the harness.
+    ///
+    /// The harness terminal appears within one frame of the Tab keypress.
+    /// Context capture (desktop snapshot, screenshot-to-file) runs in the
+    /// background and is injected into the live PTY once complete.
+    fn begin_tab_ai_harness_entry(
         &mut self,
         entry_intent: Option<String>,
         cx: &mut Context<Self>,
@@ -75,6 +110,77 @@ impl ScriptListApp {
             receipt_json = %serde_json::to_string(&invocation_receipt).unwrap_or_default(),
         );
 
+        self.tab_ai_harness_capture_generation += 1;
+
+        let request = TabAiLaunchRequest {
+            source_view,
+            entry_intent,
+            ui_snapshot,
+            invocation_receipt,
+            capture_generation: self.tab_ai_harness_capture_generation,
+        };
+
+        let capture_rx = self.spawn_tab_ai_pre_switch_capture(&request, cx);
+        self.open_tab_ai_harness_terminal_from_request(request, capture_rx, cx);
+    }
+
+    /// Spawn background capture work that runs after the view has switched.
+    ///
+    /// Captures the desktop context snapshot and (best-effort) focused window
+    /// screenshot. Returns a channel receiver that delivers the results.
+    fn spawn_tab_ai_pre_switch_capture(
+        &self,
+        _request: &TabAiLaunchRequest,
+        cx: &Context<Self>,
+    ) -> TabAiDeferredCaptureRx {
+        let (tx, rx) = async_channel::bounded::<Result<TabAiDeferredCaptureArtifacts, String>>(1);
+
+        cx.spawn(async move |_this, cx| {
+            let result = cx.background_executor().spawn(async move {
+                // Capture desktop context (text-safe, no screenshots in the blob)
+                let desktop = crate::context_snapshot::capture_context_snapshot(
+                    &crate::context_snapshot::CaptureContextOptions::tab_ai_submit(),
+                );
+
+                // Best-effort screenshot-to-file capture
+                let screenshot_path =
+                    match crate::ai::harness::capture_tab_ai_focused_window_screenshot_file() {
+                        Ok(Some(file)) => Some(file.path),
+                        Ok(None) => None,
+                        Err(e) => {
+                            tracing::debug!(
+                                event = "tab_ai_deferred_screenshot_failed",
+                                error = %e,
+                            );
+                            None
+                        }
+                    };
+
+                Ok(TabAiDeferredCaptureArtifacts {
+                    desktop,
+                    screenshot_path,
+                })
+            }).await;
+
+            let _ = tx.send(result).await;
+        })
+        .detach();
+
+        rx
+    }
+
+    /// Open the harness terminal immediately, then spawn a task that waits
+    /// for the deferred capture result and injects the enriched context.
+    ///
+    /// **Contract:** `AppView::QuickTerminalView` and `cx.notify()` happen
+    /// *before* any deferred-capture await. The user sees the terminal cursor
+    /// within one frame.
+    fn open_tab_ai_harness_terminal_from_request(
+        &mut self,
+        request: TabAiLaunchRequest,
+        capture_rx: TabAiDeferredCaptureRx,
+        cx: &mut Context<Self>,
+    ) {
         let (entity, _was_cold_start) = match self.ensure_tab_ai_harness_terminal(cx) {
             Ok(result) => result,
             Err(error) => {
@@ -95,19 +201,19 @@ impl ScriptListApp {
         };
 
         // Determine readiness based on actual PTY output, not cold-start flag.
-        // A prewarmed session that hasn't printed its prompt yet still needs the wait.
         let wait_for_readiness = Self::tab_ai_harness_needs_readiness_wait(&entity, cx);
 
         tracing::debug!(
             event = "tab_ai_harness_submission_planned",
             wait_for_readiness,
-            has_entry_intent = entry_intent.is_some(),
+            has_entry_intent = request.entry_intent.is_some(),
         );
 
         // Save the originating surface so Escape and re-entry can use it
-        self.tab_ai_harness_return_view = Some(source_view.clone());
+        self.tab_ai_harness_return_view = Some(request.source_view.clone());
         self.tab_ai_harness_return_focus_target = Some(self.tab_ai_return_focus_target());
 
+        // --- View switch FIRST: user sees the terminal immediately ---
         self.current_view = AppView::QuickTerminalView {
             entity: entity.clone(),
         };
@@ -123,60 +229,106 @@ impl ScriptListApp {
         .detach();
         cx.notify();
 
-        // Build and inject context (harness path captures fresh desktop snapshot).
-        // Use tab_ai_submit() (text-safe, no screenshots) for generic PTY backends.
-        // Pasting base64 PNG data into a CLI harness stdin is fragile and bloats the
-        // payload. The richer tab_ai() profile with screenshots is reserved for a
-        // future Claude-specific SDK path that can handle binary attachments natively.
-        let desktop = crate::context_snapshot::capture_context_snapshot(
-            &crate::context_snapshot::CaptureContextOptions::tab_ai_submit(),
-        );
-        let resolved = self.build_tab_ai_context_from(
-            entry_intent.clone().unwrap_or_default(),
-            source_view,
-            ui_snapshot,
-            desktop,
-            invocation_receipt,
-            cx,
-        );
+        // --- Spawn deferred context injection task ---
+        // This waits for the background capture, builds the full context blob
+        // with source type / screenshot / apply-back hint, then injects.
+        let app_weak = cx.entity().downgrade();
+        let capture_gen = request.capture_generation;
 
-        let submission_mode = if entry_intent.is_some() {
-            crate::ai::TabAiHarnessSubmissionMode::Submit
-        } else {
-            crate::ai::TabAiHarnessSubmissionMode::PasteOnly
-        };
+        cx.spawn(async move |_this, cx| {
+            // Wait for deferred capture to complete
+            let capture_result = match capture_rx.recv().await {
+                Ok(result) => result,
+                Err(_) => Err("deferred capture channel closed".to_string()),
+            };
 
-        match crate::ai::build_tab_ai_harness_submission(
-            &resolved.context,
-            entry_intent.as_deref(),
-            submission_mode,
-            Some(&resolved.invocation_receipt),
-            &resolved.suggested_intents,
-        ) {
-            Ok(submission) => {
-                self.inject_tab_ai_harness_submission(
-                    entity,
-                    submission,
-                    wait_for_readiness,
-                    entry_intent.is_some(),
-                    cx,
-                );
-            }
-            Err(error) => {
-                tracing::warn!(
-                    event = "tab_ai_harness_context_build_failed",
-                    error = %error,
-                );
-                self.toast_manager.push(
-                    crate::components::toast::Toast::error(
-                        format!("Failed to build harness context: {error}"),
-                        &self.theme,
-                    )
-                    .duration_ms(Some(TOAST_ERROR_MS)),
-                );
-                cx.notify();
-            }
-        }
+            let artifacts = match capture_result {
+                Ok(a) => a,
+                Err(e) => {
+                    tracing::warn!(
+                        event = "tab_ai_deferred_capture_failed",
+                        error = %e,
+                    );
+                    TabAiDeferredCaptureArtifacts::default()
+                }
+            };
+
+            // Apply the captured context
+            let _ = cx.update(|cx| {
+                let Some(app) = app_weak.upgrade() else { return; };
+                app.update(cx, |this, cx| {
+                    // Stale generation check
+                    if this.tab_ai_harness_capture_generation != capture_gen {
+                        tracing::debug!(
+                            event = "tab_ai_deferred_capture_stale",
+                            expected = capture_gen,
+                            current = this.tab_ai_harness_capture_generation,
+                        );
+                        return;
+                    }
+
+                    let source_type = detect_tab_ai_source_type(
+                        &request.source_view,
+                        &artifacts.desktop,
+                    );
+                    let apply_back_hint = build_tab_ai_apply_back_hint(source_type.as_ref());
+
+                    let resolved = this.build_tab_ai_context_from(
+                        request.entry_intent.clone().unwrap_or_default(),
+                        request.source_view.clone(),
+                        request.ui_snapshot.clone(),
+                        artifacts.desktop,
+                        request.invocation_receipt.clone(),
+                        cx,
+                    );
+
+                    let context = resolved.context.with_deferred_capture_fields(
+                        source_type,
+                        artifacts.screenshot_path,
+                        apply_back_hint,
+                    );
+
+                    let submission_mode = if request.entry_intent.is_some() {
+                        crate::ai::TabAiHarnessSubmissionMode::Submit
+                    } else {
+                        crate::ai::TabAiHarnessSubmissionMode::PasteOnly
+                    };
+
+                    match crate::ai::build_tab_ai_harness_submission(
+                        &context,
+                        request.entry_intent.as_deref(),
+                        submission_mode,
+                        Some(&resolved.invocation_receipt),
+                        &resolved.suggested_intents,
+                    ) {
+                        Ok(submission) => {
+                            this.inject_tab_ai_harness_submission(
+                                entity.clone(),
+                                submission,
+                                wait_for_readiness,
+                                request.entry_intent.is_some(),
+                                cx,
+                            );
+                        }
+                        Err(error) => {
+                            tracing::warn!(
+                                event = "tab_ai_harness_context_build_failed",
+                                error = %error,
+                            );
+                            this.toast_manager.push(
+                                crate::components::toast::Toast::error(
+                                    format!("Failed to build harness context: {error}"),
+                                    &this.theme,
+                                )
+                                .duration_ms(Some(TOAST_ERROR_MS)),
+                            );
+                            cx.notify();
+                        }
+                    }
+                });
+            });
+        })
+        .detach();
     }
 
     /// Prewarm the configured harness at app startup so the first Tab press
@@ -408,10 +560,35 @@ impl ScriptListApp {
     /// - `Cmd+W` closes the wrapper (handled in `render_prompts/term.rs`).
     /// - Plain `Escape` is forwarded to the PTY so the harness TUI can handle it.
     /// - The footer hint strip advertises only "⌘W Close".
+    ///
+    /// **Lifecycle contract:**
+    /// - Tears down the PTY via `TermPrompt::terminate_session()`.
+    /// - Clears `self.tab_ai_harness` so the next Tab opens a fresh session.
+    /// - Schedules a deferred `warm_tab_ai_harness_on_startup()` prewarm so
+    ///   the next Tab press still gets an instant harness.
     pub(crate) fn close_tab_ai_harness_terminal(&mut self, cx: &mut Context<Self>) {
         if !matches!(self.current_view, AppView::QuickTerminalView { .. }) {
             return;
         }
+
+        // Invalidate any in-flight deferred capture so late results cannot
+        // inject stale context after the harness has been closed.
+        self.tab_ai_harness_capture_generation += 1;
+
+        // Tear down the existing PTY session so no stale context persists.
+        let session = self.tab_ai_harness.take();
+        if let Some(session) = session {
+            let result = session.entity.update(cx, |term, _cx| {
+                term.terminate_session().map_err(|e| e.to_string())
+            });
+            if let Err(error) = result {
+                tracing::warn!(
+                    event = "tab_ai_harness_terminal_kill_failed",
+                    error = %error,
+                );
+            }
+        }
+
         let return_view = self
             .tab_ai_harness_return_view
             .take()
@@ -424,6 +601,8 @@ impl ScriptListApp {
         tracing::info!(
             event = "tab_ai_harness_terminal_close",
             focus_target = %format!("{return_focus_target:?}"),
+            session_cleared = true,
+            capture_generation = self.tab_ai_harness_capture_generation,
         );
 
         self.current_view = return_view;
@@ -433,7 +612,31 @@ impl ScriptListApp {
             FocusTarget::ActionsDialog => FocusedInput::ActionsSearch,
             _ => FocusedInput::None,
         };
+
+        // Keep the instant feel without reusing stale context.
+        self.schedule_tab_ai_harness_prewarm(std::time::Duration::from_millis(250), cx);
         cx.notify();
+    }
+
+    /// Schedule a deferred prewarm of the Tab AI harness so the next Tab
+    /// press gets an instant fresh session after a close cycle.
+    fn schedule_tab_ai_harness_prewarm(
+        &mut self,
+        delay: std::time::Duration,
+        cx: &mut Context<Self>,
+    ) {
+        let app_weak = cx.entity().downgrade();
+        cx.spawn(async move |_this, cx| {
+            cx.background_executor().timer(delay).await;
+            let _ = cx.update(|cx| {
+                if let Some(app) = app_weak.upgrade() {
+                    app.update(cx, |this, cx| {
+                        this.warm_tab_ai_harness_on_startup(cx);
+                    });
+                }
+            });
+        })
+        .detach();
     }
 
     /// Build context from explicit inputs, resolving targets and clipboard
@@ -1500,6 +1703,78 @@ impl ScriptListApp {
 
         Some(overlay.into_any_element())
     }
+}
+
+/// Detect the source type from the originating view and desktop snapshot.
+///
+/// Priority order:
+/// 1. Desktop selected text present → `DesktopSelection`
+/// 2. ScriptList with a resolved focused target → `ScriptListItem`
+/// 3. ClipboardHistoryView → `ClipboardEntry`
+/// 4. Prompt-like active surfaces → `RunningCommand`
+/// 5. Fallback → `Desktop`
+fn detect_tab_ai_source_type(
+    source_view: &AppView,
+    desktop: &crate::context_snapshot::AiContextSnapshot,
+) -> Option<crate::ai::TabAiSourceType> {
+    // Desktop selected text takes priority — it means the user had something
+    // highlighted outside of Script Kit.
+    if desktop.selected_text.as_ref().map_or(false, |t| !t.trim().is_empty()) {
+        return Some(crate::ai::TabAiSourceType::DesktopSelection);
+    }
+
+    match source_view {
+        AppView::ScriptList => Some(crate::ai::TabAiSourceType::ScriptListItem),
+
+        AppView::ClipboardHistoryView { .. } => {
+            Some(crate::ai::TabAiSourceType::ClipboardEntry)
+        }
+
+        // Prompt-like surfaces: the user was interacting with a running command
+        AppView::ArgPrompt { .. }
+        | AppView::MiniPrompt { .. }
+        | AppView::MicroPrompt { .. }
+        | AppView::DivPrompt { .. }
+        | AppView::FormPrompt { .. }
+        | AppView::EditorPrompt { .. }
+        | AppView::SelectPrompt { .. }
+        | AppView::PathPrompt { .. }
+        | AppView::DropPrompt { .. }
+        | AppView::TemplatePrompt { .. }
+        | AppView::TermPrompt { .. }
+        | AppView::EnvPrompt { .. }
+        | AppView::ChatPrompt { .. }
+        | AppView::NamingPrompt { .. } => Some(crate::ai::TabAiSourceType::RunningCommand),
+
+        _ => Some(crate::ai::TabAiSourceType::Desktop),
+    }
+}
+
+/// Build an apply-back hint from the detected source type.
+fn build_tab_ai_apply_back_hint(
+    source_type: Option<&crate::ai::TabAiSourceType>,
+) -> Option<crate::ai::TabAiApplyBackHint> {
+    let (action, label) = match source_type? {
+        crate::ai::TabAiSourceType::DesktopSelection => {
+            ("replaceSelectedText", "Frontmost selection")
+        }
+        crate::ai::TabAiSourceType::ScriptListItem => {
+            ("runGeneratedScript", "Focused script")
+        }
+        crate::ai::TabAiSourceType::RunningCommand => {
+            ("pasteToPrompt", "Active prompt")
+        }
+        crate::ai::TabAiSourceType::ClipboardEntry => {
+            ("copyToClipboard", "Clipboard")
+        }
+        crate::ai::TabAiSourceType::Desktop => {
+            ("pasteToFrontmostApp", "Frontmost app")
+        }
+    };
+    Some(crate::ai::TabAiApplyBackHint {
+        action: action.to_string(),
+        target_label: Some(label.to_string()),
+    })
 }
 
 #[cfg(test)]

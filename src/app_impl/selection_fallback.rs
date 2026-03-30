@@ -15,7 +15,9 @@ fn fallback_keeps_window_open(fallback: &crate::fallbacks::FallbackItem) -> bool
     match fallback {
         crate::fallbacks::FallbackItem::Builtin(builtin) => matches!(
             builtin.id,
-            "run-in-terminal" | "search-files" | "builtin-generate-script-with-ai"
+            "run-in-terminal"
+                | "search-files"
+                | crate::fallbacks::builtins::SEND_TO_AI_FALLBACK_ID
         ),
         crate::fallbacks::FallbackItem::Script(_) => true,
     }
@@ -444,6 +446,15 @@ impl ScriptListApp {
 
                     self.execute_builtin_with_query(&entry, Some(input), cx);
                 }
+                FallbackResult::SendToAiHarness { query } => {
+                    logging::log("FALLBACK", &format!("SendToAiHarness: {}", query));
+                    let normalized = query.trim().to_string();
+                    if normalized.is_empty() {
+                        self.open_tab_ai_chat(cx);
+                    } else {
+                        self.open_tab_ai_chat_with_entry_intent(Some(normalized), cx);
+                    }
+                }
             },
             Err(e) => {
                 logging::log("FALLBACK", &format!("Fallback execution error: {}", e));
@@ -495,12 +506,14 @@ mod tests {
     }
 
     #[test]
-    fn test_fallback_keeps_window_open_for_generate_script_builtin() {
+    fn test_fallback_keeps_window_open_for_send_to_ai() {
         let fallback = crate::fallbacks::FallbackItem::Builtin(
             crate::fallbacks::builtins::get_builtin_fallbacks()
                 .into_iter()
-                .find(|fallback| fallback.id == "builtin-generate-script-with-ai")
-                .expect("generate-script fallback should exist"),
+                .find(|fallback| {
+                    fallback.id == crate::fallbacks::builtins::SEND_TO_AI_FALLBACK_ID
+                })
+                .expect("send-to-ai fallback should exist"),
         );
 
         assert!(fallback_keeps_window_open(&fallback));

@@ -287,8 +287,8 @@ const TAB_AI_MODE_SOURCE: &str = include_str!("../src/app_impl/tab_ai_mode.rs");
 fn open_harness_terminal_saves_return_view_before_switching() {
     // The harness terminal must save the originating view BEFORE switching current_view.
     let open_fn_start = TAB_AI_MODE_SOURCE
-        .find("fn open_tab_ai_harness_terminal(")
-        .expect("open_tab_ai_harness_terminal must exist");
+        .find("fn open_tab_ai_harness_terminal_from_request(")
+        .expect("open_tab_ai_harness_terminal_from_request must exist");
     let open_fn_body = &TAB_AI_MODE_SOURCE[open_fn_start..];
     let next_fn = open_fn_body[1..]
         .find("\n    fn ")
@@ -515,8 +515,8 @@ fn open_harness_terminal_calls_readiness_check_before_injection() {
     // The open function must call the output-based readiness check,
     // not rely on was_cold_start for the wait decision.
     let open_fn_start = TAB_AI_MODE_SOURCE
-        .find("fn open_tab_ai_harness_terminal(")
-        .expect("open_tab_ai_harness_terminal must exist");
+        .find("fn open_tab_ai_harness_terminal_from_request(")
+        .expect("open_tab_ai_harness_terminal_from_request must exist");
     let open_fn_body = &TAB_AI_MODE_SOURCE[open_fn_start..];
     let next_fn = open_fn_body[1..]
         .find("\n    fn ")
@@ -550,8 +550,8 @@ fn open_harness_terminal_passes_receipt_and_suggestions_to_submission() {
     // The open function must pass invocation_receipt and suggested_intents
     // to build_tab_ai_harness_submission, not just None/&[].
     let open_fn_start = TAB_AI_MODE_SOURCE
-        .find("fn open_tab_ai_harness_terminal(")
-        .expect("open_tab_ai_harness_terminal must exist");
+        .find("fn open_tab_ai_harness_terminal_from_request(")
+        .expect("open_tab_ai_harness_terminal_from_request must exist");
     let open_fn_body = &TAB_AI_MODE_SOURCE[open_fn_start..];
     let next_fn = open_fn_body[1..]
         .find("\n    fn ")

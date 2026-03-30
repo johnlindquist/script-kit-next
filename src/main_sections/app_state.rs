@@ -268,6 +268,9 @@ struct ScriptListApp {
     tab_ai_save_offer_state: Option<TabAiSaveOfferState>,
     /// Persistent harness terminal session — reused across Tab presses.
     pub(crate) tab_ai_harness: Option<crate::ai::TabAiHarnessSessionState>,
+    /// Generation counter for cancelling stale deferred capture results.
+    /// Incremented on each new `begin_tab_ai_harness_entry()` call.
+    pub(crate) tab_ai_harness_capture_generation: u64,
     /// Previous surface to restore when leaving Tab AI quick terminal.
     pub(crate) tab_ai_harness_return_view: Option<AppView>,
     /// Previous focus target to restore when leaving Tab AI quick terminal.

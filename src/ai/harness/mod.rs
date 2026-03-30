@@ -5,6 +5,14 @@
 //! The context assembly pipeline (`TabAiContextBlob`) is unchanged — this
 //! module only consumes it.
 
+pub(crate) mod screenshot_files;
+
+pub use screenshot_files::{
+    capture_tab_ai_focused_window_screenshot_file, cleanup_old_tab_ai_screenshot_files,
+    cleanup_old_tab_ai_screenshot_files_in_dir, tab_ai_screenshot_prefix, TabAiScreenshotFile,
+    TAB_AI_SCREENSHOT_MAX_KEEP,
+};
+
 use serde::{Deserialize, Serialize};
 
 /// Schema version for `HarnessConfig` wire format.

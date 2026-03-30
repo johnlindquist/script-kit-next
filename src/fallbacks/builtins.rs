@@ -66,6 +66,11 @@ impl FallbackCondition {
     }
 }
 
+/// Fallback ID for the "Send to AI" harness-native action.
+pub const SEND_TO_AI_FALLBACK_ID: &str = "send-to-ai";
+/// Display label for the "Send to AI" fallback.
+pub const SEND_TO_AI_FALLBACK_LABEL: &str = "Send to AI";
+
 /// Action type that determines how the fallback executes
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FallbackAction {
@@ -87,6 +92,8 @@ pub enum FallbackAction {
     SearchFiles,
     /// Execute a Script Kit built-in command by ID
     ExecuteBuiltin { builtin_id: String },
+    /// Open the instant AI harness terminal with the query
+    SendToAiHarness,
 }
 
 /// A built-in fallback command
@@ -199,6 +206,10 @@ impl BuiltinFallback {
             FallbackAction::ExecuteBuiltin { builtin_id } => Ok(FallbackResult::ExecuteBuiltin {
                 builtin_id: builtin_id.clone(),
             }),
+
+            FallbackAction::SendToAiHarness => Ok(FallbackResult::SendToAiHarness {
+                query: input.trim().to_string(),
+            }),
         }
     }
 
@@ -224,6 +235,7 @@ impl BuiltinFallback {
             FallbackAction::ExecuteBuiltin { .. } => {
                 format!("Run command with '{}'", truncated)
             }
+            FallbackAction::SendToAiHarness => format!("Ask AI about '{}'", truncated),
         }
     }
 }
@@ -247,6 +259,8 @@ pub enum FallbackResult {
     SearchFiles { query: String },
     /// Execute a Script Kit built-in command
     ExecuteBuiltin { builtin_id: String },
+    /// Open the instant AI harness terminal with this query
+    SendToAiHarness { query: String },
 }
 
 /// Get all built-in fallback commands
@@ -254,15 +268,13 @@ pub enum FallbackResult {
 /// Returns a vector of all default fallbacks in priority order
 pub fn get_builtin_fallbacks() -> Vec<BuiltinFallback> {
     vec![
-        // Generate Script with AI - top fallback when no script matches
+        // Send to AI — top fallback when no script matches; opens the instant harness
         BuiltinFallback {
-            id: "builtin-generate-script-with-ai",
-            name: "Generate Script with AI",
-            description: "Generate a Script Kit script from this text",
+            id: SEND_TO_AI_FALLBACK_ID,
+            name: SEND_TO_AI_FALLBACK_LABEL,
+            description: "Open the instant harness with this query and inferred context",
             icon: "sparkles",
-            action: FallbackAction::ExecuteBuiltin {
-                builtin_id: "builtin-generate-script-with-ai".to_string(),
-            },
+            action: FallbackAction::SendToAiHarness,
             condition: FallbackCondition::Always,
             enabled: true,
             priority: 0,
@@ -460,7 +472,7 @@ mod tests {
 
         // Should include all "Always" fallbacks
         let ids: Vec<&str> = fallbacks.iter().map(|f| f.id).collect();
-        assert!(ids.contains(&"builtin-generate-script-with-ai"));
+        assert!(ids.contains(&SEND_TO_AI_FALLBACK_ID));
         assert!(ids.contains(&"builtin-do-in-current-app"));
         assert!(ids.contains(&"search-files"));
         assert!(ids.contains(&"run-in-terminal"));
@@ -578,19 +590,59 @@ mod tests {
     }
 
     #[test]
-    fn test_execute_generate_script_with_ai_returns_execute_builtin() {
-        let fallbacks = get_builtin_fallbacks();
-        let generate_script = fallbacks
-            .iter()
-            .find(|f| f.id == "builtin-generate-script-with-ai")
-            .expect("generate-script fallback should exist");
+    fn test_send_to_ai_is_top_fallback_priority() {
+        let fallbacks = get_applicable_fallbacks("build a weather app");
+        let first = fallbacks
+            .first()
+            .expect("applicable fallback list should not be empty");
+        assert_eq!(first.id, SEND_TO_AI_FALLBACK_ID);
+        assert_eq!(first.name, SEND_TO_AI_FALLBACK_LABEL);
+        assert_eq!(first.priority, 0);
+    }
 
-        let result = generate_script.execute("build a git helper").unwrap();
+    #[test]
+    fn test_execute_send_to_ai_returns_harness_result() {
+        let fallbacks = get_builtin_fallbacks();
+        let send_to_ai = fallbacks
+            .iter()
+            .find(|f| f.id == SEND_TO_AI_FALLBACK_ID)
+            .expect("send-to-ai fallback should exist");
+
+        let result = send_to_ai.execute("build a git helper").unwrap();
         match result {
-            FallbackResult::ExecuteBuiltin { builtin_id } => {
-                assert_eq!(builtin_id, "builtin-generate-script-with-ai")
+            FallbackResult::SendToAiHarness { query } => {
+                assert_eq!(query, "build a git helper");
             }
-            _ => panic!("Expected ExecuteBuiltin result"),
+            _ => panic!("Expected SendToAiHarness result"),
+        }
+    }
+
+    #[test]
+    fn test_send_to_ai_subtitle_reflects_query() {
+        let fallbacks = get_builtin_fallbacks();
+        let send_to_ai = fallbacks
+            .iter()
+            .find(|f| f.id == SEND_TO_AI_FALLBACK_ID)
+            .expect("send-to-ai fallback should exist");
+
+        let subtitle = send_to_ai.get_subtitle("rename these files");
+        assert_eq!(subtitle, "Ask AI about 'rename these files'");
+    }
+
+    #[test]
+    fn test_send_to_ai_trims_whitespace_from_query() {
+        let fallbacks = get_builtin_fallbacks();
+        let send_to_ai = fallbacks
+            .iter()
+            .find(|f| f.id == SEND_TO_AI_FALLBACK_ID)
+            .expect("send-to-ai fallback should exist");
+
+        let result = send_to_ai.execute("  hello  ").unwrap();
+        match result {
+            FallbackResult::SendToAiHarness { query } => {
+                assert_eq!(query, "hello");
+            }
+            _ => panic!("Expected SendToAiHarness result"),
         }
     }
 
@@ -747,14 +799,14 @@ mod tests {
     }
 
     #[test]
-    fn test_generate_script_with_ai_is_top_fallback_priority() {
+    fn test_send_to_ai_is_top_applicable_fallback() {
         let fallbacks = get_applicable_fallbacks("build a weather app");
 
         let first = fallbacks
             .first()
             .expect("applicable fallback list should not be empty");
 
-        assert_eq!(first.id, "builtin-generate-script-with-ai");
+        assert_eq!(first.id, SEND_TO_AI_FALLBACK_ID);
         assert_eq!(first.priority, 0);
     }
 
@@ -790,21 +842,21 @@ mod tests {
     }
 
     #[test]
-    fn test_do_in_current_app_fallback_priority_after_generate_script() {
+    fn test_do_in_current_app_fallback_priority_after_send_to_ai() {
         let fallbacks = get_applicable_fallbacks("close duplicate tabs");
 
-        let gen_pos = fallbacks
+        let ai_pos = fallbacks
             .iter()
-            .position(|f| f.id == "builtin-generate-script-with-ai");
+            .position(|f| f.id == SEND_TO_AI_FALLBACK_ID);
         let do_pos = fallbacks
             .iter()
             .position(|f| f.id == "builtin-do-in-current-app");
 
-        assert!(gen_pos.is_some());
+        assert!(ai_pos.is_some());
         assert!(do_pos.is_some());
         assert!(
-            gen_pos.unwrap() < do_pos.unwrap(),
-            "generate-script (priority 0) should come before do-in-current-app (priority 1)"
+            ai_pos.unwrap() < do_pos.unwrap(),
+            "send-to-ai (priority 0) should come before do-in-current-app (priority 1)"
         );
     }
 }

@@ -25,23 +25,29 @@ fn ai_capture_hide_settle_duration() -> std::time::Duration {
 }
 
 fn ai_command_keeps_main_window_visible(cmd_type: &builtins::AiCommandType) -> bool {
+    // All active AI commands now route to the harness terminal, which is
+    // a view inside the main window — keep it visible.
     match cmd_type {
-        builtins::AiCommandType::GenerateScript => true,
-        builtins::AiCommandType::MiniAi => false,
+        builtins::AiCommandType::GenerateScript
+        | builtins::AiCommandType::GenerateScriptFromCurrentApp
+        | builtins::AiCommandType::OpenAi
+        | builtins::AiCommandType::MiniAi
+        | builtins::AiCommandType::NewConversation
+        | builtins::AiCommandType::ClearConversation
+        | builtins::AiCommandType::SendScreenToAi
+        | builtins::AiCommandType::SendFocusedWindowToAi
+        | builtins::AiCommandType::SendSelectedTextToAi
+        | builtins::AiCommandType::SendBrowserTabToAi
+        | builtins::AiCommandType::SendScreenAreaToAi => true,
+        // Preset commands (debug-only) retain their original behavior.
         _ => false,
     }
 }
 
-fn ai_command_uses_hide_then_capture_flow(cmd_type: &builtins::AiCommandType) -> bool {
-    matches!(
-        cmd_type,
-        builtins::AiCommandType::GenerateScriptFromCurrentApp
-            | builtins::AiCommandType::SendScreenToAi
-            | builtins::AiCommandType::SendFocusedWindowToAi
-            | builtins::AiCommandType::SendScreenAreaToAi
-            | builtins::AiCommandType::SendSelectedTextToAi
-            | builtins::AiCommandType::SendBrowserTabToAi
-    )
+fn ai_command_uses_hide_then_capture_flow(_cmd_type: &builtins::AiCommandType) -> bool {
+    // Legacy capture flow no longer needed — all active AI commands route to
+    // the harness terminal which captures context inline.
+    false
 }
 
 #[cfg(test)]
@@ -1818,167 +1824,39 @@ impl ScriptListApp {
                 }
 
                 match cmd_type {
-                    AiCommandType::OpenAi | AiCommandType::NewConversation => {
-                        self.open_ai_window_after_already_hidden(
-                            &format!("ai_command::{cmd_type:?}"),
-                            &dctx.trace_id,
-                            DeferredAiWindowAction::OpenOnly,
-                            cx,
-                        );
-                        Self::builtin_success(dctx, format!("ai_command::{cmd_type:?}"))
-                    }
-
-                    AiCommandType::MiniAi => {
-                        let source_action = format!("ai_command::{cmd_type:?}");
-                        let trace_id = dctx.trace_id.to_string();
-
-                        tracing::info!(
-                            category = "AI",
-                            event = "ai_handoff_defer_open_start",
-                            source_action = %source_action,
-                            trace_id = %trace_id,
-                            deferred_action = "open_only",
-                            "Opening mini AI window after main window already hidden"
-                        );
-
-                        cx.spawn(async move |this, cx| {
-                            cx.background_executor()
-                                .timer(std::time::Duration::from_millis(1))
-                                .await;
-
-                            let started_at = std::time::Instant::now();
-
-                            let open_result = cx.update(|cx| {
-                                crate::ai::open_mini_ai_window_from("builtin_mini_ai", cx)
-                                    .map_err(|error| error.to_string())?;
-                                Ok::<(), String>(())
-                            });
-
-                            if open_result.is_ok() {
-                                let ready_now = cx.update(ai::is_ai_window_ready);
-                                if !ready_now {
-                                    cx.background_executor()
-                                        .timer(std::time::Duration::from_millis(16))
-                                        .await;
-                                }
-                            }
-
-                            let handoff_result = open_result.and_then(|()| {
-                                cx.update(|cx| {
-                                    if !ai::is_ai_window_ready(cx) {
-                                        return Err("AI window not ready after open".to_string());
-                                    }
-                                    DeferredAiWindowAction::OpenOnly.apply(cx)
-                                })
-                            });
-
-                            match handoff_result {
-                                Ok(apply_stage) => {
-                                    let _ = this.update(cx, |_this, cx| {
-                                        tracing::info!(
-                                            category = "AI",
-                                            event = "ai_handoff_defer_open_success",
-                                            source_action = %source_action,
-                                            trace_id = %trace_id,
-                                            deferred_action = "open_only",
-                                            apply_stage,
-                                            duration_ms = started_at.elapsed().as_millis() as u64,
-                                            "Mini AI handoff completed"
-                                        );
-                                        cx.notify();
-                                    });
-                                }
-                                Err(error) => {
-                                    let _ = this.update(cx, |this, cx| {
-                                        tracing::error!(
-                                            category = "AI",
-                                            event = "ai_handoff_defer_open_failed",
-                                            source_action = %source_action,
-                                            trace_id = %trace_id,
-                                            deferred_action = "open_only",
-                                            error = %error,
-                                            duration_ms = started_at.elapsed().as_millis() as u64,
-                                            "Failed to open mini AI window after hiding main window"
-                                        );
-                                        this.show_error_toast(
-                                            format!("Failed to send to AI Chat: {}", error),
-                                            cx,
-                                        );
-                                    });
-                                }
-                            }
-                        })
-                        .detach();
-
-                        Self::builtin_success(dctx, format!("ai_command::{cmd_type:?}"))
-                    }
-
-                    AiCommandType::ClearConversation => {
-                        match ai::clear_all_chats() {
-                            Ok(()) => {
-                                ai::close_ai_window(cx);
-                                self.open_ai_window_after_already_hidden(
-                                    "ClearConversation",
-                                    &dctx.trace_id,
-                                    DeferredAiWindowAction::OpenOnly,
-                                    cx,
-                                );
-                                Self::builtin_success(dctx, "ai_clear_conversation")
-                            }
-                            Err(e) => {
-                                let message = format!("Failed to clear AI conversations: {}", e);
-                                self.show_error_toast(message.clone(), cx);
-                                Self::builtin_error(
-                                    dctx,
-                                    crate::action_helpers::ERROR_ACTION_FAILED,
-                                    message,
-                                    "ai_clear_conversation_failed",
-                                )
-                            }
-                        }
-                    }
-
+                    // -------------------------------------------------------
+                    // All active AI commands now route to the harness terminal.
+                    // The harness captures context inline via its own snapshot.
+                    // -------------------------------------------------------
                     AiCommandType::GenerateScript => {
                         let query = query_override.unwrap_or(&self.filter_text).to_string();
-                        self.dispatch_ai_script_generation_from_query(query, cx);
-                        Self::builtin_success(dctx, "ai_generate_script_dispatched")
+                        let trimmed = query.trim().to_string();
+                        if trimmed.is_empty() {
+                            self.open_tab_ai_chat(cx);
+                        } else {
+                            self.open_tab_ai_chat_with_entry_intent(Some(trimmed), cx);
+                        }
+                        Self::builtin_success(dctx, "ai_generate_script_routed_to_harness")
                     }
 
-                    AiCommandType::GenerateScriptFromCurrentApp => {
-                        self.spawn_generate_script_from_current_app_after_hide(
-                            dctx.trace_id.to_string(),
-                            query_override.map(|s| s.to_string()),
-                            cx,
-                        );
-                        Self::builtin_success(
-                            dctx,
-                            "ai_generate_script_from_current_app_scheduled",
-                        )
+                    AiCommandType::GenerateScriptFromCurrentApp
+                    | AiCommandType::SendScreenToAi
+                    | AiCommandType::SendFocusedWindowToAi
+                    | AiCommandType::SendSelectedTextToAi
+                    | AiCommandType::SendBrowserTabToAi
+                    | AiCommandType::SendScreenAreaToAi => {
+                        // Context capture is handled by the harness's built-in
+                        // context snapshot — no legacy hide-then-capture needed.
+                        self.open_tab_ai_chat(cx);
+                        Self::builtin_success(dctx, format!("ai_{cmd_type:?}_routed_to_harness"))
                     }
 
-                    AiCommandType::SendScreenToAi => {
-                        self.spawn_send_screen_to_ai_after_hide(&dctx.trace_id, cx);
-                        Self::builtin_success(dctx, "ai_send_screen_scheduled")
-                    }
-
-                    AiCommandType::SendFocusedWindowToAi => {
-                        self.spawn_send_focused_window_to_ai_after_hide(&dctx.trace_id, cx);
-                        Self::builtin_success(dctx, "ai_send_focused_window_scheduled")
-                    }
-
-                    AiCommandType::SendSelectedTextToAi => {
-                        self.spawn_send_selected_text_to_ai_after_hide(&dctx.trace_id, cx);
-                        Self::builtin_success(dctx, "ai_send_selected_text_scheduled")
-                    }
-
-                    AiCommandType::SendBrowserTabToAi => {
-                        self.spawn_send_browser_tab_to_ai_after_hide(&dctx.trace_id, cx);
-                        Self::builtin_success(dctx, "ai_send_browser_tab_scheduled")
-                    }
-
-                    AiCommandType::SendScreenAreaToAi => {
-                        self.spawn_send_screen_area_to_ai_after_hide(&dctx.trace_id, cx);
-                        Self::builtin_success(dctx, "ai_send_screen_area_scheduled")
+                    AiCommandType::OpenAi
+                    | AiCommandType::MiniAi
+                    | AiCommandType::NewConversation
+                    | AiCommandType::ClearConversation => {
+                        self.open_tab_ai_chat(cx);
+                        Self::builtin_success(dctx, format!("ai_{cmd_type:?}_routed_to_harness"))
                     }
 
                     AiCommandType::CreateAiPreset => {
@@ -4038,21 +3916,41 @@ mod builtin_execution_ai_feedback_tests {
     use std::path::PathBuf;
 
     #[test]
-    fn only_plain_generate_script_keeps_main_window_visible() {
+    fn all_active_ai_commands_keep_main_window_visible_for_harness() {
+        // All active AI commands now route to the harness terminal (a view
+        // inside the main window), so they must all keep the window visible.
         assert!(ai_command_keeps_main_window_visible(
             &AiCommandType::GenerateScript
         ));
-        assert!(!ai_command_keeps_main_window_visible(
+        assert!(ai_command_keeps_main_window_visible(
             &AiCommandType::GenerateScriptFromCurrentApp
         ));
-        assert!(!ai_command_keeps_main_window_visible(
+        assert!(ai_command_keeps_main_window_visible(
             &AiCommandType::SendScreenToAi
         ));
-        assert!(!ai_command_keeps_main_window_visible(
+        assert!(ai_command_keeps_main_window_visible(
             &AiCommandType::OpenAi
         ));
-        assert!(!ai_command_keeps_main_window_visible(
+        assert!(ai_command_keeps_main_window_visible(
             &AiCommandType::MiniAi
+        ));
+        assert!(ai_command_keeps_main_window_visible(
+            &AiCommandType::NewConversation
+        ));
+        assert!(ai_command_keeps_main_window_visible(
+            &AiCommandType::ClearConversation
+        ));
+        assert!(ai_command_keeps_main_window_visible(
+            &AiCommandType::SendFocusedWindowToAi
+        ));
+        assert!(ai_command_keeps_main_window_visible(
+            &AiCommandType::SendSelectedTextToAi
+        ));
+        assert!(ai_command_keeps_main_window_visible(
+            &AiCommandType::SendBrowserTabToAi
+        ));
+        assert!(ai_command_keeps_main_window_visible(
+            &AiCommandType::SendScreenAreaToAi
         ));
     }
 
@@ -4075,23 +3973,25 @@ mod builtin_execution_ai_feedback_tests {
     }
 
     #[test]
-    fn test_ai_capture_commands_use_hide_then_capture_flow_only_for_sync_screenshots() {
-        assert!(ai_command_uses_hide_then_capture_flow(
+    fn no_ai_commands_use_hide_then_capture_flow_after_harness_redirect() {
+        // Legacy capture flow is no longer used — all active AI commands
+        // route to the harness terminal which captures context inline.
+        assert!(!ai_command_uses_hide_then_capture_flow(
             &AiCommandType::GenerateScriptFromCurrentApp
         ));
-        assert!(ai_command_uses_hide_then_capture_flow(
+        assert!(!ai_command_uses_hide_then_capture_flow(
             &AiCommandType::SendScreenToAi
         ));
-        assert!(ai_command_uses_hide_then_capture_flow(
+        assert!(!ai_command_uses_hide_then_capture_flow(
             &AiCommandType::SendFocusedWindowToAi
         ));
-        assert!(ai_command_uses_hide_then_capture_flow(
+        assert!(!ai_command_uses_hide_then_capture_flow(
             &AiCommandType::SendScreenAreaToAi
         ));
-        assert!(ai_command_uses_hide_then_capture_flow(
+        assert!(!ai_command_uses_hide_then_capture_flow(
             &AiCommandType::SendSelectedTextToAi
         ));
-        assert!(ai_command_uses_hide_then_capture_flow(
+        assert!(!ai_command_uses_hide_then_capture_flow(
             &AiCommandType::SendBrowserTabToAi
         ));
         assert!(!ai_command_uses_hide_then_capture_flow(

@@ -563,6 +563,22 @@ impl ScriptListApp {
             return false; // Scriptlets don't need immediate window show
         }
 
+        // Try matching the raw command_id as a builtin entry ID (e.g. "builtin-dictation").
+        // Hotkey handlers pass the full builtin ID without the "builtin/" prefix split.
+        {
+            let config = crate::config::BuiltInConfig::default();
+            if let Some(entry) = builtins::get_builtin_entries(&config)
+                .iter()
+                .find(|e| e.id == command_id)
+            {
+                logging::log("EXEC", &format!("Executing builtin by raw ID: {}", command_id));
+                self.execute_builtin(entry, cx);
+                let needs_main_window =
+                    builtin_needs_main_window_for_command_id(command_id);
+                return needs_main_window;
+            }
+        }
+
         // Fall back to path-based execution (legacy behavior)
         // Scripts typically need the main window for prompts
         self.execute_script_by_path(command_id, cx);

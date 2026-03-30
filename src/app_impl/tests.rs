@@ -59,13 +59,17 @@ fn test_shift_tab_routes_through_harness_entry_intent() {
 }
 
 #[test]
-fn test_generate_script_builtin_routes_to_shared_ai_script_generation_handler() {
+fn test_generate_script_builtin_routes_to_harness_terminal() {
     let builtin_execution = fs::read_to_string("src/app_execute/builtin_execution.rs")
         .expect("Failed to read src/app_execute/builtin_execution.rs");
 
     assert!(
-        builtin_execution.contains("self.dispatch_ai_script_generation_from_query(query, cx);"),
-        "Generate Script built-in should route to dispatch_ai_script_generation_from_query"
+        builtin_execution.contains("open_tab_ai_chat_with_entry_intent(Some(trimmed), cx)"),
+        "Generate Script built-in should route to harness terminal with entry intent"
+    );
+    assert!(
+        builtin_execution.contains("ai_generate_script_routed_to_harness"),
+        "Generate Script success label should indicate harness routing"
     );
 }
 
@@ -93,21 +97,19 @@ fn test_tab_interceptor_matches_tab_key_case_insensitive() {
 }
 
 #[test]
-fn test_generate_script_from_current_app_routes_to_shared_dispatch() {
+fn test_generate_script_from_current_app_routes_to_harness() {
     let builtin_execution = fs::read_to_string("src/app_execute/builtin_execution.rs")
         .expect("Failed to read src/app_execute/builtin_execution.rs");
 
     assert!(
         builtin_execution
-            .contains("AiCommandType::GenerateScriptFromCurrentApp =>"),
-        "GenerateScriptFromCurrentApp must have a dedicated match arm in builtin_execution.rs"
+            .contains("AiCommandType::GenerateScriptFromCurrentApp"),
+        "GenerateScriptFromCurrentApp must be handled in builtin_execution.rs"
     );
 
     assert!(
-        builtin_execution
-            .contains("app.dispatch_ai_script_generation_from_query(prompt, cx);"),
-        "GenerateScriptFromCurrentApp must route through dispatch_ai_script_generation_from_query \
-         (in async capture closure), not a separate UI path"
+        builtin_execution.contains("ai_{cmd_type:?}_routed_to_harness"),
+        "GenerateScriptFromCurrentApp must route to harness terminal"
     );
 }
 
