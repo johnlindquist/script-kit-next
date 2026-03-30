@@ -1420,10 +1420,7 @@ mod cleanup_contract_audits {
     #[test]
     fn tab_ai_silent_prewarm_is_marked_fresh_on_cold_start_contract() {
         let source = include_str!("../../app_impl/tab_ai_mode.rs");
-        let body = compact(&extract_fn_body(
-            source,
-            "fn warm_tab_ai_harness_silently",
-        ));
+        let body = compact(&extract_fn_body(source, "fn warm_tab_ai_harness_silently"));
         assert!(
             body.contains(&compact("if was_cold_start {")),
             "silent prewarm helper must gate FreshPrewarm tagging on a newly created session"
@@ -1446,9 +1443,7 @@ mod cleanup_contract_audits {
             "pub(crate) fn close_tab_ai_harness_terminal",
         ));
         assert!(
-            body.contains(&compact(
-                "let session = self.tab_ai_harness.take();"
-            )),
+            body.contains(&compact("let session = self.tab_ai_harness.take();")),
             "close path must clear the current PTY session"
         );
         assert!(
@@ -1537,10 +1532,7 @@ mod cleanup_contract_audits {
     #[test]
     fn silent_prewarm_helper_still_marks_cold_start_as_fresh_contract() {
         let source = include_str!("../../app_impl/tab_ai_mode.rs");
-        let body = compact(&extract_fn_body(
-            source,
-            "fn warm_tab_ai_harness_silently",
-        ));
+        let body = compact(&extract_fn_body(source, "fn warm_tab_ai_harness_silently"));
 
         assert!(
             body.contains(&compact("if was_cold_start {")),
@@ -1566,8 +1558,7 @@ mod cleanup_contract_audits {
     #[test]
     fn full_screen_capture_helper_contract_is_preserved() {
         assert!(
-            SCREENSHOT_FILES_SOURCE
-                .contains("pub fn capture_tab_ai_screen_screenshot_file()"),
+            SCREENSHOT_FILES_SOURCE.contains("pub fn capture_tab_ai_screen_screenshot_file()"),
             "full-screen screenshot helper must exist as a public function",
         );
         assert!(
@@ -1598,9 +1589,7 @@ mod cleanup_contract_audits {
             .find("pub fn get_builtin_entries(")
             .expect("get_builtin_entries must exist");
         let fn_body = &BUILTINS_SOURCE[fn_start..];
-        let fn_end = fn_body
-            .find("\n#[cfg(test)]")
-            .unwrap_or(fn_body.len());
+        let fn_end = fn_body.find("\n#[cfg(test)]").unwrap_or(fn_body.len());
         let registration_section = &fn_body[..fn_end];
 
         for legacy_id in [
@@ -1640,9 +1629,7 @@ mod cleanup_contract_audits {
             .find("pub fn get_builtin_entries(")
             .expect("get_builtin_entries must exist");
         let fn_body = &BUILTINS_SOURCE[fn_start..];
-        let fn_end = fn_body
-            .find("\n#[cfg(test)]")
-            .unwrap_or(fn_body.len());
+        let fn_end = fn_body.find("\n#[cfg(test)]").unwrap_or(fn_body.len());
         let registration_section = &fn_body[..fn_end];
 
         assert!(
@@ -1658,10 +1645,7 @@ mod cleanup_contract_audits {
     #[test]
     fn detect_source_type_delegates_to_canonical_function() {
         let source = include_str!("../../app_impl/tab_ai_mode.rs");
-        let body = compact(&extract_fn_body(
-            source,
-            "fn detect_tab_ai_source_type(",
-        ));
+        let body = compact(&extract_fn_body(source, "fn detect_tab_ai_source_type("));
 
         assert!(
             body.contains(&compact(
@@ -1678,10 +1662,7 @@ mod cleanup_contract_audits {
     #[test]
     fn build_apply_back_hint_delegates_to_canonical_function() {
         let source = include_str!("../../app_impl/tab_ai_mode.rs");
-        let body = compact(&extract_fn_body(
-            source,
-            "fn build_tab_ai_apply_back_hint(",
-        ));
+        let body = compact(&extract_fn_body(source, "fn build_tab_ai_apply_back_hint("));
 
         assert!(
             body.contains(&compact(

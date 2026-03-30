@@ -61,26 +61,6 @@ fn hide_main_window() {
     // No-op on non-macOS platforms
 }
 
-/// Hide the main window synchronously via `orderOut:`.
-///
-/// Unlike [`defer_hide_main_window`], this runs immediately on the calling
-/// thread.  **Only safe when NOT inside a GPUI callback** (listener, update,
-/// render, entity method) — otherwise `orderOut:` will trigger
-/// `window_did_change_key_status` which re-enters the `RefCell` and panics.
-///
-/// Use this when you need the main window to be hidden *before* a subsequent
-/// operation (e.g. before creating a new PopUp window that would cause macOS
-/// to surface sibling panels).
-#[cfg(target_os = "macos")]
-pub fn hide_main_window_sync() {
-    hide_main_window();
-}
-
-#[cfg(not(target_os = "macos"))]
-pub fn hide_main_window_sync() {
-    // No-op on non-macOS platforms
-}
-
 /// Hide the main window, deferring the ObjC call to the next event-loop tick.
 ///
 /// This is the **only safe way** to hide the main window from inside any GPUI

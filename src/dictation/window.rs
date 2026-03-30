@@ -665,15 +665,17 @@ pub fn open_dictation_overlay(
     // overlay — macOS may surface sibling panels at the same level.
     let main_was_visible = crate::is_main_window_visible();
 
-    // focus: false — the overlay must not activate the app or surface the
-    // main window.  We bring the overlay to front via orderFrontRegardless
-    // and makeKeyWindow below.
+    // focus: false + show: false — the overlay must not activate the app or
+    // surface the main window.  Creating a PopUp with show:true causes macOS
+    // to surface sibling panels at the same window level, which briefly
+    // flashes the main window.  We create hidden, then bring to front via
+    // orderFrontRegardless below (which only surfaces THIS window).
     let window_options = WindowOptions {
         window_bounds: Some(WindowBounds::Windowed(bounds)),
         titlebar: None,
         window_background,
         focus: false,
-        show: true,
+        show: false,
         kind: gpui::WindowKind::PopUp,
         ..Default::default()
     };
@@ -728,6 +730,20 @@ pub fn open_dictation_overlay(
                     // to deliver Escape key events without pulling a hidden app forward.
                     unsafe {
                         let ns_window: cocoa::base::id = msg_send![ns_view, window];
+
+                        // Hide the main window BEFORE surfacing the overlay.
+                        // orderFrontRegardless on a PopUp can cause macOS to
+                        // also surface sibling panels at the same level.  By
+                        // sending orderOut: to the main panel first (in the
+                        // same synchronous call), it cannot flash on screen.
+                        // SAFETY: get_main_window returns the registered main
+                        // NSPanel; orderOut: with nil sender is safe.
+                        if !main_was_visible {
+                            if let Some(main_window) = crate::window_manager::get_main_window() {
+                                let () = msg_send![main_window, orderOut: cocoa::base::nil];
+                            }
+                        }
+
                         let () = msg_send![ns_window, orderFrontRegardless];
                         if should_key_overlay {
                             let () = msg_send![ns_window, makeKeyWindow];
@@ -745,15 +761,6 @@ pub fn open_dictation_overlay(
         let _ = handle.update(cx, |view, window, cx| {
             view.focus_handle.focus(window, cx);
         });
-    }
-
-    // Defensive guard: if the main window was hidden before we opened the
-    // overlay, ensure it stays hidden. Creating a new PopUp NSPanel at
-    // the same window level can cause macOS to surface sibling panels.
-    // This must stay deferred because orderOut: can synchronously re-enter
-    // GPUI and panic when called from update/listener contexts.
-    if !main_was_visible {
-        crate::platform::defer_hide_main_window(cx);
     }
 
     // Store handle.
