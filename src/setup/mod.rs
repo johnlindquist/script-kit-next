@@ -2053,6 +2053,7 @@ mod tab_ai_agent_doc_contract_tests {
     const ROOT_AGENTS: &str = include_str!("../../kit-init/ROOT_AGENTS.md");
     const REPO_CLAUDE: &str = include_str!("../../CLAUDE.md");
     const REPO_AGENTS: &str = include_str!("../../AGENTS.md");
+    const AI_MOD_SOURCE: &str = include_str!("../ai/mod.rs");
 
     fn assert_tab_ai_doc_contract(source: &str, label: &str) {
         for needle in [
@@ -2088,6 +2089,37 @@ mod tab_ai_agent_doc_contract_tests {
         }
     }
 
+    fn assert_tab_ai_schema_detail_contract(source: &str, label: &str) {
+        for needle in [
+            "`TabAiExecutionRecord` (v2)",
+            "Compatibility-only types still present",
+            "PanelOnlyElements",
+            "CollectorFallback",
+            "NoSemanticElements",
+            "MissingFocusTarget",
+            "InputNotExtractable",
+            "InputNotApplicable",
+        ] {
+            assert!(
+                source.contains(needle),
+                "{label} must contain `{needle}`"
+            );
+        }
+
+        for stale in [
+            "`TabAiExecutionRecord` (v1)",
+            "record + status + output + duration",
+            "Persisted memory: intent, script, target bundle_id, outcome",
+            "PanelOnlyWarning",
+            "MissingInput",
+        ] {
+            assert!(
+                !source.contains(stale),
+                "{label} contains stale Tab AI schema detail: {stale}"
+            );
+        }
+    }
+
     #[test]
     fn root_claude_doc_matches_landed_tab_ai_contract() {
         assert_tab_ai_doc_contract(ROOT_CLAUDE, "kit-init/ROOT_CLAUDE.md");
@@ -2106,5 +2138,35 @@ mod tab_ai_agent_doc_contract_tests {
     #[test]
     fn repo_agents_doc_matches_landed_tab_ai_contract() {
         assert_tab_ai_doc_contract(REPO_AGENTS, "AGENTS.md");
+    }
+
+    #[test]
+    fn repo_claude_schema_detail_matches_current_tab_ai_types() {
+        assert_tab_ai_schema_detail_contract(REPO_CLAUDE, "CLAUDE.md");
+    }
+
+    #[test]
+    fn repo_agents_schema_detail_matches_current_tab_ai_types() {
+        assert_tab_ai_schema_detail_contract(REPO_AGENTS, "AGENTS.md");
+    }
+
+    #[test]
+    fn ai_mod_docs_reflect_tab_ai_harness_primary_path() {
+        for needle in [
+            "//! AI surfaces and shared contracts.",
+            "//! The primary Tab-triggered AI experience is **not** the old inline chat UI.",
+            "//! Pressing Tab routes to a warm harness terminal in `AppView::QuickTerminalView`",
+            "//! - Legacy chat/window code still exists, but it is not the default Tab AI surface.",
+        ] {
+            assert!(
+                AI_MOD_SOURCE.contains(needle),
+                "src/ai/mod.rs docs must contain `{needle}`"
+            );
+        }
+
+        assert!(
+            !AI_MOD_SOURCE.contains("//! AI Chat Module"),
+            "src/ai/mod.rs must not describe the module as chat-only anymore"
+        );
     }
 }
