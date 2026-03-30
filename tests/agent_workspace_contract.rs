@@ -108,11 +108,7 @@ fn test_setup_seeds_root_agent_workspace() {
             "kit/tsconfig.json must exist"
         );
         assert!(
-            kit_root
-                .join("kit")
-                .join("main")
-                .join("scripts")
-                .exists(),
+            kit_root.join("kit").join("main").join("scripts").exists(),
             "kit/main/scripts/ must exist"
         );
         assert!(
@@ -124,11 +120,7 @@ fn test_setup_seeds_root_agent_workspace() {
             "kit/main/extensions/ must exist"
         );
         assert!(
-            kit_root
-                .join("kit")
-                .join("main")
-                .join("agents")
-                .exists(),
+            kit_root.join("kit").join("main").join("agents").exists(),
             "kit/main/agents/ must exist"
         );
 
@@ -202,10 +194,7 @@ fn test_setup_idempotent_preserves_user_content() {
         );
 
         // User script preserved
-        assert!(
-            user_script.exists(),
-            "User script should survive rerun"
-        );
+        assert!(user_script.exists(), "User script should survive rerun");
         let user_content = fs::read_to_string(&user_script).unwrap();
         assert!(
             user_content.contains("// custom"),
@@ -454,7 +443,9 @@ fn test_setup_seeds_harness_workflow_temp_dirs() {
 /// not only from the repository root.
 #[test]
 fn test_sdk_reference_run_command_is_cwd_safe() {
-    use script_kit_gpui::mcp_resources::{self, SdkReferenceDocument, SDK_REFERENCE_SCHEMA_VERSION};
+    use script_kit_gpui::mcp_resources::{
+        self, SdkReferenceDocument, SDK_REFERENCE_SCHEMA_VERSION,
+    };
 
     let content = mcp_resources::read_resource("kit://sdk-reference", &[], &[], None)
         .expect("kit://sdk-reference should resolve");

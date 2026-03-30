@@ -181,7 +181,7 @@ pub enum UtilityCommandType {
     ScratchPad,
     /// Open quick terminal for running commands
     QuickTerminal,
-    /// Open Claude Code in an instant terminal session
+    /// Open Claude Code in the harness terminal surface used by Tab AI
     ClaudeCode,
     /// Inspect actively running Script Kit child processes
     ProcessManager,
@@ -1366,8 +1366,10 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         entries.push(BuiltInEntry::new_with_icon(
             "builtin-claude-code",
             "Claude Code",
-            "Open Claude Code in an instant terminal session",
-            vec!["claude", "code", "terminal", "cli", "repl", "anthropic"],
+            "Open Claude Code in the harness terminal surface used by Tab AI",
+            vec![
+                "claude", "code", "terminal", "cli", "repl", "anthropic", "harness", "tab ai",
+            ],
             BuiltInFeature::UtilityCommand(UtilityCommandType::ClaudeCode),
             "🤖",
         ));

@@ -2490,7 +2490,7 @@ impl ScriptListApp {
             }
 
             // =========================================================================
-            // Utility Commands (Scratch Pad, Quick Terminal, Process Manager)
+            // Utility Commands (Scratch Pad, Quick Terminal, Claude Code Harness, Process Manager)
             // =========================================================================
             builtins::BuiltInFeature::UtilityCommand(cmd_type) => {
                 tracing::info!(
