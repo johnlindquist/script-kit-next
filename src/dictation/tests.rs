@@ -1028,10 +1028,11 @@ fn delivery_frontmost_app_sets_correct_destination() {
     );
 }
 
-/// Prove that paste failures are surfaced as `DictationSessionPhase::Failed`
-/// and not silently dropped.
+/// Prove that paste failures are surfaced (logged + toast) and not silently
+/// dropped.  The overlay is closed before pasting (for focus handoff), so
+/// failures cannot use the overlay — they show a toast instead.
 #[test]
-fn delivery_paste_failure_surfaces_as_failed_phase() {
+fn delivery_paste_failure_surfaces_error() {
     let src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
         .expect("read builtin_execution.rs");
 
@@ -1040,23 +1041,54 @@ fn delivery_paste_failure_surfaces_as_failed_phase() {
         .expect("handler must exist");
     let handler_src = &src[handler_start..];
 
-    // The Err branch of paste_text must set Failed phase.
+    // The Err branch of paste_text must log the failure.
     let paste_pos = handler_src
         .find("paste_text")
         .expect("handler must call paste_text");
     let after_paste = &handler_src[paste_pos..];
 
     assert!(
-        after_paste.contains("DictationSessionPhase::Failed"),
-        "paste failure must surface as DictationSessionPhase::Failed"
-    );
-    assert!(
-        after_paste.contains("Failed to paste transcript"),
+        after_paste.contains("Failed to paste dictation transcript"),
         "paste failure must log an error describing what failed"
     );
     assert!(
-        after_paste.contains("return"),
-        "paste failure must early-return (not fall through to Finished phase)"
+        after_paste.contains("show_error_toast"),
+        "paste failure must show an error toast to the user"
+    );
+}
+
+/// Prove that the frontmost-app paste path hides the main window and closes
+/// the dictation overlay BEFORE pasting, so macOS returns keyboard focus to
+/// the target app before the CGEvent Cmd+V fires.
+#[test]
+fn delivery_frontmost_app_hides_window_before_paste() {
+    let src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("read builtin_execution.rs");
+
+    let handler_start = src
+        .find("fn handle_dictation_transcript")
+        .expect("handler must exist");
+    let handler_src = &src[handler_start..];
+
+    // The else branch (frontmost-app path) must close the overlay and hide the
+    // main window before scheduling the paste.
+    let close_overlay_pos = handler_src
+        .find("close_dictation_overlay")
+        .expect("handler must close dictation overlay before paste");
+    let hide_pos = handler_src
+        .find("defer_hide_main_window")
+        .expect("handler must call defer_hide_main_window before paste");
+    let paste_pos = handler_src
+        .find("paste_text")
+        .expect("handler must call paste_text");
+
+    assert!(
+        close_overlay_pos < paste_pos,
+        "close_dictation_overlay (byte {close_overlay_pos}) must appear before paste_text (byte {paste_pos})"
+    );
+    assert!(
+        hide_pos < paste_pos,
+        "defer_hide_main_window (byte {hide_pos}) must appear before paste_text (byte {paste_pos})"
     );
 }
 
@@ -1109,8 +1141,7 @@ fn delivery_logic_not_in_runtime() {
 /// should accept dictated text.
 #[test]
 fn try_set_prompt_input_covers_key_prompt_views() {
-    let src =
-        std::fs::read_to_string("src/app_impl/ui_window.rs").expect("read ui_window.rs");
+    let src = std::fs::read_to_string("src/app_impl/ui_window.rs").expect("read ui_window.rs");
 
     let fn_start = src
         .find("fn try_set_prompt_input")
