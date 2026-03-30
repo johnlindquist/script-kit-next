@@ -841,7 +841,7 @@ impl ScriptListApp {
                     }
                     // Tab key: consumed by intercept_keystrokes in startup_new_tab.rs.
                     // This fallback only fires if the interceptor somehow misses;
-                    // route to Tab AI full-view chat.
+                    // route to Tab AI quick terminal (harness surface).
                     key if sk_is_key_tab(key) => {
                         this.open_tab_ai_chat(cx);
                         cx.stop_propagation();
