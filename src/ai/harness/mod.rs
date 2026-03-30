@@ -1378,6 +1378,44 @@ mod cleanup_contract_audits {
     }
 
     #[test]
+    fn tab_ai_startup_prewarm_is_marked_fresh_on_cold_start_contract() {
+        let source = include_str!("../../app_impl/tab_ai_mode.rs");
+        let body = compact(&extract_fn_body(
+            source,
+            "pub(crate) fn warm_tab_ai_harness_on_startup",
+        ));
+        assert!(
+            body.contains(&compact("if was_cold_start {")),
+            "startup prewarm must gate FreshPrewarm tagging on a newly created session"
+        );
+        assert!(
+            body.contains(&compact("session.mark_fresh_prewarm();")),
+            "cold-started prewarm must be marked reusable once"
+        );
+    }
+
+    #[test]
+    fn tab_ai_close_path_reseeds_future_prewarm_contract() {
+        let source = include_str!("../../app_impl/tab_ai_mode.rs");
+        let body = compact(&extract_fn_body(
+            source,
+            "pub(crate) fn close_tab_ai_harness_terminal",
+        ));
+        assert!(
+            body.contains(&compact(
+                "let session = self.tab_ai_harness.take();"
+            )),
+            "close path must clear the current PTY session"
+        );
+        assert!(
+            body.contains(&compact(
+                "self.schedule_tab_ai_harness_prewarm(std::time::Duration::from_millis(250), cx);"
+            )),
+            "close path must schedule a fresh prewarm for the next Tab press"
+        );
+    }
+
+    #[test]
     fn tab_ai_open_path_switches_view_before_waiting_for_capture_contract() {
         let body = extract_fn_body(
             include_str!("../../app_impl/tab_ai_mode.rs"),

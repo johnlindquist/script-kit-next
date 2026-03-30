@@ -2520,6 +2520,130 @@ mod tests {
         );
     }
 
+    // ── Compact contract helpers ────────────────────────────────
+
+    fn tab_ai_contract_compact(input: &str) -> String {
+        input.split_whitespace().collect::<String>()
+    }
+
+    fn tab_ai_extract_fn_body(source: &str, signature: &str) -> String {
+        let start = source.find(signature).expect("signature must exist");
+        let rest = &source[start..];
+        let open = rest.find('{').expect("function body must open");
+        let mut depth = 0usize;
+        let mut end = None;
+        for (idx, ch) in rest[open..].char_indices() {
+            match ch {
+                '{' => depth += 1,
+                '}' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        end = Some(open + idx + 1);
+                        break;
+                    }
+                }
+                _ => {}
+            }
+        }
+        rest[..end.expect("function body must close")].to_string()
+    }
+
+    #[test]
+    fn tab_ai_open_path_reuses_fresh_prewarm_once_contract() {
+        let source = include_str!("tab_ai_mode.rs");
+        let body = tab_ai_contract_compact(&tab_ai_extract_fn_body(
+            source,
+            "fn open_tab_ai_harness_terminal_from_request(",
+        ));
+
+        assert!(
+            body.contains(&tab_ai_contract_compact(
+                "s.is_fresh_prewarm() && s.entity.read(cx).is_alive()"
+            )),
+            "open path must only reuse a fresh prewarm when the PTY is still alive"
+        );
+        assert!(
+            body.contains(&tab_ai_contract_compact("session.mark_consumed();")),
+            "first explicit Tab must consume the prewarm so later Tabs cannot reuse it"
+        );
+        assert!(
+            body.contains(&tab_ai_contract_compact(
+                "self.ensure_tab_ai_harness_terminal(!reuse_fresh_prewarm, cx)"
+            )),
+            "open path must invert reuse_fresh_prewarm into force_fresh"
+        );
+    }
+
+    #[test]
+    fn tab_ai_open_path_switches_view_before_waiting_for_capture_contract() {
+        let source = include_str!("tab_ai_mode.rs");
+        let body = tab_ai_contract_compact(&tab_ai_extract_fn_body(
+            source,
+            "fn open_tab_ai_harness_terminal_from_request(",
+        ));
+
+        let view_switch = body
+            .find(&tab_ai_contract_compact(
+                "self.current_view = AppView::QuickTerminalView",
+            ))
+            .expect("QuickTerminalView switch must exist");
+        let notify = body
+            .find(&tab_ai_contract_compact("cx.notify();"))
+            .expect("cx.notify must exist");
+        let capture_wait = body
+            .find(&tab_ai_contract_compact("capture_rx.recv().await"))
+            .expect("deferred capture await must exist");
+
+        assert!(
+            view_switch < notify,
+            "the harness view must be selected before notifying the UI"
+        );
+        assert!(
+            notify < capture_wait,
+            "the terminal must become visible before waiting for deferred capture"
+        );
+    }
+
+    #[test]
+    fn tab_ai_startup_prewarm_is_marked_fresh_on_cold_start_contract() {
+        let source = include_str!("tab_ai_mode.rs");
+        let body = tab_ai_contract_compact(&tab_ai_extract_fn_body(
+            source,
+            "pub(crate) fn warm_tab_ai_harness_on_startup(",
+        ));
+
+        assert!(
+            body.contains(&tab_ai_contract_compact("if was_cold_start {")),
+            "startup prewarm must gate FreshPrewarm tagging on a newly created session"
+        );
+        assert!(
+            body.contains(&tab_ai_contract_compact("session.mark_fresh_prewarm();")),
+            "cold-started prewarm must be marked reusable once"
+        );
+    }
+
+    #[test]
+    fn tab_ai_close_path_reseeds_future_prewarm_contract() {
+        let source = include_str!("tab_ai_mode.rs");
+        let body = tab_ai_contract_compact(&tab_ai_extract_fn_body(
+            source,
+            "pub(crate) fn close_tab_ai_harness_terminal(",
+        ));
+
+        assert!(
+            body.contains(&tab_ai_contract_compact(
+                "let session = self.tab_ai_harness.take();"
+            )),
+            "close path must clear the current PTY session"
+        );
+        assert!(
+            body.contains(&tab_ai_contract_compact(
+                "self.schedule_tab_ai_harness_prewarm(std::time::Duration::from_millis(250), cx);"
+            )),
+            "close path must schedule a fresh prewarm for the next Tab press"
+        );
+    }
+
     // ── Existing save-name tests ──────────────────────────────────
 
     #[test]
