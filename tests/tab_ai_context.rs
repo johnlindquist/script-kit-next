@@ -5,8 +5,8 @@
 //! JSON field naming, and round-trip correctness.
 
 use script_kit_gpui::ai::{
-    TabAiClipboardContext, TabAiClipboardHistoryEntry, TabAiContextBlob, TabAiMemorySuggestion,
-    TabAiUiSnapshot, TAB_AI_CONTEXT_SCHEMA_VERSION,
+    TabAiApplyBackHint, TabAiClipboardContext, TabAiClipboardHistoryEntry, TabAiContextBlob,
+    TabAiMemorySuggestion, TabAiSourceType, TabAiUiSnapshot, TAB_AI_CONTEXT_SCHEMA_VERSION,
 };
 use script_kit_gpui::context_snapshot::{
     AiContextSnapshot, Base64PngContext, BrowserContext, FocusedWindowContext, FrontmostAppContext,
@@ -699,4 +699,199 @@ fn suggested_intent_spec_new_works() {
     let spec = TabAiSuggestedIntentSpec::new("Focus", "focus on this app");
     assert_eq!(spec.label, "Focus");
     assert_eq!(spec.intent, "focus on this app");
+}
+
+// =========================================================================
+// Deferred capture fields: sourceType, screenshotPath, applyBackHint
+// =========================================================================
+
+#[test]
+fn context_blob_serializes_source_type_screenshot_path_and_apply_back_hint_without_schema_bump() {
+    let blob = full_blob().with_deferred_capture_fields(
+        Some(TabAiSourceType::DesktopSelection),
+        Some("/tmp/tab-ai-screenshot-20260330T125352Z-41231.png".to_string()),
+        Some(TabAiApplyBackHint {
+            action: "replaceSelectedText".to_string(),
+            target_label: Some("Frontmost selection".to_string()),
+        }),
+    );
+
+    let json = serde_json::to_string_pretty(&blob).expect("must serialize");
+    let parsed: serde_json::Value = serde_json::from_str(&json).expect("must parse");
+
+    // Schema version must NOT have been bumped
+    assert_eq!(
+        parsed["schemaVersion"].as_u64().expect("schemaVersion"),
+        TAB_AI_CONTEXT_SCHEMA_VERSION as u64,
+        "schema version must remain unchanged with new optional fields"
+    );
+
+    // sourceType present and camelCase
+    assert_eq!(
+        parsed["sourceType"].as_str().expect("sourceType"),
+        "desktopSelection"
+    );
+
+    // screenshotPath present
+    assert!(
+        parsed["screenshotPath"]
+            .as_str()
+            .expect("screenshotPath")
+            .contains("tab-ai-screenshot"),
+        "screenshotPath must contain the screenshot filename"
+    );
+
+    // applyBackHint present with expected fields
+    let hint = &parsed["applyBackHint"];
+    assert_eq!(
+        hint["action"].as_str().expect("action"),
+        "replaceSelectedText"
+    );
+    assert_eq!(
+        hint["targetLabel"].as_str().expect("targetLabel"),
+        "Frontmost selection"
+    );
+}
+
+#[test]
+fn context_blob_omits_deferred_fields_when_none() {
+    let blob = full_blob();
+    let json = serde_json::to_string(&blob).expect("must serialize");
+
+    // When None, these fields must not appear in the JSON at all
+    assert!(
+        !json.contains("sourceType"),
+        "sourceType must be omitted when None"
+    );
+    assert!(
+        !json.contains("screenshotPath"),
+        "screenshotPath must be omitted when None"
+    );
+    assert!(
+        !json.contains("applyBackHint"),
+        "applyBackHint must be omitted when None"
+    );
+}
+
+#[test]
+fn source_type_serde_round_trip() {
+    let variants = vec![
+        (TabAiSourceType::DesktopSelection, "desktopSelection"),
+        (TabAiSourceType::ScriptListItem, "scriptListItem"),
+        (TabAiSourceType::RunningCommand, "runningCommand"),
+        (TabAiSourceType::ClipboardEntry, "clipboardEntry"),
+        (TabAiSourceType::Desktop, "desktop"),
+    ];
+    for (variant, expected_json) in variants {
+        let json = serde_json::to_string(&variant).expect("must serialize");
+        assert_eq!(
+            json,
+            format!("\"{expected_json}\""),
+            "serde output must be camelCase for {variant:?}"
+        );
+        let parsed: TabAiSourceType = serde_json::from_str(&json).expect("must parse");
+        assert_eq!(parsed, variant, "round-trip must preserve variant");
+    }
+}
+
+#[test]
+fn apply_back_hint_serde_round_trip() {
+    let hint = TabAiApplyBackHint {
+        action: "pasteToPrompt".to_string(),
+        target_label: Some("Active prompt".to_string()),
+    };
+    let json = serde_json::to_string(&hint).expect("must serialize");
+    assert!(json.contains("\"action\":\"pasteToPrompt\""));
+    assert!(json.contains("\"targetLabel\":\"Active prompt\""));
+
+    let parsed: TabAiApplyBackHint = serde_json::from_str(&json).expect("must parse");
+    assert_eq!(parsed, hint);
+}
+
+#[test]
+fn apply_back_hint_omits_target_label_when_none() {
+    let hint = TabAiApplyBackHint {
+        action: "copyToClipboard".to_string(),
+        target_label: None,
+    };
+    let json = serde_json::to_string(&hint).expect("must serialize");
+    assert!(!json.contains("targetLabel"), "targetLabel must be omitted when None");
+}
+
+#[test]
+fn with_deferred_capture_fields_preserves_existing_blob_data() {
+    let original = full_blob();
+    let enriched = original.clone().with_deferred_capture_fields(
+        Some(TabAiSourceType::ClipboardEntry),
+        Some("/tmp/screenshot.png".to_string()),
+        None,
+    );
+
+    // Original blob fields must be preserved
+    assert_eq!(enriched.schema_version, original.schema_version);
+    assert_eq!(enriched.timestamp, original.timestamp);
+    assert_eq!(enriched.ui.prompt_type, original.ui.prompt_type);
+    assert_eq!(enriched.desktop.selected_text, original.desktop.selected_text);
+
+    // New fields must be set
+    assert_eq!(enriched.source_type, Some(TabAiSourceType::ClipboardEntry));
+    assert_eq!(enriched.screenshot_path.as_deref(), Some("/tmp/screenshot.png"));
+    assert!(enriched.apply_back_hint.is_none());
+}
+
+// =========================================================================
+// Source-type detection priority: desktop selection wins over generic desktop
+// =========================================================================
+
+/// Validates that `detect_tab_ai_source_type` checks `selected_text` first,
+/// before falling through to the `match source_view` block. This ensures that
+/// desktop selection always takes priority over the generic `Desktop` fallback.
+#[test]
+fn source_type_detection_prefers_desktop_selection_over_generic_desktop() {
+    let source = include_str!("../src/app_impl/tab_ai_mode.rs");
+
+    // Find the detect function body
+    let fn_start = source
+        .find("fn detect_tab_ai_source_type(")
+        .expect("detect_tab_ai_source_type must exist");
+    let fn_body = &source[fn_start..];
+    let fn_end = fn_body[1..]
+        .find("\nfn ")
+        .or_else(|| fn_body[1..].find("\n    fn "))
+        .unwrap_or(fn_body.len());
+    let fn_body = &fn_body[..fn_end];
+
+    // The selected_text check must come BEFORE the match on source_view
+    let selected_text_pos = fn_body
+        .find("selected_text")
+        .expect("must check selected_text");
+    let desktop_selection_pos = fn_body
+        .find("DesktopSelection")
+        .expect("must return DesktopSelection for selected text");
+    let match_source_pos = fn_body
+        .find("match source_view")
+        .expect("must match on source_view for view-based detection");
+    let desktop_fallback_pos = fn_body
+        .rfind("Desktop)")
+        .expect("must have Desktop fallback");
+
+    assert!(
+        selected_text_pos < match_source_pos,
+        "selected_text check must come before match source_view"
+    );
+    assert!(
+        desktop_selection_pos < match_source_pos,
+        "DesktopSelection return must come before match source_view"
+    );
+    assert!(
+        match_source_pos < desktop_fallback_pos,
+        "Desktop fallback must come after match source_view (in the _ arm)"
+    );
+
+    // The selected_text check must be an early return
+    let selection_block = &fn_body[selected_text_pos..match_source_pos];
+    assert!(
+        selection_block.contains("return Some("),
+        "selected_text branch must early-return so it wins over any source_view match"
+    );
 }
