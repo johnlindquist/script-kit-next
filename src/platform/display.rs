@@ -194,6 +194,73 @@ pub fn get_macos_visible_displays() -> Vec<VisibleDisplayBounds> {
     }]
 }
 
+/// Return the display containing the currently focused window (key window).
+///
+/// Uses `NSScreen.mainScreen`, which returns the screen that contains the
+/// window receiving keyboard events. This is the correct heuristic for
+/// placing UI relative to the user's active workspace, as opposed to
+/// `get_global_mouse_position()` which follows the cursor.
+///
+/// Falls back to the first display (primary) when `mainScreen` is nil.
+#[cfg(target_os = "macos")]
+pub fn get_active_display() -> Option<VisibleDisplayBounds> {
+    if require_main_thread("get_active_display") {
+        return None;
+    }
+
+    // SAFETY: Main thread verified. NSScreen.mainScreen returns the screen
+    // containing the key window, or nil if there is no key window.
+    // We nil-check the result and fall back to screens[0] (primary).
+    // primary_screen_height() is called first to anchor coordinate conversion.
+    unsafe {
+        let screens: id = msg_send![class!(NSScreen), screens];
+        if screens.is_null() {
+            return None;
+        }
+
+        let count: usize = msg_send![screens, count];
+        let primary_screen_index = primary_screen_array_index(count)?;
+
+        let primary_screen: id = msg_send![screens, objectAtIndex: primary_screen_index];
+        if primary_screen == nil {
+            return None;
+        }
+        let primary_frame: NSRect = msg_send![primary_screen, frame];
+        let primary_height = primary_frame.size.height;
+
+        // Try mainScreen first (screen with key window).
+        let main_screen: id = msg_send![class!(NSScreen), mainScreen];
+        let target_screen = if main_screen == nil {
+            primary_screen
+        } else {
+            main_screen
+        };
+
+        let frame: NSRect = msg_send![target_screen, frame];
+        let visible_frame: NSRect = msg_send![target_screen, visibleFrame];
+
+        Some(VisibleDisplayBounds {
+            frame: nsrect_to_display_bounds(frame, primary_height),
+            visible_area: nsrect_to_display_bounds(visible_frame, primary_height),
+        })
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn get_active_display() -> Option<VisibleDisplayBounds> {
+    let fallback = DisplayBounds {
+        origin_x: 0.0,
+        origin_y: 0.0,
+        width: 1920.0,
+        height: 1080.0,
+    };
+
+    Some(VisibleDisplayBounds {
+        frame: fallback.clone(),
+        visible_area: fallback,
+    })
+}
+
 /// Get all displays with their full frame in top-left global coordinates.
 #[cfg(target_os = "macos")]
 pub fn get_macos_displays() -> Vec<DisplayBounds> {
@@ -257,6 +324,28 @@ pub fn clamp_to_visible(bounds: Bounds<Pixels>, visible_area: &DisplayBounds) ->
         point(px(clamped_x as f32), px(clamped_y as f32)),
         Size::new(px(clamped_width as f32), px(clamped_height as f32)),
     )
+}
+
+/// Query macOS `accessibilityDisplayShouldReduceMotion` preference.
+///
+/// Returns `true` when the user has enabled "Reduce motion" in
+/// System Settings → Accessibility → Display, signalling that
+/// animations should be disabled or simplified.
+#[cfg(target_os = "macos")]
+pub fn prefers_reduced_motion() -> bool {
+    // SAFETY: NSWorkspace.sharedWorkspace is a singleton accessor safe to call
+    // from the main thread. accessibilityDisplayShouldReduceMotion is a read-only
+    // property that queries the system accessibility preference.
+    unsafe {
+        let workspace: id = msg_send![class!(NSWorkspace), sharedWorkspace];
+        let result: cocoa::base::BOOL = msg_send![workspace, accessibilityDisplayShouldReduceMotion];
+        result != cocoa::base::NO
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn prefers_reduced_motion() -> bool {
+    false
 }
 
 #[cfg(test)]

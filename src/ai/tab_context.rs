@@ -1370,11 +1370,20 @@ pub struct TabAiApplyBackHint {
 /// Routing state for the apply-back flow: pairs the detected source classification
 /// with the apply-back hint so the app can execute the right action when the user
 /// presses ⌘⏎ in the harness terminal.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+///
+/// `focused_target` carries the resolved target metadata captured at Tab-press
+/// time so the apply-back handler can route results without rediscovering UI
+/// state after the harness closes.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct TabAiApplyBackRoute {
     pub source_type: TabAiSourceType,
     pub hint: TabAiApplyBackHint,
+    /// The focused target captured at invocation time. Populated for source
+    /// types that resolve a concrete target (e.g. `ScriptListItem`,
+    /// `RunningCommand`). `None` for generic desktop or desktop selection.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub focused_target: Option<TabAiTargetContext>,
 }
 
 /// Detect the source type from the originating prompt type string and desktop snapshot.
@@ -4519,10 +4528,31 @@ mod tab_ai_apply_back_route_tests {
                 action: "replaceSelectedText".to_string(),
                 target_label: Some("Frontmost selection".to_string()),
             },
+            focused_target: None,
         };
         let json = serde_json::to_string(&route).expect("serialize");
         let back: TabAiApplyBackRoute = serde_json::from_str(&json).expect("deserialize");
         assert_eq!(route, back);
+
+        // Route with focused_target round-trips correctly
+        let route_with_target = TabAiApplyBackRoute {
+            source_type: TabAiSourceType::ScriptListItem,
+            hint: TabAiApplyBackHint {
+                action: "runGeneratedScript".to_string(),
+                target_label: Some("Focused script".to_string()),
+            },
+            focused_target: Some(TabAiTargetContext {
+                source: "ScriptList".to_string(),
+                kind: "script".to_string(),
+                semantic_id: "choice:0:my-script".to_string(),
+                label: "My Script".to_string(),
+                metadata: Some(serde_json::json!({"path": "/scripts/my-script.ts"})),
+            }),
+        };
+        let json2 = serde_json::to_string(&route_with_target).expect("serialize with target");
+        let back2: TabAiApplyBackRoute = serde_json::from_str(&json2).expect("deserialize with target");
+        assert_eq!(route_with_target, back2);
+        assert!(json2.contains("focusedTarget"), "focusedTarget must appear when Some");
     }
 
     #[test]

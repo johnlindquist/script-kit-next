@@ -5,8 +5,9 @@
 //! JSON field naming, and round-trip correctness.
 
 use script_kit_gpui::ai::{
-    TabAiApplyBackHint, TabAiClipboardContext, TabAiClipboardHistoryEntry, TabAiContextBlob,
-    TabAiMemorySuggestion, TabAiSourceType, TabAiUiSnapshot, TAB_AI_CONTEXT_SCHEMA_VERSION,
+    TabAiApplyBackHint, TabAiApplyBackRoute, TabAiClipboardContext, TabAiClipboardHistoryEntry,
+    TabAiContextBlob, TabAiMemorySuggestion, TabAiSourceType, TabAiTargetContext,
+    TabAiUiSnapshot, TAB_AI_CONTEXT_SCHEMA_VERSION,
 };
 use script_kit_gpui::context_snapshot::{
     AiContextSnapshot, Base64PngContext, BrowserContext, FocusedWindowContext, FrontmostAppContext,
@@ -458,8 +459,7 @@ fn tab_ai_context_blob_serializes_schema_v3_clipboard_history_and_targets() {
 
 use script_kit_gpui::ai::{
     build_tab_ai_suggested_intents, recent_tab_ai_automations_for_bundle_from_path,
-    TabAiMemoryEntry, TabAiSuggestedIntentSpec, TabAiTargetContext,
-    TAB_AI_MEMORY_ENTRY_SCHEMA_VERSION,
+    TabAiMemoryEntry, TabAiSuggestedIntentSpec, TAB_AI_MEMORY_ENTRY_SCHEMA_VERSION,
 };
 
 #[test]
@@ -958,4 +958,175 @@ fn deferred_capture_fields_are_serialized_into_context_blob() {
         json.contains("\"targetLabel\":\"Focused script\""),
         "applyBackHint.targetLabel must serialize as camelCase"
     );
+}
+
+// =========================================================================
+// Apply-back route carries focused target metadata per source type
+// =========================================================================
+
+fn sample_script_target() -> TabAiTargetContext {
+    TabAiTargetContext {
+        source: "ScriptList".to_string(),
+        kind: "script".to_string(),
+        semantic_id: "choice:0:my-script".to_string(),
+        label: "My Script".to_string(),
+        metadata: Some(serde_json::json!({"path": "/scripts/my-script.ts"})),
+    }
+}
+
+fn sample_running_command_target() -> TabAiTargetContext {
+    TabAiTargetContext {
+        source: "ArgPrompt".to_string(),
+        kind: "choice".to_string(),
+        semantic_id: "choice:2:option-c".to_string(),
+        label: "Option C".to_string(),
+        metadata: Some(serde_json::json!({"promptType": "ArgPrompt", "value": "option-c"})),
+    }
+}
+
+#[test]
+fn apply_back_route_desktop_selection_has_no_focused_target() {
+    let route = TabAiApplyBackRoute {
+        source_type: TabAiSourceType::DesktopSelection,
+        hint: TabAiApplyBackHint {
+            action: "replaceSelectedText".to_string(),
+            target_label: Some("Frontmost selection".to_string()),
+        },
+        focused_target: None,
+    };
+    let json = serde_json::to_string(&route).expect("serialize");
+
+    assert!(
+        !json.contains("focusedTarget"),
+        "DesktopSelection route must omit focusedTarget (it uses selected_text, not a target)"
+    );
+    assert!(json.contains("\"sourceType\":\"desktopSelection\""));
+}
+
+#[test]
+fn apply_back_route_script_list_item_carries_focused_target() {
+    let target = sample_script_target();
+    let route = TabAiApplyBackRoute {
+        source_type: TabAiSourceType::ScriptListItem,
+        hint: TabAiApplyBackHint {
+            action: "runGeneratedScript".to_string(),
+            target_label: Some("Focused script".to_string()),
+        },
+        focused_target: Some(target.clone()),
+    };
+    let json = serde_json::to_string(&route).expect("serialize");
+
+    assert!(
+        json.contains("focusedTarget"),
+        "ScriptListItem route must include focusedTarget"
+    );
+    assert!(
+        json.contains("\"kind\":\"script\""),
+        "focusedTarget must carry the target kind"
+    );
+    assert!(
+        json.contains("\"label\":\"My Script\""),
+        "focusedTarget must carry the target label"
+    );
+    assert!(
+        json.contains("choice:0:my-script"),
+        "focusedTarget must carry the semantic ID"
+    );
+
+    // Round-trip preserves target metadata
+    let parsed: TabAiApplyBackRoute = serde_json::from_str(&json).expect("deserialize");
+    assert_eq!(parsed.source_type, TabAiSourceType::ScriptListItem);
+    assert_eq!(parsed.focused_target.as_ref().map(|t| t.label.as_str()), Some("My Script"));
+    assert_eq!(
+        parsed.focused_target.as_ref().and_then(|t| t.metadata.as_ref()),
+        Some(&serde_json::json!({"path": "/scripts/my-script.ts"})),
+    );
+}
+
+#[test]
+fn apply_back_route_running_command_carries_focused_target() {
+    let target = sample_running_command_target();
+    let route = TabAiApplyBackRoute {
+        source_type: TabAiSourceType::RunningCommand,
+        hint: TabAiApplyBackHint {
+            action: "pasteToPrompt".to_string(),
+            target_label: Some("Active prompt".to_string()),
+        },
+        focused_target: Some(target.clone()),
+    };
+    let json = serde_json::to_string(&route).expect("serialize");
+
+    assert!(
+        json.contains("focusedTarget"),
+        "RunningCommand route must include focusedTarget"
+    );
+    assert!(
+        json.contains("\"kind\":\"choice\""),
+        "focusedTarget must carry the choice kind"
+    );
+    assert!(
+        json.contains("\"label\":\"Option C\""),
+        "focusedTarget must carry the choice label"
+    );
+
+    let parsed: TabAiApplyBackRoute = serde_json::from_str(&json).expect("deserialize");
+    assert_eq!(parsed.source_type, TabAiSourceType::RunningCommand);
+    assert!(parsed.focused_target.is_some());
+    assert_eq!(
+        parsed.focused_target.as_ref().map(|t| t.semantic_id.as_str()),
+        Some("choice:2:option-c"),
+    );
+}
+
+/// Structural contract: the production route-building code in tab_ai_mode.rs
+/// must pass `resolved.context.focused_target` into `TabAiApplyBackRoute`.
+#[test]
+fn production_route_carries_focused_target_from_resolved_context() {
+    let source =
+        std::fs::read_to_string("src/app_impl/tab_ai_mode.rs").expect("read tab_ai_mode.rs");
+
+    // Find the route construction site
+    let route_site = source
+        .find("TabAiApplyBackRoute {")
+        .expect("TabAiApplyBackRoute construction must exist in tab_ai_mode.rs");
+    let route_block = &source[route_site..route_site + 400];
+
+    assert!(
+        route_block.contains("focused_target"),
+        "TabAiApplyBackRoute construction must include focused_target field"
+    );
+    assert!(
+        route_block.contains("resolved.context.focused_target"),
+        "focused_target must come from the resolved context, not from rediscovering UI state"
+    );
+}
+
+/// Verify that route metadata is correctly typed per source: ScriptListItem
+/// and RunningCommand should allow a target, while DesktopSelection/Desktop
+/// should not require one.
+#[test]
+fn apply_back_route_focused_target_is_optional_for_desktop_types() {
+    // Desktop types: focused_target = None is valid, JSON omits the field
+    for source_type in &[TabAiSourceType::DesktopSelection, TabAiSourceType::Desktop] {
+        let route = TabAiApplyBackRoute {
+            source_type: source_type.clone(),
+            hint: TabAiApplyBackHint {
+                action: "pasteToFrontmostApp".to_string(),
+                target_label: None,
+            },
+            focused_target: None,
+        };
+        let json = serde_json::to_string(&route).expect("serialize");
+        assert!(
+            !json.contains("focusedTarget"),
+            "{source_type:?} route must omit focusedTarget when None"
+        );
+
+        // Deserialize back: focused_target defaults to None
+        let parsed: TabAiApplyBackRoute = serde_json::from_str(&json).expect("deserialize");
+        assert!(
+            parsed.focused_target.is_none(),
+            "{source_type:?} route must deserialize with focused_target = None"
+        );
+    }
 }

@@ -195,8 +195,63 @@ impl ScriptListApp {
                     })
             });
 
-        // Mini prompt has no list content
-        let content = div();
+        // Compact choice list for mini prompt (e.g. mic picker)
+        let content = if choices.is_empty() {
+            div()
+        } else {
+            let arg_list_colors = crate::list_item::ListItemColors::from_theme(theme);
+            let arg_selected_index = self.arg_selected_index;
+            let filtered_choices = self.get_filtered_arg_choices_owned();
+            let filtered_choices_len = filtered_choices.len();
+
+            if filtered_choices_len == 0 {
+                div()
+                    .w_full()
+                    .h(px(crate::list_item::LIST_ITEM_HEIGHT))
+                    .px(px(mini_padding_x))
+                    .flex()
+                    .items_center()
+                    .text_color(rgb(text_muted))
+                    .child("No matches")
+            } else {
+                div()
+                    .flex()
+                    .flex_col()
+                    .flex_1()
+                    .min_h(px(0.))
+                    .w_full()
+                    .child(
+                        uniform_list(
+                            "mini-choices",
+                            filtered_choices_len,
+                            move |visible_range, _window, _cx| {
+                                visible_range
+                                    .map(|ix| {
+                                        if let Some((_, choice)) = filtered_choices.get(ix) {
+                                            let is_selected = ix == arg_selected_index;
+                                            div().id(ix).child(
+                                                crate::list_item::ListItem::new(
+                                                    choice.name.clone(),
+                                                    arg_list_colors,
+                                                )
+                                                .selected(is_selected)
+                                                .with_accent_bar(true)
+                                                .index(ix),
+                                            )
+                                        } else {
+                                            div()
+                                                .id(ix)
+                                                .h(px(crate::list_item::LIST_ITEM_HEIGHT))
+                                        }
+                                    })
+                                    .collect()
+                            },
+                        )
+                        .h_full()
+                        .track_scroll(&self.arg_list_scroll_handle),
+                    )
+            }
+        };
         let leading: Option<gpui::AnyElement> = None;
 
         // Use the same shared shell as arg/render.rs
@@ -234,10 +289,18 @@ mod mini_prompt_render_tests {
     }
 
     #[test]
-    fn mini_prompt_has_no_list_display() {
+    fn mini_prompt_renders_compact_choice_list() {
         assert!(
-            !MINI_SOURCE.contains("uniform_list("),
-            "mini prompt should not render a choice list"
+            MINI_SOURCE.contains("uniform_list("),
+            "mini prompt should render a compact choice list when choices are present"
+        );
+        assert!(
+            MINI_SOURCE.contains("ListItem::new("),
+            "mini prompt should use ListItem for consistent choice rendering"
+        );
+        assert!(
+            MINI_SOURCE.contains("min_h(px(0.))"),
+            "mini prompt list container needs min_h to prevent overflow"
         );
     }
 
