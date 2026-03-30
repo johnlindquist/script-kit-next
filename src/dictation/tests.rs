@@ -2498,3 +2498,94 @@ fn builtin_dictation_overlay_transitions_are_ordered_correctly() {
         "handler must show Failed on transcription error"
     );
 }
+
+// ---------------------------------------------------------------------------
+// Dictation start-edge preflight & helper parity tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn dictation_start_preflight_runs_before_toggle() {
+    let src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("read builtin_execution.rs");
+    let dictation_start = src
+        .find("builtins::BuiltInFeature::Dictation")
+        .expect("dictation builtin must exist");
+    let dictation_src =
+        &src[dictation_start..dictation_start + 3000.min(src.len() - dictation_start)];
+
+    let recording_guard_pos = dictation_src
+        .find("if !crate::dictation::is_dictation_recording()")
+        .expect("dictation start path must gate preflight on recording state");
+    let preflight_pos = dictation_src
+        .find("ensure_dictation_delivery_target_available")
+        .expect("dictation start path must preflight the delivery target");
+    let toggle_pos = dictation_src
+        .find("crate::dictation::toggle_dictation()")
+        .expect("dictation start path must toggle dictation");
+
+    assert!(
+        recording_guard_pos < preflight_pos && preflight_pos < toggle_pos,
+        "start-edge preflight must run before toggle_dictation"
+    );
+}
+
+#[test]
+fn dictation_start_preflight_surfaces_unavailable_target() {
+    let src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("read builtin_execution.rs");
+    let dictation_start = src
+        .find("builtins::BuiltInFeature::Dictation")
+        .expect("dictation builtin must exist");
+    let dictation_src =
+        &src[dictation_start..dictation_start + 3000.min(src.len() - dictation_start)];
+
+    assert!(
+        dictation_src.contains("Dictation start preflight failed"),
+        "preflight failures must be logged"
+    );
+    assert!(
+        dictation_src.contains("Dictation unavailable: {error_text}"),
+        "preflight failures must surface a toast"
+    );
+    assert!(
+        dictation_src.contains("dictation_preflight_failed"),
+        "preflight failures must short-circuit without starting capture"
+    );
+}
+
+#[test]
+fn can_accept_dictation_into_prompt_stays_aligned_with_direct_delivery_views() {
+    let src = std::fs::read_to_string("src/app_impl/ui_window.rs")
+        .expect("read ui_window.rs");
+
+    let helper_start = src
+        .find("fn can_accept_dictation_into_prompt")
+        .expect("can_accept_dictation_into_prompt must exist");
+    let helper_src = &src[helper_start..helper_start + 1200.min(src.len() - helper_start)];
+
+    let setter_start = src
+        .find("fn try_set_prompt_input")
+        .expect("try_set_prompt_input must exist");
+    let setter_src = &src[setter_start..setter_start + 3500.min(src.len() - setter_start)];
+
+    for view in [
+        "AppView::ArgPrompt",
+        "AppView::MiniPrompt",
+        "AppView::MicroPrompt",
+        "AppView::PathPrompt",
+        "AppView::SelectPrompt",
+        "AppView::EnvPrompt",
+        "AppView::TemplatePrompt",
+        "AppView::FormPrompt",
+        "AppView::FileSearchView",
+    ] {
+        assert!(
+            helper_src.contains(view),
+            "can_accept_dictation_into_prompt must include {view}"
+        );
+        assert!(
+            setter_src.contains(view),
+            "try_set_prompt_input must include {view}"
+        );
+    }
+}
