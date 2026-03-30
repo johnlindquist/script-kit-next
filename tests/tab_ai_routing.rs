@@ -2079,15 +2079,27 @@ fn builtin_ai_chat_entry_reflects_harness_label() {
 // Legacy command intent preservation
 // =========================================================================
 
+/// Helper: find a match arm inside `execute_builtin_inner` (not in helper fns).
+fn find_execution_arm(needle: &str) -> &str {
+    // Scope to `execute_builtin_inner` body so we skip helper-function references.
+    let fn_start = BUILTIN_EXECUTION_SOURCE
+        .find("fn execute_builtin_inner(")
+        .expect("execute_builtin_inner must exist");
+    let inner = &BUILTIN_EXECUTION_SOURCE[fn_start..];
+    let arm_offset = inner
+        .find(needle)
+        .unwrap_or_else(|| panic!("{needle} arm must exist inside execute_builtin_inner"));
+    let arm_start = fn_start + arm_offset;
+    &BUILTIN_EXECUTION_SOURCE[arm_start..BUILTIN_EXECUTION_SOURCE.len().min(arm_start + 1200)]
+}
+
 #[test]
 fn generate_script_from_current_app_preserves_explicit_harness_intent() {
-    let arm_start = BUILTIN_EXECUTION_SOURCE
-        .find("AiCommandType::GenerateScriptFromCurrentApp")
-        .expect("GenerateScriptFromCurrentApp arm must exist");
-    let arm = &BUILTIN_EXECUTION_SOURCE[arm_start..BUILTIN_EXECUTION_SOURCE.len().min(arm_start + 1200)];
+    let arm = find_execution_arm("AiCommandType::GenerateScriptFromCurrentApp");
 
     assert!(
-        arm.contains("query_override") && arm.contains("open_tab_ai_chat_with_entry_intent(Some("),
+        arm.contains("query_override")
+            && arm.contains("open_tab_ai_chat_with_entry_intent(Some("),
         "GenerateScriptFromCurrentApp must preserve explicit harness intent \
          instead of flattening to open_tab_ai_chat(cx)"
     );
@@ -2100,11 +2112,7 @@ fn generate_script_from_current_app_preserves_explicit_harness_intent() {
 #[test]
 fn legacy_screenshot_commands_preserve_requested_capture_kind() {
     // SendScreenToAi must carry a full-screen intent
-    let screen_arm_start = BUILTIN_EXECUTION_SOURCE
-        .find("AiCommandType::SendScreenToAi")
-        .expect("SendScreenToAi arm must exist");
-    let screen_arm = &BUILTIN_EXECUTION_SOURCE
-        [screen_arm_start..BUILTIN_EXECUTION_SOURCE.len().min(screen_arm_start + 600)];
+    let screen_arm = find_execution_arm("AiCommandType::SendScreenToAi");
     assert!(
         screen_arm.contains("open_tab_ai_chat_with_entry_intent(")
             && screen_arm.contains("full screen"),
@@ -2112,11 +2120,7 @@ fn legacy_screenshot_commands_preserve_requested_capture_kind() {
     );
 
     // SendFocusedWindowToAi must carry a focused-window intent
-    let focused_arm_start = BUILTIN_EXECUTION_SOURCE
-        .find("AiCommandType::SendFocusedWindowToAi")
-        .expect("SendFocusedWindowToAi arm must exist");
-    let focused_arm = &BUILTIN_EXECUTION_SOURCE
-        [focused_arm_start..BUILTIN_EXECUTION_SOURCE.len().min(focused_arm_start + 600)];
+    let focused_arm = find_execution_arm("AiCommandType::SendFocusedWindowToAi");
     assert!(
         focused_arm.contains("open_tab_ai_chat_with_entry_intent(")
             && focused_arm.contains("focused window"),
@@ -2124,14 +2128,91 @@ fn legacy_screenshot_commands_preserve_requested_capture_kind() {
     );
 
     // SendScreenAreaToAi must carry a screen-area intent
-    let area_arm_start = BUILTIN_EXECUTION_SOURCE
-        .find("AiCommandType::SendScreenAreaToAi")
-        .expect("SendScreenAreaToAi arm must exist");
-    let area_arm = &BUILTIN_EXECUTION_SOURCE
-        [area_arm_start..BUILTIN_EXECUTION_SOURCE.len().min(area_arm_start + 600)];
+    let area_arm = find_execution_arm("AiCommandType::SendScreenAreaToAi");
     assert!(
         area_arm.contains("open_tab_ai_chat_with_entry_intent(")
             && area_arm.contains("screen area"),
         "SendScreenAreaToAi must request screen-area capture via explicit intent"
+    );
+}
+
+// =========================================================================
+// Apply-back regression coverage
+// =========================================================================
+
+#[test]
+fn tab_ai_harness_tracks_apply_back_route_state() {
+    assert!(
+        APP_STATE_SOURCE.contains("tab_ai_harness_apply_back_route"),
+        "ScriptListApp must persist apply-back routing state for the active harness session"
+    );
+}
+
+#[test]
+fn quick_terminal_cmd_enter_routes_to_apply_back() {
+    assert!(
+        TERM_RENDER_SOURCE.contains("this.apply_tab_ai_result_from_clipboard(cx);"),
+        "QuickTerminalView must route Cmd+Enter into apply-back"
+    );
+}
+
+#[test]
+fn tab_ai_apply_back_uses_running_command_prompt_reinjection() {
+    assert!(
+        TAB_AI_MODE_SOURCE.contains("self.try_set_prompt_input(text.clone(), cx)"),
+        "RunningCommand apply-back must reuse try_set_prompt_input instead of frontmost-app paste"
+    );
+}
+
+#[test]
+fn tab_ai_frontmost_apply_back_hides_before_paste() {
+    let hide_pos = TAB_AI_MODE_SOURCE
+        .find("crate::platform::defer_hide_main_window(cx)")
+        .expect("apply-back must defer-hide the main window");
+
+    let replace_pos = TAB_AI_MODE_SOURCE
+        .find("selected_text::set_selected_text(&text_for_apply)")
+        .expect("apply-back must support selected-text replacement");
+
+    let paste_pos = TAB_AI_MODE_SOURCE
+        .find(".paste_text(&text_for_apply)")
+        .expect("apply-back must support frontmost-app paste");
+
+    assert!(
+        hide_pos < replace_pos,
+        "main window must hide before set_selected_text fires"
+    );
+    assert!(
+        hide_pos < paste_pos,
+        "main window must hide before TextInjector::paste_text fires"
+    );
+}
+
+#[test]
+fn tab_ai_apply_back_route_cleared_on_harness_close() {
+    // close_tab_ai_harness_terminal must clear the apply-back route to prevent
+    // stale routing after the harness session ends.
+    let close_fn_start = TAB_AI_MODE_SOURCE
+        .find("fn close_tab_ai_harness_terminal(")
+        .expect("close_tab_ai_harness_terminal must exist");
+    let close_fn_body = &TAB_AI_MODE_SOURCE[close_fn_start..];
+    let next_fn = close_fn_body[1..]
+        .find("\n    fn ")
+        .unwrap_or(close_fn_body.len());
+    let close_fn_body = &close_fn_body[..next_fn];
+
+    assert!(
+        close_fn_body.contains("tab_ai_harness_apply_back_route"),
+        "close_tab_ai_harness_terminal must clear the apply-back route"
+    );
+}
+
+#[test]
+fn tab_ai_apply_back_hint_strip_visible_in_quick_terminal() {
+    // The hint strip must advertise the ⌘⏎ Apply action so users know about it.
+    assert!(
+        TERM_RENDER_SOURCE.contains("Apply")
+            && TERM_RENDER_SOURCE.contains("Close"),
+        "QuickTerminalView hint strip must show both Apply and Close actions"
     );
 }
