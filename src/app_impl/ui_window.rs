@@ -318,6 +318,21 @@ impl ScriptListApp {
     /// Returns `true` when the current view accepted the text (i.e. there is an
     /// active prompt with an input field), `false` otherwise.  Used by dictation
     /// to decide whether to fall back to paste-to-frontmost-app.
+    /// Returns `true` when the current view can accept dictated text directly.
+    pub(crate) fn can_accept_dictation_into_prompt(&self) -> bool {
+        matches!(
+            &self.current_view,
+            AppView::ArgPrompt { .. }
+                | AppView::MiniPrompt { .. }
+                | AppView::MicroPrompt { .. }
+                | AppView::PathPrompt { .. }
+                | AppView::SelectPrompt { .. }
+                | AppView::EnvPrompt { .. }
+                | AppView::TemplatePrompt { .. }
+                | AppView::FormPrompt { .. }
+        )
+    }
+
     pub(crate) fn try_set_prompt_input(&mut self, text: String, cx: &mut Context<Self>) -> bool {
         match &mut self.current_view {
             AppView::ArgPrompt { .. } => {

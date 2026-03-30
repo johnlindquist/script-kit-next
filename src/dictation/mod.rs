@@ -16,7 +16,8 @@ pub use device::{
     save_dictation_device_id, DictationDeviceMenuItem, DictationDeviceSelectionAction,
 };
 pub use runtime::{
-    maybe_unload_transcriber, snapshot_overlay_state, toggle_dictation, transcribe_captured_audio,
+    is_dictation_recording, maybe_unload_transcriber, snapshot_overlay_state, toggle_dictation,
+    transcribe_captured_audio,
 };
 pub use transcription::{
     build_session_result, captured_duration, merge_captured_chunks, resolve_default_model_path,

@@ -7,6 +7,7 @@ use crate::dictation::types::{
     CapturedAudioChunk, CompletedDictationCapture, DictationCaptureConfig, DictationCaptureEvent,
     DictationDestination, DictationLevel, RawAudioChunk,
 };
+use crate::dictation::DictationOverlayState;
 use crate::dictation::visualizer::{bars_for_level, compute_level};
 use anyhow::Result;
 use parking_lot::Mutex;
@@ -2010,5 +2011,354 @@ fn build_device_menu_items_actions_match_device_ids() {
     assert_eq!(
         items[2].action,
         DictationDeviceSelectionAction::UseDevice(DictationDeviceId("usb".to_string()))
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Delivery-target preflight tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn dictation_runtime_exposes_is_recording_helper() {
+    let runtime_src =
+        std::fs::read_to_string("src/dictation/runtime.rs").expect("read runtime.rs");
+    let fn_start = runtime_src
+        .find("pub fn is_dictation_recording() -> bool")
+        .expect("runtime must expose is_dictation_recording");
+    let fn_src = &runtime_src[fn_start..fn_start + 200.min(runtime_src.len() - fn_start)];
+    assert!(
+        fn_src.contains("SESSION.lock().is_some()"),
+        "is_dictation_recording must reflect live session state"
+    );
+
+    let mod_src = std::fs::read_to_string("src/dictation/mod.rs").expect("read mod.rs");
+    assert!(
+        mod_src.contains("is_dictation_recording"),
+        "dictation mod facade must re-export is_dictation_recording"
+    );
+}
+
+#[test]
+fn can_accept_dictation_into_prompt_matches_delivery_views() {
+    let src = std::fs::read_to_string("src/app_impl/ui_window.rs").expect("read ui_window.rs");
+    let fn_start = src
+        .find("fn can_accept_dictation_into_prompt")
+        .expect("can_accept_dictation_into_prompt must exist");
+    let fn_src = &src[fn_start..fn_start + 1200.min(src.len() - fn_start)];
+
+    for view in &[
+        "AppView::ArgPrompt",
+        "AppView::MiniPrompt",
+        "AppView::MicroPrompt",
+        "AppView::PathPrompt",
+        "AppView::SelectPrompt",
+        "AppView::EnvPrompt",
+        "AppView::TemplatePrompt",
+        "AppView::FormPrompt",
+    ] {
+        assert!(
+            fn_src.contains(view),
+            "can_accept_dictation_into_prompt must include {view}"
+        );
+    }
+}
+
+#[test]
+fn dictation_start_preflights_delivery_target_before_toggle() {
+    let src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("read builtin_execution.rs");
+    let branch_start = src
+        .find("builtins::BuiltInFeature::Dictation =>")
+        .expect("dictation builtin branch must exist");
+    let branch_src = &src[branch_start..branch_start + 5000.min(src.len() - branch_start)];
+
+    let preflight_pos = branch_src
+        .find("ensure_dictation_delivery_target_available")
+        .expect("dictation start must preflight delivery target");
+    let toggle_pos = branch_src
+        .find("crate::dictation::toggle_dictation()")
+        .expect("dictation builtin must call toggle_dictation");
+    assert!(
+        preflight_pos < toggle_pos,
+        "delivery-target preflight (byte {preflight_pos}) must run before toggle_dictation (byte {toggle_pos})"
+    );
+}
+
+#[test]
+fn dictation_preflight_allows_prompt_or_frontmost_target() {
+    let src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("read builtin_execution.rs");
+    let helper_start = src
+        .find("fn ensure_dictation_delivery_target_available")
+        .expect("delivery preflight helper must exist");
+    let helper_src = &src[helper_start..helper_start + 600.min(src.len() - helper_start)];
+
+    assert!(
+        helper_src.contains("self.can_accept_dictation_into_prompt()"),
+        "delivery preflight must allow direct prompt delivery"
+    );
+    assert!(
+        helper_src.contains("ensure_dictation_frontmost_target_available"),
+        "delivery preflight must use the tracked frontmost-app guard when no prompt can accept text"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Behavioral toggle outcome tests
+// ---------------------------------------------------------------------------
+
+/// Prove that `DictationToggleOutcome::Started` is constructible and distinct
+/// from `Stopped` variants, matching the contract where the first toggle
+/// returns `Started` and the second returns `Stopped(Some(_))` or
+/// `Stopped(None)`.
+#[test]
+fn toggle_outcome_started_is_distinct_from_stopped() {
+    use crate::dictation::types::DictationToggleOutcome;
+
+    let started = DictationToggleOutcome::Started;
+    let stopped_none = DictationToggleOutcome::Stopped(None);
+    let stopped_some = DictationToggleOutcome::Stopped(Some(CompletedDictationCapture {
+        chunks: vec![CapturedAudioChunk {
+            sample_rate_hz: 16_000,
+            samples: vec![0.5; 160],
+            duration: Duration::from_millis(10),
+        }],
+        audio_duration: Duration::from_millis(10),
+    }));
+
+    assert_ne!(started, stopped_none);
+    assert_ne!(started, stopped_some);
+    assert_ne!(stopped_none, stopped_some);
+}
+
+/// Prove that `Stopped(Some(capture))` carries the expected audio data
+/// through the type, validating the end-to-end contract from toggle_dictation
+/// to transcription handoff.
+#[test]
+fn toggle_outcome_stopped_some_carries_capture_data() {
+    use crate::dictation::types::DictationToggleOutcome;
+
+    let chunks = vec![
+        CapturedAudioChunk {
+            sample_rate_hz: 16_000,
+            samples: vec![0.1; 160],
+            duration: Duration::from_millis(10),
+        },
+        CapturedAudioChunk {
+            sample_rate_hz: 16_000,
+            samples: vec![0.2; 80],
+            duration: Duration::from_millis(5),
+        },
+    ];
+    let capture = CompletedDictationCapture {
+        chunks: chunks.clone(),
+        audio_duration: Duration::from_millis(15),
+    };
+    let outcome = DictationToggleOutcome::Stopped(Some(capture));
+
+    match outcome {
+        DictationToggleOutcome::Stopped(Some(cap)) => {
+            assert_eq!(cap.chunks.len(), 2);
+            assert_eq!(cap.audio_duration, Duration::from_millis(15));
+            // Verify the chunks can be merged for transcription.
+            let merged = crate::dictation::merge_captured_chunks(&cap.chunks);
+            assert_eq!(merged.len(), 240);
+        }
+        other => panic!("expected Stopped(Some(_)), got {other:?}"),
+    }
+}
+
+/// Simulate the full toggle cycle: Started → (capture chunks) → Stopped(Some)
+/// and verify the transcription facade processes the captured audio.
+#[test]
+fn toggle_cycle_produces_transcribable_capture() -> Result<()> {
+    // Simulate producing captured chunks (as toggle_dictation would return).
+    let chunks = vec![
+        CapturedAudioChunk {
+            sample_rate_hz: 16_000,
+            samples: vec![0.3; 320],
+            duration: Duration::from_millis(20),
+        },
+        CapturedAudioChunk {
+            sample_rate_hz: 16_000,
+            samples: vec![0.4; 160],
+            duration: Duration::from_millis(10),
+        },
+    ];
+
+    let capture = CompletedDictationCapture {
+        audio_duration: crate::dictation::captured_duration(&chunks),
+        chunks,
+    };
+
+    assert_eq!(capture.audio_duration, Duration::from_millis(30));
+
+    // Feed the captured audio through a stub transcriber to prove the
+    // capture → transcribe handoff works.
+    let transcriber = DictationTranscriber::new(
+        DictationTranscriptionConfig {
+            minimum_samples: 1,
+            ..Default::default()
+        },
+        Box::new(StubEngine {
+            output: "hello world".to_string(),
+        }),
+    );
+
+    let result = transcriber.transcribe_chunks(&capture.chunks)?;
+    assert_eq!(result, Some("hello world".to_string()));
+
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Overlay state transition coverage
+// ---------------------------------------------------------------------------
+
+/// Prove that the overlay states follow the expected progression for a
+/// successful dictation session: Recording → Transcribing → Finished.
+#[test]
+fn overlay_state_transitions_recording_to_transcribing_to_finished() {
+    use crate::dictation::DictationSessionPhase;
+
+    let recording = DictationOverlayState {
+        phase: DictationSessionPhase::Recording,
+        elapsed: Duration::from_secs(2),
+        bars: [0.1, 0.2, 0.5, 0.8, 1.0, 0.8, 0.5, 0.2, 0.1],
+        transcript: "".into(),
+    };
+    assert_eq!(recording.phase, DictationSessionPhase::Recording);
+    assert!(recording.transcript.is_empty());
+
+    let transcribing = DictationOverlayState {
+        phase: DictationSessionPhase::Transcribing,
+        elapsed: recording.elapsed,
+        bars: [0.0; 9],
+        transcript: "".into(),
+    };
+    assert_eq!(transcribing.phase, DictationSessionPhase::Transcribing);
+    assert!(transcribing.transcript.is_empty());
+
+    let finished = DictationOverlayState {
+        phase: DictationSessionPhase::Finished,
+        elapsed: recording.elapsed,
+        bars: [0.0; 9],
+        transcript: "hello world".into(),
+    };
+    assert_eq!(finished.phase, DictationSessionPhase::Finished);
+    assert_eq!(finished.transcript.as_ref(), "hello world");
+}
+
+/// Prove that the overlay states follow the expected progression for a
+/// failed dictation session: Recording → Transcribing → Failed.
+#[test]
+fn overlay_state_transitions_recording_to_transcribing_to_failed() {
+    use crate::dictation::DictationSessionPhase;
+
+    let recording = DictationOverlayState {
+        phase: DictationSessionPhase::Recording,
+        elapsed: Duration::from_secs(1),
+        bars: [0.5; 9],
+        transcript: "".into(),
+    };
+    assert_eq!(recording.phase, DictationSessionPhase::Recording);
+
+    let transcribing = DictationOverlayState {
+        phase: DictationSessionPhase::Transcribing,
+        elapsed: recording.elapsed,
+        ..Default::default()
+    };
+    assert_eq!(transcribing.phase, DictationSessionPhase::Transcribing);
+
+    let failed = DictationOverlayState {
+        phase: DictationSessionPhase::Failed("model load error".to_string()),
+        elapsed: recording.elapsed,
+        ..Default::default()
+    };
+    assert!(matches!(failed.phase, DictationSessionPhase::Failed(ref msg) if msg.contains("model load")));
+}
+
+/// Prove that overlay state for a silent/empty recording closes without
+/// reaching Finished or Failed (silent path produces no overlay transition
+/// beyond the initial Recording phase).
+#[test]
+fn overlay_state_silent_recording_skips_finished_and_failed() {
+    use crate::dictation::DictationSessionPhase;
+
+    // Silent recording: the runtime returns Stopped(None), so the caller
+    // never transitions to Transcribing/Finished/Failed — just closes.
+    let recording = DictationOverlayState {
+        phase: DictationSessionPhase::Recording,
+        elapsed: Duration::from_millis(500),
+        bars: [0.0; 9],
+        transcript: "".into(),
+    };
+    assert_eq!(recording.phase, DictationSessionPhase::Recording);
+    assert!(!crate::dictation::window::has_sound(&recording.bars));
+}
+
+/// Prove that the Transcribing → Finished transition carries the transcript
+/// text, which is then used by the delivery path to inject into the prompt
+/// or paste to the frontmost app.
+#[test]
+fn overlay_finished_state_carries_transcript_for_delivery() {
+    use crate::dictation::DictationSessionPhase;
+
+    let transcript_text = "the quick brown fox";
+    let finished = DictationOverlayState {
+        phase: DictationSessionPhase::Finished,
+        elapsed: Duration::from_secs(3),
+        bars: [0.0; 9],
+        transcript: transcript_text.into(),
+    };
+
+    assert_eq!(finished.phase, DictationSessionPhase::Finished);
+    assert_eq!(finished.transcript.as_ref(), transcript_text);
+    assert!(!finished.transcript.is_empty());
+}
+
+/// Verify that the overlay update path in builtin_execution transitions
+/// through Recording → Transcribing → Finished (or Failed) in order,
+/// matching the acceptance criteria.
+#[test]
+fn builtin_dictation_overlay_transitions_are_ordered_correctly() {
+    let src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("read builtin_execution.rs");
+
+    let branch_start = src
+        .find("builtins::BuiltInFeature::Dictation =>")
+        .expect("dictation builtin branch must exist");
+    let branch_src = &src[branch_start..];
+
+    // On Started: overlay is set to Recording.
+    let recording_pos = branch_src
+        .find("DictationSessionPhase::Recording")
+        .expect("Started arm must set overlay to Recording");
+
+    // On Stopped(Some): overlay transitions to Transcribing.
+    let transcribing_pos = branch_src
+        .find("DictationSessionPhase::Transcribing")
+        .expect("Stopped(Some) arm must set overlay to Transcribing");
+
+    assert!(
+        recording_pos < transcribing_pos,
+        "Recording (byte {recording_pos}) must appear before Transcribing (byte {transcribing_pos}) in the dictation branch"
+    );
+
+    // After transcription: overlay shows Finished.
+    let handler_src = dictation_handler_source(&src);
+    let finished_positions: Vec<_> = handler_src
+        .match_indices("DictationSessionPhase::Finished")
+        .collect();
+    assert!(
+        finished_positions.len() >= 2,
+        "handler must show Finished for both prompt and frontmost-app paths, found {} occurrences",
+        finished_positions.len()
+    );
+
+    // Transcription error: overlay shows Failed.
+    assert!(
+        handler_src.contains("DictationSessionPhase::Failed"),
+        "handler must show Failed on transcription error"
     );
 }

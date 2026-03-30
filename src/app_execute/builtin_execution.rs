@@ -3592,6 +3592,25 @@ impl ScriptListApp {
                     "Opening Dictation"
                 );
                 self.opened_from_main_menu = true;
+
+                // Preflight: on the start edge, verify we have somewhere to
+                // deliver transcribed text before beginning capture.
+                if !crate::dictation::is_dictation_recording() {
+                    if let Err(error) = self.ensure_dictation_delivery_target_available() {
+                        let error_text = error.to_string();
+                        tracing::error!(
+                            category = "DICTATION",
+                            error = %error_text,
+                            "Dictation start preflight failed"
+                        );
+                        self.show_error_toast(
+                            format!("Dictation unavailable: {error_text}"),
+                            cx,
+                        );
+                        return Self::builtin_success(dctx, "dictation_preflight_failed");
+                    }
+                }
+
                 match crate::dictation::toggle_dictation() {
                     Ok(crate::dictation::DictationToggleOutcome::Started) => {
                         let _ = crate::dictation::open_dictation_overlay(cx);
@@ -3923,6 +3942,18 @@ impl ScriptListApp {
 
     fn dictation_focus_settle_duration() -> std::time::Duration {
         std::time::Duration::from_millis(Self::DICTATION_FOCUS_SETTLE_MS)
+    }
+
+    /// Ensure a new dictation session has somewhere valid to send text.
+    ///
+    /// Allowed start conditions:
+    /// - a Script Kit prompt is active and can accept dictated text, or
+    /// - the frontmost-app tracker already has a previously tracked external target.
+    fn ensure_dictation_delivery_target_available(&self) -> anyhow::Result<()> {
+        if self.can_accept_dictation_into_prompt() {
+            return Ok(());
+        }
+        Self::ensure_dictation_frontmost_target_available()
     }
 
     /// Verify that the frontmost-app tracker has a previously-tracked
