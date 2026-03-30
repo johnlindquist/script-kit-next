@@ -4432,8 +4432,10 @@ mod tab_ai_source_type_tests {
     // Source-text contract tests: verify structural invariants of tab_ai_mode.rs
     // -----------------------------------------------------------------------
 
-    const TAB_AI_MODE_SRC: &str =
-        include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/app_impl/tab_ai_mode.rs"));
+    const TAB_AI_MODE_SRC: &str = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/src/app_impl/tab_ai_mode.rs"
+    ));
 
     #[test]
     fn quick_terminal_switch_and_notify_happen_before_capture_await() {
@@ -4550,9 +4552,13 @@ mod tab_ai_apply_back_route_tests {
             }),
         };
         let json2 = serde_json::to_string(&route_with_target).expect("serialize with target");
-        let back2: TabAiApplyBackRoute = serde_json::from_str(&json2).expect("deserialize with target");
+        let back2: TabAiApplyBackRoute =
+            serde_json::from_str(&json2).expect("deserialize with target");
         assert_eq!(route_with_target, back2);
-        assert!(json2.contains("focusedTarget"), "focusedTarget must appear when Some");
+        assert!(
+            json2.contains("focusedTarget"),
+            "focusedTarget must appear when Some"
+        );
     }
 
     #[test]
@@ -4567,8 +4573,7 @@ mod tab_ai_apply_back_route_tests {
 
     #[test]
     fn quick_terminal_cmd_enter_routes_to_apply_back() {
-        let source =
-            std::fs::read_to_string("src/render_prompts/term.rs").expect("read term.rs");
+        let source = std::fs::read_to_string("src/render_prompts/term.rs").expect("read term.rs");
         assert!(
             source.contains("this.apply_tab_ai_result_from_clipboard(cx);"),
             "QuickTerminalView must route Cmd+Enter into apply-back"

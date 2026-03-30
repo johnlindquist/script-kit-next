@@ -338,7 +338,8 @@ pub fn prefers_reduced_motion() -> bool {
     // property that queries the system accessibility preference.
     unsafe {
         let workspace: id = msg_send![class!(NSWorkspace), sharedWorkspace];
-        let result: cocoa::base::BOOL = msg_send![workspace, accessibilityDisplayShouldReduceMotion];
+        let result: cocoa::base::BOOL =
+            msg_send![workspace, accessibilityDisplayShouldReduceMotion];
         result != cocoa::base::NO
     }
 }

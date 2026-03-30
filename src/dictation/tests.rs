@@ -1758,10 +1758,7 @@ fn transcribing_dot_pulse_is_periodic() {
     let at_t_plus_period = super::window::transcribing_dot_opacities_at(0.5 + period);
 
     for (a, b) in at_t.iter().zip(at_t_plus_period.iter()) {
-        assert!(
-            (a - b).abs() < 0.001,
-            "pulse must be periodic: {a} vs {b}"
-        );
+        assert!((a - b).abs() < 0.001, "pulse must be periodic: {a} vs {b}");
     }
 }
 
@@ -2868,8 +2865,7 @@ fn overlay_uses_active_display_not_mouse_position() {
 
 #[test]
 fn active_display_api_exists_in_platform() {
-    let display_src =
-        std::fs::read_to_string("src/platform/display.rs").expect("read display.rs");
+    let display_src = std::fs::read_to_string("src/platform/display.rs").expect("read display.rs");
 
     assert!(
         display_src.contains("pub fn get_active_display()"),
@@ -3041,8 +3037,7 @@ fn overlay_window_opens_without_app_activation() {
 
 #[test]
 fn runtime_session_has_overlay_phase_field() {
-    let runtime_src =
-        std::fs::read_to_string("src/dictation/runtime.rs").expect("read runtime.rs");
+    let runtime_src = std::fs::read_to_string("src/dictation/runtime.rs").expect("read runtime.rs");
 
     assert!(
         runtime_src.contains("overlay_phase: DictationSessionPhase"),
@@ -3052,8 +3047,7 @@ fn runtime_session_has_overlay_phase_field() {
 
 #[test]
 fn snapshot_overlay_state_reads_session_phase_not_hardcoded() {
-    let runtime_src =
-        std::fs::read_to_string("src/dictation/runtime.rs").expect("read runtime.rs");
+    let runtime_src = std::fs::read_to_string("src/dictation/runtime.rs").expect("read runtime.rs");
 
     // The old bug: snapshot_overlay_state() hardcoded `phase: Recording`.
     // Verify it now reads from `session.overlay_phase`.
@@ -3111,7 +3105,8 @@ fn builtin_microphone_submit_handler_accepts_mini_prompt_choices() {
     let valid_fn_start = helpers_src
         .find("fn is_valid_builtin_mic_selection")
         .expect("is_valid_builtin_mic_selection must exist");
-    let valid_fn_body = &helpers_src[valid_fn_start..valid_fn_start + 400.min(helpers_src.len() - valid_fn_start)];
+    let valid_fn_body =
+        &helpers_src[valid_fn_start..valid_fn_start + 400.min(helpers_src.len() - valid_fn_start)];
     assert!(
         valid_fn_body.contains("MiniPrompt"),
         "is_valid_builtin_mic_selection must handle MiniPrompt variant"
@@ -3121,7 +3116,8 @@ fn builtin_microphone_submit_handler_accepts_mini_prompt_choices() {
     let handle_fn_start = helpers_src
         .find("fn handle_builtin_mic_selection")
         .expect("handle_builtin_mic_selection must exist");
-    let handle_fn_body = &helpers_src[handle_fn_start..handle_fn_start + 1600.min(helpers_src.len() - handle_fn_start)];
+    let handle_fn_body = &helpers_src
+        [handle_fn_start..handle_fn_start + 1600.min(helpers_src.len() - handle_fn_start)];
     assert!(
         handle_fn_body.contains("MiniPrompt"),
         "handle_builtin_mic_selection label resolution must handle MiniPrompt variant"
@@ -3130,8 +3126,7 @@ fn builtin_microphone_submit_handler_accepts_mini_prompt_choices() {
 
 #[test]
 fn start_recording_initialises_overlay_phase_to_recording() {
-    let runtime_src =
-        std::fs::read_to_string("src/dictation/runtime.rs").expect("read runtime.rs");
+    let runtime_src = std::fs::read_to_string("src/dictation/runtime.rs").expect("read runtime.rs");
 
     assert!(
         runtime_src.contains("overlay_phase: DictationSessionPhase::Recording"),
@@ -3281,8 +3276,7 @@ fn abort_callback_never_invokes_transcript_delivery() {
 /// reading stale state.
 #[test]
 fn abort_dictation_clears_session_state() {
-    let runtime_src =
-        std::fs::read_to_string("src/dictation/runtime.rs").expect("read runtime.rs");
+    let runtime_src = std::fs::read_to_string("src/dictation/runtime.rs").expect("read runtime.rs");
 
     // abort_dictation must call stop_recording which takes the session.
     let abort_start = runtime_src
@@ -3300,8 +3294,7 @@ fn abort_dictation_clears_session_state() {
     let stop_start = runtime_src
         .find("fn stop_recording()")
         .expect("stop_recording must exist");
-    let stop_src =
-        &runtime_src[stop_start..stop_start + 600.min(runtime_src.len() - stop_start)];
+    let stop_src = &runtime_src[stop_start..stop_start + 600.min(runtime_src.len() - stop_start)];
 
     assert!(
         stop_src.contains(".take()"),
@@ -3391,9 +3384,18 @@ fn frontmost_app_delivery_full_ordering_chain() {
 
     let steps: Vec<(&str, usize)> = [
         ("DictationSessionPhase::Finished", "show Finished overlay"),
-        ("dictation_done_state_duration", "wait for done-state visibility"),
-        ("yield_focus_for_dictation_paste", "yield focus to target app"),
-        ("dictation_focus_settle_duration", "wait for focus to settle"),
+        (
+            "dictation_done_state_duration",
+            "wait for done-state visibility",
+        ),
+        (
+            "yield_focus_for_dictation_paste",
+            "yield focus to target app",
+        ),
+        (
+            "dictation_focus_settle_duration",
+            "wait for focus to settle",
+        ),
         ("paste_text", "paste transcript"),
     ]
     .iter()
@@ -3409,7 +3411,10 @@ fn frontmost_app_delivery_full_ordering_chain() {
         assert!(
             pair[0].1 < pair[1].1,
             "delivery ordering violated: '{}' (byte {}) must come before '{}' (byte {})",
-            pair[0].0, pair[0].1, pair[1].0, pair[1].1
+            pair[0].0,
+            pair[0].1,
+            pair[1].0,
+            pair[1].1
         );
     }
 }
@@ -3420,9 +3425,8 @@ fn frontmost_app_delivery_full_ordering_chain() {
 
 #[test]
 fn parakeet_engine_new_fails_for_missing_model_dir() {
-    let result = ParakeetDictationEngine::new(std::path::Path::new(
-        "/definitely/missing-parakeet-dir",
-    ));
+    let result =
+        ParakeetDictationEngine::new(std::path::Path::new("/definitely/missing-parakeet-dir"));
     assert!(
         result.is_err(),
         "ParakeetDictationEngine::new must fail for a missing directory"
@@ -3480,7 +3484,10 @@ fn is_parakeet_model_available_returns_true_for_populated_dir() {
         && std::fs::read_dir(path)
             .map(|mut entries| entries.next().is_some())
             .unwrap_or(false);
-    assert!(available, "populated directory should be detected as available");
+    assert!(
+        available,
+        "populated directory should be detected as available"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -3666,8 +3673,7 @@ fn dictation_transcription_logs_model_resolution_details() {
 
 #[test]
 fn overlay_generation_is_bumped_from_started_path_not_window_creation() {
-    let window_source =
-        std::fs::read_to_string("src/dictation/window.rs").expect("read window.rs");
+    let window_source = std::fs::read_to_string("src/dictation/window.rs").expect("read window.rs");
     let builtin_source = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
         .expect("read builtin_execution.rs");
 
@@ -3683,8 +3689,7 @@ fn overlay_generation_is_bumped_from_started_path_not_window_creation() {
 
 #[test]
 fn open_dictation_overlay_does_not_bump_generation_itself() {
-    let window_source =
-        std::fs::read_to_string("src/dictation/window.rs").expect("read window.rs");
+    let window_source = std::fs::read_to_string("src/dictation/window.rs").expect("read window.rs");
 
     // Extract just the open_dictation_overlay function body to check it
     // doesn't contain its own generation bump.
@@ -3693,9 +3698,7 @@ fn open_dictation_overlay_does_not_bump_generation_itself() {
         .expect("open_dictation_overlay must exist");
     let fn_body = &window_source[fn_start..];
     // Take up to the next top-level `pub fn` after the opening one.
-    let fn_end = fn_body[1..]
-        .find("\npub fn ")
-        .unwrap_or(fn_body.len() - 1);
+    let fn_end = fn_body[1..].find("\npub fn ").unwrap_or(fn_body.len() - 1);
     let fn_text = &fn_body[..fn_end + 1];
 
     assert!(
@@ -3707,8 +3710,7 @@ fn open_dictation_overlay_does_not_bump_generation_itself() {
 
 #[test]
 fn hidden_main_window_path_does_not_always_key_overlay() {
-    let window_source =
-        std::fs::read_to_string("src/dictation/window.rs").expect("read window.rs");
+    let window_source = std::fs::read_to_string("src/dictation/window.rs").expect("read window.rs");
     assert!(
         window_source.contains("let should_key_overlay = crate::is_main_window_visible()"),
         "overlay keying must depend on whether the main window is already visible"
@@ -3740,8 +3742,7 @@ fn dictation_builtin_does_not_set_opened_from_main_menu() {
 
 #[test]
 fn overlay_render_uses_outer_wrapper_for_full_bounds() {
-    let window_source =
-        std::fs::read_to_string("src/dictation/window.rs").expect("read window.rs");
+    let window_source = std::fs::read_to_string("src/dictation/window.rs").expect("read window.rs");
 
     // The render must have a dedicated outer root div that claims full bounds
     // with the pill surface as a child — not the pill div as root.

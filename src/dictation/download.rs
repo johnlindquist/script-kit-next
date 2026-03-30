@@ -63,8 +63,12 @@ pub fn download_parakeet_model(
         .context("cannot resolve models parent directory")?;
 
     // Ensure models directory exists.
-    std::fs::create_dir_all(models_parent)
-        .with_context(|| format!("failed to create models directory: {}", models_parent.display()))?;
+    std::fs::create_dir_all(models_parent).with_context(|| {
+        format!(
+            "failed to create models directory: {}",
+            models_parent.display()
+        )
+    })?;
 
     let partial_path = models_parent.join("parakeet-v3-int8.tar.gz.partial");
     let extracting_path = models_parent.join("parakeet-tdt-0.6b-v3-int8.extracting");
@@ -228,9 +232,7 @@ fn download_archive(
 
     // Validate final size.
     if expected_size > 0 && downloaded != expected_size {
-        anyhow::bail!(
-            "download size mismatch: got {downloaded} bytes, expected {expected_size}"
-        );
+        anyhow::bail!("download size mismatch: got {downloaded} bytes, expected {expected_size}");
     }
 
     Ok(())
@@ -238,11 +240,7 @@ fn download_archive(
 
 /// Extract a `.tar.gz` archive, promoting a single inner directory to the
 /// final model path (matching the vercel-voice extraction behavior).
-fn extract_tar_gz(
-    archive_path: &Path,
-    extracting_dir: &Path,
-    final_dir: &Path,
-) -> Result<()> {
+fn extract_tar_gz(archive_path: &Path, extracting_dir: &Path, final_dir: &Path) -> Result<()> {
     tracing::info!(
         category = "DICTATION",
         archive = %archive_path.display(),
@@ -262,12 +260,9 @@ fn extract_tar_gz(
     let decoder = flate2::read::GzDecoder::new(file);
     let mut archive = tar::Archive::new(decoder);
 
-    archive.unpack(extracting_dir).with_context(|| {
-        format!(
-            "failed to extract archive to {}",
-            extracting_dir.display()
-        )
-    })?;
+    archive
+        .unpack(extracting_dir)
+        .with_context(|| format!("failed to extract archive to {}", extracting_dir.display()))?;
 
     // Check if the archive contained a single top-level directory.
     // If so, promote it to the final path (e.g. archive contains

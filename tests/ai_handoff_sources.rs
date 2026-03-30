@@ -417,53 +417,22 @@ fn deferred_ai_handoff_emits_actionable_failure_toast_on_open_error() {
 }
 
 // ---------------------------------------------------------------------------
-// SendScreenAreaToAi — uses the deferred hide-and-capture pattern
+// SendScreenAreaToAi — unavailable until region capture is attached
 // ---------------------------------------------------------------------------
 
 #[test]
-fn send_screen_area_to_ai_uses_deferred_capture_flow() {
+fn send_screen_area_to_ai_returns_error_without_region_capture() {
     let builtins = read_source("src/app_execute/builtin_execution.rs");
 
-    // The SendScreenAreaToAi arm must call the deferred helper, not inline capture
+    // The SendScreenAreaToAi arm must return an explicit error, not open the harness.
     let screen_area_arm = slice_from(&builtins, "AiCommandType::SendScreenAreaToAi => {");
     assert!(
-        screen_area_arm.contains("self.spawn_send_screen_area_to_ai_after_hide("),
-        "SendScreenAreaToAi must delegate to the deferred capture helper"
+        screen_area_arm.contains("builtin_error(") && screen_area_arm.contains("unavailable"),
+        "SendScreenAreaToAi must return an explicit error until region capture exists"
     );
     assert!(
-        !screen_area_arm.contains("platform::capture_screen_area()"),
-        "SendScreenAreaToAi must not perform inline synchronous capture"
-    );
-
-    // The helper must exist and use the same deferred pattern
-    let helper = slice_from(&builtins, "fn spawn_send_screen_area_to_ai_after_hide(");
-    assert!(
-        helper.contains("platform::defer_hide_main_window(cx);"),
-        "screen area capture helper must defer main window hide"
-    );
-    assert!(
-        helper.contains("ai_capture_hide_settle_duration()"),
-        "screen area capture helper must wait for hide settle before capturing"
-    );
-    assert!(
-        helper.contains("platform::capture_screen_area()"),
-        "screen area capture helper must call capture_screen_area on background executor"
-    );
-    assert!(
-        helper.contains("event = \"ai_capture_scheduled\""),
-        "screen area capture helper must log ai_capture_scheduled"
-    );
-    assert!(
-        helper.contains("event = \"ai_capture_completed\""),
-        "screen area capture helper must log ai_capture_completed"
-    );
-    assert!(
-        helper.contains("source_action = \"SendScreenAreaToAi\""),
-        "screen area capture helper must use SendScreenAreaToAi as source_action"
-    );
-    assert!(
-        helper.contains("open_ai_window_after_already_hidden("),
-        "screen area capture helper must use deferred AI window open"
+        screen_area_arm.contains("toast_manager.push("),
+        "SendScreenAreaToAi must show an error toast"
     );
 }
 

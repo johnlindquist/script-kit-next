@@ -2305,12 +2305,50 @@ fn legacy_screenshot_commands_preserve_requested_capture_kind() {
         "SendFocusedWindowToAi must request focused-window capture via explicit intent"
     );
 
-    // SendScreenAreaToAi must carry a screen-area intent
-    let area_arm = find_execution_arm("AiCommandType::SendScreenAreaToAi");
+    // SendScreenAreaToAi must fail with an explicit error — no real region capture yet.
+    let area_arm_full = find_execution_arm("AiCommandType::SendScreenAreaToAi");
+    // Trim to just this arm (stop before the next AiCommandType match).
+    let area_arm = area_arm_full
+        .find("AiCommandType::SendSelectedTextToAi")
+        .map(|pos| &area_arm_full[..pos])
+        .unwrap_or(area_arm_full);
     assert!(
-        area_arm.contains("open_tab_ai_chat_with_entry_intent(")
-            && area_arm.contains("screen area"),
-        "SendScreenAreaToAi must request screen-area capture via explicit intent"
+        area_arm.contains("builtin_error(") && area_arm.contains("unavailable"),
+        "SendScreenAreaToAi must return an explicit error until region capture is attached"
+    );
+    assert!(
+        area_arm.contains("toast_manager.push("),
+        "SendScreenAreaToAi must show an error toast to the user"
+    );
+    assert!(
+        !area_arm.contains("open_tab_ai_chat"),
+        "SendScreenAreaToAi must NOT open the harness without real region data"
+    );
+}
+
+#[test]
+fn send_selected_text_to_ai_submits_explicit_intent() {
+    let arm = find_execution_arm("AiCommandType::SendSelectedTextToAi");
+    assert!(
+        arm.contains("open_tab_ai_chat_with_entry_intent("),
+        "SendSelectedTextToAi must open the harness with an explicit intent"
+    );
+    assert!(
+        arm.contains("selected text"),
+        "SendSelectedTextToAi must include 'selected text' in the intent string"
+    );
+}
+
+#[test]
+fn send_browser_tab_to_ai_submits_explicit_intent() {
+    let arm = find_execution_arm("AiCommandType::SendBrowserTabToAi");
+    assert!(
+        arm.contains("open_tab_ai_chat_with_entry_intent("),
+        "SendBrowserTabToAi must open the harness with an explicit intent"
+    );
+    assert!(
+        arm.contains("browser tab"),
+        "SendBrowserTabToAi must include 'browser tab' in the intent string"
     );
 }
 
