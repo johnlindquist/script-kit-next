@@ -4,10 +4,6 @@ use std::time::Duration;
 use crate::dictation::types::{DictationLevel, DictationSessionPhase};
 use crate::dictation::visualizer::bars_for_level;
 
-/// Vercel-voice overlay color constants.
-/// Green for active audio, red for silence.
-const OVERLAY_ACTIVE_COLOR: u32 = 0x52c41a;
-const OVERLAY_INACTIVE_COLOR: u32 = 0xff4d4f;
 /// Threshold: if any bar exceeds this, we treat audio as "active" (green).
 const SOUND_THRESHOLD: f32 = 0.15;
 
@@ -45,11 +41,15 @@ use gpui::{
     Styled, Window, WindowBounds, WindowOptions,
 };
 
+use crate::list_item::FONT_MONO;
 use crate::theme::get_cached_theme;
-use crate::theme::opacity::OPACITY_ACTIVE;
+use crate::theme::opacity::{
+    OPACITY_ACTIVE, OPACITY_SELECTED, OPACITY_SUBTLE, OPACITY_TEXT_MUTED,
+};
 use crate::ui_foundation::HexColorExt;
 
-use std::sync::{Mutex, OnceLock};
+use parking_lot::Mutex;
+use std::sync::OnceLock;
 
 /// Global handle so we can reach the overlay from any callsite.
 static DICTATION_OVERLAY_WINDOW: OnceLock<Mutex<Option<gpui::WindowHandle<DictationOverlay>>>> =
@@ -86,17 +86,16 @@ impl Render for DictationOverlay {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
         let theme = get_cached_theme();
 
-        // Vercel-voice surface: dark translucent pill with border + shadow.
-        // Primary uses rgba(18,18,22, 0.42) fallback; with vibrancy rgba(18,18,22, 0.24).
+        // Translucent pill surface derived from theme background.
         let surface_bg = if theme.is_vibrancy_enabled() {
-            gpui::rgba(0x1212163D) // ~0.24 alpha
+            theme.colors.background.main.with_opacity(OPACITY_SUBTLE)
         } else {
-            gpui::rgba(0x1212166B) // ~0.42 alpha
+            theme.colors.background.main.with_opacity(OPACITY_SELECTED)
         };
-        let border_color = gpui::rgba(0xFFFFFF2E); // rgba(255,255,255,0.18)
+        let border_color = theme.colors.ui.border.with_opacity(OPACITY_SUBTLE);
 
-        let timer_color = gpui::rgba(0xFFFFFF80); // rgba(255,255,255,0.50)
-        let muted_text = gpui::rgba(0xFFFFFFA6); // rgba(255,255,255,0.65)
+        let timer_color = theme.colors.text.muted.with_opacity(OPACITY_SELECTED);
+        let muted_text = theme.colors.text.muted.with_opacity(OPACITY_TEXT_MUTED);
         let text_color = theme.colors.text.primary.with_opacity(OPACITY_ACTIVE);
 
         let phase = &self.state.phase;
@@ -122,6 +121,7 @@ impl Render for DictationOverlay {
                         div().flex().flex_row().items_center().gap(px(8.)).child(
                             div()
                                 .text_size(px(11.5))
+                                .font_family(FONT_MONO)
                                 .text_color(timer_color)
                                 .child(timer_text),
                         ),
@@ -158,6 +158,7 @@ impl Render for DictationOverlay {
                 .child(
                     div()
                         .text_size(px(11.5))
+                        .font_family(FONT_MONO)
                         .text_color(text_color)
                         .overflow_hidden()
                         .child(finished_label(&self.state.transcript)),
@@ -173,6 +174,7 @@ impl Render for DictationOverlay {
                     .child(
                         div()
                             .text_size(px(11.5))
+                            .font_family(FONT_MONO)
                             .text_color(muted_text)
                             .overflow_hidden()
                             .child(err_text),
@@ -229,12 +231,13 @@ pub(crate) fn finished_label(transcript: &SharedString) -> SharedString {
 /// Render 9 waveform bars matching vercel-voice `.bars-container` styling.
 ///
 /// Bars are 4px wide, 4px gap, 4px min-height, 20px max-height, fully rounded.
-/// Green (`#52c41a`) when sound is detected, red (`#ff4d4f`) when silent.
+/// Uses theme success color when sound is detected, error color when silent.
 fn render_waveform_bars(bars: &[f32; 9], has_sound: bool) -> impl IntoElement {
+    let theme = get_cached_theme();
     let bar_hex = if has_sound {
-        OVERLAY_ACTIVE_COLOR
+        theme.colors.ui.success
     } else {
-        OVERLAY_INACTIVE_COLOR
+        theme.colors.ui.error
     };
 
     let bar_elements: Vec<_> = bars
@@ -268,12 +271,12 @@ fn render_waveform_bars(bars: &[f32; 9], has_sound: bool) -> impl IntoElement {
     container
 }
 
-/// Render 3 green dots for the transcribing state.
+/// Render 3 dots for the transcribing state.
 ///
-/// Matches vercel-voice `.transcribing-dots` — 4px circles with the active
-/// green color at staggered opacities to suggest pulsing motion.
+/// Uses theme success color at staggered opacities to suggest pulsing motion.
 fn render_transcribing_dots() -> impl IntoElement {
-    let opacities = [0.5_f32, 0.85, 0.5];
+    let theme = get_cached_theme();
+    let opacities = [OPACITY_SELECTED, OPACITY_ACTIVE, OPACITY_SELECTED];
 
     let mut container = div()
         .flex()
@@ -283,7 +286,7 @@ fn render_transcribing_dots() -> impl IntoElement {
         .h(px(20.));
 
     for &opacity in &opacities {
-        let dot_color = OVERLAY_ACTIVE_COLOR.with_opacity(opacity);
+        let dot_color = theme.colors.ui.success.with_opacity(opacity);
         container = container.child(div().w(px(4.)).h(px(4.)).rounded(px(2.)).bg(dot_color));
     }
 
@@ -306,7 +309,7 @@ pub fn open_dictation_overlay(
     // If already open, return the existing handle.
     let slot = DICTATION_OVERLAY_WINDOW.get_or_init(|| Mutex::new(None));
     {
-        let guard = slot.lock().unwrap_or_else(|e| e.into_inner());
+        let guard = slot.lock();
         if let Some(handle) = *guard {
             return Ok(handle);
         }
@@ -373,7 +376,7 @@ pub fn open_dictation_overlay(
 
     // Store handle.
     {
-        let mut guard = slot.lock().unwrap_or_else(|e| e.into_inner());
+        let mut guard = slot.lock();
         *guard = Some(handle);
     }
 
@@ -385,7 +388,7 @@ pub fn open_dictation_overlay(
 pub fn update_dictation_overlay(state: DictationOverlayState, cx: &mut App) -> anyhow::Result<()> {
     let slot = DICTATION_OVERLAY_WINDOW.get_or_init(|| Mutex::new(None));
     let handle = {
-        let guard = slot.lock().unwrap_or_else(|e| e.into_inner());
+        let guard = slot.lock();
         match *guard {
             Some(h) => h,
             None => return Ok(()), // Not open — nothing to update.
@@ -403,7 +406,7 @@ pub fn update_dictation_overlay(state: DictationOverlayState, cx: &mut App) -> a
 pub fn close_dictation_overlay(cx: &mut App) -> anyhow::Result<()> {
     let slot = DICTATION_OVERLAY_WINDOW.get_or_init(|| Mutex::new(None));
     let handle = {
-        let mut guard = slot.lock().unwrap_or_else(|e| e.into_inner());
+        let mut guard = slot.lock();
         guard.take()
     };
 
@@ -420,6 +423,6 @@ pub fn close_dictation_overlay(cx: &mut App) -> anyhow::Result<()> {
 /// Check whether the dictation overlay window is currently open.
 pub fn is_dictation_overlay_open() -> bool {
     let slot = DICTATION_OVERLAY_WINDOW.get_or_init(|| Mutex::new(None));
-    let guard = slot.lock().unwrap_or_else(|e| e.into_inner());
+    let guard = slot.lock();
     guard.is_some()
 }
