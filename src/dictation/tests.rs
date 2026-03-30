@@ -1298,3 +1298,77 @@ fn dictation_hotkey_channel_not_dead_code() {
         "dictation hotkey channel receiver must be consumed in at least one entry point"
     );
 }
+
+// ---------------------------------------------------------------------------
+// Finished-label formatting tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn finished_label_formats_short_and_long_transcripts() {
+    let short: gpui::SharedString = "hello world".into();
+    assert_eq!(
+        super::window::finished_label(&short).to_string(),
+        "Done · hello world"
+    );
+
+    let long: gpui::SharedString = "abcdefghijklmnopqrstuvwxyz0123456789".into();
+    assert_eq!(
+        super::window::finished_label(&long).to_string(),
+        "Done · abcdefghijklmnopqrstuvwxyz01…"
+    );
+}
+
+#[test]
+fn finished_label_returns_done_for_empty_transcript() {
+    let empty: gpui::SharedString = "".into();
+    assert_eq!(
+        super::window::finished_label(&empty).to_string(),
+        "Done"
+    );
+
+    let whitespace: gpui::SharedString = "   ".into();
+    assert_eq!(
+        super::window::finished_label(&whitespace).to_string(),
+        "Done"
+    );
+}
+
+#[test]
+fn frontmost_app_delivery_shows_done_state_before_close_and_paste() {
+    let src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("read builtin_execution.rs");
+
+    let handler_start = src
+        .find("fn handle_dictation_transcript")
+        .expect("handler must exist");
+    let handler_src = &src[handler_start..];
+
+    // Both delivery paths (prompt + frontmost-app) must show Finished.
+    let finished_count = handler_src
+        .match_indices("DictationSessionPhase::Finished")
+        .count();
+    assert!(
+        finished_count >= 2,
+        "handle_dictation_transcript must use Finished for both prompt and frontmost-app delivery paths"
+    );
+
+    // Scope to the frontmost-app else branch: starts at the 75ms timer
+    // (unique to that branch) and extends through paste_text.
+    let done_pause_pos = handler_src
+        .find("timer(std::time::Duration::from_millis(75))")
+        .expect("frontmost-app delivery must wait briefly so the done state is visible");
+
+    // Search forward from the done-pause for close and paste, in order.
+    let after_pause = &handler_src[done_pause_pos..];
+    let close_offset = after_pause
+        .find("close_dictation_overlay")
+        .expect("frontmost-app delivery must close the overlay after the done-state pause");
+    let paste_offset = after_pause
+        .find("paste_text")
+        .expect("frontmost-app delivery must paste after the done-state pause");
+
+    assert!(
+        close_offset < paste_offset,
+        "frontmost-app delivery must close overlay before pasting (close at {close_offset}, paste at {paste_offset})"
+    );
+}
