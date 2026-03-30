@@ -120,23 +120,26 @@ impl ScriptListApp {
             capture_generation: self.tab_ai_harness_capture_generation,
         };
 
-        let capture_rx = self.spawn_tab_ai_pre_switch_capture(&request, cx);
+        let capture_rx = self.spawn_tab_ai_pre_switch_capture(&request);
         self.open_tab_ai_harness_terminal_from_request(request, capture_rx, cx);
     }
 
-    /// Spawn background capture work that runs after the view has switched.
+    /// Start background capture immediately on a dedicated OS thread.
     ///
     /// Captures the desktop context snapshot and (best-effort) focused window
     /// screenshot. Returns a channel receiver that delivers the results.
+    ///
+    /// Uses `std::thread::spawn` instead of `cx.spawn` + background executor
+    /// so the expensive AX/screenshot work begins *immediately* — before the
+    /// view switch can steal focus from the frontmost app.
     fn spawn_tab_ai_pre_switch_capture(
         &self,
         _request: &TabAiLaunchRequest,
-        cx: &Context<Self>,
     ) -> TabAiDeferredCaptureRx {
         let (tx, rx) = async_channel::bounded::<Result<TabAiDeferredCaptureArtifacts, String>>(1);
 
-        cx.spawn(async move |_this, cx| {
-            let result = cx.background_executor().spawn(async move {
+        std::thread::spawn(move || {
+            let result = std::panic::catch_unwind(|| {
                 // Capture desktop context (text-safe, no screenshots in the blob)
                 let desktop = crate::context_snapshot::capture_context_snapshot(
                     &crate::context_snapshot::CaptureContextOptions::tab_ai_submit(),
@@ -147,24 +150,30 @@ impl ScriptListApp {
                     match crate::ai::harness::capture_tab_ai_focused_window_screenshot_file() {
                         Ok(Some(file)) => Some(file.path),
                         Ok(None) => None,
-                        Err(e) => {
+                        Err(error) => {
                             tracing::debug!(
                                 event = "tab_ai_deferred_screenshot_failed",
-                                error = %e,
+                                error = %error,
                             );
                             None
                         }
                     };
 
-                Ok(TabAiDeferredCaptureArtifacts {
+                TabAiDeferredCaptureArtifacts {
                     desktop,
                     screenshot_path,
-                })
-            }).await;
+                }
+            })
+            .map_err(|_| "tab_ai_deferred_capture_panicked".to_string());
 
-            let _ = tx.send(result).await;
-        })
-        .detach();
+            let send_result = match result {
+                Ok(artifacts) => tx.send_blocking(Ok(artifacts)),
+                Err(error) => tx.send_blocking(Err(error)),
+            };
+            if send_result.is_err() {
+                tracing::debug!(event = "tab_ai_deferred_capture_receiver_dropped");
+            }
+        });
 
         rx
     }
@@ -267,12 +276,6 @@ impl ScriptListApp {
                         return;
                     }
 
-                    let source_type = detect_tab_ai_source_type(
-                        &request.source_view,
-                        &artifacts.desktop,
-                    );
-                    let apply_back_hint = build_tab_ai_apply_back_hint(source_type.as_ref());
-
                     let resolved = this.build_tab_ai_context_from(
                         request.entry_intent.clone().unwrap_or_default(),
                         request.source_view.clone(),
@@ -281,6 +284,13 @@ impl ScriptListApp {
                         request.invocation_receipt.clone(),
                         cx,
                     );
+
+                    let source_type = detect_tab_ai_source_type(
+                        &request.source_view,
+                        &resolved.context.desktop,
+                        resolved.context.focused_target.as_ref(),
+                    );
+                    let apply_back_hint = build_tab_ai_apply_back_hint(source_type.as_ref());
 
                     let context = resolved.context.with_deferred_capture_fields(
                         source_type,
@@ -1716,15 +1726,25 @@ impl ScriptListApp {
 fn detect_tab_ai_source_type(
     source_view: &AppView,
     desktop: &crate::context_snapshot::AiContextSnapshot,
+    focused_target: Option<&crate::ai::TabAiTargetContext>,
 ) -> Option<crate::ai::TabAiSourceType> {
     // Desktop selected text takes priority — it means the user had something
     // highlighted outside of Script Kit.
-    if desktop.selected_text.as_ref().map_or(false, |t| !t.trim().is_empty()) {
+    if desktop
+        .selected_text
+        .as_ref()
+        .is_some_and(|t| !t.trim().is_empty())
+    {
         return Some(crate::ai::TabAiSourceType::DesktopSelection);
     }
 
     match source_view {
-        AppView::ScriptList => Some(crate::ai::TabAiSourceType::ScriptListItem),
+        // Only classify as ScriptListItem when context resolution actually
+        // resolved a focused target. Without a target the apply-back hint
+        // would claim "focused script" when there is none.
+        AppView::ScriptList if focused_target.is_some() => {
+            Some(crate::ai::TabAiSourceType::ScriptListItem)
+        }
 
         AppView::ClipboardHistoryView { .. } => {
             Some(crate::ai::TabAiSourceType::ClipboardEntry)
@@ -1881,6 +1901,109 @@ mod tests {
         );
     }
 
+    // ── Source-type detection tests ──────────────────────────────────
+
+    #[test]
+    fn desktop_selection_beats_internal_surface_classification() {
+        let desktop = crate::context_snapshot::AiContextSnapshot {
+            selected_text: Some("hello".to_string()),
+            ..Default::default()
+        };
+        // Even when the source view is ScriptList with a focused target,
+        // desktop selected text takes precedence.
+        let focused_target = crate::ai::TabAiTargetContext {
+            source: "ScriptList".to_string(),
+            kind: "script".to_string(),
+            semantic_id: "script:0".to_string(),
+            label: "hello-world".to_string(),
+            metadata: None,
+        };
+        assert_eq!(
+            super::detect_tab_ai_source_type(
+                &AppView::ScriptList,
+                &desktop,
+                Some(&focused_target),
+            ),
+            Some(crate::ai::TabAiSourceType::DesktopSelection),
+            "Desktop selected text must take precedence over ScriptList classification"
+        );
+    }
+
+    #[test]
+    fn script_list_requires_real_focused_target() {
+        let desktop = crate::context_snapshot::AiContextSnapshot::default();
+
+        // ScriptList without a focused target falls back to Desktop
+        assert_eq!(
+            super::detect_tab_ai_source_type(&AppView::ScriptList, &desktop, None),
+            Some(crate::ai::TabAiSourceType::Desktop),
+            "ScriptList without focused target must fall back to Desktop"
+        );
+
+        // ScriptList WITH a focused target resolves to ScriptListItem
+        let focused_target = crate::ai::TabAiTargetContext {
+            source: "ScriptList".to_string(),
+            kind: "script".to_string(),
+            semantic_id: "script:0".to_string(),
+            label: "hello-world".to_string(),
+            metadata: None,
+        };
+        assert_eq!(
+            super::detect_tab_ai_source_type(
+                &AppView::ScriptList,
+                &desktop,
+                Some(&focused_target),
+            ),
+            Some(crate::ai::TabAiSourceType::ScriptListItem),
+            "ScriptList with focused target must resolve to ScriptListItem"
+        );
+    }
+
+    #[test]
+    fn desktop_selection_whitespace_only_does_not_count() {
+        let desktop = crate::context_snapshot::AiContextSnapshot {
+            selected_text: Some("   \n\t  ".to_string()),
+            ..Default::default()
+        };
+        // Whitespace-only selection should NOT trigger DesktopSelection
+        assert_eq!(
+            super::detect_tab_ai_source_type(&AppView::ScriptList, &desktop, None),
+            Some(crate::ai::TabAiSourceType::Desktop),
+            "Whitespace-only selected text must not trigger DesktopSelection"
+        );
+    }
+
+    #[test]
+    fn source_type_computed_after_context_resolution() {
+        // Structural contract: sourceType is computed after build_tab_ai_context_from
+        // so it can inspect the resolved focused_target.
+        const SRC: &str = include_str!("tab_ai_mode.rs");
+
+        let build_idx = SRC
+            .find("let resolved = this.build_tab_ai_context_from(")
+            .expect("build_tab_ai_context_from call");
+        let detect_idx = SRC
+            .find("let source_type = detect_tab_ai_source_type(")
+            .expect("detect_tab_ai_source_type call");
+
+        assert!(
+            build_idx < detect_idx,
+            "sourceType must be computed AFTER build_tab_ai_context_from so it can inspect resolved targets"
+        );
+    }
+
+    #[test]
+    fn detect_source_type_passes_resolved_focused_target() {
+        // Structural contract: detect_tab_ai_source_type receives focused_target from resolved context
+        const SRC: &str = include_str!("tab_ai_mode.rs");
+        assert!(
+            SRC.contains("resolved.context.focused_target.as_ref()"),
+            "detect_tab_ai_source_type must receive focused_target from the resolved context"
+        );
+    }
+
+    // ── Existing save-name tests ──────────────────────────────────
+
     #[test]
     fn tab_ai_default_save_name_falls_back_to_slug_when_intent_is_generic() {
         let record = crate::ai::TabAiExecutionRecord::from_parts(
@@ -1921,4 +2044,5 @@ mod tests {
             "Should derive from intent, got: {name}"
         );
     }
+
 }
