@@ -8,12 +8,35 @@
 pub(crate) mod screenshot_files;
 
 pub use screenshot_files::{
-    capture_tab_ai_focused_window_screenshot_file, cleanup_old_tab_ai_screenshot_files,
-    cleanup_old_tab_ai_screenshot_files_in_dir, tab_ai_screenshot_prefix, TabAiScreenshotFile,
-    TAB_AI_SCREENSHOT_MAX_KEEP,
+    capture_tab_ai_focused_window_screenshot_file, capture_tab_ai_screen_screenshot_file,
+    cleanup_old_tab_ai_screenshot_files, cleanup_old_tab_ai_screenshot_files_in_dir,
+    tab_ai_screenshot_prefix, TabAiScreenshotFile, TAB_AI_SCREENSHOT_MAX_KEEP,
 };
 
 use serde::{Deserialize, Serialize};
+
+// ---------------------------------------------------------------------------
+// Capture kind
+// ---------------------------------------------------------------------------
+
+/// Declares what kind of pre-switch capture the harness launch should perform.
+///
+/// Threaded through [`TabAiLaunchRequest`] → [`spawn_tab_ai_pre_switch_capture`]
+/// so each explicit AI command gets the appropriate screenshot/context capture
+/// instead of always defaulting to focused-window.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TabAiCaptureKind {
+    /// Default Tab/Shift+Tab path: focused-window screenshot + full desktop context.
+    DefaultContext,
+    /// Full-screen screenshot (e.g. `SendScreenToAi`).
+    FullScreen,
+    /// Focused-window screenshot (e.g. `SendFocusedWindowToAi`).
+    FocusedWindow,
+    /// Selected text context only — no screenshot (e.g. `SendSelectedTextToAi`).
+    SelectedText,
+    /// Browser tab URL context only — no screenshot (e.g. `SendBrowserTabToAi`).
+    BrowserTab,
+}
 
 /// Schema version for `HarnessConfig` wire format.
 pub const TAB_AI_HARNESS_CONFIG_SCHEMA_VERSION: u32 = 1;
@@ -1188,10 +1211,7 @@ mod cleanup_contract_audits {
             source.contains("FreshPrewarm"),
             "FreshPrewarm variant must exist"
         );
-        assert!(
-            source.contains("Consumed"),
-            "Consumed variant must exist"
-        );
+        assert!(source.contains("Consumed"), "Consumed variant must exist");
         assert!(
             source.contains("pub fn is_fresh_prewarm(&self) -> bool"),
             "session must expose is_fresh_prewarm()"

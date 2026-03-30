@@ -1871,19 +1871,21 @@ impl ScriptListApp {
                     }
 
                     AiCommandType::SendScreenToAi => {
-                        self.open_tab_ai_chat_with_entry_intent(
+                        self.open_tab_ai_chat_with_capture_kind(
                             Some("Capture and analyze the full screen.".to_string()),
+                            crate::ai::TabAiCaptureKind::FullScreen,
                             cx,
                         );
                         Self::builtin_success(dctx, "ai_send_screen_routed_to_harness")
                     }
 
                     AiCommandType::SendFocusedWindowToAi => {
-                        self.open_tab_ai_chat_with_entry_intent(
+                        self.open_tab_ai_chat_with_capture_kind(
                             Some(
                                 "Capture and analyze the focused window."
                                     .to_string(),
                             ),
+                            crate::ai::TabAiCaptureKind::FocusedWindow,
                             cx,
                         );
                         Self::builtin_success(
@@ -1909,23 +1911,25 @@ impl ScriptListApp {
                     }
 
                     AiCommandType::SendSelectedTextToAi => {
-                        self.open_tab_ai_chat_with_entry_intent(
+                        self.open_tab_ai_chat_with_capture_kind(
                             Some(
                                 "Use the current selected text as the primary subject."
                                     .to_string(),
                             ),
+                            crate::ai::TabAiCaptureKind::SelectedText,
                             cx,
                         );
                         Self::builtin_success(dctx, "ai_send_selected_text_routed_to_harness")
                     }
 
                     AiCommandType::SendBrowserTabToAi => {
-                        self.open_tab_ai_chat_with_entry_intent(
+                        self.open_tab_ai_chat_with_capture_kind(
                             Some(
                                 "Use the current browser tab URL and page context \
                                  as the primary subject."
                                     .to_string(),
                             ),
+                            crate::ai::TabAiCaptureKind::BrowserTab,
                             cx,
                         );
                         Self::builtin_success(dctx, "ai_send_browser_tab_routed_to_harness")
@@ -4239,58 +4243,30 @@ impl ScriptListApp {
         Ok(())
     }
 
-    /// Activate the tracked target app via AppleScript so macOS moves
-    /// keyboard focus there before the CGEvent Cmd+V paste fires.
-    #[cfg(target_os = "macos")]
-    fn activate_bundle_id_for_dictation_paste(bundle_id: &str) -> anyhow::Result<()> {
-        use anyhow::Context as _;
-        let escaped = bundle_id.replace('\\', "\\\\").replace('"', "\\\"");
-        let script = format!("tell application id \"{escaped}\" to activate");
-        let output = std::process::Command::new("osascript")
-            .arg("-e")
-            .arg(&script)
-            .output()
-            .context("failed to spawn osascript for dictation app activation")?;
-        if output.status.success() {
-            tracing::info!(
-                category = "DICTATION",
-                target_bundle_id = %bundle_id,
-                "Target app activated via osascript"
-            );
-            return Ok(());
-        }
-        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        if stderr.is_empty() {
-            anyhow::bail!(
-                "failed to activate target app {bundle_id} before dictation paste"
-            );
-        }
-        anyhow::bail!(
-            "failed to activate target app {bundle_id} before dictation paste: {stderr}"
-        );
-    }
-
-    #[cfg(not(target_os = "macos"))]
-    fn activate_bundle_id_for_dictation_paste(_bundle_id: &str) -> anyhow::Result<()> {
-        Ok(())
-    }
-
-    /// Close the dictation overlay, activate the tracked target app, then
-    /// hide Script Kit so macOS moves keyboard focus to the target before
-    /// the CGEvent Cmd+V paste fires.
+    /// Close the dictation overlay and hide Script Kit so macOS naturally
+    /// returns keyboard focus to the previously-active window before the
+    /// CGEvent Cmd+V paste fires.
+    ///
+    /// Script Kit is a non-activating accessory app (NSPanel with
+    /// NonactivatingPanel style), so when our panels close via `orderOut:`,
+    /// macOS automatically restores focus to the window that was active
+    /// before — no explicit `activate` call is needed.  Avoiding AppleScript
+    /// `tell application id … to activate` is important because that can
+    /// reorder windows within multi-window apps like Chrome, causing the
+    /// paste to land in the wrong window.
     fn yield_focus_for_dictation_paste(
         &mut self,
         target_bundle_id: &str,
         cx: &mut Context<Self>,
     ) -> anyhow::Result<()> {
         use anyhow::Context as _;
+        tracing::info!(
+            category = "DICTATION",
+            target_bundle_id = %target_bundle_id,
+            "Yielding focus for dictation paste (non-activating panel dismiss)"
+        );
         crate::dictation::close_dictation_overlay(cx)
             .context("failed to close dictation overlay before paste")?;
-        Self::activate_bundle_id_for_dictation_paste(target_bundle_id).with_context(|| {
-            format!(
-                "failed to activate target app {target_bundle_id} before dictation paste"
-            )
-        })?;
         if script_kit_gpui::is_main_window_visible() {
             script_kit_gpui::set_main_window_visible(false);
             platform::defer_hide_main_window(cx);
