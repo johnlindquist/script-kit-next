@@ -1374,6 +1374,123 @@ fn frontmost_app_delivery_shows_done_state_before_close_and_paste() {
 }
 
 // ---------------------------------------------------------------------------
+// Ordering regressions: frontmost-app delivery sequence
+// ---------------------------------------------------------------------------
+
+/// Extract the frontmost-app else branch from handle_dictation_transcript.
+fn frontmost_dictation_delivery_branch(handler_src: &str) -> &str {
+    let prompt_if = handler_src
+        .find("if self.try_set_prompt_input")
+        .expect("handler must branch on prompt delivery");
+    let else_offset = handler_src[prompt_if..]
+        .find("} else {")
+        .expect("handler must have a frontmost-app else branch");
+    &handler_src[prompt_if + else_offset..]
+}
+
+#[test]
+fn delivery_frontmost_app_shows_finished_before_close_and_paste() {
+    let src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("read builtin_execution.rs");
+    let handler_start = src
+        .find("fn handle_dictation_transcript")
+        .expect("handler must exist");
+    let handler_src = &src[handler_start..];
+
+    let frontmost_src = frontmost_dictation_delivery_branch(handler_src);
+
+    let finished_pos = frontmost_src
+        .find("DictationSessionPhase::Finished")
+        .expect("frontmost-app branch must render Finished");
+    let close_pos = frontmost_src
+        .find("close_dictation_overlay")
+        .expect("frontmost-app branch must close overlay");
+    let paste_pos = frontmost_src
+        .find("paste_text")
+        .expect("frontmost-app branch must paste transcript");
+
+    assert!(
+        finished_pos < close_pos,
+        "Finished phase (byte {finished_pos}) must appear before close_dictation_overlay (byte {close_pos})"
+    );
+    assert!(
+        close_pos < paste_pos,
+        "close_dictation_overlay (byte {close_pos}) must appear before paste_text (byte {paste_pos})"
+    );
+}
+
+#[test]
+fn delivery_frontmost_app_waits_before_closing_and_pasting() {
+    let src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("read builtin_execution.rs");
+    let handler_start = src
+        .find("fn handle_dictation_transcript")
+        .expect("handler must exist");
+    let handler_src = &src[handler_start..];
+
+    let frontmost_src = frontmost_dictation_delivery_branch(handler_src);
+
+    let done_timer_pos = frontmost_src
+        .find("from_millis(75)")
+        .expect("frontmost-app branch must wait briefly on Finished state");
+    let close_pos = frontmost_src
+        .find("close_dictation_overlay")
+        .expect("frontmost-app branch must close overlay");
+    let focus_timer_pos = frontmost_src
+        .find("from_millis(100)")
+        .expect("frontmost-app branch must wait for focus to settle");
+    let paste_pos = frontmost_src
+        .find("paste_text")
+        .expect("frontmost-app branch must paste transcript");
+
+    assert!(
+        done_timer_pos < close_pos,
+        "Finished-state timer (byte {done_timer_pos}) must appear before close_dictation_overlay (byte {close_pos})"
+    );
+    assert!(
+        close_pos < focus_timer_pos,
+        "close_dictation_overlay (byte {close_pos}) must appear before focus-settle timer (byte {focus_timer_pos})"
+    );
+    assert!(
+        focus_timer_pos < paste_pos,
+        "focus-settle timer (byte {focus_timer_pos}) must appear before paste_text (byte {paste_pos})"
+    );
+}
+
+#[test]
+fn delivery_frontmost_app_aborts_paste_on_focus_yield_failure() {
+    let src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("read builtin_execution.rs");
+    let handler_start = src
+        .find("fn handle_dictation_transcript")
+        .expect("handler must exist");
+    let handler_src = &src[handler_start..];
+
+    let frontmost_src = frontmost_dictation_delivery_branch(handler_src);
+
+    // The focus-yield result must be checked (not discarded with `let _ =`).
+    assert!(
+        frontmost_src.contains("yield_focus_result"),
+        "frontmost-app branch must name the focus-yield result for error checking"
+    );
+
+    // On failure, must show error toast and schedule cleanup before returning.
+    let err_check_pos = frontmost_src
+        .find("if let Err(error) = yield_focus_result")
+        .expect("frontmost-app branch must check yield_focus_result for errors");
+    let show_error_pos = frontmost_src
+        .find("show_error_toast")
+        .expect("frontmost-app branch must show error toast on focus-yield failure");
+    let cleanup_in_err = frontmost_src
+        .find("schedule_dictation_transcriber_cleanup");
+
+    assert!(
+        err_check_pos < show_error_pos.min(cleanup_in_err.unwrap_or(usize::MAX)),
+        "error check must come before toast and cleanup"
+    );
+}
+
+// ---------------------------------------------------------------------------
 // Source-audit tests: pin overlay to repo guardrails
 // ---------------------------------------------------------------------------
 
