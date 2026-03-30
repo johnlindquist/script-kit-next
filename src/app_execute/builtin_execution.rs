@@ -1646,16 +1646,11 @@ impl ScriptListApp {
                 tracing::info!(
                     category = "BUILTIN",
                     trace_id = %dctx.trace_id,
-                    "Opening AI Chat window"
+                    "Opening AI harness terminal"
                 );
-                self.open_ai_window_after_main_hide(
-                    "AiChat",
-                    &dctx.trace_id,
-                    DeferredAiWindowAction::OpenOnly,
-                    cx,
-                );
+                self.open_tab_ai_chat(cx);
 
-                Self::builtin_success(dctx, "open_ai_chat_dispatched")
+                Self::builtin_success(dctx, "open_ai_harness_dispatched")
             }
             builtins::BuiltInFeature::Notes => {
                 tracing::info!(
@@ -1839,12 +1834,61 @@ impl ScriptListApp {
                         Self::builtin_success(dctx, "ai_generate_script_routed_to_harness")
                     }
 
-                    AiCommandType::GenerateScriptFromCurrentApp
-                    | AiCommandType::SendScreenToAi
-                    | AiCommandType::SendFocusedWindowToAi
-                    | AiCommandType::SendSelectedTextToAi
-                    | AiCommandType::SendBrowserTabToAi
-                    | AiCommandType::SendScreenAreaToAi => {
+                    AiCommandType::GenerateScriptFromCurrentApp => {
+                        let query = query_override.unwrap_or(&self.filter_text).trim();
+                        let intent = if query.is_empty() {
+                            "Generate a Script Kit script for the frontmost app \
+                             using the current menu, selection, and browser context."
+                                .to_string()
+                        } else {
+                            format!(
+                                "Generate a Script Kit script for the frontmost app \
+                                 using the current menu, selection, and browser context. \
+                                 User request: {query}"
+                            )
+                        };
+                        self.open_tab_ai_chat_with_entry_intent(Some(intent), cx);
+                        Self::builtin_success(
+                            dctx,
+                            "ai_generate_script_from_current_app_routed_to_harness",
+                        )
+                    }
+
+                    AiCommandType::SendScreenToAi => {
+                        self.open_tab_ai_chat_with_entry_intent(
+                            Some("Capture and analyze the full screen.".to_string()),
+                            cx,
+                        );
+                        Self::builtin_success(dctx, "ai_send_screen_routed_to_harness")
+                    }
+
+                    AiCommandType::SendFocusedWindowToAi => {
+                        self.open_tab_ai_chat_with_entry_intent(
+                            Some(
+                                "Capture and analyze the focused window."
+                                    .to_string(),
+                            ),
+                            cx,
+                        );
+                        Self::builtin_success(
+                            dctx,
+                            "ai_send_focused_window_routed_to_harness",
+                        )
+                    }
+
+                    AiCommandType::SendScreenAreaToAi => {
+                        self.open_tab_ai_chat_with_entry_intent(
+                            Some(
+                                "Capture and analyze a selected screen area."
+                                    .to_string(),
+                            ),
+                            cx,
+                        );
+                        Self::builtin_success(dctx, "ai_send_screen_area_routed_to_harness")
+                    }
+
+                    AiCommandType::SendSelectedTextToAi
+                    | AiCommandType::SendBrowserTabToAi => {
                         // Context capture is handled by the harness's built-in
                         // context snapshot — no legacy hide-then-capture needed.
                         self.open_tab_ai_chat(cx);
@@ -3955,8 +3999,8 @@ impl ScriptListApp {
         Ok(())
     }
 
-    /// Close the dictation overlay, hide Script Kit, and explicitly activate
-    /// the tracked target app so macOS moves keyboard focus there before
+    /// Close the dictation overlay, activate the tracked target app, then
+    /// hide Script Kit so macOS moves keyboard focus to the target before
     /// the CGEvent Cmd+V paste fires.
     fn yield_focus_for_dictation_paste(
         &mut self,
@@ -3966,15 +4010,15 @@ impl ScriptListApp {
         use anyhow::Context as _;
         crate::dictation::close_dictation_overlay(cx)
             .context("failed to close dictation overlay before paste")?;
-        if script_kit_gpui::is_main_window_visible() {
-            script_kit_gpui::set_main_window_visible(false);
-            platform::defer_hide_main_window(cx);
-        }
         Self::activate_bundle_id_for_dictation_paste(target_bundle_id).with_context(|| {
             format!(
                 "failed to activate target app {target_bundle_id} before dictation paste"
             )
         })?;
+        if script_kit_gpui::is_main_window_visible() {
+            script_kit_gpui::set_main_window_visible(false);
+            platform::defer_hide_main_window(cx);
+        }
         Ok(())
     }
 

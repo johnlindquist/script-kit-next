@@ -114,6 +114,7 @@ pub use self::tab_context::{
     tab_ai_execution_audit_path, tab_ai_experience_pack_name, tab_ai_experience_pack_subtitle,
     tab_ai_intent_uses_implicit_target, tab_ai_memory_index_path, truncate_tab_ai_text,
     write_tab_ai_memory_entry, write_tab_ai_memory_entry_to_path, TabAiApplyBackHint,
+    TabAiApplyBackRoute,
     TabAiClipboardContext, TabAiClipboardHistoryEntry, TabAiContextBlob, TabAiDegradationReason,
     TabAiExecutionReceipt, TabAiExecutionRecord, TabAiExecutionStatus, TabAiExperienceIntent,
     TabAiExperiencePack, TabAiExperienceSpec, TabAiFieldStatus, TabAiInvocationReceipt,

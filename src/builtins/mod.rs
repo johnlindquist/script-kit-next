@@ -452,25 +452,25 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             debug!("Added Window Switcher built-in entry");
         }
 
-        // AI Chat is always available
+        // AI Harness is always available — opens the instant harness terminal
         entries.push(BuiltInEntry::new_with_icon(
             "builtin-ai-chat",
-            "AI Chat",
-            "Open AI Chat with Claude, GPT, and other configured assistants",
+            "Open AI Harness",
+            "Open the instant AI harness terminal with fresh context",
             vec![
                 "ai",
+                "harness",
                 "chat",
                 "assistant",
                 "claude",
                 "gpt",
-                "openai",
-                "anthropic",
                 "llm",
+                "tab",
             ],
             BuiltInFeature::AiChat,
             "🤖",
         ));
-        debug!("Added AI Chat built-in entry");
+        debug!("Added AI Harness built-in entry");
 
         entries.push(BuiltInEntry::new_with_icon(
             "builtin-favorites",
@@ -1956,14 +1956,14 @@ mod tests {
         assert!(window_switcher.keywords.contains(&"manage".to_string()));
         assert!(window_switcher.keywords.contains(&"switcher".to_string()));
 
-        // Check AI chat entry
+        // Check AI harness entry
         let ai_chat = entries.iter().find(|e| e.id == "builtin-ai-chat");
         assert!(ai_chat.is_some());
         let ai_chat = ai_chat.unwrap();
-        assert_eq!(ai_chat.name, "AI Chat");
+        assert_eq!(ai_chat.name, "Open AI Harness");
         assert_eq!(ai_chat.feature, BuiltInFeature::AiChat);
         assert!(ai_chat.keywords.contains(&"ai".to_string()));
-        assert!(ai_chat.keywords.contains(&"chat".to_string()));
+        assert!(ai_chat.keywords.contains(&"harness".to_string()));
         assert!(ai_chat.keywords.contains(&"claude".to_string()));
         assert!(ai_chat.keywords.contains(&"gpt".to_string()));
 

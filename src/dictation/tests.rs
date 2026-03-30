@@ -1874,6 +1874,37 @@ fn delivery_focus_helper_closes_overlay_before_hiding_main_window() {
 }
 
 #[test]
+fn delivery_focus_helper_activates_target_before_hiding_main_window() {
+    let src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("read builtin_execution.rs");
+
+    let helper_src = dictation_yield_focus_helper_source(&src);
+
+    assert!(
+        helper_src.contains("bundle_id: &str"),
+        "yield_focus_for_dictation_paste must accept the tracked target bundle id"
+    );
+
+    assert!(
+        helper_src.contains("activate_bundle_id_for_dictation_paste"),
+        "focus helper must explicitly activate the tracked target app"
+    );
+
+    let activate_pos = helper_src
+        .find("activate_bundle_id_for_dictation_paste")
+        .expect("helper must activate target app");
+    let hide_pos = helper_src
+        .find("defer_hide_main_window")
+        .expect("helper must defer main-window hide");
+
+    assert!(
+        activate_pos < hide_pos,
+        "target activation (byte {activate_pos}) must happen before \
+         Script Kit hides its main window (byte {hide_pos})"
+    );
+}
+
+#[test]
 fn delivery_frontmost_app_calls_focus_helper_before_paste() {
     let src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
         .expect("read builtin_execution.rs");
@@ -2912,6 +2943,38 @@ fn overlay_key_handler_writes_through_to_runtime_phase() {
     assert!(
         count >= 2,
         "set_overlay_phase must be called for both Confirming and Resume transitions, found {count}"
+    );
+}
+
+#[test]
+fn builtin_microphone_submit_handler_accepts_mini_prompt_choices() {
+    let helpers_src =
+        std::fs::read_to_string("src/render_prompts/arg/helpers.rs").expect("read arg helpers");
+
+    // Validation must match both ArgPrompt and MiniPrompt variants.
+    assert!(
+        helpers_src.contains("AppView::MiniPrompt { choices, .. }"),
+        "builtin microphone submit handling must validate MiniPrompt choices"
+    );
+
+    // The validation function must appear and reference MiniPrompt.
+    let valid_fn_start = helpers_src
+        .find("fn is_valid_builtin_mic_selection")
+        .expect("is_valid_builtin_mic_selection must exist");
+    let valid_fn_body = &helpers_src[valid_fn_start..valid_fn_start + 400.min(helpers_src.len() - valid_fn_start)];
+    assert!(
+        valid_fn_body.contains("MiniPrompt"),
+        "is_valid_builtin_mic_selection must handle MiniPrompt variant"
+    );
+
+    // The label resolution in handle_builtin_mic_selection must also match MiniPrompt.
+    let handle_fn_start = helpers_src
+        .find("fn handle_builtin_mic_selection")
+        .expect("handle_builtin_mic_selection must exist");
+    let handle_fn_body = &helpers_src[handle_fn_start..handle_fn_start + 1600.min(helpers_src.len() - handle_fn_start)];
+    assert!(
+        handle_fn_body.contains("MiniPrompt"),
+        "handle_builtin_mic_selection label resolution must handle MiniPrompt variant"
     );
 }
 
