@@ -23,6 +23,8 @@ struct TabAiLaunchRequest {
     ui_snapshot: crate::ai::TabAiUiSnapshot,
     /// Invocation receipt for logging and downstream consumption.
     invocation_receipt: crate::ai::TabAiInvocationReceipt,
+    /// What kind of capture to perform (focused window, full screen, etc.).
+    capture_kind: crate::ai::TabAiCaptureKind,
     /// Monotonic generation counter — used to drop stale capture results.
     capture_generation: u64,
 }
@@ -70,10 +72,28 @@ impl ScriptListApp {
         entry_intent: Option<String>,
         cx: &mut Context<Self>,
     ) {
+        self.open_tab_ai_chat_with_capture_kind(
+            entry_intent,
+            crate::ai::TabAiCaptureKind::DefaultContext,
+            cx,
+        );
+    }
+
+    /// Entry point with explicit capture kind.
+    ///
+    /// Used by `SendScreenToAi`, `SendFocusedWindowToAi`, etc. so each
+    /// command gets the appropriate screenshot/context capture behaviour
+    /// instead of always defaulting to focused-window.
+    pub(crate) fn open_tab_ai_chat_with_capture_kind(
+        &mut self,
+        entry_intent: Option<String>,
+        capture_kind: crate::ai::TabAiCaptureKind,
+        cx: &mut Context<Self>,
+    ) {
         if self.tab_ai_save_offer_state.is_some() {
             return;
         }
-        self.begin_tab_ai_harness_entry(entry_intent, cx);
+        self.begin_tab_ai_harness_entry(entry_intent, capture_kind, cx);
     }
 
     /// Deferred-capture entry point: build a launch request from pre-switch
@@ -85,6 +105,7 @@ impl ScriptListApp {
     fn begin_tab_ai_harness_entry(
         &mut self,
         entry_intent: Option<String>,
+        capture_kind: crate::ai::TabAiCaptureKind,
         cx: &mut Context<Self>,
     ) {
         let source_view = self.current_view.clone();
@@ -117,6 +138,7 @@ impl ScriptListApp {
             entry_intent,
             ui_snapshot,
             invocation_receipt,
+            capture_kind,
             capture_generation: self.tab_ai_harness_capture_generation,
         };
 
@@ -134,8 +156,9 @@ impl ScriptListApp {
     /// view switch can steal focus from the frontmost app.
     fn spawn_tab_ai_pre_switch_capture(
         &self,
-        _request: &TabAiLaunchRequest,
+        request: &TabAiLaunchRequest,
     ) -> TabAiDeferredCaptureRx {
+        let capture_kind = request.capture_kind;
         let (tx, rx) = async_channel::bounded::<Result<TabAiDeferredCaptureArtifacts, String>>(1);
 
         std::thread::spawn(move || {
@@ -145,19 +168,43 @@ impl ScriptListApp {
                     &crate::context_snapshot::CaptureContextOptions::tab_ai_submit(),
                 );
 
-                // Best-effort screenshot-to-file capture
-                let screenshot_path =
-                    match crate::ai::harness::capture_tab_ai_focused_window_screenshot_file() {
-                        Ok(Some(file)) => Some(file.path),
-                        Ok(None) => None,
-                        Err(error) => {
-                            tracing::debug!(
-                                event = "tab_ai_deferred_screenshot_failed",
-                                error = %error,
-                            );
-                            None
+                // Best-effort screenshot-to-file capture, branching on the
+                // requested capture kind so explicit AI commands get the right
+                // screenshot type instead of always defaulting to focused-window.
+                let screenshot_path = match capture_kind {
+                    crate::ai::TabAiCaptureKind::DefaultContext
+                    | crate::ai::TabAiCaptureKind::FocusedWindow => {
+                        match crate::ai::harness::capture_tab_ai_focused_window_screenshot_file() {
+                            Ok(Some(file)) => Some(file.path),
+                            Ok(None) => None,
+                            Err(error) => {
+                                tracing::debug!(
+                                    event = "tab_ai_deferred_screenshot_failed",
+                                    capture_kind = "focused_window",
+                                    error = %error,
+                                );
+                                None
+                            }
                         }
-                    };
+                    }
+                    crate::ai::TabAiCaptureKind::FullScreen => {
+                        match crate::ai::harness::capture_tab_ai_screen_screenshot_file() {
+                            Ok(Some(file)) => Some(file.path),
+                            Ok(None) => None,
+                            Err(error) => {
+                                tracing::debug!(
+                                    event = "tab_ai_deferred_screenshot_failed",
+                                    capture_kind = "full_screen",
+                                    error = %error,
+                                );
+                                None
+                            }
+                        }
+                    }
+                    // Text-only captures (selected text, browser tab) skip screenshots.
+                    crate::ai::TabAiCaptureKind::SelectedText
+                    | crate::ai::TabAiCaptureKind::BrowserTab => None,
+                };
 
                 TabAiDeferredCaptureArtifacts {
                     desktop,
@@ -441,14 +488,10 @@ impl ScriptListApp {
     /// Returns the entity and whether this was a cold start (newly created).
     ///
     /// When `force_fresh` is `true`, any existing alive session is terminated
-    /// first so the caller gets a brand-new PTY.
-    ///
-    /// Callers pass `false` only when:
-    /// - startup prewarm seeds a silent session
-    /// - the first explicit Tab consumes a live `FreshPrewarm` exactly once
-    ///
-    /// After that one-shot reuse, later explicit Tab presses pass `true`
-    /// and receive a clean PTY.
+    /// first so the caller gets a brand-new PTY.  The startup and post-close
+    /// prewarm paths pass `false` to seed a reusable session; the first
+    /// explicit Tab press may reuse that `FreshPrewarm` once, and later
+    /// explicit opens force a clean PTY again.
     fn ensure_tab_ai_harness_terminal(
         &mut self,
         force_fresh: bool,

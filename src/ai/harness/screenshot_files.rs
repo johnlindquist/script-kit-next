@@ -113,6 +113,67 @@ pub fn capture_tab_ai_focused_window_screenshot_file() -> Result<Option<TabAiScr
     }))
 }
 
+/// Capture a full-screen screenshot and write it to a temp file.
+///
+/// Mirror of [`capture_tab_ai_focused_window_screenshot_file`] but captures
+/// the entire screen via `platform::capture_screen_screenshot()` instead of
+/// just the focused window.
+pub fn capture_tab_ai_screen_screenshot_file() -> Result<Option<TabAiScreenshotFile>> {
+    let (png_data, width, height) = match crate::platform::capture_screen_screenshot() {
+        Ok(data) => data,
+        Err(e) => {
+            tracing::debug!(
+                event = "tab_ai_screen_screenshot_capture_failed",
+                error = %e,
+            );
+            return Ok(None);
+        }
+    };
+
+    if png_data.is_empty() {
+        return Ok(None);
+    }
+
+    let tmp_dir = screenshot_tmp_dir()?;
+    std::fs::create_dir_all(&tmp_dir)
+        .with_context(|| format!("failed to create screenshot tmp dir: {}", tmp_dir.display()))?;
+
+    let filename = build_tab_ai_screenshot_filename(
+        chrono::Utc::now(),
+        std::process::id(),
+        TAB_AI_SCREENSHOT_SEQUENCE.fetch_add(1, Ordering::Relaxed),
+    );
+    let file_path = tmp_dir.join(&filename);
+
+    std::fs::write(&file_path, &png_data)
+        .with_context(|| format!("failed to write screenshot: {}", file_path.display()))?;
+
+    let abs_path = file_path.to_string_lossy().into_owned();
+
+    tracing::debug!(
+        event = "tab_ai_screen_screenshot_file_written",
+        path = %abs_path,
+        width,
+        height,
+        bytes = png_data.len(),
+    );
+
+    if let Err(e) = cleanup_old_tab_ai_screenshot_files(TAB_AI_SCREENSHOT_MAX_KEEP) {
+        tracing::warn!(
+            event = "tab_ai_screenshot_cleanup_failed",
+            error = %e,
+        );
+    }
+
+    Ok(Some(TabAiScreenshotFile {
+        path: abs_path,
+        width,
+        height,
+        title: "Full Screen".to_string(),
+        used_fallback: false,
+    }))
+}
+
 /// Remove old Tab AI screenshot files, keeping at most `max_keep` newest files.
 pub fn cleanup_old_tab_ai_screenshot_files(max_keep: usize) -> Result<()> {
     let tmp_dir = screenshot_tmp_dir()?;
