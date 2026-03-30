@@ -862,3 +862,58 @@ fn builtin_microphone_prompt_labels_current_and_default_choices() {
         "prompt must preselect the saved/current microphone"
     );
 }
+
+#[test]
+fn builtin_microphone_prompt_treats_missing_saved_device_as_system_default_current() {
+    let builtin_src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("read builtin_execution.rs");
+
+    assert!(
+        builtin_src.contains("let saved_device_available = current_id"),
+        "SelectMicrophone must detect whether the saved microphone still exists"
+    );
+    assert!(
+        builtin_src
+            .contains("let default_selected =\n                            current_id.is_none() || !saved_device_available"),
+        "missing saved microphones must fall back to System Default as current"
+    );
+    assert!(
+        builtin_src.contains(
+            "saved_device_available\n                                && current_id.as_deref()"
+        ),
+        "only an available saved device should be labeled as current"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Stale mic preference self-heal regression test
+// ---------------------------------------------------------------------------
+
+#[test]
+fn runtime_clears_stale_mic_preference_on_missing_device() {
+    let runtime_src = std::fs::read_to_string("src/dictation/runtime.rs").expect("read runtime.rs");
+
+    // The fallback branch must attempt to clear the stale preference.
+    assert!(
+        runtime_src.contains("save_dictation_device_id(None)"),
+        "resolve_preferred_device must clear stale preference when saved device is missing"
+    );
+
+    // If clearing fails, runtime must log a warning and continue.
+    assert!(
+        runtime_src.contains("Failed to clear stale microphone preference"),
+        "runtime must warn when clearing stale preference fails"
+    );
+
+    // The fallback must still resolve to the system default after clearing.
+    let clear_pos = runtime_src
+        .find("save_dictation_device_id(None)")
+        .expect("must call save_dictation_device_id(None)");
+    let fallback_pos = runtime_src[clear_pos..]
+        .find("default_input_device()")
+        .expect("must fall back to default_input_device after clearing");
+    assert!(
+        fallback_pos > 0,
+        "default_input_device must be called after clearing stale preference (offset {fallback_pos})"
+    );
+}
