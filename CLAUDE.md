@@ -292,7 +292,7 @@ Universal AI surface triggered by Tab from any view. Connects to a pre-running C
 
 **Architecture:**
 - `AppView::QuickTerminalView` — primary Tab AI destination (via `open_tab_ai_chat()` → `open_tab_ai_harness_terminal()`)
-- `HarnessConfig` — persisted at `~/.scriptkit/harness.json`, supports Claude Code, Codex, Gemini CLI, Copilot CLI, Custom backends
+- `HarnessConfig` — persisted at `~/.scriptkit/harness.json`, supports Claude Code, Codex, Gemini CLI, Copilot CLI, Custom backends; `warmOnStartup` defaults to `true` (pre-spawn harness at app launch)
 - `TabAiHarnessSessionState` — runtime state for a live harness PTY session (reused across Tab invocations)
 - Context assembly (unchanged): `build_tab_ai_context()` → `TabAiResolvedContext` (blob + bundle_id + warning count + invocation receipt)
 - Target resolution: `resolve_tab_ai_surface_targets()` extracts focused/visible targets per surface

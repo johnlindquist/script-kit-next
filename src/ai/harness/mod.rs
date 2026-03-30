@@ -817,6 +817,57 @@ mod tests {
     }
 
     #[test]
+    fn agent_docs_describe_quick_terminal_contract() {
+        const CLAUDE_DOC: &str = include_str!("../../../CLAUDE.md");
+        const AGENTS_DOC: &str = include_str!("../../../AGENTS.md");
+
+        for (label, text) in [("CLAUDE.md", CLAUDE_DOC), ("AGENTS.md", AGENTS_DOC)] {
+            assert!(
+                text.contains("QuickTerminalView"),
+                "{label} must mention QuickTerminalView"
+            );
+            assert!(
+                text.contains("build_tab_ai_harness_submission"),
+                "{label} must mention harness submission"
+            );
+            assert!(
+                text.contains("CaptureContextOptions::tab_ai_submit()"),
+                "{label} must mention text-safe PTY capture"
+            );
+            assert!(
+                text.contains("~/.scriptkit/harness.json"),
+                "{label} must mention harness config path"
+            );
+            assert!(
+                text.contains("warmOnStartup"),
+                "{label} must mention warmOnStartup"
+            );
+            assert!(
+                text.contains("Cmd+W"),
+                "{label} must document wrapper close"
+            );
+            assert!(
+                text.contains("Escape"),
+                "{label} must mention PTY escape passthrough"
+            );
+            assert!(
+                !text.contains(
+                    "AppView::TabAiChat` variant \u{2014} full-view replacement (primary path via `open_tab_ai_chat()`)"
+                ),
+                "{label} must not describe TabAiChat as the default Tab path"
+            );
+            assert!(
+                !text.contains("inline AI chat opens"),
+                "{label} must not describe inline chat as the default Tab destination"
+            );
+            assert!(
+                !text.contains("dispatch_ai_script_generation_from_query"),
+                "{label} must not advertise the legacy Shift+Tab generation bypass"
+            );
+        }
+    }
+
+    #[test]
     fn standard_startup_quick_terminal_tab_writes_directly_to_pty() {
         let source = include_str!("../../app_impl/startup.rs");
         assert!(
