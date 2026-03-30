@@ -68,7 +68,7 @@ pub(crate) fn waveform_bar_height(level: f32) -> f32 {
     (WAVEFORM_BAR_MIN_HEIGHT_PX
         + level.clamp(0.0, 1.0).powf(0.7)
             * (WAVEFORM_BAR_MAX_HEIGHT_PX - WAVEFORM_BAR_MIN_HEIGHT_PX))
-    .min(WAVEFORM_BAR_MAX_HEIGHT_PX)
+        .min(WAVEFORM_BAR_MAX_HEIGHT_PX)
 }
 
 /// Returns true if any bar exceeds the sound threshold.
@@ -117,9 +117,7 @@ use gpui::{
 
 use crate::list_item::FONT_MONO;
 use crate::theme::get_cached_theme;
-use crate::theme::opacity::{
-    OPACITY_ACTIVE, OPACITY_SELECTED, OPACITY_SUBTLE, OPACITY_TEXT_MUTED,
-};
+use crate::theme::opacity::{OPACITY_ACTIVE, OPACITY_SELECTED, OPACITY_SUBTLE, OPACITY_TEXT_MUTED};
 use crate::ui_foundation::HexColorExt;
 
 use parking_lot::Mutex;
