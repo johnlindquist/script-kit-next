@@ -1299,4 +1299,113 @@ mod cleanup_contract_audits {
             "dispatch_ai_script_generation_from_query must not call the legacy chat"
         );
     }
+
+    #[test]
+    fn force_fresh_path_propagates_terminate_failures() {
+        let source = include_str!("../../app_impl/tab_ai_mode.rs");
+        let start = source
+            .find("fn ensure_tab_ai_harness_terminal")
+            .expect("ensure_tab_ai_harness_terminal should exist");
+        let rest = &source[start..];
+        let end = rest[1..]
+            .find("\n    fn ")
+            .or_else(|| rest[1..].find("\n    pub"))
+            .unwrap_or(rest.len());
+        let body = compact(&rest[..end]);
+
+        // The force-fresh path must propagate terminate failures via `?`
+        // instead of silently discarding them with `let _ = ...`.
+        assert!(
+            body.contains(&compact(
+                "existing.entity.update(cx, |term, _cx| { term.terminate_session().map_err(|e| e.to_string()) })?;"
+            )),
+            "force-fresh path must propagate terminate_session failures with `?`"
+        );
+        assert!(
+            !body.contains(&compact("let _ = existing.entity.update")),
+            "force-fresh path must not discard terminate failures"
+        );
+    }
+
+    // ── Acceptance-criteria contract tests ──────────────────────
+
+    fn extract_fn_body(source: &str, signature: &str) -> String {
+        let start = source.find(signature).expect("signature must exist");
+        let rest = &source[start..];
+        let open = rest.find('{').expect("function body must open");
+        let mut depth = 0usize;
+        let mut end = None;
+        for (idx, ch) in rest[open..].char_indices() {
+            match ch {
+                '{' => depth += 1,
+                '}' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        end = Some(open + idx + 1);
+                        break;
+                    }
+                }
+                _ => {}
+            }
+        }
+        rest[..end.expect("function body must close")].to_string()
+    }
+
+    #[test]
+    fn tab_ai_open_path_reuses_fresh_prewarm_once_contract() {
+        let source = include_str!("../../app_impl/tab_ai_mode.rs");
+        let body = compact(&extract_fn_body(
+            source,
+            "fn open_tab_ai_harness_terminal_from_request",
+        ));
+
+        assert!(
+            body.contains(&compact(
+                "s.is_fresh_prewarm() && s.entity.read(cx).is_alive()"
+            )),
+            "open path must only reuse a fresh prewarm when the PTY is still alive"
+        );
+        assert!(
+            body.contains(&compact("session.mark_consumed();")),
+            "first explicit Tab must consume the prewarm so later Tabs cannot reuse it"
+        );
+        assert!(
+            body.contains(&compact(
+                "self.ensure_tab_ai_harness_terminal(!reuse_fresh_prewarm, cx)"
+            )),
+            "open path must invert reuse_fresh_prewarm into force_fresh"
+        );
+    }
+
+    #[test]
+    fn tab_ai_open_path_switches_view_before_waiting_for_capture_contract() {
+        let body = extract_fn_body(
+            include_str!("../../app_impl/tab_ai_mode.rs"),
+            "fn open_tab_ai_harness_terminal_from_request",
+        );
+
+        let view_switch = body
+            .find("self.current_view = AppView::QuickTerminalView")
+            .expect("QuickTerminalView switch must exist");
+
+        // Find the cx.notify() that comes AFTER the view switch (not the
+        // error-path notify that precedes it).
+        let notify = body[view_switch..]
+            .find("cx.notify()")
+            .map(|offset| view_switch + offset)
+            .expect("cx.notify() must follow the view switch");
+
+        let capture_wait = body
+            .find("capture_rx.recv().await")
+            .expect("deferred capture await must exist");
+
+        assert!(
+            view_switch < notify,
+            "the harness view must be selected before notifying the UI"
+        );
+        assert!(
+            notify < capture_wait,
+            "the terminal must become visible before waiting for deferred capture"
+        );
+    }
 }
