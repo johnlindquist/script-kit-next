@@ -3751,6 +3751,30 @@ impl ScriptListApp {
                         std::time::Duration::from_secs(300),
                     );
                 } else {
+                    // Guard: verify that a tracked external app target exists
+                    // before attempting to paste to the frontmost app.
+                    if let Err(error) = Self::ensure_dictation_frontmost_target_available() {
+                        let error_text = error.to_string();
+                        tracing::error!(
+                            category = "DICTATION",
+                            error = %error_text,
+                            "Failed to resolve frontmost-app dictation target"
+                        );
+                        self.show_error_toast(
+                            format!("Dictation paste failed: {error_text}"),
+                            cx,
+                        );
+                        self.schedule_dictation_overlay_close(
+                            cx,
+                            std::time::Duration::from_millis(150),
+                        );
+                        self.schedule_dictation_transcriber_cleanup(
+                            cx,
+                            std::time::Duration::from_secs(300),
+                        );
+                        return;
+                    }
+
                     // Show a brief done state before closing and pasting to
                     // the frontmost app, matching the prompt-first path UX.
                     let _ = crate::dictation::update_dictation_overlay(
@@ -3766,7 +3790,7 @@ impl ScriptListApp {
                     cx.spawn(async move |this, cx| {
                         // Brief pause so the user sees the done state.
                         cx.background_executor()
-                            .timer(std::time::Duration::from_millis(75))
+                            .timer(Self::dictation_done_state_duration())
                             .await;
 
                         // Close overlay and hide Script Kit windows so macOS
@@ -3806,7 +3830,7 @@ impl ScriptListApp {
 
                         // Let macOS settle focus back to the target app.
                         cx.background_executor()
-                            .timer(std::time::Duration::from_millis(100))
+                            .timer(Self::dictation_focus_settle_duration())
                             .await;
 
                         let paste_result = cx
@@ -3888,6 +3912,26 @@ impl ScriptListApp {
                 );
             }
         }
+    }
+
+    const DICTATION_DONE_STATE_MS: u64 = 75;
+    const DICTATION_FOCUS_SETTLE_MS: u64 = 100;
+
+    fn dictation_done_state_duration() -> std::time::Duration {
+        std::time::Duration::from_millis(Self::DICTATION_DONE_STATE_MS)
+    }
+
+    fn dictation_focus_settle_duration() -> std::time::Duration {
+        std::time::Duration::from_millis(Self::DICTATION_FOCUS_SETTLE_MS)
+    }
+
+    /// Verify that the frontmost-app tracker has a previously-tracked
+    /// external app target before attempting a dictation paste.
+    fn ensure_dictation_frontmost_target_available() -> anyhow::Result<()> {
+        use anyhow::Context as _;
+        crate::frontmost_app_tracker::get_last_real_app_bundle_id()
+            .context("no previously tracked frontmost app is available for dictation paste")?;
+        Ok(())
     }
 
     /// Close the dictation overlay and hide the main window, propagating
