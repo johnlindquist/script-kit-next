@@ -774,3 +774,91 @@ fn stop_path_errors_when_channel_closes_without_eos() {
     );
     assert_eq!(chunks.len(), 1, "should still collect chunks before close");
 }
+
+// ---------------------------------------------------------------------------
+// Mic selection wiring regression tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn builtin_microphone_selection_command_is_wired() {
+    let builtin_src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("read builtin_execution.rs");
+
+    assert!(
+        builtin_src.contains("SettingsCommandType::SelectMicrophone"),
+        "builtin settings command must expose SelectMicrophone"
+    );
+    assert!(
+        builtin_src.contains("crate::dictation::list_input_devices()"),
+        "SelectMicrophone must enumerate available input devices"
+    );
+    assert!(
+        builtin_src.contains("BUILTIN_MIC_SELECT_PROMPT_ID"),
+        "SelectMicrophone must open a dedicated synthetic ArgPrompt"
+    );
+    assert!(
+        builtin_src.contains("BUILTIN_MIC_DEFAULT_VALUE"),
+        "SelectMicrophone must include a system-default choice value"
+    );
+    assert!(
+        builtin_src.contains("AppView::ArgPrompt"),
+        "SelectMicrophone must open an ArgPrompt"
+    );
+    assert!(
+        builtin_src.contains("Select microphone..."),
+        "SelectMicrophone prompt placeholder must stay user-facing"
+    );
+}
+
+#[test]
+fn builtin_microphone_submit_handler_persists_or_clears_preference() {
+    let helpers_src = std::fs::read_to_string("src/render_prompts/arg/helpers.rs")
+        .expect("read arg helpers");
+    let config_src =
+        std::fs::read_to_string("src/config/types.rs").expect("read config types");
+
+    assert!(
+        helpers_src
+            .contains("fn is_valid_builtin_mic_selection(&self, value: &str) -> bool"),
+        "arg helpers must validate built-in microphone selections"
+    );
+    assert!(
+        helpers_src.contains("value == BUILTIN_MIC_DEFAULT_VALUE"),
+        "submit handling must accept the synthetic system-default value"
+    );
+    assert!(
+        helpers_src.contains("let device_id = if value == BUILTIN_MIC_DEFAULT_VALUE"),
+        "submit handling must clear the stored preference when System Default is chosen"
+    );
+    assert!(
+        helpers_src.contains("crate::dictation::save_dictation_device_id(device_id)"),
+        "submit handling must persist the chosen microphone device"
+    );
+    assert!(
+        config_src.contains("pub selected_device_id: Option<String>"),
+        "user preferences must persist dictation.selected_device_id"
+    );
+}
+
+#[test]
+fn builtin_microphone_prompt_labels_current_and_default_choices() {
+    let builtin_src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("read builtin_execution.rs");
+
+    assert!(
+        builtin_src.contains("\"System Default (current)\""),
+        "prompt must mark the default entry when no saved mic is set"
+    );
+    assert!(
+        builtin_src.contains("\" (current)\""),
+        "prompt must label the saved microphone as current"
+    );
+    assert!(
+        builtin_src.contains("\" (system default)\""),
+        "prompt must label whichever enumerated mic is the OS default"
+    );
+    assert!(
+        builtin_src.contains("self.arg_selected_index = start_index;"),
+        "prompt must preselect the saved/current microphone"
+    );
+}
