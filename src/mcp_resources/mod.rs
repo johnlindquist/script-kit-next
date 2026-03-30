@@ -646,7 +646,7 @@ fn build_harness_workflow() -> HarnessWorkflow {
             "};\n",
             "\n",
             "const result = await arg(\"Pick one\", [\"a\", \"b\", \"c\"]);\n",
-            "console.log(result);\n",
+            "await div(md(`## ${result}`));\n",
         ).into(),
         example_scriptlet: concat!(
             "---\n",

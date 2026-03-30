@@ -119,17 +119,12 @@ impl Render for DictationOverlay {
                     .w_full()
                     // Left: timer
                     .child(
-                        div()
-                            .flex()
-                            .flex_row()
-                            .items_center()
-                            .gap(px(8.))
-                            .child(
-                                div()
-                                    .text_size(px(11.5))
-                                    .text_color(timer_color)
-                                    .child(timer_text),
-                            ),
+                        div().flex().flex_row().items_center().gap(px(8.)).child(
+                            div()
+                                .text_size(px(11.5))
+                                .text_color(timer_color)
+                                .child(timer_text),
+                        ),
                     )
                     // Center: waveform bars (flex-grow to fill)
                     .child(
@@ -262,13 +257,7 @@ fn render_transcribing_dots() -> impl IntoElement {
 
     for &opacity in &opacities {
         let dot_color = OVERLAY_ACTIVE_COLOR.with_opacity(opacity);
-        container = container.child(
-            div()
-                .w(px(4.))
-                .h(px(4.))
-                .rounded(px(2.))
-                .bg(dot_color),
-        );
+        container = container.child(div().w(px(4.)).h(px(4.)).rounded(px(2.)).bg(dot_color));
     }
 
     container
