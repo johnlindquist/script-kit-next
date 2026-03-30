@@ -701,7 +701,7 @@ impl ScriptListApp {
     /// **Lifecycle contract:**
     /// - Tears down the PTY via `TermPrompt::terminate_session()`.
     /// - Clears `self.tab_ai_harness` so the next Tab opens a fresh session.
-    /// - Schedules a deferred `warm_tab_ai_harness_on_startup()` prewarm so
+    /// - Schedules a deferred `warm_tab_ai_harness_after_close()` prewarm so
     ///   the next Tab press still gets an instant harness.
     pub(crate) fn close_tab_ai_harness_terminal(&mut self, cx: &mut Context<Self>) {
         if !matches!(self.current_view, AppView::QuickTerminalView { .. }) {
