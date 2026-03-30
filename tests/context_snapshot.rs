@@ -381,23 +381,30 @@ fn versioned_resources_are_listed_and_resolve() {
         None,
     )
     .expect("kit://sdk-reference should resolve");
-    let sdk_json: serde_json::Value =
+
+    // Deserialize into the shared contract type instead of hardcoding scalars.
+    let sdk: script_kit_gpui::mcp_resources::SdkReferenceDocument =
         serde_json::from_str(&sdk_doc.text).expect("kit://sdk-reference must be valid JSON");
-    assert_eq!(sdk_json["schemaVersion"], 2);
-    assert_eq!(sdk_json["sdkPackage"], "@johnlindquist/kit");
-    assert!(
-        sdk_json["harnessWorkflow"].is_object(),
-        "sdk-reference must include harnessWorkflow"
+    assert_eq!(
+        sdk.schema_version,
+        script_kit_gpui::mcp_resources::SDK_REFERENCE_SCHEMA_VERSION,
+        "schema_version must match the current SDK_REFERENCE_SCHEMA_VERSION constant"
+    );
+    assert_eq!(
+        sdk.sdk_package, "@scriptkit/sdk",
+        "sdk_package must be @scriptkit/sdk"
     );
     assert!(
-        sdk_json["harnessWorkflow"]["testScriptDirectory"]
-            .as_str()
-            .is_some(),
-        "harnessWorkflow must include testScriptDirectory"
+        sdk.metadata_format.contains("export const metadata"),
+        "metadata_format must use export const metadata"
     );
     assert!(
-        sdk_json["harnessWorkflow"]["runCommand"].as_str().is_some(),
+        !sdk.harness_workflow.run_command.is_empty(),
         "harnessWorkflow must include runCommand"
+    );
+    assert!(
+        !sdk.harness_workflow.test_script_directory.is_empty(),
+        "harnessWorkflow must include testScriptDirectory"
     );
 }
 
