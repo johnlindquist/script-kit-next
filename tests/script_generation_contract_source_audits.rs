@@ -68,34 +68,50 @@ fn test_slug_source_is_logged() {
     );
 }
 
-/// The system prompt must present both metadata formats as valid options,
-/// with metadata export mentioned as preferred for new scripts.
+/// The system prompt must require metadata export and reject legacy comment headers.
 #[test]
-fn test_system_prompt_accepts_both_metadata_formats() {
-    let generator = read_source("src/ai/script_generation.rs");
+fn test_system_prompt_requires_metadata_export_and_rejects_legacy_headers() {
+    // Read only the prompt constant, not the whole file (which contains extraction logic
+    // and internal tests that legitimately reference legacy format markers).
+    let prompt = script_kit_gpui::ai::AI_SCRIPT_GENERATION_SYSTEM_PROMPT;
 
-    // Must mention comment headers as valid
     assert!(
-        generator.contains("// Name:") && generator.contains("// Description:"),
-        "System prompt must still accept comment header metadata"
+        prompt.contains("export const metadata"),
+        "System prompt must require export const metadata"
     );
-
-    // Must mention metadata export as valid
     assert!(
-        generator.contains("export const metadata"),
-        "System prompt must accept metadata export format"
+        prompt.contains("do NOT use // Name: or // Description: comment headers")
+            || prompt.contains("Do NOT use legacy comment-header metadata"),
+        "System prompt must explicitly reject legacy comment headers"
+    );
+    assert!(
+        !prompt.contains("Format A") && !prompt.contains("Format B"),
+        "Legacy dual-format markers must be removed from the prompt"
     );
 }
 
-/// Before/after contract markers: the generator instructions must bracket
-/// the two accepted formats so an AI agent can verify which contract is active.
+/// The system prompt must not teach kenvPath() or ~/.kenv legacy workspace paths.
+/// It may mention them only in a prohibition context (e.g., "Never use kenvPath()").
 #[test]
-fn test_generator_contract_has_format_markers() {
-    let generator = read_source("src/ai/script_generation.rs");
+fn test_system_prompt_does_not_teach_legacy_workspace_paths() {
+    let prompt = script_kit_gpui::ai::AI_SCRIPT_GENERATION_SYSTEM_PROMPT;
 
+    // Must not teach kenvPath as a usable API or document ~/.kenv as a path
     assert!(
-        generator.contains("Format A") && generator.contains("Format B"),
-        "Generator contract must label the two accepted metadata formats as Format A and Format B"
+        !prompt.contains("kenvPath(...) —") && !prompt.contains("~/.kenv-relative"),
+        "System prompt must not document kenvPath() as a usable API or ~/.kenv as a path"
+    );
+
+    // Must teach the ~/.scriptkit workspace model
+    assert!(
+        prompt.contains("home(\".scriptkit\""),
+        "System prompt must teach the ~/.scriptkit workspace model"
+    );
+
+    // Must explicitly prohibit kenvPath usage
+    assert!(
+        prompt.contains("Never use kenvPath()"),
+        "System prompt must explicitly prohibit kenvPath() usage"
     );
 }
 

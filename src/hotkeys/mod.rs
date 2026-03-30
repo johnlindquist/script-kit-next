@@ -1186,11 +1186,7 @@ pub(crate) fn start_hotkey_listener(config: config::Config) {
             register_builtin_hotkey(&manager_guard, HotkeyAction::Ai, &ai_hotkey);
         }
         if let Some(dictation_hotkey) = config.get_dictation_hotkey() {
-            register_builtin_hotkey(
-                &manager_guard,
-                HotkeyAction::Dictation,
-                &dictation_hotkey,
-            );
+            register_builtin_hotkey(&manager_guard, HotkeyAction::Dictation, &dictation_hotkey);
         }
         if let Some(logs_hotkey) = config.get_logs_hotkey() {
             register_builtin_hotkey(&manager_guard, HotkeyAction::ToggleLogs, &logs_hotkey);

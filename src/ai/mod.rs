@@ -86,6 +86,7 @@ pub use self::script_generation::{
     generate_script_from_prompt_with_receipt, generated_script_receipt_path,
     GeneratedScriptContractAudit, GeneratedScriptMetadataStyle, GeneratedScriptOutput,
     GeneratedScriptReceipt, AI_GENERATED_SCRIPT_RECEIPT_SCHEMA_VERSION,
+    AI_SCRIPT_GENERATION_SYSTEM_PROMPT,
 };
 pub use self::sdk_handlers::try_handle_ai_message;
 pub use self::storage::{

@@ -29,10 +29,6 @@ use std::io::{ErrorKind, Write};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use tracing::{info, instrument, warn};
-/// Scripts directory under ~/.scriptkit/kit/main/
-const SCRIPTS_DIR: &str = "~/.scriptkit/kit/main/scripts";
-/// Extensions directory under ~/.scriptkit/kit/main/
-const EXTENSIONS_DIR: &str = "~/.scriptkit/kit/main/extensions";
 /// Maximum filename size on most filesystems (bytes, not chars).
 const MAX_FILENAME_BYTES: usize = 255;
 /// Reserved filenames on Windows that are invalid even with an extension.
@@ -40,11 +36,19 @@ const WINDOWS_RESERVED_FILENAMES: [&str; 22] = [
     "con", "prn", "aux", "nul", "com1", "com2", "com3", "com4", "com5", "com6", "com7", "com8",
     "com9", "lpt1", "lpt2", "lpt3", "lpt4", "lpt5", "lpt6", "lpt7", "lpt8", "lpt9",
 ];
+/// Scripts directory under the active Script Kit workspace.
 pub fn scripts_dir() -> PathBuf {
-    PathBuf::from(shellexpand::tilde(SCRIPTS_DIR).as_ref())
+    crate::setup::get_kit_path()
+        .join("kit")
+        .join("main")
+        .join("scripts")
 }
+/// Extensions directory under the active Script Kit workspace.
 pub fn extensions_dir() -> PathBuf {
-    PathBuf::from(shellexpand::tilde(EXTENSIONS_DIR).as_ref())
+    crate::setup::get_kit_path()
+        .join("kit")
+        .join("main")
+        .join("extensions")
 }
 fn validate_sanitized_name(
     original_name: &str,

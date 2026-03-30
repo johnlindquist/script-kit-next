@@ -473,6 +473,66 @@ fn test_sdk_reference_run_command_is_cwd_safe() {
     );
 }
 
+/// script_creation::scripts_dir() and extensions_dir() must follow SK_PATH override.
+#[test]
+fn test_script_creation_dirs_follow_sk_path_override() {
+    use script_kit_gpui::script_creation;
+
+    with_temp_sk_path(|kit_root| {
+        assert_eq!(
+            script_creation::scripts_dir(),
+            kit_root.join("kit").join("main").join("scripts")
+        );
+        assert_eq!(
+            script_creation::extensions_dir(),
+            kit_root.join("kit").join("main").join("extensions")
+        );
+    });
+}
+
+/// MCP resource descriptions for scripts:// and kit://scripts must reference kit/main/scripts.
+#[test]
+fn test_resource_definitions_use_kit_main_scripts_path() {
+    use script_kit_gpui::mcp_resources::get_resource_definitions;
+
+    let resources = get_resource_definitions();
+    for uri in ["scripts://", "kit://scripts"] {
+        let resource = resources
+            .iter()
+            .find(|resource| resource.uri == uri)
+            .unwrap_or_else(|| panic!("resource {uri} must exist"));
+        let description = resource.description.clone().unwrap_or_default();
+        assert!(
+            description.contains("kit/main/scripts"),
+            "{uri} description must mention kit/main/scripts: {description}"
+        );
+        assert!(
+            !description.contains("~/.scriptkit/scripts/"),
+            "{uri} description must not mention the legacy scripts root: {description}"
+        );
+    }
+}
+
+/// kit://sdk-reference example scriptlet must follow current extension contract.
+#[test]
+fn test_sdk_reference_example_scriptlet_matches_current_extension_contract() {
+    use script_kit_gpui::mcp_resources::{self, SdkReferenceDocument};
+
+    let content = mcp_resources::read_resource("kit://sdk-reference", &[], &[], None)
+        .expect("kit://sdk-reference should resolve");
+    let doc: SdkReferenceDocument =
+        serde_json::from_str(&content.text).expect("valid JSON document");
+
+    let scriptlet = &doc.harness_workflow.example_scriptlet;
+    assert!(scriptlet.contains("---"));
+    assert!(scriptlet.contains("## Copy Date"));
+    assert!(scriptlet.contains("```tool:copy-date"));
+    assert!(scriptlet.contains("import \"@scriptkit/sdk\""));
+    assert!(scriptlet.contains("<!-- description:"));
+    assert!(!scriptlet.contains("```js"));
+    assert!(!scriptlet.contains("// Shortcut:"));
+}
+
 /// Root agent docs are the canonical agent entrypoint and must stay free of legacy v1 tokens.
 #[test]
 fn test_root_agent_docs_do_not_reference_legacy_v1_contract() {
