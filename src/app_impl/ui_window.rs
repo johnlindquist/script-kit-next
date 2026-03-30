@@ -330,6 +330,7 @@ impl ScriptListApp {
                 | AppView::EnvPrompt { .. }
                 | AppView::TemplatePrompt { .. }
                 | AppView::FormPrompt { .. }
+                | AppView::FileSearchView { .. }
         )
     }
 
