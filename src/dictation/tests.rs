@@ -1967,7 +1967,12 @@ fn delivery_focus_helper_closes_overlay_before_hiding_main_window() {
 }
 
 #[test]
-fn delivery_focus_helper_activates_target_before_hiding_main_window() {
+fn delivery_focus_helper_does_not_activate_target_app() {
+    // Script Kit is a non-activating accessory app.  When the dictation
+    // overlay closes (orderOut:) and the main window hides, macOS
+    // automatically returns focus to the previously-active window.
+    // Explicit AppleScript `activate` must NOT be used because it can
+    // reorder windows in multi-window apps like Chrome.
     let src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
         .expect("read builtin_execution.rs");
 
@@ -1979,21 +1984,9 @@ fn delivery_focus_helper_activates_target_before_hiding_main_window() {
     );
 
     assert!(
-        helper_src.contains("activate_bundle_id_for_dictation_paste"),
-        "focus helper must explicitly activate the tracked target app"
-    );
-
-    let activate_pos = helper_src
-        .find("activate_bundle_id_for_dictation_paste")
-        .expect("helper must activate target app");
-    let hide_pos = helper_src
-        .find("defer_hide_main_window")
-        .expect("helper must defer main-window hide");
-
-    assert!(
-        activate_pos < hide_pos,
-        "target activation (byte {activate_pos}) must happen before \
-         Script Kit hides its main window (byte {hide_pos})"
+        !helper_src.contains("activate_bundle_id_for_dictation_paste"),
+        "focus helper must NOT explicitly activate the target app — \
+         non-activating panel dismiss handles focus restoration naturally"
     );
 }
 
@@ -3712,8 +3705,8 @@ fn open_dictation_overlay_does_not_bump_generation_itself() {
 fn hidden_main_window_path_does_not_always_key_overlay() {
     let window_source = std::fs::read_to_string("src/dictation/window.rs").expect("read window.rs");
     assert!(
-        window_source.contains("let should_key_overlay = crate::is_main_window_visible()"),
-        "overlay keying must depend on whether the main window is already visible"
+        window_source.contains("let should_key_overlay = main_was_visible"),
+        "overlay keying must depend on whether the main window was already visible"
     );
 }
 

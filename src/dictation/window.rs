@@ -703,12 +703,17 @@ pub fn open_dictation_overlay(
         });
     }
 
+    // Snapshot main-window visibility BEFORE any native window operations.
+    // If it was hidden, we must ensure it stays hidden after creating the
+    // overlay — macOS may surface sibling panels at the same level.
+    let main_was_visible = crate::is_main_window_visible();
+
     // Only make the overlay key window when the main window is already
     // visible.  When Script Kit is hidden, keying the overlay would pull
     // the entire app forward — the dictation hotkey must never surface
     // the main window.  orderFrontRegardless alone is enough to show the
     // popup without activating the app.
-    let should_key_overlay = crate::is_main_window_visible();
+    let should_key_overlay = main_was_visible;
 
     #[cfg(target_os = "macos")]
     {
@@ -740,6 +745,14 @@ pub fn open_dictation_overlay(
         let _ = handle.update(cx, |view, window, cx| {
             view.focus_handle.focus(window, cx);
         });
+    }
+
+    // Defensive guard: if the main window was hidden before we opened the
+    // overlay, ensure it stays hidden.  Creating a new PopUp NSPanel at
+    // the same window level can cause macOS to surface sibling panels.
+    // This mirrors the pattern used by Notes (see notes/window/window_ops.rs).
+    if !main_was_visible {
+        crate::platform::defer_hide_main_window(cx);
     }
 
     // Store handle.
