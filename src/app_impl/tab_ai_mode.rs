@@ -237,21 +237,9 @@ impl ScriptListApp {
         capture_rx: TabAiDeferredCaptureRx,
         cx: &mut Context<Self>,
     ) {
-        // Reuse a silently prewarmed session exactly once; otherwise force fresh.
-        let reuse_fresh_prewarm = self
-            .tab_ai_harness
-            .as_ref()
-            .map(|s| s.is_fresh_prewarm() && s.entity.read(cx).is_alive())
-            .unwrap_or(false);
-
-        if reuse_fresh_prewarm {
-            if let Some(session) = self.tab_ai_harness.as_mut() {
-                session.mark_consumed();
-            }
-        }
-
+        // Every explicit Tab entry gets a fresh harness session — no prewarm reuse.
         let (entity, _was_cold_start) =
-            match self.ensure_tab_ai_harness_terminal(!reuse_fresh_prewarm, cx) {
+            match self.ensure_tab_ai_harness_terminal(true, cx) {
                 Ok(result) => result,
                 Err(error) => {
                     tracing::error!(
@@ -520,14 +508,17 @@ impl ScriptListApp {
     ) -> Result<(gpui::Entity<crate::term_prompt::TermPrompt>, bool), String> {
         if force_fresh {
             // Kill the existing session so the user gets a clean slate.
-            // Propagate failures so callers do not create a new session on
-            // top of a stale PTY.
-            if let Some(existing) = self.tab_ai_harness.take() {
+            // Terminate FIRST, then clear the handle — if termination fails
+            // the handle stays in app state so we don't lose track of a live PTY.
+            if let Some(existing) = self.tab_ai_harness.as_ref() {
                 existing
                     .entity
                     .update(cx, |term, _cx| {
                         term.terminate_session().map_err(|e| e.to_string())
                     })?;
+            }
+            if self.tab_ai_harness.is_some() {
+                self.tab_ai_harness = None;
                 tracing::info!(event = "tab_ai_harness_old_session_terminated");
             }
         } else {
@@ -2436,89 +2427,6 @@ mod tests {
         );
     }
 
-    // ── One-shot prewarm reuse contract ──────────────────────────
-
-    fn tab_ai_prewarm_fn_block<'a>(source: &'a str, signature: &str) -> &'a str {
-        let start = source
-            .find(signature)
-            .unwrap_or_else(|| panic!("{signature} must exist"));
-        let rest = &source[start..];
-        let next_fn = rest[1..]
-            .find("\n    fn ")
-            .map(|idx| idx + 1)
-            .or_else(|| rest[1..].find("\n    pub(crate) fn ").map(|idx| idx + 1))
-            .unwrap_or(rest.len());
-        &rest[..next_fn]
-    }
-
-    #[test]
-    fn tab_ai_open_path_reuses_fresh_prewarm_exactly_once() {
-        let source = include_str!("tab_ai_mode.rs");
-        let body = tab_ai_prewarm_fn_block(
-            source,
-            "fn open_tab_ai_harness_terminal_from_request(",
-        );
-
-        assert!(
-            body.contains("s.is_fresh_prewarm()") && body.contains("s.entity.read(cx).is_alive()"),
-            "open path must only treat a prewarm as reusable when it is both fresh and still alive"
-        );
-        assert!(
-            body.contains("session.mark_consumed();"),
-            "reusing a fresh prewarm must consume it immediately so the next Tab press cannot reuse it again"
-        );
-        assert!(
-            body.contains("ensure_tab_ai_harness_terminal(!reuse_fresh_prewarm, cx)"),
-            "open path must invert reuse_fresh_prewarm into the force_fresh argument"
-        );
-    }
-
-    #[test]
-    fn tab_ai_open_path_keeps_open_first_ordering() {
-        let source = include_str!("tab_ai_mode.rs");
-        let body = tab_ai_prewarm_fn_block(
-            source,
-            "fn open_tab_ai_harness_terminal_from_request(",
-        );
-
-        let view_switch = body
-            .find("self.current_view = AppView::QuickTerminalView")
-            .expect("QuickTerminalView switch must exist");
-        let await_capture = body
-            .find("capture_rx.recv().await")
-            .expect("deferred capture await must exist");
-
-        assert!(
-            view_switch < await_capture,
-            "the harness view must be installed before deferred capture is awaited"
-        );
-        assert!(
-            body.contains("cx.notify();"),
-            "the open path must still notify after switching views"
-        );
-    }
-
-    #[test]
-    fn tab_ai_startup_prewarm_marks_new_session_fresh() {
-        let source = include_str!("tab_ai_mode.rs");
-        // The shared silent helper contains the actual prewarm logic.
-        let body = tab_ai_prewarm_fn_block(
-            source,
-            "fn warm_tab_ai_harness_silently(",
-        );
-
-        assert!(
-            body.contains("self.ensure_tab_ai_harness_terminal(false, cx)"),
-            "silent prewarm must seed the session without forcing a teardown"
-        );
-        assert!(
-            body.contains("session.mark_fresh_prewarm();"),
-            "silent prewarm must explicitly tag a newly created session as FreshPrewarm"
-        );
-    }
-
-    // ── Compact contract helpers ────────────────────────────────
-
     fn tab_ai_contract_compact(input: &str) -> String {
         input.split_whitespace().collect::<String>()
     }
@@ -2543,32 +2451,6 @@ mod tests {
             }
         }
         rest[..end.expect("function body must close")].to_string()
-    }
-
-    #[test]
-    fn tab_ai_open_path_reuses_fresh_prewarm_once_contract() {
-        let source = include_str!("tab_ai_mode.rs");
-        let body = tab_ai_contract_compact(&tab_ai_extract_fn_body(
-            source,
-            "fn open_tab_ai_harness_terminal_from_request(",
-        ));
-
-        assert!(
-            body.contains(&tab_ai_contract_compact(
-                "s.is_fresh_prewarm() && s.entity.read(cx).is_alive()"
-            )),
-            "open path must only reuse a fresh prewarm when the PTY is still alive"
-        );
-        assert!(
-            body.contains(&tab_ai_contract_compact("session.mark_consumed();")),
-            "first explicit Tab must consume the prewarm so later Tabs cannot reuse it"
-        );
-        assert!(
-            body.contains(&tab_ai_contract_compact(
-                "self.ensure_tab_ai_harness_terminal(!reuse_fresh_prewarm, cx)"
-            )),
-            "open path must invert reuse_fresh_prewarm into force_fresh"
-        );
     }
 
     #[test]

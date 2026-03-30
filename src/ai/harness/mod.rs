@@ -1143,24 +1143,16 @@ mod cleanup_contract_audits {
             .expect("warm_tab_ai_harness_on_startup should follow open fn");
         let body = compact(&rest[..end]);
 
-        // The open path reuses a fresh prewarm exactly once, then forces fresh.
-        assert!(
-            body.contains("is_fresh_prewarm"),
-            "open path must check is_fresh_prewarm to decide one-shot reuse"
-        );
-        assert!(
-            body.contains("is_alive"),
-            "open path must also check is_alive before treating a prewarm as reusable"
-        );
-        assert!(
-            body.contains("mark_consumed"),
-            "open path must consume the fresh prewarm so the next Tab cannot reuse it"
-        );
+        // Every explicit Tab entry must always force a fresh harness session.
         assert!(
             body.contains(&compact(
-                "ensure_tab_ai_harness_terminal(!reuse_fresh_prewarm, cx)"
+                "match self.ensure_tab_ai_harness_terminal(true, cx)"
             )),
-            "open path must invert reuse_fresh_prewarm into the force_fresh argument"
+            "explicit Tab entry must always force a fresh harness session"
+        );
+        assert!(
+            !body.contains("reuse_fresh_prewarm"),
+            "literal fresh-session contract must not keep one-time prewarm reuse in the explicit open path"
         );
 
         // Verify the terminal becomes visible before deferred context injection.
@@ -1344,6 +1336,11 @@ mod cleanup_contract_audits {
             !body.contains(&compact("let _ = existing.entity.update")),
             "force-fresh path must not discard terminate failures"
         );
+        // Handle must NOT be cleared before terminate succeeds.
+        assert!(
+            !body.contains(&compact("self.tab_ai_harness.take()")),
+            "force-fresh path must not use .take() which clears the handle before terminate"
+        );
     }
 
     // ── Acceptance-criteria contract tests ──────────────────────
@@ -1371,7 +1368,7 @@ mod cleanup_contract_audits {
     }
 
     #[test]
-    fn tab_ai_open_path_reuses_fresh_prewarm_once_contract() {
+    fn tab_ai_open_path_always_forces_fresh_session_contract() {
         let source = include_str!("../../app_impl/tab_ai_mode.rs");
         let body = compact(&extract_fn_body(
             source,
@@ -1380,19 +1377,37 @@ mod cleanup_contract_audits {
 
         assert!(
             body.contains(&compact(
-                "s.is_fresh_prewarm() && s.entity.read(cx).is_alive()"
+                "match self.ensure_tab_ai_harness_terminal(true, cx)"
             )),
-            "open path must only reuse a fresh prewarm when the PTY is still alive"
+            "explicit Tab entry must always force a fresh harness session"
         );
         assert!(
-            body.contains(&compact("session.mark_consumed();")),
-            "first explicit Tab must consume the prewarm so later Tabs cannot reuse it"
+            !body.contains("reuse_fresh_prewarm"),
+            "literal fresh-session contract must not keep one-time prewarm reuse in the explicit open path"
         );
+    }
+
+    #[test]
+    fn force_fresh_path_clears_session_only_after_successful_terminate_contract() {
+        let source = include_str!("../../app_impl/tab_ai_mode.rs");
+        let body = compact(&extract_fn_body(
+            source,
+            "fn ensure_tab_ai_harness_terminal",
+        ));
+
+        let terminate_pos = body
+            .find(&compact(
+                "existing.entity.update(cx, |term, _cx| { term.terminate_session().map_err(|e| e.to_string()) })?;"
+            ))
+            .expect("terminate_session call must exist in force-fresh path");
+
+        let clear_pos = body
+            .find(&compact("self.tab_ai_harness = None;"))
+            .expect("session clear must exist after terminate success");
+
         assert!(
-            body.contains(&compact(
-                "self.ensure_tab_ai_harness_terminal(!reuse_fresh_prewarm, cx)"
-            )),
-            "open path must invert reuse_fresh_prewarm into force_fresh"
+            terminate_pos < clear_pos,
+            "force-fresh path must clear self.tab_ai_harness only after terminate_session succeeds"
         );
     }
 
@@ -1536,6 +1551,103 @@ mod cleanup_contract_audits {
     }
 
     // ── Source/apply-back provenance unification contracts ─────
+
+    // ── Screenshot helper & builtin registry audits ────────────
+
+    const SCREENSHOT_FILES_SOURCE: &str = include_str!("screenshot_files.rs");
+    const BUILTINS_SOURCE: &str = include_str!("../../builtins/mod.rs");
+
+    #[test]
+    fn full_screen_capture_helper_contract_is_preserved() {
+        assert!(
+            SCREENSHOT_FILES_SOURCE
+                .contains("pub fn capture_tab_ai_screen_screenshot_file()"),
+            "full-screen screenshot helper must exist as a public function",
+        );
+        assert!(
+            SCREENSHOT_FILES_SOURCE.contains("capture_screen_screenshot()"),
+            "full-screen screenshot helper must call the platform full-screen screenshot API",
+        );
+        assert!(
+            SCREENSHOT_FILES_SOURCE.contains("cleanup_old_tab_ai_screenshot_files"),
+            "full-screen screenshot helper must clean up old screenshot temp files",
+        );
+        assert!(
+            SCREENSHOT_FILES_SOURCE.contains("TAB_AI_SCREENSHOT_MAX_KEEP"),
+            "full-screen screenshot helper must use the shared screenshot retention limit",
+        );
+        assert!(
+            SCREENSHOT_FILES_SOURCE.contains("title: \"Full Screen\".to_string()"),
+            "full-screen screenshot helper must label the artifact as Full Screen",
+        );
+        assert!(
+            SCREENSHOT_FILES_SOURCE.contains("used_fallback: false"),
+            "full-screen screenshot helper must set used_fallback to false",
+        );
+    }
+
+    #[test]
+    fn builtin_registry_keeps_harness_entries_and_manual_paths_only() {
+        let fn_start = BUILTINS_SOURCE
+            .find("pub fn get_builtin_entries(")
+            .expect("get_builtin_entries must exist");
+        let fn_body = &BUILTINS_SOURCE[fn_start..];
+        let fn_end = fn_body
+            .find("\n#[cfg(test)]")
+            .unwrap_or(fn_body.len());
+        let registration_section = &fn_body[..fn_end];
+
+        for legacy_id in [
+            "builtin-open-ai-chat",
+            "builtin-mini-ai-chat",
+            "builtin-new-conversation",
+            "builtin-clear-conversation",
+            "builtin-send-screen-area-to-ai",
+        ] {
+            let quoted = format!("\"{}\"", legacy_id);
+            assert!(
+                !registration_section.contains(&quoted),
+                "{legacy_id} must not be registered in the main builtin list",
+            );
+        }
+
+        for kept_id in [
+            "builtin-generate-script-with-ai",
+            "builtin-generate-script-from-current-app",
+            "builtin-send-screen-to-ai",
+            "builtin-send-selected-text-to-ai",
+            "builtin-send-browser-tab-to-ai",
+            "builtin-new-script",
+            "builtin-new-extension",
+        ] {
+            let quoted = format!("\"{}\"", kept_id);
+            assert!(
+                registration_section.contains(&quoted),
+                "{kept_id} must stay registered in the main builtin list",
+            );
+        }
+    }
+
+    #[test]
+    fn focused_window_builtin_uses_canonical_id() {
+        let fn_start = BUILTINS_SOURCE
+            .find("pub fn get_builtin_entries(")
+            .expect("get_builtin_entries must exist");
+        let fn_body = &BUILTINS_SOURCE[fn_start..];
+        let fn_end = fn_body
+            .find("\n#[cfg(test)]")
+            .unwrap_or(fn_body.len());
+        let registration_section = &fn_body[..fn_end];
+
+        assert!(
+            registration_section.contains("\"builtin-send-focused-window-to-ai\""),
+            "SendFocusedWindowToAi must use the canonical focused-window builtin id",
+        );
+        assert!(
+            !registration_section.contains("\"builtin-send-window-to-ai\""),
+            "legacy short focused-window builtin id must not remain in the main builtin list",
+        );
+    }
 
     #[test]
     fn detect_source_type_delegates_to_canonical_function() {
