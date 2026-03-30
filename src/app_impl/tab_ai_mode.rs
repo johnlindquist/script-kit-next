@@ -190,15 +190,8 @@ impl ScriptListApp {
         capture_rx: TabAiDeferredCaptureRx,
         cx: &mut Context<Self>,
     ) {
-        // Reuse a fresh prewarm exactly once; otherwise force a clean PTY.
-        let reuse_fresh_prewarm = self
-            .tab_ai_harness
-            .as_ref()
-            .map(|s| s.is_fresh_prewarm() && s.entity.read(cx).is_alive())
-            .unwrap_or(false);
-
         let (entity, _was_cold_start) =
-            match self.ensure_tab_ai_harness_terminal(!reuse_fresh_prewarm, cx) {
+            match self.ensure_tab_ai_harness_terminal(true, cx) {
                 Ok(result) => result,
                 Err(error) => {
                     tracing::error!(
@@ -216,11 +209,6 @@ impl ScriptListApp {
                     return;
                 }
             };
-
-        // Mark the session as consumed so it cannot be reused again.
-        if let Some(session) = self.tab_ai_harness.as_mut() {
-            session.mark_consumed();
-        }
 
         // Determine readiness based on actual PTY output, not cold-start flag.
         let wait_for_readiness = Self::tab_ai_harness_needs_readiness_wait(&entity, cx);
@@ -417,7 +405,7 @@ impl ScriptListApp {
                 // reuses them exactly once instead of immediately killing them.
                 if was_cold_start {
                     if let Some(session) = self.tab_ai_harness.as_mut() {
-                        session.warm_state = crate::ai::TabAiHarnessWarmState::FreshPrewarm;
+                        session.mark_fresh_prewarm();
                     }
                 }
                 tracing::info!(
@@ -440,9 +428,9 @@ impl ScriptListApp {
     /// Returns the entity and whether this was a cold start (newly created).
     ///
     /// When `force_fresh` is `true`, any existing alive session is terminated
-    /// first so the caller gets a brand-new PTY. Explicit prewarm reuse passes
-    /// `false` so a fresh prewarmed session can be consumed exactly once;
-    /// otherwise callers pass `true` to force a clean PTY.
+    /// first so the caller gets a brand-new PTY. The startup prewarm path
+    /// passes `false` to seed the initial session; every explicit Tab
+    /// invocation passes `true` to always get a clean PTY.
     fn ensure_tab_ai_harness_terminal(
         &mut self,
         force_fresh: bool,
