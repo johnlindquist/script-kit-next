@@ -194,13 +194,14 @@ pub fn transcribe_captured_audio(chunks: &[CapturedAudioChunk]) -> Result<Option
             model_path = %config.model_path.display(),
             "Initializing Parakeet ONNX dictation engine"
         );
-        let engine: Box<dyn crate::dictation::transcription::DictationEngine> =
-            Box::new(ParakeetDictationEngine::new(&config.model_path).with_context(|| {
+        let engine: Box<dyn crate::dictation::transcription::DictationEngine> = Box::new(
+            ParakeetDictationEngine::new(&config.model_path).with_context(|| {
                 format!(
                     "failed to initialize Parakeet engine from {}",
                     config.model_path.display()
                 )
-            })?);
+            })?,
+        );
         *guard = Some(DictationTranscriber::new(config.clone(), engine));
     }
 

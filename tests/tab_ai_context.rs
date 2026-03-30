@@ -6,8 +6,8 @@
 
 use script_kit_gpui::ai::{
     TabAiApplyBackHint, TabAiApplyBackRoute, TabAiClipboardContext, TabAiClipboardHistoryEntry,
-    TabAiContextBlob, TabAiMemorySuggestion, TabAiSourceType, TabAiTargetContext,
-    TabAiUiSnapshot, TAB_AI_CONTEXT_SCHEMA_VERSION,
+    TabAiContextBlob, TabAiMemorySuggestion, TabAiSourceType, TabAiTargetContext, TabAiUiSnapshot,
+    TAB_AI_CONTEXT_SCHEMA_VERSION,
 };
 use script_kit_gpui::context_snapshot::{
     AiContextSnapshot, Base64PngContext, BrowserContext, FocusedWindowContext, FrontmostAppContext,
@@ -1036,9 +1036,15 @@ fn apply_back_route_script_list_item_carries_focused_target() {
     // Round-trip preserves target metadata
     let parsed: TabAiApplyBackRoute = serde_json::from_str(&json).expect("deserialize");
     assert_eq!(parsed.source_type, TabAiSourceType::ScriptListItem);
-    assert_eq!(parsed.focused_target.as_ref().map(|t| t.label.as_str()), Some("My Script"));
     assert_eq!(
-        parsed.focused_target.as_ref().and_then(|t| t.metadata.as_ref()),
+        parsed.focused_target.as_ref().map(|t| t.label.as_str()),
+        Some("My Script")
+    );
+    assert_eq!(
+        parsed
+            .focused_target
+            .as_ref()
+            .and_then(|t| t.metadata.as_ref()),
         Some(&serde_json::json!({"path": "/scripts/my-script.ts"})),
     );
 }
@@ -1073,7 +1079,10 @@ fn apply_back_route_running_command_carries_focused_target() {
     assert_eq!(parsed.source_type, TabAiSourceType::RunningCommand);
     assert!(parsed.focused_target.is_some());
     assert_eq!(
-        parsed.focused_target.as_ref().map(|t| t.semantic_id.as_str()),
+        parsed
+            .focused_target
+            .as_ref()
+            .map(|t| t.semantic_id.as_str()),
         Some("choice:2:option-c"),
     );
 }

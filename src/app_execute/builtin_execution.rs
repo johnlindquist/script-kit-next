@@ -1882,22 +1882,42 @@ impl ScriptListApp {
                     }
 
                     AiCommandType::SendScreenAreaToAi => {
+                        let message = "Send Screen Area to AI is unavailable until \
+                                       selected-area capture is attached to the harness.";
+                        self.toast_manager.push(
+                            components::toast::Toast::error(message, &self.theme)
+                                .duration_ms(Some(TOAST_ERROR_MS)),
+                        );
+                        cx.notify();
+                        Self::builtin_error(
+                            dctx,
+                            crate::action_helpers::ERROR_ACTION_FAILED,
+                            message.to_string(),
+                            "ai_send_screen_area_unavailable",
+                        )
+                    }
+
+                    AiCommandType::SendSelectedTextToAi => {
                         self.open_tab_ai_chat_with_entry_intent(
                             Some(
-                                "Capture and analyze a selected screen area."
+                                "Use the current selected text as the primary subject."
                                     .to_string(),
                             ),
                             cx,
                         );
-                        Self::builtin_success(dctx, "ai_send_screen_area_routed_to_harness")
+                        Self::builtin_success(dctx, "ai_send_selected_text_routed_to_harness")
                     }
 
-                    AiCommandType::SendSelectedTextToAi
-                    | AiCommandType::SendBrowserTabToAi => {
-                        // Context capture is handled by the harness's built-in
-                        // context snapshot — no legacy hide-then-capture needed.
-                        self.open_tab_ai_chat(cx);
-                        Self::builtin_success(dctx, format!("ai_{cmd_type:?}_routed_to_harness"))
+                    AiCommandType::SendBrowserTabToAi => {
+                        self.open_tab_ai_chat_with_entry_intent(
+                            Some(
+                                "Use the current browser tab URL and page context \
+                                 as the primary subject."
+                                    .to_string(),
+                            ),
+                            cx,
+                        );
+                        Self::builtin_success(dctx, "ai_send_browser_tab_routed_to_harness")
                     }
 
                     AiCommandType::OpenAi

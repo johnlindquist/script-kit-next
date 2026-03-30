@@ -228,23 +228,21 @@ impl DictationOverlay {
             self.transcribing_started_at = Some(Instant::now());
             // Spawn a tick loop that re-renders every TRANSCRIBING_TICK_MS so
             // the sine-wave pulse progresses smoothly.
-            self._animation_task = Some(cx.spawn(async move |this, cx| {
-                loop {
-                    cx.background_executor()
-                        .timer(Duration::from_millis(TRANSCRIBING_TICK_MS))
-                        .await;
-                    let should_stop = this
-                        .update(cx, |view, cx| {
-                            if view.state.phase != DictationSessionPhase::Transcribing {
-                                return true;
-                            }
-                            cx.notify();
-                            false
-                        })
-                        .unwrap_or(true);
-                    if should_stop {
-                        break;
-                    }
+            self._animation_task = Some(cx.spawn(async move |this, cx| loop {
+                cx.background_executor()
+                    .timer(Duration::from_millis(TRANSCRIBING_TICK_MS))
+                    .await;
+                let should_stop = this
+                    .update(cx, |view, cx| {
+                        if view.state.phase != DictationSessionPhase::Transcribing {
+                            return true;
+                        }
+                        cx.notify();
+                        false
+                    })
+                    .unwrap_or(true);
+                if should_stop {
+                    break;
                 }
             }));
         } else if leaving_transcribing {
@@ -638,9 +636,7 @@ pub fn open_dictation_overlay(
     {
         let mut guard = slot.lock();
         if let Some(handle) = *guard {
-            let alive = handle
-                .update(cx, |_view, _window, _cx| {})
-                .is_ok();
+            let alive = handle.update(cx, |_view, _window, _cx| {}).is_ok();
             if alive {
                 return Ok(handle);
             }
