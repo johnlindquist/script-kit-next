@@ -4044,7 +4044,22 @@ impl ScriptListApp {
         let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
         // Channel carries phase transitions from the blocking download thread
         // to the async context so we can update the HUD on the main thread.
-        let (progress_tx, progress_rx) = async_channel::bounded::<String>(16);
+        let (progress_tx, progress_rx) = async_channel::bounded::<String>(32);
+
+        // Spawn a concurrent reader that shows HUD updates as they arrive
+        // (not after the download completes).
+        cx.spawn({
+            let progress_rx = progress_rx.clone();
+            async move |this, cx| {
+                while let Ok(msg) = progress_rx.recv().await {
+                    let _ = this.update(cx, |this, cx| {
+                        this.show_hud(msg, Some(HUD_SHORT_MS), cx);
+                    });
+                }
+            }
+        })
+        .detach();
+
         cx.spawn(async move |this, cx| {
             let result = cx
                 .background_executor()
@@ -4065,7 +4080,7 @@ impl ScriptListApp {
                                             let prev = last_pct.load(
                                                 std::sync::atomic::Ordering::Relaxed,
                                             );
-                                            if pct >= prev + 10 || pct == 100 {
+                                            if pct >= prev + 5 || pct == 100 {
                                                 last_pct.store(
                                                     pct,
                                                     std::sync::atomic::Ordering::Relaxed,
@@ -4075,8 +4090,15 @@ impl ScriptListApp {
                                                     pct,
                                                     "Model download progress"
                                                 );
+                                                let filled = (pct / 10) as usize;
+                                                let empty = 10usize.saturating_sub(filled);
+                                                let bar = format!(
+                                                    "{}{}",
+                                                    "█".repeat(filled),
+                                                    "░".repeat(empty),
+                                                );
                                                 let _ = progress_tx.send_blocking(
-                                                    format!("Downloading dictation model… {pct}%"),
+                                                    format!("Downloading dictation model… [{bar}] {pct}%"),
                                                 );
                                             }
                                         }
@@ -4086,10 +4108,20 @@ impl ScriptListApp {
                                                 "Extracting dictation model"
                                             );
                                             let _ = progress_tx.send_blocking(
-                                                "Extracting dictation model…".to_string(),
+                                                "Extracting dictation model… [██████████]".to_string(),
                                             );
                                         }
-                                        _ => {}
+                                        crate::dictation::download::DownloadPhase::Failed(error) => {
+                                            let _ = progress_tx.send_blocking(format!(
+                                                "Dictation model download failed: {error}"
+                                            ));
+                                        }
+                                        crate::dictation::download::DownloadPhase::Cancelled => {
+                                            let _ = progress_tx.send_blocking(
+                                                "Dictation model download cancelled".to_string(),
+                                            );
+                                        }
+                                        crate::dictation::download::DownloadPhase::Complete => {}
                                     }
                                 }
                             },
@@ -4098,21 +4130,6 @@ impl ScriptListApp {
                     }
                 })
                 .await;
-
-            // Drain any queued progress messages and show the last one as HUD.
-            // The download is already complete at this point, so we just show
-            // whatever the final phase was before the result HUD.
-            {
-                let mut last_msg = None;
-                while let Ok(msg) = progress_rx.try_recv() {
-                    last_msg = Some(msg);
-                }
-                if let Some(msg) = last_msg {
-                    let _ = this.update(cx, |this, cx| {
-                        this.show_hud(msg, Some(HUD_SHORT_MS), cx);
-                    });
-                }
-            }
 
             let _ = this.update(cx, |this, cx| {
                 PARAKEET_MODEL_DOWNLOAD_IN_PROGRESS

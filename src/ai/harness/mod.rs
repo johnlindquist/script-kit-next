@@ -1109,7 +1109,7 @@ mod cleanup_contract_audits {
     }
 
     #[test]
-    fn explicit_tab_entry_reuses_only_fresh_prewarm_once() {
+    fn explicit_tab_entry_always_forces_fresh_session() {
         let source = include_str!("../../app_impl/tab_ai_mode.rs");
         let start = source
             .find("fn open_tab_ai_harness_terminal_from_request")
@@ -1120,19 +1120,21 @@ mod cleanup_contract_audits {
             .expect("warm_tab_ai_harness_on_startup should follow open fn");
         let body = compact(&rest[..end]);
 
-        assert!(
-            body.contains("is_fresh_prewarm"),
-            "open path must check whether an existing session is a fresh prewarm"
-        );
+        // Every user-initiated Tab press must force a fresh harness session.
         assert!(
             body.contains(&compact(
-                "match self.ensure_tab_ai_harness_terminal(!reuse_fresh_prewarm, cx)"
+                "self.ensure_tab_ai_harness_terminal(true, cx)"
             )),
-            "explicit Tab must reuse only fresh prewarms and otherwise force a clean PTY"
+            "explicit Tab must always force a fresh PTY session"
+        );
+        // Must NOT reuse prewarm sessions for user-initiated Tab presses.
+        assert!(
+            !body.contains("is_fresh_prewarm"),
+            "open path must not check is_fresh_prewarm — always force fresh"
         );
         assert!(
-            body.contains("mark_consumed"),
-            "a reused prewarm must be consumed immediately"
+            !body.contains("mark_consumed"),
+            "open path must not call mark_consumed — always force fresh"
         );
 
         // Verify the terminal becomes visible before deferred context injection.
