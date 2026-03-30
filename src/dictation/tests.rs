@@ -1339,10 +1339,10 @@ fn frontmost_app_delivery_shows_done_state_before_close_and_paste() {
         "handle_dictation_transcript must use Finished for both prompt and frontmost-app delivery paths"
     );
 
-    // Scope to the frontmost-app else branch: starts at the 75ms timer
-    // (unique to that branch) and extends through paste_text.
+    // Scope to the frontmost-app else branch: starts at the named done-state
+    // timer (unique to that branch) and extends through paste_text.
     let done_pause_pos = handler_src
-        .find("timer(std::time::Duration::from_millis(75))")
+        .find("dictation_done_state_duration")
         .expect("frontmost-app delivery must wait briefly so the done state is visible");
 
     // Search forward from the done-pause for yield-focus (which closes the
@@ -1419,13 +1419,13 @@ fn delivery_frontmost_app_waits_before_closing_and_pasting() {
     let frontmost_src = frontmost_dictation_delivery_branch(handler_src);
 
     let done_timer_pos = frontmost_src
-        .find("from_millis(75)")
+        .find("dictation_done_state_duration")
         .expect("frontmost-app branch must wait briefly on Finished state");
     let yield_pos = frontmost_src
         .find("yield_focus_for_dictation_paste")
         .expect("frontmost-app branch must yield focus (close overlay + hide)");
     let focus_timer_pos = frontmost_src
-        .find("from_millis(100)")
+        .find("dictation_focus_settle_duration")
         .expect("frontmost-app branch must wait for focus to settle");
     let paste_pos = frontmost_src
         .find("paste_text")
@@ -1466,14 +1466,20 @@ fn delivery_frontmost_app_aborts_paste_on_focus_yield_failure() {
     let err_check_pos = frontmost_src
         .find("if let Err(error) = yield_focus_result")
         .expect("frontmost-app branch must check yield_focus_result for errors");
-    let show_error_pos = frontmost_src
-        .find("show_error_toast")
-        .expect("frontmost-app branch must show error toast on focus-yield failure");
-    let cleanup_in_err = frontmost_src
-        .find("schedule_dictation_transcriber_cleanup");
+    // Search for show_error_toast AFTER the yield_focus_result error check,
+    // since the tracker guard earlier in the branch also uses show_error_toast.
+    let post_err_src = &frontmost_src[err_check_pos..];
+    let show_error_pos = err_check_pos
+        + post_err_src
+            .find("show_error_toast")
+            .expect("frontmost-app branch must show error toast on focus-yield failure");
+    let cleanup_in_err = err_check_pos
+        + post_err_src
+            .find("schedule_dictation_transcriber_cleanup")
+            .unwrap_or(usize::MAX - err_check_pos);
 
     assert!(
-        err_check_pos < show_error_pos.min(cleanup_in_err.unwrap_or(usize::MAX)),
+        err_check_pos < show_error_pos.min(cleanup_in_err),
         "error check must come before toast and cleanup"
     );
 }
@@ -1779,6 +1785,91 @@ fn delivery_focus_yield_failure_surfaces_and_returns_before_paste() {
     assert!(
         return_pos < paste_pos,
         "pre-paste failure path must return before paste_text"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Frontmost-app target gating and named timing helpers
+// ---------------------------------------------------------------------------
+
+#[test]
+fn delivery_frontmost_app_checks_tracked_target_before_paste() {
+    let src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("read builtin_execution.rs");
+
+    let frontmost_src = dictation_frontmost_paste_source(&src);
+
+    let target_pos = frontmost_src
+        .find("ensure_dictation_frontmost_target_available")
+        .expect("frontmost-app branch must verify tracked target before paste");
+    let paste_pos = frontmost_src
+        .find("paste_text")
+        .expect("frontmost-app branch must call paste_text");
+
+    assert!(
+        target_pos < paste_pos,
+        "ensure_dictation_frontmost_target_available (byte {target_pos}) must appear before \
+         paste_text (byte {paste_pos}) in the frontmost-app branch"
+    );
+}
+
+#[test]
+fn delivery_frontmost_app_surfaces_missing_tracked_target() {
+    let src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("read builtin_execution.rs");
+
+    let handler_src = dictation_handler_source(&src);
+
+    assert!(
+        handler_src.contains(
+            "no previously tracked frontmost app is available for dictation paste"
+        ),
+        "frontmost-app path must surface a missing tracked-target error"
+    );
+    assert!(
+        handler_src.contains("Failed to resolve frontmost-app dictation target"),
+        "frontmost-app path must log tracked-target resolution failures"
+    );
+    assert!(
+        handler_src.contains("show_error_toast"),
+        "frontmost-app path must show the user a tracked-target failure"
+    );
+}
+
+#[test]
+fn delivery_frontmost_app_uses_named_focus_settle_duration_before_paste() {
+    let src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("read builtin_execution.rs");
+
+    let frontmost_src = dictation_frontmost_paste_source(&src);
+
+    let settle_pos = frontmost_src
+        .find("dictation_focus_settle_duration")
+        .expect("frontmost-app branch must wait for named focus settle duration");
+    let paste_pos = frontmost_src
+        .find("paste_text")
+        .expect("frontmost-app branch must call paste_text");
+
+    assert!(
+        settle_pos < paste_pos,
+        "dictation_focus_settle_duration (byte {settle_pos}) must appear before \
+         paste_text (byte {paste_pos}) in the frontmost-app branch"
+    );
+}
+
+#[test]
+fn delivery_frontmost_app_target_helper_uses_frontmost_app_tracker() {
+    let src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("read builtin_execution.rs");
+
+    let helper_start = src
+        .find("fn ensure_dictation_frontmost_target_available")
+        .expect("tracked-target helper must exist");
+    let helper_src = &src[helper_start..helper_start + 600.min(src.len() - helper_start)];
+
+    assert!(
+        helper_src.contains("get_last_real_app_bundle_id"),
+        "tracked-target helper must use frontmost_app_tracker"
     );
 }
 
