@@ -244,6 +244,11 @@ impl TabAiHarnessSessionState {
         matches!(self.warm_state, TabAiHarnessWarmState::FreshPrewarm)
     }
 
+    /// Mark the session as a newly created prewarm that may be reused once.
+    pub fn mark_fresh_prewarm(&mut self) {
+        self.warm_state = TabAiHarnessWarmState::FreshPrewarm;
+    }
+
     /// Mark the session as consumed so it cannot be reused again.
     pub fn mark_consumed(&mut self) {
         self.warm_state = TabAiHarnessWarmState::Consumed;
@@ -1104,7 +1109,7 @@ mod cleanup_contract_audits {
     }
 
     #[test]
-    fn open_tab_ai_harness_terminal_reuses_prewarmed_session() {
+    fn explicit_tab_entry_reuses_only_fresh_prewarm_once() {
         let source = include_str!("../../app_impl/tab_ai_mode.rs");
         let start = source
             .find("fn open_tab_ai_harness_terminal_from_request")
@@ -1115,19 +1120,32 @@ mod cleanup_contract_audits {
             .expect("warm_tab_ai_harness_on_startup should follow open fn");
         let body = compact(&rest[..end]);
 
-        // The open path must NOT unconditionally force_fresh=true.
-        // It should check for a fresh prewarm first.
-        assert!(
-            !body.contains(&compact("self.ensure_tab_ai_harness_terminal(true, cx)")),
-            "open path must not unconditionally force_fresh=true or the post-close prewarm is wasted"
-        );
         assert!(
             body.contains("is_fresh_prewarm"),
-            "open path must check for fresh prewarm before deciding force_fresh"
+            "open path must check whether an existing session is a fresh prewarm"
+        );
+        assert!(
+            body.contains(&compact(
+                "match self.ensure_tab_ai_harness_terminal(!reuse_fresh_prewarm, cx)"
+            )),
+            "explicit Tab must reuse only fresh prewarms and otherwise force a clean PTY"
         );
         assert!(
             body.contains("mark_consumed"),
-            "open path must mark the session as consumed after reuse"
+            "a reused prewarm must be consumed immediately"
+        );
+
+        // Verify the terminal becomes visible before deferred context injection.
+        let full_body = &rest[..end];
+        let view_switch = full_body
+            .find("self.current_view = AppView::QuickTerminalView")
+            .expect("must switch to quick terminal");
+        let deferred_inject = full_body
+            .rfind("cx.spawn(async move |_this, cx|")
+            .expect("must spawn deferred injection task");
+        assert!(
+            view_switch < deferred_inject,
+            "the terminal must become visible before deferred context injection begins"
         );
     }
 
@@ -1145,12 +1163,93 @@ mod cleanup_contract_audits {
         let body = compact(&rest[..end]);
 
         assert!(
-            body.contains("FreshPrewarm"),
-            "prewarm must tag cold-start sessions as FreshPrewarm"
+            body.contains("mark_fresh_prewarm"),
+            "prewarm must use the encapsulated mark_fresh_prewarm() helper"
         );
         assert!(
             body.contains(&compact("ensure_tab_ai_harness_terminal(false, cx)")),
             "prewarm must use force_fresh=false to avoid killing existing sessions"
+        );
+    }
+
+    #[test]
+    fn session_state_exposes_explicit_one_shot_prewarm_api() {
+        let source = include_str!("mod.rs");
+        assert!(
+            source.contains("pub enum TabAiHarnessWarmState"),
+            "session state enum must exist"
+        );
+        assert!(
+            source.contains("FreshPrewarm"),
+            "FreshPrewarm variant must exist"
+        );
+        assert!(
+            source.contains("Consumed"),
+            "Consumed variant must exist"
+        );
+        assert!(
+            source.contains("pub fn is_fresh_prewarm(&self) -> bool"),
+            "session must expose is_fresh_prewarm()"
+        );
+        assert!(
+            source.contains("pub fn mark_fresh_prewarm(&mut self)"),
+            "session must expose mark_fresh_prewarm()"
+        );
+        assert!(
+            source.contains("pub fn mark_consumed(&mut self)"),
+            "session must expose mark_consumed()"
+        );
+    }
+
+    #[test]
+    fn startup_prewarm_uses_encapsulated_helper_not_raw_field_write() {
+        let source = include_str!("../../app_impl/tab_ai_mode.rs");
+        let start = source
+            .find("pub(crate) fn warm_tab_ai_harness_on_startup")
+            .expect("warm_tab_ai_harness_on_startup should exist");
+        let rest = &source[start..];
+        let end = rest[1..]
+            .find("\n    fn ")
+            .or_else(|| rest[1..].find("\n    pub"))
+            .unwrap_or(rest.len());
+        let body = &rest[..end];
+
+        assert!(
+            !body.contains("warm_state ="),
+            "startup prewarm must not directly write warm_state — use mark_fresh_prewarm() instead"
+        );
+        assert!(
+            body.contains("mark_fresh_prewarm()"),
+            "startup prewarm must use the encapsulated mark_fresh_prewarm() helper"
+        );
+    }
+
+    #[test]
+    fn close_path_tears_down_session_and_reprewarms() {
+        let source = include_str!("../../app_impl/tab_ai_mode.rs");
+        let start = source
+            .find("pub(crate) fn close_tab_ai_harness_terminal")
+            .expect("close_tab_ai_harness_terminal should exist");
+        let rest = &source[start..];
+        let end = rest[1..]
+            .find("\n    fn ")
+            .or_else(|| rest[1..].find("\n    pub"))
+            .unwrap_or(rest.len());
+        let body = compact(&rest[..end]);
+
+        assert!(
+            body.contains(&compact("let session = self.tab_ai_harness.take();")),
+            "close must clear the live harness session"
+        );
+        assert!(
+            body.contains("terminate_session"),
+            "close must kill the PTY"
+        );
+        assert!(
+            body.contains(&compact(
+                "self.schedule_tab_ai_harness_prewarm(std::time::Duration::from_millis(250), cx);"
+            )),
+            "close must queue a silent fresh prewarm for the next Tab press"
         );
     }
 

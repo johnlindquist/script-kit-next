@@ -9,6 +9,17 @@ const BUILTIN_MIC_SELECT_PROMPT_ID: &str = "builtin:select-microphone";
 /// Choice value representing "use system default" in the mic-selection prompt.
 const BUILTIN_MIC_DEFAULT_VALUE: &str = "__system_default__";
 
+/// Synthetic prompt ID for the dictation model download consent prompt.
+/// Checked in `submit_arg_prompt_from_current_state` to intercept submit
+/// and either start the Parakeet download or cancel.
+const BUILTIN_DICTATION_MODEL_PROMPT_ID: &str = "builtin:dictation-model";
+
+/// Choice value: user wants to download the Parakeet model.
+const BUILTIN_DICTATION_MODEL_DOWNLOAD: &str = "download";
+
+/// Choice value: user declines the download for now.
+const BUILTIN_DICTATION_MODEL_CANCEL: &str = "cancel";
+
 /// Prevent overlapping Parakeet model downloads when the dictation hotkey is
 /// pressed repeatedly while the model is still missing.
 static PARAKEET_MODEL_DOWNLOAD_IN_PROGRESS: std::sync::atomic::AtomicBool =
@@ -3544,12 +3555,30 @@ impl ScriptListApp {
                     // Check that the Parakeet model is downloaded before
                     // starting capture — no silent Whisper fallback.
                     if !crate::dictation::is_parakeet_model_available() {
-                        tracing::warn!(
+                        // If already downloading, show a status HUD instead of
+                        // re-opening the prompt.
+                        if PARAKEET_MODEL_DOWNLOAD_IN_PROGRESS
+                            .load(std::sync::atomic::Ordering::Acquire)
+                        {
+                            self.show_hud(
+                                "Dictation model download already in progress".to_string(),
+                                Some(HUD_MEDIUM_MS),
+                                cx,
+                            );
+                            return Self::builtin_success(
+                                dctx,
+                                "dictation_model_download_in_progress",
+                            );
+                        }
+                        tracing::info!(
                             category = "DICTATION",
-                            "Parakeet model not downloaded, starting background download"
+                            "Parakeet model not downloaded, opening consent prompt"
                         );
-                        self.start_parakeet_model_download(cx);
-                        return Self::builtin_success(dctx, "dictation_model_download_started");
+                        self.open_dictation_model_prompt(cx);
+                        return Self::builtin_success(
+                            dctx,
+                            "dictation_model_prompt_opened",
+                        );
                     }
 
                     if let Err(error) = self.ensure_dictation_delivery_target_available() {
@@ -4013,6 +4042,9 @@ impl ScriptListApp {
         );
 
         let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        // Channel carries phase transitions from the blocking download thread
+        // to the async context so we can update the HUD on the main thread.
+        let (progress_tx, progress_rx) = async_channel::bounded::<String>(16);
         cx.spawn(async move |this, cx| {
             let result = cx
                 .background_executor()
@@ -4025,6 +4057,7 @@ impl ScriptListApp {
                         crate::dictation::download::download_parakeet_model(
                             {
                                 let last_pct = last_pct.clone();
+                                let progress_tx = progress_tx;
                                 move |phase, progress| {
                                     match phase {
                                         crate::dictation::download::DownloadPhase::Downloading => {
@@ -4032,7 +4065,6 @@ impl ScriptListApp {
                                             let prev = last_pct.load(
                                                 std::sync::atomic::Ordering::Relaxed,
                                             );
-                                            // Log every 10% to avoid spam.
                                             if pct >= prev + 10 || pct == 100 {
                                                 last_pct.store(
                                                     pct,
@@ -4043,12 +4075,18 @@ impl ScriptListApp {
                                                     pct,
                                                     "Model download progress"
                                                 );
+                                                let _ = progress_tx.send_blocking(
+                                                    format!("Downloading dictation model… {pct}%"),
+                                                );
                                             }
                                         }
                                         crate::dictation::download::DownloadPhase::Extracting => {
                                             tracing::info!(
                                                 category = "DICTATION",
                                                 "Extracting dictation model"
+                                            );
+                                            let _ = progress_tx.send_blocking(
+                                                "Extracting dictation model…".to_string(),
                                             );
                                         }
                                         _ => {}
@@ -4060,6 +4098,21 @@ impl ScriptListApp {
                     }
                 })
                 .await;
+
+            // Drain any queued progress messages and show the last one as HUD.
+            // The download is already complete at this point, so we just show
+            // whatever the final phase was before the result HUD.
+            {
+                let mut last_msg = None;
+                while let Ok(msg) = progress_rx.try_recv() {
+                    last_msg = Some(msg);
+                }
+                if let Some(msg) = last_msg {
+                    let _ = this.update(cx, |this, cx| {
+                        this.show_hud(msg, Some(HUD_SHORT_MS), cx);
+                    });
+                }
+            }
 
             let _ = this.update(cx, |this, cx| {
                 PARAKEET_MODEL_DOWNLOAD_IN_PROGRESS
@@ -4092,6 +4145,60 @@ impl ScriptListApp {
             });
         })
         .detach();
+    }
+
+    /// Open a mini-prompt asking the user to download the Parakeet dictation
+    /// model or cancel.  Reuses the same `MiniPrompt` + `Choice` pattern as
+    /// the microphone-selection prompt so that submission is intercepted in
+    /// `submit_arg_prompt_from_current_state`.
+    fn open_dictation_model_prompt(&mut self, cx: &mut Context<Self>) {
+        let choices = vec![
+            Choice {
+                name: "Download Parakeet model (~478 MB)".to_string(),
+                value: BUILTIN_DICTATION_MODEL_DOWNLOAD.to_string(),
+                description: Some("Required for local dictation".to_string()),
+                key: None,
+                semantic_id: None,
+            },
+            Choice {
+                name: "Not now".to_string(),
+                value: BUILTIN_DICTATION_MODEL_CANCEL.to_string(),
+                description: Some("Leave dictation unchanged".to_string()),
+                key: None,
+                semantic_id: None,
+            },
+        ];
+        self.open_builtin_filterable_view(
+            AppView::MiniPrompt {
+                id: BUILTIN_DICTATION_MODEL_PROMPT_ID.to_string(),
+                placeholder: "Dictation model required".to_string(),
+                choices,
+            },
+            "Download dictation model?",
+            cx,
+        );
+    }
+
+    /// Handle a selection from the dictation model download prompt.
+    fn handle_dictation_model_selection(&mut self, value: &str, cx: &mut Context<Self>) {
+        match value {
+            BUILTIN_DICTATION_MODEL_DOWNLOAD => {
+                tracing::info!(
+                    category = "DICTATION",
+                    "User accepted Parakeet model download"
+                );
+                self.start_parakeet_model_download(cx);
+                // Return to script list while downloading in background.
+                self.reset_to_script_list(cx);
+            }
+            _ => {
+                tracing::info!(
+                    category = "DICTATION",
+                    "User declined Parakeet model download"
+                );
+                self.reset_to_script_list(cx);
+            }
+        }
     }
 
     /// Ensure a new dictation session has somewhere valid to send text.

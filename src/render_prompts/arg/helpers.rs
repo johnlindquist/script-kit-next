@@ -353,6 +353,12 @@ impl ScriptListApp {
                     self.handle_builtin_mic_selection(&value, cx);
                     return;
                 }
+
+                // Intercept dictation model download consent prompt.
+                if prompt_id == BUILTIN_DICTATION_MODEL_PROMPT_ID {
+                    self.handle_dictation_model_selection(&value, cx);
+                    return;
+                }
                 self.submit_prompt_response(prompt_id.to_string(), Some(value), cx);
             }
             ArgSubmitOutcome::InvalidEmpty => {
