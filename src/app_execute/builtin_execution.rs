@@ -3791,13 +3791,35 @@ impl ScriptListApp {
                         // Close overlay and hide Script Kit windows so macOS
                         // returns keyboard focus to the target app before
                         // the CGEvent Cmd+V fires.
-                        let _ = this.update(cx, |_this, cx| {
+                        let yield_focus_result = this.update(cx, |_this, cx| {
                             let _ = crate::dictation::close_dictation_overlay(cx);
                             if script_kit_gpui::is_main_window_visible() {
                                 script_kit_gpui::set_main_window_visible(false);
                                 platform::defer_hide_main_window(cx);
                             }
                         });
+
+                        if let Err(error) = yield_focus_result {
+                            let error_text = error.to_string();
+                            let _ = this.update(cx, |this, cx| {
+                                tracing::error!(
+                                    category = "DICTATION",
+                                    error = %error_text,
+                                    "Failed to yield focus before dictation paste"
+                                );
+                                this.show_error_toast(
+                                    format!(
+                                        "Dictation paste failed before paste step: {error_text}"
+                                    ),
+                                    cx,
+                                );
+                                this.schedule_dictation_transcriber_cleanup(
+                                    cx,
+                                    std::time::Duration::from_secs(300),
+                                );
+                            });
+                            return;
+                        }
 
                         // Let macOS settle focus back to the target app.
                         cx.background_executor()
