@@ -1,7 +1,8 @@
 use crate::dictation::capture::{start_capture, DictationCaptureHandle};
 use crate::dictation::device::{default_input_device, list_input_devices};
 use crate::dictation::transcription::{
-    build_session_result, DictationTranscriber, DictationTranscriptionConfig, WhisperDictationEngine,
+    build_session_result, DictationTranscriber, DictationTranscriptionConfig,
+    WhisperDictationEngine,
 };
 use crate::dictation::types::{
     CapturedAudioChunk, DictationCaptureConfig, DictationCaptureEvent, DictationDestination,
@@ -61,8 +62,8 @@ fn start_recording() -> Result<()> {
     let device_id = resolve_preferred_device()?;
     let capture_config = DictationCaptureConfig::default();
 
-    let (event_rx, capture_handle) =
-        start_capture(capture_config, device_id.as_ref()).context("failed to start audio capture")?;
+    let (event_rx, capture_handle) = start_capture(capture_config, device_id.as_ref())
+        .context("failed to start audio capture")?;
 
     let session = DictationSession {
         _capture_handle: capture_handle,
@@ -89,7 +90,10 @@ fn start_recording() -> Result<()> {
 fn stop_and_transcribe() -> Result<()> {
     let session = SESSION.lock().take();
     let Some(mut session) = session else {
-        tracing::warn!(category = "DICTATION", "stop_and_transcribe called but no session active");
+        tracing::warn!(
+            category = "DICTATION",
+            "stop_and_transcribe called but no session active"
+        );
         return Ok(());
     };
 
@@ -141,8 +145,12 @@ pub(crate) fn transcribe_and_deliver(
     chunks: &[CapturedAudioChunk],
 ) -> Result<Option<DictationSessionResult>> {
     let config = DictationTranscriptionConfig::default();
-    let engine = WhisperDictationEngine::new(&config)
-        .with_context(|| format!("failed to initialize Whisper engine from {}", config.model_path.display()))?;
+    let engine = WhisperDictationEngine::new(&config).with_context(|| {
+        format!(
+            "failed to initialize Whisper engine from {}",
+            config.model_path.display()
+        )
+    })?;
 
     let transcriber = DictationTranscriber::new(config, Box::new(engine));
 

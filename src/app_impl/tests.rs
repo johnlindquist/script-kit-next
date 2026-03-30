@@ -139,3 +139,41 @@ fn test_emoji_picker_arrow_interceptor_consumes_left_right_keys_before_input() {
         "EmojiPickerView left/right handling must navigate and stop propagation to Input"
     );
 }
+
+// ---------------------------------------------------------------------------
+// Tab AI harness routing contract tests (startup.rs parity)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn script_list_shift_tab_routes_into_harness_entry_intent_in_standard_startup() {
+    let source = fs::read_to_string("src/app_impl/startup.rs")
+        .expect("Failed to read src/app_impl/startup.rs");
+
+    assert!(
+        source.contains("open_tab_ai_chat_with_entry_intent(Some(query), cx)"),
+        "Shift+Tab in ScriptList must route the filter text into harness entry intent"
+    );
+    assert!(
+        !source.contains("dispatch_ai_script_generation_from_query(query, cx)"),
+        "Standard startup must not keep the legacy Shift+Tab script-generation path"
+    );
+}
+
+#[test]
+fn quick_terminal_tab_is_written_directly_to_pty_in_standard_startup() {
+    let source = fs::read_to_string("src/app_impl/startup.rs")
+        .expect("Failed to read src/app_impl/startup.rs");
+
+    assert!(
+        source.contains("b\"\\t\""),
+        "QuickTerminal must forward Tab directly to the PTY"
+    );
+    assert!(
+        source.contains("b\"\\x1b[Z\""),
+        "QuickTerminal must forward Shift+Tab/backtab directly to the PTY"
+    );
+    assert!(
+        source.contains("term.terminal.input(bytes)"),
+        "QuickTerminal Tab handling must write raw bytes to the PTY"
+    );
+}

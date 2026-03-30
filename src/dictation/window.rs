@@ -42,7 +42,6 @@ use crate::theme::get_cached_theme;
 use crate::theme::opacity::{OPACITY_ACTIVE, OPACITY_GHOST, OPACITY_MUTED, OPACITY_TEXT_MUTED};
 use crate::ui_foundation::HexColorExt;
 
-
 use std::sync::{Mutex, OnceLock};
 
 /// Global handle so we can reach the overlay from any callsite.
@@ -110,27 +109,20 @@ impl Render for DictationOverlay {
                             .child(timer_text),
                     )
             }
-            DictationSessionPhase::Transcribing => div()
-                .flex()
-                .flex_row()
-                .items_center()
-                .gap(px(6.))
-                .child(
+            DictationSessionPhase::Transcribing => {
+                div().flex().flex_row().items_center().gap(px(6.)).child(
                     div()
                         .text_size(px(13.))
                         .text_color(muted_text)
                         .child(SharedString::from("Transcribing…")),
-                ),
-            DictationSessionPhase::Finished => div()
-                .flex()
-                .flex_row()
-                .items_center()
-                .child(
-                    div()
-                        .text_size(px(13.))
-                        .text_color(text_color)
-                        .child(self.state.transcript.clone()),
-                ),
+                )
+            }
+            DictationSessionPhase::Finished => div().flex().flex_row().items_center().child(
+                div()
+                    .text_size(px(13.))
+                    .text_color(text_color)
+                    .child(self.state.transcript.clone()),
+            ),
             DictationSessionPhase::Failed(ref msg) => {
                 let err_text: SharedString = format!("Error: {msg}").into();
                 div().flex().flex_row().items_center().child(
@@ -195,7 +187,9 @@ fn render_waveform_bars(bars: &[f32; 9], text_hex: u32) -> impl IntoElement {
 ///
 /// Creates a `WindowKind::PopUp` window with blurred background and vibrancy.
 /// Returns a handle that can be used to update or close the overlay.
-pub fn open_dictation_overlay(cx: &mut App) -> anyhow::Result<gpui::WindowHandle<DictationOverlay>> {
+pub fn open_dictation_overlay(
+    cx: &mut App,
+) -> anyhow::Result<gpui::WindowHandle<DictationOverlay>> {
     use anyhow::Context as _;
 
     // If already open, return the existing handle.
@@ -237,9 +231,7 @@ pub fn open_dictation_overlay(cx: &mut App) -> anyhow::Result<gpui::WindowHandle
     };
 
     let handle = cx
-        .open_window(window_options, |_window, cx| {
-            cx.new(DictationOverlay::new)
-        })
+        .open_window(window_options, |_window, cx| cx.new(DictationOverlay::new))
         .context("Failed to open dictation overlay window")?;
 
     // Configure vibrancy on macOS (never call setLevel on PopUp windows).
@@ -256,8 +248,7 @@ pub fn open_dictation_overlay(cx: &mut App) -> anyhow::Result<gpui::WindowHandle
                     // We obtain the parent NSWindow via the standard -[NSView window] message.
                     // Called on the main thread as required by AppKit.
                     unsafe {
-                        let ns_window: cocoa::base::id =
-                            msg_send![ns_view, window];
+                        let ns_window: cocoa::base::id = msg_send![ns_view, window];
                         crate::platform::configure_secondary_window_vibrancy(
                             ns_window,
                             "Dictation",

@@ -5,13 +5,10 @@
         // Create channel for builtin confirmation modal signals
         // When a dangerous action (Quit, Shut Down, etc.) requires confirmation,
         // the modal callback sends (entry_id, confirmed) through this channel
-        // Create channel for inline chat escape signals
+        // Legacy chat channels (retained for TabAiChat compatibility — not the primary Tab AI surface)
         let (inline_chat_escape_tx, inline_chat_escape_rx) = mpsc::sync_channel(4);
-        // Create channel for inline chat continue signals (Continue in AI Chat → hide main window)
         let (inline_chat_continue_tx, inline_chat_continue_rx) = mpsc::sync_channel(4);
-        // Create channel for inline chat configure signals (when user wants to set up API key)
         let (inline_chat_configure_tx, inline_chat_configure_rx) = mpsc::sync_channel(4);
-        // Create channel for inline chat Claude Code signals (when user wants to enable Claude Code)
         let (inline_chat_claude_code_tx, inline_chat_claude_code_rx) = mpsc::sync_channel(4);
         let mut app = ScriptListApp {
             scripts,
