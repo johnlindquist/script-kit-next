@@ -3791,13 +3791,15 @@ impl ScriptListApp {
                         // Close overlay and hide Script Kit windows so macOS
                         // returns keyboard focus to the target app before
                         // the CGEvent Cmd+V fires.
-                        let yield_focus_result = this.update(cx, |_this, cx| {
-                            let _ = crate::dictation::close_dictation_overlay(cx);
-                            if script_kit_gpui::is_main_window_visible() {
-                                script_kit_gpui::set_main_window_visible(false);
-                                platform::defer_hide_main_window(cx);
-                            }
-                        });
+                        let yield_focus_result = match this.update(
+                            cx,
+                            |this, cx| this.yield_focus_for_dictation_paste(cx),
+                        ) {
+                            Ok(result) => result,
+                            Err(error) => Err(anyhow::anyhow!(
+                                "failed to update app state before paste: {error}"
+                            )),
+                        };
 
                         if let Err(error) = yield_focus_result {
                             let error_text = error.to_string();
@@ -3905,6 +3907,22 @@ impl ScriptListApp {
                 );
             }
         }
+    }
+
+    /// Close the dictation overlay and hide the main window, propagating
+    /// errors so the caller can abort the paste if either step fails.
+    fn yield_focus_for_dictation_paste(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) -> anyhow::Result<()> {
+        use anyhow::Context as _;
+        crate::dictation::close_dictation_overlay(cx)
+            .context("failed to close dictation overlay before paste")?;
+        if script_kit_gpui::is_main_window_visible() {
+            script_kit_gpui::set_main_window_visible(false);
+            platform::defer_hide_main_window(cx);
+        }
+        Ok(())
     }
 
     /// Schedule the overlay window to close after a delay.
