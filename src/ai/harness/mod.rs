@@ -816,6 +816,56 @@ mod tests {
         );
     }
 
+    fn extract_tab_ai_quick_terminal_section(doc: &str) -> &str {
+        let start = doc
+            .find("### Tab AI — Quick Terminal with Context Injection")
+            .expect("doc must contain Tab AI quick terminal section");
+        let rest = &doc[start..];
+        let end = rest[1..]
+            .find("\n### ")
+            .map(|idx| idx + 1)
+            .unwrap_or(rest.len());
+        &rest[..end]
+    }
+
+    #[test]
+    fn agent_docs_keep_quick_terminal_section_identical() {
+        const CLAUDE_DOC: &str = include_str!("../../../CLAUDE.md");
+        const AGENTS_DOC: &str = include_str!("../../../AGENTS.md");
+        assert_eq!(
+            extract_tab_ai_quick_terminal_section(CLAUDE_DOC),
+            extract_tab_ai_quick_terminal_section(AGENTS_DOC),
+            "CLAUDE.md and AGENTS.md must keep the Tab AI quick-terminal section byte-for-byte identical"
+        );
+    }
+
+    #[test]
+    fn agent_docs_match_actual_lifecycle_and_submit_semantics() {
+        const CLAUDE_DOC: &str = include_str!("../../../CLAUDE.md");
+        const AGENTS_DOC: &str = include_str!("../../../AGENTS.md");
+        for (label, text) in [("CLAUDE.md", CLAUDE_DOC), ("AGENTS.md", AGENTS_DOC)] {
+            let section = extract_tab_ai_quick_terminal_section(text);
+            assert!(
+                section.contains("silently prewarms the configured harness at app launch"),
+                "{label} must describe startup prewarm as the default path"
+            );
+            assert!(
+                section.contains("`Await the user's next terminal input.` is emitted only when"),
+                "{label} must describe sentinel behavior precisely"
+            );
+            assert!(
+                !section.contains("First Tab press spawns the configured harness CLI in a PTY"),
+                "{label} must not claim first-Tab spawn as the default lifecycle"
+            );
+            assert!(
+                !section.contains(
+                    "`Submit` — used when a non-empty entry intent is supplied. Appends a sentinel asking the harness to wait"
+                ),
+                "{label} must not claim Submit-with-intent appends the wait sentinel"
+            );
+        }
+    }
+
     #[test]
     fn agent_docs_describe_quick_terminal_contract() {
         const CLAUDE_DOC: &str = include_str!("../../../CLAUDE.md");

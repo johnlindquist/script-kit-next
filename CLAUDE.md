@@ -300,7 +300,8 @@ Universal AI surface triggered by Tab from any view. Connects to a pre-running C
 
 **Submission modes** (`TabAiHarnessSubmissionMode`):
 - `PasteOnly` — default for plain Tab entry and for any entry whose normalized intent is empty after trimming. Stages context in the PTY without submitting; user types intent next.
-- `Submit` — used when a non-empty entry intent is supplied. Appends a sentinel asking the harness to wait, completing a full turn.
+- `Submit` — selected when an entry intent survives trimming. With a non-empty intent, Script Kit appends `User intent:` and submits immediately.
+- Sentinel behavior — `Await the user's next terminal input.` is emitted only when `TabAiHarnessSubmissionMode::Submit` is used without a non-empty intent.
 
 **Capture profiles:**
 - Generic PTY backends use `CaptureContextOptions::tab_ai_submit()` (text-safe, no screenshots — base64 PNG in PTY stdin is fragile).
@@ -323,9 +324,10 @@ Universal AI surface triggered by Tab from any view. Connects to a pre-running C
 | `TabAiDegradationReason` | Enum: `PanelOnlyWarning`, `CollectorFallback`, `MissingInput`, etc. |
 
 **Harness lifecycle:**
-- First Tab press spawns the configured harness CLI in a PTY (cold start ~120ms delay for prompt render).
-- Subsequent Tab presses reuse the live session if the PTY is still alive.
-- Crash/exit triggers a fresh spawn on next Tab press.
+- Default path — `warmOnStartup` defaults to `true`, so Script Kit silently prewarms the configured harness at app launch.
+- Cold-start fallback — if prewarm is disabled, config validation fails, or the PTY has exited, the next Tab entry cold-starts the harness and waits for readiness before injecting context.
+- Reuse — while the PTY stays alive, subsequent Tab presses reuse the same session.
+- Recovery — if the harness crashes or exits, the next Tab entry respawns it.
 
 **Legacy compatibility only:** `TabAiChat` and `open_tab_ai_full_view_chat()` still exist for non-primary flows. They are not the default Tab AI surface and should not be used to describe the pivot.
 

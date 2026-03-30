@@ -598,6 +598,26 @@ fn script_list_tab_fallback_routes_to_open_tab_ai_chat() {
 }
 
 // =========================================================================
+// ScriptList fallback comment matches quick-terminal contract
+// =========================================================================
+
+#[test]
+fn script_list_tab_fallback_comment_matches_quick_terminal_contract() {
+    assert!(
+        SCRIPT_LIST_SOURCE.contains("route to Tab AI quick terminal (harness surface)."),
+        "render_script_list fallback comment must describe the quick terminal harness surface"
+    );
+    assert!(
+        !SCRIPT_LIST_SOURCE.contains("route to Tab AI full-view chat"),
+        "render_script_list fallback comment must not describe the legacy full-view chat"
+    );
+    assert!(
+        SCRIPT_LIST_SOURCE.contains("this.open_tab_ai_chat(cx);"),
+        "render_script_list fallback must still route through open_tab_ai_chat"
+    );
+}
+
+// =========================================================================
 // Deterministic context capture (used by tests)
 // =========================================================================
 
