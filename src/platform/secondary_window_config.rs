@@ -292,6 +292,7 @@ pub fn update_all_secondary_windows_appearance(_is_dark: bool) {
 
 // Re-export display/coordinate helpers from the unified display module.
 pub use self::display::{
-    clamp_to_visible, display_for_point, flip_y, get_global_mouse_position, get_macos_displays,
-    get_macos_visible_displays, primary_screen_height, VisibleDisplayBounds,
+    clamp_to_visible, display_for_point, flip_y, get_active_display, get_global_mouse_position,
+    get_macos_displays, get_macos_visible_displays, prefers_reduced_motion, primary_screen_height,
+    VisibleDisplayBounds,
 };

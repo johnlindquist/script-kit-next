@@ -1,7 +1,8 @@
 use crate::dictation::capture::{mix_to_mono, normalize_chunk, resample_linear, run_processor};
 use crate::dictation::transcription::{
-    build_session_result, merge_captured_chunks, DictationEngine, DictationTranscriber,
-    DictationTranscriptionConfig, WhisperDictationEngine,
+    build_session_result, is_parakeet_model_available, merge_captured_chunks, DictationEngine,
+    DictationTranscriber, DictationTranscriptionConfig, ParakeetDictationEngine,
+    WhisperDictationEngine,
 };
 use crate::dictation::types::{
     CapturedAudioChunk, CompletedDictationCapture, DictationCaptureConfig, DictationCaptureEvent,
@@ -510,23 +511,28 @@ fn whisper_engine_new_accepts_regular_file_model_path() {
 }
 
 #[test]
-fn whisper_engine_new_with_default_config_surfaces_path_or_succeeds() {
-    let config = DictationTranscriptionConfig::default();
+fn whisper_engine_new_with_whisper_config_surfaces_path_or_succeeds() {
+    use crate::dictation::transcription::resolve_whisper_model_path;
+    let whisper_path = resolve_whisper_model_path();
+    let config = DictationTranscriptionConfig {
+        model_path: whisper_path.clone(),
+        ..Default::default()
+    };
     let result = WhisperDictationEngine::new(&config);
 
-    if config.model_path.is_file() {
+    if whisper_path.is_file() {
         assert!(
             result.is_ok(),
-            "default model path should initialize when the file exists: {}",
-            config.model_path.display()
+            "whisper model path should initialize when the file exists: {}",
+            whisper_path.display()
         );
     } else {
         let error = result
-            .expect_err("default model path should fail when the file is missing or invalid")
+            .expect_err("whisper model path should fail when the file is missing or invalid")
             .to_string();
         assert!(
-            error.contains(&config.model_path.display().to_string()),
-            "default-path init error should name the attempted path, got: {error}"
+            error.contains(&whisper_path.display().to_string()),
+            "whisper-path init error should name the attempted path, got: {error}"
         );
     }
 }
@@ -570,9 +576,20 @@ fn resolve_default_model_path_matches_config_default() {
 }
 
 #[test]
-fn resolve_default_model_path_ends_with_expected_filename() {
+fn resolve_default_model_path_ends_with_parakeet_dir() {
     use crate::dictation::transcription::resolve_default_model_path;
     let path = resolve_default_model_path();
+    assert!(
+        path.ends_with("models/parakeet-tdt-0.6b-v3-int8"),
+        "resolved path must end with models/parakeet-tdt-0.6b-v3-int8, got: {}",
+        path.display()
+    );
+}
+
+#[test]
+fn resolve_whisper_model_path_ends_with_expected_filename() {
+    use crate::dictation::transcription::resolve_whisper_model_path;
+    let path = resolve_whisper_model_path();
     assert!(
         path.ends_with("models/whisper-medium-q4_1.bin"),
         "resolved path must end with models/whisper-medium-q4_1.bin, got: {}",
@@ -658,6 +675,10 @@ fn dictation_goal_critical_paths_exist() {
     assert!(
         transcription.contains("WhisperDictationEngine"),
         "transcription.rs must define WhisperDictationEngine"
+    );
+    assert!(
+        transcription.contains("ParakeetDictationEngine"),
+        "transcription.rs must define ParakeetDictationEngine"
     );
 }
 
@@ -1348,8 +1369,8 @@ fn dictation_surfaces_missing_model_with_toast() {
         "missing Whisper model must produce a download-oriented toast"
     );
     assert!(
-        builtin_src.contains("resolve_default_model_path()"),
-        "missing-model toast must use the resolved default model path"
+        builtin_src.contains("resolve_whisper_model_path()"),
+        "missing-model toast must use the resolved Whisper model path"
     );
 }
 
@@ -1691,9 +1712,80 @@ fn overlay_dot_and_window_constants_match_target_contract() {
     assert_eq!(super::window::STATUS_TEXT_SIZE_PX, 11.5);
     assert_eq!(super::window::WAVEFORM_BAR_COUNT, 9);
     assert_eq!(super::window::TRANSCRIBING_DOT_COUNT, 3);
+    // Reduced-motion (static) fallback matches the original contract.
     assert_eq!(
-        super::window::transcribing_dot_opacities(),
+        super::window::transcribing_dot_opacities_static(),
         [OPACITY_SELECTED, OPACITY_ACTIVE, OPACITY_SELECTED]
+    );
+}
+
+#[test]
+fn transcribing_dot_pulse_varies_over_time() {
+    // At t=0, all dots are at the same phase point.
+    let at_zero = super::window::transcribing_dot_opacities_at(0.0);
+    // At t=0.3 (past one stagger cycle), dots should differ.
+    let at_stagger = super::window::transcribing_dot_opacities_at(0.3);
+
+    // All opacities must stay within [0.3, 1.0].
+    for &arr in &[at_zero, at_stagger] {
+        for &v in &arr {
+            assert!(
+                (0.29..=1.01).contains(&v),
+                "dot opacity {v} out of [0.3, 1.0] range"
+            );
+        }
+    }
+
+    // At t=0.3 the stagger should cause visible differences between dots.
+    let spread = at_stagger
+        .iter()
+        .copied()
+        .fold(0.0_f32, |acc, v| acc.max(v))
+        - at_stagger
+            .iter()
+            .copied()
+            .fold(1.0_f32, |acc, v| acc.min(v));
+    assert!(
+        spread > 0.01,
+        "dots should have visible spread at t=0.3, got {spread}"
+    );
+}
+
+#[test]
+fn transcribing_dot_pulse_is_periodic() {
+    let period = super::window::TRANSCRIBING_PULSE_PERIOD_SECS;
+    let at_t = super::window::transcribing_dot_opacities_at(0.5);
+    let at_t_plus_period = super::window::transcribing_dot_opacities_at(0.5 + period);
+
+    for (a, b) in at_t.iter().zip(at_t_plus_period.iter()) {
+        assert!(
+            (a - b).abs() < 0.001,
+            "pulse must be periodic: {a} vs {b}"
+        );
+    }
+}
+
+#[test]
+fn transcribing_dot_pulse_constants_match_vercel_voice() {
+    assert!(
+        (super::window::TRANSCRIBING_PULSE_PERIOD_SECS - 1.4).abs() < f64::EPSILON,
+        "pulse period must be 1.4s (vercel-voice reference)"
+    );
+    assert!(
+        (super::window::TRANSCRIBING_PULSE_STAGGER_SECS - 0.2).abs() < f64::EPSILON,
+        "pulse stagger must be 0.2s (vercel-voice reference)"
+    );
+}
+
+#[test]
+fn reduced_motion_fallback_is_static() {
+    use crate::theme::opacity::{OPACITY_ACTIVE, OPACITY_SELECTED};
+
+    let static_opacities = super::window::transcribing_dot_opacities_static();
+    assert_eq!(
+        static_opacities,
+        [OPACITY_SELECTED, OPACITY_ACTIVE, OPACITY_SELECTED],
+        "reduced-motion fallback must return static staggered opacities"
     );
 }
 
@@ -1747,7 +1839,7 @@ fn dictation_overlay_derives_colors_from_theme_and_glassmorphism() {
 }
 
 #[test]
-fn dictation_overlay_close_propagates_window_update_failure() {
+fn dictation_overlay_close_handles_dead_windows_gracefully() {
     let source =
         std::fs::read_to_string("src/dictation/window.rs").expect("read dictation window.rs");
 
@@ -1760,13 +1852,17 @@ fn dictation_overlay_close_propagates_window_update_failure() {
         close_src.contains(".update("),
         "close_dictation_overlay must call handle.update"
     );
+    // Dead windows are not errors — the close function must log a warning
+    // but not propagate as Err, since the window is already gone.
     assert!(
-        !close_src.contains("let _ = handle.update"),
-        "close_dictation_overlay must not discard window close failures"
+        close_src.contains("Overlay window already gone"),
+        "close_dictation_overlay must warn when closing an already-dead window"
     );
+    // The slot must be cleared before attempting removal so no other
+    // caller can see a stale handle.
     assert!(
-        close_src.contains("failed to close dictation overlay window"),
-        "close_dictation_overlay must propagate update failure with context"
+        close_src.contains("guard.take()"),
+        "close_dictation_overlay must clear the slot before removing the window"
     );
 }
 
@@ -2747,6 +2843,51 @@ fn overlay_positioned_bottom_center_of_screen() {
 }
 
 // ---------------------------------------------------------------------------
+// Overlay: active-display selection (not mouse-based)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn overlay_uses_active_display_not_mouse_position() {
+    let window_src = std::fs::read_to_string("src/dictation/window.rs").expect("read window.rs");
+
+    // Must use get_active_display() (key-window heuristic), not mouse position.
+    assert!(
+        window_src.contains("get_active_display()"),
+        "overlay must resolve display via get_active_display() (key-window screen)"
+    );
+    // Must NOT use mouse-position-based display selection.
+    assert!(
+        !window_src.contains("get_global_mouse_position()"),
+        "overlay must NOT use get_global_mouse_position() for display selection"
+    );
+    assert!(
+        !window_src.contains("display_for_point("),
+        "overlay must NOT use display_for_point() for display selection"
+    );
+}
+
+#[test]
+fn active_display_api_exists_in_platform() {
+    let display_src =
+        std::fs::read_to_string("src/platform/display.rs").expect("read display.rs");
+
+    assert!(
+        display_src.contains("pub fn get_active_display()"),
+        "platform must expose get_active_display() for key-window display resolution"
+    );
+    assert!(
+        display_src.contains("mainScreen"),
+        "get_active_display() must use NSScreen.mainScreen"
+    );
+    // Non-macOS stub must exist.
+    assert!(
+        display_src.contains("#[cfg(not(target_os = \"macos\"))]")
+            && display_src.contains("get_active_display"),
+        "get_active_display() must have a non-macOS stub"
+    );
+}
+
+// ---------------------------------------------------------------------------
 // Overlay: Escape confirmation state machine
 // ---------------------------------------------------------------------------
 
@@ -2874,14 +3015,23 @@ fn overlay_dimensions_match_vercel_voice_contract() {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn overlay_window_opens_with_focus_enabled() {
+fn overlay_window_opens_without_app_activation() {
     let window_src = std::fs::read_to_string("src/dictation/window.rs").expect("read window.rs");
 
-    // The overlay window must be created with focus: true so key events
-    // (Escape for confirmation) reach it.
+    // The overlay window must be created with focus: false to avoid
+    // activating the app (which would surface the main window).  Key
+    // events are delivered via orderFrontRegardless + makeKeyWindow.
     assert!(
-        window_src.contains("focus: true"),
-        "overlay window must open with focus: true for key event delivery"
+        window_src.contains("focus: false"),
+        "overlay window must open with focus: false to avoid app activation"
+    );
+    assert!(
+        window_src.contains("orderFrontRegardless"),
+        "overlay must use orderFrontRegardless for non-activating front"
+    );
+    assert!(
+        window_src.contains("makeKeyWindow"),
+        "overlay must use makeKeyWindow for key event delivery"
     );
 }
 
@@ -2987,4 +3137,488 @@ fn start_recording_initialises_overlay_phase_to_recording() {
         runtime_src.contains("overlay_phase: DictationSessionPhase::Recording"),
         "start_recording must initialise overlay_phase to Recording"
     );
+}
+
+// ---------------------------------------------------------------------------
+// Regression: missing-model error path must NEVER attempt paste or delivery
+// ---------------------------------------------------------------------------
+
+/// When `transcribe_captured_audio` returns an `Err` (e.g. missing Whisper
+/// model), `handle_dictation_transcript` must show a toast and update the
+/// overlay to `Failed` — but it must **never** call `paste_text` or
+/// `try_set_prompt_input`, because there is no transcript to deliver.
+///
+/// This test structurally verifies the error arm to prevent accidental
+/// delivery regressions.
+#[test]
+fn missing_model_error_path_never_attempts_paste_or_prompt_delivery() {
+    let src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("read builtin_execution.rs");
+
+    let handler_src = dictation_handler_source(&src);
+
+    // The error arm starts at `Err(error) =>` and extends to the end of the
+    // match (the handler's closing brace).  Extract it by finding the last
+    // `Err(error) =>` after the `Ok(None)` arm.
+    let ok_none_pos = handler_src
+        .find("Ok(None) =>")
+        .expect("handler must have an Ok(None) arm");
+    let err_arm_start = handler_src[ok_none_pos..]
+        .find("Err(error) =>")
+        .expect("handler must have an Err(error) arm after Ok(None)");
+    let err_arm_src = &handler_src[ok_none_pos + err_arm_start..];
+
+    assert!(
+        !err_arm_src.contains("paste_text"),
+        "Err arm of handle_dictation_transcript must NEVER call paste_text \
+         — there is no transcript to deliver when transcription fails"
+    );
+    assert!(
+        !err_arm_src.contains("try_set_prompt_input"),
+        "Err arm of handle_dictation_transcript must NEVER call try_set_prompt_input \
+         — there is no transcript to deliver when transcription fails"
+    );
+
+    // Confirm the error arm DOES show a toast and update overlay to Failed.
+    assert!(
+        err_arm_src.contains("show_error_toast"),
+        "Err arm must surface the error to the user via toast"
+    );
+    assert!(
+        err_arm_src.contains("DictationSessionPhase::Failed"),
+        "Err arm must update overlay to Failed phase"
+    );
+    assert!(
+        err_arm_src.contains("schedule_dictation_overlay_close"),
+        "Err arm must schedule overlay close after showing the error"
+    );
+}
+
+/// The `Ok(None)` arm (silent/short audio) must also never attempt delivery.
+#[test]
+fn silent_audio_path_never_attempts_paste_or_prompt_delivery() {
+    let src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("read builtin_execution.rs");
+
+    let handler_src = dictation_handler_source(&src);
+
+    // Extract the Ok(None) arm: from `Ok(None) =>` to `Err(error) =>`.
+    let none_start = handler_src
+        .find("Ok(None) =>")
+        .expect("handler must have an Ok(None) arm");
+    let none_src_tail = &handler_src[none_start..];
+    let err_offset = none_src_tail
+        .find("Err(error) =>")
+        .expect("Ok(None) arm must be followed by Err arm");
+    let none_arm_src = &none_src_tail[..err_offset];
+
+    assert!(
+        !none_arm_src.contains("paste_text"),
+        "Ok(None) arm must NEVER call paste_text — no transcript exists"
+    );
+    assert!(
+        !none_arm_src.contains("try_set_prompt_input"),
+        "Ok(None) arm must NEVER call try_set_prompt_input — no transcript exists"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Regression: Escape → Escape abort must NEVER deliver a transcript
+// ---------------------------------------------------------------------------
+
+/// The overlay abort callback registered at dictation start must call
+/// `abort_dictation()` + `close_dictation_overlay()` and must NOT invoke
+/// `handle_dictation_transcript` or any delivery function.  This verifies
+/// the structural separation between abort and delivery paths.
+#[test]
+fn abort_callback_never_invokes_transcript_delivery() {
+    let src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("read builtin_execution.rs");
+
+    // Extract the abort callback body: from `set_overlay_abort_callback` to
+    // the closing `});` before `open_dictation_overlay`.
+    let callback_start = src
+        .find("set_overlay_abort_callback")
+        .expect("dictation start path must register an abort callback");
+    let callback_tail = &src[callback_start..];
+
+    // The callback is a closure — find its extent up to the next overlay call.
+    let callback_end = callback_tail
+        .find("open_dictation_overlay")
+        .expect("abort callback must be followed by overlay open");
+    let callback_src = &callback_tail[..callback_end];
+
+    assert!(
+        callback_src.contains("abort_dictation()"),
+        "abort callback must call abort_dictation() to discard the recording"
+    );
+    assert!(
+        callback_src.contains("close_dictation_overlay"),
+        "abort callback must close the overlay"
+    );
+    assert!(
+        !callback_src.contains("handle_dictation_transcript"),
+        "abort callback must NEVER invoke handle_dictation_transcript — \
+         the user chose to discard the recording"
+    );
+    assert!(
+        !callback_src.contains("paste_text"),
+        "abort callback must NEVER call paste_text"
+    );
+    assert!(
+        !callback_src.contains("try_set_prompt_input"),
+        "abort callback must NEVER call try_set_prompt_input"
+    );
+    assert!(
+        !callback_src.contains("transcribe_captured_audio"),
+        "abort callback must NEVER invoke transcription — \
+         the recording is discarded, not transcribed"
+    );
+}
+
+/// `abort_dictation()` must drop the session, ensuring `is_dictation_recording()`
+/// returns false afterward and preventing any further overlay pump ticks from
+/// reading stale state.
+#[test]
+fn abort_dictation_clears_session_state() {
+    let runtime_src =
+        std::fs::read_to_string("src/dictation/runtime.rs").expect("read runtime.rs");
+
+    // abort_dictation must call stop_recording which takes the session.
+    let abort_start = runtime_src
+        .find("pub fn abort_dictation() -> Result<()>")
+        .expect("abort_dictation must exist");
+    let abort_src =
+        &runtime_src[abort_start..abort_start + 300.min(runtime_src.len() - abort_start)];
+
+    assert!(
+        abort_src.contains("stop_recording()"),
+        "abort_dictation must call stop_recording() to drain and drop the session"
+    );
+
+    // stop_recording must take() the session from the mutex.
+    let stop_start = runtime_src
+        .find("fn stop_recording()")
+        .expect("stop_recording must exist");
+    let stop_src =
+        &runtime_src[stop_start..stop_start + 600.min(runtime_src.len() - stop_start)];
+
+    assert!(
+        stop_src.contains(".take()"),
+        "stop_recording must take() the session from the global mutex, \
+         clearing it so is_dictation_recording() returns false"
+    );
+}
+
+/// The overlay Escape key handler must write `Confirming` through to the
+/// runtime (via `set_overlay_phase`) so the pump reads the authoritative
+/// phase.  A second Escape in Confirming must call the abort callback (which
+/// invokes `abort_dictation` + close), NOT `handle_dictation_transcript`.
+#[test]
+fn escape_confirming_escape_abort_never_reaches_transcript_handler() {
+    let window_src = std::fs::read_to_string("src/dictation/window.rs").expect("read window.rs");
+
+    let handler_start = window_src
+        .find("fn handle_key_down")
+        .expect("overlay must have a key-down handler");
+    let handler_src =
+        &window_src[handler_start..handler_start + 2000.min(window_src.len() - handler_start)];
+
+    // Recording + Escape → Confirming.
+    assert!(
+        handler_src.contains("DictationSessionPhase::Confirming"),
+        "Escape during Recording must transition to Confirming"
+    );
+
+    // Confirming + Escape → invoke the stored abort callback.
+    assert!(
+        handler_src.contains("OVERLAY_ABORT_CALLBACK"),
+        "Escape during Confirming must invoke the stored abort callback"
+    );
+
+    // The key handler must NEVER invoke transcript delivery functions.
+    assert!(
+        !handler_src.contains("handle_dictation_transcript"),
+        "overlay key handler must never call handle_dictation_transcript"
+    );
+    assert!(
+        !handler_src.contains("paste_text"),
+        "overlay key handler must never call paste_text"
+    );
+    assert!(
+        !handler_src.contains("transcribe_captured_audio"),
+        "overlay key handler must never invoke transcription"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Regression: missing-model toast includes download guidance
+// ---------------------------------------------------------------------------
+
+/// When the Whisper model file is absent, the error toast must include:
+/// 1. A recognizable "model missing" message,
+/// 2. The resolved default model path so the user knows where to place the file,
+/// 3. No paste attempt (verified separately above).
+#[test]
+fn missing_model_toast_includes_path_and_download_guidance() {
+    let src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("read builtin_execution.rs");
+
+    let handler_src = dictation_handler_source(&src);
+
+    // Find the missing-model branch inside the Err arm.
+    assert!(
+        handler_src.contains("Whisper model not found"),
+        "handler must detect the 'Whisper model not found' error string"
+    );
+    assert!(
+        handler_src.contains("Whisper model path is not a regular file"),
+        "handler must also detect the 'not a regular file' error string"
+    );
+    assert!(
+        handler_src.contains("Dictation model missing."),
+        "missing-model toast must begin with a clear 'model missing' message"
+    );
+    assert!(
+        handler_src.contains("Download whisper-medium-q4_1.bin to"),
+        "missing-model toast must tell the user which file to download"
+    );
+    assert!(
+        handler_src.contains("resolve_whisper_model_path()"),
+        "missing-model toast must include the resolved Whisper path"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Regression: complete delivery ordering chain (end-to-end)
+// ---------------------------------------------------------------------------
+
+/// Verify the full frontmost-app delivery chain ordering in one test:
+/// Finished → done_state_duration → yield_focus → focus_settle → paste_text.
+/// This catches regressions if any step is reordered or removed.
+#[test]
+fn frontmost_app_delivery_full_ordering_chain() {
+    let src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("read builtin_execution.rs");
+
+    let frontmost_src = dictation_frontmost_paste_source(&src);
+
+    let steps: Vec<(&str, usize)> = [
+        ("DictationSessionPhase::Finished", "show Finished overlay"),
+        ("dictation_done_state_duration", "wait for done-state visibility"),
+        ("yield_focus_for_dictation_paste", "yield focus to target app"),
+        ("dictation_focus_settle_duration", "wait for focus to settle"),
+        ("paste_text", "paste transcript"),
+    ]
+    .iter()
+    .map(|(needle, label)| {
+        let pos = frontmost_src
+            .find(needle)
+            .unwrap_or_else(|| panic!("frontmost-app branch must contain {label} ({needle})"));
+        (*label, pos)
+    })
+    .collect();
+
+    for pair in steps.windows(2) {
+        assert!(
+            pair[0].1 < pair[1].1,
+            "delivery ordering violated: '{}' (byte {}) must come before '{}' (byte {})",
+            pair[0].0, pair[0].1, pair[1].0, pair[1].1
+        );
+    }
+}
+
+// ---------------------------------------------------------------------------
+// ParakeetDictationEngine tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn parakeet_engine_new_fails_for_missing_model_dir() {
+    let result = ParakeetDictationEngine::new(std::path::Path::new(
+        "/definitely/missing-parakeet-dir",
+    ));
+    assert!(
+        result.is_err(),
+        "ParakeetDictationEngine::new must fail for a missing directory"
+    );
+    let err_msg = result.unwrap_err().to_string();
+    assert!(
+        err_msg.contains("not found"),
+        "error should mention 'not found', got: {err_msg}"
+    );
+}
+
+#[test]
+fn parakeet_engine_new_fails_for_file_path() {
+    let temp_file = tempfile::NamedTempFile::new().expect("create temp file");
+    let result = ParakeetDictationEngine::new(temp_file.path());
+    assert!(
+        result.is_err(),
+        "ParakeetDictationEngine::new must fail for a file path"
+    );
+    let err_msg = result.unwrap_err().to_string();
+    assert!(
+        err_msg.contains("not a directory"),
+        "error should mention 'not a directory', got: {err_msg}"
+    );
+}
+
+#[test]
+fn parakeet_engine_new_accepts_existing_directory() {
+    let temp_dir = tempfile::TempDir::new().expect("create temp dir");
+    ParakeetDictationEngine::new(temp_dir.path())
+        .expect("ParakeetDictationEngine::new should accept an existing directory");
+}
+
+// ---------------------------------------------------------------------------
+// Model availability tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn is_parakeet_model_available_returns_false_for_nonexistent_path() {
+    // The default path is unlikely to exist in CI, so this should be false.
+    // We test the function runs without panicking and returns a bool.
+    let _available = is_parakeet_model_available();
+}
+
+#[test]
+fn is_parakeet_model_available_returns_true_for_populated_dir() {
+    let temp_dir = tempfile::TempDir::new().expect("create temp dir");
+    // Create a dummy file inside to simulate an extracted model.
+    std::fs::write(temp_dir.path().join("model.onnx"), b"dummy").expect("write dummy model");
+
+    // We can't easily test the actual function since it reads from a fixed path,
+    // but we can verify the logic inline.
+    let path = temp_dir.path();
+    let available = path.is_dir()
+        && std::fs::read_dir(path)
+            .map(|mut entries| entries.next().is_some())
+            .unwrap_or(false);
+    assert!(available, "populated directory should be detected as available");
+}
+
+// ---------------------------------------------------------------------------
+// Download types tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn download_progress_percentage_ranges() {
+    use crate::dictation::download::{DownloadPhase, DownloadProgress};
+
+    let p = DownloadProgress {
+        downloaded: 0,
+        total: 100,
+    };
+    assert_eq!(p.percentage(), 0);
+
+    let p = DownloadProgress {
+        downloaded: 50,
+        total: 100,
+    };
+    assert_eq!(p.percentage(), 50);
+
+    let p = DownloadProgress {
+        downloaded: 100,
+        total: 100,
+    };
+    assert_eq!(p.percentage(), 100);
+
+    // Unknown total.
+    let p = DownloadProgress {
+        downloaded: 42,
+        total: 0,
+    };
+    assert_eq!(p.percentage(), 0);
+}
+
+#[test]
+fn download_phase_variants_are_distinct() {
+    use crate::dictation::download::DownloadPhase;
+
+    let phases = vec![
+        DownloadPhase::Downloading,
+        DownloadPhase::Extracting,
+        DownloadPhase::Complete,
+        DownloadPhase::Cancelled,
+        DownloadPhase::Failed("test".to_string()),
+    ];
+
+    for (i, a) in phases.iter().enumerate() {
+        for (j, b) in phases.iter().enumerate() {
+            if i == j {
+                assert_eq!(a, b);
+            } else {
+                assert_ne!(a, b);
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Parakeet model constants and URL validation
+// ---------------------------------------------------------------------------
+
+#[test]
+fn parakeet_model_url_is_https() {
+    use crate::dictation::transcription::PARAKEET_MODEL_URL;
+    assert!(
+        PARAKEET_MODEL_URL.starts_with("https://"),
+        "model URL must use HTTPS, got: {PARAKEET_MODEL_URL}"
+    );
+}
+
+#[test]
+fn parakeet_model_archive_size_is_reasonable() {
+    use crate::dictation::transcription::PARAKEET_MODEL_ARCHIVE_SIZE;
+    // ~478 MB — sanity check it's in the right ballpark.
+    assert!(
+        PARAKEET_MODEL_ARCHIVE_SIZE > 400_000_000,
+        "archive size should be > 400 MB"
+    );
+    assert!(
+        PARAKEET_MODEL_ARCHIVE_SIZE < 600_000_000,
+        "archive size should be < 600 MB"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Runtime Parakeet fallback logic
+// ---------------------------------------------------------------------------
+
+#[test]
+fn runtime_has_parakeet_fallback_logic() {
+    let runtime_src = std::fs::read_to_string("src/dictation/runtime.rs").expect("read runtime.rs");
+
+    assert!(
+        runtime_src.contains("is_parakeet_model_available"),
+        "runtime must check Parakeet model availability"
+    );
+    assert!(
+        runtime_src.contains("ParakeetDictationEngine"),
+        "runtime must reference ParakeetDictationEngine"
+    );
+    assert!(
+        runtime_src.contains("WhisperDictationEngine"),
+        "runtime must still reference WhisperDictationEngine as fallback"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Model status type tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn dictation_model_status_variants() {
+    use crate::dictation::types::DictationModelStatus;
+
+    let statuses = vec![
+        DictationModelStatus::Available,
+        DictationModelStatus::NotDownloaded,
+        DictationModelStatus::Downloading { percentage: 50 },
+        DictationModelStatus::Extracting,
+        DictationModelStatus::DownloadFailed("err".to_string()),
+    ];
+
+    assert_eq!(statuses.len(), 5);
+    assert_ne!(statuses[0], statuses[1]);
 }

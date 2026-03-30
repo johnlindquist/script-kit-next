@@ -4,9 +4,12 @@ use anyhow::{Context as _, Result};
 use parking_lot::Mutex;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
+use transcribe_rs::onnx::parakeet::ParakeetModel;
+use transcribe_rs::onnx::Quantization;
 use transcribe_rs::whisper_cpp::{
     WhisperEngine as TranscribeWhisperEngine, WhisperInferenceParams,
 };
+use transcribe_rs::{SpeechModel, TranscribeOptions};
 
 /// Version-agnostic transcription engine trait.
 ///
@@ -30,14 +33,38 @@ pub struct DictationTranscriptionConfig {
 /// Default Whisper model filename (relative to the models directory).
 const DEFAULT_WHISPER_MODEL: &str = "whisper-medium-q4_1.bin";
 
-/// Resolve the default Whisper model path.
+/// Default Parakeet model directory name (relative to the models directory).
+const DEFAULT_PARAKEET_MODEL_DIR: &str = "parakeet-tdt-0.6b-v3-int8";
+
+/// URL for downloading the Parakeet model archive.
+pub const PARAKEET_MODEL_URL: &str = "https://blob.handy.computer/parakeet-v3-int8.tar.gz";
+
+/// Expected size of the Parakeet model archive in bytes.
+pub const PARAKEET_MODEL_ARCHIVE_SIZE: u64 = 478_517_071;
+
+/// Resolve the default Parakeet model directory path.
 ///
 /// Anchors the model path to `get_kit_path()/models/` so it works
-/// regardless of the process working directory.  The returned path is
-/// always absolute (assuming `get_kit_path()` returns an absolute path,
-/// which it does for every documented configuration).
+/// regardless of the process working directory.
 pub fn resolve_default_model_path() -> PathBuf {
+    get_kit_path()
+        .join("models")
+        .join(DEFAULT_PARAKEET_MODEL_DIR)
+}
+
+/// Resolve the legacy Whisper model file path.
+pub fn resolve_whisper_model_path() -> PathBuf {
     get_kit_path().join("models").join(DEFAULT_WHISPER_MODEL)
+}
+
+/// Returns `true` when the default Parakeet model directory exists and
+/// contains at least one file (i.e. extraction completed).
+pub fn is_parakeet_model_available() -> bool {
+    let path = resolve_default_model_path();
+    path.is_dir()
+        && std::fs::read_dir(&path)
+            .map(|mut entries| entries.next().is_some())
+            .unwrap_or(false)
 }
 
 impl Default for DictationTranscriptionConfig {
@@ -240,6 +267,97 @@ impl DictationEngine for WhisperDictationEngine {
                 },
             )
             .context("whisper transcription failed")?;
+
+        Ok(result.text.trim().to_owned())
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Concrete Parakeet engine (ONNX via transcribe-rs)
+// ---------------------------------------------------------------------------
+
+/// Local Parakeet speech-to-text engine backed by ONNX Runtime via
+/// `transcribe-rs`.
+///
+/// The underlying `ParakeetModel` is loaded lazily on the first
+/// `transcribe()` call.  Call `unload()` to free model memory.
+pub struct ParakeetDictationEngine {
+    model_dir: PathBuf,
+    model: Option<ParakeetModel>,
+}
+
+impl std::fmt::Debug for ParakeetDictationEngine {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ParakeetDictationEngine")
+            .field("model_dir", &self.model_dir)
+            .field("model_loaded", &self.model.is_some())
+            .finish()
+    }
+}
+
+impl ParakeetDictationEngine {
+    /// Create a new Parakeet engine handle.
+    ///
+    /// Validates that `model_dir` points to an existing directory but defers
+    /// the expensive model load to the first `transcribe()` call.
+    pub fn new(model_dir: &Path) -> anyhow::Result<Self> {
+        if !model_dir.exists() {
+            anyhow::bail!("Parakeet model not found at {}", model_dir.display());
+        }
+        if !model_dir.is_dir() {
+            anyhow::bail!(
+                "Parakeet model path is not a directory: {}",
+                model_dir.display()
+            );
+        }
+        Ok(Self {
+            model_dir: model_dir.to_path_buf(),
+            model: None,
+        })
+    }
+
+    /// Lazily load the Parakeet ONNX model.
+    fn load_if_needed(&mut self) -> Result<&mut ParakeetModel> {
+        if self.model.is_none() {
+            tracing::info!(
+                category = "DICTATION",
+                model_dir = %self.model_dir.display(),
+                "Loading Parakeet ONNX model (INT8)"
+            );
+            let loaded = ParakeetModel::load(&self.model_dir, &Quantization::Int8)
+                .map_err(|e| anyhow::anyhow!("failed to load Parakeet model: {e}"))?;
+            self.model = Some(loaded);
+        }
+        self.model
+            .as_mut()
+            .context("parakeet model missing after load")
+    }
+
+    /// Unload the model, freeing memory.
+    pub fn unload(&mut self) {
+        self.model = None;
+        tracing::info!(
+            category = "DICTATION",
+            model_dir = %self.model_dir.display(),
+            "Parakeet model unloaded"
+        );
+    }
+}
+
+impl DictationEngine for ParakeetDictationEngine {
+    fn transcribe(&mut self, samples: &[f32], _initial_prompt: Option<&str>) -> Result<String> {
+        let model = self.load_if_needed()?;
+
+        tracing::debug!(
+            category = "DICTATION",
+            samples = samples.len(),
+            "Parakeet transcription requested"
+        );
+
+        let options = TranscribeOptions::default();
+        let result = model
+            .transcribe(samples, &options)
+            .map_err(|e| anyhow::anyhow!("parakeet transcription failed: {e}"))?;
 
         Ok(result.text.trim().to_owned())
     }

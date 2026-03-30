@@ -190,7 +190,7 @@ impl ScriptListApp {
         capture_rx: TabAiDeferredCaptureRx,
         cx: &mut Context<Self>,
     ) {
-        let (entity, _was_cold_start) = match self.ensure_tab_ai_harness_terminal(cx) {
+        let (entity, _was_cold_start) = match self.ensure_tab_ai_harness_terminal(true, cx) {
             Ok(result) => result,
             Err(error) => {
                 tracing::error!(
@@ -293,12 +293,15 @@ impl ScriptListApp {
                     let apply_back_hint = build_tab_ai_apply_back_hint(source_type.as_ref());
 
                     // Persist the apply-back route so ⌘⏎ can execute it later.
+                    // Carry the focused target metadata so apply-back can route
+                    // results without rediscovering UI state after the harness closes.
                     this.tab_ai_harness_apply_back_route = source_type
                         .clone()
                         .zip(apply_back_hint.clone())
                         .map(|(source_type, hint)| crate::ai::TabAiApplyBackRoute {
                             source_type,
                             hint,
+                            focused_target: resolved.context.focused_target.clone(),
                         });
 
                     let context = resolved.context.with_deferred_capture_fields(
@@ -395,7 +398,7 @@ impl ScriptListApp {
             return;
         }
 
-        match self.ensure_tab_ai_harness_terminal(cx) {
+        match self.ensure_tab_ai_harness_terminal(false, cx) {
             Ok((_entity, was_cold_start)) => {
                 tracing::info!(
                     event = "tab_ai_harness_prewarmed",
@@ -415,14 +418,30 @@ impl ScriptListApp {
 
     /// Ensure a harness terminal session exists and is alive.
     /// Returns the entity and whether this was a cold start (newly created).
+    ///
+    /// When `force_fresh` is `true`, any existing alive session is terminated
+    /// first so the caller gets a brand-new PTY.  User-initiated Tab presses
+    /// pass `true`; the prewarm path passes `false` to reuse an existing
+    /// session.
     fn ensure_tab_ai_harness_terminal(
         &mut self,
+        force_fresh: bool,
         cx: &mut Context<Self>,
     ) -> Result<(gpui::Entity<crate::term_prompt::TermPrompt>, bool), String> {
-        // Reuse existing session if alive
-        if let Some(existing) = &self.tab_ai_harness {
-            if existing.entity.read(cx).is_alive() {
-                return Ok((existing.entity.clone(), false));
+        if force_fresh {
+            // Kill the existing session so the user gets a clean slate.
+            if let Some(existing) = self.tab_ai_harness.take() {
+                let _ = existing.entity.update(cx, |term, _cx| {
+                    term.terminate_session().map_err(|e| e.to_string())
+                });
+                tracing::info!(event = "tab_ai_harness_old_session_terminated");
+            }
+        } else {
+            // Reuse existing session if alive (prewarm path)
+            if let Some(existing) = &self.tab_ai_harness {
+                if existing.entity.read(cx).is_alive() {
+                    return Ok((existing.entity.clone(), false));
+                }
             }
         }
 
@@ -1917,13 +1936,57 @@ impl ScriptListApp {
                 return;
             }
             crate::ai::TabAiSourceType::ScriptListItem => {
-                self.toast_manager.push(
-                    crate::components::toast::Toast::error(
-                        "Apply-back for Script List items is not wired yet".to_string(),
-                        &self.theme,
-                    )
-                    .duration_ms(Some(TOAST_ERROR_MS)),
-                );
+                self.close_tab_ai_harness_terminal(cx);
+
+                // Use the focused target label as the prompt for slug derivation.
+                let prompt_label = route
+                    .focused_target
+                    .as_ref()
+                    .map(|t| t.label.clone())
+                    .unwrap_or_else(|| "ai generated script".to_string());
+
+                match crate::ai::script_generation::save_generated_script_from_response(
+                    &prompt_label,
+                    &text,
+                ) {
+                    Ok(script_path) => {
+                        let path_str = script_path.to_string_lossy().to_string();
+                        tracing::info!(
+                            target: "tab_ai",
+                            source_type = "ScriptListItem",
+                            script_path = %path_str,
+                            "tab_ai_apply_back.script_saved"
+                        );
+                        self.toast_manager.push(
+                            crate::components::toast::Toast::success(
+                                format!(
+                                    "Saved and running generated script: {}",
+                                    script_path
+                                        .file_stem()
+                                        .and_then(|s| s.to_str())
+                                        .unwrap_or("script"),
+                                ),
+                                &self.theme,
+                            )
+                            .duration_ms(Some(TOAST_SUCCESS_MS)),
+                        );
+                        self.execute_script_by_path(&path_str, cx);
+                    }
+                    Err(error) => {
+                        tracing::warn!(
+                            target: "tab_ai",
+                            error = %error,
+                            "tab_ai_apply_back.script_save_failed"
+                        );
+                        self.toast_manager.push(
+                            crate::components::toast::Toast::error(
+                                format!("Failed to save generated script: {error}"),
+                                &self.theme,
+                            )
+                            .duration_ms(Some(TOAST_ERROR_MS)),
+                        );
+                    }
+                }
                 cx.notify();
                 return;
             }

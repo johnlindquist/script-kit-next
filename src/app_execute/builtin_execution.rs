@@ -3648,11 +3648,20 @@ impl ScriptListApp {
     /// dictation overlay.  Runs every 50 ms and stops automatically when the
     /// session ends (i.e. `snapshot_overlay_state()` returns `None`).
     fn spawn_dictation_overlay_pump(&mut self, cx: &mut Context<Self>) {
+        let gen = crate::dictation::overlay_generation();
         cx.spawn(async move |_this, cx| {
             loop {
                 cx.background_executor()
                     .timer(std::time::Duration::from_millis(50))
                     .await;
+                // Bail if a newer overlay session has started.
+                if crate::dictation::overlay_generation() != gen {
+                    tracing::debug!(
+                        category = "DICTATION",
+                        "Overlay pump detected generation change, stopping"
+                    );
+                    break;
+                }
                 let Some(state) = crate::dictation::snapshot_overlay_state() else {
                     break;
                 };
@@ -3886,7 +3895,7 @@ impl ScriptListApp {
             }
             Err(error) => {
                 let error_text = error.to_string();
-                let model_path = crate::dictation::resolve_default_model_path();
+                let model_path = crate::dictation::resolve_whisper_model_path();
                 tracing::error!(
                     category = "DICTATION",
                     error = %error_text,
@@ -4028,8 +4037,17 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
         delay: std::time::Duration,
     ) {
+        let gen = crate::dictation::overlay_generation();
         cx.spawn(async move |_this, cx| {
             cx.background_executor().timer(delay).await;
+            // Only close if the overlay hasn't been replaced by a newer session.
+            if crate::dictation::overlay_generation() != gen {
+                tracing::debug!(
+                    category = "DICTATION",
+                    "Scheduled overlay close skipped — generation changed"
+                );
+                return;
+            }
             cx.update(|cx| {
                 let _ = crate::dictation::close_dictation_overlay(cx);
             });

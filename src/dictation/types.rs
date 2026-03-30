@@ -103,3 +103,20 @@ pub struct DictationSessionResult {
     pub destination: DictationDestination,
     pub audio_duration: Duration,
 }
+
+// --- Model availability ---
+
+/// Whether the dictation engine's model is ready to use.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DictationModelStatus {
+    /// Model files are present and ready.
+    Available,
+    /// Model is not downloaded yet.
+    NotDownloaded,
+    /// Model is currently being downloaded.
+    Downloading { percentage: u8 },
+    /// Model is being extracted from the archive.
+    Extracting,
+    /// Download or extraction failed.
+    DownloadFailed(String),
+}

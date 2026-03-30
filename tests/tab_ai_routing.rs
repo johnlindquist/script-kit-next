@@ -2216,3 +2216,111 @@ fn tab_ai_apply_back_hint_strip_visible_in_quick_terminal() {
         "QuickTerminalView hint strip must show both Apply and Close actions"
     );
 }
+
+// =========================================================================
+// ScriptListItem apply-back contract
+// =========================================================================
+
+#[test]
+fn script_list_item_apply_back_no_longer_shows_stub_toast() {
+    // The ScriptListItem branch must NOT contain the old "not wired yet" stub.
+    let apply_fn_start = TAB_AI_MODE_SOURCE
+        .find("fn apply_tab_ai_result_from_clipboard(")
+        .expect("apply_tab_ai_result_from_clipboard must exist");
+    let apply_fn_body = &TAB_AI_MODE_SOURCE[apply_fn_start..];
+    let next_impl = apply_fn_body[1..]
+        .find("\nimpl ")
+        .unwrap_or(apply_fn_body.len());
+    let apply_fn_body = &apply_fn_body[..next_impl];
+
+    assert!(
+        !apply_fn_body.contains("not wired yet"),
+        "ScriptListItem apply-back must no longer show the placeholder toast"
+    );
+}
+
+#[test]
+fn script_list_item_apply_back_saves_generated_script() {
+    // The ScriptListItem branch must save a generated script via the existing
+    // save_generated_script_from_response pipeline.
+    let apply_fn_start = TAB_AI_MODE_SOURCE
+        .find("fn apply_tab_ai_result_from_clipboard(")
+        .expect("apply_tab_ai_result_from_clipboard must exist");
+    let apply_fn_body = &TAB_AI_MODE_SOURCE[apply_fn_start..];
+
+    // Find the ScriptListItem match arm.
+    let arm_start = apply_fn_body
+        .find("ScriptListItem =>")
+        .expect("ScriptListItem match arm must exist in apply-back");
+    let arm_body = &apply_fn_body[arm_start..];
+
+    assert!(
+        arm_body.contains("save_generated_script_from_response"),
+        "ScriptListItem apply-back must route through save_generated_script_from_response"
+    );
+}
+
+#[test]
+fn script_list_item_apply_back_executes_saved_script() {
+    // After saving the script, the ScriptListItem branch must execute it.
+    let apply_fn_start = TAB_AI_MODE_SOURCE
+        .find("fn apply_tab_ai_result_from_clipboard(")
+        .expect("apply_tab_ai_result_from_clipboard must exist");
+    let apply_fn_body = &TAB_AI_MODE_SOURCE[apply_fn_start..];
+
+    let arm_start = apply_fn_body
+        .find("ScriptListItem =>")
+        .expect("ScriptListItem match arm must exist");
+    let arm_body = &apply_fn_body[arm_start..];
+
+    assert!(
+        arm_body.contains("execute_script_by_path"),
+        "ScriptListItem apply-back must execute the saved script"
+    );
+}
+
+#[test]
+fn script_list_item_apply_back_closes_harness_first() {
+    // The harness must be closed before saving/executing the script.
+    let apply_fn_start = TAB_AI_MODE_SOURCE
+        .find("fn apply_tab_ai_result_from_clipboard(")
+        .expect("apply_tab_ai_result_from_clipboard must exist");
+    let apply_fn_body = &TAB_AI_MODE_SOURCE[apply_fn_start..];
+
+    let arm_start = apply_fn_body
+        .find("ScriptListItem =>")
+        .expect("ScriptListItem match arm must exist");
+    let arm_body = &apply_fn_body[arm_start..];
+
+    let close_pos = arm_body
+        .find("close_tab_ai_harness_terminal")
+        .expect("ScriptListItem apply-back must close the harness");
+    let save_pos = arm_body
+        .find("save_generated_script_from_response")
+        .expect("ScriptListItem apply-back must save a script");
+
+    assert!(
+        close_pos < save_pos,
+        "Harness must close before saving the generated script"
+    );
+}
+
+#[test]
+fn script_list_item_apply_back_uses_focused_target_label() {
+    // The focused target label should be used as the prompt for slug derivation,
+    // not a hardcoded string.
+    let apply_fn_start = TAB_AI_MODE_SOURCE
+        .find("fn apply_tab_ai_result_from_clipboard(")
+        .expect("apply_tab_ai_result_from_clipboard must exist");
+    let apply_fn_body = &TAB_AI_MODE_SOURCE[apply_fn_start..];
+
+    let arm_start = apply_fn_body
+        .find("ScriptListItem =>")
+        .expect("ScriptListItem match arm must exist");
+    let arm_body = &apply_fn_body[arm_start..];
+
+    assert!(
+        arm_body.contains("focused_target") && arm_body.contains("label"),
+        "ScriptListItem apply-back must use the focused target's label for the prompt"
+    );
+}

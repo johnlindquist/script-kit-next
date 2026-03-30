@@ -90,9 +90,35 @@ pub(crate) fn has_sound(bars: &[f32; WAVEFORM_BAR_COUNT]) -> bool {
     bars.iter().any(|&bar| bar > SOUND_THRESHOLD)
 }
 
-/// Staggered opacities for the 3-dot transcribing animation.
-pub(crate) fn transcribing_dot_opacities() -> [f32; TRANSCRIBING_DOT_COUNT] {
+/// Pulse cycle duration in seconds (matches vercel-voice 1.4s).
+pub(crate) const TRANSCRIBING_PULSE_PERIOD_SECS: f64 = 1.4;
+/// Stagger between consecutive dots in seconds (matches vercel-voice 0.2s).
+pub(crate) const TRANSCRIBING_PULSE_STAGGER_SECS: f64 = 0.2;
+/// Minimum dot opacity during pulse.
+const PULSE_OPACITY_MIN: f32 = 0.3;
+/// Maximum dot opacity during pulse.
+const PULSE_OPACITY_MAX: f32 = 1.0;
+
+/// Static opacities for reduced-motion fallback (no animation).
+pub(crate) fn transcribing_dot_opacities_static() -> [f32; TRANSCRIBING_DOT_COUNT] {
     [OPACITY_SELECTED, OPACITY_ACTIVE, OPACITY_SELECTED]
+}
+
+/// Compute time-based staggered pulse opacities for the 3-dot transcribing animation.
+///
+/// Each dot follows a sine-wave pulse with a per-dot phase offset:
+/// `opacity = min + (max - min) * (0.5 + 0.5 * sin(2π * (t - i * stagger) / period))`
+///
+/// Matches vercel-voice: 1.4s cycle, 0.2s stagger between dots.
+pub(crate) fn transcribing_dot_opacities_at(elapsed_secs: f64) -> [f32; TRANSCRIBING_DOT_COUNT] {
+    let mut opacities = [0.0_f32; TRANSCRIBING_DOT_COUNT];
+    for (i, opacity) in opacities.iter_mut().enumerate() {
+        let phase = elapsed_secs - (i as f64 * TRANSCRIBING_PULSE_STAGGER_SECS);
+        let t = std::f64::consts::TAU * phase / TRANSCRIBING_PULSE_PERIOD_SECS;
+        let wave = 0.5 + 0.5 * t.sin();
+        *opacity = PULSE_OPACITY_MIN + (PULSE_OPACITY_MAX - PULSE_OPACITY_MIN) * wave as f32;
+    }
+    opacities
 }
 
 /// Snapshot of the dictation overlay's visual state.
@@ -126,7 +152,7 @@ impl Default for DictationOverlayState {
 
 use gpui::{
     div, prelude::*, px, rgb, App, Context, FocusHandle, Focusable, IntoElement, KeyDownEvent,
-    ParentElement, Render, Styled, Window, WindowBounds, WindowOptions,
+    ParentElement, Render, Styled, Task, Window, WindowBounds, WindowOptions,
 };
 
 use crate::list_item::FONT_MONO;
@@ -135,7 +161,17 @@ use crate::theme::opacity::{OPACITY_ACTIVE, OPACITY_SELECTED, OPACITY_SUBTLE, OP
 use crate::ui_foundation::HexColorExt;
 
 use parking_lot::Mutex;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::OnceLock;
+use std::time::Instant;
+
+/// Monotonic generation counter for overlay sessions.
+///
+/// Incremented each time a new overlay window is opened. Async tasks
+/// (pump, scheduled close) compare their captured generation against the
+/// current value and bail when stale, preventing a delayed close from
+/// killing a newly opened overlay.
+static OVERLAY_GENERATION: AtomicU64 = AtomicU64::new(0);
 
 /// Global handle so we can reach the overlay from any callsite.
 static DICTATION_OVERLAY_WINDOW: OnceLock<Mutex<Option<gpui::WindowHandle<DictationOverlay>>>> =
@@ -153,10 +189,19 @@ pub fn set_overlay_abort_callback(callback: impl Fn(&mut App) + Send + Sync + 's
     *OVERLAY_ABORT_CALLBACK.lock() = Some(Box::new(callback));
 }
 
+/// Interval between animation ticks for the transcribing dot pulse (ms).
+const TRANSCRIBING_TICK_MS: u64 = 50;
+
 /// The GPUI entity that renders the compact dictation pill.
 pub struct DictationOverlay {
     state: DictationOverlayState,
     focus_handle: FocusHandle,
+    /// When the transcribing animation started (for pulse phase computation).
+    transcribing_started_at: Option<Instant>,
+    /// Whether the user has "Reduce motion" enabled in system accessibility.
+    reduced_motion: bool,
+    /// Keeps the transcribing tick loop alive; dropped when phase changes.
+    _animation_task: Option<Task<()>>,
 }
 
 impl DictationOverlay {
@@ -164,12 +209,49 @@ impl DictationOverlay {
         Self {
             state: DictationOverlayState::default(),
             focus_handle: cx.focus_handle(),
+            transcribing_started_at: None,
+            reduced_motion: crate::platform::prefers_reduced_motion(),
+            _animation_task: None,
         }
     }
 
     /// Replace the visual state snapshot (called from the dictation runtime).
     pub fn set_state(&mut self, state: DictationOverlayState, cx: &mut Context<Self>) {
+        let entering_transcribing = state.phase == DictationSessionPhase::Transcribing
+            && self.state.phase != DictationSessionPhase::Transcribing;
+        let leaving_transcribing = state.phase != DictationSessionPhase::Transcribing
+            && self.state.phase == DictationSessionPhase::Transcribing;
+
         self.state = state;
+
+        if entering_transcribing && !self.reduced_motion {
+            self.transcribing_started_at = Some(Instant::now());
+            // Spawn a tick loop that re-renders every TRANSCRIBING_TICK_MS so
+            // the sine-wave pulse progresses smoothly.
+            self._animation_task = Some(cx.spawn(async move |this, cx| {
+                loop {
+                    cx.background_executor()
+                        .timer(Duration::from_millis(TRANSCRIBING_TICK_MS))
+                        .await;
+                    let should_stop = this
+                        .update(cx, |view, cx| {
+                            if view.state.phase != DictationSessionPhase::Transcribing {
+                                return true;
+                            }
+                            cx.notify();
+                            false
+                        })
+                        .unwrap_or(true);
+                    if should_stop {
+                        break;
+                    }
+                }
+            }));
+        } else if leaving_transcribing {
+            self.transcribing_started_at = None;
+            self._animation_task = None;
+        }
+
         cx.notify();
     }
 
@@ -317,13 +399,20 @@ impl Render for DictationOverlay {
             }
             DictationSessionPhase::Transcribing => {
                 // 3 green dots matching vercel-voice .transcribing-dots
+                let dot_opacities = if self.reduced_motion {
+                    transcribing_dot_opacities_static()
+                } else if let Some(started) = self.transcribing_started_at {
+                    transcribing_dot_opacities_at(started.elapsed().as_secs_f64())
+                } else {
+                    transcribing_dot_opacities_static()
+                };
                 div()
                     .flex()
                     .flex_row()
                     .items_center()
                     .justify_center()
                     .w_full()
-                    .child(render_transcribing_dots())
+                    .child(render_transcribing_dots(&dot_opacities))
             }
             DictationSessionPhase::Finished => div()
                 .flex()
@@ -360,7 +449,9 @@ impl Render for DictationOverlay {
             _ => div(),
         };
 
-        // Compact pill: OVERLAY_HEIGHT_PX tall, fully-rounded, glassmorphism.
+        // Root container fills the entire popup window edge-to-edge.
+        // The pill surface is the root itself — no wrapper needed because
+        // the window bounds already match the pill dimensions exactly.
         div()
             .track_focus(&self.focus_handle)
             .on_key_down(cx.listener(Self::handle_key_down))
@@ -368,7 +459,8 @@ impl Render for DictationOverlay {
             .flex_row()
             .items_center()
             .justify_center()
-            .h(px(OVERLAY_HEIGHT_PX))
+            .w_full()
+            .h_full()
             .px(px(OVERLAY_HORIZONTAL_PADDING_PX))
             .gap(px(OVERLAY_CONTENT_GAP_PX))
             .bg(surface_bg)
@@ -441,8 +533,10 @@ fn render_waveform_bars(bars: &[f32; WAVEFORM_BAR_COUNT], active: bool) -> impl 
 
 /// Render dots for the transcribing state.
 ///
-/// Uses theme success color at staggered opacities to suggest pulsing motion.
-fn render_transcribing_dots() -> impl IntoElement {
+/// Uses theme success color at the given per-dot opacities.
+/// When animated, opacities come from `transcribing_dot_opacities_at()`;
+/// under reduced-motion, from `transcribing_dot_opacities_static()`.
+fn render_transcribing_dots(opacities: &[f32; TRANSCRIBING_DOT_COUNT]) -> impl IntoElement {
     let theme = get_cached_theme();
 
     let mut container = div()
@@ -452,7 +546,7 @@ fn render_transcribing_dots() -> impl IntoElement {
         .gap(px(TRANSCRIBING_DOT_GAP_PX))
         .h(px(WAVEFORM_BAR_MAX_HEIGHT_PX));
 
-    for &opacity in &transcribing_dot_opacities() {
+    for &opacity in opacities {
         let dot_color = theme.colors.ui.success.with_opacity(opacity);
         container = container.child(
             div()
@@ -472,19 +566,20 @@ fn render_transcribing_dots() -> impl IntoElement {
 
 /// Calculate bottom-center bounds for the overlay on the active display.
 ///
-/// Resolves the active display by finding which screen contains the current
-/// mouse cursor position (via `get_global_mouse_position()` + `display_for_point()`).
+/// Resolves the active display via `get_active_display()`, which returns the
+/// screen containing the currently focused window (key window). This ensures the
+/// overlay appears on the display the user is actively working on, not wherever
+/// the mouse cursor happens to be parked.
 /// Falls back to the first visible display, then to a hardcoded 1920×1080 default.
 /// Positions the pill centered horizontally and `OVERLAY_BOTTOM_OFFSET_PX` above
 /// the bottom edge of the chosen display's visible area.
 fn calculate_overlay_bottom_center_bounds() -> gpui::Bounds<gpui::Pixels> {
-    let displays = crate::platform::get_macos_visible_displays();
-
-    // Resolve the active display: prefer the one under the mouse cursor,
-    // fall back to the first display (primary).
-    let active_display = crate::platform::get_global_mouse_position()
-        .and_then(|mouse_pt| crate::platform::display_for_point(mouse_pt, &displays))
-        .or_else(|| displays.first().cloned());
+    // Prefer the display with the key window (active/focused display).
+    // Fall back to the first visible display (primary) if unavailable.
+    let active_display = crate::platform::get_active_display().or_else(|| {
+        let displays = crate::platform::get_macos_visible_displays();
+        displays.into_iter().next()
+    });
 
     let (vis_x, vis_y, vis_w, vis_h) = if let Some(display) = active_display {
         let v = &display.visible_area;
@@ -531,14 +626,31 @@ pub fn open_dictation_overlay(
 ) -> anyhow::Result<gpui::WindowHandle<DictationOverlay>> {
     use anyhow::Context as _;
 
-    // If already open, return the existing handle.
+    // If already open AND the native window is still alive, return the
+    // existing handle.  If the handle is stale (window was closed natively),
+    // clear the slot and fall through to create a fresh one.
     let slot = DICTATION_OVERLAY_WINDOW.get_or_init(|| Mutex::new(None));
     {
-        let guard = slot.lock();
+        let mut guard = slot.lock();
         if let Some(handle) = *guard {
-            return Ok(handle);
+            let alive = handle
+                .update(cx, |_view, _window, _cx| {})
+                .is_ok();
+            if alive {
+                return Ok(handle);
+            }
+            // Stale handle — clear and recreate.
+            tracing::warn!(
+                category = "DICTATION",
+                "Overlay handle was stale, clearing slot"
+            );
+            *guard = None;
         }
     }
+
+    // Bump generation so any in-flight pump/close from a prior session
+    // detects staleness and stops.
+    OVERLAY_GENERATION.fetch_add(1, Ordering::SeqCst);
 
     let theme = get_cached_theme();
     let window_background = if theme.is_vibrancy_enabled() {
@@ -551,11 +663,14 @@ pub fn open_dictation_overlay(
     // 15px above the bottom of the active display's visible area.
     let bounds = calculate_overlay_bottom_center_bounds();
 
+    // focus: false — the overlay must not activate the app or surface the
+    // main window.  We bring the overlay to front via orderFrontRegardless
+    // and makeKeyWindow below.
     let window_options = WindowOptions {
         window_bounds: Some(WindowBounds::Windowed(bounds)),
         titlebar: None,
         window_background,
-        focus: true,
+        focus: false,
         show: true,
         kind: gpui::WindowKind::PopUp,
         ..Default::default()
@@ -591,7 +706,29 @@ pub fn open_dictation_overlay(
         });
     }
 
-    // Focus the overlay so key events (Escape) are delivered.
+    // Bring overlay to front without activating the app, then make it key
+    // so Escape key events are delivered.
+    #[cfg(target_os = "macos")]
+    {
+        let _ = handle.update(cx, |_view, window, _cx| {
+            if let Ok(wh) = raw_window_handle::HasWindowHandle::window_handle(window) {
+                if let raw_window_handle::RawWindowHandle::AppKit(appkit) = wh.as_raw() {
+                    use objc::{msg_send, sel, sel_impl};
+                    let ns_view = appkit.ns_view.as_ptr() as cocoa::base::id;
+                    // SAFETY: ns_view is a valid NSView from a just-created GPUI window.
+                    // orderFrontRegardless brings the window to front without activating the app.
+                    // makeKeyWindow delivers key events without app activation.
+                    unsafe {
+                        let ns_window: cocoa::base::id = msg_send![ns_view, window];
+                        let () = msg_send![ns_window, orderFrontRegardless];
+                        let () = msg_send![ns_window, makeKeyWindow];
+                    }
+                }
+            }
+        });
+    }
+
+    // Focus the GPUI focus handle so key events (Escape) are delivered.
     let _ = handle.update(cx, |view, window, cx| {
         view.focus_handle.focus(window, cx);
     });
@@ -635,22 +772,38 @@ pub fn close_dictation_overlay(cx: &mut App) -> anyhow::Result<()> {
     };
 
     if let Some(handle) = handle {
-        handle
-            .update(cx, |_view, window, _cx| {
-                window.remove_window();
-            })
-            .map_err(|error| {
-                anyhow::anyhow!("failed to close dictation overlay window: {error}")
-            })?;
-        tracing::info!(category = "DICTATION", "Dictation overlay window closed");
+        // Attempt to remove — ignore errors from already-dead windows.
+        let result = handle.update(cx, |_view, window, _cx| {
+            window.remove_window();
+        });
+        if result.is_ok() {
+            tracing::info!(category = "DICTATION", "Dictation overlay window closed");
+        } else {
+            tracing::warn!(
+                category = "DICTATION",
+                "Overlay window already gone when close was called"
+            );
+        }
     }
 
     Ok(())
 }
 
 /// Check whether the dictation overlay window is currently open.
+///
+/// Note: this only checks whether the slot holds a handle.  For true
+/// liveness validation (which requires `&mut App`), use
+/// `open_dictation_overlay` which probes the handle before reuse.
 pub fn is_dictation_overlay_open() -> bool {
     let slot = DICTATION_OVERLAY_WINDOW.get_or_init(|| Mutex::new(None));
     let guard = slot.lock();
     guard.is_some()
+}
+
+/// Return the current overlay generation counter.
+///
+/// Async tasks capture this value at spawn time and compare on each tick.
+/// When the live value differs, the task is stale and must stop.
+pub fn overlay_generation() -> u64 {
+    OVERLAY_GENERATION.load(Ordering::SeqCst)
 }

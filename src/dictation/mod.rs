@@ -3,6 +3,7 @@
 
 pub mod capture;
 mod device;
+pub mod download;
 mod runtime;
 mod transcription;
 mod types;
@@ -20,18 +21,22 @@ pub use runtime::{
     snapshot_overlay_state, toggle_dictation, transcribe_captured_audio,
 };
 pub use transcription::{
-    build_session_result, captured_duration, merge_captured_chunks, resolve_default_model_path,
-    DictationEngine, DictationTranscriber, DictationTranscriptionConfig, WhisperDictationEngine,
+    build_session_result, captured_duration, is_parakeet_model_available, merge_captured_chunks,
+    resolve_default_model_path, resolve_whisper_model_path, DictationEngine, DictationTranscriber,
+    DictationTranscriptionConfig, ParakeetDictationEngine, WhisperDictationEngine,
+    PARAKEET_MODEL_ARCHIVE_SIZE, PARAKEET_MODEL_URL,
 };
 pub use types::{
     CapturedAudioChunk, CompletedDictationCapture, DictationCaptureConfig, DictationCaptureEvent,
     DictationDestination, DictationDeviceId, DictationDeviceInfo, DictationLevel,
-    DictationSessionPhase, DictationSessionResult, DictationToggleOutcome, RawAudioChunk,
+    DictationModelStatus, DictationSessionPhase, DictationSessionResult, DictationToggleOutcome,
+    RawAudioChunk,
 };
 pub use visualizer::{bars_for_level, compute_level};
 pub use window::{
     close_dictation_overlay, is_dictation_overlay_open, open_dictation_overlay,
-    set_overlay_abort_callback, update_dictation_overlay, DictationOverlay, DictationOverlayState,
+    overlay_generation, set_overlay_abort_callback, update_dictation_overlay, DictationOverlay,
+    DictationOverlayState,
 };
 
 #[cfg(test)]

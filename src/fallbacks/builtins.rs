@@ -783,6 +783,35 @@ mod tests {
     }
 
     #[test]
+    fn send_to_ai_is_priority_zero_harness_fallback() {
+        let fallbacks = get_builtin_fallbacks();
+        let first = fallbacks
+            .iter()
+            .min_by_key(|fallback| fallback.priority)
+            .expect("fallback list should not be empty");
+        assert_eq!(first.id, SEND_TO_AI_FALLBACK_ID);
+        assert_eq!(first.name, SEND_TO_AI_FALLBACK_LABEL);
+        assert!(matches!(&first.action, FallbackAction::SendToAiHarness));
+        assert_eq!(first.priority, 0);
+    }
+
+    #[test]
+    fn send_to_ai_execute_trims_query_and_returns_harness_result() {
+        let fallback = get_builtin_fallbacks()
+            .into_iter()
+            .find(|fallback| fallback.id == SEND_TO_AI_FALLBACK_ID)
+            .expect("send-to-ai fallback should exist");
+
+        let result = fallback
+            .execute("  convert this CSV to JSON  ")
+            .expect("send-to-ai fallback should execute");
+        assert!(matches!(
+            result,
+            FallbackResult::SendToAiHarness { query } if query == "convert this CSV to JSON"
+        ));
+    }
+
+    #[test]
     fn test_search_files_priority() {
         let fallbacks = get_applicable_fallbacks("test");
 
