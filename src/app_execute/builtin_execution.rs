@@ -2396,8 +2396,11 @@ impl ScriptListApp {
                         Self::builtin_success(dctx, "choose_theme")
                     }
                     SettingsCommandType::SelectMicrophone => {
-                        let devices = match crate::dictation::list_input_devices() {
-                            Ok(devices) => devices,
+                        let prefs = crate::config::load_user_preferences();
+                        let menu_items = match crate::dictation::list_input_device_menu_items(
+                            prefs.dictation.selected_device_id.as_deref(),
+                        ) {
+                            Ok(items) => items,
                             Err(error) => {
                                 tracing::error!(
                                     category = "DICTATION",
@@ -2418,58 +2421,36 @@ impl ScriptListApp {
                             }
                         };
 
-                        let prefs = crate::config::load_user_preferences();
-                        let current_id = prefs.dictation.selected_device_id;
-
-                        // Check whether the saved device is still physically present.
-                        let saved_device_available = current_id
-                            .as_deref()
-                            .map(|id| devices.iter().any(|device| device.id.0 == id))
-                            .unwrap_or(false);
-
-                        let mut choices: Vec<Choice> = Vec::with_capacity(devices.len() + 1);
-
-                        // "System Default" entry — clears the preference.
-                        // Falls back to current when no saved pref or saved device is missing.
-                        let default_selected =
-                            current_id.is_none() || !saved_device_available;
-                        choices.push(Choice {
-                            name: if default_selected {
-                                "System Default (current)".to_string()
-                            } else {
-                                "System Default".to_string()
-                            },
-                            value: BUILTIN_MIC_DEFAULT_VALUE.to_string(),
-                            description: Some(
-                                "Use the system's default input device".to_string(),
-                            ),
-                            key: None,
-                            semantic_id: None,
-                        });
-
                         let mut start_index: usize = 0;
-                        for device in &devices {
-                            let is_current = saved_device_available
-                                && current_id.as_deref()
-                                    == Some(device.id.0.as_str());
-                            let suffix = if is_current {
-                                " (current)"
-                            } else if device.is_default {
-                                " (system default)"
-                            } else {
-                                ""
-                            };
-                            if is_current {
-                                start_index = choices.len();
-                            }
-                            choices.push(Choice {
-                                name: format!("{}{}", device.name, suffix),
-                                value: device.id.0.clone(),
-                                description: None,
-                                key: None,
-                                semantic_id: None,
-                            });
-                        }
+                        let choices: Vec<Choice> = menu_items
+                            .iter()
+                            .enumerate()
+                            .map(|(idx, item)| {
+                                let value = match &item.action {
+                                    crate::dictation::DictationDeviceSelectionAction::UseSystemDefault => {
+                                        BUILTIN_MIC_DEFAULT_VALUE.to_string()
+                                    }
+                                    crate::dictation::DictationDeviceSelectionAction::UseDevice(id) => {
+                                        id.0.clone()
+                                    }
+                                };
+                                let name = if item.is_selected {
+                                    if start_index == 0 && idx > 0 {
+                                        start_index = idx;
+                                    }
+                                    format!("{} (current)", item.title)
+                                } else {
+                                    item.title.clone()
+                                };
+                                Choice {
+                                    name,
+                                    value,
+                                    description: Some(item.subtitle.clone()),
+                                    key: None,
+                                    semantic_id: None,
+                                }
+                            })
+                            .collect();
 
                         self.opened_from_main_menu = true;
                         self.arg_selected_index = start_index;

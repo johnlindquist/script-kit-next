@@ -372,27 +372,32 @@ impl ScriptListApp {
 
     /// Persist the microphone selection and return to the script list.
     fn handle_builtin_mic_selection(&mut self, value: &str, cx: &mut Context<Self>) {
-        let device_id = if value == BUILTIN_MIC_DEFAULT_VALUE {
-            None
+        let action = if value == BUILTIN_MIC_DEFAULT_VALUE {
+            crate::dictation::DictationDeviceSelectionAction::UseSystemDefault
         } else {
-            Some(value)
+            crate::dictation::DictationDeviceSelectionAction::UseDevice(
+                crate::dictation::DictationDeviceId(value.to_string()),
+            )
         };
 
-        match crate::dictation::save_dictation_device_id(device_id) {
+        match crate::dictation::apply_device_selection(&action) {
             Ok(()) => {
-                let label = if device_id.is_some() {
-                    // Find the device name from the choices for a nicer HUD message.
-                    if let AppView::ArgPrompt { ref choices, .. } = self.current_view {
-                        choices
-                            .iter()
-                            .find(|c| c.value == value)
-                            .map(|c| c.name.trim_end_matches(" (current)").to_string())
-                            .unwrap_or_else(|| "Selected".to_string())
-                    } else {
-                        "Selected".to_string()
+                let label = match &action {
+                    crate::dictation::DictationDeviceSelectionAction::UseDevice(_) => {
+                        // Find the device name from the choices for a nicer HUD message.
+                        if let AppView::ArgPrompt { ref choices, .. } = self.current_view {
+                            choices
+                                .iter()
+                                .find(|c| c.value == value)
+                                .map(|c| c.name.trim_end_matches(" (current)").to_string())
+                                .unwrap_or_else(|| "Selected".to_string())
+                        } else {
+                            "Selected".to_string()
+                        }
                     }
-                } else {
-                    "System Default".to_string()
+                    crate::dictation::DictationDeviceSelectionAction::UseSystemDefault => {
+                        "System Default".to_string()
+                    }
                 };
                 self.show_hud(
                     format!("Microphone: {label}"),

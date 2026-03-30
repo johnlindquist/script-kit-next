@@ -648,8 +648,8 @@ fn runtime_resolves_mic_preference_from_settings() {
         "runtime must check dictation.selected_device_id"
     );
     assert!(
-        runtime_src.contains("default_input_device"),
-        "runtime must fall back to default_input_device"
+        runtime_src.contains("resolve_selected_input_device"),
+        "runtime must delegate selection to resolve_selected_input_device"
     );
 }
 
@@ -856,8 +856,8 @@ fn builtin_microphone_selection_command_is_wired() {
         "builtin settings command must expose SelectMicrophone"
     );
     assert!(
-        builtin_src.contains("crate::dictation::list_input_devices()"),
-        "SelectMicrophone must enumerate available input devices"
+        builtin_src.contains("crate::dictation::list_input_device_menu_items("),
+        "SelectMicrophone must load rows from the shared menu-item helper"
     );
     assert!(
         builtin_src.contains("BUILTIN_MIC_SELECT_PROMPT_ID"),
@@ -892,12 +892,8 @@ fn builtin_microphone_submit_handler_persists_or_clears_preference() {
         "submit handling must accept the synthetic system-default value"
     );
     assert!(
-        helpers_src.contains("let device_id = if value == BUILTIN_MIC_DEFAULT_VALUE"),
-        "submit handling must clear the stored preference when System Default is chosen"
-    );
-    assert!(
-        helpers_src.contains("crate::dictation::save_dictation_device_id(device_id)"),
-        "submit handling must persist the chosen microphone device"
+        helpers_src.contains("crate::dictation::apply_device_selection(&action)"),
+        "submit handling must persist choices through the shared apply_device_selection helper"
     );
     assert!(
         config_src.contains("pub selected_device_id: Option<String>"),
@@ -906,21 +902,13 @@ fn builtin_microphone_submit_handler_persists_or_clears_preference() {
 }
 
 #[test]
-fn builtin_microphone_prompt_labels_current_and_default_choices() {
+fn builtin_microphone_prompt_labels_current_and_preselects() {
     let builtin_src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
         .expect("read builtin_execution.rs");
 
     assert!(
-        builtin_src.contains("\"System Default (current)\""),
-        "prompt must mark the default entry when no saved mic is set"
-    );
-    assert!(
-        builtin_src.contains("\" (current)\""),
-        "prompt must label the saved microphone as current"
-    );
-    assert!(
-        builtin_src.contains("\" (system default)\""),
-        "prompt must label whichever enumerated mic is the OS default"
+        builtin_src.contains("format!(\"{} (current)\", item.title)"),
+        "prompt must label the selected microphone as current"
     );
     assert!(
         builtin_src.contains("self.arg_selected_index = start_index;"),
@@ -929,24 +917,17 @@ fn builtin_microphone_prompt_labels_current_and_default_choices() {
 }
 
 #[test]
-fn builtin_microphone_prompt_treats_missing_saved_device_as_system_default_current() {
+fn builtin_microphone_prompt_delegates_to_shared_menu_items() {
     let builtin_src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
         .expect("read builtin_execution.rs");
 
     assert!(
-        builtin_src.contains("let saved_device_available = current_id"),
-        "SelectMicrophone must detect whether the saved microphone still exists"
+        builtin_src.contains("crate::dictation::list_input_device_menu_items("),
+        "SelectMicrophone must delegate to the shared menu-item builder"
     );
     assert!(
-        builtin_src
-            .contains("let default_selected =\n                            current_id.is_none() || !saved_device_available"),
-        "missing saved microphones must fall back to System Default as current"
-    );
-    assert!(
-        builtin_src.contains(
-            "saved_device_available\n                                && current_id.as_deref()"
-        ),
-        "only an available saved device should be labeled as current"
+        builtin_src.contains("item.is_selected"),
+        "SelectMicrophone must use the shared is_selected flag for stale-device fallback"
     );
 }
 
@@ -1233,16 +1214,11 @@ fn runtime_clears_stale_mic_preference_on_missing_device() {
         "runtime must warn when clearing stale preference fails"
     );
 
-    // The fallback must still resolve to the system default after clearing.
-    let clear_pos = runtime_src
-        .find("save_dictation_device_id(None)")
-        .expect("must call save_dictation_device_id(None)");
-    let fallback_pos = runtime_src[clear_pos..]
-        .find("default_input_device()")
-        .expect("must fall back to default_input_device after clearing");
+    // The runtime must delegate to resolve_selected_input_device, which
+    // handles the system-default fallback internally.
     assert!(
-        fallback_pos > 0,
-        "default_input_device must be called after clearing stale preference (offset {fallback_pos})"
+        runtime_src.contains("resolve_selected_input_device"),
+        "resolve_preferred_device must delegate to resolve_selected_input_device for fallback"
     );
 }
 
@@ -1803,5 +1779,145 @@ fn delivery_focus_yield_failure_surfaces_and_returns_before_paste() {
     assert!(
         return_pos < paste_pos,
         "pre-paste failure path must return before paste_text"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Device selection helpers
+// ---------------------------------------------------------------------------
+
+use crate::dictation::device::{
+    build_device_menu_items, resolve_selected_input_device, DictationDeviceMenuItem,
+    DictationDeviceSelectionAction,
+};
+use crate::dictation::types::{DictationDeviceId, DictationDeviceInfo};
+
+fn device(id: &str, name: &str, is_default: bool) -> DictationDeviceInfo {
+    DictationDeviceInfo {
+        id: DictationDeviceId(id.to_string()),
+        name: name.to_string(),
+        is_default,
+    }
+}
+
+#[test]
+fn resolve_selected_input_device_prefers_saved_device() {
+    let devices = vec![
+        device("builtin", "MacBook Pro Microphone", true),
+        device("usb", "USB Microphone", false),
+    ];
+    let selected = resolve_selected_input_device(&devices, Some("usb")).unwrap();
+    assert_eq!(selected.id.0, "usb");
+    assert_eq!(selected.name, "USB Microphone");
+}
+
+#[test]
+fn resolve_selected_input_device_falls_back_to_default_for_stale_saved_id() {
+    let devices = vec![
+        device("builtin", "MacBook Pro Microphone", true),
+        device("usb", "USB Microphone", false),
+    ];
+    let selected = resolve_selected_input_device(&devices, Some("missing")).unwrap();
+    assert_eq!(selected.id.0, "builtin");
+    assert!(selected.is_default);
+}
+
+#[test]
+fn resolve_selected_input_device_returns_default_when_no_preference() {
+    let devices = vec![
+        device("builtin", "MacBook Pro Microphone", true),
+        device("usb", "USB Microphone", false),
+    ];
+    let selected = resolve_selected_input_device(&devices, None).unwrap();
+    assert_eq!(selected.id.0, "builtin");
+}
+
+#[test]
+fn resolve_selected_input_device_returns_none_for_empty_list() {
+    let selected = resolve_selected_input_device(&[], Some("anything"));
+    assert!(selected.is_none());
+}
+
+#[test]
+fn build_device_menu_items_marks_system_default_when_saved_device_is_missing() {
+    let devices = vec![
+        device("builtin", "MacBook Pro Microphone", true),
+        device("usb", "USB Microphone", false),
+    ];
+    let items = build_device_menu_items(&devices, Some("missing"));
+    assert_eq!(items.len(), 3);
+    assert_eq!(items[0].title, "System Default");
+    assert!(items[0].is_selected);
+    assert!(!items[1].is_selected);
+    assert!(!items[2].is_selected);
+}
+
+#[test]
+fn build_device_menu_items_marks_saved_device_when_present() {
+    let devices = vec![
+        device("builtin", "MacBook Pro Microphone", true),
+        device("usb", "USB Microphone", false),
+    ];
+    let items = build_device_menu_items(&devices, Some("usb"));
+    assert_eq!(items.len(), 3);
+    assert!(!items[0].is_selected, "System Default should not be selected");
+    assert!(!items[1].is_selected, "builtin should not be selected");
+    assert!(items[2].is_selected, "USB Mic should be selected");
+}
+
+#[test]
+fn build_device_menu_items_marks_system_default_when_no_preference() {
+    let devices = vec![
+        device("builtin", "MacBook Pro Microphone", true),
+        device("usb", "USB Microphone", false),
+    ];
+    let items = build_device_menu_items(&devices, None);
+    assert!(items[0].is_selected);
+    assert!(!items[1].is_selected);
+    assert!(!items[2].is_selected);
+}
+
+#[test]
+fn build_device_menu_items_default_row_subtitle_includes_device_name() {
+    let devices = vec![device("builtin", "MacBook Pro Microphone", true)];
+    let items = build_device_menu_items(&devices, None);
+    assert!(
+        items[0].subtitle.contains("MacBook Pro Microphone"),
+        "subtitle should name the default device"
+    );
+}
+
+#[test]
+fn build_device_menu_items_labels_default_device_with_dot_suffix() {
+    let devices = vec![
+        device("builtin", "MacBook Pro Microphone", true),
+        device("usb", "USB Microphone", false),
+    ];
+    let items = build_device_menu_items(&devices, None);
+    assert!(
+        items[1].title.contains("\u{00b7} default"),
+        "default device row should have '\u{00b7} default' suffix"
+    );
+    assert_eq!(items[2].title, "USB Microphone");
+}
+
+#[test]
+fn build_device_menu_items_actions_match_device_ids() {
+    let devices = vec![
+        device("builtin", "MacBook Pro Microphone", true),
+        device("usb", "USB Microphone", false),
+    ];
+    let items = build_device_menu_items(&devices, None);
+    assert_eq!(
+        items[0].action,
+        DictationDeviceSelectionAction::UseSystemDefault
+    );
+    assert_eq!(
+        items[1].action,
+        DictationDeviceSelectionAction::UseDevice(DictationDeviceId("builtin".to_string()))
+    );
+    assert_eq!(
+        items[2].action,
+        DictationDeviceSelectionAction::UseDevice(DictationDeviceId("usb".to_string()))
     );
 }

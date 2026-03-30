@@ -10,7 +10,11 @@ mod visualizer;
 mod window;
 
 pub use capture::{start_capture, DictationCaptureHandle};
-pub use device::{default_input_device, list_input_devices, save_dictation_device_id};
+pub use device::{
+    apply_device_selection, build_device_menu_items, default_input_device,
+    list_input_device_menu_items, list_input_devices, resolve_selected_input_device,
+    save_dictation_device_id, DictationDeviceMenuItem, DictationDeviceSelectionAction,
+};
 pub use runtime::{
     maybe_unload_transcriber, snapshot_overlay_state, toggle_dictation, transcribe_captured_audio,
 };
