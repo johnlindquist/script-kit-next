@@ -54,6 +54,28 @@ pub enum DictationCaptureEvent {
     EndOfStream,
 }
 
+// --- Capture completion types ---
+
+/// Audio data returned when dictation recording is stopped.
+///
+/// Contains the collected audio chunks and their total duration.  The caller
+/// is responsible for transcription and delivery — the runtime only captures.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CompletedDictationCapture {
+    pub chunks: Vec<CapturedAudioChunk>,
+    pub audio_duration: Duration,
+}
+
+/// Outcome of a `toggle_dictation()` call.
+#[derive(Debug, Clone, PartialEq)]
+pub enum DictationToggleOutcome {
+    /// A new recording session was started.
+    Started,
+    /// An active recording was stopped.  `Some(capture)` when audio was
+    /// collected, `None` for an empty recording.
+    Stopped(Option<CompletedDictationCapture>),
+}
+
 // --- Session / transcription types ---
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -60,6 +60,9 @@ vte = "0.15"                   # ANSI escape sequence parser, required by alacri
 bitflags = "2.10"              # For cell attribute flags
 async-channel = "2.3"          # Async channel for stdin command listener
 
+# Local speech-to-text via Whisper.cpp (used by dictation feature)
+transcribe-rs = { version = "0.3", features = ["whisper-cpp"] }
+
 # Selected text functionality (getSelectedText/setSelectedText)
 get-selected-text = "0.1"      # Hybrid AX + clipboard fallback for reading selected text
 arboard = "3.6"                # Clipboard access for setSelectedText fallback

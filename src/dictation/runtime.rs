@@ -1,14 +1,16 @@
 use crate::dictation::capture::{start_capture, DictationCaptureHandle};
 use crate::dictation::device::{default_input_device, list_input_devices};
 use crate::dictation::transcription::{
-    build_session_result, DictationTranscriber, DictationTranscriptionConfig,
-    WhisperDictationEngine,
+    captured_duration, DictationTranscriber, DictationTranscriptionConfig, WhisperDictationEngine,
 };
 use crate::dictation::types::{
-    CapturedAudioChunk, DictationCaptureConfig, DictationCaptureEvent, DictationDestination,
-    DictationDeviceId, DictationSessionResult,
+    CapturedAudioChunk, CompletedDictationCapture, DictationCaptureConfig, DictationCaptureEvent,
+    DictationDeviceId, DictationLevel, DictationToggleOutcome,
 };
+use crate::dictation::visualizer::bars_for_level;
+use crate::dictation::window::DictationOverlayState;
 use anyhow::{Context, Result};
+use gpui::SharedString;
 use parking_lot::Mutex;
 use std::time::Instant;
 
@@ -18,9 +20,10 @@ use std::time::Instant;
 
 /// Live state of a dictation recording session.
 struct DictationSession {
-    _capture_handle: DictationCaptureHandle,
+    capture_handle: Option<DictationCaptureHandle>,
     event_rx: async_channel::Receiver<DictationCaptureEvent>,
     chunks: Vec<CapturedAudioChunk>,
+    last_level: DictationLevel,
     started_at: Instant,
 }
 
@@ -29,29 +32,103 @@ struct DictationSession {
 /// `None` means idle (no recording in progress).
 static SESSION: Mutex<Option<DictationSession>> = Mutex::new(None);
 
+/// Lazily-initialized transcriber, kept alive across sessions so the model
+/// does not need to be reloaded for every dictation.  Unloaded after an idle
+/// timeout via `maybe_unload_transcriber()`.
+static TRANSCRIBER: Mutex<Option<DictationTranscriber>> = Mutex::new(None);
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
 /// Toggle dictation recording on/off.
 ///
-/// When called while idle, starts a new dictation capture session.
-/// When called while recording, stops capture and begins transcription.
+/// - When idle: starts a new capture session and returns `Started`.
+/// - When recording: drops the capture handle (flushing the tail chunk),
+///   drains events until `EndOfStream`, and returns `Stopped(Some(capture))`
+///   or `Stopped(None)` for an empty recording.
 ///
 /// This is the single entrypoint shared by both `BuiltInFeature::Dictation`
-/// and `HotkeyAction::Dictation`.
-pub fn toggle_dictation() -> Result<()> {
+/// and `HotkeyAction::Dictation`.  The caller owns transcription, overlay
+/// transitions, and delivery — the runtime only captures audio.
+pub fn toggle_dictation() -> Result<DictationToggleOutcome> {
     tracing::info!(category = "DICTATION", "toggle_dictation called");
 
-    let was_recording = SESSION.lock().is_some();
-
-    if was_recording {
-        stop_and_transcribe()?;
-    } else {
-        start_recording()?;
+    if SESSION.lock().is_some() {
+        return Ok(DictationToggleOutcome::Stopped(stop_recording()?));
     }
 
-    Ok(())
+    start_recording()?;
+    Ok(DictationToggleOutcome::Started)
+}
+
+/// Snapshot the current overlay visual state from the live session.
+///
+/// Drains pending events (non-blocking) so the level/chunk data stays
+/// current.  Returns `None` when no recording is active.
+pub fn snapshot_overlay_state() -> Option<DictationOverlayState> {
+    let mut guard = SESSION.lock();
+    let session = guard.as_mut()?;
+
+    // Non-blocking drain of queued events.
+    while let Ok(event) = session.event_rx.try_recv() {
+        match event {
+            DictationCaptureEvent::Chunk(chunk) => session.chunks.push(chunk),
+            DictationCaptureEvent::Level(level) => session.last_level = level,
+            DictationCaptureEvent::EndOfStream => {}
+        }
+    }
+
+    Some(DictationOverlayState {
+        phase: crate::dictation::DictationSessionPhase::Recording,
+        elapsed: session.started_at.elapsed(),
+        bars: bars_for_level(session.last_level),
+        transcript: SharedString::default(),
+    })
+}
+
+/// Transcribe previously captured audio chunks.
+///
+/// Lazily initialises the Whisper engine on first use and caches it for
+/// subsequent calls.  Returns `Ok(None)` when the audio is too short or
+/// silent.
+pub fn transcribe_captured_audio(
+    chunks: &[CapturedAudioChunk],
+) -> Result<Option<String>> {
+    let mut guard = TRANSCRIBER.lock();
+
+    if guard
+        .as_ref()
+        .map(DictationTranscriber::is_idle)
+        .unwrap_or(true)
+    {
+        let config = DictationTranscriptionConfig::default();
+        let engine = WhisperDictationEngine::new(&config).with_context(|| {
+            format!(
+                "failed to initialize Whisper engine from {}",
+                config.model_path.display()
+            )
+        })?;
+        *guard = Some(DictationTranscriber::new(config, Box::new(engine)));
+    }
+
+    guard
+        .as_ref()
+        .context("dictation transcriber unavailable")?
+        .transcribe_chunks(chunks)
+}
+
+/// Unload the cached transcriber if it has been idle for longer than its
+/// configured timeout.  Intended to be called on a timer from the app layer.
+pub fn maybe_unload_transcriber() {
+    let mut guard = TRANSCRIBER.lock();
+    if guard
+        .as_ref()
+        .map(DictationTranscriber::is_idle)
+        .unwrap_or(false)
+    {
+        *guard = None;
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -66,9 +143,13 @@ fn start_recording() -> Result<()> {
         .context("failed to start audio capture")?;
 
     let session = DictationSession {
-        _capture_handle: capture_handle,
+        capture_handle: Some(capture_handle),
         event_rx,
         chunks: Vec::new(),
+        last_level: DictationLevel {
+            rms: 0.0,
+            peak: 0.0,
+        },
         started_at: Instant::now(),
     };
 
@@ -84,122 +165,62 @@ fn start_recording() -> Result<()> {
 }
 
 // ---------------------------------------------------------------------------
-// Stop + transcribe + deliver
+// Stop recording
 // ---------------------------------------------------------------------------
 
-fn stop_and_transcribe() -> Result<()> {
+/// Stop the current recording and return the completed capture.
+///
+/// **Important**: the capture handle is dropped *before* draining the event
+/// channel.  This ensures the AVFoundation session stops, the processor
+/// thread flushes the tail chunk, and `EndOfStream` is sent before we begin
+/// collecting.  Without this ordering, `try_recv()` would miss the tail.
+fn stop_recording() -> Result<Option<CompletedDictationCapture>> {
     let session = SESSION.lock().take();
     let Some(mut session) = session else {
         tracing::warn!(
             category = "DICTATION",
-            "stop_and_transcribe called but no session active"
+            "stop_recording called but no session active"
         );
-        return Ok(());
+        return Ok(None);
     };
 
-    // Drain remaining events from the capture channel.
-    while let Ok(event) = session.event_rx.try_recv() {
-        if let DictationCaptureEvent::Chunk(chunk) = event {
-            session.chunks.push(chunk);
-        }
-    }
+    stop_capture_and_collect(&mut session)?;
 
-    let elapsed = session.started_at.elapsed();
+    let audio_duration = captured_duration(&session.chunks);
     tracing::info!(
         category = "DICTATION",
         chunks = session.chunks.len(),
-        elapsed_ms = elapsed.as_millis() as u64,
-        "Recording stopped, beginning transcription"
+        audio_duration_ms = audio_duration.as_millis() as u64,
+        "Recording stopped"
     );
 
-    // Transcribe
-    let result = transcribe_and_deliver(&session.chunks)?;
-
-    if let Some(result) = &result {
-        tracing::info!(
-            category = "DICTATION",
-            transcript_len = result.transcript.len(),
-            destination = ?result.destination,
-            audio_duration_ms = result.audio_duration.as_millis() as u64,
-            "Dictation session complete"
-        );
-    } else {
-        tracing::info!(
-            category = "DICTATION",
-            "No speech detected — nothing to deliver"
-        );
+    if session.chunks.is_empty() {
+        return Ok(None);
     }
 
-    Ok(())
+    Ok(Some(CompletedDictationCapture {
+        chunks: session.chunks,
+        audio_duration,
+    }))
 }
 
-// ---------------------------------------------------------------------------
-// Transcription + delivery
-// ---------------------------------------------------------------------------
+/// Drop the capture handle first so the processor thread can flush its tail
+/// chunk and send `EndOfStream`, then blocking-drain the channel.
+fn stop_capture_and_collect(session: &mut DictationSession) -> Result<()> {
+    // Drop capture handle — triggers AVCaptureSession stop, processor thread
+    // flush, and EndOfStream emission.
+    let _ = session.capture_handle.take();
 
-/// Transcribe captured audio and deliver the text to the appropriate
-/// destination.
-///
-/// Returns `Ok(None)` when no speech is detected.
-pub(crate) fn transcribe_and_deliver(
-    chunks: &[CapturedAudioChunk],
-) -> Result<Option<DictationSessionResult>> {
-    let config = DictationTranscriptionConfig::default();
-    let engine = WhisperDictationEngine::new(&config).with_context(|| {
-        format!(
-            "failed to initialize Whisper engine from {}",
-            config.model_path.display()
-        )
-    })?;
-
-    let transcriber = DictationTranscriber::new(config, Box::new(engine));
-
-    let transcript = match transcriber.transcribe_chunks(chunks)? {
-        Some(text) => text,
-        None => return Ok(None),
-    };
-
-    let destination = resolve_destination();
-    deliver_transcript(&transcript, &destination)?;
-
-    Ok(Some(build_session_result(chunks, destination, transcript)))
-}
-
-/// Deliver transcribed text to the resolved destination.
-///
-/// - `ActivePrompt`: calls `set_prompt_input(...)` on the main window.
-/// - `FrontmostApp`: uses the existing `TextInjector::paste_text(...)` path.
-pub(crate) fn deliver_transcript(
-    transcript: &str,
-    destination: &DictationDestination,
-) -> Result<()> {
-    match destination {
-        DictationDestination::ActivePrompt => {
-            tracing::info!(
-                category = "DICTATION",
-                "Delivering transcript to active prompt via set_prompt_input"
-            );
-            // In the full integration this calls through the main window handle:
-            //   window_handle.update(cx, |view, _window, cx| {
-            //       view.set_prompt_input(transcript.to_string(), cx);
-            //   });
-            // For now we log the intent — the GPUI App context is not available
-            // in this synchronous helper.  The caller (toggle_dictation via
-            // cx.spawn) will perform the actual update.
-            Ok(())
-        }
-        DictationDestination::FrontmostApp => {
-            tracing::info!(
-                category = "DICTATION",
-                "Delivering transcript to frontmost app via paste_text"
-            );
-            let injector = crate::text_injector::TextInjector::new();
-            injector
-                .paste_text(transcript)
-                .context("failed to paste transcribed text to frontmost app")?;
-            Ok(())
+    // Blocking drain until EndOfStream.
+    while let Ok(event) = session.event_rx.recv_blocking() {
+        match event {
+            DictationCaptureEvent::Chunk(chunk) => session.chunks.push(chunk),
+            DictationCaptureEvent::Level(level) => session.last_level = level,
+            DictationCaptureEvent::EndOfStream => return Ok(()),
         }
     }
+
+    anyhow::bail!("dictation capture stream closed before EndOfStream")
 }
 
 // ---------------------------------------------------------------------------
@@ -246,18 +267,4 @@ pub(crate) fn resolve_preferred_device() -> Result<Option<DictationDeviceId>> {
     );
     let default = default_input_device()?;
     Ok(default.map(|d| d.id))
-}
-
-// ---------------------------------------------------------------------------
-// Destination resolution
-// ---------------------------------------------------------------------------
-
-/// Determine where transcribed text should be delivered.
-///
-/// If a Script Kit prompt is currently active, text goes to the prompt input.
-/// Otherwise it goes to the frontmost app via clipboard paste.
-fn resolve_destination() -> DictationDestination {
-    // TODO: check if a Script Kit prompt is active by inspecting AppView.
-    // For now, default to frontmost app — the safer choice.
-    DictationDestination::FrontmostApp
 }

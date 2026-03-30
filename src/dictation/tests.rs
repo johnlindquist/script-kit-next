@@ -4,8 +4,8 @@ use crate::dictation::transcription::{
     DictationTranscriptionConfig,
 };
 use crate::dictation::types::{
-    CapturedAudioChunk, DictationCaptureConfig, DictationCaptureEvent, DictationDestination,
-    DictationLevel, RawAudioChunk,
+    CapturedAudioChunk, CompletedDictationCapture, DictationCaptureConfig, DictationCaptureEvent,
+    DictationDestination, DictationLevel, RawAudioChunk,
 };
 use crate::dictation::visualizer::{bars_for_level, compute_level};
 use anyhow::Result;
@@ -484,23 +484,43 @@ fn whisper_engine_new_fails_for_directory_path() {
 }
 
 // ---------------------------------------------------------------------------
-// Delivery path source-audit tests
+// Runtime handoff architecture tests
 // ---------------------------------------------------------------------------
 
 #[test]
-fn dictation_delivery_uses_existing_prompt_and_paste_paths() {
+fn runtime_returns_toggle_outcome_not_unit() {
     let runtime_src = std::fs::read_to_string("src/dictation/runtime.rs").expect("read runtime.rs");
-    let transcription_src =
-        std::fs::read_to_string("src/dictation/transcription.rs").expect("read transcription.rs");
-    let combined = format!("{runtime_src}{transcription_src}");
 
     assert!(
-        combined.contains("set_prompt_input("),
-        "delivery must reference set_prompt_input for active prompt delivery"
+        runtime_src.contains("DictationToggleOutcome"),
+        "toggle_dictation must return DictationToggleOutcome"
     );
     assert!(
-        combined.contains("paste_text(") || combined.contains("TextInjector::new()"),
-        "delivery must use TextInjector::paste_text for frontmost app delivery"
+        !runtime_src.contains("deliver_transcript"),
+        "runtime must not own delivery — caller does"
+    );
+    assert!(
+        !runtime_src.contains("resolve_destination"),
+        "runtime must not resolve destination — caller does"
+    );
+}
+
+#[test]
+fn runtime_drops_capture_handle_before_draining_events() {
+    let runtime_src = std::fs::read_to_string("src/dictation/runtime.rs").expect("read runtime.rs");
+
+    // The function that stops capture must drop the handle before blocking on
+    // recv_blocking so the processor thread can flush its tail chunk and send
+    // EndOfStream.
+    let drop_pos = runtime_src
+        .find("capture_handle.take()")
+        .expect("runtime must drop capture handle via .take()");
+    let drain_pos = runtime_src
+        .find("recv_blocking()")
+        .expect("runtime must blocking-drain via recv_blocking");
+    assert!(
+        drop_pos < drain_pos,
+        "capture handle must be dropped BEFORE blocking drain (drop at byte {drop_pos}, drain at {drain_pos})"
     );
 }
 
@@ -610,4 +630,147 @@ fn dictation_entrypoints_are_not_stubs() {
         !hotkeys_src.contains("TODO: wire dictation"),
         "hotkeys/mod.rs still contains 'TODO: wire dictation'"
     );
+}
+
+// ---------------------------------------------------------------------------
+// Stop-path flush: tail chunk preserved after stop
+// ---------------------------------------------------------------------------
+
+/// Simulates the stop-path by sending chunks through a channel, then
+/// closing the sender (simulating handle drop) and verifying that the
+/// receiver collects all chunks including the tail before EndOfStream.
+#[test]
+fn stop_path_collects_all_chunks_including_tail_after_handle_drop() {
+    use crate::dictation::types::CompletedDictationCapture;
+
+    let (tx, rx) = async_channel::bounded::<DictationCaptureEvent>(16);
+
+    // Simulate a processor thread that sends chunks then EndOfStream.
+    let producer = std::thread::spawn(move || {
+        tx.send_blocking(DictationCaptureEvent::Chunk(CapturedAudioChunk {
+            sample_rate_hz: 16_000,
+            samples: vec![0.1; 160],
+            duration: Duration::from_millis(10),
+        }))
+        .expect("send chunk 1");
+
+        tx.send_blocking(DictationCaptureEvent::Level(DictationLevel {
+            rms: 0.3,
+            peak: 0.5,
+        }))
+        .expect("send level");
+
+        // Tail chunk — the one that would be lost if we drained with
+        // try_recv() before the handle was dropped.
+        tx.send_blocking(DictationCaptureEvent::Chunk(CapturedAudioChunk {
+            sample_rate_hz: 16_000,
+            samples: vec![0.2; 80],
+            duration: Duration::from_millis(5),
+        }))
+        .expect("send tail chunk");
+
+        tx.send_blocking(DictationCaptureEvent::EndOfStream)
+            .expect("send EOS");
+    });
+
+    // Consumer: blocking drain (mirrors stop_capture_and_collect).
+    let mut chunks = Vec::new();
+    while let Ok(event) = rx.recv_blocking() {
+        match event {
+            DictationCaptureEvent::Chunk(chunk) => chunks.push(chunk),
+            DictationCaptureEvent::Level(_) => {}
+            DictationCaptureEvent::EndOfStream => break,
+        }
+    }
+
+    producer.join().expect("producer thread");
+
+    assert_eq!(chunks.len(), 2, "must collect both chunks including tail");
+    assert_eq!(chunks[0].samples.len(), 160);
+    assert_eq!(chunks[1].samples.len(), 80, "tail chunk must be preserved");
+
+    let audio_duration = crate::dictation::transcription::captured_duration(&chunks);
+    assert_eq!(audio_duration, Duration::from_millis(15));
+
+    // Verify CompletedDictationCapture can be constructed from the result.
+    let capture = CompletedDictationCapture {
+        chunks,
+        audio_duration,
+    };
+    assert_eq!(capture.chunks.len(), 2);
+    assert_eq!(capture.audio_duration, Duration::from_millis(15));
+}
+
+/// Verifies that an empty recording (no chunks before EndOfStream) results
+/// in `Stopped(None)`.
+#[test]
+fn stop_path_empty_recording_produces_none() {
+    use crate::dictation::types::DictationToggleOutcome;
+
+    let (tx, rx) = async_channel::bounded::<DictationCaptureEvent>(4);
+
+    let producer = std::thread::spawn(move || {
+        tx.send_blocking(DictationCaptureEvent::EndOfStream)
+            .expect("send EOS");
+    });
+
+    let mut chunks = Vec::new();
+    while let Ok(event) = rx.recv_blocking() {
+        match event {
+            DictationCaptureEvent::Chunk(chunk) => chunks.push(chunk),
+            DictationCaptureEvent::Level(_) => {}
+            DictationCaptureEvent::EndOfStream => break,
+        }
+    }
+
+    producer.join().expect("producer thread");
+
+    let outcome = if chunks.is_empty() {
+        DictationToggleOutcome::Stopped(None)
+    } else {
+        DictationToggleOutcome::Stopped(Some(CompletedDictationCapture {
+            audio_duration: crate::dictation::transcription::captured_duration(&chunks),
+            chunks,
+        }))
+    };
+
+    assert_eq!(outcome, DictationToggleOutcome::Stopped(None));
+}
+
+/// Verifies that the blocking drain terminates with an error when the
+/// channel is closed without sending EndOfStream.
+#[test]
+fn stop_path_errors_when_channel_closes_without_eos() {
+    let (tx, rx) = async_channel::bounded::<DictationCaptureEvent>(4);
+
+    let producer = std::thread::spawn(move || {
+        tx.send_blocking(DictationCaptureEvent::Chunk(CapturedAudioChunk {
+            sample_rate_hz: 16_000,
+            samples: vec![0.5; 160],
+            duration: Duration::from_millis(10),
+        }))
+        .expect("send chunk");
+        // Drop tx without sending EndOfStream.
+    });
+
+    let mut chunks = Vec::new();
+    let mut saw_eos = false;
+    while let Ok(event) = rx.recv_blocking() {
+        match event {
+            DictationCaptureEvent::Chunk(chunk) => chunks.push(chunk),
+            DictationCaptureEvent::Level(_) => {}
+            DictationCaptureEvent::EndOfStream => {
+                saw_eos = true;
+                break;
+            }
+        }
+    }
+
+    producer.join().expect("producer thread");
+
+    assert!(
+        !saw_eos,
+        "should not have received EndOfStream when sender dropped early"
+    );
+    assert_eq!(chunks.len(), 1, "should still collect chunks before close");
 }

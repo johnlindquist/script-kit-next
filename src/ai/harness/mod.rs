@@ -796,12 +796,22 @@ mod tests {
     #[test]
     fn standard_startup_shift_tab_routes_into_harness_entry_intent() {
         let source = include_str!("../../app_impl/startup.rs");
+        // Split at the test module boundary so assertions only inspect
+        // production code, not their own string literals.
+        let production = source
+            .split("\n#[cfg(test)]")
+            .next()
+            .expect("file has content before #[cfg(test)]");
         assert!(
-            source.contains("open_tab_ai_chat_with_entry_intent(Some(query), cx)"),
+            production.contains("open_tab_ai_chat_with_entry_intent(Some(query), cx)"),
             "Shift+Tab in ScriptList must route the filter text into harness entry intent"
         );
+        let legacy_call = format!(
+            "{}(query, cx)",
+            "dispatch_ai_script_generation_from_query"
+        );
         assert!(
-            !source.contains("dispatch_ai_script_generation_from_query(query, cx)"),
+            !production.contains(&legacy_call),
             "Standard startup must not keep the legacy Shift+Tab script-generation path"
         );
     }

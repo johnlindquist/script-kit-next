@@ -1,8 +1,9 @@
 use crate::dictation::types::{CapturedAudioChunk, DictationDestination, DictationSessionResult};
-use anyhow::Result;
+use anyhow::{Context as _, Result};
 use parking_lot::Mutex;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
+use transcribe_rs::whisper_cpp::{WhisperEngine as TranscribeWhisperEngine, WhisperInferenceParams};
 
 /// Version-agnostic transcription engine trait.
 ///
@@ -125,29 +126,33 @@ pub fn build_session_result(
 }
 
 // ---------------------------------------------------------------------------
-// Concrete Whisper engine
+// Concrete Whisper engine (transcribe-rs / whisper.cpp backend)
 // ---------------------------------------------------------------------------
 
-/// Configuration required to load a Whisper model from disk.
+/// Local Whisper speech-to-text engine backed by `transcribe-rs`.
 ///
-/// When `WhisperDictationEngine::new()` is called, the engine validates that
-/// the model file exists and is readable.  Actual model loading is deferred
-/// to the first `transcribe()` call in production; for now we validate early
-/// so callers get a meaningful error at construction time.
-#[derive(Debug)]
+/// The underlying `TranscribeWhisperEngine` is loaded lazily on the first
+/// `transcribe()` call and cached for subsequent invocations.  Call
+/// `unload()` to free the model memory.
 pub struct WhisperDictationEngine {
     model_path: PathBuf,
-    /// Whether the model has been lazily loaded. In this scaffold the flag is
-    /// set once the model path is validated — a real integration would store
-    /// the loaded `whisper_rs::WhisperContext` here.
-    loaded: bool,
+    engine: Option<TranscribeWhisperEngine>,
+}
+
+impl std::fmt::Debug for WhisperDictationEngine {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WhisperDictationEngine")
+            .field("model_path", &self.model_path)
+            .field("engine_loaded", &self.engine.is_some())
+            .finish()
+    }
 }
 
 impl WhisperDictationEngine {
-    /// Create a new Whisper engine.
+    /// Create a new Whisper engine handle.
     ///
-    /// Fails immediately if `config.model_path` does not point to an existing
-    /// regular file.
+    /// Validates that `config.model_path` points to an existing regular file
+    /// but defers the expensive model load to the first `transcribe()` call.
     pub fn new(config: &DictationTranscriptionConfig) -> anyhow::Result<Self> {
         let path = &config.model_path;
         if !path.exists() {
@@ -161,13 +166,36 @@ impl WhisperDictationEngine {
         }
         Ok(Self {
             model_path: path.clone(),
-            loaded: false,
+            engine: None,
         })
+    }
+
+    /// Lazily load the Whisper model, returning a mutable reference to the
+    /// live engine.
+    fn load_if_needed(&mut self) -> Result<&mut TranscribeWhisperEngine> {
+        if self.engine.is_none() {
+            tracing::info!(
+                category = "DICTATION",
+                model_path = %self.model_path.display(),
+                "Loading Whisper model"
+            );
+            self.engine = Some(
+                TranscribeWhisperEngine::load(&self.model_path).with_context(|| {
+                    format!(
+                        "failed to load Whisper model from {}",
+                        self.model_path.display()
+                    )
+                })?,
+            );
+        }
+        self.engine
+            .as_mut()
+            .context("whisper engine missing after load")
     }
 
     /// Unload the model, freeing memory.
     pub fn unload(&mut self) {
-        self.loaded = false;
+        self.engine = None;
         tracing::info!(
             category = "DICTATION",
             model_path = %self.model_path.display(),
@@ -178,17 +206,7 @@ impl WhisperDictationEngine {
 
 impl DictationEngine for WhisperDictationEngine {
     fn transcribe(&mut self, samples: &[f32], initial_prompt: Option<&str>) -> Result<String> {
-        if !self.loaded {
-            tracing::info!(
-                category = "DICTATION",
-                model_path = %self.model_path.display(),
-                "Loading Whisper model"
-            );
-            // TODO: integrate transcribe-rs WhisperContext::new() here once
-            // the whisper-rs dependency is added.  For now we mark as loaded
-            // and return a placeholder so the pipeline is exercised end-to-end.
-            self.loaded = true;
-        }
+        let engine = self.load_if_needed()?;
 
         tracing::debug!(
             category = "DICTATION",
@@ -197,10 +215,17 @@ impl DictationEngine for WhisperDictationEngine {
             "Whisper transcription requested"
         );
 
-        // Placeholder: real Whisper inference will replace this.
-        // The pipeline (capture → merge → transcribe → deliver) is fully wired;
-        // swapping in the real engine is a single-file change once the dep lands.
-        Ok(String::new())
+        let result = engine
+            .transcribe_with(
+                samples,
+                &WhisperInferenceParams {
+                    initial_prompt: initial_prompt.map(str::to_owned),
+                    ..Default::default()
+                },
+            )
+            .context("whisper transcription failed")?;
+
+        Ok(result.text.trim().to_owned())
     }
 }
 
