@@ -1081,6 +1081,28 @@ mod cleanup_contract_audits {
     }
 
     #[test]
+    fn open_tab_ai_harness_terminal_reuses_prewarmed_session() {
+        let source = include_str!("../../app_impl/tab_ai_mode.rs");
+        let start = source
+            .find("fn open_tab_ai_harness_terminal_from_request")
+            .expect("open_tab_ai_harness_terminal_from_request should exist");
+        let rest = &source[start..];
+        let end = rest
+            .find("pub(crate) fn warm_tab_ai_harness_on_startup")
+            .expect("warm_tab_ai_harness_on_startup should follow open fn");
+        let body = compact(&rest[..end]);
+
+        assert!(
+            body.contains(&compact("self.ensure_tab_ai_harness_terminal(true, cx)")),
+            "explicit Tab entry must force-fresh the harness PTY for a clean session"
+        );
+        assert!(
+            !body.contains(&compact("self.ensure_tab_ai_harness_terminal(false, cx)")),
+            "explicit Tab entry must not reuse stale harness sessions"
+        );
+    }
+
+    #[test]
     fn prompt_ai_dispatch_routes_script_generation_to_harness() {
         let source = compact(include_str!("../../app_impl/prompt_ai.rs"));
 

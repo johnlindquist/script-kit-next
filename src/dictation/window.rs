@@ -449,12 +449,8 @@ impl Render for DictationOverlay {
             _ => div(),
         };
 
-        // Root container fills the entire popup window edge-to-edge.
-        // The pill surface is the root itself — no wrapper needed because
-        // the window bounds already match the pill dimensions exactly.
-        div()
-            .track_focus(&self.focus_handle)
-            .on_key_down(cx.listener(Self::handle_key_down))
+        // Inner pill surface — glassmorphism styling, padding, rounded corners.
+        let surface = div()
             .flex()
             .flex_row()
             .items_center()
@@ -467,7 +463,16 @@ impl Render for DictationOverlay {
             .rounded(px(OVERLAY_RADIUS_PX))
             .border_1()
             .border_color(border_color)
-            .child(inner)
+            .child(inner);
+
+        // Outer root claims the full popup content bounds so no GPUI inset
+        // gap remains between the pill and the native window frame.
+        div()
+            .track_focus(&self.focus_handle)
+            .on_key_down(cx.listener(Self::handle_key_down))
+            .w_full()
+            .h_full()
+            .child(surface)
     }
 }
 
@@ -648,10 +653,6 @@ pub fn open_dictation_overlay(
         }
     }
 
-    // Bump generation so any in-flight pump/close from a prior session
-    // detects staleness and stops.
-    OVERLAY_GENERATION.fetch_add(1, Ordering::SeqCst);
-
     let theme = get_cached_theme();
     let window_background = if theme.is_vibrancy_enabled() {
         gpui::WindowBackgroundAppearance::Blurred
@@ -706,8 +707,13 @@ pub fn open_dictation_overlay(
         });
     }
 
-    // Bring overlay to front without activating the app, then make it key
-    // so Escape key events are delivered.
+    // Only make the overlay key window when the main window is already
+    // visible.  When Script Kit is hidden, keying the overlay would pull
+    // the entire app forward — the dictation hotkey must never surface
+    // the main window.  orderFrontRegardless alone is enough to show the
+    // popup without activating the app.
+    let should_key_overlay = crate::is_main_window_visible();
+
     #[cfg(target_os = "macos")]
     {
         let _ = handle.update(cx, |_view, window, _cx| {
@@ -717,21 +723,28 @@ pub fn open_dictation_overlay(
                     let ns_view = appkit.ns_view.as_ptr() as cocoa::base::id;
                     // SAFETY: ns_view is a valid NSView from a just-created GPUI window.
                     // orderFrontRegardless brings the window to front without activating the app.
-                    // makeKeyWindow delivers key events without app activation.
+                    // makeKeyWindow is only sent when the main window is already visible,
+                    // to deliver Escape key events without pulling a hidden app forward.
                     unsafe {
                         let ns_window: cocoa::base::id = msg_send![ns_view, window];
                         let () = msg_send![ns_window, orderFrontRegardless];
-                        let () = msg_send![ns_window, makeKeyWindow];
+                        if should_key_overlay {
+                            let () = msg_send![ns_window, makeKeyWindow];
+                        }
                     }
                 }
             }
         });
     }
 
-    // Focus the GPUI focus handle so key events (Escape) are delivered.
-    let _ = handle.update(cx, |view, window, cx| {
-        view.focus_handle.focus(window, cx);
-    });
+    // Focus the GPUI focus handle so key events (Escape) are delivered —
+    // but only when we also made the window key, otherwise this would
+    // activate the app.
+    if should_key_overlay {
+        let _ = handle.update(cx, |view, window, cx| {
+            view.focus_handle.focus(window, cx);
+        });
+    }
 
     // Store handle.
     {
@@ -798,6 +811,15 @@ pub fn is_dictation_overlay_open() -> bool {
     let slot = DICTATION_OVERLAY_WINDOW.get_or_init(|| Mutex::new(None));
     let guard = slot.lock();
     guard.is_some()
+}
+
+/// Bump the logical overlay session generation.
+///
+/// Call this on every `DictationToggleOutcome::Started`, even when reusing
+/// the same overlay window handle.  This ensures that stale delayed closes
+/// from a prior session see a generation mismatch and bail.
+pub fn begin_overlay_session() -> u64 {
+    OVERLAY_GENERATION.fetch_add(1, Ordering::SeqCst) + 1
 }
 
 /// Return the current overlay generation counter.

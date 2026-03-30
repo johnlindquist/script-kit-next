@@ -909,6 +909,68 @@ impl ScriptListApp {
         }
     }
 
+    /// Convert a `SearchResult` from the Script List into a `TabAiTargetContext`
+    /// with script-native metadata (name, path, description, type).
+    fn tab_ai_target_from_search_result(
+        index: usize,
+        result: &scripts::SearchResult,
+    ) -> crate::ai::TabAiTargetContext {
+        let name = result.name().to_string();
+        let kind = match result {
+            scripts::SearchResult::Script(_) => "script",
+            scripts::SearchResult::Scriptlet(_) => "scriptlet",
+            scripts::SearchResult::BuiltIn(_) => "builtin",
+            scripts::SearchResult::App(_) => "app",
+            scripts::SearchResult::Window(_) => "window",
+            scripts::SearchResult::Agent(_) => "agent",
+            scripts::SearchResult::Fallback(_) => "fallback",
+        };
+        let metadata = match result {
+            scripts::SearchResult::Script(m) => serde_json::json!({
+                "name": m.script.name,
+                "path": m.script.path.to_string_lossy(),
+                "description": m.script.description,
+                "shortcut": m.script.shortcut,
+                "alias": m.script.alias,
+            }),
+            scripts::SearchResult::Scriptlet(m) => serde_json::json!({
+                "name": m.scriptlet.name,
+                "description": m.scriptlet.description,
+                "filePath": m.scriptlet.file_path,
+            }),
+            scripts::SearchResult::BuiltIn(m) => serde_json::json!({
+                "id": m.entry.id,
+                "name": m.entry.name,
+                "description": m.entry.description,
+            }),
+            scripts::SearchResult::App(m) => serde_json::json!({
+                "name": m.app.name,
+                "path": m.app.path.to_string_lossy(),
+                "bundleId": m.app.bundle_id,
+            }),
+            scripts::SearchResult::Window(m) => serde_json::json!({
+                "app": m.window.app,
+                "title": m.window.title,
+            }),
+            scripts::SearchResult::Agent(m) => serde_json::json!({
+                "name": m.agent.name,
+                "path": m.agent.path.to_string_lossy(),
+                "description": m.agent.description,
+            }),
+            scripts::SearchResult::Fallback(m) => serde_json::json!({
+                "name": m.fallback.name(),
+                "description": m.fallback.description(),
+            }),
+        };
+        crate::ai::TabAiTargetContext {
+            source: "ScriptList".to_string(),
+            kind: kind.to_string(),
+            semantic_id: crate::protocol::generate_semantic_id("choice", index, &name),
+            label: name,
+            metadata: Some(metadata),
+        }
+    }
+
     /// Source-view-aware target resolution: resolves targets against an explicit view
     /// instead of `self.current_view`. Used at submit time when `current_view`
     /// has already switched to the harness terminal.
@@ -1194,6 +1256,43 @@ impl ScriptListApp {
                         })),
                     })
                     .collect();
+                (focused_target, visible_targets)
+            }
+            AppView::ScriptList => {
+                // Resolve the focused script list item through the grouped results
+                // cache, which maps selected_index → flat result index → SearchResult.
+                let focused_target = self
+                    .cached_grouped_items
+                    .get(self.selected_index)
+                    .and_then(|item| match item {
+                        GroupedListItem::Item(result_idx) => {
+                            self.cached_grouped_flat_results.get(*result_idx)
+                        }
+                        _ => None,
+                    })
+                    .map(|result| {
+                        Self::tab_ai_target_from_search_result(
+                            self.selected_index,
+                            result,
+                        )
+                    });
+
+                let visible_targets: Vec<crate::ai::TabAiTargetContext> = self
+                    .cached_grouped_items
+                    .iter()
+                    .filter_map(|item| match item {
+                        GroupedListItem::Item(result_idx) => {
+                            self.cached_grouped_flat_results.get(*result_idx)
+                        }
+                        _ => None,
+                    })
+                    .take(TAB_AI_VISIBLE_TARGET_LIMIT)
+                    .enumerate()
+                    .map(|(display_index, result)| {
+                        Self::tab_ai_target_from_search_result(display_index, result)
+                    })
+                    .collect();
+
                 (focused_target, visible_targets)
             }
             _ => {
