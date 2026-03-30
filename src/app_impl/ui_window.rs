@@ -313,7 +313,12 @@ impl ScriptListApp {
         }
     }
 
-    pub(crate) fn set_prompt_input(&mut self, text: String, cx: &mut Context<Self>) {
+    /// Try to insert text into the current prompt's input field.
+    ///
+    /// Returns `true` when the current view accepted the text (i.e. there is an
+    /// active prompt with an input field), `false` otherwise.  Used by dictation
+    /// to decide whether to fall back to paste-to-frontmost-app.
+    pub(crate) fn try_set_prompt_input(&mut self, text: String, cx: &mut Context<Self>) -> bool {
         match &mut self.current_view {
             AppView::ArgPrompt { .. } => {
                 self.arg_input.set_text(text);
@@ -322,6 +327,7 @@ impl ScriptListApp {
                     .scroll_to_item(0, ScrollStrategy::Top);
                 self.update_window_size();
                 cx.notify();
+                true
             }
             AppView::MiniPrompt { .. } | AppView::MicroPrompt { .. } => {
                 self.arg_input.set_text(text);
@@ -330,21 +336,27 @@ impl ScriptListApp {
                     .scroll_to_item(0, ScrollStrategy::Top);
                 self.update_window_size();
                 cx.notify();
+                true
             }
             AppView::PathPrompt { entity, .. } => {
                 entity.update(cx, |prompt, cx| prompt.set_input(text, cx));
+                true
             }
             AppView::SelectPrompt { entity, .. } => {
                 entity.update(cx, |prompt, cx| prompt.set_input(text, cx));
+                true
             }
             AppView::EnvPrompt { entity, .. } => {
                 entity.update(cx, |prompt, cx| prompt.set_input(text, cx));
+                true
             }
             AppView::TemplatePrompt { entity, .. } => {
                 entity.update(cx, |prompt, cx| prompt.set_input(text, cx));
+                true
             }
             AppView::FormPrompt { entity, .. } => {
                 entity.update(cx, |prompt, cx| prompt.set_input(text, cx));
+                true
             }
             AppView::FileSearchView {
                 query,
@@ -364,13 +376,17 @@ impl ScriptListApp {
                 self.update_file_search_results(results);
                 self.file_search_scroll_handle
                     .scroll_to_item(0, ScrollStrategy::Top);
-                // Mark that we need to sync the input text on next render
                 self.filter_text = text;
                 self.pending_filter_sync = true;
                 cx.notify();
+                true
             }
-            _ => {}
+            _ => false,
         }
+    }
+
+    pub(crate) fn set_prompt_input(&mut self, text: String, cx: &mut Context<Self>) {
+        let _ = self.try_set_prompt_input(text, cx);
     }
 
     /// Helper to get filtered arg choices without cloning

@@ -1,6 +1,14 @@
 /// Delay between hiding the main window and starting a synchronous screenshot capture.
 const AI_CAPTURE_HIDE_SETTLE_MS: u64 = 150;
 
+/// Synthetic prompt ID used when the microphone-selection ArgPrompt is open.
+/// Checked in `submit_arg_prompt_from_current_state` to intercept the submit
+/// and persist the chosen device instead of sending a protocol message.
+const BUILTIN_MIC_SELECT_PROMPT_ID: &str = "builtin:select-microphone";
+
+/// Choice value representing "use system default" in the mic-selection prompt.
+const BUILTIN_MIC_DEFAULT_VALUE: &str = "__system_default__";
+
 #[cfg(test)]
 fn ai_open_failure_message(error: impl std::fmt::Display) -> String {
     format!("Failed to open AI: {}", error)
@@ -2387,6 +2395,88 @@ impl ScriptListApp {
 
                         Self::builtin_success(dctx, "choose_theme")
                     }
+                    SettingsCommandType::SelectMicrophone => {
+                        let devices = match crate::dictation::list_input_devices() {
+                            Ok(devices) => devices,
+                            Err(error) => {
+                                tracing::error!(
+                                    category = "DICTATION",
+                                    error = %error,
+                                    "Failed to enumerate microphone devices"
+                                );
+                                self.show_hud(
+                                    format!("Failed to list microphones: {error}"),
+                                    Some(HUD_SHORT_MS),
+                                    cx,
+                                );
+                                return Self::builtin_error(
+                                    dctx,
+                                    "select_microphone_failed",
+                                    "Failed to list microphones",
+                                    error.to_string(),
+                                );
+                            }
+                        };
+
+                        let prefs = crate::config::load_user_preferences();
+                        let current_id = prefs.dictation.selected_device_id;
+
+                        let mut choices: Vec<Choice> = Vec::with_capacity(devices.len() + 1);
+
+                        // "System Default" entry — clears the preference.
+                        let default_selected = current_id.is_none();
+                        choices.push(Choice {
+                            name: if default_selected {
+                                "System Default (current)".to_string()
+                            } else {
+                                "System Default".to_string()
+                            },
+                            value: BUILTIN_MIC_DEFAULT_VALUE.to_string(),
+                            description: Some(
+                                "Use the system's default input device".to_string(),
+                            ),
+                            key: None,
+                            semantic_id: None,
+                        });
+
+                        let mut start_index: usize = 0;
+                        for device in &devices {
+                            let is_current =
+                                current_id.as_deref() == Some(device.id.0.as_str());
+                            let suffix = if is_current {
+                                " (current)"
+                            } else if device.is_default {
+                                " (system default)"
+                            } else {
+                                ""
+                            };
+                            if is_current {
+                                start_index = choices.len();
+                            }
+                            choices.push(Choice {
+                                name: format!("{}{}", device.name, suffix),
+                                value: device.id.0.clone(),
+                                description: None,
+                                key: None,
+                                semantic_id: None,
+                            });
+                        }
+
+                        self.opened_from_main_menu = true;
+                        self.arg_selected_index = start_index;
+                        self.open_builtin_filterable_view(
+                            AppView::ArgPrompt {
+                                id: BUILTIN_MIC_SELECT_PROMPT_ID.to_string(),
+                                placeholder: "Select microphone...".to_string(),
+                                choices,
+                                actions: None,
+                            },
+                            "Select microphone...",
+                            cx,
+                        );
+
+                        Self::builtin_success(dctx, "select_microphone")
+                    }
                 }
             }
 
@@ -3512,12 +3602,71 @@ impl ScriptListApp {
                     "Opening Dictation"
                 );
                 self.opened_from_main_menu = true;
-                if let Err(e) = crate::dictation::toggle_dictation() {
-                    tracing::error!(
-                        category = "DICTATION",
-                        error = %e,
-                        "Failed to toggle dictation"
-                    );
+                match crate::dictation::toggle_dictation() {
+                    Ok(crate::dictation::DictationToggleOutcome::Started) => {
+                        let _ = crate::dictation::open_dictation_overlay(cx);
+                        let _ = crate::dictation::update_dictation_overlay(
+                            crate::dictation::DictationOverlayState {
+                                phase: crate::dictation::DictationSessionPhase::Recording,
+                                ..Default::default()
+                            },
+                            cx,
+                        );
+                        self.spawn_dictation_overlay_pump(cx);
+                    }
+                    Ok(crate::dictation::DictationToggleOutcome::Stopped(Some(capture))) => {
+                        let _ = crate::dictation::update_dictation_overlay(
+                            crate::dictation::DictationOverlayState {
+                                phase: crate::dictation::DictationSessionPhase::Transcribing,
+                                elapsed: capture.audio_duration,
+                                ..Default::default()
+                            },
+                            cx,
+                        );
+                        let audio_duration = capture.audio_duration;
+                        let chunks = capture.chunks;
+                        cx.spawn(async move |this, cx| {
+                            let transcript_result = cx
+                                .background_executor()
+                                .spawn(async move {
+                                    crate::dictation::transcribe_captured_audio(&chunks)
+                                })
+                                .await;
+
+                            let _ = this.update(cx, |this, cx| {
+                                Self::handle_dictation_transcript(
+                                    this,
+                                    transcript_result,
+                                    audio_duration,
+                                    cx,
+                                );
+                            });
+                        })
+                        .detach();
+                    }
+                    Ok(crate::dictation::DictationToggleOutcome::Stopped(None)) => {
+                        let _ = crate::dictation::close_dictation_overlay(cx);
+                    }
+                    Err(error) => {
+                        tracing::error!(
+                            category = "DICTATION",
+                            error = %error,
+                            "Failed to toggle dictation"
+                        );
+                        let _ = crate::dictation::update_dictation_overlay(
+                            crate::dictation::DictationOverlayState {
+                                phase: crate::dictation::DictationSessionPhase::Failed(
+                                    error.to_string(),
+                                ),
+                                ..Default::default()
+                            },
+                            cx,
+                        );
+                        self.schedule_dictation_overlay_close(
+                            cx,
+                            std::time::Duration::from_millis(800),
+                        );
+                    }
                 }
                 Self::builtin_success(dctx, "dictation_toggle")
             }
@@ -3549,6 +3698,171 @@ impl ScriptListApp {
                 Self::builtin_success(dctx, "open_settings")
             }
         }
+    }
+
+    // =========================================================================
+    // Dictation helpers — overlay pump, transcript delivery, scheduled cleanup
+    // =========================================================================
+
+    /// Periodically snapshot the live capture session and push state to the
+    /// dictation overlay.  Runs every 50 ms and stops automatically when the
+    /// session ends (i.e. `snapshot_overlay_state()` returns `None`).
+    fn spawn_dictation_overlay_pump(&mut self, cx: &mut Context<Self>) {
+        cx.spawn(async move |_this, cx| {
+            loop {
+                cx.background_executor()
+                    .timer(std::time::Duration::from_millis(50))
+                    .await;
+                let Some(state) = crate::dictation::snapshot_overlay_state() else {
+                    break;
+                };
+                cx.update(|cx| {
+                    let _ = crate::dictation::update_dictation_overlay(state, cx);
+                });
+            }
+        })
+        .detach();
+    }
+
+    /// Handle the result of background transcription: deliver the transcript
+    /// to either the active prompt or the frontmost app, update the overlay,
+    /// and schedule cleanup timers.
+    fn handle_dictation_transcript(
+        &mut self,
+        result: anyhow::Result<Option<String>>,
+        audio_duration: std::time::Duration,
+        cx: &mut Context<Self>,
+    ) {
+        match result {
+            Ok(Some(transcript)) => {
+                let destination =
+                    if self.try_set_prompt_input(transcript.clone(), cx) {
+                        crate::dictation::DictationDestination::ActivePrompt
+                    } else {
+                        match crate::text_injector::TextInjector::new().paste_text(&transcript) {
+                            Ok(()) => crate::dictation::DictationDestination::FrontmostApp,
+                            Err(error) => {
+                                tracing::error!(
+                                    category = "DICTATION",
+                                    error = %error,
+                                    "Failed to paste transcript to frontmost app"
+                                );
+                                let _ = crate::dictation::update_dictation_overlay(
+                                    crate::dictation::DictationOverlayState {
+                                        phase: crate::dictation::DictationSessionPhase::Failed(
+                                            error.to_string(),
+                                        ),
+                                        elapsed: audio_duration,
+                                        ..Default::default()
+                                    },
+                                    cx,
+                                );
+                                self.schedule_dictation_overlay_close(
+                                    cx,
+                                    std::time::Duration::from_millis(800),
+                                );
+                                self.schedule_dictation_transcriber_cleanup(
+                                    cx,
+                                    std::time::Duration::from_secs(300),
+                                );
+                                return;
+                            }
+                        }
+                    };
+
+                tracing::info!(
+                    category = "DICTATION",
+                    destination = ?destination,
+                    transcript_len = transcript.len(),
+                    "Transcript delivered"
+                );
+
+                let _ = crate::dictation::update_dictation_overlay(
+                    crate::dictation::DictationOverlayState {
+                        phase: crate::dictation::DictationSessionPhase::Finished,
+                        elapsed: audio_duration,
+                        transcript: transcript.into(),
+                        ..Default::default()
+                    },
+                    cx,
+                );
+                self.schedule_dictation_overlay_close(
+                    cx,
+                    std::time::Duration::from_millis(400),
+                );
+                self.schedule_dictation_transcriber_cleanup(
+                    cx,
+                    std::time::Duration::from_secs(300),
+                );
+            }
+            Ok(None) => {
+                // No speech detected — close overlay quietly.
+                self.schedule_dictation_overlay_close(
+                    cx,
+                    std::time::Duration::from_millis(150),
+                );
+                self.schedule_dictation_transcriber_cleanup(
+                    cx,
+                    std::time::Duration::from_secs(300),
+                );
+            }
+            Err(error) => {
+                tracing::error!(
+                    category = "DICTATION",
+                    error = %error,
+                    "Transcription failed"
+                );
+                let _ = crate::dictation::update_dictation_overlay(
+                    crate::dictation::DictationOverlayState {
+                        phase: crate::dictation::DictationSessionPhase::Failed(
+                            error.to_string(),
+                        ),
+                        elapsed: audio_duration,
+                        ..Default::default()
+                    },
+                    cx,
+                );
+                self.schedule_dictation_overlay_close(
+                    cx,
+                    std::time::Duration::from_millis(800),
+                );
+                self.schedule_dictation_transcriber_cleanup(
+                    cx,
+                    std::time::Duration::from_secs(300),
+                );
+            }
+        }
+    }
+
+    /// Schedule the overlay window to close after a delay.
+    fn schedule_dictation_overlay_close(
+        &mut self,
+        cx: &mut Context<Self>,
+        delay: std::time::Duration,
+    ) {
+        cx.spawn(async move |_this, cx| {
+            cx.background_executor().timer(delay).await;
+            cx.update(|cx| {
+                let _ = crate::dictation::close_dictation_overlay(cx);
+            });
+        })
+        .detach();
+    }
+
+    /// Schedule the cached Whisper transcriber to be unloaded after an idle
+    /// timeout.
+    fn schedule_dictation_transcriber_cleanup(
+        &mut self,
+        cx: &mut Context<Self>,
+        delay: std::time::Duration,
+    ) {
+        cx.spawn(async move |_this, cx| {
+            cx.background_executor().timer(delay).await;
+            cx.update(|_cx| {
+                crate::dictation::maybe_unload_transcriber();
+            });
+        })
+        .detach();
     }
 }
 

@@ -169,6 +169,8 @@ pub enum SettingsCommandType {
     ConfigureAnthropicApiKey,
     /// Browse and apply color themes
     ChooseTheme,
+    /// Select microphone for dictation
+    SelectMicrophone,
 }
 /// Utility command types for quick access tools
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1290,6 +1292,23 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             vec!["theme", "appearance", "color", "dark", "light", "scheme"],
             BuiltInFeature::SettingsCommand(SettingsCommandType::ChooseTheme),
             "🎨",
+        ));
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin-select-microphone",
+            "Select Microphone",
+            "Choose which microphone to use for dictation",
+            vec![
+                "microphone",
+                "mic",
+                "audio",
+                "input",
+                "dictation",
+                "device",
+                "recording",
+            ],
+            BuiltInFeature::SettingsCommand(SettingsCommandType::SelectMicrophone),
+            "🎙️",
         ));
 
         // =========================================================================
