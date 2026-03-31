@@ -101,9 +101,7 @@ fn metadata_frontmost_uses_same_synthetic_title() {
 
     // The metadata frontmost branch must also call
     // script_kit_excluded_capture_title() for consistency.
-    let title_call_count = src
-        .matches("script_kit_excluded_capture_title()")
-        .count();
+    let title_call_count = src.matches("script_kit_excluded_capture_title()").count();
     assert!(
         title_call_count >= 2,
         "both screenshot and metadata paths must call \

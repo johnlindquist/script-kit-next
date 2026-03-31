@@ -38,6 +38,7 @@ fn paste_only_without_intent_omits_sentinel() {
         None,
         TabAiHarnessSubmissionMode::PasteOnly,
         None,
+        None,
         &[],
     )
     .expect("submission should build");
@@ -61,6 +62,7 @@ fn paste_only_with_intent_includes_intent() {
         Some("open settings"),
         TabAiHarnessSubmissionMode::PasteOnly,
         None,
+        None,
         &[],
     )
     .expect("submission should build");
@@ -79,6 +81,7 @@ fn paste_only_stages_context_block_with_schema_version() {
         &context,
         None,
         TabAiHarnessSubmissionMode::PasteOnly,
+        None,
         None,
         &[],
     )
@@ -110,6 +113,7 @@ fn submit_without_intent_includes_sentinel() {
         None,
         TabAiHarnessSubmissionMode::Submit,
         None,
+        None,
         &[],
     )
     .expect("submission should build");
@@ -128,6 +132,7 @@ fn submit_with_intent_includes_intent_and_omits_sentinel() {
         &context,
         Some("rename this file"),
         TabAiHarnessSubmissionMode::Submit,
+        None,
         None,
         &[],
     )
@@ -153,6 +158,7 @@ fn blank_intent_treated_as_none() {
         Some("   "),
         TabAiHarnessSubmissionMode::PasteOnly,
         None,
+        None,
         &[],
     )
     .expect("should build");
@@ -163,6 +169,7 @@ fn blank_intent_treated_as_none() {
         &context,
         Some("   "),
         TabAiHarnessSubmissionMode::Submit,
+        None,
         None,
         &[],
     )
@@ -178,6 +185,7 @@ fn empty_string_intent_treated_as_none() {
         &context,
         Some(""),
         TabAiHarnessSubmissionMode::PasteOnly,
+        None,
         None,
         &[],
     )
@@ -198,6 +206,7 @@ fn submission_includes_input_text_from_context() {
         None,
         TabAiHarnessSubmissionMode::PasteOnly,
         None,
+        None,
         &[],
     )
     .expect("should build");
@@ -215,6 +224,7 @@ fn submission_includes_prompt_type_from_context() {
         &context,
         None,
         TabAiHarnessSubmissionMode::PasteOnly,
+        None,
         None,
         &[],
     )
@@ -367,6 +377,7 @@ fn paste_only_includes_hints_block_when_receipt_and_suggestions_provided() {
         &context,
         None,
         TabAiHarnessSubmissionMode::PasteOnly,
+        None,
         Some(&receipt),
         &suggestions,
     )
@@ -407,6 +418,7 @@ fn paste_only_omits_hints_block_when_no_receipt_or_suggestions() {
         None,
         TabAiHarnessSubmissionMode::PasteOnly,
         None,
+        None,
         &[],
     )
     .expect("submission should build");
@@ -434,6 +446,7 @@ fn submit_mode_also_includes_hints_block_when_provided() {
         &context,
         None,
         TabAiHarnessSubmissionMode::Submit,
+        None,
         Some(&receipt),
         &suggestions,
     )
@@ -459,6 +472,7 @@ fn hints_block_appears_between_context_and_intent() {
         &context,
         Some("rename this file"),
         TabAiHarnessSubmissionMode::PasteOnly,
+        None,
         Some(&receipt),
         &suggestions,
     )
@@ -601,6 +615,7 @@ fn harness_submission_contains_source_type_screenshot_and_apply_back_hint() {
         &blob,
         Some("Summarize this"),
         TabAiHarnessSubmissionMode::Submit,
+        None,
         None,
         &[],
     )

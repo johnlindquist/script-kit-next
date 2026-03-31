@@ -3771,7 +3771,10 @@ fn overlay_render_uses_outer_wrapper_for_full_bounds() {
 
     // The render must have a dedicated outer root div that claims full bounds
     // with overflow hidden and the pill surface as a child.
-    let compact: String = window_source.chars().filter(|c| !c.is_whitespace()).collect();
+    let compact: String = window_source
+        .chars()
+        .filter(|c| !c.is_whitespace())
+        .collect();
     assert!(
         compact.contains(".w_full().h_full().overflow_hidden().child(surface)"),
         "overlay render must use an outer wrapper div with w_full().h_full().overflow_hidden().child(surface)"
@@ -4001,10 +4004,14 @@ fn mic_resolution_prefers_saved_device() {
 
 #[test]
 fn mic_resolution_falls_back_when_saved_device_missing() {
-    let devices = vec![
-        device_with_transport("mic-1", "Built-in", true, DictationDeviceTransport::BuiltIn),
-    ];
-    let res = resolve_selected_input_device(&devices, Some("disappeared-mic")).expect("should resolve");
+    let devices = vec![device_with_transport(
+        "mic-1",
+        "Built-in",
+        true,
+        DictationDeviceTransport::BuiltIn,
+    )];
+    let res =
+        resolve_selected_input_device(&devices, Some("disappeared-mic")).expect("should resolve");
     assert_eq!(res.device.id.0, "mic-1");
     assert!(res.fell_back);
 }
@@ -4023,17 +4030,35 @@ fn mic_resolution_prefers_system_default_when_no_preference() {
 #[test]
 fn mic_resolution_prefers_builtin_over_virtual_when_no_default() {
     let devices = vec![
-        device_with_transport("mic-v", "Virtual Audio", false, DictationDeviceTransport::Virtual),
-        device_with_transport("mic-b", "MacBook Mic", false, DictationDeviceTransport::BuiltIn),
+        device_with_transport(
+            "mic-v",
+            "Virtual Audio",
+            false,
+            DictationDeviceTransport::Virtual,
+        ),
+        device_with_transport(
+            "mic-b",
+            "MacBook Mic",
+            false,
+            DictationDeviceTransport::BuiltIn,
+        ),
     ];
     let res = resolve_selected_input_device(&devices, None).expect("should resolve");
-    assert_eq!(res.device.id.0, "mic-b", "should prefer built-in over virtual");
+    assert_eq!(
+        res.device.id.0, "mic-b",
+        "should prefer built-in over virtual"
+    );
 }
 
 #[test]
 fn mic_resolution_prefers_usb_over_virtual_when_no_builtin() {
     let devices = vec![
-        device_with_transport("mic-v", "Virtual Audio", false, DictationDeviceTransport::Virtual),
+        device_with_transport(
+            "mic-v",
+            "Virtual Audio",
+            false,
+            DictationDeviceTransport::Virtual,
+        ),
         device_with_transport("mic-u", "USB Mic", false, DictationDeviceTransport::Usb),
     ];
     let res = resolve_selected_input_device(&devices, None).expect("should resolve");
@@ -4042,9 +4067,12 @@ fn mic_resolution_prefers_usb_over_virtual_when_no_builtin() {
 
 #[test]
 fn mic_resolution_uses_first_device_as_last_resort() {
-    let devices = vec![
-        device_with_transport("mic-v", "Virtual Audio", false, DictationDeviceTransport::Virtual),
-    ];
+    let devices = vec![device_with_transport(
+        "mic-v",
+        "Virtual Audio",
+        false,
+        DictationDeviceTransport::Virtual,
+    )];
     let res = resolve_selected_input_device(&devices, None).expect("should resolve");
     assert_eq!(res.device.id.0, "mic-v", "should fall back to any device");
 }
@@ -4090,11 +4118,19 @@ fn download_progress_percentage_edge_cases() {
     use crate::dictation::download::DownloadProgress;
 
     assert_eq!(
-        DownloadProgress { downloaded: 1, total: 3 }.percentage(),
+        DownloadProgress {
+            downloaded: 1,
+            total: 3
+        }
+        .percentage(),
         33
     );
     assert_eq!(
-        DownloadProgress { downloaded: 999, total: 1000 }.percentage(),
+        DownloadProgress {
+            downloaded: 999,
+            total: 1000
+        }
+        .percentage(),
         99
     );
 }
@@ -4112,6 +4148,7 @@ fn dictation_target_enum_covers_all_surfaces() {
         DictationTarget::MainWindowPrompt,
         DictationTarget::NotesEditor,
         DictationTarget::AiChatComposer,
+        DictationTarget::TabAiHarness,
         DictationTarget::ExternalApp,
     ];
     for target in &targets {
@@ -4119,6 +4156,7 @@ fn dictation_target_enum_covers_all_surfaces() {
             DictationTarget::MainWindowPrompt => {}
             DictationTarget::NotesEditor => {}
             DictationTarget::AiChatComposer => {}
+            DictationTarget::TabAiHarness => {}
             DictationTarget::ExternalApp => {}
         }
     }
@@ -4128,14 +4166,15 @@ fn dictation_target_enum_covers_all_surfaces() {
 fn dictation_destination_includes_internal_surfaces() {
     use crate::dictation::types::DictationDestination;
 
-    // NotesEditor and AiChatComposer must exist alongside the original variants.
+    // NotesEditor, AiChatComposer, and TabAiHarness must exist alongside the original variants.
     let destinations = [
         DictationDestination::ActivePrompt,
         DictationDestination::FrontmostApp,
         DictationDestination::NotesEditor,
         DictationDestination::AiChatComposer,
+        DictationDestination::TabAiHarness,
     ];
-    assert_eq!(destinations.len(), 4);
+    assert_eq!(destinations.len(), 5);
 }
 
 #[test]
@@ -4281,8 +4320,7 @@ fn internal_delivery_failure_falls_back_to_frontmost_app() {
 
 #[test]
 fn toggle_dictation_accepts_target_parameter() {
-    let src = std::fs::read_to_string("src/dictation/runtime.rs")
-        .expect("read runtime.rs");
+    let src = std::fs::read_to_string("src/dictation/runtime.rs").expect("read runtime.rs");
 
     assert!(
         src.contains("pub fn toggle_dictation(target: DictationTarget)"),
@@ -4301,8 +4339,7 @@ fn get_dictation_target_is_exported() {
 
 #[test]
 fn dictation_session_stores_target() {
-    let src = std::fs::read_to_string("src/dictation/runtime.rs")
-        .expect("read runtime.rs");
+    let src = std::fs::read_to_string("src/dictation/runtime.rs").expect("read runtime.rs");
 
     assert!(
         src.contains("target: DictationTarget"),

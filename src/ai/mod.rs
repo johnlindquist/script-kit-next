@@ -72,6 +72,9 @@ pub use self::harness::{
     TAB_AI_HARNESS_CONFIG_SCHEMA_VERSION, TAB_AI_HARNESS_CONTEXT_SCHEMA_VERSION,
     TAB_AI_SCREENSHOT_MAX_KEEP,
 };
+pub use self::harness::{
+    plan_tab_ai_quick_submit, TabAiQuickSubmitKind, TabAiQuickSubmitPlan, TabAiQuickSubmitSource,
+};
 pub use self::message_parts::{
     file_path_parts, merge_context_parts, prepare_user_message_with_receipt,
     resolve_context_part_to_prompt_block, resolve_context_parts_to_prompt_prefix,
