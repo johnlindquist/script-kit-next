@@ -228,7 +228,7 @@
  * │                           CONFIGURATION FILE                               │
  * └───────────────────────────────────────────────────────────────────────────┘
  *
- * LOCATION: ~/.scriptkit/config.ts
+ * LOCATION: ~/.scriptkit/kit/config.ts
  *
  * PURPOSE: Controls Script Kit's behavior, appearance, and built-in features.
  * The config file is a TypeScript module that exports a default Config object.

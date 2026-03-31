@@ -115,7 +115,7 @@ impl ScriptListApp {
                 }
             }
 
-            self.sort_directory_results();
+            self.apply_file_search_sort_mode();
             self.recompute_file_search_display_indices();
         } else {
             // Global search or cross-directory — full refresh.
@@ -192,7 +192,7 @@ impl ScriptListApp {
         if current_dir.is_some() && new_dir.as_ref() == current_dir.as_ref() {
             if let Some(new_entry) = Self::build_file_result_from_metadata(preferred_path) {
                 self.cached_file_results.push(new_entry);
-                self.sort_directory_results();
+                self.apply_file_search_sort_mode();
                 self.recompute_file_search_display_indices();
             }
         } else {

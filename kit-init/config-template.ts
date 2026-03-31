@@ -229,6 +229,43 @@ export default {
   // },
 
   // ===========================================================================
+  // Suggested Commands (Frecency)
+  // ===========================================================================
+  // Controls the "Suggested" section in the main menu.
+
+  // suggested: {
+  //   enabled: true,       // Show suggested section
+  //   maxItems: 10,        // Max items in the section
+  //   minScore: 0.1,       // Minimum frecency score to include
+  //   halfLifeDays: 7,     // Decay half-life in days
+  //   trackUsage: true,    // Track command usage
+  //   excludedCommands: [] // Command IDs to exclude
+  // },
+
+  // ===========================================================================
+  // File Watcher
+  // ===========================================================================
+  // Debounce and back-off settings for the file watcher.
+
+  // watcher: {
+  //   debounceMs: 500,
+  //   stormThreshold: 200,
+  //   initialBackoffMs: 100,
+  //   maxBackoffMs: 30000,
+  //   maxNotifyErrors: 10,
+  // },
+
+  // ===========================================================================
+  // Window Layout
+  // ===========================================================================
+  // Sizing defaults for the launcher window.
+
+  // layout: {
+  //   standardHeight: 500,
+  //   maxHeight: 700,
+  // },
+
+  // ===========================================================================
   // Advanced Settings
   // ===========================================================================
   // These settings are rarely needed but available for special cases.

@@ -50,8 +50,8 @@ fn refresh_mutation_patches_cache_in_place_for_directory_browse() {
         "must use build_file_result_from_metadata for the new entry"
     );
     assert!(
-        FILES_SOURCE.contains("self.sort_directory_results()"),
-        "must re-sort after patching"
+        FILES_SOURCE.contains("self.apply_file_search_sort_mode()"),
+        "must re-sort after patching using the active sort mode"
     );
     assert!(
         FILES_SOURCE.contains("self.recompute_file_search_display_indices()"),
@@ -156,7 +156,7 @@ fn trash_call_site_passes_old_path() {
     let trash_section = FILES_SOURCE
         .find("\"move_to_trash\" =>")
         .expect("move_to_trash handler must exist");
-    let trash_end = (trash_section + 4000).min(FILES_SOURCE.len());
+    let trash_end = (trash_section + 5000).min(FILES_SOURCE.len());
     let trash_body = &FILES_SOURCE[trash_section..trash_end];
 
     assert!(

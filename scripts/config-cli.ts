@@ -2,7 +2,7 @@
 /**
  * Script Kit Config CLI
  * 
- * A CLI tool for AI agents to read and modify ~/.scriptkit/config.ts
+ * A CLI tool for AI agents to read and modify ~/.scriptkit/kit/config.ts
  * 
  * Usage:
  *   bun scripts/config-cli.ts get [key]        - Read value(s)
@@ -58,6 +58,42 @@ interface ProcessLimits {
   healthCheckIntervalMs?: number;
 }
 
+interface SuggestedConfig {
+  enabled?: boolean;
+  maxItems?: number;
+  minScore?: number;
+  halfLifeDays?: number;
+  trackUsage?: boolean;
+  excludedCommands?: string[];
+}
+
+interface WatcherConfig {
+  debounceMs?: number;
+  stormThreshold?: number;
+  initialBackoffMs?: number;
+  maxBackoffMs?: number;
+  maxNotifyErrors?: number;
+}
+
+interface LayoutConfig {
+  standardHeight?: number;
+  maxHeight?: number;
+}
+
+interface CommandConfig {
+  shortcut?: HotkeyConfig;
+  hidden?: boolean;
+  confirmationRequired?: boolean;
+}
+
+interface ClaudeCodeConfig {
+  enabled?: boolean;
+  path?: string;
+  permissionMode?: string;
+  allowedTools?: string;
+  addDirs?: string[];
+}
+
 interface Config {
   hotkey: HotkeyConfig;
   bun_path?: string;
@@ -69,13 +105,25 @@ interface Config {
   builtIns?: BuiltInConfig;
   clipboardHistoryMaxTextLength?: number;
   processLimits?: ProcessLimits;
+  suggested?: SuggestedConfig;
+  notesHotkey?: HotkeyConfig;
+  aiHotkey?: HotkeyConfig;
+  aiHotkeyEnabled?: boolean;
+  logsHotkey?: HotkeyConfig;
+  logsHotkeyEnabled?: boolean;
+  dictationHotkey?: HotkeyConfig;
+  dictationHotkeyEnabled?: boolean;
+  watcher?: WatcherConfig;
+  layout?: LayoutConfig;
+  commands?: Record<string, CommandConfig>;
+  claudeCode?: ClaudeCodeConfig;
 }
 
 // =============================================================================
 // Default Values (matching src/config.rs)
 // =============================================================================
 
-const DEFAULTS: Required<Config> = {
+const DEFAULTS: Config & Record<string, unknown> = {
   hotkey: {
     modifiers: ["meta"],
     key: "Semicolon"
@@ -100,6 +148,25 @@ const DEFAULTS: Required<Config> = {
     maxMemoryMb: undefined,
     maxRuntimeSeconds: undefined,
     healthCheckIntervalMs: 5000
+  },
+  suggested: {
+    enabled: true,
+    maxItems: 10,
+    minScore: 0.1,
+    halfLifeDays: 7,
+    trackUsage: true,
+    excludedCommands: []
+  },
+  watcher: {
+    debounceMs: 500,
+    stormThreshold: 200,
+    initialBackoffMs: 100,
+    maxBackoffMs: 30000,
+    maxNotifyErrors: 10
+  },
+  layout: {
+    standardHeight: 500,
+    maxHeight: 700
   }
 };
 
@@ -221,6 +288,143 @@ const CONFIG_SCHEMA: ConfigOption[] = [
     type: "number",
     default: 5000,
     description: "Health check interval in milliseconds"
+  },
+  // --- Auxiliary hotkeys ---
+  {
+    key: "notesHotkey",
+    type: "HotkeyConfig",
+    default: undefined,
+    description: "Hotkey for opening the Notes window (no default; set explicitly)"
+  },
+  {
+    key: "aiHotkey",
+    type: "HotkeyConfig",
+    default: undefined,
+    description: "Hotkey for opening the AI chat (defaults to Cmd+Shift+Space when enabled)"
+  },
+  {
+    key: "aiHotkeyEnabled",
+    type: "boolean",
+    default: true,
+    description: "Whether the AI hotkey is registered"
+  },
+  {
+    key: "logsHotkey",
+    type: "HotkeyConfig",
+    default: undefined,
+    description: "Hotkey for toggling log capture (defaults to Cmd+Shift+L when enabled)"
+  },
+  {
+    key: "logsHotkeyEnabled",
+    type: "boolean",
+    default: true,
+    description: "Whether the logs hotkey is registered"
+  },
+  {
+    key: "dictationHotkey",
+    type: "HotkeyConfig",
+    default: undefined,
+    description: "Hotkey for toggling dictation (no default; set explicitly)"
+  },
+  {
+    key: "dictationHotkeyEnabled",
+    type: "boolean",
+    default: true,
+    description: "Whether the dictation hotkey is registered"
+  },
+  // --- Suggested ---
+  {
+    key: "suggested.enabled",
+    type: "boolean",
+    default: true,
+    description: "Enable the Suggested section in the main menu"
+  },
+  {
+    key: "suggested.maxItems",
+    type: "number",
+    default: 10,
+    description: "Maximum number of suggested items shown"
+  },
+  {
+    key: "suggested.minScore",
+    type: "number",
+    default: 0.1,
+    description: "Minimum frecency score to include an item"
+  },
+  {
+    key: "suggested.halfLifeDays",
+    type: "number",
+    default: 7,
+    description: "Half-life (in days) for the frecency decay curve"
+  },
+  {
+    key: "suggested.trackUsage",
+    type: "boolean",
+    default: true,
+    description: "Track command usage for frecency scoring"
+  },
+  {
+    key: "suggested.excludedCommands",
+    type: "string[]",
+    default: [],
+    description: "Command IDs to exclude from suggestions"
+  },
+  // --- Watcher ---
+  {
+    key: "watcher.debounceMs",
+    type: "number",
+    default: 500,
+    description: "File-watcher debounce interval in milliseconds"
+  },
+  {
+    key: "watcher.stormThreshold",
+    type: "number",
+    default: 200,
+    description: "Event count considered a storm within one debounce window"
+  },
+  {
+    key: "watcher.initialBackoffMs",
+    type: "number",
+    default: 100,
+    description: "Initial back-off delay in milliseconds after a storm"
+  },
+  {
+    key: "watcher.maxBackoffMs",
+    type: "number",
+    default: 30000,
+    description: "Maximum back-off delay in milliseconds"
+  },
+  {
+    key: "watcher.maxNotifyErrors",
+    type: "number",
+    default: 10,
+    description: "Max consecutive notify errors before the watcher stops"
+  },
+  // --- Layout ---
+  {
+    key: "layout.standardHeight",
+    type: "number",
+    default: 500,
+    description: "Standard window height in pixels"
+  },
+  {
+    key: "layout.maxHeight",
+    type: "number",
+    default: 700,
+    description: "Maximum window height in pixels"
+  },
+  // --- Commands & Claude Code ---
+  {
+    key: "commands",
+    type: "Record<string, CommandConfig>",
+    default: undefined,
+    description: "Per-command shortcuts and visibility overrides"
+  },
+  {
+    key: "claudeCode",
+    type: "ClaudeCodeConfig",
+    default: undefined,
+    description: "Claude Code CLI provider configuration"
   }
 ];
 
@@ -780,7 +984,14 @@ async function cmdValidate(): Promise<void> {
     }
     
     // Check for unknown keys
-    const knownTopLevel = ['hotkey', 'bun_path', 'editor', 'padding', 'editorFontSize', 'terminalFontSize', 'uiScale', 'builtIns', 'processLimits'];
+    const knownTopLevel = [
+      'hotkey', 'bun_path', 'editor', 'padding', 'editorFontSize',
+      'terminalFontSize', 'uiScale', 'builtIns', 'processLimits',
+      'clipboardHistoryMaxTextLength', 'suggested', 'notesHotkey',
+      'aiHotkey', 'aiHotkeyEnabled', 'logsHotkey', 'logsHotkeyEnabled',
+      'dictationHotkey', 'dictationHotkeyEnabled', 'watcher', 'layout',
+      'commands', 'claudeCode',
+    ];
     for (const key of Object.keys(config)) {
       if (!knownTopLevel.includes(key)) {
         warnings.push(`Unknown config key: ${key}`);

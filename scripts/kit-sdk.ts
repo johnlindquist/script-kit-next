@@ -618,7 +618,7 @@ export interface LayoutInfo {
 }
 
 // =============================================================================
-// Config Types (for ~/.scriptkit/config.ts)
+// Config Types (for ~/.scriptkit/kit/config.ts)
 // =============================================================================
 
 /**
@@ -640,7 +640,7 @@ export type KeyCode =
   | "Digit0" | "Digit1" | "Digit2" | "Digit3" | "Digit4"
   | "Digit5" | "Digit6" | "Digit7" | "Digit8" | "Digit9"
   // Special keys
-  | "Space" | "Enter" | "Semicolon"
+  | "Space" | "Enter" | "Semicolon" | "Comma" | "Period" | "Slash"
   // Function keys (if supported)
   | "F1" | "F2" | "F3" | "F4" | "F5" | "F6"
   | "F7" | "F8" | "F9" | "F10" | "F11" | "F12";
@@ -953,9 +953,133 @@ export interface ClaudeCodeConfig {
 }
 
 /**
+ * Suggested-commands configuration.
+ * Controls the frecency-based "Suggested" section in the main menu.
+ *
+ * @example
+ * ```typescript
+ * suggested: {
+ *   enabled: true,
+ *   maxItems: 10,
+ *   minScore: 0.1,
+ *   halfLifeDays: 7,
+ *   trackUsage: true,
+ * }
+ * ```
+ */
+export interface SuggestedConfig {
+  /**
+   * Enable the Suggested section.
+   * @default true
+   */
+  enabled?: boolean;
+
+  /**
+   * Maximum number of suggested items shown.
+   * @default 10
+   */
+  maxItems?: number;
+
+  /**
+   * Minimum frecency score to include an item.
+   * @default 0.1
+   */
+  minScore?: number;
+
+  /**
+   * Half-life (in days) for the frecency decay curve.
+   * @default 7
+   */
+  halfLifeDays?: number;
+
+  /**
+   * Track command usage for frecency scoring.
+   * @default true
+   */
+  trackUsage?: boolean;
+
+  /**
+   * Command IDs to exclude from suggestions.
+   * @default []
+   */
+  excludedCommands?: string[];
+}
+
+/**
+ * File-watcher debounce and back-off configuration.
+ *
+ * @example
+ * ```typescript
+ * watcher: {
+ *   debounceMs: 500,
+ *   stormThreshold: 200,
+ *   initialBackoffMs: 100,
+ *   maxBackoffMs: 30000,
+ *   maxNotifyErrors: 10,
+ * }
+ * ```
+ */
+export interface WatcherConfig {
+  /**
+   * Debounce interval in milliseconds.
+   * @default 500
+   */
+  debounceMs?: number;
+
+  /**
+   * Number of events within one debounce window considered a storm.
+   * @default 200
+   */
+  stormThreshold?: number;
+
+  /**
+   * Initial back-off delay in milliseconds after a storm.
+   * @default 100
+   */
+  initialBackoffMs?: number;
+
+  /**
+   * Maximum back-off delay in milliseconds.
+   * @default 30000
+   */
+  maxBackoffMs?: number;
+
+  /**
+   * Maximum consecutive notify errors before the watcher gives up.
+   * @default 10
+   */
+  maxNotifyErrors?: number;
+}
+
+/**
+ * Window layout sizing configuration.
+ *
+ * @example
+ * ```typescript
+ * layout: {
+ *   standardHeight: 500,
+ *   maxHeight: 700,
+ * }
+ * ```
+ */
+export interface LayoutConfig {
+  /**
+   * Standard window height in pixels.
+   * @default 500
+   */
+  standardHeight?: number;
+
+  /**
+   * Maximum window height in pixels.
+   * @default 700
+   */
+  maxHeight?: number;
+}
+
+/**
  * Script Kit configuration schema.
- * 
- * This configuration is loaded from `~/.scriptkit/config.ts` and controls
+ *
+ * This configuration is loaded from `~/.scriptkit/kit/config.ts` and controls
  * Script Kit's behavior, appearance, and built-in features.
  * 
  * @example Minimal configuration (only hotkey required)
@@ -1157,6 +1281,27 @@ export interface Config {
    * @default true
    */
   dictationHotkeyEnabled?: boolean;
+
+  /**
+   * Suggested-commands (frecency) configuration.
+   *
+   * @default { enabled: true, maxItems: 10, minScore: 0.1, halfLifeDays: 7, trackUsage: true }
+   */
+  suggested?: SuggestedConfig;
+
+  /**
+   * File-watcher debounce and back-off configuration.
+   *
+   * @default { debounceMs: 500, stormThreshold: 200, initialBackoffMs: 100, maxBackoffMs: 30000, maxNotifyErrors: 10 }
+   */
+  watcher?: WatcherConfig;
+
+  /**
+   * Window layout sizing configuration.
+   *
+   * @default { standardHeight: 500, maxHeight: 700 }
+   */
+  layout?: LayoutConfig;
 
   /**
    * Per-command configuration for shortcuts and visibility.

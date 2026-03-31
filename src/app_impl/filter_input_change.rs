@@ -654,7 +654,7 @@ impl ScriptListApp {
             self.file_search_frozen_filter = None;
 
             if sort_on_done {
-                self.sort_directory_results();
+                self.apply_file_search_sort_mode();
                 self.recompute_file_search_display_indices();
                 self.restore_file_search_selection_after_results_change(
                     preferred_selected_path.as_deref(),

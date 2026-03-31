@@ -28,79 +28,25 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 // =============================================================================
-// Types
+// Types — re-exported from the canonical SDK source
 // =============================================================================
 
-type KeyModifier = "meta" | "ctrl" | "alt" | "shift";
-type KeyCode =
-  | "KeyA" | "KeyB" | "KeyC" | "KeyD" | "KeyE" | "KeyF" | "KeyG"
-  | "KeyH" | "KeyI" | "KeyJ" | "KeyK" | "KeyL" | "KeyM" | "KeyN"
-  | "KeyO" | "KeyP" | "KeyQ" | "KeyR" | "KeyS" | "KeyT" | "KeyU"
-  | "KeyV" | "KeyW" | "KeyX" | "KeyY" | "KeyZ"
-  | "Digit0" | "Digit1" | "Digit2" | "Digit3" | "Digit4"
-  | "Digit5" | "Digit6" | "Digit7" | "Digit8" | "Digit9"
-  | "Space" | "Enter" | "Semicolon" | "Comma" | "Period" | "Slash"
-  | "F1" | "F2" | "F3" | "F4" | "F5" | "F6"
-  | "F7" | "F8" | "F9" | "F10" | "F11" | "F12";
+import type {
+  BuiltInConfig,
+  ClaudeCodeConfig,
+  CommandConfig,
+  Config,
+  ContentPadding,
+  HotkeyConfig,
+  KeyCode,
+  KeyModifier,
+  LayoutConfig,
+  ProcessLimits,
+  SuggestedConfig,
+  WatcherConfig,
+} from "./kit-sdk";
 
-interface HotkeyConfig {
-  modifiers: KeyModifier[];
-  key: KeyCode;
-}
-
-interface ContentPadding {
-  top?: number;
-  left?: number;
-  right?: number;
-}
-
-interface BuiltInConfig {
-  clipboardHistory?: boolean;
-  appLauncher?: boolean;
-  windowSwitcher?: boolean;
-}
-
-interface ProcessLimits {
-  maxMemoryMb?: number;
-  maxRuntimeSeconds?: number;
-  healthCheckIntervalMs?: number;
-}
-
-interface CommandConfig {
-  shortcut?: HotkeyConfig;
-  hidden?: boolean;
-  confirmationRequired?: boolean;
-}
-
-interface ClaudeCodeConfig {
-  enabled?: boolean;
-  path?: string;
-  permissionMode?: string;
-  allowedTools?: string;
-  addDirs?: string[];
-}
-
-export interface Config {
-  hotkey: HotkeyConfig;
-  bun_path?: string;
-  editor?: string;
-  padding?: ContentPadding;
-  editorFontSize?: number;
-  terminalFontSize?: number;
-  uiScale?: number;
-  builtIns?: BuiltInConfig;
-  clipboardHistoryMaxTextLength?: number;
-  processLimits?: ProcessLimits;
-  notesHotkey?: HotkeyConfig;
-  aiHotkey?: HotkeyConfig;
-  aiHotkeyEnabled?: boolean;
-  logsHotkey?: HotkeyConfig;
-  logsHotkeyEnabled?: boolean;
-  dictationHotkey?: HotkeyConfig;
-  dictationHotkeyEnabled?: boolean;
-  commands?: Record<string, CommandConfig>;
-  claudeCode?: ClaudeCodeConfig;
-}
+export type { Config };
 
 export interface ConfigOption {
   key: string;

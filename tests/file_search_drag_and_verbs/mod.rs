@@ -426,3 +426,37 @@ fn toggle_file_search_actions_accepts_optional_file() {
         "toggle_file_search_actions must accept Option<&FileResult> for directory-only mode"
     );
 }
+
+// ──────────────────────────────────────────────────────────────────────
+// Sort mode preserved when browsing into subdirectory
+// ──────────────────────────────────────────────────────────────────────
+
+#[test]
+fn sort_mode_preserved_on_internal_browse() {
+    let source = include_str!("../../src/app_impl/filter_input_core.rs");
+    assert!(
+        source.contains("let preserve_sort_mode = matches!(self.current_view, AppView::FileSearchView"),
+        "open_file_search_view must detect when already in file search to preserve sort mode"
+    );
+    assert!(
+        source.contains("if !preserve_sort_mode {"),
+        "open_file_search_view must conditionally reset sort mode"
+    );
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Stream completion uses active sort mode, not hardcoded name sort
+// ──────────────────────────────────────────────────────────────────────
+
+#[test]
+fn directory_stream_completion_uses_active_sort_mode() {
+    let source = include_str!("../../src/app_impl/filter_input_change.rs");
+    assert!(
+        source.contains("self.apply_file_search_sort_mode();"),
+        "directory stream completion must honor the active file_search_sort_mode"
+    );
+    assert!(
+        !source.contains("self.sort_directory_results();"),
+        "stream completion must not use hardcoded sort_directory_results"
+    );
+}
