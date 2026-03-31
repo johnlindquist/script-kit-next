@@ -3,7 +3,7 @@
 Working examples demonstrating Script Kit patterns. Learn by reading, then create your own in the matching workspace directory:
 
 - scripts → `~/.scriptkit/kit/main/scripts/`
-- extension bundles → `~/.scriptkit/kit/main/extensions/`
+- extension / scriptlet bundles → `~/.scriptkit/kit/main/extensions/`
 - mdflow agents → `~/.scriptkit/kit/main/agents/`
 
 ## Start Here
