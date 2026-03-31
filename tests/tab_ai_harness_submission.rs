@@ -692,3 +692,109 @@ fn harness_submission_contains_source_type_screenshot_and_apply_back_hint() {
         "user intent must appear after the </scriptKitContext> block"
     );
 }
+
+// =========================================================================
+// Quick-submit planner → harness submission regression
+// =========================================================================
+
+#[test]
+fn submission_includes_quick_submit_hint_and_synthesized_intent() {
+    use script_kit_gpui::ai::{plan_tab_ai_quick_submit, TabAiQuickSubmitSource};
+
+    let plan = plan_tab_ai_quick_submit(TabAiQuickSubmitSource::Fallback, "git status")
+        .expect("plan should exist for shell command");
+
+    let context = make_context("ScriptList", Some("git status"));
+    let submission = build_tab_ai_harness_submission(
+        &context,
+        Some(&plan.synthesized_intent),
+        TabAiHarnessSubmissionMode::Submit,
+        Some(&plan),
+        None,
+        &[],
+    )
+    .expect("submission should build");
+
+    assert!(
+        submission.contains("\"kind\": \"shellCommand\""),
+        "hints block must include quick-submit kind as shellCommand"
+    );
+    assert!(
+        submission.contains("Command:\ngit status"),
+        "synthesized intent must include the original command"
+    );
+    assert!(
+        submission.contains("User intent:"),
+        "submission must include User intent section"
+    );
+    assert!(
+        submission.contains("<scriptKitHints>"),
+        "submission must include the hints block with quick-submit metadata"
+    );
+}
+
+#[test]
+fn submission_quick_submit_visual_ask_uses_full_screen_capture() {
+    use script_kit_gpui::ai::{plan_tab_ai_quick_submit, TabAiQuickSubmitSource};
+
+    let plan = plan_tab_ai_quick_submit(
+        TabAiQuickSubmitSource::Fallback,
+        "what's wrong with this UI?",
+    )
+    .expect("plan should exist for visual ask");
+
+    let context = make_context("ScriptList", None);
+    let submission = build_tab_ai_harness_submission(
+        &context,
+        Some(&plan.synthesized_intent),
+        TabAiHarnessSubmissionMode::Submit,
+        Some(&plan),
+        None,
+        &[],
+    )
+    .expect("submission should build");
+
+    assert!(
+        submission.contains("\"kind\": \"visualAsk\""),
+        "hints block must include quick-submit kind as visualAsk"
+    );
+    assert!(
+        submission.contains("\"captureKind\": \"fullScreen\""),
+        "hints block must include captureKind as fullScreen"
+    );
+}
+
+#[test]
+fn submission_quick_submit_dictation_source_preserved_in_hints() {
+    use script_kit_gpui::ai::{plan_tab_ai_quick_submit, TabAiQuickSubmitSource};
+
+    let plan = plan_tab_ai_quick_submit(
+        TabAiQuickSubmitSource::Dictation,
+        "rewrite this to sound calmer",
+    )
+    .expect("plan should exist for text transform");
+
+    let context = make_context("ScriptList", None);
+    let submission = build_tab_ai_harness_submission(
+        &context,
+        Some(&plan.synthesized_intent),
+        TabAiHarnessSubmissionMode::Submit,
+        Some(&plan),
+        None,
+        &[],
+    )
+    .expect("submission should build");
+
+    assert!(
+        submission.contains("\"source\": \"dictation\""),
+        "hints block must preserve the dictation source"
+    );
+    assert!(
+        submission.contains("\"kind\": \"textTransform\""),
+        "hints block must include quick-submit kind as textTransform"
+    );
+    assert!(
+        submission.contains("\"captureKind\": \"selectedText\""),
+        "text transform must use selectedText capture kind"
+    );
+}
