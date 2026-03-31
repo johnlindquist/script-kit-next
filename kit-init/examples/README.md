@@ -1,13 +1,20 @@
 # Script Kit Examples
 
-Working examples demonstrating Script Kit patterns. Learn by reading, then create your own in `~/.scriptkit/kit/main/scripts/`.
+Working examples demonstrating Script Kit patterns. Learn by reading, then create your own in the matching workspace directory:
+
+- scripts → `~/.scriptkit/kit/main/scripts/`
+- extension bundles → `~/.scriptkit/kit/main/extensions/`
+- mdflow agents → `~/.scriptkit/kit/main/agents/`
 
 ## Start Here
 
-- Creating a new script: copy from `scripts/`
-- Creating a new extension bundle: read `extensions/howto.md` first, then copy from `extensions/main.md`
-- Looking for richer extension patterns or edge cases: read `extensions/advanced.md`
-- Creating a new agent: copy from `agents/`
+| Goal | Copy from | Write to | Read next |
+|------|-----------|----------|-----------|
+| New script | `scripts/hello-world.ts` | `~/.scriptkit/kit/main/scripts/<name>.ts` | `~/.scriptkit/skills/script-authoring/SKILL.md` |
+| New extension bundle | `extensions/howto.md` then `extensions/main.md` | `~/.scriptkit/kit/main/extensions/<name>.md` | `~/.scriptkit/skills/scriptlets/SKILL.md` |
+| New mdflow agent | `agents/review-pr.claude.md` | `~/.scriptkit/kit/main/agents/<name>.<backend>.md` | `~/.scriptkit/skills/agents/SKILL.md` |
+
+Pick one artifact, copy one starter, save it under `kit/main/`, then stop. Do not create multiple artifact types for one request.
 
 ## Scripts (`scripts/`)
 
@@ -47,6 +54,8 @@ Copy any example to your workspace:
 
 ```bash
 cp ~/.scriptkit/examples/scripts/hello-world.ts ~/.scriptkit/kit/main/scripts/my-script.ts
+cp ~/.scriptkit/examples/extensions/main.md ~/.scriptkit/kit/main/extensions/my-bundle.md
+cp ~/.scriptkit/examples/agents/review-pr.claude.md ~/.scriptkit/kit/main/agents/my-agent.claude.md
 ```
 
 Then edit to suit your needs. Script Kit will detect it immediately.

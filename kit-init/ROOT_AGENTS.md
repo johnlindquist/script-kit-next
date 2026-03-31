@@ -1,8 +1,8 @@
 # Script Kit SDK Reference
 
-Complete reference for AI agents writing Script Kit scripts.
+Complete reference for AI agents creating Script Kit artifacts: scripts, extension bundles, and mdflow agents.
 
-> **Package**: `@scriptkit/sdk` — **Runtime**: Bun — **Scripts**: `~/.scriptkit/kit/main/scripts/*.ts`
+> **Package**: `@scriptkit/sdk` — **Runtime**: Bun — **Write under**: `~/.scriptkit/kit/main/{scripts,extensions,agents}`
 
 ## Pick the Artifact Type First
 
@@ -16,6 +16,85 @@ Before writing files, decide which artifact the user actually asked for.
 
 Do not create a `.ts` script when the request is really a scriptlet bundle or mdflow agent.
 Do not write runnable user files outside `~/.scriptkit/kit/main/`.
+
+## Minimal Starter Templates
+
+Use one of these and stop at the smallest working version.
+
+### Script → `~/.scriptkit/kit/main/scripts/<name>.ts`
+
+```typescript
+import "@scriptkit/sdk";
+
+export const metadata = {
+  name: "My Script",
+  description: "What it does",
+};
+
+const value = await arg("What should this script do?");
+await div(`<div class="p-8 text-2xl">${value}</div>`);
+```
+
+### Extension bundle → `~/.scriptkit/kit/main/extensions/<name>.md`
+
+~~~md
+---
+name: My Bundle
+description: Personal helpers
+icon: sparkles
+---
+
+## Hello Snippet
+
+```metadata
+keyword: !hello
+description: Quick greeting
+```
+
+```paste
+Hello!
+```
+
+## Quick Note
+
+```metadata
+description: Save a quick note
+```
+
+```tool:quick-note
+import "@scriptkit/sdk";
+
+const note = await arg("Note");
+await Bun.write(`${env.HOME}/quick-note.txt`, note);
+await notify("Saved");
+```
+~~~
+
+### mdflow agent → `~/.scriptkit/kit/main/agents/<name>.<backend>.md`
+
+```markdown
+---
+_sk_name: "Review PR"
+_sk_description: "Review staged changes and call out risks"
+_sk_icon: "git-pull-request"
+model: sonnet
+---
+
+Review the current git diff.
+
+Return:
+1. findings ordered by severity
+2. concrete fixes
+3. tests to add
+```
+
+### One-shot Rules
+
+- Pick the smallest artifact that fits.
+- Save only under `~/.scriptkit/kit/main/`.
+- For scripts, always start with `import "@scriptkit/sdk";`.
+- For extension bundles, prefer `metadata` code fences instead of HTML comments.
+- For `tool:<name>` scriptlets, the first line must be `import "@scriptkit/sdk";`.
 
 ## Agent Files (`kit/main/agents/*.md`)
 
@@ -190,6 +269,8 @@ await open("https://example.com");       // Open URL/file in default app
 ```
 
 ## Extensions (Scriptlet Bundles)
+
+For first-pass authoring, copy the minimal starter above. The rest of this section is detailed reference.
 
 Markdown files at `~/.scriptkit/kit/main/extensions/*.md`:
 

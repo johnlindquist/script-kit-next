@@ -12,6 +12,9 @@ icon: book-open
 
 # Getting Started
 
+> For new bundles, copy the `metadata` fence patterns in this file.
+> The HTML comment examples at the end are compatibility-only.
+
 Type a keyword anywhere (e.g., `!sig`) and Script Kit will replace it with the expansion text.
 
 ## Hello World
@@ -370,9 +373,10 @@ description: Meeting notes template
 
 ---
 
-# Legacy Format (HTML Comments)
+# Compatibility Only (Legacy HTML Comments)
 
-HTML comment metadata also works for backwards compatibility.
+> These examples are for reading older bundles.
+> Do not copy this format for new harness-authored bundles; use the `metadata` fence examples earlier in this file instead.
 
 ## Thumbs Up
 

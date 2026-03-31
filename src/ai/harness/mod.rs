@@ -372,67 +372,82 @@ fn push_target_lines(out: &mut String, label_prefix: &str, target: &crate::ai::T
     }
 }
 
-fn format_visible_element_line(element: &crate::protocol::ElementInfo) -> String {
-    let label = element
-        .text
-        .as_deref()
-        .or(element.value.as_deref())
-        .unwrap_or(element.semantic_id.as_str());
-    let mut parts = vec![
-        format!("semantic_id={}", element.semantic_id),
-        format!("label={}", collapse_inline_text(label)),
-    ];
-    if element.selected == Some(true) {
-        parts.push("selected=true".to_string());
+fn push_visible_element_lines(
+    out: &mut String,
+    label_prefix: &str,
+    element: &crate::protocol::ElementInfo,
+) {
+    push_line(out, &format!("{label_prefix} semantic id"), &element.semantic_id);
+    if let Some(text) = element.text.as_deref() {
+        push_line(out, &format!("{label_prefix} text"), collapse_inline_text(text));
     }
-    if element.focused == Some(true) {
-        parts.push("focused=true".to_string());
+    if let Some(value) = element.value.as_deref() {
+        push_line(out, &format!("{label_prefix} value"), collapse_inline_text(value));
+    }
+    if let Some(selected) = element.selected {
+        push_line(out, &format!("{label_prefix} selected"), selected.to_string());
+    }
+    if let Some(focused) = element.focused {
+        push_line(out, &format!("{label_prefix} focused"), focused.to_string());
     }
     if let Some(index) = element.index {
-        parts.push(format!("index={index}"));
+        push_line(out, &format!("{label_prefix} index"), index.to_string());
     }
-    parts.join(" | ")
 }
 
-fn format_clipboard_history_line(entry: &crate::ai::TabAiClipboardHistoryEntry) -> String {
-    let mut parts = vec![
-        format!("type={}", entry.content_type),
-        format!("preview={}", collapse_inline_text(&entry.preview)),
-        format!("timestamp={}", entry.timestamp),
-    ];
+fn push_clipboard_history_lines(
+    out: &mut String,
+    label_prefix: &str,
+    entry: &crate::ai::TabAiClipboardHistoryEntry,
+) {
+    push_line(out, &format!("{label_prefix} type"), &entry.content_type);
+    push_line(
+        out,
+        &format!("{label_prefix} preview"),
+        collapse_inline_text(&entry.preview),
+    );
+    push_line(
+        out,
+        &format!("{label_prefix} timestamp"),
+        entry.timestamp.to_string(),
+    );
     if let Some(text) = entry
         .full_text
         .as_deref()
         .filter(|text| !text.trim().is_empty())
     {
-        parts.push(format!("text={}", collapse_inline_text(text)));
+        push_block(out, &format!("{label_prefix} text"), text);
     }
     if let Some(ocr) = entry
         .ocr_text
         .as_deref()
         .filter(|text| !text.trim().is_empty())
     {
-        parts.push(format!("ocr={}", collapse_inline_text(ocr)));
+        push_block(out, &format!("{label_prefix} ocr"), ocr);
     }
     if let Some(width) = entry.image_width {
-        parts.push(format!("image_width={width}"));
+        push_line(out, &format!("{label_prefix} image width"), width.to_string());
     }
     if let Some(height) = entry.image_height {
-        parts.push(format!("image_height={height}"));
+        push_line(out, &format!("{label_prefix} image height"), height.to_string());
     }
-    parts.join(" | ")
 }
 
-fn format_prior_automation_line(item: &crate::ai::TabAiMemorySuggestion) -> String {
-    format!(
-        "slug={} | query={} | prompt_type={} | bundle_id={} | written_at={} | score={:.3}",
-        item.slug,
-        collapse_inline_text(&item.effective_query),
-        item.prompt_type,
-        item.bundle_id,
-        item.written_at,
-        item.score,
-    )
+fn push_prior_automation_lines(
+    out: &mut String,
+    label_prefix: &str,
+    item: &crate::ai::TabAiMemorySuggestion,
+) {
+    push_line(out, &format!("{label_prefix} slug"), &item.slug);
+    push_block(out, &format!("{label_prefix} query"), &item.effective_query);
+    push_line(out, &format!("{label_prefix} prompt type"), &item.prompt_type);
+    push_line(out, &format!("{label_prefix} bundle id"), &item.bundle_id);
+    push_line(out, &format!("{label_prefix} written at"), &item.written_at);
+    push_line(
+        out,
+        &format!("{label_prefix} score"),
+        format!("{:.3}", item.score),
+    );
 }
 
 /// Build a flat, labeled context block from a resolved context blob.
@@ -472,11 +487,7 @@ pub fn build_tab_ai_harness_context_block(
         push_target_lines(&mut out, &format!("visible target {}", index + 1), target);
     }
     for (index, element) in context.ui.visible_elements.iter().take(6).enumerate() {
-        push_line(
-            &mut out,
-            &format!("visible element {}", index + 1),
-            format_visible_element_line(element),
-        );
+        push_visible_element_lines(&mut out, &format!("visible element {}", index + 1), element);
     }
 
     if let Some(text) = context.desktop.selected_text.as_deref() {

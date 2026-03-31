@@ -2538,15 +2538,17 @@ fn app_view_to_prompt_type_str(view: &AppView) -> &'static str {
 /// Early source type detection using only the view and UI snapshot — no
 /// desktop context required.  Returns `Some` for known-source views where
 /// the prompt type alone is sufficient (ClipboardHistory, running prompts,
-/// ScriptList with a focused semantic ID).  Returns `None` for generic
-/// desktop/selection cases that need the deferred desktop snapshot.
+/// ScriptList with a focused or selected semantic ID).  Returns `None` for
+/// generic desktop/selection cases that need the deferred desktop snapshot.
 fn detect_tab_ai_source_type_early(
     source_view: &AppView,
     ui: &crate::ai::TabAiUiSnapshot,
 ) -> Option<crate::ai::TabAiSourceType> {
     let prompt_type = app_view_to_prompt_type_str(source_view);
     match prompt_type {
-        "ScriptList" if ui.focused_semantic_id.is_some() => {
+        "ScriptList"
+            if ui.focused_semantic_id.is_some() || ui.selected_semantic_id.is_some() =>
+        {
             Some(crate::ai::TabAiSourceType::ScriptListItem)
         }
         "ClipboardHistory" => Some(crate::ai::TabAiSourceType::ClipboardEntry),
@@ -2628,17 +2630,236 @@ impl ScriptListApp {
     const TAB_AI_APPLY_BACK_FOCUS_SETTLE_MS: u64 = 250;
     const TAB_AI_APPLY_BACK_CLIPBOARD_PRIME_MS: u64 = 25;
 
-    /// Prime the clipboard from the terminal, then apply after a short delay
-    /// so the clipboard write completes before the read.  This prevents the
-    /// stale-clipboard race that occurs when `prime_apply_clipboard()` and
-    /// `apply_tab_ai_result_from_clipboard()` run back-to-back in the same
-    /// synchronous call.
+    /// Unified apply handler — routes `text` to the correct destination
+    /// based on `route.source_type`.  Called by both the terminal-selection
+    /// fast path and the clipboard fallback.
+    fn apply_tab_ai_result_text(
+        &mut self,
+        route: crate::ai::TabAiApplyBackRoute,
+        text: String,
+        cx: &mut Context<Self>,
+    ) {
+        if text.trim().is_empty() {
+            self.toast_manager.push(
+                crate::components::toast::Toast::error(
+                    "No terminal selection or harness output was available".to_string(),
+                    &self.theme,
+                )
+                .duration_ms(Some(TOAST_ERROR_MS)),
+            );
+            cx.notify();
+            return;
+        }
+
+        match route.source_type.clone() {
+            crate::ai::TabAiSourceType::RunningCommand => {
+                self.close_tab_ai_harness_terminal(cx);
+                if self.try_set_prompt_input(text.clone(), cx) {
+                    self.toast_manager.push(
+                        crate::components::toast::Toast::success(
+                            tab_ai_apply_back_success_message(&route.source_type).to_string(),
+                            &self.theme,
+                        )
+                        .duration_ms(Some(TOAST_SUCCESS_MS)),
+                    );
+                } else {
+                    self.toast_manager.push(
+                        crate::components::toast::Toast::error(
+                            "The original prompt is no longer active".to_string(),
+                            &self.theme,
+                        )
+                        .duration_ms(Some(TOAST_ERROR_MS)),
+                    );
+                }
+                cx.notify();
+            }
+            crate::ai::TabAiSourceType::ClipboardEntry => {
+                self.close_tab_ai_harness_terminal(cx);
+                match write_tab_ai_apply_back_clipboard_text(&text) {
+                    Ok(()) => {
+                        self.toast_manager.push(
+                            crate::components::toast::Toast::success(
+                                tab_ai_apply_back_success_message(&route.source_type).to_string(),
+                                &self.theme,
+                            )
+                            .duration_ms(Some(TOAST_SUCCESS_MS)),
+                        );
+                    }
+                    Err(error) => {
+                        self.toast_manager.push(
+                            crate::components::toast::Toast::error(
+                                format!("Failed to update clipboard: {error}"),
+                                &self.theme,
+                            )
+                            .duration_ms(Some(TOAST_ERROR_MS)),
+                        );
+                    }
+                }
+                cx.notify();
+            }
+            crate::ai::TabAiSourceType::ScriptListItem => {
+                self.close_tab_ai_harness_terminal(cx);
+
+                // Use the focused target label as the prompt for slug derivation.
+                let prompt_label = route
+                    .focused_target
+                    .as_ref()
+                    .map(|t| t.label.clone())
+                    .unwrap_or_else(|| "ai generated script".to_string());
+
+                match crate::ai::script_generation::save_generated_script_from_response(
+                    &prompt_label,
+                    &text,
+                ) {
+                    Ok(script_path) => {
+                        let path_str = script_path.to_string_lossy().to_string();
+                        tracing::info!(
+                            target: "tab_ai",
+                            source_type = "ScriptListItem",
+                            script_path = %path_str,
+                            "tab_ai_apply_back.script_saved"
+                        );
+                        self.toast_manager.push(
+                            crate::components::toast::Toast::success(
+                                format!(
+                                    "Saved and running generated script: {}",
+                                    script_path
+                                        .file_stem()
+                                        .and_then(|s| s.to_str())
+                                        .unwrap_or("script"),
+                                ),
+                                &self.theme,
+                            )
+                            .duration_ms(Some(TOAST_SUCCESS_MS)),
+                        );
+                        self.execute_script_by_path(&path_str, cx);
+                    }
+                    Err(error) => {
+                        tracing::warn!(
+                            target: "tab_ai",
+                            error = %error,
+                            "tab_ai_apply_back.script_save_failed"
+                        );
+                        self.toast_manager.push(
+                            crate::components::toast::Toast::error(
+                                format!("Failed to save generated script: {error}"),
+                                &self.theme,
+                            )
+                            .duration_ms(Some(TOAST_ERROR_MS)),
+                        );
+                    }
+                }
+                cx.notify();
+            }
+            crate::ai::TabAiSourceType::DesktopSelection
+            | crate::ai::TabAiSourceType::Desktop => {
+                // Desktop selection / generic desktop: hide the main window first,
+                // wait for focus to settle back to the previous frontmost app,
+                // then apply via set_selected_text or TextInjector::paste_text.
+                self.close_tab_ai_harness_terminal(cx);
+                crate::platform::defer_hide_main_window(cx);
+
+                let app_weak = cx.entity().downgrade();
+                cx.spawn(async move |_this, cx| {
+                    cx.background_executor()
+                        .timer(std::time::Duration::from_millis(
+                            Self::TAB_AI_APPLY_BACK_FOCUS_SETTLE_MS,
+                        ))
+                        .await;
+
+                    let route_for_apply = route.clone();
+                    let route_for_toast = route.clone();
+                    let text_for_apply = text.clone();
+
+                    let result = cx
+                        .background_executor()
+                        .spawn(async move {
+                            match route_for_apply.source_type {
+                                crate::ai::TabAiSourceType::DesktopSelection => {
+                                    selected_text::set_selected_text(&text_for_apply)
+                                        .map_err(|error| error.to_string())
+                                }
+                                crate::ai::TabAiSourceType::Desktop => {
+                                    let injector = text_injector::TextInjector::new();
+                                    injector
+                                        .paste_text(&text_for_apply)
+                                        .map_err(|error| error.to_string())
+                                }
+                                _ => Ok(()),
+                            }
+                        })
+                        .await;
+
+                    let _ = cx.update(|cx| {
+                        let Some(app) = app_weak.upgrade() else {
+                            return;
+                        };
+                        app.update(cx, |this, cx| {
+                            match result {
+                                Ok(()) => {
+                                    this.toast_manager.push(
+                                        crate::components::toast::Toast::success(
+                                            tab_ai_apply_back_success_message(
+                                                &route_for_toast.source_type,
+                                            )
+                                            .to_string(),
+                                            &this.theme,
+                                        )
+                                        .duration_ms(Some(TOAST_SUCCESS_MS)),
+                                    );
+                                }
+                                Err(error) => {
+                                    this.toast_manager.push(
+                                        crate::components::toast::Toast::error(
+                                            format!("Failed to apply result: {error}"),
+                                            &this.theme,
+                                        )
+                                        .duration_ms(Some(TOAST_ERROR_MS)),
+                                    );
+                                }
+                            }
+                            cx.notify();
+                        });
+                    });
+                })
+                .detach();
+            }
+        }
+    }
+
+    /// Apply harness output from the terminal.  Prefers the terminal selection
+    /// directly (no clipboard round-trip); falls back to clipboard priming
+    /// only when no selection exists.
     #[allow(dead_code)] // Called from include!() binary code (render_prompts/term.rs)
     pub(crate) fn apply_tab_ai_result_from_terminal(
         &mut self,
         entity: Entity<term_prompt::TermPrompt>,
         cx: &mut Context<Self>,
     ) {
+        // Try to read the terminal selection directly — avoids the
+        // clipboard prime → timer → read race entirely.
+        let selected_text = entity.update(cx, |term_prompt, _cx| {
+            term_prompt.selected_text_for_apply()
+        });
+
+        if let Some(text) = selected_text {
+            let Some(route) = self.tab_ai_harness_apply_back_route.clone() else {
+                self.toast_manager.push(
+                    crate::components::toast::Toast::error(
+                        "Tab AI is still capturing where Apply should go. Press ⌘↩ again in a moment."
+                            .to_string(),
+                        &self.theme,
+                    )
+                    .duration_ms(Some(TOAST_ERROR_MS)),
+                );
+                cx.notify();
+                return;
+            };
+            self.apply_tab_ai_result_text(route, text, cx);
+            return;
+        }
+
+        // No selection — fall back to clipboard priming (copies last output).
         entity.update(cx, |term_prompt, cx| {
             term_prompt.prime_apply_clipboard(cx);
         });
@@ -2694,181 +2915,7 @@ impl ScriptListApp {
             }
         };
 
-        match route.source_type {
-            crate::ai::TabAiSourceType::RunningCommand => {
-                self.close_tab_ai_harness_terminal(cx);
-                if self.try_set_prompt_input(text.clone(), cx) {
-                    self.toast_manager.push(
-                        crate::components::toast::Toast::success(
-                            tab_ai_apply_back_success_message(&route.source_type).to_string(),
-                            &self.theme,
-                        )
-                        .duration_ms(Some(TOAST_SUCCESS_MS)),
-                    );
-                } else {
-                    self.toast_manager.push(
-                        crate::components::toast::Toast::error(
-                            "The original prompt is no longer active".to_string(),
-                            &self.theme,
-                        )
-                        .duration_ms(Some(TOAST_ERROR_MS)),
-                    );
-                }
-                cx.notify();
-                return;
-            }
-            crate::ai::TabAiSourceType::ClipboardEntry => {
-                self.close_tab_ai_harness_terminal(cx);
-                match write_tab_ai_apply_back_clipboard_text(&text) {
-                    Ok(()) => {
-                        self.toast_manager.push(
-                            crate::components::toast::Toast::success(
-                                tab_ai_apply_back_success_message(&route.source_type).to_string(),
-                                &self.theme,
-                            )
-                            .duration_ms(Some(TOAST_SUCCESS_MS)),
-                        );
-                    }
-                    Err(error) => {
-                        self.toast_manager.push(
-                            crate::components::toast::Toast::error(
-                                format!("Failed to update clipboard: {error}"),
-                                &self.theme,
-                            )
-                            .duration_ms(Some(TOAST_ERROR_MS)),
-                        );
-                    }
-                }
-                cx.notify();
-                return;
-            }
-            crate::ai::TabAiSourceType::ScriptListItem => {
-                self.close_tab_ai_harness_terminal(cx);
-
-                // Use the focused target label as the prompt for slug derivation.
-                let prompt_label = route
-                    .focused_target
-                    .as_ref()
-                    .map(|t| t.label.clone())
-                    .unwrap_or_else(|| "ai generated script".to_string());
-
-                match crate::ai::script_generation::save_generated_script_from_response(
-                    &prompt_label,
-                    &text,
-                ) {
-                    Ok(script_path) => {
-                        let path_str = script_path.to_string_lossy().to_string();
-                        tracing::info!(
-                            target: "tab_ai",
-                            source_type = "ScriptListItem",
-                            script_path = %path_str,
-                            "tab_ai_apply_back.script_saved"
-                        );
-                        self.toast_manager.push(
-                            crate::components::toast::Toast::success(
-                                format!(
-                                    "Saved and running generated script: {}",
-                                    script_path
-                                        .file_stem()
-                                        .and_then(|s| s.to_str())
-                                        .unwrap_or("script"),
-                                ),
-                                &self.theme,
-                            )
-                            .duration_ms(Some(TOAST_SUCCESS_MS)),
-                        );
-                        self.execute_script_by_path(&path_str, cx);
-                    }
-                    Err(error) => {
-                        tracing::warn!(
-                            target: "tab_ai",
-                            error = %error,
-                            "tab_ai_apply_back.script_save_failed"
-                        );
-                        self.toast_manager.push(
-                            crate::components::toast::Toast::error(
-                                format!("Failed to save generated script: {error}"),
-                                &self.theme,
-                            )
-                            .duration_ms(Some(TOAST_ERROR_MS)),
-                        );
-                    }
-                }
-                cx.notify();
-                return;
-            }
-            crate::ai::TabAiSourceType::DesktopSelection
-            | crate::ai::TabAiSourceType::Desktop => {}
-        }
-
-        // Desktop selection / generic desktop: hide the main window first,
-        // wait for focus to settle back to the previous frontmost app,
-        // then apply via set_selected_text or TextInjector::paste_text.
-        self.close_tab_ai_harness_terminal(cx);
-        crate::platform::defer_hide_main_window(cx);
-
-        let app_weak = cx.entity().downgrade();
-        cx.spawn(async move |_this, cx| {
-            cx.background_executor()
-                .timer(std::time::Duration::from_millis(
-                    Self::TAB_AI_APPLY_BACK_FOCUS_SETTLE_MS,
-                ))
-                .await;
-
-            let route_for_apply = route.clone();
-            let route_for_toast = route.clone();
-            let text_for_apply = text.clone();
-
-            let result = cx
-                .background_executor()
-                .spawn(async move {
-                    match route_for_apply.source_type {
-                        crate::ai::TabAiSourceType::DesktopSelection => {
-                            selected_text::set_selected_text(&text_for_apply)
-                                .map_err(|error| error.to_string())
-                        }
-                        crate::ai::TabAiSourceType::Desktop => {
-                            let injector = text_injector::TextInjector::new();
-                            injector
-                                .paste_text(&text_for_apply)
-                                .map_err(|error| error.to_string())
-                        }
-                        _ => Ok(()),
-                    }
-                })
-                .await;
-
-            let _ = cx.update(|cx| {
-                let Some(app) = app_weak.upgrade() else {
-                    return;
-                };
-                app.update(cx, |this, cx| {
-                    match result {
-                        Ok(()) => {
-                            this.toast_manager.push(
-                                crate::components::toast::Toast::success(
-                                    tab_ai_apply_back_success_message(&route_for_toast.source_type)
-                                        .to_string(),
-                                    &this.theme,
-                                )
-                                .duration_ms(Some(TOAST_SUCCESS_MS)),
-                            );
-                        }
-                        Err(error) => {
-                            this.toast_manager.push(
-                                crate::components::toast::Toast::error(
-                                    format!("Failed to apply result: {error}"),
-                                    &this.theme,
-                                )
-                                .duration_ms(Some(TOAST_ERROR_MS)),
-                            );
-                        }
-                    }
-                    cx.notify();
-                });
-            });
-        })
-        .detach();
+        self.apply_tab_ai_result_text(route, text, cx);
     }
 }
 
