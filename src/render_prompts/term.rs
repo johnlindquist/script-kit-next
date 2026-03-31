@@ -323,26 +323,31 @@ impl ScriptListApp {
             // Terminal content takes remaining space.
             // Keep overflow clipping scoped to terminal output so the actions popup can
             // preserve vibrancy/translucency compositing when rendered as an overlay.
-            // The wrapper forwards wheel events into the TermPrompt entity so
-            // scroll works even when GPUI targets the wrapper div.
+            // For QuickTerminal (harness), forward wrapper wheel events into the
+            // TermPrompt so scroll works even when GPUI targets the wrapper div.
+            // Regular script terminals handle scroll natively inside TermPrompt.
             .child({
+                let is_quick_terminal =
+                    matches!(self.current_view, AppView::QuickTerminalView { .. });
                 let terminal_entity_for_scroll = entity.clone();
                 div()
                     .flex_1()
                     .min_h(px(0.))
                     .overflow_hidden()
-                    .on_scroll_wheel(cx.listener(
-                        move |_this: &mut Self,
-                              event: &gpui::ScrollWheelEvent,
-                              _window: &mut Window,
-                              cx: &mut Context<Self>| {
-                            let entity = terminal_entity_for_scroll.clone();
-                            entity.update(cx, |term_prompt, cx| {
-                                term_prompt.handle_external_scroll_wheel(event, cx);
-                            });
-                            cx.stop_propagation();
-                        },
-                    ))
+                    .when(is_quick_terminal, |d| {
+                        d.on_scroll_wheel(cx.listener(
+                            move |_this: &mut Self,
+                                  event: &gpui::ScrollWheelEvent,
+                                  _window: &mut Window,
+                                  cx: &mut Context<Self>| {
+                                let entity = terminal_entity_for_scroll.clone();
+                                entity.update(cx, |term_prompt, cx| {
+                                    term_prompt.handle_external_scroll_wheel(event, cx);
+                                });
+                                cx.stop_propagation();
+                            },
+                        ))
+                    })
                     .child(entity)
             })
             // Terminal-specific footer: only advertise close so the PTY keeps full keyboard control.
