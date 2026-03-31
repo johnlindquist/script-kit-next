@@ -4,32 +4,41 @@ Complete reference for AI agents creating Script Kit artifacts: scripts, extensi
 
 > **Package**: `@scriptkit/sdk` — **Runtime**: Bun — **Write under**: `~/.scriptkit/kit/main/{scripts,extensions,agents}`
 
-## Start Here
+## One-Shot First
 
-When the user wants one new Script Kit artifact fast:
+Use `~/.scriptkit/examples/START_HERE.md` as the canonical one-shot authoring guide.
+Open it first when the user wants one new Script Kit artifact in harness mode.
+Use this file only after the artifact type is already chosen and you need deeper SDK reference.
 
-1. Open `~/.scriptkit/examples/START_HERE.md`
-2. Pick exactly one artifact
-3. Copy exactly one starter into `~/.scriptkit/kit/main/`
-4. Stop at the smallest working version
+## Fast Route
 
-## Quick Decision
-
-| If the request is for... | Use | Write to |
-|--------------------------|-----|----------|
+| Request shape | Artifact | Write to |
+|---------------|----------|----------|
 | Script Kit UI, Bun APIs, files, HTTP, or multi-step logic | Script | `~/.scriptkit/kit/main/scripts/<name>.ts` |
 | snippets, text expansion, quick shell commands, or grouped helpers | Extension bundle / scriptlet bundle | `~/.scriptkit/kit/main/extensions/<name>.md` |
 | reusable backend-specific prompt or automation | mdflow agent | `~/.scriptkit/kit/main/agents/<name>.<backend>.md` |
 
 Script Kit uses **extension bundle** and **scriptlet bundle** to mean the same artifact.
 
+## Guardrails
+
+- Create exactly one artifact per request.
+- Save runnable user files only under `~/.scriptkit/kit/main/`.
+- Do not create a `.ts` script when the request is really a bundle or agent.
+- For `tool:<name>` scriptlets, the first line must be `import "@scriptkit/sdk";`.
+- Agent files do not use `export const metadata`; use underscore-prefixed `_sk_*` keys.
+- Choose the backend suffix deliberately: `.claude.md`, `.gemini.md`, `.codex.md`, `.copilot.md`, or `.i.gemini.md`.
+
 ## Read Next
 
-- Script → `~/.scriptkit/examples/scripts/hello-world.ts`
-- Extension bundle / scriptlet bundle → `~/.scriptkit/examples/extensions/starter.md`
-- mdflow agent → `~/.scriptkit/examples/agents/review-pr.claude.md`
-- More bundle rules → `~/.scriptkit/skills/scriptlets/SKILL.md`
-- More agent rules → `~/.scriptkit/skills/agents/SKILL.md`
+- Canonical launchpad → `~/.scriptkit/examples/START_HERE.md`
+- Machine-readable SDK reference → `kit://sdk-reference`
+- Script details → `~/.scriptkit/skills/script-authoring/SKILL.md`
+- Bundle details → `~/.scriptkit/skills/scriptlets/SKILL.md`
+- Agent details → `~/.scriptkit/skills/agents/SKILL.md`
+- Script example → `~/.scriptkit/examples/scripts/hello-world.ts`
+- Bundle starter → `~/.scriptkit/examples/extensions/starter.md`
+- Agent example → `~/.scriptkit/examples/agents/review-pr.claude.md`
 
 ## Prompts
 
