@@ -675,56 +675,36 @@ impl ScriptListApp {
                                     }
                                 } else {
                                     // Tab: Enter directory OR autocomplete file name
-                                    // Get filtered results to find selected item
-                                    let filter_pattern = if let Some(parsed) =
-                                        crate::file_search::parse_directory_path(query)
+                                    // Reuse the precomputed display order instead of
+                                    // re-running Nucleo on every Tab keypress.
+                                    if let Some(clamped) =
+                                        this.clamp_file_search_display_index(*selected_index)
                                     {
-                                        parsed.filter
-                                    } else if !query.is_empty() {
-                                        Some(query.clone())
-                                    } else {
-                                        None
-                                    };
-
-                                    let filtered_results: Vec<_> =
-                                        if let Some(ref pattern) = filter_pattern {
-                                            crate::file_search::filter_results_nucleo_simple(
-                                                &this.cached_file_results,
-                                                pattern,
-                                            )
-                                        } else {
-                                            this.cached_file_results.iter().enumerate().collect()
-                                        };
-
-                                    // Defensive bounds check: clamp selected_index if out of bounds
-                                    let filtered_len = filtered_results.len();
-                                    if filtered_len > 0 && *selected_index >= filtered_len {
-                                        *selected_index = filtered_len - 1;
+                                        *selected_index = clamped;
                                     }
 
-                                    if let Some((_, file)) = filtered_results.get(*selected_index) {
+                                    if let Some((_, file)) =
+                                        this.selected_file_search_result(*selected_index)
+                                    {
                                         if file.file_type == crate::file_search::FileType::Directory
                                         {
-                                            // Directory: Enter it (append /)
                                             let shortened =
                                                 crate::file_search::shorten_path(&file.path);
-                                            let new_path = format!("{}/", shortened);
+                                            let new_path =
+                                                format!("{}/", shortened.trim_end_matches('/'));
                                             crate::logging::log(
                                                 "KEY",
                                                 &format!("Tab: Entering directory: {}", new_path),
                                             );
 
-                                            // Update the input - handle_filter_input_change handles the rest
                                             this.gpui_input_state.update(cx, |state, cx| {
                                                 state.set_value(new_path.clone(), window, cx);
-                                                // Ensure cursor is at end with no selection after programmatic set_value
                                                 let len = new_path.len();
                                                 state.set_selection(len, len, window, cx);
                                             });
 
                                             cx.notify();
                                         } else {
-                                            // File: Autocomplete the full path (terminal-style tab completion)
                                             let shortened =
                                                 crate::file_search::shorten_path(&file.path);
                                             crate::logging::log(
@@ -735,10 +715,8 @@ impl ScriptListApp {
                                                 ),
                                             );
 
-                                            // Set the input to the file's full path
                                             this.gpui_input_state.update(cx, |state, cx| {
                                                 state.set_value(shortened.clone(), window, cx);
-                                                // Ensure cursor is at end with no selection after programmatic set_value
                                                 let len = shortened.len();
                                                 state.set_selection(len, len, window, cx);
                                             });
@@ -746,7 +724,6 @@ impl ScriptListApp {
                                             cx.notify();
                                         }
                                     } else {
-                                        // No selection - just consume the key
                                         crate::logging::log(
                                             "KEY",
                                             "Tab: No selection to autocomplete, no-op",
