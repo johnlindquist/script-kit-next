@@ -18,8 +18,9 @@ pub use device::{
     DictationDeviceSelectionAction,
 };
 pub use runtime::{
-    abort_dictation, get_dictation_target, is_dictation_recording, maybe_unload_transcriber,
-    set_overlay_phase, snapshot_overlay_state, toggle_dictation, transcribe_captured_audio,
+    abort_dictation, dictation_elapsed, get_dictation_target, is_dictation_recording,
+    maybe_unload_transcriber, set_overlay_phase, snapshot_overlay_state, toggle_dictation,
+    transcribe_captured_audio,
 };
 pub use transcription::{
     build_session_result, captured_duration, is_parakeet_model_available, merge_captured_chunks,
