@@ -76,14 +76,31 @@ mod unix_process {
 const EMBEDDED_SDK: &str = include_str!("../../scripts/kit-sdk.ts");
 
 const SAFE_SCRIPT_ENV_VARS: &[&str] = &[
+    // Cross-platform
     "PATH",
     "HOME",
-    "TMPDIR",
-    "USER",
     "LANG",
     "TERM",
+    // Unix
+    "TMPDIR",
+    "USER",
     "SHELL",
     "XDG_RUNTIME_DIR",
+    // Windows — without these, child processes crash (STATUS_STACK_BUFFER_OVERRUN)
+    // because DLLs cannot locate system directories or temp storage.
+    "SystemRoot",
+    "WINDIR",
+    "TEMP",
+    "TMP",
+    "USERPROFILE",
+    "APPDATA",
+    "LOCALAPPDATA",
+    "PROGRAMDATA",
+    "COMSPEC",
+    "SYSTEMDRIVE",
+    "OS",
+    "NUMBER_OF_PROCESSORS",
+    "PROCESSOR_ARCHITECTURE",
 ];
 
 /// OnceLock for single-flight SDK extraction
