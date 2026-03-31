@@ -677,51 +677,85 @@ impl ScriptListApp {
                                     // Tab: Enter directory OR autocomplete file name
                                     // Reuse the precomputed display order instead of
                                     // re-running Nucleo on every Tab keypress.
-                                    if let Some(clamped) =
-                                        this.clamp_file_search_display_index(*selected_index)
-                                    {
+                                    // Use direct field access to avoid borrow conflict
+                                    // with the &mut selected_index from the pattern match.
+                                    let display_len =
+                                        this.file_search_display_indices.len();
+                                    if display_len > 0 {
+                                        let clamped =
+                                            (*selected_index).min(display_len - 1);
                                         *selected_index = clamped;
-                                    }
 
-                                    if let Some((_, file)) =
-                                        this.selected_file_search_result(*selected_index)
-                                    {
-                                        if file.file_type == crate::file_search::FileType::Directory
-                                        {
-                                            let shortened =
-                                                crate::file_search::shorten_path(&file.path);
-                                            let new_path =
-                                                format!("{}/", shortened.trim_end_matches('/'));
-                                            crate::logging::log(
-                                                "KEY",
-                                                &format!("Tab: Entering directory: {}", new_path),
-                                            );
+                                        let file_info = this
+                                            .file_search_display_indices
+                                            .get(clamped)
+                                            .and_then(|&ri| {
+                                                this.cached_file_results.get(ri)
+                                            })
+                                            .map(|f| (f.file_type.clone(), f.path.clone()));
 
-                                            this.gpui_input_state.update(cx, |state, cx| {
-                                                state.set_value(new_path.clone(), window, cx);
-                                                let len = new_path.len();
-                                                state.set_selection(len, len, window, cx);
-                                            });
+                                        if let Some((file_type, path)) = file_info {
+                                            if file_type
+                                                == crate::file_search::FileType::Directory
+                                            {
+                                                let shortened =
+                                                    crate::file_search::shorten_path(&path);
+                                                let new_path = format!(
+                                                    "{}/",
+                                                    shortened.trim_end_matches('/')
+                                                );
+                                                crate::logging::log(
+                                                    "KEY",
+                                                    &format!(
+                                                        "Tab: Entering directory: {}",
+                                                        new_path
+                                                    ),
+                                                );
 
-                                            cx.notify();
-                                        } else {
-                                            let shortened =
-                                                crate::file_search::shorten_path(&file.path);
-                                            crate::logging::log(
-                                                "KEY",
-                                                &format!(
-                                                    "Tab: Autocompleting file path: {}",
-                                                    shortened
-                                                ),
-                                            );
+                                                this.gpui_input_state.update(
+                                                    cx,
+                                                    |state, cx| {
+                                                        state.set_value(
+                                                            new_path.clone(),
+                                                            window,
+                                                            cx,
+                                                        );
+                                                        let len = new_path.len();
+                                                        state.set_selection(
+                                                            len, len, window, cx,
+                                                        );
+                                                    },
+                                                );
 
-                                            this.gpui_input_state.update(cx, |state, cx| {
-                                                state.set_value(shortened.clone(), window, cx);
-                                                let len = shortened.len();
-                                                state.set_selection(len, len, window, cx);
-                                            });
+                                                cx.notify();
+                                            } else {
+                                                let shortened =
+                                                    crate::file_search::shorten_path(&path);
+                                                crate::logging::log(
+                                                    "KEY",
+                                                    &format!(
+                                                        "Tab: Autocompleting file path: {}",
+                                                        shortened
+                                                    ),
+                                                );
 
-                                            cx.notify();
+                                                this.gpui_input_state.update(
+                                                    cx,
+                                                    |state, cx| {
+                                                        state.set_value(
+                                                            shortened.clone(),
+                                                            window,
+                                                            cx,
+                                                        );
+                                                        let len = shortened.len();
+                                                        state.set_selection(
+                                                            len, len, window, cx,
+                                                        );
+                                                    },
+                                                );
+
+                                                cx.notify();
+                                            }
                                         }
                                     } else {
                                         crate::logging::log(

@@ -81,78 +81,89 @@
                                     }
                                 } else {
                                     // Tab: Enter directory OR autocomplete file name
-                                    // Get filtered results to find selected item
-                                    let filter_pattern = if let Some(parsed) =
-                                        crate::file_search::parse_directory_path(query)
-                                    {
-                                        parsed.filter
-                                    } else if !query.is_empty() {
-                                        Some(query.clone())
-                                    } else {
-                                        None
-                                    };
+                                    // Reuse the precomputed display order instead of
+                                    // re-running Nucleo on every Tab keypress.
+                                    // Use direct field access to avoid borrow conflict
+                                    // with the &mut selected_index from the pattern match.
+                                    let display_len =
+                                        this.file_search_display_indices.len();
+                                    if display_len > 0 {
+                                        let clamped =
+                                            (*selected_index).min(display_len - 1);
+                                        *selected_index = clamped;
 
-                                    let filtered_results: Vec<_> =
-                                        if let Some(ref pattern) = filter_pattern {
-                                            crate::file_search::filter_results_nucleo_simple(
-                                                &this.cached_file_results,
-                                                pattern,
-                                            )
-                                        } else {
-                                            this.cached_file_results.iter().enumerate().collect()
-                                        };
+                                        let file_info = this
+                                            .file_search_display_indices
+                                            .get(clamped)
+                                            .and_then(|&ri| {
+                                                this.cached_file_results.get(ri)
+                                            })
+                                            .map(|f| (f.file_type.clone(), f.path.clone()));
 
-                                    // Defensive bounds check: clamp selected_index if out of bounds
-                                    let filtered_len = filtered_results.len();
-                                    if filtered_len > 0 && *selected_index >= filtered_len {
-                                        *selected_index = filtered_len - 1;
-                                    }
+                                        if let Some((file_type, path)) = file_info {
+                                            if file_type
+                                                == crate::file_search::FileType::Directory
+                                            {
+                                                let shortened =
+                                                    crate::file_search::shorten_path(&path);
+                                                let new_path = format!(
+                                                    "{}/",
+                                                    shortened.trim_end_matches('/')
+                                                );
+                                                crate::logging::log(
+                                                    "KEY",
+                                                    &format!(
+                                                        "Tab: Entering directory: {}",
+                                                        new_path
+                                                    ),
+                                                );
 
-                                    if let Some((_, file)) = filtered_results.get(*selected_index) {
-                                        if file.file_type == crate::file_search::FileType::Directory
-                                        {
-                                            // Directory: Enter it (append /)
-                                            let shortened =
-                                                crate::file_search::shorten_path(&file.path);
-                                            let new_path = format!("{}/", shortened);
-                                            crate::logging::log(
-                                                "KEY",
-                                                &format!("Tab: Entering directory: {}", new_path),
-                                            );
+                                                this.gpui_input_state.update(
+                                                    cx,
+                                                    |state, cx| {
+                                                        state.set_value(
+                                                            new_path.clone(),
+                                                            window,
+                                                            cx,
+                                                        );
+                                                        let len = new_path.len();
+                                                        state.set_selection(
+                                                            len, len, window, cx,
+                                                        );
+                                                    },
+                                                );
 
-                                            // Update the input - handle_filter_input_change handles the rest
-                                            this.gpui_input_state.update(cx, |state, cx| {
-                                                state.set_value(new_path.clone(), window, cx);
-                                                // Ensure cursor is at end with no selection after programmatic set_value
-                                                let len = new_path.len();
-                                                state.set_selection(len, len, window, cx);
-                                            });
+                                                cx.notify();
+                                            } else {
+                                                let shortened =
+                                                    crate::file_search::shorten_path(&path);
+                                                crate::logging::log(
+                                                    "KEY",
+                                                    &format!(
+                                                        "Tab: Autocompleting file path: {}",
+                                                        shortened
+                                                    ),
+                                                );
 
-                                            cx.notify();
-                                        } else {
-                                            // File: Autocomplete the full path (terminal-style tab completion)
-                                            let shortened =
-                                                crate::file_search::shorten_path(&file.path);
-                                            crate::logging::log(
-                                                "KEY",
-                                                &format!(
-                                                    "Tab: Autocompleting file path: {}",
-                                                    shortened
-                                                ),
-                                            );
+                                                this.gpui_input_state.update(
+                                                    cx,
+                                                    |state, cx| {
+                                                        state.set_value(
+                                                            shortened.clone(),
+                                                            window,
+                                                            cx,
+                                                        );
+                                                        let len = shortened.len();
+                                                        state.set_selection(
+                                                            len, len, window, cx,
+                                                        );
+                                                    },
+                                                );
 
-                                            // Set the input to the file's full path
-                                            this.gpui_input_state.update(cx, |state, cx| {
-                                                state.set_value(shortened.clone(), window, cx);
-                                                // Ensure cursor is at end with no selection after programmatic set_value
-                                                let len = shortened.len();
-                                                state.set_selection(len, len, window, cx);
-                                            });
-
-                                            cx.notify();
+                                                cx.notify();
+                                            }
                                         }
                                     } else {
-                                        // No selection - just consume the key
                                         crate::logging::log(
                                             "KEY",
                                             "Tab: No selection to autocomplete, no-op",
