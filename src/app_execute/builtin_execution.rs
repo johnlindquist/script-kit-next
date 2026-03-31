@@ -32,6 +32,7 @@ enum DictationModelProgressEvent {
         downloaded_bytes: u64,
         total_bytes: u64,
         speed_bytes_per_sec: u64,
+        eta_seconds: Option<u64>,
     },
     Extracting,
 }
@@ -82,6 +83,15 @@ fn dictation_model_prompt_status() -> &'static parking_lot::Mutex<crate::dictati
     DICTATION_MODEL_PROMPT_STATUS.get_or_init(|| {
         parking_lot::Mutex::new(crate::dictation::DictationModelStatus::NotDownloaded)
     })
+}
+
+static PARAKEET_MODEL_DOWNLOAD_CANCEL: std::sync::OnceLock<
+    parking_lot::Mutex<Option<std::sync::Arc<std::sync::atomic::AtomicBool>>>,
+> = std::sync::OnceLock::new();
+
+fn parakeet_model_download_cancel_slot(
+) -> &'static parking_lot::Mutex<Option<std::sync::Arc<std::sync::atomic::AtomicBool>>> {
+    PARAKEET_MODEL_DOWNLOAD_CANCEL.get_or_init(|| parking_lot::Mutex::new(None))
 }
 
 #[cfg(test)]
@@ -4170,6 +4180,7 @@ impl ScriptListApp {
         }
 
         let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        *parakeet_model_download_cancel_slot().lock() = Some(cancel.clone());
         // Channel carries typed progress events from the blocking download
         // thread to the async context so we can update the prompt on the
         // main thread.
@@ -4188,6 +4199,7 @@ impl ScriptListApp {
                             downloaded_bytes,
                             total_bytes,
                             speed_bytes_per_sec,
+                            eta_seconds,
                         } => {
                             this.update_dictation_model_prompt_if_visible(
                                 crate::dictation::DictationModelStatus::Downloading {
@@ -4195,6 +4207,7 @@ impl ScriptListApp {
                                     downloaded_bytes,
                                     total_bytes,
                                     speed_bytes_per_sec,
+                                    eta_seconds,
                                 },
                                 cx,
                             );
@@ -4208,9 +4221,10 @@ impl ScriptListApp {
                             let dl = crate::dictation::download::format_bytes(downloaded_bytes);
                             let total = crate::dictation::download::format_bytes(total_bytes);
                             let speed = crate::dictation::download::format_speed(speed_bytes_per_sec);
+                            let eta = crate::dictation::download::format_eta(eta_seconds);
                             this.show_hud(
                                 format!(
-                                    "Downloading model\u{2026} [{bar}] {percentage}% \u{00b7} {dl}/{total} \u{00b7} {speed}"
+                                    "Downloading model\u{2026} [{bar}] {percentage}% \u{00b7} {dl}/{total} \u{00b7} {speed} \u{00b7} {eta}"
                                 ),
                                 Some(HUD_SHORT_MS),
                                 cx,
@@ -4263,7 +4277,7 @@ impl ScriptListApp {
                                                 tracker.update(progress.downloaded);
                                                 tracker.speed_bytes_per_sec()
                                             };
-                                            if pct >= prev + 2 || pct == 100 {
+                                            if pct >= prev.saturating_add(1) || pct == 100 {
                                                 last_pct.store(
                                                     pct,
                                                     std::sync::atomic::Ordering::Relaxed,
@@ -4276,12 +4290,14 @@ impl ScriptListApp {
                                                     speed,
                                                     "Model download progress"
                                                 );
+                                                let eta = crate::dictation::download::estimate_eta_seconds(progress, speed);
                                                 let _ = progress_tx.send_blocking(
                                                     DictationModelProgressEvent::Downloading {
                                                         percentage: pct,
                                                         downloaded_bytes: progress.downloaded,
                                                         total_bytes: progress.total,
                                                         speed_bytes_per_sec: speed,
+                                                        eta_seconds: eta,
                                                     },
                                                 );
                                             }
@@ -4308,6 +4324,7 @@ impl ScriptListApp {
                 .await;
 
             let _ = this.update(cx, |this, cx| {
+                *parakeet_model_download_cancel_slot().lock() = None;
                 PARAKEET_MODEL_DOWNLOAD_IN_PROGRESS
                     .store(false, std::sync::atomic::Ordering::Release);
                 match result {
@@ -4323,6 +4340,22 @@ impl ScriptListApp {
                         this.show_hud(
                             "Dictation model ready \u{2014} press hotkey to dictate"
                                 .to_string(),
+                            Some(HUD_MEDIUM_MS),
+                            cx,
+                        );
+                    }
+                    Err(error) if error.to_string().contains("cancelled") => {
+                        let cancelled = "model download cancelled".to_string();
+                        tracing::info!(
+                            category = "DICTATION",
+                            "Parakeet model download cancelled"
+                        );
+                        this.update_dictation_model_prompt_if_visible(
+                            crate::dictation::DictationModelStatus::DownloadFailed(cancelled),
+                            cx,
+                        );
+                        this.show_hud(
+                            "Dictation model download cancelled".to_string(),
                             Some(HUD_MEDIUM_MS),
                             cx,
                         );
@@ -4358,13 +4391,20 @@ impl ScriptListApp {
         status: crate::dictation::DictationModelStatus,
     ) -> (String, String, Vec<Choice>) {
         use crate::dictation::DictationModelStatus;
+
+        let archive_size = crate::dictation::download::format_bytes(
+            crate::dictation::PARAKEET_MODEL_ARCHIVE_SIZE,
+        );
+
         match status {
             DictationModelStatus::NotDownloaded => (
-                "Download dictation model?".to_string(),
-                "Dictation model required".to_string(),
+                "Download local dictation model".to_string(),
+                format!(
+                    "{archive_size} download \u{00b7} fully local transcription \u{00b7} no cloud round-trip"
+                ),
                 vec![
                     Choice {
-                        name: "Download Parakeet model (~478 MB)".to_string(),
+                        name: format!("Download Parakeet model ({archive_size})"),
                         value: BUILTIN_DICTATION_MODEL_DOWNLOAD.to_string(),
                         description: Some("Required for local dictation".to_string()),
                         key: None,
@@ -4384,6 +4424,7 @@ impl ScriptListApp {
                 downloaded_bytes,
                 total_bytes,
                 speed_bytes_per_sec,
+                eta_seconds,
             } => {
                 let filled = (percentage / 10) as usize;
                 let empty = 10usize.saturating_sub(filled);
@@ -4391,21 +4432,33 @@ impl ScriptListApp {
                 let dl = crate::dictation::download::format_bytes(downloaded_bytes);
                 let total = crate::dictation::download::format_bytes(total_bytes);
                 let speed = crate::dictation::download::format_speed(speed_bytes_per_sec);
+                let eta = crate::dictation::download::format_eta(eta_seconds);
                 (
-                    "Downloading dictation model\u{2026}".to_string(),
-                    format!("[{bar}] {percentage}% \u{00b7} {dl}/{total} \u{00b7} {speed}"),
-                    vec![Choice {
-                        name: "Hide".to_string(),
-                        value: BUILTIN_DICTATION_MODEL_HIDE.to_string(),
-                        description: Some("Download continues in background".to_string()),
-                        key: None,
-                        semantic_id: None,
-                    }],
+                    format!("Preparing local dictation\u{2026} {percentage}%"),
+                    format!("[{bar}] {dl}/{total} \u{00b7} {speed} \u{00b7} {eta}"),
+                    vec![
+                        Choice {
+                            name: "Cancel download".to_string(),
+                            value: BUILTIN_DICTATION_MODEL_CANCEL.to_string(),
+                            description: Some(
+                                "Stop now; retry resumes from the partial file".to_string(),
+                            ),
+                            key: None,
+                            semantic_id: None,
+                        },
+                        Choice {
+                            name: "Hide".to_string(),
+                            value: BUILTIN_DICTATION_MODEL_HIDE.to_string(),
+                            description: Some("Download continues in background".to_string()),
+                            key: None,
+                            semantic_id: None,
+                        },
+                    ],
                 )
             }
             DictationModelStatus::Extracting => (
-                "Extracting dictation model\u{2026}".to_string(),
-                "Unpacking Parakeet model files".to_string(),
+                "Installing local dictation model\u{2026}".to_string(),
+                "Download finished. Unpacking model files.".to_string(),
                 vec![Choice {
                     name: "Hide".to_string(),
                     value: BUILTIN_DICTATION_MODEL_HIDE.to_string(),
@@ -4414,6 +4467,32 @@ impl ScriptListApp {
                     semantic_id: None,
                 }],
             ),
+            DictationModelStatus::DownloadFailed(ref error)
+                if error.to_ascii_lowercase().contains("cancelled") =>
+            {
+                (
+                    "Download cancelled".to_string(),
+                    "Partial download kept. Retry resumes from where you stopped.".to_string(),
+                    vec![
+                        Choice {
+                            name: "Retry download".to_string(),
+                            value: BUILTIN_DICTATION_MODEL_DOWNLOAD.to_string(),
+                            description: Some(
+                                "Resume the Parakeet model download".to_string(),
+                            ),
+                            key: None,
+                            semantic_id: None,
+                        },
+                        Choice {
+                            name: "Done".to_string(),
+                            value: BUILTIN_DICTATION_MODEL_HIDE.to_string(),
+                            description: Some("Close this prompt".to_string()),
+                            key: None,
+                            semantic_id: None,
+                        },
+                    ],
+                )
+            }
             DictationModelStatus::DownloadFailed(error) => (
                 "Dictation model download failed".to_string(),
                 error,
@@ -4438,7 +4517,8 @@ impl ScriptListApp {
             ),
             DictationModelStatus::Available => (
                 "Dictation model ready".to_string(),
-                "Press the dictation hotkey again to start recording".to_string(),
+                "Everything is local now. Press the dictation hotkey again to start recording."
+                    .to_string(),
                 vec![Choice {
                     name: "Done".to_string(),
                     value: BUILTIN_DICTATION_MODEL_HIDE.to_string(),
@@ -4477,6 +4557,10 @@ impl ScriptListApp {
         status: crate::dictation::DictationModelStatus,
         cx: &mut Context<Self>,
     ) {
+        // Always persist the latest status so reopening a hidden prompt
+        // shows the current state instead of stale progress.
+        *dictation_model_prompt_status().lock() = status.clone();
+
         let is_visible = matches!(
             &self.current_view,
             AppView::MiniPrompt { id, .. } if id == BUILTIN_DICTATION_MODEL_PROMPT_ID
@@ -4509,12 +4593,37 @@ impl ScriptListApp {
                     crate::dictation::DictationModelStatus::Downloading {
                         percentage: 0,
                         downloaded_bytes: 0,
-                        total_bytes: 0,
+                        total_bytes: crate::dictation::PARAKEET_MODEL_ARCHIVE_SIZE,
                         speed_bytes_per_sec: 0,
+                        eta_seconds: None,
                     },
                     cx,
                 );
                 self.start_parakeet_model_download(cx);
+            }
+            BUILTIN_DICTATION_MODEL_CANCEL => {
+                if PARAKEET_MODEL_DOWNLOAD_IN_PROGRESS
+                    .load(std::sync::atomic::Ordering::Acquire)
+                {
+                    tracing::info!(
+                        category = "DICTATION",
+                        "User requested Parakeet model download cancellation"
+                    );
+                    if let Some(cancel) = parakeet_model_download_cancel_slot().lock().clone() {
+                        cancel.store(true, std::sync::atomic::Ordering::Release);
+                    }
+                    self.show_hud(
+                        "Cancelling dictation model download\u{2026}".to_string(),
+                        Some(HUD_SHORT_MS),
+                        cx,
+                    );
+                } else {
+                    tracing::info!(
+                        category = "DICTATION",
+                        "User declined Parakeet model download"
+                    );
+                    self.reset_to_script_list(cx);
+                }
             }
             BUILTIN_DICTATION_MODEL_HIDE => {
                 tracing::info!(
@@ -4801,12 +4910,12 @@ mod dictation_model_prompt_tests {
                 downloaded_bytes: 175_000_000,
                 total_bytes: 500_000_000,
                 speed_bytes_per_sec: 10_485_760,
+                eta_seconds: Some(31),
             },
         );
-        assert_eq!(title, "Downloading dictation model\u{2026}");
         assert!(
-            placeholder.contains("35%"),
-            "placeholder must show percentage, got: {placeholder}"
+            title.contains("35%"),
+            "title must show percentage, got: {title}"
         );
         assert!(
             placeholder.contains("166.9 MB"),
@@ -4816,9 +4925,15 @@ mod dictation_model_prompt_tests {
             placeholder.contains("10.0 MB/s"),
             "placeholder must show speed, got: {placeholder}"
         );
-        assert_eq!(choices.len(), 1);
-        assert_eq!(choices[0].name, "Hide");
-        assert_eq!(choices[0].value, BUILTIN_DICTATION_MODEL_HIDE);
+        assert!(
+            placeholder.contains("ETA"),
+            "placeholder must show ETA, got: {placeholder}"
+        );
+        assert_eq!(choices.len(), 2);
+        assert_eq!(choices[0].name, "Cancel download");
+        assert_eq!(choices[0].value, BUILTIN_DICTATION_MODEL_CANCEL);
+        assert_eq!(choices[1].name, "Hide");
+        assert_eq!(choices[1].value, BUILTIN_DICTATION_MODEL_HIDE);
     }
 
     #[test]
@@ -4836,12 +4951,34 @@ mod dictation_model_prompt_tests {
     }
 
     #[test]
+    fn cancelled_prompt_offers_retry_and_done() {
+        let (title, placeholder, choices) = ScriptListApp::build_dictation_model_prompt(
+            crate::dictation::DictationModelStatus::DownloadFailed(
+                "model download cancelled".to_string(),
+            ),
+        );
+        assert_eq!(title, "Download cancelled");
+        assert!(
+            placeholder.contains("Partial download kept"),
+            "cancelled placeholder must mention partial file, got: {placeholder}"
+        );
+        assert_eq!(choices.len(), 2);
+        assert_eq!(choices[0].name, "Retry download");
+        assert_eq!(choices[0].value, BUILTIN_DICTATION_MODEL_DOWNLOAD);
+        assert_eq!(choices[1].name, "Done");
+        assert_eq!(choices[1].value, BUILTIN_DICTATION_MODEL_HIDE);
+    }
+
+    #[test]
     fn not_downloaded_prompt_offers_download_and_cancel() {
         let (title, placeholder, choices) = ScriptListApp::build_dictation_model_prompt(
             crate::dictation::DictationModelStatus::NotDownloaded,
         );
-        assert_eq!(title, "Download dictation model?");
-        assert_eq!(placeholder, "Dictation model required");
+        assert_eq!(title, "Download local dictation model");
+        assert!(
+            placeholder.contains("fully local transcription"),
+            "placeholder must mention local transcription, got: {placeholder}"
+        );
         assert_eq!(choices.len(), 2);
         assert_eq!(choices[0].value, BUILTIN_DICTATION_MODEL_DOWNLOAD);
         assert_eq!(choices[1].value, BUILTIN_DICTATION_MODEL_CANCEL);
@@ -4852,7 +4989,7 @@ mod dictation_model_prompt_tests {
         let (title, _placeholder, choices) = ScriptListApp::build_dictation_model_prompt(
             crate::dictation::DictationModelStatus::Extracting,
         );
-        assert_eq!(title, "Extracting dictation model\u{2026}");
+        assert_eq!(title, "Installing local dictation model\u{2026}");
         assert_eq!(choices.len(), 1);
         assert_eq!(choices[0].value, BUILTIN_DICTATION_MODEL_HIDE);
     }

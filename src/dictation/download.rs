@@ -58,6 +58,52 @@ pub fn format_speed(bytes_per_sec: u64) -> String {
     format!("{}/s", format_bytes(bytes_per_sec))
 }
 
+/// Estimate remaining time from total bytes and current speed.
+/// Returns `None` when we do not yet have enough information.
+pub fn estimate_eta_seconds(progress: DownloadProgress, bytes_per_sec: u64) -> Option<u64> {
+    if progress.total == 0 || bytes_per_sec == 0 || progress.downloaded >= progress.total {
+        return None;
+    }
+    let remaining = progress.total.saturating_sub(progress.downloaded);
+    Some(remaining.div_ceil(bytes_per_sec))
+}
+
+/// Format ETA text for the download prompt and HUD.
+///
+/// Examples:
+/// - `None` → `"ETA --"`
+/// - `Some(0)` → `"ETA <1s"`
+/// - `Some(15)` → `"ETA 15s"`
+/// - `Some(75)` → `"ETA 1m 15s"`
+/// - `Some(3672)` → `"ETA 1h 1m"`
+pub fn format_eta(seconds: Option<u64>) -> String {
+    let Some(seconds) = seconds else {
+        return "ETA --".to_string();
+    };
+    if seconds == 0 {
+        return "ETA <1s".to_string();
+    }
+    if seconds < 60 {
+        return format!("ETA {seconds}s");
+    }
+    if seconds < 3600 {
+        let minutes = seconds / 60;
+        let secs = seconds % 60;
+        return if secs == 0 {
+            format!("ETA {minutes}m")
+        } else {
+            format!("ETA {minutes}m {secs}s")
+        };
+    }
+    let hours = seconds / 3600;
+    let minutes = (seconds % 3600) / 60;
+    if minutes == 0 {
+        format!("ETA {hours}h")
+    } else {
+        format!("ETA {hours}h {minutes}m")
+    }
+}
+
 /// Download phase reported to callers.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DownloadPhase {

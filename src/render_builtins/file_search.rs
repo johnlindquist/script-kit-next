@@ -462,10 +462,30 @@ impl ScriptListApp {
                                     }
                                 }
                             } else {
-                                // Open file with default app
                                 if let Some(file) = get_selected_file() {
+                                    if file.file_type == FileType::Directory {
+                                        // Directory: browse inline
+                                        let next_query = format!(
+                                            "{}/",
+                                            file_search::shorten_path(&file.path)
+                                                .trim_end_matches('/')
+                                        );
+                                        let next_presentation = match &this.current_view {
+                                            AppView::FileSearchView {
+                                                presentation, ..
+                                            } => *presentation,
+                                            _ => FileSearchPresentation::Full,
+                                        };
+                                        this.open_file_search_view(
+                                            next_query,
+                                            next_presentation,
+                                            cx,
+                                        );
+                                        cx.stop_propagation();
+                                        return;
+                                    }
+                                    // File: open with default app and close
                                     let _ = file_search::open_file(&file.path);
-                                    // Close window after opening file
                                     this.close_and_reset_window(cx);
                                 }
                             }
@@ -601,9 +621,10 @@ impl ScriptListApp {
                                 let fallback_icon =
                                     file_search::file_type_icon(file.file_type).to_string();
 
-                                // Click handler: select on click, open file on double-click
+                                // Click handler: select on click, open/browse on double-click
                                 let click_entity = click_entity_handle.clone();
                                 let file_path = file.path.clone();
+                                let file_type = file.file_type;
                                 let click_handler = move |event: &gpui::ClickEvent,
                                                            _window: &mut Window,
                                                            cx: &mut gpui::App| {
@@ -618,18 +639,40 @@ impl ScriptListApp {
                                             }
                                             cx.notify();
 
-                                            // Double-click: open file
+                                            // Double-click: browse directory inline or open file
                                             if let gpui::ClickEvent::Mouse(mouse_event) = event {
                                                 if mouse_event.down.click_count == 2 {
-                                                    logging::log(
-                                                        "UI",
-                                                        &format!(
-                                                            "Double-click opening file: {}",
-                                                            file_path
-                                                        ),
-                                                    );
-                                                    let _ = file_search::open_file(&file_path);
-                                                    this.close_and_reset_window(cx);
+                                                    if file_type == FileType::Directory {
+                                                        let next_query = format!(
+                                                            "{}/",
+                                                            file_search::shorten_path(&file_path)
+                                                                .trim_end_matches('/')
+                                                        );
+                                                        let next_presentation =
+                                                            match &this.current_view {
+                                                                AppView::FileSearchView {
+                                                                    presentation,
+                                                                    ..
+                                                                } => *presentation,
+                                                                _ => FileSearchPresentation::Full,
+                                                            };
+                                                        this.open_file_search_view(
+                                                            next_query,
+                                                            next_presentation,
+                                                            cx,
+                                                        );
+                                                    } else {
+                                                        logging::log(
+                                                            "UI",
+                                                            &format!(
+                                                                "Double-click opening file: {}",
+                                                                file_path
+                                                            ),
+                                                        );
+                                                        let _ =
+                                                            file_search::open_file(&file_path);
+                                                        this.close_and_reset_window(cx);
+                                                    }
                                                 }
                                             }
                                         });
@@ -946,6 +989,45 @@ impl ScriptListApp {
                 )
         };
 
+        let is_mini = matches!(presentation, FileSearchPresentation::Mini);
+
+        // Compute mini-mode context for mode-aware chrome
+        let is_directory_query = crate::file_search::parse_directory_path(query).is_some();
+        let is_advanced_query = crate::file_search::looks_like_advanced_mdquery(query);
+        let mode_label = if is_directory_query {
+            "Browse"
+        } else if is_advanced_query {
+            "Spotlight+"
+        } else {
+            "Search"
+        };
+
+        let (empty_title, empty_subtitle) = if query.is_empty() {
+            ("Type to search files", "Use ~/ to browse a folder inline")
+        } else if is_directory_query && query.ends_with('/') {
+            ("Folder is empty", "Try another path or keep typing to narrow a parent folder")
+        } else if is_directory_query {
+            ("No matches in folder", "Keep typing to narrow the current directory")
+        } else if is_advanced_query {
+            ("No Spotlight matches", "Try a broader predicate or fewer operators")
+        } else {
+            ("No files found", "Try ~/ to browse, or \u{2318}\u{21b5} to ask AI about this search")
+        };
+
+        let mini_hints: Vec<SharedString> = if let Some(file) = selected_file.as_ref() {
+            if file.file_type == FileType::Directory {
+                vec!["\u{21b5} Browse".into(), "\u{2318}\u{21b5} Ask AI".into(), "\u{2318}K Actions".into()]
+            } else {
+                vec!["\u{21b5} Open".into(), "\u{2318}\u{21b5} Ask AI".into(), "\u{2318}K Actions".into()]
+            }
+        } else if is_directory_query {
+            vec!["Browse by path".into(), "\u{2318}\u{21b5} Ask AI".into(), "\u{2318}K Actions".into()]
+        } else if is_advanced_query {
+            vec!["Spotlight query".into(), "\u{2318}\u{21b5} Ask AI".into(), "\u{2318}K Actions".into()]
+        } else {
+            vec!["\u{21b5} Open".into(), "\u{2318}\u{21b5} Ask AI".into(), "\u{2318}K Actions".into()]
+        };
+
         // Header: bare input + file count (scaffold adds padding/layout)
         let input_height = CURSOR_HEIGHT_LG + (CURSOR_MARGIN_Y * 2.0);
         let header_element = div()
@@ -974,12 +1056,16 @@ impl ScriptListApp {
                     .items_center()
                     .justify_end()
                     .py(px(4.))
-                    .w(px(70.))
+                    .w(px(120.))
                     .child(
                         div()
                             .text_sm()
                             .text_color(rgb(text_dimmed))
-                            .child(format!("{} files", filtered_len)),
+                            .child(if is_mini {
+                                format!("{} \u{00b7} {}", mode_label, filtered_len)
+                            } else {
+                                format!("{} files", filtered_len)
+                            }),
                     ),
             );
 
@@ -1005,15 +1091,23 @@ impl ScriptListApp {
                 .items_center()
                 .justify_center()
                 .child(
-                    div().flex().flex_col().items_center().gap(px(8.)).child(
-                        div()
-                            .text_color(rgb(text_dimmed))
-                            .child(if query.is_empty() {
-                                "Type to search files"
-                            } else {
-                                "No files found"
-                            }),
-                    ),
+                    div()
+                        .flex()
+                        .flex_col()
+                        .items_center()
+                        .gap(px(6.))
+                        .child(
+                            div()
+                                .text_sm()
+                                .text_color(rgb(text_dimmed))
+                                .child(empty_title),
+                        )
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(rgb(text_muted))
+                                .child(empty_subtitle),
+                        ),
                 )
         } else {
             div()
@@ -1027,8 +1121,6 @@ impl ScriptListApp {
         // Preview pane: file detail or placeholder
         let preview_pane = preview_content;
 
-        let is_mini = matches!(presentation, FileSearchPresentation::Mini);
-
         // Assemble layout: mini = list-only, full = list + preview split
         let layout_mode = if is_mini { "mini" } else { "expanded" };
         tracing::info!(
@@ -1038,15 +1130,10 @@ impl ScriptListApp {
         );
 
         if is_mini {
-            let hints: Vec<SharedString> = vec![
-                "\u{21b5} Open".into(),
-                "\u{2318}\u{21b5} Ask AI".into(),
-                "\u{21e5} Navigate".into(),
-            ];
             crate::components::render_minimal_list_prompt_scaffold(
                 header_element,
                 list_pane,
-                hints,
+                mini_hints,
                 None,
             )
             .key_context("FileSearchView")

@@ -258,11 +258,20 @@ impl ScriptListApp {
                 selected_index,
                 presentation,
             } => {
+                // Copy presentation early so we can use it after releasing
+                // the mutable borrow on self.current_view.
+                let presentation = *presentation;
+
                 // ── Mini presentation: return to ScriptList when query
                 //    no longer matches the ~ trigger ──────────────────
-                if *presentation == FileSearchPresentation::Mini
+                if presentation == FileSearchPresentation::Mini
                     && !Self::should_enter_file_search_from_script_list(&new_text)
                 {
+                    if let Some(cancel) = self.file_search_cancel.take() {
+                        cancel.store(true, std::sync::atomic::Ordering::Relaxed);
+                    }
+                    self.file_search_debounce_task = None;
+                    self.file_search_loading = false;
                     self.current_view = AppView::ScriptList;
                     self.filter_text = new_text.clone();
                     self.pending_placeholder = None;
@@ -430,6 +439,13 @@ impl ScriptListApp {
                                                         .scroll_to_item(0, ScrollStrategy::Top);
                                                 }
 
+                                                if let AppView::FileSearchView { presentation, .. } = &app.current_view {
+                                                    Self::resize_file_search_window_for_presentation(
+                                                        *presentation,
+                                                        app.file_search_display_indices.len(),
+                                                    );
+                                                }
+
                                                 cx.notify();
                                             })
                                         });
@@ -444,6 +460,10 @@ impl ScriptListApp {
                             self.file_search_loading = false;
                             // Recompute display indices for new filter
                             self.recompute_file_search_display_indices();
+                            Self::resize_file_search_window_for_presentation(
+                                presentation,
+                                self.file_search_display_indices.len(),
+                            );
                             cx.notify();
                         }
                         return; // Don't run main menu filter logic
@@ -459,6 +479,7 @@ impl ScriptListApp {
                     // Clear cached results for new search
                     self.cached_file_results.clear();
                     self.file_search_display_indices.clear();
+                    Self::resize_file_search_window_for_presentation(presentation, 0);
                     cx.notify();
 
                     // Create new cancel token for this search
@@ -574,6 +595,13 @@ impl ScriptListApp {
                                                     "File search first batch: {} results",
                                                     batch_count
                                                 ),
+                                            );
+                                        }
+
+                                        if let AppView::FileSearchView { presentation, .. } = &app.current_view {
+                                            Self::resize_file_search_window_for_presentation(
+                                                *presentation,
+                                                app.file_search_display_indices.len(),
                                             );
                                         }
 
