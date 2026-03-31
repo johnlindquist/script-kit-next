@@ -55,6 +55,9 @@ const EMBEDDED_EXAMPLES_ADVANCED: &str =
     include_str!("../../kit-init/extensions/examples/advanced.md");
 /// Embedded Examples extension - howto guide (built-in extension that ships with the app)
 const EMBEDDED_EXAMPLES_HOWTO: &str = include_str!("../../kit-init/extensions/examples/howto.md");
+/// Embedded Examples extension - minimal starter bundle
+const EMBEDDED_EXAMPLES_STARTER: &str =
+    include_str!("../../kit-init/extensions/examples/starter.md");
 /// Root-level CLAUDE.md for the ~/.scriptkit workspace (the harness cwd)
 const EMBEDDED_ROOT_CLAUDE_MD: &str = include_str!("../../kit-init/ROOT_CLAUDE.md");
 /// Root-level AGENTS.md SDK reference for the ~/.scriptkit workspace
@@ -85,6 +88,8 @@ const EMBEDDED_EXAMPLE_PATH_PICKER: &str =
     include_str!("../../kit-init/examples/scripts/path-picker.ts");
 /// Examples README
 const EMBEDDED_EXAMPLES_README: &str = include_str!("../../kit-init/examples/README.md");
+/// Examples START_HERE launchpad
+const EMBEDDED_EXAMPLES_START_HERE: &str = include_str!("../../kit-init/examples/START_HERE.md");
 /// Skill: agent authoring
 const EMBEDDED_SKILL_AGENTS: &str = include_str!("../../kit-init/skills/agents/SKILL.md");
 /// Example agent: review-pr
@@ -519,6 +524,12 @@ pub fn ensure_kit_setup() -> SetupResult {
         &mut warnings,
         "kit/examples/extensions/howto.md",
     );
+    write_string_if_changed(
+        &examples_dir.join("starter.md"),
+        EMBEDDED_EXAMPLES_STARTER,
+        &mut warnings,
+        "kit/examples/extensions/starter.md",
+    );
 
     // User-owned: config.ts (only create if missing)
     // Located in kit/ directory so it can be version controlled with user scripts
@@ -651,6 +662,12 @@ pub fn ensure_kit_setup() -> SetupResult {
         "examples/README.md",
     );
     write_string_if_changed(
+        &kit_dir.join("examples").join("START_HERE.md"),
+        EMBEDDED_EXAMPLES_START_HERE,
+        &mut warnings,
+        "examples/START_HERE.md",
+    );
+    write_string_if_changed(
         &kit_dir
             .join("examples")
             .join("scripts")
@@ -709,6 +726,15 @@ pub fn ensure_kit_setup() -> SetupResult {
         EMBEDDED_EXAMPLES_HOWTO,
         &mut warnings,
         "examples/extensions/howto.md",
+    );
+    write_string_if_changed(
+        &kit_dir
+            .join("examples")
+            .join("extensions")
+            .join("starter.md"),
+        EMBEDDED_EXAMPLES_STARTER,
+        &mut warnings,
+        "examples/extensions/starter.md",
     );
 
     // App-managed: Example agents (refresh if changed)

@@ -550,9 +550,11 @@ fn test_sdk_reference_example_scriptlet_matches_current_extension_contract() {
     let scriptlet = &doc.harness_workflow.example_scriptlet;
     assert!(scriptlet.contains("---"));
     assert!(scriptlet.contains("## Copy Date"));
+    assert!(scriptlet.contains("```metadata"));
+    assert!(scriptlet.contains("description: Copy today's date"));
     assert!(scriptlet.contains("```tool:copy-date"));
     assert!(scriptlet.contains("import \"@scriptkit/sdk\""));
-    assert!(scriptlet.contains("<!-- description:"));
+    assert!(!scriptlet.contains("<!-- description:"));
     assert!(!scriptlet.contains("```js"));
     assert!(!scriptlet.contains("// Shortcut:"));
 }
