@@ -153,6 +153,16 @@ impl ScriptListApp {
         cx.notify();
     }
 
+    /// Restore keyboard focus to the file-search input after an async
+    /// file verb (rename, move, trash, copy-name) completes.
+    fn restore_file_search_input_focus(&mut self, cx: &mut Context<Self>) {
+        if matches!(self.current_view, AppView::FileSearchView { .. }) {
+            self.pending_focus = Some(FocusTarget::MainFilter);
+            self.focused_input = FocusedInput::MainFilter;
+            cx.notify();
+        }
+    }
+
     /// Handle file-related actions. Returns `true` if handled.
     fn handle_file_action(
         &mut self,
@@ -411,8 +421,9 @@ impl ScriptListApp {
                     let new_name = match crate::file_search::prompt_rename_target_name(&path) {
                         Ok(Some(value)) => value,
                         Ok(None) => {
-                            let _ = this.update(cx, |this, _cx| {
+                            let _ = this.update(cx, |this, cx| {
                                 this.file_search_actions_path = None;
+                                this.restore_file_search_input_focus(cx);
                             });
                             return;
                         }
@@ -423,6 +434,7 @@ impl ScriptListApp {
                                     format!("Failed to rename: {}", e),
                                     cx,
                                 );
+                                this.restore_file_search_input_focus(cx);
                             });
                             return;
                         }
@@ -443,6 +455,7 @@ impl ScriptListApp {
                                     previous_display_index,
                                     cx,
                                 );
+                                this.restore_file_search_input_focus(cx);
                             }
                             Err(e) => {
                                 this.file_search_actions_path = None;
@@ -450,6 +463,7 @@ impl ScriptListApp {
                                     format!("Failed to rename: {}", e),
                                     cx,
                                 );
+                                this.restore_file_search_input_focus(cx);
                             }
                         }
                     });
@@ -475,8 +489,9 @@ impl ScriptListApp {
                         match crate::file_search::prompt_move_destination_dir(&path, is_dir) {
                             Ok(Some(value)) => value,
                             Ok(None) => {
-                                let _ = this.update(cx, |this, _cx| {
+                                let _ = this.update(cx, |this, cx| {
                                     this.file_search_actions_path = None;
+                                    this.restore_file_search_input_focus(cx);
                                 });
                                 return;
                             }
@@ -487,6 +502,7 @@ impl ScriptListApp {
                                         format!("Failed to move: {}", e),
                                         cx,
                                     );
+                                    this.restore_file_search_input_focus(cx);
                                 });
                                 return;
                             }
@@ -510,6 +526,7 @@ impl ScriptListApp {
                                     previous_display_index,
                                     cx,
                                 );
+                                this.restore_file_search_input_focus(cx);
                             }
                             Err(e) => {
                                 this.file_search_actions_path = None;
@@ -517,6 +534,7 @@ impl ScriptListApp {
                                     format!("Failed to move: {}", e),
                                     cx,
                                 );
+                                this.restore_file_search_input_focus(cx);
                             }
                         }
                     });
@@ -561,6 +579,10 @@ impl ScriptListApp {
                                 duration_ms = start.elapsed().as_millis() as u64,
                                 "Async action cancelled: move_to_trash"
                             );
+                            let _ = this.update(cx, |this, cx| {
+                                this.file_search_actions_path = None;
+                                this.restore_file_search_input_focus(cx);
+                            });
                             return;
                         }
                         Err(e) => {
@@ -572,11 +594,13 @@ impl ScriptListApp {
                                     error = %e,
                                     "failed to open confirmation modal"
                                 );
+                                this.file_search_actions_path = None;
                                 this.show_error_toast_with_code(
                                     "Failed to open confirmation dialog",
                                     Some(crate::action_helpers::ERROR_MODAL_FAILED),
                                     cx,
                                 );
+                                this.restore_file_search_input_focus(cx);
                             });
                             return;
                         }
@@ -604,6 +628,7 @@ impl ScriptListApp {
                                     previous_display_index,
                                     cx,
                                 );
+                                this.restore_file_search_input_focus(cx);
                             }
                             Err(e) => {
                                 tracing::error!(
@@ -619,6 +644,7 @@ impl ScriptListApp {
                                     format!("Failed to move to Trash: {}", e),
                                     cx,
                                 );
+                                this.restore_file_search_input_focus(cx);
                             }
                         }
                     });
@@ -642,6 +668,7 @@ impl ScriptListApp {
                     true,
                     cx,
                 );
+                self.restore_file_search_input_focus(cx);
                 DispatchOutcome::success()
             }
             _ => DispatchOutcome::not_handled(),
