@@ -105,6 +105,10 @@ pub struct TermPrompt {
     /// Used as a readiness signal for cold-start injection: callers can poll
     /// this instead of relying on a fixed delay.
     pub has_received_output: bool,
+    /// When true, scroll wheel events always drive local scrollback instead of
+    /// being routed to the PTY via `scroll_to_pty()`.  Used by QuickTerminal
+    /// (harness) sessions where the user scrolls to review output history.
+    pub prefer_buffer_scroll_on_wheel: bool,
 }
 
 // --- merged from part_001.rs ---
@@ -160,6 +164,7 @@ impl TermPrompt {
             suppress_keys: false,
             escape_cancels: true,
             has_received_output: false,
+            prefer_buffer_scroll_on_wheel: false,
         })
     }
 
@@ -1390,10 +1395,16 @@ impl Render for TermPrompt {
 
                 if scroll_lines != 0 {
                     // Route scroll based on terminal mode:
+                    // - prefer_buffer_scroll_on_wheel: always local scrollback (harness)
                     // - Mouse mode: send mouse wheel escape sequences to PTY
                     // - Alt screen + alternate scroll: send arrow key sequences to PTY
                     // - Normal: scroll the display buffer
-                    if !this.terminal.scroll_to_pty(scroll_lines) {
+                    let routed_to_pty = if this.prefer_buffer_scroll_on_wheel {
+                        false
+                    } else {
+                        this.terminal.scroll_to_pty(scroll_lines)
+                    };
+                    if !routed_to_pty {
                         this.terminal.scroll(scroll_lines);
                     }
                     trace!(delta = scroll_lines, "Mouse wheel scroll");

@@ -889,14 +889,16 @@ fn with_deferred_capture_fields_preserves_existing_blob_data() {
 }
 
 // =========================================================================
-// Source-type detection priority: desktop selection wins over generic desktop
+// Source-type detection priority: Script Kit origin surfaces beat desktop selection
 // =========================================================================
 
-/// Validates that `detect_tab_ai_source_type` checks `selected_text` first,
-/// before falling through to the `match source_view` block. This ensures that
-/// desktop selection always takes priority over the generic `Desktop` fallback.
+/// Validates that `detect_tab_ai_source_type` delegates to the canonical
+/// `detect_tab_ai_source_type_from_prompt` where Script Kit origin surfaces
+/// (ScriptListItem, ClipboardEntry, RunningCommand) take precedence over
+/// incidental desktop selected text. Desktop selection only wins when no
+/// stronger Script Kit origin is present.
 #[test]
-fn source_type_detection_prefers_desktop_selection_over_generic_desktop() {
+fn source_type_detection_delegates_to_canonical_prompt_detector() {
     let source = include_str!("../src/app_impl/tab_ai_mode.rs");
 
     // Find the detect function body
@@ -910,38 +912,44 @@ fn source_type_detection_prefers_desktop_selection_over_generic_desktop() {
         .unwrap_or(fn_body.len());
     let fn_body = &fn_body[..fn_end];
 
-    // The selected_text check must come BEFORE the match on source_view
-    let selected_text_pos = fn_body
-        .find("selected_text")
-        .expect("must check selected_text");
-    let desktop_selection_pos = fn_body
+    // Must delegate to the canonical function
+    assert!(
+        fn_body.contains("detect_tab_ai_source_type_from_prompt"),
+        "detect_tab_ai_source_type must delegate to detect_tab_ai_source_type_from_prompt"
+    );
+
+    // Verify the canonical function has the correct priority (origin > desktop selection)
+    let canonical_source = include_str!("../src/ai/tab_context.rs");
+    let canonical_start = canonical_source
+        .find("pub fn detect_tab_ai_source_type_from_prompt(")
+        .expect("canonical detector must exist");
+    let canonical_body = &canonical_source[canonical_start..];
+    let canonical_end = canonical_body[1..]
+        .find("\npub fn ")
+        .or_else(|| canonical_body[1..].find("\npub(crate) fn "))
+        .unwrap_or(canonical_body.len());
+    let canonical_body = &canonical_body[..canonical_end];
+
+    // ScriptListItem must come before DesktopSelection in the match
+    let script_list_pos = canonical_body
+        .find("ScriptListItem")
+        .expect("must handle ScriptListItem");
+    let desktop_selection_pos = canonical_body
         .find("DesktopSelection")
-        .expect("must return DesktopSelection for selected text");
-    let match_source_pos = fn_body
-        .find("match source_view")
-        .expect("must match on source_view for view-based detection");
-    let desktop_fallback_pos = fn_body
-        .rfind("Desktop)")
-        .expect("must have Desktop fallback");
+        .expect("must handle DesktopSelection");
 
     assert!(
-        selected_text_pos < match_source_pos,
-        "selected_text check must come before match source_view"
-    );
-    assert!(
-        desktop_selection_pos < match_source_pos,
-        "DesktopSelection return must come before match source_view"
-    );
-    assert!(
-        match_source_pos < desktop_fallback_pos,
-        "Desktop fallback must come after match source_view (in the _ arm)"
+        script_list_pos < desktop_selection_pos,
+        "ScriptListItem must be checked before DesktopSelection"
     );
 
-    // The selected_text check must be an early return
-    let selection_block = &fn_body[selected_text_pos..match_source_pos];
+    // RunningCommand must come before DesktopSelection
+    let running_cmd_pos = canonical_body
+        .find("RunningCommand")
+        .expect("must handle RunningCommand");
     assert!(
-        selection_block.contains("return Some("),
-        "selected_text branch must early-return so it wins over any source_view match"
+        running_cmd_pos < desktop_selection_pos,
+        "RunningCommand must be checked before DesktopSelection"
     );
 }
 

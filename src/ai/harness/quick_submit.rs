@@ -72,6 +72,17 @@ impl TabAiQuickSubmitPlan {
             _ => super::TabAiCaptureKind::DefaultContext,
         }
     }
+
+    /// The actual text that should become `User intent:` in the harness.
+    ///
+    /// Auto Submit (Fallback source) preserves the user's raw typed input.
+    /// Other quick-submit sources use the planner's synthesized guidance.
+    pub fn submission_intent(&self) -> &str {
+        match self.source {
+            TabAiQuickSubmitSource::Fallback => &self.raw_query,
+            _ => &self.synthesized_intent,
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------

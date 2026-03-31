@@ -81,7 +81,7 @@ fn render_terminal_prompt_hint_strip(
 ) -> AnyElement {
     let apply_label =
         crate::ai::tab_ai_apply_back_footer_label(route.map(|r| &r.source_type));
-    let text = format!("⌘↩ {apply_label} · ⌘W Close");
+    let text = format!("⌘↩ {apply_label} (copied output) · ⌘W Close");
     crate::components::prompt_layout_shell::render_simple_hint_strip(text, None)
 }
 
