@@ -268,7 +268,7 @@ impl ScriptListApp {
                     && !Self::should_enter_file_search_from_script_list(&new_text)
                 {
                     let _ = self.begin_file_search_session();
-                    self.file_search_current_dir = None;
+                    self.reset_file_search_transient_state();
                     self.current_view = AppView::ScriptList;
                     self.filter_text = new_text.clone();
                     self.pending_placeholder = None;
@@ -442,6 +442,60 @@ enum FileSearchStreamSource {
 }
 
 impl ScriptListApp {
+    /// Return the path of the currently selected file-search row, if any.
+    fn current_file_search_selected_path(&self) -> Option<String> {
+        let AppView::FileSearchView { selected_index, .. } = &self.current_view else {
+            return None;
+        };
+        let display_len = self.file_search_display_indices.len();
+        if display_len == 0 {
+            return None;
+        }
+        let clamped = (*selected_index).min(display_len.saturating_sub(1));
+        let result_index = *self.file_search_display_indices.get(clamped)?;
+        self.cached_file_results
+            .get(result_index)
+            .map(|entry| entry.path.clone())
+    }
+
+    /// After results change, restore selection to `preferred_path` if still
+    /// visible, otherwise clamp to the nearest valid row.
+    fn restore_file_search_selection_after_results_change(
+        &mut self,
+        preferred_path: Option<&str>,
+    ) {
+        let len = self.file_search_display_indices.len();
+        let fallback_index = match &self.current_view {
+            AppView::FileSearchView { selected_index, .. } if len > 0 => {
+                (*selected_index).min(len.saturating_sub(1))
+            }
+            _ => 0,
+        };
+
+        let next_index = preferred_path
+            .and_then(|path| self.file_search_display_index_for_path(path))
+            .unwrap_or(fallback_index);
+
+        if let AppView::FileSearchView { selected_index, .. } = &mut self.current_view {
+            *selected_index = if len == 0 { 0 } else { next_index.min(len.saturating_sub(1)) };
+        }
+    }
+
+    /// Reset all transient file-search state so exit/reopen cycles start
+    /// from a clean slate.
+    fn reset_file_search_transient_state(&mut self) {
+        self.file_search_current_dir = None;
+        self.file_search_loading = false;
+        self.file_search_frozen_filter = None;
+        self.file_search_actions_path = None;
+        self.file_search_cancel = None;
+        self.file_search_debounce_task = None;
+        self.cached_file_results.clear();
+        self.file_search_display_indices.clear();
+        self.file_search_scroll_handle
+            .scroll_to_item(0, ScrollStrategy::Top);
+    }
+
     /// Spawn a streaming file-search task that feeds batched results back
     /// into `apply_file_search_stream_batch`.  Used by both the directory
     /// and Spotlight paths so the batch/cancel/resize logic lives in one
@@ -573,6 +627,9 @@ impl ScriptListApp {
             }
         }
 
+        // Capture selected path before mutating results so we can restore it.
+        let preferred_selected_path = self.current_file_search_selected_path();
+
         let mut needs_recompute = false;
 
         if clear_on_first_batch && is_first_batch {
@@ -587,6 +644,9 @@ impl ScriptListApp {
 
         if needs_recompute {
             self.recompute_file_search_display_indices();
+            self.restore_file_search_selection_after_results_change(
+                preferred_selected_path.as_deref(),
+            );
         }
 
         if is_done {
@@ -596,13 +656,17 @@ impl ScriptListApp {
             if sort_on_done {
                 self.sort_directory_results();
                 self.recompute_file_search_display_indices();
+                self.restore_file_search_selection_after_results_change(
+                    preferred_selected_path.as_deref(),
+                );
             }
 
-            if let AppView::FileSearchView { selected_index, .. } = &mut self.current_view {
-                *selected_index = 0;
+            if !self.file_search_display_indices.is_empty() {
+                if let AppView::FileSearchView { selected_index, .. } = &self.current_view {
+                    self.file_search_scroll_handle
+                        .scroll_to_item(*selected_index, ScrollStrategy::Nearest);
+                }
             }
-            self.file_search_scroll_handle
-                .scroll_to_item(0, ScrollStrategy::Top);
         }
 
         Self::resize_file_search_window_after_results_change(
