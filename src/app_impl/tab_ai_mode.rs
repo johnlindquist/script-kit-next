@@ -1835,6 +1835,44 @@ impl ScriptListApp {
         })
     }
 
+    /// Open the AI harness with the currently selected file-search result
+    /// routed through the quick-submit plan path (richer harness hints).
+    ///
+    /// Returns `false` when there is no valid selection or intent, so the
+    /// caller can fall through to default key handling.
+    pub(crate) fn open_file_search_selection_in_tab_ai(
+        &mut self,
+        query: &str,
+        selected_index: usize,
+        plan_mode: bool,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let Some((_display_index, selected)) =
+            self.selected_file_search_result(selected_index)
+        else {
+            return false;
+        };
+
+        let Some(intent) =
+            self.build_file_search_ai_entry_intent(query, selected_index, plan_mode)
+        else {
+            return false;
+        };
+
+        let plan = crate::ai::TabAiQuickSubmitPlan {
+            source: crate::ai::TabAiQuickSubmitSource::Fallback,
+            kind: crate::ai::TabAiQuickSubmitKind::FileDrop,
+            raw_query: selected.path.clone(),
+            normalized_query: selected.path.clone(),
+            synthesized_intent: intent,
+            capture_kind: "defaultContext".to_string(),
+            submit: true,
+        };
+
+        self.open_tab_ai_chat_with_quick_submit_plan(plan, cx);
+        true
+    }
+
     /// Capture a snapshot of the current UI state for context assembly.
     ///
     /// Returns the snapshot and a machine-readable invocation receipt that
