@@ -3,7 +3,9 @@
 //! This module handles execution of scriptlets (small scripts embedded in markdown)
 //! with support for various tool types (shell, scripting languages, TypeScript, etc.)
 
-use crate::scriptlets::{format_scriptlet, process_conditionals, Scriptlet, SHELL_TOOLS};
+use crate::scriptlets::{
+    format_scriptlet, normalize_scriptlet_tool, process_conditionals, Scriptlet, SHELL_TOOLS,
+};
 use std::collections::HashMap;
 use std::io::Write;
 use std::path::PathBuf;
@@ -152,7 +154,7 @@ pub fn run_scriptlet(
     // Process conditionals and variable substitution
     let content = process_conditionals(&scriptlet.scriptlet_content, &options.flags);
     let is_windows = cfg!(target_os = "windows");
-    let tool = scriptlet.tool.to_lowercase();
+    let tool = normalize_scriptlet_tool(&scriptlet.tool);
     let content = if tool == "template" {
         format_template_content(
             &content,

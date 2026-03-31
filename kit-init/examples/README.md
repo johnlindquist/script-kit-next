@@ -2,6 +2,13 @@
 
 Working examples demonstrating Script Kit patterns. Learn by reading, then create your own in `~/.scriptkit/kit/main/scripts/`.
 
+## Start Here
+
+- Creating a new script: copy from `scripts/`
+- Creating a new extension bundle: read `extensions/howto.md` first, then copy from `extensions/main.md`
+- Looking for richer extension patterns or edge cases: read `extensions/advanced.md`
+- Creating a new agent: copy from `agents/`
+
 ## Scripts (`scripts/`)
 
 | File | Pattern Demonstrated |
@@ -17,9 +24,9 @@ Reference markdown bundles copied from the built-in examples kit.
 
 | File | Pattern Demonstrated |
 |------|---------------------|
+| `howto.md` | Best first read for creating a new bundle |
 | `main.md` | Core scriptlet patterns |
-| `advanced.md` | Richer bundle patterns |
-| `howto.md` | Bundle layout, metadata blocks, and fence types |
+| `advanced.md` | Richer bundle patterns and edge cases |
 
 Copy patterns from these files into `~/.scriptkit/kit/main/extensions/`.
 

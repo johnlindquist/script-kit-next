@@ -126,8 +126,9 @@ pub(crate) fn parse_scriptlet_section(
         "Parsing scriptlet section metadata"
     );
 
-    // Extract code block
-    let (tool, code) = extract_code_block(section)?;
+    // Extract code block and normalize fence language
+    let (raw_tool, code) = extract_code_block(section)?;
+    let tool = crate::scriptlets::normalize_scriptlet_tool(&raw_tool);
 
     // Generate command slug from name
     let command = slugify_name(&name);

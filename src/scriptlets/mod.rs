@@ -56,6 +56,30 @@ pub const VALID_TOOLS: &[&str] = &[
 ];
 /// Shell tools (tools that execute in a shell environment)
 pub const SHELL_TOOLS: &[&str] = &["bash", "zsh", "sh", "fish", "cmd", "powershell", "pwsh"];
+
+/// Normalize a fence language to the canonical tool name.
+///
+/// - `tool:<name>` fences map to `"kit"` (TypeScript/SDK path).
+/// - `template:<name>` fences map to `"template"`.
+/// - Empty/whitespace-only defaults to `"ts"`.
+/// - Everything else is lowercased and returned as-is.
+pub fn normalize_scriptlet_tool(tool: &str) -> String {
+    let trimmed = tool.trim();
+    if trimmed.is_empty() {
+        return "ts".to_string();
+    }
+    let normalized = trimmed.to_ascii_lowercase();
+    match normalized.as_str() {
+        "tool" => return "kit".to_string(),
+        "template" => return "template".to_string(),
+        _ => {}
+    }
+    match normalized.split_once(':') {
+        Some(("tool", _)) => "kit".to_string(),
+        Some(("template", _)) => "template".to_string(),
+        _ => normalized,
+    }
+}
 const SCRIPTLET_FILE_SIZE_LIMIT_BYTES: u64 = 2 * 1024 * 1024;
 const ALLOWED_SCRIPTLET_DIR_NAMES: [&str; 2] = ["extensions", "scriptlets"];
 
@@ -501,12 +525,14 @@ impl Scriptlet {
 
     /// Check if this scriptlet uses a shell tool
     pub fn is_shell(&self) -> bool {
-        SHELL_TOOLS.contains(&self.tool.as_str())
+        let tool = normalize_scriptlet_tool(&self.tool);
+        SHELL_TOOLS.contains(&tool.as_str())
     }
 
     /// Check if the tool type is valid
     pub fn is_valid_tool(&self) -> bool {
-        VALID_TOOLS.contains(&self.tool.as_str())
+        let tool = normalize_scriptlet_tool(&self.tool);
+        VALID_TOOLS.contains(&tool.as_str())
     }
 }
 /// Convert a name to a command slug (lowercase, spaces to hyphens)
