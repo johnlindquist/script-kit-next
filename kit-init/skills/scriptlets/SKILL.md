@@ -1,181 +1,97 @@
 # Skill: Scriptlets (Extension Bundles)
 
-Create markdown-based extension bundles that group quick commands together.
+Use an extension bundle when the user wants text expansions, snippets, quick shell commands, or several lightweight helpers grouped in one markdown file.
 
-## Where Scriptlets Live
+## Write Here
 
-```
-~/.scriptkit/kit/main/extensions/*.md
-```
+`~/.scriptkit/kit/main/extensions/<name>.md`
 
-Each `.md` file is an extension bundle. Every code block inside becomes a separate menu item.
+Do not create new user bundles in built-in kits or example kits.
 
-## Creating an Extension Bundle
+## Read These Files In Order
 
-### Basic Structure
+1. `~/.scriptkit/examples/extensions/howto.md`
+2. `~/.scriptkit/examples/extensions/main.md`
+3. `~/.scriptkit/examples/extensions/advanced.md`
+
+## Canonical Bundle Shape
 
 ```markdown
 ---
-name: My Tools
-description: A collection of useful tools
+name: My Bundle
+description: Personal helpers
+icon: sparkles
 ---
 
-# My Tools
+## Email Sign-off
 
-## Command Name
-<!-- name: Display Name -->
-<!-- description: What this does -->
-
-\`\`\`bash
-echo "Hello from the shell!"
-\`\`\`
+```metadata
+keyword: !bye
+description: Quick email sign-off
 ```
 
-### Scriptlet Types
-
-#### Bash Commands
-
-```markdown
-## List Downloads
-<!-- name: List Downloads -->
-
-\`\`\`bash
-ls -la ~/Downloads | head -20
-\`\`\`
+```paste
+Thanks,
+Your Name
 ```
 
-#### TypeScript Tools (with SDK)
-
-```markdown
 ## Quick Note
-<!-- name: Quick Note -->
 
-\`\`\`tool:quick-note
+```metadata
+description: Save a quick note
+```
+
+```tool:quick-note
 import "@scriptkit/sdk";
-const note = await arg("Enter note:");
-await Bun.write(`${env.HOME}/notes/${Date.now()}.txt`, note);
-await notify("Saved!");
-\`\`\`
+const note = await arg("Note");
+await Bun.write(`${env.HOME}/quick-note.txt`, note);
+await notify("Saved");
+```
 ```
 
-#### Text Templates
+## Fence Map
 
-```markdown
-## Email Template
-<!-- name: Email Template -->
+| Fence | Use for |
+|------|---------|
+| `paste` | Static text expansion |
+| `bash` | Shell command |
+| `tool:<name>` | TypeScript with the Script Kit SDK |
+| `template:<name>` | Template expansion |
+| `open` | URL or file target |
 
-\`\`\`template:email
-Hi {{name}},
+`tool:<name>` fences still need `import "@scriptkit/sdk";` as the first line.
 
-Thanks for your message about {{topic}}.
+## Metadata
 
-Best regards
-\`\`\`
-```
+Prefer `metadata` code fences for:
+- `keyword`
+- `description`
+- `shortcut`
+- `alias`
+- `schedule`
+- `cron`
+- `icon`
+- boolean flags
 
-### Metadata Comments
+Legacy HTML comments still work, but do not generate them for new harness-authored bundles unless the user explicitly asks for legacy format.
 
-Place HTML comments before the code fence:
+## Choose Script vs Extension Bundle
 
-```markdown
-<!-- name: Display Name -->
-<!-- description: Shown when focused -->
-<!-- shortcut: cmd shift x -->
-<!-- trigger: !snippet -->
-```
+Choose a `.ts` script when the request needs:
+- rich UI
+- multi-step logic
+- file/network workflows
+- external APIs
 
-| Field | Purpose |
-|-------|---------|
-| `name` | Display name in Script Kit menu |
-| `description` | Subtitle shown when focused |
-| `shortcut` | Global hotkey (e.g., `ctrl shift h`) |
-| `trigger` | Snippet trigger (e.g., `!hello` expands when typed) |
+Choose an extension bundle when the request is:
+- a snippet
+- a text expansion
+- a quick shell command
+- a small grouped helper set
 
-### Shared Actions
+## Done When
 
-Create `*.actions.md` files to add actions to all scriptlets in a bundle:
-
-```markdown
-## Edit Source
-<!-- name: Edit Source -->
-<!-- shortcut: cmd e -->
-
-\`\`\`bash
-open -a "Visual Studio Code" "{{sourceFile}}"
-\`\`\`
-```
-
-Name it `main.actions.md` alongside `main.md` to attach actions to that bundle.
-
-## Complete Example
-
-```markdown
----
-name: Dev Shortcuts
-description: Quick developer commands
----
-
-# Dev Shortcuts
-
-## Git Status
-<!-- name: Git Status -->
-<!-- description: Show current repo status -->
-<!-- shortcut: ctrl g -->
-
-\`\`\`bash
-cd {{cwd}} && git status
-\`\`\`
-
----
-
-## Docker Cleanup
-<!-- name: Docker Cleanup -->
-<!-- description: Remove stopped containers and dangling images -->
-
-\`\`\`bash
-docker container prune -f && docker image prune -f
-echo "Docker cleaned up!"
-\`\`\`
-
----
-
-## Quick Timer
-<!-- name: Quick Timer -->
-<!-- description: Set a quick countdown timer -->
-
-\`\`\`tool:timer
-import "@scriptkit/sdk";
-const minutes = await arg("Minutes:", ["1", "5", "10", "15", "30"]);
-const seconds = parseInt(minutes) * 60;
-await $`sleep ${seconds} && osascript -e 'display notification "Timer done!" with title "Script Kit"'`;
-await notify(`Timer set for ${minutes} minutes`);
-\`\`\`
-
----
-
-## Date Stamp
-<!-- name: Date Stamp -->
-<!-- trigger: !date -->
-
-\`\`\`template:date
-{{year}}-{{month}}-{{day}}
-\`\`\`
-```
-
-## When to Use Scripts vs Scriptlets
-
-| Use Case | Script (.ts) | Scriptlet (.md) |
-|----------|-------------|-----------------|
-| Complex logic | Yes | No |
-| Quick shell commands | Possible but overkill | Yes |
-| Text snippets/templates | No | Yes |
-| API integrations | Yes | No |
-| Grouped related commands | Separate files | One bundle file |
-| Rich UI (editor, forms) | Yes | Via `tool:` fence |
-
-## Common Mistakes
-
-- **Wrong fence type**: Use `` ```bash `` for shell, `` ```tool:name `` for TypeScript
-- **Missing SDK import**: `tool:` scriptlets still need `import "@scriptkit/sdk";`
-- **Wrong directory**: Extensions go in `kit/main/extensions/`, not `extensions/`
-- **Overloading bundles**: Keep bundles focused — one theme per `.md` file
+- the file lives in `~/.scriptkit/kit/main/extensions/`
+- each `##` heading is one scriptlet
+- the fence type matches the intended behavior
+- the bundle is the smallest artifact that fits

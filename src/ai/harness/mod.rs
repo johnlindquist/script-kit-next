@@ -366,10 +366,18 @@ fn format_clipboard_history_line(entry: &crate::ai::TabAiClipboardHistoryEntry) 
         format!("preview={}", collapse_inline_text(&entry.preview)),
         format!("timestamp={}", entry.timestamp),
     ];
-    if let Some(text) = entry.full_text.as_deref().filter(|text| !text.trim().is_empty()) {
+    if let Some(text) = entry
+        .full_text
+        .as_deref()
+        .filter(|text| !text.trim().is_empty())
+    {
         parts.push(format!("text={}", collapse_inline_text(text)));
     }
-    if let Some(ocr) = entry.ocr_text.as_deref().filter(|text| !text.trim().is_empty()) {
+    if let Some(ocr) = entry
+        .ocr_text
+        .as_deref()
+        .filter(|text| !text.trim().is_empty())
+    {
         parts.push(format!("ocr={}", collapse_inline_text(ocr)));
     }
     if let Some(width) = entry.image_width {
@@ -405,7 +413,11 @@ pub fn build_tab_ai_harness_context_block(
         "Prefer focused target over visible targets when the user says \"this\", \"it\", or \"selected\".\n\n",
     );
 
-    push_line(&mut out, "schema version", context.schema_version.to_string());
+    push_line(
+        &mut out,
+        "schema version",
+        context.schema_version.to_string(),
+    );
     push_line(&mut out, "timestamp", &context.timestamp);
     push_line(&mut out, "prompt type", &context.ui.prompt_type);
 
@@ -444,7 +456,10 @@ pub fn build_tab_ai_harness_context_block(
         push_line(
             &mut out,
             "frontmost app",
-            format!("{} | bundle_id={} | pid={}", app.name, app.bundle_id, app.pid),
+            format!(
+                "{} | bundle_id={} | pid={}",
+                app.name, app.bundle_id, app.pid
+            ),
         );
     }
     if let Some(browser) = context.desktop.browser.as_ref() {
@@ -524,6 +539,46 @@ pub fn build_tab_ai_harness_context_block(
 // Artifact authoring guidance
 // ---------------------------------------------------------------------------
 
+const ARTIFACT_AUTHORING_CONTAINS: &[&str] = &[
+    "create", "make", "write", "build", "generate", "scaffold", "spin up", "set up",
+];
+
+const ARTIFACT_AUTHORING_PREFIXES: &[&str] = &[
+    "new ",
+    "add ",
+    "need ",
+    "want ",
+    "help me make ",
+    "help me create ",
+];
+
+const ARTIFACT_AUTHORING_WORDS: &[&str] = &[
+    "script",
+    "scriptlet",
+    "scriptlets",
+    "extension",
+    "snippet",
+    "snippets",
+    "text expansion",
+    "quick command",
+    "template",
+    "agent",
+    "mdflow",
+    "prompt file",
+];
+
+/// Returns `true` for bare artifact nouns like "snippet", "a script",
+/// "new extension" where the noun alone signals authoring intent.
+fn looks_like_bare_artifact_request(intent: &str) -> bool {
+    let prefixes = ["", "a ", "an ", "new ", "my "];
+    ARTIFACT_AUTHORING_WORDS.iter().any(|artifact| {
+        prefixes.iter().any(|prefix| {
+            let candidate = format!("{prefix}{artifact}");
+            intent == candidate || intent.starts_with(&format!("{candidate} "))
+        })
+    })
+}
+
 /// Returns `true` when the intent looks like a request to create/scaffold a
 /// Script Kit artifact (script, scriptlet bundle, agent).  Used to decide
 /// whether to inject the `<scriptKitArtifactAuthoring>` guidance block.
@@ -531,53 +586,71 @@ pub fn should_include_artifact_authoring_guidance(intent: Option<&str>) -> bool 
     let Some(intent) = intent.map(str::trim).filter(|value| !value.is_empty()) else {
         return false;
     };
-    let intent = intent.to_ascii_lowercase();
+    let intent = collapse_inline_text(&intent.to_ascii_lowercase());
 
-    let has_authoring_verb = [
-        "create", "make", "write", "build", "generate", "scaffold",
-    ]
-    .iter()
-    .any(|needle| intent.contains(needle));
+    let has_authoring_signal = ARTIFACT_AUTHORING_CONTAINS
+        .iter()
+        .any(|needle| intent.contains(needle))
+        || ARTIFACT_AUTHORING_PREFIXES
+            .iter()
+            .any(|needle| intent.starts_with(needle));
 
-    let has_artifact_word = [
-        "script",
-        "scriptlet",
-        "extension",
-        "snippet",
-        "template",
-        "agent",
-        "mdflow",
-    ]
-    .iter()
-    .any(|needle| intent.contains(needle));
+    let has_artifact_word = ARTIFACT_AUTHORING_WORDS
+        .iter()
+        .any(|needle| intent.contains(needle));
 
-    has_authoring_verb && has_artifact_word
+    (has_authoring_signal && has_artifact_word) || looks_like_bare_artifact_request(&intent)
 }
 
 /// Static guidance block that tells the harness how to pick the right artifact
-/// type and where to write the result.
+/// type and where to write the result, with exact file pointers.
 fn build_tab_ai_artifact_authoring_guidance_block() -> &'static str {
     r#"<scriptKitArtifactAuthoring>
-Pick the artifact type before writing files.
+Pick the smallest artifact that fits before writing files.
 
 Artifact: Script
-- write: ~/.scriptkit/kit/main/scripts/<name>.ts
-- learn: ~/.scriptkit/skills/script-authoring/SKILL.md
-- reference: ~/.scriptkit/examples/scripts/
+Use when:
+- the user wants a full TypeScript workflow
+- the job needs Script Kit UI APIs, Bun APIs, files, HTTP, or multi-step logic
+Write:
+- ~/.scriptkit/kit/main/scripts/<name>.ts
+Read first:
+- ~/.scriptkit/skills/script-authoring/SKILL.md
+Reference:
+- ~/.scriptkit/examples/scripts/hello-world.ts
+- ~/.scriptkit/examples/scripts/choose-from-list.ts
 
 Artifact: Extension bundle
-- write: ~/.scriptkit/kit/main/extensions/<name>.md
-- learn: ~/.scriptkit/skills/scriptlets/SKILL.md
-- reference: ~/.scriptkit/examples/extensions/
+Use when:
+- the user wants text expansions, snippets, quick shell commands, or grouped lightweight helpers
+- multiple related commands belong in one markdown file
+Write:
+- ~/.scriptkit/kit/main/extensions/<name>.md
+Read first:
+- ~/.scriptkit/examples/extensions/howto.md
+- ~/.scriptkit/skills/scriptlets/SKILL.md
+Reference:
+- ~/.scriptkit/examples/extensions/main.md
+- ~/.scriptkit/examples/extensions/advanced.md
 
 Artifact: mdflow agent
-- write: ~/.scriptkit/kit/main/agents/<name>.<backend>.md
-- learn: ~/.scriptkit/skills/agents/SKILL.md
-- reference: ~/.scriptkit/examples/agents/
+Use when:
+- the user wants a reusable backend-specific prompt or automation file
+- the request is for an agent, not a runnable .ts script
+Write:
+- ~/.scriptkit/kit/main/agents/<name>.<backend>.md
+Read first:
+- ~/.scriptkit/skills/agents/SKILL.md
+Reference:
+- ~/.scriptkit/examples/agents/review-pr.claude.md
+- ~/.scriptkit/examples/agents/plan-feature.i.gemini.md
 
 Rules:
 - Do not create a .ts script when the request is really a scriptlet bundle or mdflow agent.
 - Do not write runnable user files outside ~/.scriptkit/kit/main/.
+- For extension bundles, each ## heading is one scriptlet.
+- For extension bundles, prefer metadata code fences for keyword, description, and shortcut.
+- For extension bundles, tool:<name> fences still need import "@scriptkit/sdk"; as the first line.
 </scriptKitArtifactAuthoring>"#
 }
 
@@ -1310,8 +1383,7 @@ mod tests {
             vec![],
             crate::context_snapshot::AiContextSnapshot {
                 selected_text: Some(
-                    "function fib(n) { return n <= 1 ? n : fib(n - 1) + fib(n - 2); }"
-                        .to_string(),
+                    "function fib(n) { return n <= 1 ? n : fib(n - 1) + fib(n - 2); }".to_string(),
                 ),
                 frontmost_app: Some(crate::context_snapshot::FrontmostAppContext {
                     pid: 42,
@@ -1366,6 +1438,67 @@ mod tests {
         assert!(block.contains("screenshot path: /tmp/scriptkit-screenshot-abc123.png"));
         assert!(!block.contains("<scriptKitContext"));
         assert!(!block.contains("```json"));
+    }
+
+    // -----------------------------------------------------------------------
+    // Artifact authoring guidance classifier tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn authoring_guidance_triggers_on_verb_plus_artifact() {
+        assert!(should_include_artifact_authoring_guidance(Some(
+            "create a script"
+        )));
+        assert!(should_include_artifact_authoring_guidance(Some(
+            "build an extension bundle"
+        )));
+        assert!(should_include_artifact_authoring_guidance(Some(
+            "generate a snippet"
+        )));
+    }
+
+    #[test]
+    fn authoring_guidance_triggers_on_prefix_plus_artifact() {
+        assert!(should_include_artifact_authoring_guidance(Some(
+            "new script for clipboard"
+        )));
+        assert!(should_include_artifact_authoring_guidance(Some(
+            "add a snippet"
+        )));
+        assert!(should_include_artifact_authoring_guidance(Some(
+            "need a quick command"
+        )));
+    }
+
+    #[test]
+    fn authoring_guidance_triggers_on_bare_artifact_noun() {
+        assert!(should_include_artifact_authoring_guidance(Some("snippet")));
+        assert!(should_include_artifact_authoring_guidance(Some("a script")));
+        assert!(should_include_artifact_authoring_guidance(Some(
+            "new extension"
+        )));
+        assert!(should_include_artifact_authoring_guidance(Some("my agent")));
+    }
+
+    #[test]
+    fn authoring_guidance_skips_non_authoring_intents() {
+        assert!(!should_include_artifact_authoring_guidance(Some(
+            "rename this file"
+        )));
+        assert!(!should_include_artifact_authoring_guidance(Some(
+            "open settings"
+        )));
+        assert!(!should_include_artifact_authoring_guidance(None));
+        assert!(!should_include_artifact_authoring_guidance(Some("")));
+    }
+
+    #[test]
+    fn authoring_guidance_block_references_exact_files() {
+        let block = build_tab_ai_artifact_authoring_guidance_block();
+        assert!(block.contains("~/.scriptkit/examples/extensions/howto.md"));
+        assert!(block.contains("~/.scriptkit/skills/scriptlets/SKILL.md"));
+        assert!(block.contains("~/.scriptkit/examples/scripts/hello-world.ts"));
+        assert!(block.contains("tool:<name>"));
     }
 }
 
