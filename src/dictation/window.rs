@@ -504,19 +504,14 @@ impl Render for DictationOverlay {
                                     .py(px(4.))
                                     .rounded(px(999.))
                                     .border_1()
-                                    .border_color(
-                                        theme.colors.ui.error.with_opacity(0.35),
-                                    )
+                                    .border_color(theme.colors.ui.error.with_opacity(0.35))
                                     .text_size(px(STATUS_TEXT_SIZE_PX))
                                     .font_family(FONT_MONO)
                                     .text_color(abort_color)
                                     .on_mouse_down(
                                         MouseButton::Left,
                                         cx.listener(
-                                            |this,
-                                             _event: &MouseDownEvent,
-                                             _window,
-                                             cx| {
+                                            |this, _event: &MouseDownEvent, _window, cx| {
                                                 this.abort_overlay_session(cx);
                                             },
                                         ),
@@ -529,19 +524,14 @@ impl Render for DictationOverlay {
                                     .py(px(4.))
                                     .rounded(px(999.))
                                     .border_1()
-                                    .border_color(
-                                        theme.colors.text.muted.with_opacity(0.25),
-                                    )
+                                    .border_color(theme.colors.text.muted.with_opacity(0.25))
                                     .text_size(px(STATUS_TEXT_SIZE_PX))
                                     .font_family(FONT_MONO)
                                     .text_color(resume_color)
                                     .on_mouse_down(
                                         MouseButton::Left,
                                         cx.listener(
-                                            |this,
-                                             _event: &MouseDownEvent,
-                                             _window,
-                                             cx| {
+                                            |this, _event: &MouseDownEvent, _window, cx| {
                                                 this.resume_recording(cx);
                                             },
                                         ),

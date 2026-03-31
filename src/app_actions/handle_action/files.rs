@@ -47,34 +47,91 @@ impl ScriptListApp {
         Some((entry.path.clone(), is_dir, entry.name.clone()))
     }
 
-    /// After a mutation (trash, rename, move, etc.), re-resolve directory contents
-    /// and keep the user's place instead of hard-resetting to the top.
+    /// Build a `FileResult` from live filesystem metadata.
+    fn build_file_result_from_metadata(path: &str) -> Option<crate::file_search::FileResult> {
+        crate::file_search::get_file_metadata(path).map(|meta| crate::file_search::FileResult {
+            path: meta.path,
+            name: meta.name,
+            size: meta.size,
+            modified: meta.modified,
+            file_type: meta.file_type,
+        })
+    }
+
+    /// Return the absolute directory path when the current view is a
+    /// directory-browse (not a global search).
+    fn current_file_search_directory_abs(&self) -> Option<String> {
+        let AppView::FileSearchView { query, .. } = &self.current_view else {
+            return None;
+        };
+        let parsed = crate::file_search::parse_directory_path(query)?;
+        crate::file_search::expand_path(parsed.directory.trim_end_matches('/'))
+            .map(|dir| crate::file_search::ensure_trailing_slash(&dir))
+    }
+
+    /// Absolute parent directory of `path`, with trailing slash.
+    fn parent_directory_abs(path: &str) -> Option<String> {
+        std::path::Path::new(path)
+            .parent()
+            .and_then(|parent| parent.to_str())
+            .map(|s| crate::file_search::ensure_trailing_slash(s))
+    }
+
+    /// After a mutation (trash, rename, move, etc.), patch the cached directory
+    /// listing in place when possible and fall back to a full refresh for global
+    /// search.
     fn refresh_file_search_after_mutation(
         &mut self,
+        old_path: &str,
         preferred_path: Option<&str>,
         previous_display_index: usize,
         cx: &mut Context<Self>,
     ) {
-        let AppView::FileSearchView {
-            query, presentation, ..
-        } = &self.current_view
-        else {
+        let AppView::FileSearchView { presentation, .. } = &self.current_view else {
             return;
         };
-        let query_value = query.clone();
         let presentation_value = *presentation;
-        let results = Self::resolve_file_search_results(&query_value);
-        self.update_file_search_results(results);
+
+        let current_dir = self.current_file_search_directory_abs();
+        let old_dir = Self::parent_directory_abs(old_path);
+        let new_dir = preferred_path.and_then(Self::parent_directory_abs);
+
+        // We can patch in place when we are browsing a concrete directory and
+        // the mutation touches that directory (source or destination).
+        let can_patch_in_place = current_dir.is_some()
+            && (old_dir.as_ref() == current_dir.as_ref()
+                || new_dir.as_ref() == current_dir.as_ref());
+
+        if can_patch_in_place {
+            // Remove the old entry from the cache.
+            self.cached_file_results.retain(|entry| entry.path != old_path);
+
+            // If the item was renamed/moved into the current directory, add it.
+            if let Some(new_path) = preferred_path {
+                if new_dir.as_ref() == current_dir.as_ref() {
+                    if let Some(updated) = Self::build_file_result_from_metadata(new_path) {
+                        self.cached_file_results.push(updated);
+                    }
+                }
+            }
+
+            self.sort_directory_results();
+            self.recompute_file_search_display_indices();
+        } else {
+            // Global search or cross-directory — full refresh.
+            let AppView::FileSearchView { query, .. } = &self.current_view else {
+                return;
+            };
+            let query_value = query.clone();
+            let results = Self::resolve_file_search_results(&query_value);
+            self.update_file_search_results(results);
+        }
 
         let next_index = preferred_path
             .and_then(|path| self.file_search_display_index_for_path(path))
             .or_else(|| {
                 let len = self.file_search_display_len();
-                if len == 0 {
-                    None
-                } else {
-                    Some(previous_display_index.min(len - 1))
-                }
+                (len > 0).then_some(previous_display_index.min(len.saturating_sub(1)))
             });
 
         if let AppView::FileSearchView {
@@ -381,6 +438,7 @@ impl ScriptListApp {
                                     cx,
                                 );
                                 this.refresh_file_search_after_mutation(
+                                    &path,
                                     Some(&new_path),
                                     previous_display_index,
                                     cx,
@@ -447,6 +505,7 @@ impl ScriptListApp {
                                     cx,
                                 );
                                 this.refresh_file_search_after_mutation(
+                                    &path,
                                     Some(&new_path),
                                     previous_display_index,
                                     cx,
@@ -540,6 +599,7 @@ impl ScriptListApp {
                                     cx,
                                 );
                                 this.refresh_file_search_after_mutation(
+                                    &path,
                                     None,
                                     previous_display_index,
                                     cx,

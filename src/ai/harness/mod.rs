@@ -377,15 +377,31 @@ fn push_visible_element_lines(
     label_prefix: &str,
     element: &crate::protocol::ElementInfo,
 ) {
-    push_line(out, &format!("{label_prefix} semantic id"), &element.semantic_id);
+    push_line(
+        out,
+        &format!("{label_prefix} semantic id"),
+        &element.semantic_id,
+    );
     if let Some(text) = element.text.as_deref() {
-        push_line(out, &format!("{label_prefix} text"), collapse_inline_text(text));
+        push_line(
+            out,
+            &format!("{label_prefix} text"),
+            collapse_inline_text(text),
+        );
     }
     if let Some(value) = element.value.as_deref() {
-        push_line(out, &format!("{label_prefix} value"), collapse_inline_text(value));
+        push_line(
+            out,
+            &format!("{label_prefix} value"),
+            collapse_inline_text(value),
+        );
     }
     if let Some(selected) = element.selected {
-        push_line(out, &format!("{label_prefix} selected"), selected.to_string());
+        push_line(
+            out,
+            &format!("{label_prefix} selected"),
+            selected.to_string(),
+        );
     }
     if let Some(focused) = element.focused {
         push_line(out, &format!("{label_prefix} focused"), focused.to_string());
@@ -426,10 +442,18 @@ fn push_clipboard_history_lines(
         push_block(out, &format!("{label_prefix} ocr"), ocr);
     }
     if let Some(width) = entry.image_width {
-        push_line(out, &format!("{label_prefix} image width"), width.to_string());
+        push_line(
+            out,
+            &format!("{label_prefix} image width"),
+            width.to_string(),
+        );
     }
     if let Some(height) = entry.image_height {
-        push_line(out, &format!("{label_prefix} image height"), height.to_string());
+        push_line(
+            out,
+            &format!("{label_prefix} image height"),
+            height.to_string(),
+        );
     }
 }
 
@@ -440,7 +464,11 @@ fn push_prior_automation_lines(
 ) {
     push_line(out, &format!("{label_prefix} slug"), &item.slug);
     push_block(out, &format!("{label_prefix} query"), &item.effective_query);
-    push_line(out, &format!("{label_prefix} prompt type"), &item.prompt_type);
+    push_line(
+        out,
+        &format!("{label_prefix} prompt type"),
+        &item.prompt_type,
+    );
     push_line(out, &format!("{label_prefix} bundle id"), &item.bundle_id);
     push_line(out, &format!("{label_prefix} written at"), &item.written_at);
     push_line(
@@ -540,18 +568,10 @@ pub fn build_tab_ai_harness_context_block(
     }
 
     for (index, entry) in context.clipboard_history.iter().take(5).enumerate() {
-        push_clipboard_history_lines(
-            &mut out,
-            &format!("clipboard history {}", index + 1),
-            entry,
-        );
+        push_clipboard_history_lines(&mut out, &format!("clipboard history {}", index + 1), entry);
     }
     for (index, item) in context.prior_automations.iter().take(3).enumerate() {
-        push_prior_automation_lines(
-            &mut out,
-            &format!("prior automation {}", index + 1),
-            item,
-        );
+        push_prior_automation_lines(&mut out, &format!("prior automation {}", index + 1), item);
     }
 
     if let Some(source_type) = context.source_type.as_ref() {
@@ -1597,20 +1617,29 @@ mod tests {
         assert!(block.contains("frontmost app name: VS Code"));
         assert!(block.contains("frontmost app bundle id: com.microsoft.VSCode"));
         assert!(block.contains("frontmost app pid: 42"));
-        assert!(!block.contains("bundle_id="), "no pipe-delimited compound fields");
+        assert!(
+            !block.contains("bundle_id="),
+            "no pipe-delimited compound fields"
+        );
 
         // Focused window is now separate labeled lines
         assert!(block.contains("focused window title: fibonacci.ts"));
         assert!(block.contains("focused window width: 1440"));
         assert!(block.contains("focused window height: 900"));
         assert!(block.contains("focused window used fallback: false"));
-        assert!(!block.contains("used_fallback="), "no pipe-delimited compound fields");
+        assert!(
+            !block.contains("used_fallback="),
+            "no pipe-delimited compound fields"
+        );
 
         // Prior automation is now separate labeled lines
         assert!(block.contains("prior automation 1 slug: run-fibonacci"));
         assert!(block.contains("prior automation 1 prompt type: QuickTerminal"));
         assert!(block.contains("prior automation 1 score: 1.000"));
-        assert!(!block.contains("slug="), "no pipe-delimited compound fields");
+        assert!(
+            !block.contains("slug="),
+            "no pipe-delimited compound fields"
+        );
     }
 
     // -----------------------------------------------------------------------

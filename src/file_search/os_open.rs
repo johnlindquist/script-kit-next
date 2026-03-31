@@ -346,8 +346,7 @@ pub fn rename_path(path: &str, new_name: &str) -> Result<String, String> {
         return Ok(path.to_string());
     }
 
-    std::fs::rename(current_path, &target)
-        .map_err(|e| format!("Failed to rename item: {}", e))?;
+    std::fs::rename(current_path, &target).map_err(|e| format!("Failed to rename item: {}", e))?;
 
     Ok(target.to_string_lossy().to_string())
 }
@@ -400,8 +399,7 @@ pub fn move_path(path: &str, destination_dir: &str) -> Result<String, String> {
         return Ok(path.to_string());
     }
 
-    std::fs::rename(current_path, &target)
-        .map_err(|e| format!("Failed to move item: {}", e))?;
+    std::fs::rename(current_path, &target).map_err(|e| format!("Failed to move item: {}", e))?;
 
     Ok(target.to_string_lossy().to_string())
 }
