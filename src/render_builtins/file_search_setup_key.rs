@@ -129,6 +129,7 @@
                 if let AppView::FileSearchView {
                     query: _,
                     selected_index,
+                    ..
                 } = &mut this.current_view
                 {
                     // Use pre-computed display_indices to get the selected file

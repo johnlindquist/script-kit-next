@@ -1,4 +1,4 @@
-use crate::dictation::types::{DictationDeviceId, DictationDeviceInfo};
+use crate::dictation::types::{DictationDeviceId, DictationDeviceInfo, DictationDeviceTransport};
 #[cfg(target_os = "macos")]
 use anyhow::Context;
 use anyhow::Result;
@@ -27,20 +27,91 @@ pub struct DictationDeviceMenuItem {
 // Pure selection helpers (no I/O — easy to test)
 // ---------------------------------------------------------------------------
 
+/// Outcome of microphone resolution, including whether a fallback was used.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DeviceResolution {
+    pub device: DictationDeviceInfo,
+    /// When `true`, the user's saved preference was not found and we fell back
+    /// to a heuristic choice.  Callers should surface this to the user.
+    pub fell_back: bool,
+}
+
 /// Resolve a microphone from the device list using a saved preference.
 ///
-/// Returns the device matching `selected_device_id` when present, otherwise
-/// falls back to the system default (the device with `is_default == true`).
+/// Priority order:
+/// 1. Exact match on `selected_device_id` (user's saved preference).
+/// 2. System default device (`is_default == true`).
+/// 3. Built-in microphone (transport == BuiltIn).
+/// 4. USB microphone (transport == Usb).
+/// 5. First non-virtual device.
+/// 6. Any device at all.
+///
+/// Sets `fell_back = true` when the saved preference existed but wasn't
+/// found in the current device list.
 pub fn resolve_selected_input_device(
     devices: &[DictationDeviceInfo],
     selected_device_id: Option<&str>,
-) -> Option<DictationDeviceInfo> {
+) -> Option<DeviceResolution> {
+    if devices.is_empty() {
+        return None;
+    }
+
+    // 1. Exact match on saved preference.
     if let Some(saved) = selected_device_id {
         if let Some(device) = devices.iter().find(|d| d.id.0 == saved) {
-            return Some(device.clone());
+            return Some(DeviceResolution {
+                device: device.clone(),
+                fell_back: false,
+            });
         }
+        // Saved device disappeared — fall through with fell_back flag.
+        tracing::warn!(
+            category = "DICTATION",
+            saved_id = saved,
+            "Saved microphone not found in device list, falling back"
+        );
+        return Some(DeviceResolution {
+            device: pick_best_fallback(devices),
+            fell_back: true,
+        });
     }
-    devices.iter().find(|d| d.is_default).cloned()
+
+    // No saved preference — use heuristic without flagging fallback.
+    Some(DeviceResolution {
+        device: pick_best_fallback(devices),
+        fell_back: false,
+    })
+}
+
+/// Pick the best microphone from the device list using a ranked heuristic.
+fn pick_best_fallback(devices: &[DictationDeviceInfo]) -> DictationDeviceInfo {
+    // System default first.
+    if let Some(d) = devices.iter().find(|d| d.is_default) {
+        return d.clone();
+    }
+    // Built-in mic.
+    if let Some(d) = devices
+        .iter()
+        .find(|d| d.transport == DictationDeviceTransport::BuiltIn)
+    {
+        return d.clone();
+    }
+    // USB mic (external but physical).
+    if let Some(d) = devices
+        .iter()
+        .find(|d| d.transport == DictationDeviceTransport::Usb)
+    {
+        return d.clone();
+    }
+    // Any non-virtual device.
+    if let Some(d) = devices
+        .iter()
+        .find(|d| d.transport != DictationDeviceTransport::Virtual)
+    {
+        return d.clone();
+    }
+    // Last resort: first device.
+    devices[0].clone()
 }
 
 /// Build the full menu item list for the microphone picker.
@@ -171,14 +242,47 @@ pub fn list_input_devices() -> Result<Vec<DictationDeviceInfo>> {
             let name = nsstring_to_string(name_obj)
                 .with_context(|| format!("missing localizedName for audio input device {id}"))?;
 
+            let transport = classify_device_transport(device);
+
             items.push(DictationDeviceInfo {
                 is_default: default_id.as_deref() == Some(id.as_str()),
                 id: DictationDeviceId(id),
                 name,
+                transport,
             });
         }
 
         Ok(items)
+    }
+}
+
+/// Classify an AVCaptureDevice's transport type into our simplified enum.
+///
+/// Uses the `transportType` property (CMIOObjectPropertyScope) to distinguish
+/// built-in mics from USB, Bluetooth, and virtual/aggregate devices.
+#[cfg(target_os = "macos")]
+fn classify_device_transport(device: *mut Object) -> DictationDeviceTransport {
+    // SAFETY: device is a valid AVCaptureDevice from the enumeration above.
+    // transportType returns an i32 (FourCharCode) that we match against known
+    // CoreMedia transport type constants.
+    let transport_type: i32 = unsafe { msg_send![device, transportType] };
+
+    // CoreMedia FourCharCode constants (from CMIOHardwareDevice.h):
+    // 'bltn' = 0x626C746E = built-in
+    // 'usb ' = 0x75736220 = USB
+    // 'blue' = 0x626C7565 = Bluetooth
+    // 'virt' = 0x76697274 = virtual
+    const BUILT_IN: i32 = 0x626C_746E_u32 as i32; // 'bltn'
+    const USB: i32 = 0x7573_6220_u32 as i32; // 'usb '
+    const BLUETOOTH: i32 = 0x626C_7565_u32 as i32; // 'blue'
+    const VIRTUAL: i32 = 0x7669_7274_u32 as i32; // 'virt'
+
+    match transport_type {
+        BUILT_IN => DictationDeviceTransport::BuiltIn,
+        USB => DictationDeviceTransport::Usb,
+        BLUETOOTH => DictationDeviceTransport::Bluetooth,
+        VIRTUAL => DictationDeviceTransport::Virtual,
+        _ => DictationDeviceTransport::Unknown,
     }
 }
 
@@ -190,7 +294,7 @@ pub fn list_input_devices() -> Result<Vec<DictationDeviceInfo>> {
 #[cfg(target_os = "macos")]
 pub fn default_input_device() -> Result<Option<DictationDeviceInfo>> {
     let devices = list_input_devices()?;
-    Ok(devices.into_iter().find(|device| device.is_default))
+    Ok(resolve_selected_input_device(&devices, None).map(|r| r.device))
 }
 
 #[cfg(not(target_os = "macos"))]

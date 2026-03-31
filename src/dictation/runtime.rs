@@ -7,7 +7,8 @@ use crate::dictation::transcription::{
 };
 use crate::dictation::types::{
     CapturedAudioChunk, CompletedDictationCapture, DictationCaptureConfig, DictationCaptureEvent,
-    DictationDeviceId, DictationLevel, DictationSessionPhase, DictationToggleOutcome,
+    DictationDeviceId, DictationLevel, DictationSessionPhase, DictationTarget,
+    DictationToggleOutcome,
 };
 use crate::dictation::visualizer::bars_for_level;
 use crate::dictation::window::DictationOverlayState;
@@ -31,6 +32,10 @@ struct DictationSession {
     /// and the overlay key handler (on Escape transitions).  The pump reads this
     /// on every tick so the overlay never drifts from shared state.
     overlay_phase: DictationSessionPhase,
+    /// The Script Kit surface that was active when dictation started.
+    /// Captured at start time so the delivery path knows where to route
+    /// the transcript even if the UI changes while the user is speaking.
+    target: DictationTarget,
 }
 
 /// Global singleton guarded by a parking_lot Mutex.
@@ -67,7 +72,8 @@ pub fn set_overlay_phase(phase: DictationSessionPhase) -> bool {
 
 /// Toggle dictation recording on/off.
 ///
-/// - When idle: starts a new capture session and returns `Started`.
+/// - When idle: starts a new capture session targeting `target` and
+///   returns `Started`.
 /// - When recording: drops the capture handle (flushing the tail chunk),
 ///   drains events until `EndOfStream`, and returns `Stopped(Some(capture))`
 ///   or `Stopped(None)` for an empty recording.
@@ -75,15 +81,25 @@ pub fn set_overlay_phase(phase: DictationSessionPhase) -> bool {
 /// This is the single entrypoint shared by both `BuiltInFeature::Dictation`
 /// and `HotkeyAction::Dictation`.  The caller owns transcription, overlay
 /// transitions, and delivery — the runtime only captures audio.
-pub fn toggle_dictation() -> Result<DictationToggleOutcome> {
-    tracing::info!(category = "DICTATION", "toggle_dictation called");
+pub fn toggle_dictation(target: DictationTarget) -> Result<DictationToggleOutcome> {
+    tracing::info!(
+        category = "DICTATION",
+        ?target,
+        "toggle_dictation called"
+    );
 
     if SESSION.lock().is_some() {
         return Ok(DictationToggleOutcome::Stopped(stop_recording()?));
     }
 
-    start_recording()?;
+    start_recording(target)?;
     Ok(DictationToggleOutcome::Started)
+}
+
+/// Return the delivery target that was captured when the current dictation
+/// session started.  Returns `None` when no session is active.
+pub fn get_dictation_target() -> Option<DictationTarget> {
+    SESSION.lock().as_ref().map(|s| s.target)
 }
 
 /// Abort the active dictation session without transcribing or delivering text.
@@ -252,7 +268,7 @@ pub(crate) fn reset_cached_transcriber_for_tests() {
 // Start recording
 // ---------------------------------------------------------------------------
 
-fn start_recording() -> Result<()> {
+fn start_recording(target: DictationTarget) -> Result<()> {
     let device_id = resolve_preferred_device()?;
     let capture_config = DictationCaptureConfig::default();
 
@@ -269,6 +285,7 @@ fn start_recording() -> Result<()> {
         },
         started_at: Instant::now(),
         overlay_phase: DictationSessionPhase::Recording,
+        target,
     };
 
     *SESSION.lock() = Some(session);
@@ -276,6 +293,7 @@ fn start_recording() -> Result<()> {
     tracing::info!(
         category = "DICTATION",
         device = ?device_id,
+        ?target,
         "Recording started"
     );
 
@@ -348,8 +366,9 @@ fn stop_capture_and_collect(session: &mut DictationSession) -> Result<()> {
 /// Resolve the user's preferred microphone device.
 ///
 /// Reads `ScriptKitUserPreferences.dictation.selected_device_id` and, if the
-/// device is still present, returns its ID.  Falls back to the system default
-/// when the preference is unset or the device has disappeared.
+/// device is still present, returns its ID.  Falls back using ranked heuristics
+/// (system default → built-in → USB → first non-virtual → any) when the
+/// preference is unset or the device has disappeared.
 ///
 /// Delegates the pure selection logic to [`resolve_selected_input_device`] so
 /// the behavior is deterministic and testable without I/O.
@@ -358,24 +377,29 @@ pub(crate) fn resolve_preferred_device() -> Result<Option<DictationDeviceId>> {
     let preferred_id = prefs.dictation.selected_device_id.clone();
 
     let devices = list_input_devices()?;
-    let selected = resolve_selected_input_device(&devices, preferred_id.as_deref());
+    let resolution = resolve_selected_input_device(&devices, preferred_id.as_deref());
 
-    match (preferred_id.as_deref(), &selected) {
-        (Some(saved_id), Some(device)) if device.id.0 == saved_id => {
+    match resolution {
+        Some(res) if !res.fell_back => {
             tracing::info!(
                 category = "DICTATION",
-                device_id = %device.id.0,
-                device_name = %device.name,
-                "Using saved microphone preference"
+                device_id = %res.device.id.0,
+                device_name = %res.device.name,
+                transport = ?res.device.transport,
+                saved = preferred_id.is_some(),
+                "Using microphone"
             );
+            Ok(Some(res.device.id))
         }
-        (Some(saved_id), Some(device)) => {
+        Some(res) => {
+            // Saved device disappeared — clear the stale preference.
             tracing::warn!(
                 category = "DICTATION",
-                missing_device_id = %saved_id,
-                fallback_device_id = %device.id.0,
-                fallback_device_name = %device.name,
-                "Saved microphone device not found, falling back to system default"
+                missing_device_id = ?preferred_id,
+                fallback_device_id = %res.device.id.0,
+                fallback_device_name = %res.device.name,
+                fallback_transport = ?res.device.transport,
+                "Saved microphone not found, falling back"
             );
             if let Err(error) = crate::dictation::save_dictation_device_id(None) {
                 tracing::warn!(
@@ -384,36 +408,14 @@ pub(crate) fn resolve_preferred_device() -> Result<Option<DictationDeviceId>> {
                     "Failed to clear stale microphone preference"
                 );
             }
+            Ok(Some(res.device.id))
         }
-        (Some(saved_id), None) => {
+        None => {
             tracing::warn!(
                 category = "DICTATION",
-                missing_device_id = %saved_id,
-                "Saved microphone device not found and no default input device is available"
+                "No input devices available"
             );
-            if let Err(error) = crate::dictation::save_dictation_device_id(None) {
-                tracing::warn!(
-                    category = "DICTATION",
-                    error = %error,
-                    "Failed to clear stale microphone preference"
-                );
-            }
-        }
-        (None, Some(device)) => {
-            tracing::info!(
-                category = "DICTATION",
-                device_id = %device.id.0,
-                device_name = %device.name,
-                "No saved mic preference, using system default"
-            );
-        }
-        (None, None) => {
-            tracing::warn!(
-                category = "DICTATION",
-                "No saved mic preference and no default input device is available"
-            );
+            Ok(None)
         }
     }
-
-    Ok(selected.map(|d| d.id))
 }

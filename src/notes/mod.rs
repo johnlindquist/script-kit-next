@@ -53,6 +53,6 @@ pub use browse_panel::{BrowsePanel, NoteAction, NoteListItem};
 // Re-export key types - suppress unused warnings since these are public API
 #[allow(unused_imports)]
 pub use window::{
-    close_notes_window, is_notes_window, is_notes_window_open, open_notes_window, quick_capture,
-    NotesApp,
+    close_notes_window, inject_text_into_notes, is_notes_window, is_notes_window_open,
+    open_notes_window, quick_capture, NotesApp,
 };

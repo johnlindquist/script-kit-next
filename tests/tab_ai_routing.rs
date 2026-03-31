@@ -3056,8 +3056,7 @@ fn selection_fallback_opens_harness_with_entry_intent() {
 #[test]
 fn full_screen_capture_helper_exists_and_uses_screen_api() {
     assert!(
-        SCREENSHOT_FILES_SOURCE
-            .contains("pub fn capture_tab_ai_screen_screenshot_file()"),
+        SCREENSHOT_FILES_SOURCE.contains("pub fn capture_tab_ai_screen_screenshot_file()"),
         "full-screen screenshot helper must exist as a public function",
     );
     assert!(
@@ -3152,9 +3151,7 @@ fn post_close_prewarm_feeds_the_next_explicit_tab_open() {
         .find("fn open_tab_ai_harness_terminal_from_request(")
         .expect("open_tab_ai_harness_terminal_from_request must exist");
     let open_body = &source[open_start..];
-    let next_fn = open_body[1..]
-        .find("\n    fn ")
-        .unwrap_or(open_body.len());
+    let next_fn = open_body[1..].find("\n    fn ").unwrap_or(open_body.len());
     let open_body = &open_body[..next_fn];
 
     assert!(

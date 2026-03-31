@@ -1213,6 +1213,7 @@ impl ScriptListApp {
                     AppView::FileSearchView {
                         ref query,
                         selected_index,
+                        ..
                     } => (
                         "fileSearch".to_string(),
                         Some("file-search".to_string()),

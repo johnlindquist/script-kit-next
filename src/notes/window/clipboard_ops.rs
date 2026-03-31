@@ -1,6 +1,36 @@
 use super::*;
 
 impl NotesApp {
+    /// Insert dictated text at the current cursor position.
+    ///
+    /// Replaces the current selection (if any) with the dictated text and
+    /// moves the cursor to the end of the insertion.  Called by the dictation
+    /// delivery pipeline when the notes window was the active target.
+    pub(crate) fn inject_dictation_text(
+        &mut self,
+        text: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.editor_state.update(cx, |state, cx| {
+            let selection = state.selection();
+            let value = state.value().to_string();
+            let start = selection.start.min(value.len());
+            let end = selection.end.min(value.len());
+            let new_value = format!("{}{}{}", &value[..start], text, &value[end..]);
+            let new_cursor = start + text.len();
+            state.set_value(&new_value, window, cx);
+            state.set_selection(new_cursor, new_cursor, window, cx);
+        });
+        self.has_unsaved_changes = true;
+        tracing::info!(
+            category = "DICTATION",
+            text_len = text.len(),
+            "Dictated text injected into notes editor"
+        );
+        cx.notify();
+    }
+
     /// Insert current date/time at cursor position (Cmd+Shift+D)
     pub(super) fn insert_date_time(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let now = chrono::Local::now();

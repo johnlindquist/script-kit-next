@@ -79,16 +79,40 @@
         // Preview pane: file detail or placeholder
         let preview_pane = preview_content;
 
-        // Assemble via shared expanded-view scaffold (owns header padding, 50/50 split, footer)
+        let is_mini = matches!(presentation, FileSearchPresentation::Mini);
+
+        // Assemble layout: mini = list-only, full = list + preview split
+        let layout_mode = if is_mini { "mini" } else { "expanded" };
         tracing::info!(
             surface = "file_search",
-            layout_mode = "expanded",
-            custom_footer_removed = true,
-            custom_divider_removed = true,
-            "file_search_chrome_checkpoint: migrated to render_expanded_view_scaffold"
+            %layout_mode,
+            "file_search_chrome_checkpoint"
         );
-        crate::components::render_expanded_view_scaffold(header_element, list_pane, preview_pane)
+
+        if is_mini {
+            let hints: Vec<SharedString> = vec![
+                "\u{21b5} Open".into(),
+                "\u{2318}\u{21b5} Ask AI".into(),
+                "\u{21e5} Navigate".into(),
+            ];
+            crate::components::render_minimal_list_prompt_scaffold(
+                header_element,
+                list_pane,
+                hints,
+                None,
+            )
             .key_context("FileSearchView")
             .track_focus(&self.focus_handle)
             .on_key_down(handle_key)
             .into_any_element()
+        } else {
+            crate::components::render_expanded_view_scaffold(
+                header_element,
+                list_pane,
+                preview_pane,
+            )
+            .key_context("FileSearchView")
+            .track_focus(&self.focus_handle)
+            .on_key_down(handle_key)
+            .into_any_element()
+        }

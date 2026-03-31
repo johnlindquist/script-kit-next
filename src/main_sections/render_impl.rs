@@ -319,8 +319,9 @@ impl Render for ScriptListApp {
             AppView::FileSearchView {
                 ref query,
                 selected_index,
+                presentation,
             } => self
-                .render_file_search(query, selected_index, cx)
+                .render_file_search(query, selected_index, presentation, cx)
                 .into_any_element(),
             AppView::ThemeChooserView {
                 ref filter,

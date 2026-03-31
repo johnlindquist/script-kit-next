@@ -377,6 +377,7 @@ impl ScriptListApp {
             AppView::FileSearchView {
                 query,
                 selected_index,
+                ..
             } => {
                 let results = ScriptListApp::resolve_file_search_results(&text);
                 logging::log(

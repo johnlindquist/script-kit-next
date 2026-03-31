@@ -192,9 +192,32 @@ pub fn set_overlay_abort_callback(callback: impl Fn(&mut App) + Send + Sync + 's
 /// Interval between animation ticks for the transcribing dot pulse (ms).
 const TRANSCRIBING_TICK_MS: u64 = 50;
 
+/// What the overlay should do when Escape is pressed in a given phase.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum OverlayEscapeAction {
+    AbortSession,
+    CloseOverlay,
+    Propagate,
+}
+
+/// Map a dictation session phase to the appropriate Escape behavior.
+pub(crate) fn overlay_escape_action(phase: &DictationSessionPhase) -> OverlayEscapeAction {
+    match phase {
+        DictationSessionPhase::Recording | DictationSessionPhase::Confirming => {
+            OverlayEscapeAction::AbortSession
+        }
+        DictationSessionPhase::Transcribing
+        | DictationSessionPhase::Delivering
+        | DictationSessionPhase::Finished
+        | DictationSessionPhase::Failed(_) => OverlayEscapeAction::CloseOverlay,
+        DictationSessionPhase::Idle => OverlayEscapeAction::Propagate,
+    }
+}
+
 /// The GPUI entity that renders the compact dictation pill.
 pub struct DictationOverlay {
     state: DictationOverlayState,
+    display_bars: [f32; WAVEFORM_BAR_COUNT],
     focus_handle: FocusHandle,
     /// When the transcribing animation started (for pulse phase computation).
     transcribing_started_at: Option<Instant>,
@@ -206,8 +229,13 @@ pub struct DictationOverlay {
 
 impl DictationOverlay {
     pub fn new(cx: &mut Context<Self>) -> Self {
+        let bars = bars_for_level(DictationLevel {
+            rms: 0.0,
+            peak: 0.0,
+        });
         Self {
             state: DictationOverlayState::default(),
+            display_bars: bars,
             focus_handle: cx.focus_handle(),
             transcribing_started_at: None,
             reduced_motion: crate::platform::prefers_reduced_motion(),
@@ -221,6 +249,18 @@ impl DictationOverlay {
             && self.state.phase != DictationSessionPhase::Transcribing;
         let leaving_transcribing = state.phase != DictationSessionPhase::Transcribing
             && self.state.phase == DictationSessionPhase::Transcribing;
+
+        // Smoothly animate bars during recording; snap for other phases.
+        self.display_bars =
+            if state.phase == DictationSessionPhase::Recording && !self.reduced_motion {
+                crate::dictation::visualizer::animate_bars(
+                    self.display_bars,
+                    state.bars,
+                    Duration::from_millis(16),
+                )
+            } else {
+                state.bars
+            };
 
         self.state = state;
 
@@ -255,10 +295,10 @@ impl DictationOverlay {
 
     /// Handle key-down events for the overlay.
     ///
-    /// State machine:
-    /// - Recording + Escape → Confirming (show Abort/Resume)
-    /// - Confirming + Escape → Abort (invoke callback, close overlay)
-    /// - Confirming + any other key → Resume Recording
+    /// Escape semantics:
+    /// - Recording / Confirming → abort the capture session immediately
+    /// - Transcribing / Delivering / Finished / Failed → dismiss overlay only
+    /// - Idle → propagate (no-op)
     fn handle_key_down(
         &mut self,
         event: &KeyDownEvent,
@@ -266,44 +306,36 @@ impl DictationOverlay {
         cx: &mut Context<Self>,
     ) {
         let key = event.keystroke.key.as_str();
-        let is_escape = crate::ui_foundation::is_key_escape(key);
+        if !crate::ui_foundation::is_key_escape(key) {
+            cx.propagate();
+            return;
+        }
 
-        match &self.state.phase {
-            DictationSessionPhase::Recording if is_escape => {
+        match overlay_escape_action(&self.state.phase) {
+            OverlayEscapeAction::AbortSession => {
                 tracing::info!(
                     category = "DICTATION",
-                    "Escape pressed during recording, entering confirming state"
-                );
-                let phase = DictationSessionPhase::Confirming;
-                let _ = crate::dictation::set_overlay_phase(phase.clone());
-                self.state.phase = phase;
-                cx.notify();
-                cx.stop_propagation();
-            }
-            DictationSessionPhase::Confirming if is_escape => {
-                tracing::info!(
-                    category = "DICTATION",
-                    "Second Escape pressed, aborting dictation"
+                    phase = ?self.state.phase,
+                    "Escape pressed, aborting dictation session"
                 );
                 let callback = OVERLAY_ABORT_CALLBACK.lock().take();
                 if let Some(cb) = callback {
                     cb(cx);
+                } else {
+                    let _ = crate::dictation::close_dictation_overlay(cx);
                 }
                 cx.stop_propagation();
             }
-            DictationSessionPhase::Confirming => {
+            OverlayEscapeAction::CloseOverlay => {
                 tracing::info!(
                     category = "DICTATION",
-                    key,
-                    "Non-Escape key pressed during confirming, resuming recording"
+                    phase = ?self.state.phase,
+                    "Escape pressed, dismissing dictation overlay"
                 );
-                let phase = DictationSessionPhase::Recording;
-                let _ = crate::dictation::set_overlay_phase(phase.clone());
-                self.state.phase = phase;
-                cx.notify();
+                let _ = crate::dictation::close_dictation_overlay(cx);
                 cx.stop_propagation();
             }
-            _ => {
+            OverlayEscapeAction::Propagate => {
                 cx.propagate();
             }
         }
@@ -332,7 +364,7 @@ impl Render for DictationOverlay {
         let text_color = theme.colors.text.primary.with_opacity(OPACITY_ACTIVE);
 
         let phase = &self.state.phase;
-        let bars = &self.state.bars;
+        let bars = &self.display_bars;
         let elapsed = &self.state.elapsed;
 
         // 3-column inner content matching vercel-voice grid layout:
@@ -455,6 +487,7 @@ impl Render for DictationOverlay {
             .justify_center()
             .w_full()
             .h_full()
+            .overflow_hidden()
             .px(px(OVERLAY_HORIZONTAL_PADDING_PX))
             .gap(px(OVERLAY_CONTENT_GAP_PX))
             .bg(surface_bg)
@@ -470,6 +503,7 @@ impl Render for DictationOverlay {
             .on_key_down(cx.listener(Self::handle_key_down))
             .w_full()
             .h_full()
+            .overflow_hidden()
             .child(surface)
     }
 }
@@ -620,6 +654,79 @@ fn calculate_overlay_bottom_center_bounds() -> gpui::Bounds<gpui::Pixels> {
     }
 }
 
+/// Configure the native window surface for the dictation overlay:
+/// clear background, corner radius mask, and masksToBounds to prevent
+/// white sliver artifacts at the pill's rounded corners.
+#[cfg(target_os = "macos")]
+fn configure_overlay_window_surface(window: &mut Window) {
+    if let Ok(wh) = raw_window_handle::HasWindowHandle::window_handle(window) {
+        if let raw_window_handle::RawWindowHandle::AppKit(appkit) = wh.as_raw() {
+            use cocoa::base::{id, NO, YES};
+            use objc::{class, msg_send, sel, sel_impl};
+
+            let ns_view = appkit.ns_view.as_ptr() as id;
+            // SAFETY: ns_view belongs to the live dictation overlay window on
+            // the main thread.  We set the window to non-opaque with a clear
+            // background and apply a corner mask to the content view's layer
+            // so the pill shape clips cleanly.
+            unsafe {
+                let ns_window: id = msg_send![ns_view, window];
+                if ns_window.is_null() {
+                    return;
+                }
+                let clear: id = msg_send![class!(NSColor), clearColor];
+                let () = msg_send![ns_window, setOpaque: NO];
+                let () = msg_send![ns_window, setBackgroundColor: clear];
+
+                let content_view: id = msg_send![ns_window, contentView];
+                if content_view.is_null() {
+                    return;
+                }
+                let () = msg_send![content_view, setWantsLayer: YES];
+                let layer: id = msg_send![content_view, layer];
+                if layer.is_null() {
+                    return;
+                }
+                let () = msg_send![layer, setCornerRadius: OVERLAY_RADIUS_PX as f64];
+                let () = msg_send![layer, setMasksToBounds: YES];
+            }
+        }
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn configure_overlay_window_surface(_window: &mut Window) {}
+
+/// Prepare the overlay window for a clean close: set alpha to 0 so the
+/// NSWindow backing store clear doesn't flash white.
+#[cfg(target_os = "macos")]
+fn prepare_overlay_window_for_close(window: &mut Window) {
+    configure_overlay_window_surface(window);
+    if let Ok(wh) = raw_window_handle::HasWindowHandle::window_handle(window) {
+        if let raw_window_handle::RawWindowHandle::AppKit(appkit) = wh.as_raw() {
+            use cocoa::base::id;
+            use objc::{class, msg_send, sel, sel_impl};
+
+            let ns_view = appkit.ns_view.as_ptr() as id;
+            // SAFETY: ns_view belongs to the live dictation overlay window on
+            // the main thread.  We set alpha to 0 before remove_window so the
+            // backing store clear is invisible.
+            unsafe {
+                let ns_window: id = msg_send![ns_view, window];
+                if ns_window.is_null() {
+                    return;
+                }
+                let clear: id = msg_send![class!(NSColor), clearColor];
+                let () = msg_send![ns_window, setBackgroundColor: clear];
+                let () = msg_send![ns_window, setAlphaValue: 0.0_f64];
+            }
+        }
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn prepare_overlay_window_for_close(_window: &mut Window) {}
+
 /// Open the dictation overlay as a compact floating pill.
 ///
 /// Creates a `WindowKind::PopUp` window with blurred background and vibrancy.
@@ -707,6 +814,9 @@ pub fn open_dictation_overlay(
                     }
                 }
             }
+
+            // Apply clear background + corner mask after vibrancy.
+            configure_overlay_window_surface(window);
         });
     }
 
@@ -802,8 +912,10 @@ pub fn close_dictation_overlay(cx: &mut App) -> anyhow::Result<()> {
     };
 
     if let Some(handle) = handle {
-        // Attempt to remove — ignore errors from already-dead windows.
+        // Fade to transparent before removing so the backing store clear
+        // doesn't flash white.
         let result = handle.update(cx, |_view, window, _cx| {
+            prepare_overlay_window_for_close(window);
             window.remove_window();
         });
         if result.is_ok() {
