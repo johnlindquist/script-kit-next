@@ -2630,6 +2630,7 @@ impl ScriptListApp {
     const TAB_AI_APPLY_BACK_FOCUS_SETTLE_MS: u64 = 250;
     const TAB_AI_APPLY_BACK_CLIPBOARD_PRIME_MS: u64 = 25;
     const TAB_AI_APPLY_BACK_ROUTE_POLL_MS: u64 = 20;
+    const TAB_AI_APPLY_BACK_ROUTE_TIMEOUT_MS: u64 = 750;
 
     /// Show a route-aware error toast when ⌘↩ is pressed but there is
     /// neither a terminal selection nor harness output available yet.
@@ -2647,6 +2648,23 @@ impl ScriptListApp {
                 &self.theme,
             )
             .duration_ms(Some(TOAST_ERROR_MS)),
+        );
+        cx.notify();
+    }
+
+    /// Show a route-aware error toast when the apply-back route is still
+    /// unavailable after the bounded wait expires.
+    fn toast_tab_ai_apply_back_pending(&mut self, cx: &mut Context<Self>) {
+        let message = match self.tab_ai_harness_apply_back_route.as_ref() {
+            Some(route) => format!(
+                "{} is still preparing. Try again in a moment.",
+                crate::ai::tab_ai_apply_back_footer_label(Some(&route.source_type)),
+            ),
+            None => "Paste Back target is still preparing. Try again in a moment.".to_string(),
+        };
+        self.toast_manager.push(
+            crate::components::toast::Toast::error(message, &self.theme)
+                .duration_ms(Some(TOAST_ERROR_MS)),
         );
         cx.notify();
     }
@@ -2848,10 +2866,11 @@ impl ScriptListApp {
         }
     }
 
-    /// Apply `text` immediately when the route is known; otherwise wait
-    /// indefinitely for deferred capture to resolve.  Cancels silently if
-    /// the harness closes (view leaves `QuickTerminalView`) or the entity
-    /// is dropped.
+    /// Apply `text` immediately when the route is known; otherwise poll
+    /// for up to `TAB_AI_APPLY_BACK_ROUTE_TIMEOUT_MS` ms.  If the route
+    /// is still unavailable after the deadline, show a route-aware error
+    /// toast instead of waiting forever.  Cancels silently if the harness
+    /// closes (view leaves `QuickTerminalView`) or the entity is dropped.
     fn apply_tab_ai_result_text_or_wait_for_route(
         &mut self,
         text: String,
@@ -2864,10 +2883,16 @@ impl ScriptListApp {
 
         let app_weak = cx.entity().downgrade();
         cx.spawn(async move |_this, cx| {
+            let deadline = std::time::Instant::now()
+                + std::time::Duration::from_millis(
+                    ScriptListApp::TAB_AI_APPLY_BACK_ROUTE_TIMEOUT_MS,
+                );
+
             loop {
                 enum WaitState {
                     Ready(crate::ai::TabAiApplyBackRoute),
                     Pending,
+                    TimedOut,
                     Cancelled,
                 }
 
@@ -2879,10 +2904,13 @@ impl ScriptListApp {
                         if !matches!(this.current_view, AppView::QuickTerminalView { .. }) {
                             return WaitState::Cancelled;
                         }
-                        match this.tab_ai_harness_apply_back_route.clone() {
-                            Some(route) => WaitState::Ready(route),
-                            None => WaitState::Pending,
+                        if let Some(route) = this.tab_ai_harness_apply_back_route.clone() {
+                            return WaitState::Ready(route);
                         }
+                        if std::time::Instant::now() >= deadline {
+                            return WaitState::TimedOut;
+                        }
+                        WaitState::Pending
                     })
                 });
 
@@ -2894,6 +2922,17 @@ impl ScriptListApp {
                             };
                             app.update(cx, |this, cx| {
                                 this.apply_tab_ai_result_text(route, text.clone(), cx);
+                            });
+                        });
+                        break;
+                    }
+                    WaitState::TimedOut => {
+                        let _ = cx.update(|cx| {
+                            let Some(app) = app_weak.upgrade() else {
+                                return;
+                            };
+                            app.update(cx, |this, cx| {
+                                this.toast_tab_ai_apply_back_pending(cx);
                             });
                         });
                         break;

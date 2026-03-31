@@ -463,15 +463,12 @@ impl TermPrompt {
         }
     }
 
-    /// Handle a scroll wheel event forwarded from an external wrapper.
+    /// Shared scroll-wheel handler used by both the inline `.on_scroll_wheel()`
+    /// closure on the terminal element and the external wrapper forwarding path.
     ///
-    /// This is the public entry point for scroll forwarding from
-    /// `QuickTerminalView` in `render_prompts/term.rs`, which wraps the
-    /// `TermPrompt` entity in an `overflow_hidden()` div.  Without explicit
-    /// forwarding, GPUI may target the wrapper div instead of the entity,
-    /// causing scroll events to be silently swallowed.
-    #[allow(dead_code)] // Called from include!() binary code (render_prompts/term.rs)
-    pub fn handle_external_scroll_wheel(
+    /// Converts line or pixel deltas into whole-line scroll commands, accumulating
+    /// fractional remainders across events so trackpad/momentum scrolling is smooth.
+    fn apply_scroll_wheel_delta(
         &mut self,
         event: &ScrollWheelEvent,
         cx: &mut Context<Self>,
@@ -513,9 +510,25 @@ impl TermPrompt {
         trace!(
             delta = whole_lines,
             remainder = self.wheel_scroll_remainder,
-            "Mouse wheel scroll (external)"
+            "Mouse wheel scroll"
         );
         cx.notify();
+    }
+
+    /// Handle a scroll wheel event forwarded from an external wrapper.
+    ///
+    /// This is the public entry point for scroll forwarding from
+    /// `QuickTerminalView` in `render_prompts/term.rs`, which wraps the
+    /// `TermPrompt` entity in an `overflow_hidden()` div.  Without explicit
+    /// forwarding, GPUI may target the wrapper div instead of the entity,
+    /// causing scroll events to be silently swallowed.
+    #[allow(dead_code)] // Called from include!() binary code (render_prompts/term.rs)
+    pub fn handle_external_scroll_wheel(
+        &mut self,
+        event: &ScrollWheelEvent,
+        cx: &mut Context<Self>,
+    ) {
+        self.apply_scroll_wheel_delta(event, cx);
     }
 
     /// Convert pixel position to terminal grid cell (col, row)
@@ -1457,55 +1470,7 @@ impl Render for TermPrompt {
                 }),
             )
             .on_scroll_wheel(cx.listener(|this, event: &ScrollWheelEvent, _window, cx| {
-                let lines = match event.delta {
-                    // Discrete wheel: scroll immediately by whole lines
-                    ScrollDelta::Lines(point) => point.y,
-                    // Trackpad/momentum: convert pixels to fractional lines
-                    ScrollDelta::Pixels(point) => {
-                        let cell_height = px(this.cell_height());
-                        point.y / cell_height
-                    }
-                };
-
-                if lines == 0.0 {
-                    return;
-                }
-
-                // Accumulate fractional remainder so small trackpad deltas
-                // aren't silently dropped (the old code rounded each event
-                // independently, losing sub-line pixel increments).
-                this.wheel_scroll_remainder += -lines;
-
-                let whole_lines = if this.wheel_scroll_remainder > 0.0 {
-                    this.wheel_scroll_remainder.floor() as i32
-                } else {
-                    this.wheel_scroll_remainder.ceil() as i32
-                };
-
-                if whole_lines == 0 {
-                    return;
-                }
-
-                this.wheel_scroll_remainder -= whole_lines as f32;
-
-                // Route scroll based on terminal mode:
-                // - prefer_buffer_scroll_on_wheel: always local scrollback (harness)
-                // - Mouse mode / alt screen: send to PTY
-                // - Normal: scroll the display buffer
-                let routed_to_pty = if this.prefer_buffer_scroll_on_wheel {
-                    false
-                } else {
-                    this.terminal.scroll_to_pty(whole_lines)
-                };
-                if !routed_to_pty {
-                    this.terminal.scroll(whole_lines);
-                }
-                trace!(
-                    delta = whole_lines,
-                    remainder = this.wheel_scroll_remainder,
-                    "Mouse wheel scroll"
-                );
-                cx.notify();
+                this.apply_scroll_wheel_delta(event, cx);
             }))
             .on_key_down(handle_key);
 

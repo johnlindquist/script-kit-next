@@ -1,6 +1,6 @@
 //! Deterministic quick-submit planner for Tab AI harness entries.
 //!
-//! Classifies raw dropped text (from Send to AI fallback, dictation
+//! Classifies raw dropped text (from Auto Submit fallback, dictation
 //! transcripts, or Shift+Tab quick entry) into a structured plan that
 //! picks the right capture kind, synthesizes a better `User intent:`
 //! turn, and always submits immediately.
