@@ -494,14 +494,9 @@ pub fn build_tab_ai_harness_context_block(
         push_block(&mut out, "selected text", text);
     }
     if let Some(app) = context.desktop.frontmost_app.as_ref() {
-        push_line(
-            &mut out,
-            "frontmost app",
-            format!(
-                "{} | bundle_id={} | pid={}",
-                app.name, app.bundle_id, app.pid
-            ),
-        );
+        push_line(&mut out, "frontmost app name", &app.name);
+        push_line(&mut out, "frontmost app bundle id", &app.bundle_id);
+        push_line(&mut out, "frontmost app pid", app.pid.to_string());
     }
     if let Some(browser) = context.desktop.browser.as_ref() {
         push_line(&mut out, "browser url", &browser.url);
@@ -509,14 +504,15 @@ pub fn build_tab_ai_harness_context_block(
     if let Some(window) = context.desktop.focused_window.as_ref() {
         push_line(
             &mut out,
-            "focused window",
-            format!(
-                "{} | {}x{} | used_fallback={}",
-                collapse_inline_text(&window.title),
-                window.width,
-                window.height,
-                window.used_fallback
-            ),
+            "focused window title",
+            collapse_inline_text(&window.title),
+        );
+        push_line(&mut out, "focused window width", window.width.to_string());
+        push_line(&mut out, "focused window height", window.height.to_string());
+        push_line(
+            &mut out,
+            "focused window used fallback",
+            window.used_fallback.to_string(),
         );
     }
     for (index, warning) in context.desktop.warnings.iter().enumerate() {
@@ -544,17 +540,17 @@ pub fn build_tab_ai_harness_context_block(
     }
 
     for (index, entry) in context.clipboard_history.iter().take(5).enumerate() {
-        push_line(
+        push_clipboard_history_lines(
             &mut out,
             &format!("clipboard history {}", index + 1),
-            format_clipboard_history_line(entry),
+            entry,
         );
     }
     for (index, item) in context.prior_automations.iter().take(3).enumerate() {
-        push_line(
+        push_prior_automation_lines(
             &mut out,
             &format!("prior automation {}", index + 1),
-            format_prior_automation_line(item),
+            item,
         );
     }
 
@@ -1158,7 +1154,7 @@ mod tests {
         )
         .expect("submission");
         assert!(submission.contains("Script Kit context"));
-        assert!(submission.contains("focused window: Finder — Downloads"));
+        assert!(submission.contains("focused window title: Finder — Downloads"));
         assert!(!submission.contains("focusedWindowImage"));
         assert!(!submission.contains("Await the user's next terminal input."));
         assert!(!submission.contains("User intent:"));
@@ -1591,6 +1587,25 @@ mod tests {
         assert!(block.contains("screenshot path: /tmp/scriptkit-screenshot-abc123.png"));
         assert!(!block.contains("<scriptKitContext"));
         assert!(!block.contains("```json"));
+
+        // Frontmost app is now separate labeled lines, not pipe-delimited
+        assert!(block.contains("frontmost app name: VS Code"));
+        assert!(block.contains("frontmost app bundle id: com.microsoft.VSCode"));
+        assert!(block.contains("frontmost app pid: 42"));
+        assert!(!block.contains("bundle_id="), "no pipe-delimited compound fields");
+
+        // Focused window is now separate labeled lines
+        assert!(block.contains("focused window title: fibonacci.ts"));
+        assert!(block.contains("focused window width: 1440"));
+        assert!(block.contains("focused window height: 900"));
+        assert!(block.contains("focused window used fallback: false"));
+        assert!(!block.contains("used_fallback="), "no pipe-delimited compound fields");
+
+        // Prior automation is now separate labeled lines
+        assert!(block.contains("prior automation 1 slug: run-fibonacci"));
+        assert!(block.contains("prior automation 1 prompt type: QuickTerminal"));
+        assert!(block.contains("prior automation 1 score: 1.000"));
+        assert!(!block.contains("slug="), "no pipe-delimited compound fields");
     }
 
     // -----------------------------------------------------------------------
