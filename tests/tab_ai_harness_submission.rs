@@ -746,7 +746,7 @@ fn submit_with_scriptlet_authoring_intent_includes_artifact_authoring_guidance()
     )
     .expect("submission should build");
 
-    assert!(submission.contains("<scriptKitArtifactAuthoring>"));
+    assert!(submission.contains("--- Script Kit artifact authoring guidance ---"));
     assert!(submission.contains("~/.scriptkit/kit/main/extensions/<name>.md"));
     assert!(submission.contains("~/.scriptkit/skills/scriptlets/SKILL.md"));
     assert!(submission.contains("~/.scriptkit/examples/extensions/"));
@@ -766,7 +766,7 @@ fn submit_with_agent_authoring_intent_includes_agent_destination() {
     )
     .expect("submission should build");
 
-    assert!(submission.contains("<scriptKitArtifactAuthoring>"));
+    assert!(submission.contains("--- Script Kit artifact authoring guidance ---"));
     assert!(submission.contains("~/.scriptkit/kit/main/agents/<name>.<backend>.md"));
     assert!(submission.contains("~/.scriptkit/skills/agents/SKILL.md"));
     assert!(submission.contains("~/.scriptkit/examples/agents/"));
@@ -785,7 +785,7 @@ fn non_authoring_intent_omits_artifact_authoring_guidance() {
     )
     .expect("submission should build");
 
-    assert!(!submission.contains("<scriptKitArtifactAuthoring>"));
+    assert!(!submission.contains("--- Script Kit artifact authoring guidance ---"));
 }
 
 #[test]
@@ -806,7 +806,7 @@ fn artifact_authoring_block_appears_between_context_and_intent() {
         .find("Script Kit context")
         .expect("context block must exist");
     let authoring_start = submission
-        .find("<scriptKitArtifactAuthoring>")
+        .find("--- Script Kit artifact authoring guidance ---")
         .expect("authoring block must exist");
     let intent_start = submission.find("User intent:").expect("intent must exist");
 

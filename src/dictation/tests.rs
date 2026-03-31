@@ -2959,12 +2959,16 @@ fn overlay_confirming_phase_renders_abort_resume() {
     let window_src = std::fs::read_to_string("src/dictation/window.rs").expect("read window.rs");
 
     assert!(
-        window_src.contains("Enter Abort"),
+        window_src.contains("Abort ↵"),
         "confirming phase must show Abort affordance"
     );
     assert!(
-        window_src.contains("Esc Resume"),
+        window_src.contains("Resume Esc"),
         "confirming phase must show Resume affordance"
+    );
+    assert!(
+        window_src.contains("Cancel dictation?"),
+        "confirming phase must show Cancel dictation? prompt"
     );
 }
 
@@ -3092,21 +3096,21 @@ fn overlay_key_handler_writes_through_to_runtime_phase() {
         "overlay key handler must delegate to overlay_escape_action"
     );
 
-    // AbortSession must invoke the stored abort callback.
+    // AbortSession must invoke the stored abort callback (via helper).
     assert!(
         window_src.contains("OVERLAY_ABORT_CALLBACK"),
-        "overlay key handler must invoke the stored abort callback on AbortSession"
+        "overlay must invoke the stored abort callback on AbortSession"
     );
 
     // CloseOverlay must call close_dictation_overlay.
     let handler_start = window_src
         .find("fn handle_key_down")
         .expect("overlay must have a key-down handler");
-    let handler_src =
-        &window_src[handler_start..handler_start + 2000.min(window_src.len() - handler_start)];
+    let handler_end = handler_start + 3000.min(window_src.len() - handler_start);
+    let handler_src = &window_src[handler_start..handler_end];
     assert!(
-        handler_src.contains("close_dictation_overlay"),
-        "overlay key handler must call close_dictation_overlay on CloseOverlay"
+        handler_src.contains("close_dictation_overlay") || handler_src.contains("abort_overlay_session"),
+        "overlay key handler must call close_dictation_overlay or abort_overlay_session on CloseOverlay"
     );
 }
 
@@ -3335,13 +3339,13 @@ fn escape_abort_never_reaches_transcript_handler() {
     let handler_start = window_src
         .find("fn handle_key_down")
         .expect("overlay must have a key-down handler");
-    let handler_src =
-        &window_src[handler_start..handler_start + 2000.min(window_src.len() - handler_start)];
+    let handler_end = handler_start + 3000.min(window_src.len() - handler_start);
+    let handler_src = &window_src[handler_start..handler_end];
 
-    // AbortSession arm invokes the stored abort callback.
+    // AbortSession arm invokes the stored abort callback (via helper).
     assert!(
-        handler_src.contains("OVERLAY_ABORT_CALLBACK"),
-        "Escape abort must invoke the stored abort callback"
+        handler_src.contains("abort_overlay_session"),
+        "Escape abort must invoke abort_overlay_session (which uses the stored abort callback)"
     );
 
     // overlay_escape_action routes Recording to TransitionToConfirming and

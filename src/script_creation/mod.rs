@@ -233,28 +233,33 @@ fn generate_extension_template(name: &str) -> String {
     format!(
         r#"---
 name: {title}
-description: "What this extension bundle includes"
-author: "Your Name"
-icon: wrench
+description: "Grouped lightweight helpers"
+icon: sparkles
 ---
 
-<!--
-  YAML frontmatter:
-  - name: display title in menus
-  - description: short summary shown in UI
-  - icon: choose a lucide icon name (for example: wrench, code, zap)
+## Hello Snippet
 
-  Learn more about creating extensions: ~/.scriptkit/GUIDE.md
--->
+```metadata
+keyword: !hello
+description: Quick greeting
+```
 
-# {title}
+```paste
+Hello from {title}!
+```
 
-Scriptlets in this bundle.
+## Quick Note
 
-## Hello World
+```metadata
+description: Save a quick note
+```
 
-```bash
-echo "Hello from {title}!"
+```tool:quick-note
+import "@scriptkit/sdk";
+
+const note = await arg("Note");
+await Bun.write(`${{env.HOME}}/quick-note.txt`, note);
+await notify("Saved");
 ```
 "#
     )
@@ -531,13 +536,13 @@ mod tests {
         let template = generate_extension_template("my-extension");
         assert!(template.starts_with("---"));
         assert!(template.contains("name: My Extension"));
-        assert!(template.contains("description: \"What this extension bundle includes\""));
-        assert!(template.contains("icon: wrench"));
-        assert!(template.contains("YAML frontmatter"));
-        assert!(template.contains("# My Extension"));
-        assert!(template.contains("Scriptlets in this bundle"));
-        assert!(template.contains("```bash"));
-        assert!(template.contains("~/.scriptkit/GUIDE.md"));
+        assert!(template.contains("description: \"Grouped lightweight helpers\""));
+        assert!(template.contains("icon: sparkles"));
+        assert!(template.contains("## Hello Snippet"));
+        assert!(template.contains("```metadata"));
+        assert!(template.contains("```paste"));
+        assert!(template.contains("```tool:quick-note"));
+        assert!(template.contains("import \"@scriptkit/sdk\";"));
     }
 
     #[test]
@@ -600,10 +605,10 @@ mod tests {
         assert!(extension_path.exists());
         assert_eq!(extension_path.file_name().unwrap(), "test-extension.md");
 
-        // Verify the content is markdown with a code block
+        // Verify the content is markdown with metadata fences
         let content = fs::read_to_string(&extension_path).unwrap();
-        assert!(content.contains("# Test Extension"));
-        assert!(content.contains("```bash"));
+        assert!(content.contains("name: Test Extension"));
+        assert!(content.contains("```metadata"));
     }
 
     #[test]

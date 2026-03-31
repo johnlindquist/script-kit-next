@@ -628,7 +628,7 @@ fn looks_like_descriptive_artifact_phrase(intent: &str) -> bool {
 
 /// Returns `true` when the intent looks like a request to create/scaffold a
 /// Script Kit artifact (script, scriptlet bundle, agent).  Used to decide
-/// whether to inject the `<scriptKitArtifactAuthoring>` guidance block.
+/// whether to inject the artifact authoring guidance block.
 pub fn should_include_artifact_authoring_guidance(intent: Option<&str>) -> bool {
     let Some(intent) = intent.map(str::trim).filter(|value| !value.is_empty()) else {
         return false;
@@ -653,54 +653,109 @@ pub fn should_include_artifact_authoring_guidance(intent: Option<&str>) -> bool 
 
 /// Static guidance block that tells the harness how to pick the right artifact
 /// type and where to write the result, with exact file pointers.
+///
+/// Uses text-native labeled sections (no XML wrappers) so the block reads
+/// naturally in a PTY terminal and does not confuse harness backends that
+/// strip or misparse XML-ish tags.
 fn build_tab_ai_artifact_authoring_guidance_block() -> &'static str {
-    r#"<scriptKitArtifactAuthoring>
+    r#"--- Script Kit artifact authoring guidance ---
 Pick the smallest artifact that fits before writing files.
 
+Decision:
+- Use Script for Script Kit UI APIs, Bun APIs, files, HTTP, or multi-step logic.
+- Use Extension bundle for snippets, text expansion, quick shell commands, or a small grouped helper set.
+- Use mdflow agent for reusable backend-specific prompts or automations.
+
 Artifact: Script
-Use when:
-- the user wants a full TypeScript workflow
-- the job needs Script Kit UI APIs, Bun APIs, files, HTTP, or multi-step logic
 Write:
 - ~/.scriptkit/kit/main/scripts/<name>.ts
-Read first:
+Read next:
 - ~/.scriptkit/skills/script-authoring/SKILL.md
-Reference:
 - ~/.scriptkit/examples/scripts/hello-world.ts
-- ~/.scriptkit/examples/scripts/choose-from-list.ts
+Starter:
+~~~ts
+import "@scriptkit/sdk";
+
+export const metadata = {
+  name: "My Script",
+  description: "What it does",
+};
+
+const value = await arg("What should this script do?");
+await div(`<div class="p-8 text-2xl">${value}</div>`);
+~~~
 
 Artifact: Extension bundle
-Use when:
-- the user wants text expansions, snippets, quick shell commands, or grouped lightweight helpers
-- multiple related commands belong in one markdown file
 Write:
 - ~/.scriptkit/kit/main/extensions/<name>.md
-Read first:
+Read next:
 - ~/.scriptkit/examples/extensions/howto.md
 - ~/.scriptkit/skills/scriptlets/SKILL.md
-Reference:
-- ~/.scriptkit/examples/extensions/main.md
-- ~/.scriptkit/examples/extensions/advanced.md
+Starter:
+~~~md
+---
+name: My Bundle
+description: Personal helpers
+icon: sparkles
+---
+
+## Hello Snippet
+
+```metadata
+keyword: !hello
+description: Quick greeting
+```
+
+```paste
+Hello!
+```
+
+## Quick Note
+
+```metadata
+description: Save a quick note
+```
+
+```tool:quick-note
+import "@scriptkit/sdk";
+
+const note = await arg("Note");
+await Bun.write(`${env.HOME}/quick-note.txt`, note);
+await notify("Saved");
+```
+~~~
 
 Artifact: mdflow agent
-Use when:
-- the user wants a reusable backend-specific prompt or automation file
-- the request is for an agent, not a runnable .ts script
 Write:
 - ~/.scriptkit/kit/main/agents/<name>.<backend>.md
-Read first:
+Read next:
 - ~/.scriptkit/skills/agents/SKILL.md
-Reference:
 - ~/.scriptkit/examples/agents/review-pr.claude.md
-- ~/.scriptkit/examples/agents/plan-feature.i.gemini.md
+Starter:
+~~~md
+---
+_sk_name: "Review PR"
+_sk_description: "Review staged changes and call out risks"
+_sk_icon: "git-pull-request"
+model: sonnet
+---
+
+Review the current git diff.
+
+Return:
+1. findings ordered by severity
+2. concrete fixes
+3. tests to add
+~~~
 
 Rules:
-- Do not create a .ts script when the request is really a scriptlet bundle or mdflow agent.
+- Do not create a .ts script when the request is really an extension bundle or mdflow agent.
 - Do not write runnable user files outside ~/.scriptkit/kit/main/.
+- For scripts, always use export const metadata with name and description.
 - For extension bundles, each ## heading is one scriptlet.
-- For extension bundles, prefer metadata code fences for keyword, description, and shortcut.
+- For extension bundles, prefer metadata code fences over HTML comments.
 - For extension bundles, tool:<name> fences still need import "@scriptkit/sdk"; as the first line.
-</scriptKitArtifactAuthoring>"#
+--- end artifact authoring guidance ---"#
 }
 
 // ---------------------------------------------------------------------------
@@ -714,8 +769,8 @@ Rules:
 /// - `PasteOnly` without intent: stages context only, no synthetic turn text.
 /// - With intent (either mode): appends the intent as `User intent:`.
 ///
-/// When the intent contains an authoring verb + artifact word, a
-/// `<scriptKitArtifactAuthoring>` block is appended between context and intent.
+/// When the intent contains an authoring verb + artifact word, a text-native
+/// artifact authoring guidance block is appended between context and intent.
 pub fn build_tab_ai_harness_submission(
     context: &crate::ai::TabAiContextBlob,
     intent: Option<&str>,

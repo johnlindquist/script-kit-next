@@ -28,6 +28,56 @@ impl ScriptListApp {
         extractor(selected.as_ref()).map_err(|e| Some(e.message()))
     }
 
+    /// Extract (path, is_dir, name) from the actions-path or the selected file search result.
+    fn resolve_file_search_path_info(&self) -> Option<(String, bool, String)> {
+        if let Some(ref path) = self.file_search_actions_path {
+            let p = std::path::Path::new(path);
+            let is_dir = p.is_dir();
+            let name = p
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_else(|| path.clone());
+            return Some((path.clone(), is_dir, name));
+        }
+        let AppView::FileSearchView { selected_index, .. } = &self.current_view else {
+            return None;
+        };
+        let (_, entry) = self.selected_file_search_result(*selected_index)?;
+        let is_dir = matches!(entry.file_type, crate::file_search::FileType::Directory);
+        Some((entry.path.clone(), is_dir, entry.name.clone()))
+    }
+
+    /// After a mutation (trash, etc.), re-resolve directory contents and refresh the display.
+    fn refresh_file_search_after_mutation(&mut self, cx: &mut Context<Self>) {
+        let AppView::FileSearchView {
+            query, presentation, ..
+        } = &self.current_view
+        else {
+            return;
+        };
+        let query_value = query.clone();
+        let presentation_value = *presentation;
+        let results = Self::resolve_file_search_results(&query_value);
+        self.update_file_search_results(results);
+
+        // Reset selection to top
+        if let AppView::FileSearchView {
+            ref mut selected_index,
+            ..
+        } = self.current_view
+        {
+            *selected_index = 0;
+        }
+
+        Self::resize_file_search_window_for_presentation(
+            presentation_value,
+            self.file_search_display_indices.len(),
+        );
+        self.file_search_scroll_handle
+            .scroll_to_item(0, gpui::ScrollStrategy::Top);
+        cx.notify();
+    }
+
     /// Handle file-related actions. Returns `true` if handled.
     fn handle_file_action(
         &mut self,
@@ -213,6 +263,154 @@ impl ScriptListApp {
                         }
                     }
                 }
+                DispatchOutcome::success()
+            }
+            "open_in_editor" => {
+                let Some((path, _, _)) = self.resolve_file_search_path_info() else {
+                    return DispatchOutcome::error(
+                        crate::action_helpers::ERROR_ACTION_FAILED,
+                        "No file selected",
+                    );
+                };
+                let path_buf = std::path::PathBuf::from(&path);
+                match crate::script_creation::open_in_editor(&path_buf, &self.config) {
+                    Ok(()) => {
+                        self.file_search_actions_path = None;
+                        self.show_hud(
+                            "Opened in Editor".to_string(),
+                            Some(HUD_SHORT_MS),
+                            cx,
+                        );
+                        self.hide_main_and_reset(cx);
+                    }
+                    Err(e) => {
+                        self.file_search_actions_path = None;
+                        return DispatchOutcome::error(
+                            crate::action_helpers::ERROR_ACTION_FAILED,
+                            format!("Failed to open in editor: {}", e),
+                        );
+                    }
+                }
+                DispatchOutcome::success()
+            }
+            "open_in_terminal" => {
+                let Some((path, is_dir, _)) = self.resolve_file_search_path_info() else {
+                    return DispatchOutcome::error(
+                        crate::action_helpers::ERROR_ACTION_FAILED,
+                        "No file selected",
+                    );
+                };
+                match crate::file_search::open_in_terminal(&path, is_dir) {
+                    Ok(_) => {
+                        self.file_search_actions_path = None;
+                        self.show_hud(
+                            "Opened in Terminal".to_string(),
+                            Some(HUD_SHORT_MS),
+                            cx,
+                        );
+                        self.hide_main_and_reset(cx);
+                    }
+                    Err(e) => {
+                        self.file_search_actions_path = None;
+                        return DispatchOutcome::error(
+                            crate::action_helpers::ERROR_ACTION_FAILED,
+                            format!("Failed to open in terminal: {}", e),
+                        );
+                    }
+                }
+                DispatchOutcome::success()
+            }
+            "move_to_trash" => {
+                let Some((path, _, name)) = self.resolve_file_search_path_info() else {
+                    return DispatchOutcome::error(
+                        crate::action_helpers::ERROR_ACTION_FAILED,
+                        "No file selected",
+                    );
+                };
+                let trace_id = trace_id.to_string();
+                let start = std::time::Instant::now();
+
+                cx.spawn(async move |this, cx| {
+                    let confirm_options = crate::confirm::ParentConfirmOptions::destructive(
+                        "Move to Trash",
+                        format!("Move \"{}\" to Trash?", name),
+                        "Move to Trash",
+                    );
+
+                    match crate::confirm::confirm_with_parent_dialog(
+                        cx,
+                        confirm_options,
+                        &trace_id,
+                    )
+                    .await
+                    {
+                        Ok(true) => {}
+                        Ok(false) => {
+                            tracing::info!(
+                                trace_id = %trace_id,
+                                status = "cancelled",
+                                duration_ms = start.elapsed().as_millis() as u64,
+                                "Async action cancelled: move_to_trash"
+                            );
+                            return;
+                        }
+                        Err(e) => {
+                            let _ = this.update(cx, |this, cx| {
+                                tracing::error!(
+                                    trace_id = %trace_id,
+                                    status = "failed",
+                                    duration_ms = start.elapsed().as_millis() as u64,
+                                    error = %e,
+                                    "failed to open confirmation modal"
+                                );
+                                this.show_error_toast_with_code(
+                                    "Failed to open confirmation dialog",
+                                    Some(crate::action_helpers::ERROR_MODAL_FAILED),
+                                    cx,
+                                );
+                            });
+                            return;
+                        }
+                    }
+
+                    let _ = this.update(cx, |this, cx| {
+                        match crate::file_search::move_to_trash(&path) {
+                            Ok(()) => {
+                                tracing::info!(
+                                    trace_id = %trace_id,
+                                    status = "completed",
+                                    duration_ms = start.elapsed().as_millis() as u64,
+                                    path = %path,
+                                    "file moved to trash"
+                                );
+                                this.file_search_actions_path = None;
+                                this.show_hud(
+                                    format!("Moved to Trash: {}", name),
+                                    Some(HUD_MEDIUM_MS),
+                                    cx,
+                                );
+                                this.refresh_file_search_after_mutation(cx);
+                            }
+                            Err(e) => {
+                                tracing::error!(
+                                    trace_id = %trace_id,
+                                    status = "failed",
+                                    duration_ms = start.elapsed().as_millis() as u64,
+                                    error = %e,
+                                    path = %path,
+                                    "failed to move to trash"
+                                );
+                                this.file_search_actions_path = None;
+                                this.show_error_toast(
+                                    format!("Failed to move to Trash: {}", e),
+                                    cx,
+                                );
+                            }
+                        }
+                    });
+                })
+                .detach();
+
                 DispatchOutcome::success()
             }
             "copy_filename" => {
