@@ -5775,8 +5775,8 @@ mod from_dialog_builtin_action_validation_tests_24 {
             is_dir: false,
         };
         let actions = get_file_context_actions(&f);
-        // open_file, reveal, rename, move, open_in_editor, open_in_terminal, attach_to_ai, quick_look, show_info, copy_path, copy_filename, move_to_trash = 12
-        assert_eq!(actions.len(), 12);
+        // open_file, reveal, rename, move, duplicate, open_in_editor, open_in_terminal, attach_to_ai, quick_look, show_info, copy_path, copy_filename, move_to_trash = 13
+        assert_eq!(actions.len(), 13);
     }
 
     #[cfg(target_os = "macos")]
@@ -5789,9 +5789,9 @@ mod from_dialog_builtin_action_validation_tests_24 {
             is_dir: true,
         };
         let actions = get_file_context_actions(&f);
-        // open_directory, reveal, rename, move, open_in_editor, open_in_terminal, show_info, copy_path, copy_filename, move_to_trash = 10
+        // open_directory, reveal, rename, move, duplicate, open_in_editor, open_in_terminal, show_info, copy_path, copy_filename, move_to_trash = 11
         // (no quick_look or attach_to_ai for dirs)
-        assert_eq!(actions.len(), 10);
+        assert_eq!(actions.len(), 11);
     }
     
     // ============================================================

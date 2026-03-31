@@ -404,6 +404,82 @@ pub fn move_path(path: &str, destination_dir: &str) -> Result<String, String> {
     Ok(target.to_string_lossy().to_string())
 }
 
+fn duplicate_target_path(path: &Path) -> Result<std::path::PathBuf, String> {
+    let parent = path
+        .parent()
+        .ok_or_else(|| "Cannot duplicate a root path".to_string())?;
+    let file_name = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .ok_or_else(|| "Selected item has no filename".to_string())?;
+    let is_dir = path.is_dir();
+    let (base, ext) = if is_dir {
+        (file_name.to_string(), None)
+    } else {
+        let ext = path
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(|s| s.to_string());
+        let stem = path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or(file_name)
+            .to_string();
+        (stem, ext)
+    };
+    for index in 1..=999 {
+        let candidate_name = match (&ext, index) {
+            (Some(ext), 1) => format!("{} copy.{}", base, ext),
+            (Some(ext), n) => format!("{} copy {}.{}", base, n, ext),
+            (None, 1) => format!("{} copy", base),
+            (None, n) => format!("{} copy {}", base, n),
+        };
+        let candidate = parent.join(candidate_name);
+        if !candidate.exists() {
+            return Ok(candidate);
+        }
+    }
+    Err("Could not find an available duplicate name".to_string())
+}
+
+fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<(), String> {
+    std::fs::create_dir(dst)
+        .map_err(|e| format!("Failed to create duplicate folder: {}", e))?;
+    for entry in
+        std::fs::read_dir(src).map_err(|e| format!("Failed to read source folder: {}", e))?
+    {
+        let entry = entry.map_err(|e| format!("Failed to read folder entry: {}", e))?;
+        let entry_path = entry.path();
+        let target_path = dst.join(entry.file_name());
+        let file_type = entry
+            .file_type()
+            .map_err(|e| format!("Failed to inspect folder entry: {}", e))?;
+        if file_type.is_dir() {
+            copy_dir_recursive(&entry_path, &target_path)?;
+        } else {
+            std::fs::copy(&entry_path, &target_path)
+                .map_err(|e| format!("Failed to copy '{}': {}", entry_path.display(), e))?;
+        }
+    }
+    Ok(())
+}
+
+/// Duplicate a file or directory and return the new path.
+pub fn duplicate_path(path: &str) -> Result<String, String> {
+    let src = Path::new(path);
+    if !src.exists() {
+        return Err(format!("Path does not exist: {}", src.display()));
+    }
+    let target = duplicate_target_path(src)?;
+    if src.is_dir() {
+        copy_dir_recursive(src, &target)?;
+    } else {
+        std::fs::copy(src, &target)
+            .map_err(|e| format!("Failed to duplicate item: {}", e))?;
+    }
+    Ok(target.to_string_lossy().to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
