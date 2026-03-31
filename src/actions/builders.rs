@@ -14,6 +14,7 @@ pub(super) use crate::actions::types::{Action, ActionCategory, ScriptInfo};
 
 mod chat;
 mod clipboard;
+mod emoji;
 mod file_path;
 mod notes;
 mod script_context;
@@ -22,6 +23,7 @@ mod shared;
 
 pub use chat::{ChatModelInfo, ChatPromptInfo};
 pub use clipboard::ClipboardEntryInfo;
+pub use emoji::{get_emoji_context_actions, EmojiActionInfo};
 pub use notes::{NewChatModelInfo, NewChatPresetInfo, NoteSwitcherNoteInfo, NotesInfo};
 pub use shared::to_deeplink_name;
 

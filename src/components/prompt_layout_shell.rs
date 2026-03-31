@@ -1602,11 +1602,15 @@ mod prompt_layout_shell_tests {
         );
         assert!(
             !render_code.contains("render_hint_strip_leading_text("),
-            "app launcher footer should not render leading status text — use canonical three-key footer"
+            "app launcher footer should not render leading status text"
         );
         assert!(
-            render_code.contains("universal_prompt_hints()"),
-            "app launcher should use the shared three-key footer"
+            !render_code.contains("universal_prompt_hints()"),
+            "app launcher should not use universal hints (no actions dialog wired)"
+        );
+        assert!(
+            render_code.contains("\"↵ Launch\""),
+            "app launcher should use a truthful two-item footer"
         );
     }
 

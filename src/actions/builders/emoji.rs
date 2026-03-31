@@ -3,7 +3,6 @@ use crate::designs::icon_variations::IconName;
 
 /// Information about an emoji for action building
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub struct EmojiActionInfo {
     /// The emoji character (e.g., "😀")
     pub value: String,
@@ -18,7 +17,7 @@ pub struct EmojiActionInfo {
 }
 
 /// Get actions specific to an emoji picker entry.
-#[allow(clippy::vec_init_then_push, dead_code)]
+#[allow(clippy::vec_init_then_push)]
 pub fn get_emoji_context_actions(emoji: &EmojiActionInfo) -> Vec<Action> {
     let mut actions = Vec::new();
 
@@ -43,7 +42,8 @@ pub fn get_emoji_context_actions(emoji: &EmojiActionInfo) -> Vec<Action> {
             ActionCategory::ScriptContext,
         )
         .with_shortcut("↵")
-        .with_icon(IconName::ArrowUp),
+        .with_icon(IconName::ArrowUp)
+        .with_section("Actions"),
     );
 
     actions.push(
@@ -54,7 +54,8 @@ pub fn get_emoji_context_actions(emoji: &EmojiActionInfo) -> Vec<Action> {
             ActionCategory::ScriptContext,
         )
         .with_shortcut("⌘↵")
-        .with_icon(IconName::Copy),
+        .with_icon(IconName::Copy)
+        .with_section("Actions"),
     );
 
     actions.push(
@@ -65,7 +66,8 @@ pub fn get_emoji_context_actions(emoji: &EmojiActionInfo) -> Vec<Action> {
             ActionCategory::ScriptContext,
         )
         .with_shortcut("⌥↵")
-        .with_icon(IconName::ArrowUp),
+        .with_icon(IconName::ArrowUp)
+        .with_section("Actions"),
     );
 
     if emoji.pinned {
@@ -77,7 +79,8 @@ pub fn get_emoji_context_actions(emoji: &EmojiActionInfo) -> Vec<Action> {
                 ActionCategory::ScriptContext,
             )
             .with_shortcut("⇧⌘P")
-            .with_icon(IconName::StarFilled),
+            .with_icon(IconName::StarFilled)
+            .with_section("Edit"),
         );
     } else {
         actions.push(
@@ -88,7 +91,8 @@ pub fn get_emoji_context_actions(emoji: &EmojiActionInfo) -> Vec<Action> {
                 ActionCategory::ScriptContext,
             )
             .with_shortcut("⇧⌘P")
-            .with_icon(IconName::Star),
+            .with_icon(IconName::Star)
+            .with_section("Edit"),
         );
     }
 
@@ -100,7 +104,8 @@ pub fn get_emoji_context_actions(emoji: &EmojiActionInfo) -> Vec<Action> {
             ActionCategory::ScriptContext,
         )
         .with_shortcut("⌥⌘C")
-        .with_icon(IconName::Code),
+        .with_icon(IconName::Code)
+        .with_section("Share"),
     );
 
     if emoji.category.is_some() {
@@ -111,7 +116,8 @@ pub fn get_emoji_context_actions(emoji: &EmojiActionInfo) -> Vec<Action> {
                 Some("Copies all emojis in this emoji's category".to_string()),
                 ActionCategory::ScriptContext,
             )
-            .with_icon(IconName::Copy),
+            .with_icon(IconName::Copy)
+            .with_section("Share"),
         );
     }
 

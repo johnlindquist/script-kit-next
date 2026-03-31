@@ -365,7 +365,10 @@ impl ScriptListApp {
         crate::components::render_minimal_list_prompt_scaffold(
             header,
             content,
-            crate::components::prompt_layout_shell::universal_prompt_hints(),
+            vec![
+                gpui::SharedString::from("↵ Switch"),
+                gpui::SharedString::from("Esc Back"),
+            ],
             None,
         )
         .rounded(px(design_visual.radius_lg))
@@ -396,16 +399,23 @@ mod window_switcher_chrome_audit {
     }
 
     #[test]
-    fn window_switcher_uses_canonical_three_key_hints() {
+    fn window_switcher_uses_truthful_two_item_footer() {
         let source = include_str!("window_switcher.rs");
         assert!(
-            source.contains("universal_prompt_hints()"),
-            "window_switcher should use universal_prompt_hints for canonical three-key footer"
+            !source.contains("universal_prompt_hints()"),
+            "window_switcher should not use universal hints (no actions dialog wired)"
         );
-        // Must not have the old custom hints
         assert!(
-            !source.contains(r#"SharedString::from("↵ Switch")"#),
-            "window_switcher should not use custom hint labels"
+            source.contains(r#"SharedString::from("↵ Switch")"#),
+            "window_switcher should use truthful '↵ Switch' footer label"
+        );
+        assert!(
+            source.contains(r#"SharedString::from("Esc Back")"#),
+            "window_switcher should use 'Esc Back' footer label"
+        );
+        assert!(
+            !source.contains("⌘K Actions"),
+            "window_switcher should not advertise ⌘K Actions without a working dialog"
         );
     }
 }

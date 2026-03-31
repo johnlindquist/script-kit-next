@@ -485,7 +485,7 @@ impl TermPrompt {
             return;
         }
 
-        self.wheel_scroll_remainder += -lines;
+        self.wheel_scroll_remainder += lines;
 
         let whole_lines = if self.wheel_scroll_remainder > 0.0 {
             self.wheel_scroll_remainder.floor() as i32
@@ -507,11 +507,6 @@ impl TermPrompt {
         if !routed_to_pty {
             self.terminal.scroll(whole_lines);
         }
-        trace!(
-            delta = whole_lines,
-            remainder = self.wheel_scroll_remainder,
-            "Mouse wheel scroll"
-        );
         cx.notify();
     }
 

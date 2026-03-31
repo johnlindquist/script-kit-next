@@ -49,28 +49,7 @@ impl ScriptListApp {
                 }
 
                 let key = event.keystroke.key.as_str();
-                let key_char = event.keystroke.key_char.as_deref();
                 let has_cmd = event.keystroke.modifiers.platform;
-                let modifiers = &event.keystroke.modifiers;
-
-                // Route to actions dialog first (Cmd+K, etc.)
-                match this.route_key_to_actions_dialog(
-                    key,
-                    key_char,
-                    modifiers,
-                    ActionsDialogHost::AppLauncher,
-                    window,
-                    cx,
-                ) {
-                    ActionsRoute::NotHandled => {}
-                    ActionsRoute::Handled => {
-                        return;
-                    }
-                    ActionsRoute::Execute { action_id } => {
-                        this.handle_action(action_id, window, cx);
-                        return;
-                    }
-                }
 
                 // ESC: Clear filter first if present, otherwise go back/close
                 if is_key_escape(key) && !this.show_actions_popup {
@@ -396,7 +375,10 @@ impl ScriptListApp {
             crate::ui_foundation::get_vibrancy_background(&self.theme),
             header,
             content,
-            crate::components::universal_prompt_hints(),
+            vec![
+                gpui::SharedString::from("↵ Launch"),
+                gpui::SharedString::from("Esc Back"),
+            ],
             None,
         )
         .text_color(rgb(text_primary))
@@ -459,19 +441,19 @@ mod app_launcher_chrome_tests {
     }
 
     #[test]
-    fn app_launcher_uses_canonical_footer_and_no_leading_status() {
+    fn app_launcher_uses_truthful_two_item_footer() {
         let source = read_source();
         assert!(
-            source.contains("universal_prompt_hints()"),
-            "app launcher should use the shared three-key footer"
+            !source.contains("universal_prompt_hints()"),
+            "app launcher should not use universal hints (no actions dialog wired)"
         );
         assert!(
-            !source.contains("render_hint_strip_leading_text("),
-            "app launcher footer should not render leading status text"
+            source.contains("\"↵ Launch\"") && source.contains("\"Esc Back\""),
+            "app launcher should use a truthful two-item footer"
         );
         assert!(
-            !source.contains("\"↵ Launch\"") && !source.contains("\"Esc Back\""),
-            "app launcher should not keep custom footer labels"
+            !source.contains("⌘K Actions"),
+            "app launcher should not advertise ⌘K Actions without a working dialog"
         );
     }
 
@@ -487,13 +469,15 @@ mod app_launcher_chrome_tests {
     }
 
     #[test]
-    fn app_launcher_wires_actions_if_it_advertises_actions() {
+    fn app_launcher_does_not_advertise_actions_without_dialog() {
         let source = read_source();
         assert!(
-            source.contains("route_key_to_actions_dialog(")
-                || source.contains("handle_prompt_key_preamble_default(")
-                || !source.contains("⌘K Actions"),
-            "app launcher should not advertise Actions without wiring Cmd+K"
+            !source.contains("⌘K Actions"),
+            "app launcher should not advertise ⌘K Actions without a working dialog"
+        );
+        assert!(
+            !source.contains("route_key_to_actions_dialog("),
+            "app launcher should not have dead actions routing code"
         );
     }
 }

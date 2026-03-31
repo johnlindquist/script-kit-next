@@ -133,7 +133,7 @@ const FOOTER_VARIATIONS: [FooterVariationSpec; 5] = [
         helper_text: None,
         info_label: None,
         left_slot_text: None,
-        right_slot_text: Some("↵ Open  •  ⌘K Actions  •  Tab AI"),
+        right_slot_text: Some("↵ Open   ⌘K Actions   Tab AI"),
     },
     FooterVariationSpec {
         id: FooterVariationId::StatusBar,

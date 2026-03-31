@@ -20,9 +20,10 @@ use std::sync::Arc;
 
 use super::builders::{
     format_shortcut_hint as format_shortcut_hint_shared, get_chat_context_actions,
-    get_clipboard_history_context_actions, get_file_context_actions, get_global_actions,
-    get_path_context_actions, get_script_context_actions,
+    get_clipboard_history_context_actions, get_emoji_context_actions, get_file_context_actions,
+    get_global_actions, get_path_context_actions, get_script_context_actions,
     get_scriptlet_context_actions_with_custom, ChatPromptInfo, ClipboardEntryInfo,
+    EmojiActionInfo,
 };
 use super::constants::{
     ACTION_ROW_INSET, HEADER_HEIGHT, POPUP_MAX_HEIGHT, POPUP_WIDTH, SEARCH_INPUT_HEIGHT,
@@ -637,6 +638,40 @@ impl ActionsDialog {
                 entry_info.pinned,
                 actions.len()
             ),
+        );
+
+        Self::from_actions_with_context(
+            focus_handle,
+            on_select,
+            actions,
+            None,
+            None,
+            theme,
+            DesignVariant::Default,
+            Some(context_title),
+            config,
+        )
+    }
+
+    /// Create ActionsDialog for an emoji picker entry with emoji-specific actions
+    /// Actions: Paste, Copy, Paste and Keep Open, Pin/Unpin, Copy Unicode, Copy Section
+    pub fn with_emoji(
+        focus_handle: FocusHandle,
+        on_select: ActionCallback,
+        emoji_info: &EmojiActionInfo,
+        theme: Arc<theme::Theme>,
+    ) -> Self {
+        let actions = get_emoji_context_actions(emoji_info);
+        let config = ActionsDialogConfig::default();
+
+        let context_title = format!("{} {}", emoji_info.value, emoji_info.name);
+
+        tracing::debug!(
+            target: "script_kit::actions",
+            emoji = %emoji_info.value,
+            name = %emoji_info.name,
+            action_count = actions.len(),
+            "ActionsDialog created for emoji"
         );
 
         Self::from_actions_with_context(

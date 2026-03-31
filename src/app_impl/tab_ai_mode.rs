@@ -807,9 +807,11 @@ impl ScriptListApp {
         )
         .map_err(|e| format!("tab_ai_harness_terminal_create_failed: {e}"))?;
 
-        // Harness terminals should always use local scrollback for wheel events
-        // so users can scroll through output history without fighting PTY mouse mode.
-        prompt.prefer_buffer_scroll_on_wheel = true;
+        // Let the smart routing in scroll_to_pty() decide: when the TUI
+        // enables mouse mode (Claude Code, etc.), scroll events are forwarded
+        // as escape sequences so the TUI can handle scrolling internally.
+        // When mouse mode is off, scroll falls back to local display buffer.
+        prompt.prefer_buffer_scroll_on_wheel = false;
 
         let entity = cx.new(|_| prompt);
 
