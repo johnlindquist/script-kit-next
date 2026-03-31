@@ -686,6 +686,10 @@ impl ScriptListApp {
                                     }
                                 };
 
+                                // Drag payload for native file drag-out
+                                let drag_payload = file_search::FileDragPayload::from_result(file);
+                                let drag_path_for_native = file.path.clone();
+
                                 div()
                                     .id(ix)
                                     .w_full()
@@ -710,6 +714,19 @@ impl ScriptListApp {
                                         .build(window, cx)
                                     })
                                     .on_click(click_handler)
+                                    .on_drag(drag_payload, move |_payload, _position, _window, cx| {
+                                        // Initiate native macOS drag session so the file
+                                        // can be dropped into Finder or other apps.
+                                        let _ = crate::platform::begin_native_file_drag(
+                                            &drag_path_for_native,
+                                        );
+                                        cx.new(|_| file_search::FileDragPayload {
+                                            name: std::path::Path::new(&drag_path_for_native)
+                                                .file_name()
+                                                .map(|n| n.to_string_lossy().to_string())
+                                                .unwrap_or_default(),
+                                        })
+                                    })
                                     .child(if show_thumbnail {
                                         let fallback_icon = fallback_icon.clone();
                                         div()

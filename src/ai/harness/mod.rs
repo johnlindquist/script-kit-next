@@ -614,8 +614,17 @@ const ARTIFACT_AUTHORING_WORDS: &[&str] = &[
     "scriptlet",
     "scriptlets",
     "extension",
+    "extensions",
+    "bundle",
+    "bundles",
+    "extension bundle",
+    "extension bundles",
+    "scriptlet bundle",
+    "scriptlet bundles",
     "snippet",
     "snippets",
+    "snippet bundle",
+    "snippet bundles",
     "text expansion",
     "quick command",
     "template",
@@ -723,7 +732,7 @@ Fastest path:
 
 Decision:
 - Use Script for Script Kit UI APIs, Bun APIs, files, HTTP, or multi-step logic.
-- Use Extension bundle for snippets, text expansion, quick shell commands, or a small grouped helper set.
+- Use Extension bundle / scriptlet bundle for snippets, text expansion, quick shell commands, or a small grouped helper set.
 - Use mdflow agent for reusable backend-specific prompts or automations.
 
 Artifact: Script
@@ -733,7 +742,7 @@ Read next:
 - ~/.scriptkit/examples/scripts/hello-world.ts
 - ~/.scriptkit/skills/script-authoring/SKILL.md
 
-Artifact: Extension bundle
+Artifact: Extension bundle / scriptlet bundle
 Write:
 - ~/.scriptkit/kit/main/extensions/<name>.md
 Read next:
@@ -760,7 +769,7 @@ const value = await arg("What should this script do?");
 await div(`<div class="p-8 text-2xl">${value}</div>`);
 ~~~
 
-Starter: Extension bundle
+Starter: Extension bundle / scriptlet bundle
 ~~~md
 ---
 name: My Bundle
@@ -1716,6 +1725,47 @@ mod tests {
         )));
         assert!(!should_include_artifact_authoring_guidance(None));
         assert!(!should_include_artifact_authoring_guidance(Some("")));
+    }
+
+    #[test]
+    fn authoring_guidance_triggers_on_bundle_requests() {
+        assert!(should_include_artifact_authoring_guidance(Some(
+            "make a bundle for quick notes"
+        )));
+        assert!(should_include_artifact_authoring_guidance(Some(
+            "new bundle with two snippets"
+        )));
+        assert!(should_include_artifact_authoring_guidance(Some(
+            "create a scriptlet bundle"
+        )));
+        assert!(should_include_artifact_authoring_guidance(Some(
+            "new extension bundle for dates"
+        )));
+        assert!(should_include_artifact_authoring_guidance(Some(
+            "snippet bundle for greetings"
+        )));
+    }
+
+    #[test]
+    fn authoring_guidance_skips_non_creation_bundle_intents() {
+        assert!(!should_include_artifact_authoring_guidance(Some(
+            "open this bundle"
+        )));
+        assert!(!should_include_artifact_authoring_guidance(Some(
+            "edit bundle metadata"
+        )));
+        assert!(!should_include_artifact_authoring_guidance(Some(
+            "run bundle tests"
+        )));
+        assert!(!should_include_artifact_authoring_guidance(Some(
+            "delete the old bundle"
+        )));
+    }
+
+    #[test]
+    fn authoring_guidance_block_mentions_scriptlet_bundle() {
+        let block = build_tab_ai_artifact_authoring_guidance_block();
+        assert!(block.contains("Extension bundle / scriptlet bundle"));
     }
 
     #[test]
