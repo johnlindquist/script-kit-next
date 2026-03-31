@@ -559,6 +559,22 @@ impl ScriptListApp {
                                 }
                                 return;
                             }
+                            // Handle Cmd+R (Rename)
+                            if has_cmd && !has_shift && key.eq_ignore_ascii_case("r") {
+                                if let Some(file) = get_selected_file() {
+                                    this.file_search_actions_path = Some(file.path.clone());
+                                    this.handle_action("rename_path".to_string(), window, cx);
+                                }
+                                return;
+                            }
+                            // Handle Cmd+Shift+M (Move)
+                            if has_cmd && has_shift && key.eq_ignore_ascii_case("m") {
+                                if let Some(file) = get_selected_file() {
+                                    this.file_search_actions_path = Some(file.path.clone());
+                                    this.handle_action("move_path".to_string(), window, cx);
+                                }
+                                return;
+                            }
                             // Handle Cmd+Backspace (Move to Trash)
                             if has_cmd && (key == "backspace" || key == "Backspace" || key == "delete") {
                                 if let Some(file) = get_selected_file() {
@@ -1089,7 +1105,8 @@ impl ScriptListApp {
         // Footer contract must match the real key wiring:
         // ↵ opens/browses, Tab enters folders or fills the path,
         // ⌘K opens actions, and ⌘↵ sends the selection/query to AI.
-        let mini_hints: Vec<SharedString> = if let Some(file) = selected_file.as_ref() {
+        // Shared across mini and full presentations.
+        let file_search_hints: Vec<SharedString> = if let Some(file) = selected_file.as_ref() {
             let primary = if file.file_type == FileType::Directory {
                 "\u{21b5} Browse"
             } else {
@@ -1132,6 +1149,29 @@ impl ScriptListApp {
                 "\u{2318}K Actions \u{b7} \u{2318}\u{21b5} AI".into(),
             ]
         };
+
+        // Secondary shortcut hints for the leading footer slot
+        let footer_leading_text: Option<String> = selected_file.as_ref().map(|file| {
+            let mut parts: Vec<&str> = Vec::new();
+            if can_shift_tab_up {
+                parts.push("\u{21e7}Tab Up");
+            }
+            parts.push("\u{2318}R Rename");
+            parts.push("\u{2318}\u{21e7}M Move");
+            if file.file_type != FileType::Directory {
+                parts.push("\u{2318}C Name");
+                parts.push("\u{2318}E Editor");
+            }
+            parts.push("\u{2318}\u{21e7}C Path");
+            parts.push("\u{2318}\u{232b} Trash");
+            parts.push("\u{2318}T Terminal");
+            #[cfg(target_os = "macos")]
+            {
+                parts.push("\u{2318}Y Quick Look");
+                parts.push("\u{2318}I Info");
+            }
+            parts.join(" \u{b7} ")
+        });
 
         // Header: bare input + file count (scaffold adds padding/layout)
         let input_height = CURSOR_HEIGHT_LG + (CURSOR_MARGIN_Y * 2.0);
@@ -1226,30 +1266,36 @@ impl ScriptListApp {
         // Preview pane: file detail or placeholder
         let preview_pane = preview_content;
 
-        // Assemble layout: mini = list-only, full = list + preview split
-        let layout_mode = if is_mini { "mini" } else { "expanded" };
-        tracing::info!(
-            surface = "file_search",
-            %layout_mode,
-            "file_search_chrome_checkpoint"
-        );
-
         if is_mini {
             crate::components::render_minimal_list_prompt_scaffold(
                 header_element,
                 list_pane,
-                mini_hints,
-                None,
+                file_search_hints.clone(),
+                footer_leading_text.clone().map(|text| {
+                    div()
+                        .text_xs()
+                        .text_color(rgb(text_muted))
+                        .child(text)
+                        .into_any_element()
+                }),
             )
             .key_context("FileSearchView")
             .track_focus(&self.focus_handle)
             .on_key_down(handle_key)
             .into_any_element()
         } else {
-            crate::components::render_expanded_view_scaffold(
+            crate::components::render_expanded_view_scaffold_with_hints(
                 header_element,
                 list_pane,
                 preview_pane,
+                file_search_hints,
+                footer_leading_text.map(|text| {
+                    div()
+                        .text_xs()
+                        .text_color(rgb(text_muted))
+                        .child(text)
+                        .into_any_element()
+                }),
             )
             .key_context("FileSearchView")
             .track_focus(&self.focus_handle)

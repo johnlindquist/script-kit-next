@@ -2363,7 +2363,7 @@ mod from_dialog_builtin_action_validation_tests_33 {
     
     #[cfg(target_os = "macos")]
     #[test]
-    fn file_context_file_macos_has_10_actions() {
+    fn file_context_file_macos_has_12_actions() {
         let file_info = FileInfo {
             path: "/tmp/test.txt".to_string(),
             name: "test.txt".to_string(),
@@ -2371,13 +2371,13 @@ mod from_dialog_builtin_action_validation_tests_33 {
             is_dir: false,
         };
         let actions = get_file_context_actions(&file_info);
-        // open_file + reveal + open_in_editor + open_in_terminal + attach_to_ai + quick_look + show_info + copy_path + copy_filename + move_to_trash = 10
-        assert_eq!(actions.len(), 10);
+        // open_file + reveal + rename + move + open_in_editor + open_in_terminal + attach_to_ai + quick_look + show_info + copy_path + copy_filename + move_to_trash = 12
+        assert_eq!(actions.len(), 12);
     }
 
     #[cfg(target_os = "macos")]
     #[test]
-    fn file_context_dir_macos_has_8_actions() {
+    fn file_context_dir_macos_has_10_actions() {
         let file_info = FileInfo {
             path: "/tmp/mydir".to_string(),
             name: "mydir".to_string(),
@@ -2385,8 +2385,8 @@ mod from_dialog_builtin_action_validation_tests_33 {
             is_dir: true,
         };
         let actions = get_file_context_actions(&file_info);
-        // open_directory + reveal + open_in_editor + open_in_terminal + show_info + copy_path + copy_filename + move_to_trash = 8
-        assert_eq!(actions.len(), 8);
+        // open_directory + reveal + rename + move + open_in_editor + open_in_terminal + show_info + copy_path + copy_filename + move_to_trash = 10
+        assert_eq!(actions.len(), 10);
     }
     
     #[test]
@@ -15237,10 +15237,10 @@ mod from_dialog_builtin_action_validation_tests_45 {
         assert!(action.description.as_ref().unwrap().contains("CleanShot X"));
     }
     
-    // =========== 9. File context: macOS file=10 dir=8 action count ===========
+    // =========== 9. File context: macOS file=12 dir=10 action count ===========
 
     #[test]
-    fn file_context_file_has_10_actions() {
+    fn file_context_file_has_12_actions() {
         let file_info = FileInfo {
             name: "test.txt".into(),
             path: "/tmp/test.txt".into(),
@@ -15248,11 +15248,11 @@ mod from_dialog_builtin_action_validation_tests_45 {
             file_type: FileType::File,
         };
         let actions = get_file_context_actions(&file_info);
-        assert_eq!(actions.len(), 10);
+        assert_eq!(actions.len(), 12);
     }
 
     #[test]
-    fn file_context_dir_has_8_actions() {
+    fn file_context_dir_has_10_actions() {
         let file_info = FileInfo {
             name: "mydir".into(),
             path: "/tmp/mydir".into(),
@@ -15260,7 +15260,7 @@ mod from_dialog_builtin_action_validation_tests_45 {
             file_type: FileType::Directory,
         };
         let actions = get_file_context_actions(&file_info);
-        assert_eq!(actions.len(), 8);
+        assert_eq!(actions.len(), 10);
     }
     
     #[test]
