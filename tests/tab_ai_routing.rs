@@ -3186,3 +3186,49 @@ fn post_close_prewarm_feeds_the_next_explicit_tab_open() {
         "next explicit Tab must consume the prewarm once"
     );
 }
+
+// ---------------------------------------------------------------------------
+// Live-session quick submit: structured submission regression tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn live_quick_submit_uses_structured_submission_helper() {
+    let src = std::fs::read_to_string("src/app_impl/tab_ai_mode.rs").expect("read tab_ai_mode.rs");
+
+    let fn_start = src
+        .find("pub(crate) fn submit_to_current_or_new_tab_ai_harness_from_text(")
+        .expect("submit_to_current_or_new_tab_ai_harness_from_text must exist");
+    let fn_src = &src[fn_start..fn_start + 2500.min(src.len() - fn_start)];
+
+    assert!(
+        fn_src.contains("self.submit_live_tab_ai_harness_from_plan("),
+        "live harness quick submit must route through the structured submission helper"
+    );
+    assert!(
+        !fn_src.contains("format!(\"{}\\n\", plan.synthesized_intent)"),
+        "live harness quick submit must not inject raw intent-only text"
+    );
+}
+
+#[test]
+fn live_quick_submit_helper_builds_full_harness_submission() {
+    let src = std::fs::read_to_string("src/app_impl/tab_ai_mode.rs").expect("read tab_ai_mode.rs");
+
+    let helper_start = src
+        .find("fn submit_live_tab_ai_harness_from_plan(")
+        .expect("submit_live_tab_ai_harness_from_plan must exist");
+    let helper_src = &src[helper_start..helper_start + 6000.min(src.len() - helper_start)];
+
+    assert!(
+        helper_src.contains("build_tab_ai_harness_submission"),
+        "live quick submit must build a full structured harness submission"
+    );
+    assert!(
+        helper_src.contains("TabAiHarnessSubmissionMode::Submit"),
+        "live quick submit must submit immediately"
+    );
+    assert!(
+        helper_src.contains("request.quick_submit_plan.as_ref()"),
+        "live quick submit must preserve quick submit metadata in scriptKitHints"
+    );
+}

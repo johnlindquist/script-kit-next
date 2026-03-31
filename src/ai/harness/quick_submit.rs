@@ -28,6 +28,7 @@ pub enum TabAiQuickSubmitKind {
     FileDrop,
     ShellCommand,
     CodeBlock,
+    DiffPatch,
     ErrorLog,
     TextTransform,
 }
@@ -89,14 +90,15 @@ pub fn plan_tab_ai_quick_submit(
             visual_capture_kind(&normalized_query),
             raw_query.clone(),
         )
-    } else if looks_like_url(&raw_query) {
+    } else if let Some(url) = normalize_url_drop(&raw_query) {
         (
             TabAiQuickSubmitKind::UrlDrop,
-            "defaultContext".to_string(),
+            "browserTab".to_string(),
             format!(
-                "Analyze this URL. If the current browser URL matches, \
-                 use the live browser context too.\n\nURL:\n{}",
-                raw_query
+                "Analyze this URL. If the frontmost browser tab matches it, \
+                 use the live browser context as the primary source of truth.\
+                 \n\nURL:\n{}",
+                url
             ),
         )
     } else if looks_like_file_path(&raw_query) {
@@ -107,6 +109,17 @@ pub fn plan_tab_ai_quick_submit(
                 "Inspect this path and do the most useful next step. \
                  If it is a file, summarize it. If it is a directory, \
                  explain what matters inside it.\n\nPath:\n{}",
+                raw_query
+            ),
+        )
+    } else if looks_like_diff_patch(&raw_query) {
+        (
+            TabAiQuickSubmitKind::DiffPatch,
+            "defaultContext".to_string(),
+            format!(
+                "Review this patch, explain the behavior change, point out \
+                 the biggest risk, and suggest the next edit or test.\n\n\
+                 Patch:\n{}",
                 raw_query
             ),
         )
@@ -197,9 +210,28 @@ fn normalize_query(input: &str) -> String {
         .join(" ")
 }
 
-fn looks_like_url(input: &str) -> bool {
-    let lower = input.trim().to_ascii_lowercase();
-    lower.starts_with("https://") || lower.starts_with("http://")
+/// Recognize full URLs, `www.` prefixed domains, and bare domain-like strings.
+/// Returns the normalized `https://` URL if the input looks like a URL drop.
+fn normalize_url_drop(input: &str) -> Option<String> {
+    let trimmed = input.trim();
+    let lower = trimmed.to_ascii_lowercase();
+    if lower.starts_with("https://") || lower.starts_with("http://") {
+        return Some(trimmed.to_string());
+    }
+    if lower.starts_with("www.") && !trimmed.contains(' ') {
+        return Some(format!("https://{trimmed}"));
+    }
+    let host = trimmed.split('/').next()?;
+    let looks_like_bare_domain = !trimmed.contains(' ')
+        && !trimmed.starts_with('/')
+        && !trimmed.starts_with("./")
+        && !trimmed.starts_with("../")
+        && !trimmed.starts_with("~/")
+        && host.contains('.')
+        && host
+            .chars()
+            .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '.' | '-'));
+    looks_like_bare_domain.then(|| format!("https://{trimmed}"))
 }
 
 fn looks_like_file_path(input: &str) -> bool {
@@ -208,7 +240,9 @@ fn looks_like_file_path(input: &str) -> bool {
         || trimmed.starts_with('/')
         || trimmed.starts_with("./")
         || trimmed.starts_with("../")
-        || (trimmed.contains('/') && !trimmed.contains(' ') && !looks_like_url(trimmed))
+        || (trimmed.contains('/')
+            && !trimmed.contains(' ')
+            && normalize_url_drop(trimmed).is_none())
 }
 
 fn looks_like_shell_command(input: &str) -> bool {
@@ -293,6 +327,15 @@ fn looks_like_text_transform_request(normalized: &str) -> bool {
     implicit_target && transform_verb
 }
 
+fn looks_like_diff_patch(input: &str) -> bool {
+    input.contains('\n')
+        && (input.starts_with("diff --git ")
+            || input.contains("\ndiff --git ")
+            || input.starts_with("@@ ")
+            || input.contains("\n@@ ")
+            || (input.contains("\n+++ ") && input.contains("\n--- ")))
+}
+
 fn looks_like_browser_request(normalized: &str) -> bool {
     normalized.contains("page")
         || normalized.contains("site")
@@ -300,6 +343,12 @@ fn looks_like_browser_request(normalized: &str) -> bool {
         || normalized.contains("tab")
         || normalized.contains("url")
         || normalized.contains("browser")
+        || normalized.contains("docs")
+        || normalized.contains("documentation")
+        || normalized.contains("repo")
+        || normalized.contains("issue")
+        || normalized.contains("pull request")
+        || normalized.contains("link")
 }
 
 fn wants_visual_context(normalized: &str) -> bool {
@@ -387,7 +436,7 @@ mod tests {
         let plan = plan_tab_ai_quick_submit(TabAiQuickSubmitSource::Fallback, "https://zed.dev")
             .expect("plan should exist");
         assert_eq!(plan.kind, TabAiQuickSubmitKind::UrlDrop);
-        assert_eq!(plan.capture_kind, "defaultContext");
+        assert_eq!(plan.capture_kind, "browserTab");
         assert!(plan.synthesized_intent.contains("URL:\nhttps://zed.dev"));
     }
 
@@ -503,5 +552,64 @@ mod tests {
             plan_tab_ai_quick_submit(TabAiQuickSubmitSource::Fallback, "git cherry-pick --abort")
                 .expect("plan");
         assert_eq!(plan.kind, TabAiQuickSubmitKind::ShellCommand);
+    }
+
+    #[test]
+    fn plans_bare_domain_as_url_drop() {
+        let plan =
+            plan_tab_ai_quick_submit(TabAiQuickSubmitSource::Fallback, "www.example.test/docs")
+                .expect("plan");
+        assert_eq!(plan.kind, TabAiQuickSubmitKind::UrlDrop);
+        assert_eq!(plan.capture_kind, "browserTab");
+        assert!(
+            plan.synthesized_intent
+                .contains("https://www.example.test/docs"),
+            "bare domains should be normalized to https URLs in the synthesized intent"
+        );
+    }
+
+    #[test]
+    fn plans_bare_hostname_as_url_drop() {
+        let plan = plan_tab_ai_quick_submit(
+            TabAiQuickSubmitSource::Fallback,
+            "github.com/zed-industries",
+        )
+        .expect("plan");
+        assert_eq!(plan.kind, TabAiQuickSubmitKind::UrlDrop);
+        assert_eq!(plan.capture_kind, "browserTab");
+    }
+
+    #[test]
+    fn plans_diff_patch_as_diff_patch() {
+        let plan = plan_tab_ai_quick_submit(
+            TabAiQuickSubmitSource::Fallback,
+            "diff --git a/src/main.rs b/src/main.rs\n@@ -1,1 +1,2 @@\n fn main() {}\n+println!(\"hello\");",
+        )
+        .expect("plan");
+        assert_eq!(plan.kind, TabAiQuickSubmitKind::DiffPatch);
+        assert!(
+            plan.synthesized_intent.contains("Review this patch"),
+            "diff drops should get a patch-review intent, not a generic code review"
+        );
+    }
+
+    #[test]
+    fn plans_unified_diff_as_diff_patch() {
+        let plan = plan_tab_ai_quick_submit(
+            TabAiQuickSubmitSource::Fallback,
+            "--- a/file.rs\n+++ b/file.rs\n@@ -1 +1 @@\n-old\n+new",
+        )
+        .expect("plan");
+        assert_eq!(plan.kind, TabAiQuickSubmitKind::DiffPatch);
+    }
+
+    #[test]
+    fn plans_docs_query_as_browser_request() {
+        let plan = plan_tab_ai_quick_submit(
+            TabAiQuickSubmitSource::Fallback,
+            "summarize the docs on this page",
+        )
+        .expect("plan");
+        assert_eq!(plan.capture_kind, "browserTab");
     }
 }
