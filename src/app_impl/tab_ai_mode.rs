@@ -2629,6 +2629,8 @@ fn tab_ai_apply_back_success_message(source_type: &crate::ai::TabAiSourceType) -
 impl ScriptListApp {
     const TAB_AI_APPLY_BACK_FOCUS_SETTLE_MS: u64 = 250;
     const TAB_AI_APPLY_BACK_CLIPBOARD_PRIME_MS: u64 = 25;
+    const TAB_AI_APPLY_BACK_ROUTE_WAIT_MS: u64 = 500;
+    const TAB_AI_APPLY_BACK_ROUTE_POLL_MS: u64 = 20;
 
     /// Unified apply handler — routes `text` to the correct destination
     /// based on `route.source_type`.  Called by both the terminal-selection
@@ -2827,6 +2829,76 @@ impl ScriptListApp {
         }
     }
 
+    /// Apply `text` immediately when the route is known; otherwise poll briefly
+    /// for deferred capture to finish instead of failing the first ⌘↩ press.
+    fn apply_tab_ai_result_text_or_wait_for_route(
+        &mut self,
+        text: String,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(route) = self.tab_ai_harness_apply_back_route.clone() {
+            self.apply_tab_ai_result_text(route, text, cx);
+            return;
+        }
+
+        let app_weak = cx.entity().downgrade();
+        cx.spawn(async move |_this, cx| {
+            let deadline = std::time::Instant::now()
+                + std::time::Duration::from_millis(
+                    ScriptListApp::TAB_AI_APPLY_BACK_ROUTE_WAIT_MS,
+                );
+            loop {
+                let maybe_route = cx.update(|cx| {
+                    let Some(app) = app_weak.upgrade() else {
+                        return None;
+                    };
+                    app.update(cx, |this, _cx| {
+                        this.tab_ai_harness_apply_back_route.clone()
+                    })
+                });
+
+                if let Some(route) = maybe_route {
+                    let _ = cx.update(|cx| {
+                        let Some(app) = app_weak.upgrade() else {
+                            return;
+                        };
+                        app.update(cx, |this, cx| {
+                            this.apply_tab_ai_result_text(route, text.clone(), cx);
+                        });
+                    });
+                    break;
+                }
+
+                if std::time::Instant::now() >= deadline {
+                    let _ = cx.update(|cx| {
+                        let Some(app) = app_weak.upgrade() else {
+                            return;
+                        };
+                        app.update(cx, |this, cx| {
+                            this.toast_manager.push(
+                                crate::components::toast::Toast::error(
+                                    "Still preparing the Apply target. Wait a moment for context capture, then press ⌘↩ again."
+                                        .to_string(),
+                                    &this.theme,
+                                )
+                                .duration_ms(Some(TOAST_ERROR_MS)),
+                            );
+                            cx.notify();
+                        });
+                    });
+                    break;
+                }
+
+                cx.background_executor()
+                    .timer(std::time::Duration::from_millis(
+                        ScriptListApp::TAB_AI_APPLY_BACK_ROUTE_POLL_MS,
+                    ))
+                    .await;
+            }
+        })
+        .detach();
+    }
+
     /// Apply harness output from the terminal.  Prefers the terminal selection
     /// directly (no clipboard round-trip); falls back to clipboard priming
     /// only when no selection exists.
@@ -2843,19 +2915,7 @@ impl ScriptListApp {
         });
 
         if let Some(text) = selected_text {
-            let Some(route) = self.tab_ai_harness_apply_back_route.clone() else {
-                self.toast_manager.push(
-                    crate::components::toast::Toast::error(
-                        "Tab AI is still capturing where Apply should go. Press ⌘↩ again in a moment."
-                            .to_string(),
-                        &self.theme,
-                    )
-                    .duration_ms(Some(TOAST_ERROR_MS)),
-                );
-                cx.notify();
-                return;
-            };
-            self.apply_tab_ai_result_text(route, text, cx);
+            self.apply_tab_ai_result_text_or_wait_for_route(text, cx);
             return;
         }
 
@@ -2884,19 +2944,6 @@ impl ScriptListApp {
     }
 
     pub(crate) fn apply_tab_ai_result_from_clipboard(&mut self, cx: &mut Context<Self>) {
-        let Some(route) = self.tab_ai_harness_apply_back_route.clone() else {
-            self.toast_manager.push(
-                crate::components::toast::Toast::error(
-                    "Tab AI is still capturing where Apply should go. Press ⌘↩ again in a moment."
-                        .to_string(),
-                    &self.theme,
-                )
-                .duration_ms(Some(TOAST_ERROR_MS)),
-            );
-            cx.notify();
-            return;
-        };
-
         let text = match read_tab_ai_apply_back_clipboard_text() {
             Ok(text) => text,
             Err(error) => {
@@ -2915,7 +2962,7 @@ impl ScriptListApp {
             }
         };
 
-        self.apply_tab_ai_result_text(route, text, cx);
+        self.apply_tab_ai_result_text_or_wait_for_route(text, cx);
     }
 }
 
