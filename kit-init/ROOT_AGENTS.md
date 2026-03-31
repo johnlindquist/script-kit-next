@@ -12,11 +12,19 @@ Use this file only after the artifact type is already chosen and you need deeper
 
 ## Fast Route
 
-| Request shape | Artifact | Write to |
-|---------------|----------|----------|
-| Script Kit UI, Bun APIs, files, HTTP, or multi-step logic | Script | `~/.scriptkit/kit/main/scripts/<name>.ts` |
-| snippets, text expansion, quick shell commands, or grouped helpers | Extension bundle / scriptlet bundle | `~/.scriptkit/kit/main/extensions/<name>.md` |
-| reusable backend-specific prompt or automation | mdflow agent | `~/.scriptkit/kit/main/agents/<name>.<backend>.md` |
+Use this plain-text route first:
+
+### Script
+- Use for Script Kit UI, Bun APIs, files, HTTP, or multi-step logic
+- Write to `~/.scriptkit/kit/main/scripts/<name>.ts`
+
+### Extension bundle / scriptlet bundle
+- Use for snippets, text expansion, quick shell commands, or grouped helpers
+- Write to `~/.scriptkit/kit/main/extensions/<name>.md`
+
+### mdflow agent
+- Use for reusable backend-specific prompt or automation
+- Write to `~/.scriptkit/kit/main/agents/<name>.<backend>.md`
 
 Script Kit uses **extension bundle** and **scriptlet bundle** to mean the same artifact.
 
@@ -39,6 +47,29 @@ Script Kit uses **extension bundle** and **scriptlet bundle** to mean the same a
 - Script example → `~/.scriptkit/examples/scripts/hello-world.ts`
 - Bundle starter → `~/.scriptkit/examples/extensions/starter.md`
 - Agent example → `~/.scriptkit/examples/agents/review-pr.claude.md`
+
+## Artifact-Specific Rules
+
+### Script
+- First line: `import "@scriptkit/sdk";`
+- Use `export const metadata = { name, description }`
+- Use Bun APIs instead of Node-only APIs
+
+### Extension bundle / scriptlet bundle
+- Save one markdown file under `~/.scriptkit/kit/main/extensions/`
+- Prefer `metadata` code fences for new bundles
+- `tool:<name>` fences must begin with `import "@scriptkit/sdk";`
+- Do not add `export const metadata` at the top of the markdown file
+
+### mdflow agent
+- Save to `~/.scriptkit/kit/main/agents/<name>.<backend>.md`
+- Use `_sk_*` metadata keys
+- Do not add `import "@scriptkit/sdk"`
+- Do not use `export const metadata`
+
+For exact function signatures, treat `kit://sdk-reference` as the source of truth.
+
+The `Prompts`, `Clipboard`, `Shell Commands`, `File Operations`, and `Notifications & Feedback` sections below apply to `.ts` scripts and `tool:<name>` scriptlets. They do not apply to mdflow agent markdown files.
 
 ## Prompts
 
@@ -313,11 +344,14 @@ Tab AI is a warm harness terminal rendered in `AppView::QuickTerminalView` via `
 - Do not describe the old inline chat or custom streaming UI as the default path
 - Do not describe Claude Agent SDK V2 or screenshot attachment support as already landed in the default Tab flow
 
-## DO NOT
+## Avoid These Mistakes
 
-- Use the old v1 SDK package — replaced by `@scriptkit/sdk`
-- Use CommonJS imports — use ES `import`
-- Use Node.js `fs` / `child_process` — use Bun APIs
-- Use comment-based metadata — use `export const metadata`
-- Edit `sdk/` files — managed by the app
-- Reference legacy v1 paths — scripts live in `kit/main/scripts/`
+- Do not create more than one artifact for one request
+- Do not put scripts in `extensions/` or `agents/`
+- Do not put bundles in `scripts/`
+- Do not put agents in `scripts/` or `extensions/`
+- Do not use CommonJS or the old v1 SDK package
+- Do not use Node.js `fs` / `child_process` — use Bun APIs
+- Do not edit `sdk/` — managed by the app
+- Do not use `export const metadata` in agent markdown files — use `_sk_*` keys
+- Do not add `import "@scriptkit/sdk"` to agent markdown files

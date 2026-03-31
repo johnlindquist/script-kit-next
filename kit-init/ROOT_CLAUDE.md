@@ -11,11 +11,19 @@ Use the rest of this file for workspace rules and Tab AI runtime contract after 
 
 ## Fast Route
 
-| Request shape | Artifact | Write to |
-|---------------|----------|----------|
-| Script Kit UI, Bun APIs, files, HTTP, or multi-step logic | Script | `~/.scriptkit/kit/main/scripts/<name>.ts` |
-| snippets, text expansion, quick shell commands, or grouped helpers | Extension bundle / scriptlet bundle | `~/.scriptkit/kit/main/extensions/<name>.md` |
-| reusable backend-specific prompt or automation | mdflow agent | `~/.scriptkit/kit/main/agents/<name>.<backend>.md` |
+Use this plain-text route first:
+
+### Script
+- Use for Script Kit UI, Bun APIs, files, HTTP, or multi-step logic
+- Write to `~/.scriptkit/kit/main/scripts/<name>.ts`
+
+### Extension bundle / scriptlet bundle
+- Use for snippets, text expansion, quick shell commands, or grouped helpers
+- Write to `~/.scriptkit/kit/main/extensions/<name>.md`
+
+### mdflow agent
+- Use for reusable backend-specific prompt or automation
+- Write to `~/.scriptkit/kit/main/agents/<name>.<backend>.md`
 
 Script Kit uses **extension bundle** and **scriptlet bundle** to mean the same artifact.
 
@@ -31,6 +39,7 @@ Script Kit uses **extension bundle** and **scriptlet bundle** to mean the same a
 ## Read Next
 
 - Canonical launchpad → `~/.scriptkit/examples/START_HERE.md`
+- Machine-readable SDK reference → `kit://sdk-reference`
 - Script details → `~/.scriptkit/skills/script-authoring/SKILL.md`
 - Bundle details → `~/.scriptkit/skills/scriptlets/SKILL.md`
 - Agent details → `~/.scriptkit/skills/agents/SKILL.md`
@@ -71,24 +80,36 @@ Script Kit uses **extension bundle** and **scriptlet bundle** to mean the same a
 └── cache/                         ← cached data
 ```
 
-## Rules
+## Artifact-Specific Rules
 
-1. **Always** `import "@scriptkit/sdk";` as the first line
-2. **Always** use `export const metadata = { name, description }` — NOT comment metadata
-3. **Scripts go in** `kit/main/scripts/*.ts`
-4. **Extensions go in** `kit/main/extensions/*.md`
-5. **Use Bun APIs**: `Bun.file()`, `Bun.write()`, `` $`command` `` — NOT Node.js fs/child_process
-6. **Top-level await** works everywhere (package.json has `"type": "module"`)
+### Script Rules
+- Start the file with `import "@scriptkit/sdk";`
+- Use `export const metadata = { name, description }`
+- Save to `kit/main/scripts/*.ts`
+- Use Bun APIs: `Bun.file()`, `Bun.write()`, and `` $`command` ``
 
-## DO NOT
+### Extension Bundle / Scriptlet Bundle Rules
+- Save one markdown file to `kit/main/extensions/*.md`
+- Prefer `metadata` code fences for new bundles
+- Use `import "@scriptkit/sdk";` only inside `tool:<name>` fences, as the first line of that fence
+- Do not put `export const metadata` at the top of the markdown file
 
-- Use CommonJS imports — use ES `import` syntax
-- Use the old v1 SDK package — use `@scriptkit/sdk`
-- Use Node.js `fs` or `child_process` — use Bun APIs
-- Use comment-based metadata — use `export const metadata`
-- Edit files in `sdk/` — they are managed by the app
-- Reference legacy v1 paths — scripts live in `kit/main/scripts/`
-- Create scripts outside `kit/main/scripts/`
+### mdflow Agent Rules
+- Save to `kit/main/agents/<name>.<backend>.md`
+- Use underscore-prefixed `_sk_*` metadata keys
+- Do not use `export const metadata`
+- Do not add `import "@scriptkit/sdk"` to the markdown file
+
+## Avoid These Mistakes
+
+- Do not create more than one artifact for one request
+- Do not put scripts in `extensions/` or `agents/`
+- Do not put bundles in `scripts/`
+- Do not put agents in `scripts/` or `extensions/`
+- Do not use CommonJS or the old v1 SDK package
+- Do not edit `sdk/`
+
+The Core SDK examples below apply to `.ts` scripts and `tool:<name>` scriptlets. They do not apply to mdflow agent markdown files.
 
 ## Core SDK Functions
 
