@@ -48,9 +48,9 @@
  * 3. SCRIPT - User scripts (by filename without extension)
  *    Format: `script/{script-name}`
  *    Examples:
- *      - "script/my-custom-script"    → ~/.scriptkit/scripts/my-custom-script.ts
- *      - "script/daily-standup"       → ~/.scriptkit/scripts/daily-standup.ts
- *      - "script/git-commit-helper"   → ~/.scriptkit/scripts/git-commit-helper.ts
+ *      - "script/my-custom-script"    → ~/.scriptkit/kit/main/scripts/my-custom-script.ts
+ *      - "script/daily-standup"       → ~/.scriptkit/kit/main/scripts/daily-standup.ts
+ *      - "script/git-commit-helper"   → ~/.scriptkit/kit/main/scripts/git-commit-helper.ts
  *
  * 4. SCRIPTLET - Inline scriptlets (by UUID)
  *    Format: `scriptlet/{uuid}`
@@ -553,7 +553,7 @@
  * ```
  *
  * USE CASE: Users with visual impairments, large monitors
- * NOTE: Theme colors are controlled separately in ~/.scriptkit/theme.json
+ * NOTE: Theme colors are controlled separately in ~/.scriptkit/kit/theme.json
  *       High contrast themes should be configured there, not here.
  *
  * ═══════════════════════════════════════════════════════════════════════════
@@ -664,8 +664,8 @@
  * - UI scale should be 0.5-2.0 for reasonable display
  *
  * RELATED FILES:
- * - ~/.scriptkit/theme.json - Color themes and visual appearance
- * - ~/.scriptkit/scripts/   - User scripts
+ * - ~/.scriptkit/kit/theme.json - Color themes and visual appearance
+ * - ~/.scriptkit/kit/main/scripts/ - User scripts
  * - ~/.scriptkit/sdk/       - SDK runtime files
  */
 

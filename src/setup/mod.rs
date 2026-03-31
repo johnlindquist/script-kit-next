@@ -1348,8 +1348,6 @@ Welcome to Script Kit! This directory contains your scripts, configuration, and 
 ├── db/                     # Databases (clipboard history, etc.)
 ├── logs/                   # Application logs
 ├── cache/                  # Cached data (app icons, etc.)
-├── config.ts               # Your configuration
-├── theme.json              # Theme customization
 └── README.md               # This file
 ```
 
@@ -1359,19 +1357,19 @@ Script Kit watches these files and reloads automatically:
 
 | File/Directory | What happens on change |
 |----------------|------------------------|
-| `config.ts` | Reloads configuration (hotkeys, settings) |
-| `theme.json` | Applies new theme colors immediately |
-| `main/scripts/*.ts` | Updates script list and metadata |
-| `main/extensions/*.md` | Updates extension list |
+| `kit/config.ts` | Reloads configuration (hotkeys, settings) |
+| `kit/theme.json` | Applies new theme colors immediately |
+| `kit/main/scripts/*.ts` | Updates script list and metadata |
+| `kit/main/extensions/*.md` | Updates extension list |
 
 ## Scripts
 
-Scripts are TypeScript files in `main/scripts/`. They have full access to the Script Kit SDK.
+Scripts are TypeScript files in `kit/main/scripts/`. They have full access to the Script Kit SDK.
 
 ### Example Script
 
 ```typescript
-// main/scripts/my-script.ts
+// kit/main/scripts/my-script.ts
 
 export const metadata = {
   name: "My Script",
@@ -1437,7 +1435,7 @@ shortcut: cmd shift x
 
 ## Configuration (config.ts)
 
-Your `config.ts` controls Script Kit behavior:
+Your `kit/config.ts` controls Script Kit behavior:
 
 ```typescript
 export default {
@@ -1459,9 +1457,9 @@ export default {
 } satisfies Config;
 ```
 
-## Theme (theme.json)
+## Theme (kit/theme.json)
 
-Customize colors in `theme.json`:
+Customize colors in `kit/theme.json`:
 
 ```json
 {
@@ -1495,7 +1493,7 @@ export SK_PATH=~/my-scripts
 
 ## Quick Tips
 
-1. **Create a new script**: Add a `.ts` file to `main/scripts/`
+1. **Create a new script**: Add a `.ts` file to `kit/main/scripts/`
 2. **Add a hotkey**: Set `shortcut` in the metadata
 3. **Test changes**: Scripts reload automatically on save
 4. **View logs**: Check `logs/script-kit-gpui.jsonl` for debugging

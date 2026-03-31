@@ -155,8 +155,11 @@ const DEFAULTS: Config & Record<string, unknown> = {
     minScore: 0.1,
     halfLifeDays: 7,
     trackUsage: true,
-    excludedCommands: []
+    excludedCommands: ["builtin-quit-script-kit"],
   },
+  aiHotkeyEnabled: true,
+  logsHotkeyEnabled: true,
+  dictationHotkeyEnabled: true,
   watcher: {
     debounceMs: 500,
     stormThreshold: 200,
@@ -366,8 +369,8 @@ const CONFIG_SCHEMA: ConfigOption[] = [
   {
     key: "suggested.excludedCommands",
     type: "string[]",
-    default: [],
-    description: "Command IDs to exclude from suggestions"
+    default: ["builtin-quit-script-kit"],
+    description: "Command IDs excluded from Suggested ranking"
   },
   // --- Watcher ---
   {
