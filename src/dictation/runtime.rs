@@ -57,6 +57,14 @@ pub fn is_dictation_recording() -> bool {
     SESSION.lock().is_some()
 }
 
+/// Returns the elapsed duration of the active dictation session, or `None`
+/// when no session is active.  This reads `started_at` directly from the
+/// live session so the caller gets an authoritative wall-clock elapsed time
+/// rather than a pump-tick-stale snapshot.
+pub fn dictation_elapsed() -> Option<std::time::Duration> {
+    SESSION.lock().as_ref().map(|s| s.started_at.elapsed())
+}
+
 /// Update the overlay phase in the live session.
 ///
 /// Called by the overlay key handler so the pump tick reads the correct phase

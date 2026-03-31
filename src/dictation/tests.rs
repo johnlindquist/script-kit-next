@@ -2955,20 +2955,29 @@ fn overlay_abort_confirmation_wires_runtime_abort() {
 }
 
 #[test]
-fn overlay_confirming_phase_renders_abort_resume() {
+fn overlay_confirming_phase_renders_stop_continue() {
     let window_src = std::fs::read_to_string("src/dictation/window.rs").expect("read window.rs");
 
+    // Source file contains unicode escapes, so match those literally.
     assert!(
-        window_src.contains("Abort ↵"),
-        "confirming phase must show Abort affordance"
+        window_src.contains(r#""Stop \u{21b5}""#),
+        "confirming phase must show Stop affordance"
     );
     assert!(
-        window_src.contains("Resume Esc"),
-        "confirming phase must show Resume affordance"
+        window_src.contains(r#""Continue \u{238b}""#),
+        "confirming phase must show Continue affordance"
     );
     assert!(
-        window_src.contains("Cancel dictation?"),
-        "confirming phase must show Cancel dictation? prompt"
+        window_src.contains("Stop dictation?"),
+        "confirming phase must show Stop dictation? prompt"
+    );
+    assert!(
+        !window_src.contains(r#""Abort \u{21b5}""#),
+        "old Abort label should be removed"
+    );
+    assert!(
+        !window_src.contains(r#""Resume Esc""#),
+        "old Resume label should be removed"
     );
 }
 
@@ -3092,8 +3101,8 @@ fn overlay_key_handler_writes_through_to_runtime_phase() {
 
     // The overlay key handler must use overlay_escape_action to decide behavior.
     assert!(
-        window_src.contains("overlay_escape_action(&self.state.phase)"),
-        "overlay key handler must delegate to overlay_escape_action"
+        window_src.contains("overlay_escape_action(&self.state.phase, elapsed)"),
+        "overlay key handler must delegate to overlay_escape_action with elapsed"
     );
 
     // AbortSession must invoke the stored abort callback (via helper).
@@ -3348,13 +3357,17 @@ fn escape_abort_never_reaches_transcript_handler() {
         "Escape abort must invoke abort_overlay_session (which uses the stored abort callback)"
     );
 
-    // overlay_escape_action routes Recording to TransitionToConfirming and
-    // Confirming to ResumeRecording (confirm-first pattern).
+    // overlay_escape_action routes Recording (≥ threshold) to TransitionToConfirming
+    // and Recording (< threshold) to AbortSession.
     assert!(
         window_src.contains(
             "DictationSessionPhase::Recording => OverlayEscapeAction::TransitionToConfirming"
         ),
-        "overlay_escape_action must map Recording to TransitionToConfirming"
+        "overlay_escape_action must map Recording (>= threshold) to TransitionToConfirming"
+    );
+    assert!(
+        window_src.contains("ESCAPE_CONFIRM_THRESHOLD"),
+        "overlay_escape_action must use the named threshold constant"
     );
     assert!(
         window_src
@@ -3967,18 +3980,37 @@ fn dictation_overlay_generation_guards_pump_and_delayed_close_contract() {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn overlay_escape_confirms_before_aborting() {
+fn overlay_escape_action_aborts_before_threshold() {
     use super::types::DictationSessionPhase;
     use super::window::{overlay_escape_action, OverlayEscapeAction};
 
-    // First Escape during Recording transitions to Confirming (not abort).
+    // Escape during Recording below 5 seconds → immediate abort.
     assert_eq!(
-        overlay_escape_action(&DictationSessionPhase::Recording),
+        overlay_escape_action(&DictationSessionPhase::Recording, Duration::from_secs(4)),
+        OverlayEscapeAction::AbortSession
+    );
+}
+
+#[test]
+fn overlay_escape_action_confirms_at_threshold() {
+    use super::types::DictationSessionPhase;
+    use super::window::{overlay_escape_action, OverlayEscapeAction};
+
+    // Escape during Recording at exactly 5 seconds → transition to Confirming.
+    assert_eq!(
+        overlay_escape_action(&DictationSessionPhase::Recording, Duration::from_secs(5)),
         OverlayEscapeAction::TransitionToConfirming
     );
-    // Second Escape during Confirming resumes recording.
+}
+
+#[test]
+fn overlay_escape_action_resumes_from_confirming() {
+    use super::types::DictationSessionPhase;
+    use super::window::{overlay_escape_action, OverlayEscapeAction};
+
+    // Escape during Confirming resumes recording (elapsed is irrelevant).
     assert_eq!(
-        overlay_escape_action(&DictationSessionPhase::Confirming),
+        overlay_escape_action(&DictationSessionPhase::Confirming, Duration::from_secs(9)),
         OverlayEscapeAction::ResumeRecording
     );
 }
@@ -3988,20 +4020,21 @@ fn overlay_escape_closes_non_recording_phases() {
     use super::types::DictationSessionPhase;
     use super::window::{overlay_escape_action, OverlayEscapeAction};
 
+    let elapsed = Duration::from_secs(0);
     assert_eq!(
-        overlay_escape_action(&DictationSessionPhase::Transcribing),
+        overlay_escape_action(&DictationSessionPhase::Transcribing, elapsed),
         OverlayEscapeAction::CloseOverlay
     );
     assert_eq!(
-        overlay_escape_action(&DictationSessionPhase::Delivering),
+        overlay_escape_action(&DictationSessionPhase::Delivering, elapsed),
         OverlayEscapeAction::CloseOverlay
     );
     assert_eq!(
-        overlay_escape_action(&DictationSessionPhase::Finished),
+        overlay_escape_action(&DictationSessionPhase::Finished, elapsed),
         OverlayEscapeAction::CloseOverlay
     );
     assert_eq!(
-        overlay_escape_action(&DictationSessionPhase::Failed("boom".to_string())),
+        overlay_escape_action(&DictationSessionPhase::Failed("boom".to_string()), elapsed),
         OverlayEscapeAction::CloseOverlay
     );
 }
@@ -4012,8 +4045,32 @@ fn overlay_escape_propagates_only_when_idle() {
     use super::window::{overlay_escape_action, OverlayEscapeAction};
 
     assert_eq!(
-        overlay_escape_action(&DictationSessionPhase::Idle),
+        overlay_escape_action(&DictationSessionPhase::Idle, Duration::from_secs(0)),
         OverlayEscapeAction::Propagate
+    );
+}
+
+#[test]
+fn confirming_ui_uses_stop_continue_copy_and_timer() {
+    let src = std::fs::read_to_string("src/dictation/window.rs").expect("read window.rs");
+    assert!(src.contains("Stop dictation?"));
+    assert!(src.contains("format_elapsed(*elapsed)"));
+    assert!(
+        !src.contains(r#""Abort \u{21b5}""#),
+        "old Abort label should be removed"
+    );
+    assert!(
+        !src.contains(r#""Resume Esc""#),
+        "old Resume label should be removed"
+    );
+}
+
+#[test]
+fn confirming_state_no_longer_resumes_on_unrelated_keys() {
+    let src = std::fs::read_to_string("src/dictation/window.rs").expect("read window.rs");
+    assert!(
+        !src.contains("Key pressed during confirmation, resuming recording"),
+        "confirming state must swallow unrelated keys instead of resuming recording"
     );
 }
 
@@ -4557,3 +4614,5 @@ fn download_failure_uses_classified_error() {
         "download failure must log both raw_error and user_error for diagnostics"
     );
 }
+
+// duplicate removed — see line 4053 for the canonical test

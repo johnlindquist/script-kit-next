@@ -811,7 +811,8 @@ impl ScriptListApp {
                     (format!("{dir}/"), FileSearchPresentation::Mini)
                 };
                 self.restart_file_search_stream_for_query(query, presentation, None, false, cx);
-                self.show_hud("Refreshing Directory".to_string(), Some(HUD_SHORT_MS), cx);
+                self.show_hud("Refreshed Directory".to_string(), Some(HUD_SHORT_MS), cx);
+                self.restore_file_search_input_focus(cx);
                 DispatchOutcome::success()
             }
             "reveal_current_directory" => {

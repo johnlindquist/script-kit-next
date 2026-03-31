@@ -214,7 +214,7 @@ pub(crate) fn overlay_phase_copy(phase: &DictationSessionPhase) -> (&'static str
     match phase {
         DictationSessionPhase::Recording => ("Listening\u{2026}", "Esc Cancel"),
         DictationSessionPhase::Confirming => {
-            ("Cancel dictation?", "\u{21b5} Cancel \u{00b7} Esc Resume")
+            ("Stop dictation?", "\u{21b5} Stop \u{00b7} Esc Continue")
         }
         DictationSessionPhase::Transcribing => ("Transcribing\u{2026}", "Esc Close"),
         DictationSessionPhase::Delivering => ("Delivering\u{2026}", "Esc Close"),
@@ -224,13 +224,25 @@ pub(crate) fn overlay_phase_copy(phase: &DictationSessionPhase) -> (&'static str
     }
 }
 
-/// Map a dictation session phase to the appropriate Escape behavior.
+/// Recordings shorter than this abort immediately on Escape; longer ones
+/// enter a confirmation state where Escape means "continue" and Enter means
+/// "stop."  Mirrors the vercel-voice 5-second threshold.
+const ESCAPE_CONFIRM_THRESHOLD: Duration = Duration::from_secs(5);
+
+/// Map a dictation session phase + elapsed time to the appropriate Escape behavior.
 ///
 /// Follows the vercel-voice confirm-first pattern:
-/// - Recording → show confirmation (first Escape)
+/// - Recording (< 5 s) → immediate abort
+/// - Recording (≥ 5 s) → show confirmation (first Escape)
 /// - Confirming → dismiss confirmation and resume recording
-pub(crate) fn overlay_escape_action(phase: &DictationSessionPhase) -> OverlayEscapeAction {
+pub(crate) fn overlay_escape_action(
+    phase: &DictationSessionPhase,
+    elapsed: Duration,
+) -> OverlayEscapeAction {
     match phase {
+        DictationSessionPhase::Recording if elapsed < ESCAPE_CONFIRM_THRESHOLD => {
+            OverlayEscapeAction::AbortSession
+        }
         DictationSessionPhase::Recording => OverlayEscapeAction::TransitionToConfirming,
         DictationSessionPhase::Confirming => OverlayEscapeAction::ResumeRecording,
         DictationSessionPhase::Transcribing
@@ -339,11 +351,12 @@ impl DictationOverlay {
 
     /// Handle key-down events for the overlay.
     ///
-    /// Escape semantics (vercel-voice confirm-first pattern):
-    /// - Recording → first Escape transitions to Confirming (shows abort/resume)
+    /// Escape semantics (vercel-voice 5-second threshold pattern):
+    /// - Recording (< 5 s) + Escape → immediate abort
+    /// - Recording (≥ 5 s) + Escape → transition to Confirming
+    /// - Confirming + Enter → abort the session
     /// - Confirming + Escape → resume Recording
-    /// - Confirming + Enter → actually abort the session
-    /// - Confirming + any other key → resume Recording
+    /// - Confirming + any other key → swallowed (no state change)
     /// - Transcribing / Delivering / Finished / Failed → dismiss overlay only
     /// - Idle → propagate (no-op)
     fn handle_key_down(
@@ -354,32 +367,23 @@ impl DictationOverlay {
     ) {
         let key = event.keystroke.key.as_str();
 
-        // In Confirming state, non-Escape/non-Enter keys resume recording.
-        if self.state.phase == DictationSessionPhase::Confirming
-            && !crate::ui_foundation::is_key_escape(key)
-            && !crate::ui_foundation::is_key_enter(key)
-        {
-            tracing::info!(
-                category = "DICTATION",
-                key,
-                "Key pressed during confirmation, resuming recording"
-            );
-            self.resume_recording(cx);
-            cx.stop_propagation();
-            return;
-        }
-
-        // In Confirming state, Enter also aborts (deliberate confirm action).
-        if self.state.phase == DictationSessionPhase::Confirming
-            && crate::ui_foundation::is_key_enter(key)
-        {
-            tracing::info!(
-                category = "DICTATION",
-                "Enter pressed during confirmation, aborting dictation session"
-            );
-            self.abort_overlay_session(cx);
-            cx.stop_propagation();
-            return;
+        // In Confirming state, only Enter and Escape have meaning.
+        // All other keys are swallowed without changing state.
+        if self.state.phase == DictationSessionPhase::Confirming {
+            if crate::ui_foundation::is_key_enter(key) {
+                tracing::info!(
+                    category = "DICTATION",
+                    "Enter pressed during confirmation, aborting dictation session"
+                );
+                self.abort_overlay_session(cx);
+                cx.stop_propagation();
+                return;
+            }
+            if !crate::ui_foundation::is_key_escape(key) {
+                // Swallow unrelated keys — no resume, no propagation.
+                cx.stop_propagation();
+                return;
+            }
         }
 
         if !crate::ui_foundation::is_key_escape(key) {
@@ -387,11 +391,16 @@ impl DictationOverlay {
             return;
         }
 
-        match overlay_escape_action(&self.state.phase) {
+        // Use the authoritative runtime elapsed time for threshold decisions,
+        // falling back to the pump-snapshot elapsed when no session is active.
+        let elapsed = crate::dictation::dictation_elapsed().unwrap_or(self.state.elapsed);
+
+        match overlay_escape_action(&self.state.phase, elapsed) {
             OverlayEscapeAction::TransitionToConfirming => {
                 tracing::info!(
                     category = "DICTATION",
-                    "Escape pressed during recording, showing confirmation"
+                    elapsed_ms = elapsed.as_millis() as u64,
+                    "Escape pressed after threshold, showing confirmation"
                 );
                 self.state.phase = DictationSessionPhase::Confirming;
                 crate::dictation::set_overlay_phase(DictationSessionPhase::Confirming);
@@ -401,7 +410,7 @@ impl DictationOverlay {
             OverlayEscapeAction::ResumeRecording => {
                 tracing::info!(
                     category = "DICTATION",
-                    phase = ?self.state.phase,
+                    elapsed_ms = elapsed.as_millis() as u64,
                     "Escape pressed in confirmation, resuming recording"
                 );
                 self.resume_recording(cx);
@@ -410,8 +419,8 @@ impl DictationOverlay {
             OverlayEscapeAction::AbortSession => {
                 tracing::info!(
                     category = "DICTATION",
-                    phase = ?self.state.phase,
-                    "Confirm action pressed, aborting dictation session"
+                    elapsed_ms = elapsed.as_millis() as u64,
+                    "Escape pressed before threshold, aborting dictation session"
                 );
                 self.abort_overlay_session(cx);
                 cx.stop_propagation();
@@ -493,16 +502,24 @@ impl Render for DictationOverlay {
                     .child(div().w(px(TIMER_SPACER_WIDTH_PX)))
             }
             DictationSessionPhase::Confirming => {
+                let timer_text = format_elapsed(*elapsed);
                 let (headline, _hint) = overlay_phase_copy(phase);
-                let abort_color = theme.colors.ui.error.with_opacity(OPACITY_ACTIVE);
-                let resume_color = theme.colors.text.muted.with_opacity(OPACITY_TEXT_MUTED);
+                let stop_color = theme.colors.ui.error.with_opacity(OPACITY_ACTIVE);
+                let continue_color = theme.colors.ui.success.with_opacity(OPACITY_ACTIVE);
                 div()
                     .flex()
                     .flex_col()
                     .items_center()
                     .justify_center()
-                    .gap(px(4.))
+                    .gap(px(6.))
                     .w_full()
+                    .child(
+                        div()
+                            .text_size(px(STATUS_TEXT_SIZE_PX))
+                            .font_family(FONT_MONO)
+                            .text_color(timer_color)
+                            .child(timer_text),
+                    )
                     .child(
                         div()
                             .text_size(px(STATUS_TEXT_SIZE_PX))
@@ -526,7 +543,7 @@ impl Render for DictationOverlay {
                                     .border_color(theme.colors.ui.error.with_opacity(0.35))
                                     .text_size(px(STATUS_TEXT_SIZE_PX))
                                     .font_family(FONT_MONO)
-                                    .text_color(abort_color)
+                                    .text_color(stop_color)
                                     .on_mouse_down(
                                         MouseButton::Left,
                                         cx.listener(
@@ -535,7 +552,7 @@ impl Render for DictationOverlay {
                                             },
                                         ),
                                     )
-                                    .child("Abort ↵"),
+                                    .child("Stop \u{21b5}"),
                             )
                             .child(
                                 div()
@@ -543,10 +560,10 @@ impl Render for DictationOverlay {
                                     .py(px(4.))
                                     .rounded(px(999.))
                                     .border_1()
-                                    .border_color(theme.colors.text.muted.with_opacity(0.25))
+                                    .border_color(theme.colors.ui.success.with_opacity(0.35))
                                     .text_size(px(STATUS_TEXT_SIZE_PX))
                                     .font_family(FONT_MONO)
-                                    .text_color(resume_color)
+                                    .text_color(continue_color)
                                     .on_mouse_down(
                                         MouseButton::Left,
                                         cx.listener(
@@ -555,7 +572,7 @@ impl Render for DictationOverlay {
                                             },
                                         ),
                                     )
-                                    .child("Resume Esc"),
+                                    .child("Continue \u{238b}"),
                             ),
                     )
             }

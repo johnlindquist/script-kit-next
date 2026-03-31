@@ -460,3 +460,47 @@ fn directory_stream_completion_uses_active_sort_mode() {
         "stream completion must not use hardcoded sort_directory_results"
     );
 }
+
+// ──────────────────────────────────────────────────────────────────────
+// refresh_directory restores focus and shows correct HUD
+// ──────────────────────────────────────────────────────────────────────
+
+const FILES_ACTION_SOURCE: &str = include_str!("../../src/app_actions/handle_action/files.rs");
+
+#[test]
+fn refresh_directory_shows_hud_and_restores_focus() {
+    let handler_start = FILES_ACTION_SOURCE
+        .find("\"refresh_directory\" =>")
+        .expect("refresh_directory handler must exist");
+    let handler_section = &FILES_ACTION_SOURCE[handler_start..(handler_start + 1200).min(FILES_ACTION_SOURCE.len())];
+
+    assert!(
+        handler_section.contains("\"Refreshed Directory\""),
+        "refresh_directory must show 'Refreshed Directory' HUD"
+    );
+    assert!(
+        handler_section.contains("restore_file_search_input_focus"),
+        "refresh_directory must restore focus to the main filter input"
+    );
+    assert!(
+        handler_section.contains("restart_file_search_stream_for_query"),
+        "refresh_directory must restart the directory stream"
+    );
+}
+
+#[test]
+fn refresh_directory_returns_error_when_no_directory_active() {
+    let handler_start = FILES_ACTION_SOURCE
+        .find("\"refresh_directory\" =>")
+        .expect("refresh_directory handler must exist");
+    let handler_section = &FILES_ACTION_SOURCE[handler_start..(handler_start + 400).min(FILES_ACTION_SOURCE.len())];
+
+    assert!(
+        handler_section.contains("current_file_search_directory_abs()"),
+        "refresh_directory must check for active browsed directory"
+    );
+    assert!(
+        handler_section.contains("DispatchOutcome::error("),
+        "refresh_directory must return error when no directory is active"
+    );
+}
