@@ -32,6 +32,9 @@ pub(crate) use shared::format_shortcut_hint;
 
 pub use chat::{get_ai_command_bar_actions, get_chat_context_actions};
 pub use clipboard::get_clipboard_history_context_actions;
+pub(crate) use file_path::{
+    build_file_search_footer_leading_text, resolve_file_search_secondary_action_id,
+};
 pub use file_path::{get_file_context_actions, get_path_context_actions};
 pub use notes::{get_new_chat_actions, get_note_switcher_actions, get_notes_command_bar_actions};
 pub use script_context::{get_global_actions, get_script_context_actions};

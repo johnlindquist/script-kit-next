@@ -503,39 +503,8 @@ impl ScriptListApp {
                                 }
                                 return;
                             }
-                            // Handle Cmd+Y (Quick Look) - macOS only
-                            #[cfg(target_os = "macos")]
-                            if has_cmd && !has_shift && key.eq_ignore_ascii_case("y") {
-                                if let Some(file) = get_selected_file() {
-                                    let _ = file_search::quick_look(&file.path);
-                                }
-                                return;
-                            }
-                            // Handle Cmd+I (Show Info) - macOS only
-                            #[cfg(target_os = "macos")]
-                            if has_cmd && !has_shift && key.eq_ignore_ascii_case("i") {
-                                if let Some(file) = get_selected_file() {
-                                    let _ = file_search::show_info(&file.path);
-                                }
-                                return;
-                            }
-                            // Handle Cmd+E (Open in Editor)
-                            if has_cmd && !has_shift && key.eq_ignore_ascii_case("e") {
-                                if let Some(file) = get_selected_file() {
-                                    this.file_search_actions_path = Some(file.path.clone());
-                                    this.handle_action("open_in_editor".to_string(), window, cx);
-                                }
-                                return;
-                            }
-                            // Handle Cmd+T (Open in Terminal)
-                            if has_cmd && !has_shift && key.eq_ignore_ascii_case("t") {
-                                if let Some(file) = get_selected_file() {
-                                    this.file_search_actions_path = Some(file.path.clone());
-                                    this.handle_action("open_in_terminal".to_string(), window, cx);
-                                }
-                                return;
-                            }
-                            // Handle Cmd+Shift+F (Reveal in Finder)
+                            // Handle Cmd+Shift+F (Reveal in Finder) — kept explicit
+                            // because it is not a secondary command in the shared contract.
                             if has_cmd && has_shift && key.eq_ignore_ascii_case("f") {
                                 if let Some(file) = get_selected_file() {
                                     this.file_search_actions_path = Some(file.path.clone());
@@ -543,45 +512,20 @@ impl ScriptListApp {
                                 }
                                 return;
                             }
-                            // Handle Cmd+Shift+C (Copy Path)
-                            if has_cmd && has_shift && key.eq_ignore_ascii_case("c") {
-                                if let Some(file) = get_selected_file() {
+                            // All other Cmd shortcuts resolve through the shared
+                            // secondary-command contract so the footer, action sheet,
+                            // and keyboard dispatch stay in sync.
+                            if let Some(file) = get_selected_file() {
+                                let file_info = crate::file_search::FileInfo::from_result(&file);
+                                if let Some(action_id) =
+                                    crate::actions::resolve_file_search_secondary_action_id(
+                                        key, has_cmd, has_shift, &file_info,
+                                    )
+                                {
                                     this.file_search_actions_path = Some(file.path.clone());
-                                    this.handle_action("copy_path".to_string(), window, cx);
+                                    this.handle_action(action_id.to_string(), window, cx);
+                                    return;
                                 }
-                                return;
-                            }
-                            // Handle Cmd+C (Copy Filename)
-                            if has_cmd && !has_shift && key.eq_ignore_ascii_case("c") {
-                                if let Some(file) = get_selected_file() {
-                                    this.file_search_actions_path = Some(file.path.clone());
-                                    this.handle_action("copy_filename".to_string(), window, cx);
-                                }
-                                return;
-                            }
-                            // Handle Cmd+R (Rename)
-                            if has_cmd && !has_shift && key.eq_ignore_ascii_case("r") {
-                                if let Some(file) = get_selected_file() {
-                                    this.file_search_actions_path = Some(file.path.clone());
-                                    this.handle_action("rename_path".to_string(), window, cx);
-                                }
-                                return;
-                            }
-                            // Handle Cmd+Shift+M (Move)
-                            if has_cmd && has_shift && key.eq_ignore_ascii_case("m") {
-                                if let Some(file) = get_selected_file() {
-                                    this.file_search_actions_path = Some(file.path.clone());
-                                    this.handle_action("move_path".to_string(), window, cx);
-                                }
-                                return;
-                            }
-                            // Handle Cmd+Backspace (Move to Trash)
-                            if has_cmd && (key == "backspace" || key == "Backspace" || key == "delete") {
-                                if let Some(file) = get_selected_file() {
-                                    this.file_search_actions_path = Some(file.path.clone());
-                                    this.handle_action("move_to_trash".to_string(), window, cx);
-                                }
-                                return;
                             }
                         }
                     }
@@ -1150,27 +1094,15 @@ impl ScriptListApp {
             ]
         };
 
-        // Secondary shortcut hints for the leading footer slot
+        // Secondary shortcut hints for the leading footer slot —
+        // derived from the shared file-search secondary-command contract
+        // so the footer, action sheet, and keyboard dispatch always agree.
         let footer_leading_text: Option<String> = selected_file.as_ref().map(|file| {
-            let mut parts: Vec<&str> = Vec::new();
-            if can_shift_tab_up {
-                parts.push("\u{21e7}Tab Up");
-            }
-            parts.push("\u{2318}R Rename");
-            parts.push("\u{2318}\u{21e7}M Move");
-            if file.file_type != FileType::Directory {
-                parts.push("\u{2318}C Name");
-                parts.push("\u{2318}E Editor");
-            }
-            parts.push("\u{2318}\u{21e7}C Path");
-            parts.push("\u{2318}\u{232b} Trash");
-            parts.push("\u{2318}T Terminal");
-            #[cfg(target_os = "macos")]
-            {
-                parts.push("\u{2318}Y Quick Look");
-                parts.push("\u{2318}I Info");
-            }
-            parts.join(" \u{b7} ")
+            let file_info = crate::file_search::FileInfo::from_result(file);
+            crate::actions::build_file_search_footer_leading_text(
+                &file_info,
+                can_shift_tab_up,
+            )
         });
 
         // Header: bare input + file count (scaffold adds padding/layout)

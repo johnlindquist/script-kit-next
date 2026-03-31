@@ -50,7 +50,6 @@ pub struct FileInfo {
 }
 impl FileInfo {
     /// Create FileInfo from a FileResult
-    #[allow(dead_code)]
     pub fn from_result(result: &FileResult) -> Self {
         FileInfo {
             path: result.path.clone(),
@@ -235,9 +234,8 @@ pub use mdfind::{
     new_cancel_token, search_files, search_files_streaming, CancelToken, SearchEvent,
 };
 pub use os_open::{
-    move_path, move_to_trash, open_file, open_in_terminal, open_with,
-    prompt_move_destination_dir, prompt_rename_target_name, quick_look, rename_path,
-    reveal_in_finder, show_info,
+    move_path, move_to_trash, open_file, open_in_terminal, open_with, prompt_move_destination_dir,
+    prompt_rename_target_name, quick_look, rename_path, reveal_in_finder, show_info,
 };
 
 #[cfg(test)]
