@@ -55,7 +55,8 @@ pub fn get_clipboard_history_context_actions(entry: &ClipboardEntryInfo) -> Vec<
             ActionCategory::ScriptContext,
         )
         .with_shortcut("↵")
-        .with_icon(IconName::ArrowUp),
+        .with_icon(IconName::ArrowUp)
+        .with_section("Actions"),
     );
 
     actions.push(
@@ -66,7 +67,8 @@ pub fn get_clipboard_history_context_actions(entry: &ClipboardEntryInfo) -> Vec<
             ActionCategory::ScriptContext,
         )
         .with_shortcut("⌘↵")
-        .with_icon(IconName::Copy),
+        .with_icon(IconName::Copy)
+        .with_section("Actions"),
     );
 
     actions.push(
@@ -77,7 +79,8 @@ pub fn get_clipboard_history_context_actions(entry: &ClipboardEntryInfo) -> Vec<
             ActionCategory::ScriptContext,
         )
         .with_shortcut("⌥↵")
-        .with_icon(IconName::ArrowUp),
+        .with_icon(IconName::ArrowUp)
+        .with_section("Actions"),
     );
 
     actions.push(
@@ -88,7 +91,8 @@ pub fn get_clipboard_history_context_actions(entry: &ClipboardEntryInfo) -> Vec<
             ActionCategory::ScriptContext,
         )
         .with_shortcut("⇧⌘E")
-        .with_icon(IconName::ArrowRight),
+        .with_icon(IconName::ArrowRight)
+        .with_section("Share"),
     );
 
     actions.push(
@@ -99,7 +103,8 @@ pub fn get_clipboard_history_context_actions(entry: &ClipboardEntryInfo) -> Vec<
             ActionCategory::ScriptContext,
         )
         .with_shortcut("⌃⌘A")
-        .with_icon(IconName::MessageCircle),
+        .with_icon(IconName::MessageCircle)
+        .with_section("Actions"),
     );
 
     #[cfg(target_os = "macos")]
@@ -111,7 +116,8 @@ pub fn get_clipboard_history_context_actions(entry: &ClipboardEntryInfo) -> Vec<
             ActionCategory::ScriptContext,
         )
         .with_shortcut("␣")
-        .with_icon(IconName::File),
+        .with_icon(IconName::File)
+        .with_section("Actions"),
     );
 
     if entry.content_type == ContentType::Image {
@@ -124,7 +130,8 @@ pub fn get_clipboard_history_context_actions(entry: &ClipboardEntryInfo) -> Vec<
                 ActionCategory::ScriptContext,
             )
             .with_shortcut("⌘O")
-            .with_icon(IconName::File),
+            .with_icon(IconName::File)
+            .with_section("Actions"),
         );
 
         #[cfg(target_os = "macos")]
@@ -136,7 +143,8 @@ pub fn get_clipboard_history_context_actions(entry: &ClipboardEntryInfo) -> Vec<
                 ActionCategory::ScriptContext,
             )
             .with_shortcut("⇧⌘A")
-            .with_icon(IconName::Pencil),
+            .with_icon(IconName::Pencil)
+            .with_section("Edit"),
         );
 
         #[cfg(target_os = "macos")]
@@ -148,7 +156,8 @@ pub fn get_clipboard_history_context_actions(entry: &ClipboardEntryInfo) -> Vec<
                 ActionCategory::ScriptContext,
             )
             .with_shortcut("⇧⌘U")
-            .with_icon(IconName::ArrowUp),
+            .with_icon(IconName::ArrowUp)
+            .with_section("Share"),
         );
     }
 
@@ -161,7 +170,8 @@ pub fn get_clipboard_history_context_actions(entry: &ClipboardEntryInfo) -> Vec<
                 ActionCategory::ScriptContext,
             )
             .with_shortcut("⇧⌘P")
-            .with_icon(IconName::StarFilled),
+            .with_icon(IconName::StarFilled)
+            .with_section("Edit"),
         );
     } else {
         actions.push(
@@ -172,7 +182,8 @@ pub fn get_clipboard_history_context_actions(entry: &ClipboardEntryInfo) -> Vec<
                 ActionCategory::ScriptContext,
             )
             .with_shortcut("⇧⌘P")
-            .with_icon(IconName::Star),
+            .with_icon(IconName::Star)
+            .with_section("Edit"),
         );
     }
 
@@ -185,7 +196,8 @@ pub fn get_clipboard_history_context_actions(entry: &ClipboardEntryInfo) -> Vec<
                 ActionCategory::ScriptContext,
             )
             .with_shortcut("⇧⌘C")
-            .with_icon(IconName::MagnifyingGlass),
+            .with_icon(IconName::MagnifyingGlass)
+            .with_section("Edit"),
         );
     }
 
@@ -197,7 +209,8 @@ pub fn get_clipboard_history_context_actions(entry: &ClipboardEntryInfo) -> Vec<
             ActionCategory::ScriptContext,
         )
         .with_shortcut("⇧⌘S")
-        .with_icon(IconName::Code),
+        .with_icon(IconName::Code)
+        .with_section("Edit"),
     );
 
     actions.push(
@@ -208,7 +221,8 @@ pub fn get_clipboard_history_context_actions(entry: &ClipboardEntryInfo) -> Vec<
             ActionCategory::ScriptContext,
         )
         .with_shortcut("⌥⇧⌘S")
-        .with_icon(IconName::File),
+        .with_icon(IconName::File)
+        .with_section("Share"),
     );
 
     actions.push(
@@ -219,7 +233,8 @@ pub fn get_clipboard_history_context_actions(entry: &ClipboardEntryInfo) -> Vec<
             ActionCategory::ScriptContext,
         )
         .with_shortcut("⌃X")
-        .with_icon(IconName::Trash),
+        .with_icon(IconName::Trash)
+        .with_section("Destructive"),
     );
 
     actions.push(
@@ -230,7 +245,8 @@ pub fn get_clipboard_history_context_actions(entry: &ClipboardEntryInfo) -> Vec<
             ActionCategory::ScriptContext,
         )
         .with_shortcut("⇧⌘X")
-        .with_icon(IconName::Trash),
+        .with_icon(IconName::Trash)
+        .with_section("Destructive"),
     );
 
     actions.push(
@@ -241,7 +257,8 @@ pub fn get_clipboard_history_context_actions(entry: &ClipboardEntryInfo) -> Vec<
             ActionCategory::ScriptContext,
         )
         .with_shortcut("⌃⇧X")
-        .with_icon(IconName::Trash),
+        .with_icon(IconName::Trash)
+        .with_section("Destructive"),
     );
 
     tracing::debug!(
@@ -318,5 +335,57 @@ mod tests {
         assert_eq!(copy_action.icon, Some(IconName::Copy));
         assert_eq!(save_file_action.icon, Some(IconName::File));
         assert_eq!(delete_action.icon, Some(IconName::Trash));
+    }
+
+    #[test]
+    fn test_get_clipboard_history_context_actions_assigns_named_sections() {
+        let actions =
+            get_clipboard_history_context_actions(&entry_info(ContentType::Text, false));
+        let allowed = ["Actions", "Edit", "Share", "Destructive"];
+
+        assert!(!actions.is_empty(), "expected at least one clipboard action");
+        assert!(
+            actions.iter().all(|action| action.section.is_some()),
+            "every clipboard action should declare a section"
+        );
+        assert!(actions.iter().all(|action| {
+            allowed.contains(&action.section.as_deref().expect("section should exist"))
+        }));
+    }
+
+    #[test]
+    fn test_get_clipboard_history_context_actions_delete_actions_are_destructive() {
+        let actions =
+            get_clipboard_history_context_actions(&entry_info(ContentType::Text, false));
+
+        for id in [
+            "clip:clipboard_delete",
+            "clip:clipboard_delete_multiple",
+            "clip:clipboard_delete_all",
+        ] {
+            let action = actions
+                .iter()
+                .find(|action| action.id == id)
+                .expect("missing delete action");
+            assert_eq!(action.section.as_deref(), Some("Destructive"));
+        }
+    }
+
+    #[test]
+    fn test_get_clipboard_history_context_actions_image_actions_use_expected_sections() {
+        let actions =
+            get_clipboard_history_context_actions(&entry_info(ContentType::Image, false));
+
+        let ocr = actions
+            .iter()
+            .find(|action| action.id == "clip:clipboard_ocr")
+            .expect("missing OCR action");
+        assert_eq!(ocr.section.as_deref(), Some("Edit"));
+
+        let save_file = actions
+            .iter()
+            .find(|action| action.id == "clip:clipboard_save_file")
+            .expect("missing save-file action");
+        assert_eq!(save_file.section.as_deref(), Some("Share"));
     }
 }

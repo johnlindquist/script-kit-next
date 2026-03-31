@@ -54,14 +54,29 @@ impl ScriptListApp {
 
             // Create the dialog entity
             let theme_arc = std::sync::Arc::clone(&self.theme);
+            let file_name = file_info.name.clone();
             let dialog = cx.new(|cx| {
                 let focus_handle = cx.focus_handle();
-                ActionsDialog::with_file(
+                let mut dialog = ActionsDialog::with_file(
                     focus_handle,
                     std::sync::Arc::new(|_action_id| {}), // Callback handled via main app
                     &file_info,
                     theme_arc,
-                )
+                );
+
+                // Match the mini main menu's actions dialog config:
+                // search at top, anchor top, centered, icons visible
+                dialog.set_config(crate::actions::ActionsDialogConfig {
+                    search_position: crate::actions::SearchPosition::Top,
+                    section_style: crate::actions::SectionStyle::Headers,
+                    anchor: crate::actions::AnchorPosition::Top,
+                    show_icons: true,
+                    search_placeholder: Some(file_name),
+                    show_context_header: false,
+                    ..crate::actions::ActionsDialogConfig::default()
+                });
+
+                dialog
             });
 
             // Store the dialog entity for keyboard routing
@@ -106,7 +121,7 @@ impl ScriptListApp {
                 ),
             );
 
-            // Open the actions window
+            // Open the actions window — centered like the mini main menu
             cx.spawn(async move |_this, cx| {
                 cx.update(|cx| {
                     match open_actions_window(
@@ -114,7 +129,7 @@ impl ScriptListApp {
                         main_bounds,
                         display_id,
                         dialog,
-                        crate::actions::WindowPosition::BottomRight,
+                        crate::actions::WindowPosition::TopCenter,
                     ) {
                         Ok(_handle) => {
                             logging::log("ACTIONS", "File search actions popup window opened");
@@ -186,14 +201,30 @@ impl ScriptListApp {
 
             // Create the dialog entity
             let theme_arc = std::sync::Arc::clone(&self.theme);
-            let dialog = cx.new(|cx| {
+            let entry_placeholder = entry_info.preview.clone();
+            let entry_info_for_dialog = entry_info.clone();
+            let dialog = cx.new(move |cx| {
                 let focus_handle = cx.focus_handle();
-                ActionsDialog::with_clipboard_entry(
+                let mut dialog = ActionsDialog::with_clipboard_entry(
                     focus_handle,
                     std::sync::Arc::new(|_action_id| {}), // Callback handled via main app
-                    &entry_info,
+                    &entry_info_for_dialog,
                     theme_arc,
-                )
+                );
+
+                // Match the mini main menu's actions dialog config:
+                // search at top, anchor top, centered, icons visible
+                dialog.set_config(crate::actions::ActionsDialogConfig {
+                    search_position: crate::actions::SearchPosition::Top,
+                    section_style: crate::actions::SectionStyle::Headers,
+                    anchor: crate::actions::AnchorPosition::Top,
+                    show_icons: true,
+                    search_placeholder: Some(entry_placeholder),
+                    show_context_header: false,
+                    ..crate::actions::ActionsDialogConfig::default()
+                });
+
+                dialog
             });
 
             // Store the dialog entity for keyboard routing
@@ -243,7 +274,7 @@ impl ScriptListApp {
                         main_bounds,
                         display_id,
                         dialog,
-                        crate::actions::WindowPosition::BottomRight,
+                        crate::actions::WindowPosition::TopCenter,
                     ) {
                         Ok(_handle) => {
                             logging::log("ACTIONS", "Clipboard actions popup window opened");
@@ -287,6 +318,50 @@ mod on_close_reentrancy_tests {
         assert!(
             source.contains("app.file_search_actions_path = None;"),
             "file-search on_close path should clear file_search_actions_path"
+        );
+    }
+
+    #[test]
+    fn test_render_builtins_actions_clipboard_popup_uses_mini_menu_contract() {
+        let source = fs::read_to_string("src/render_builtins/actions.rs")
+            .expect("Failed to read src/render_builtins/actions.rs");
+
+        let clipboard_fn = source
+            .split("fn toggle_clipboard_actions(")
+            .nth(1)
+            .expect("missing toggle_clipboard_actions");
+
+        assert!(
+            clipboard_fn.contains("dialog.set_config(crate::actions::ActionsDialogConfig {"),
+            "clipboard actions should set an explicit ActionsDialogConfig"
+        );
+        assert!(
+            clipboard_fn.contains("search_position: crate::actions::SearchPosition::Top"),
+            "clipboard actions should place search at the top"
+        );
+        assert!(
+            clipboard_fn.contains("section_style: crate::actions::SectionStyle::Headers"),
+            "clipboard actions should use section headers"
+        );
+        assert!(
+            clipboard_fn.contains("anchor: crate::actions::AnchorPosition::Top"),
+            "clipboard actions should anchor to the top"
+        );
+        assert!(
+            clipboard_fn.contains("show_icons: true"),
+            "clipboard actions should show icons"
+        );
+        assert!(
+            clipboard_fn.contains("show_context_header: false"),
+            "clipboard actions should hide the context header"
+        );
+        assert!(
+            clipboard_fn.contains("crate::actions::WindowPosition::TopCenter"),
+            "clipboard actions should open in the top-center mini-menu position"
+        );
+        assert!(
+            !clipboard_fn.contains("crate::actions::WindowPosition::BottomRight"),
+            "clipboard actions should not open in the bottom-right position"
         );
     }
 }
