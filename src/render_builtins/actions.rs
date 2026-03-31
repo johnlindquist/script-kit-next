@@ -364,4 +364,5 @@ mod on_close_reentrancy_tests {
             "clipboard actions should not open in the bottom-right position"
         );
     }
+
 }

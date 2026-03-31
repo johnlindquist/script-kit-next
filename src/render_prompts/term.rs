@@ -76,53 +76,11 @@ fn is_term_prompt_actions_toggle_shortcut(has_cmd: bool, has_shift: bool, key: &
 }
 
 #[inline]
-fn predicted_apply_footer_label(return_view: Option<&AppView>) -> &'static str {
-    match return_view {
-        Some(AppView::ScriptList) => "Save as Script & Run",
-        Some(AppView::ClipboardHistoryView { .. }) => "Copy Result",
-        Some(
-            AppView::ArgPrompt { .. }
-            | AppView::MiniPrompt { .. }
-            | AppView::MicroPrompt { .. }
-            | AppView::DivPrompt { .. }
-            | AppView::FormPrompt { .. }
-            | AppView::EditorPrompt { .. }
-            | AppView::SelectPrompt { .. }
-            | AppView::PathPrompt { .. }
-            | AppView::DropPrompt { .. }
-            | AppView::TemplatePrompt { .. }
-            | AppView::TermPrompt { .. }
-            | AppView::EnvPrompt { .. }
-            | AppView::ChatPrompt { .. }
-            | AppView::NamingPrompt { .. },
-        ) => "Paste Back to Prompt",
-        Some(_) => "Paste Back",
-        None => "Preparing Paste Back\u{2026}",
-    }
-}
-
-#[inline]
 fn render_terminal_prompt_hint_strip(
-    route: Option<&crate::ai::TabAiApplyBackRoute>,
-    return_view: Option<&AppView>,
+    _route: Option<&crate::ai::TabAiApplyBackRoute>,
+    _return_view: Option<&AppView>,
 ) -> AnyElement {
-    let text = match route {
-        Some(route) => {
-            let apply_label =
-                crate::ai::tab_ai_apply_back_footer_label(Some(&route.source_type));
-            match route.hint.target_label.as_deref() {
-                Some(target_label) => {
-                    format!("⌘↩ {apply_label} \u{2192} {target_label} \u{00b7} ⌘W Close")
-                }
-                None => format!("⌘↩ {apply_label} \u{00b7} ⌘W Close"),
-            }
-        }
-        None => format!(
-            "⌘↩ {} \u{00b7} ⌘W Close",
-            predicted_apply_footer_label(return_view)
-        ),
-    };
-    crate::components::prompt_layout_shell::render_simple_hint_strip(text, None)
+    crate::components::prompt_layout_shell::render_simple_hint_strip("⌘W Close".to_string(), None)
 }
 
 impl ScriptListApp {

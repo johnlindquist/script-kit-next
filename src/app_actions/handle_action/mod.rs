@@ -575,7 +575,6 @@ impl ScriptListApp {
         } else {
             None
         };
-
         // Clipboard actions handle their own transitions and notifications.
         let clipboard_outcome = self.handle_clipboard_action(&action_id_stripped, selected_clipboard_entry, &dctx, cx);
         if clipboard_outcome.was_handled() {

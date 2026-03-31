@@ -1039,7 +1039,7 @@ impl ScriptListApp {
                         div()
                             .text_xs()
                             .text_color(rgba(hint_text_rgba))
-                            .child("↵ Run  ·  ⌘K Actions  ·  Tab AI"),
+                            .child("↵ Run   ⌘K Actions   Tab AI"),
                     ),
             );
 

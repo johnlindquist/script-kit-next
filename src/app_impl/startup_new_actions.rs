@@ -208,7 +208,6 @@
                                 AppView::TermPrompt { .. } => Some(ActionsDialogHost::TermPrompt),
                                 AppView::FormPrompt { .. } => Some(ActionsDialogHost::FormPrompt),
                                 AppView::WebcamView { .. } => Some(ActionsDialogHost::WebcamPrompt),
-                                AppView::AppLauncherView { .. } => Some(ActionsDialogHost::AppLauncher),
                                 _ => None,
                             };
 

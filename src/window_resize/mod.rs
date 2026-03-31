@@ -24,8 +24,8 @@ use std::sync::OnceLock;
 use tracing::{debug, info, warn};
 const RESIZE_MIN_DELTA_PX: f64 = 1.0;
 const WINDOW_RESIZE_ANIMATE: bool = false;
-const MINI_MAIN_WINDOW_MIN_HEIGHT: f32 = 220.0;
-const MINI_MAIN_WINDOW_MAX_HEIGHT: f32 = 420.0;
+const MINI_MAIN_WINDOW_MIN_HEIGHT: f32 = 440.0;
+const MINI_MAIN_WINDOW_MAX_HEIGHT: f32 = 440.0;
 const MINI_MAIN_WINDOW_HEADER_HEIGHT: f32 = 56.0;
 const MINI_MAIN_WINDOW_HINT_STRIP_HEIGHT: f32 = 30.0;
 const MINI_MAIN_WINDOW_DIVIDER_HEIGHT: f32 = 1.0;
@@ -173,24 +173,13 @@ pub(crate) fn log_mini_window_sizing(
     );
 }
 
-/// Calculate the target height for the mini main window given content-aware sizing.
+/// Calculate the target height for the mini main window.
 ///
-/// Formula: header + divider + hint_strip + list_content, clamped to [MIN, MAX].
-/// List content = selectable_items * LIST_ITEM_HEIGHT + visible_section_headers * SECTION_HEADER_HEIGHT.
-pub(crate) fn height_for_mini_main_window(sizing: MiniMainWindowSizing) -> Pixels {
-    let list_height = if sizing.is_empty {
-        0.0
-    } else {
-        (sizing.selectable_items as f32 * LIST_ITEM_HEIGHT)
-            + (sizing.visible_section_headers as f32 * MINI_MAIN_WINDOW_SECTION_HEADER_HEIGHT)
-    };
-
-    let total_height = MINI_MAIN_WINDOW_HEADER_HEIGHT
-        + MINI_MAIN_WINDOW_DIVIDER_HEIGHT
-        + MINI_MAIN_WINDOW_HINT_STRIP_HEIGHT
-        + list_height;
-
-    px(total_height.clamp(MINI_MAIN_WINDOW_MIN_HEIGHT, MINI_MAIN_WINDOW_MAX_HEIGHT))
+/// Returns a fixed height to eliminate resize jank. The mini window always uses
+/// the full max height so transitions between views (e.g. main menu → file search)
+/// and filter changes never cause visible resizing.
+pub(crate) fn height_for_mini_main_window(_sizing: MiniMainWindowSizing) -> Pixels {
+    px(MINI_MAIN_WINDOW_MAX_HEIGHT)
 }
 
 /// Defer a mini main window resize to the end of the current effect cycle.
@@ -873,54 +862,48 @@ mod resize_tests {
     }
 
     #[test]
-    fn test_mini_main_window_dynamic_height() {
+    fn test_mini_main_window_fixed_height() {
         let layout = default_layout();
-        // Content-aware formula: header(56) + divider(1) + hint_strip(30) + list_content
-        // 0 items: empty → clamped to MIN_HEIGHT (220)
+        // Mini main window always uses the fixed max height to prevent resize jank
         assert_eq!(
             height_for_view_with_layout(ViewType::MiniMainWindow, 0, &layout),
-            px(MINI_MAIN_WINDOW_MIN_HEIGHT)
+            px(MINI_MAIN_WINDOW_MAX_HEIGHT)
         );
-        // 4 items: 56 + 1 + 30 + 4*40 = 247
         assert_eq!(
             height_for_view_with_layout(ViewType::MiniMainWindow, 4, &layout),
-            px(247.0)
+            px(MINI_MAIN_WINDOW_MAX_HEIGHT)
         );
-        // 8 items: 56 + 1 + 30 + 8*40 = 407
         assert_eq!(
             height_for_view_with_layout(ViewType::MiniMainWindow, 8, &layout),
-            px(407.0)
+            px(MINI_MAIN_WINDOW_MAX_HEIGHT)
         );
-        // 100 items: capped at 8 visible → same as 8 items = 407
         assert_eq!(
             height_for_view_with_layout(ViewType::MiniMainWindow, 100, &layout),
-            px(407.0)
+            px(MINI_MAIN_WINDOW_MAX_HEIGHT)
         );
     }
 
     #[test]
-    fn test_mini_height_content_aware_with_section_headers() {
-        // 3 items, no headers: 56 + 1 + 30 + 3*40 = 207 → clamped to MIN 220
+    fn test_mini_height_fixed_regardless_of_content() {
+        // All sizing configurations return the fixed max height
         assert_eq!(
             f32::from(height_for_mini_main_window(MiniMainWindowSizing {
                 selectable_items: 3,
                 visible_section_headers: 0,
                 is_empty: false,
             })),
-            MINI_MAIN_WINDOW_MIN_HEIGHT
+            MINI_MAIN_WINDOW_MAX_HEIGHT
         );
 
-        // 6 items + 1 section header: 56 + 1 + 30 + 6*40 + 1*32 = 359
         assert_eq!(
             f32::from(height_for_mini_main_window(MiniMainWindowSizing {
                 selectable_items: 6,
                 visible_section_headers: 1,
                 is_empty: false,
             })),
-            359.0
+            MINI_MAIN_WINDOW_MAX_HEIGHT
         );
 
-        // 8 items + 2 section headers: 56 + 1 + 30 + 8*40 + 2*32 = 471 → clamped to MAX 420
         assert_eq!(
             f32::from(height_for_mini_main_window(MiniMainWindowSizing {
                 selectable_items: 8,
@@ -1165,19 +1148,22 @@ mod mini_main_window_layout_tests {
             capped_mini_main_window_selectable_rows(0),
             MINI_MAIN_WINDOW_MAX_VISIBLE_ROWS
         );
-        assert_eq!(capped_mini_main_window_selectable_rows(1), 7);
-        assert_eq!(capped_mini_main_window_selectable_rows(2), 6);
+        // With 440px max, budget = 440-56-1-30 = 353; 1 header: (353-32)/40 = 8.025 → 8
+        assert_eq!(capped_mini_main_window_selectable_rows(1), 8);
+        // 2 headers: (353-64)/40 = 7.225 → 7
+        assert_eq!(capped_mini_main_window_selectable_rows(2), 7);
     }
 
     #[test]
-    fn two_headers_and_capped_rows_stay_below_max_height() {
+    fn two_headers_and_capped_rows_return_fixed_height() {
         let height = height_for_mini_main_window(MiniMainWindowSizing {
             selectable_items: capped_mini_main_window_selectable_rows(2),
             visible_section_headers: 2,
             is_empty: false,
         });
 
-        assert_eq!(f32::from(height), 391.0);
+        // Fixed height regardless of content
+        assert_eq!(f32::from(height), MINI_MAIN_WINDOW_MAX_HEIGHT);
     }
 
     #[test]

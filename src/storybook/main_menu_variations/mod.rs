@@ -277,7 +277,7 @@ fn footer_hints(theme: &crate::theme::Theme) -> Div {
             div()
                 .text_xs()
                 .text_color(theme.colors.text.dimmed.to_rgb())
-                .child("↵ Run  ·  ⌘K Actions  ·  Tab AI"),
+                .child("↵ Run   ⌘K Actions   Tab AI"),
         )
 }
 
@@ -1231,7 +1231,7 @@ fn render_neon() -> AnyElement {
                     div()
                         .text_xs()
                         .text_color(neon_blue.with_opacity(0.4))
-                        .child("⌘K Actions  ·  Tab AI"),
+                        .child("⌘K Actions   Tab AI"),
                 ),
         )
         .into_any_element()

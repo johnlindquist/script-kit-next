@@ -12,20 +12,15 @@ fn mini_height_empty_state_clamps_to_min_height() {
 }
 
 #[test]
-fn mini_height_accounts_for_items_and_section_headers() {
+fn mini_height_returns_fixed_height_regardless_of_content() {
     let height = f32::from(height_for_mini_main_window(MiniMainWindowSizing {
         selectable_items: 3,
         visible_section_headers: 2,
         is_empty: false,
     }));
 
-    let expected = MINI_MAIN_WINDOW_HEADER_HEIGHT
-        + MINI_MAIN_WINDOW_DIVIDER_HEIGHT
-        + MINI_MAIN_WINDOW_HINT_STRIP_HEIGHT
-        + (3.0 * LIST_ITEM_HEIGHT)
-        + (2.0 * MINI_MAIN_WINDOW_SECTION_HEADER_HEIGHT);
-
-    assert_eq!(height, expected);
+    // Fixed height to prevent resize jank
+    assert_eq!(height, MINI_MAIN_WINDOW_MAX_HEIGHT);
 }
 
 #[test]
@@ -46,11 +41,12 @@ fn capped_rows_drop_as_section_headers_consume_budget() {
         capped_mini_main_window_selectable_rows(0),
         MINI_MAIN_WINDOW_MAX_VISIBLE_ROWS
     );
-    // Each header consumes SECTION_HEADER_HEIGHT from the list budget,
-    // reducing the number of LIST_ITEM_HEIGHT rows that fit.
-    assert_eq!(capped_mini_main_window_selectable_rows(1), 7);
-    assert_eq!(capped_mini_main_window_selectable_rows(2), 6);
-    // With 4 headers, budget drops further
+    // With 440px max, budget = 440-56-1-30 = 353
+    // 1 header: (353-32)/40 = 8.025 → 8, min(8, 8) = 8
+    assert_eq!(capped_mini_main_window_selectable_rows(1), 8);
+    // 2 headers: (353-64)/40 = 7.225 → 7
+    assert_eq!(capped_mini_main_window_selectable_rows(2), 7);
+    // 4 headers: (353-128)/40 = 5.625 → 5
     assert_eq!(capped_mini_main_window_selectable_rows(4), 5);
     // With enough headers, no selectable rows fit at all
     assert_eq!(capped_mini_main_window_selectable_rows(10), 0);
@@ -100,7 +96,7 @@ fn grouped_sizing_single_section_with_fewer_items_than_cap() {
 #[test]
 fn grouped_sizing_second_section_header_reduces_selectable_capacity() {
     // RECENT + 3 items + MAIN + 5 items = 10 grouped elements.
-    // With 2 headers the selectable cap drops from 8 → 6.
+    // With 440px max, 2 headers → selectable cap = 7.
     let grouped_items = vec![
         header("RECENT"),
         GroupedListItem::Item(0),
@@ -119,7 +115,7 @@ fn grouped_sizing_second_section_header_reduces_selectable_capacity() {
     assert_eq!(
         sizing,
         MiniMainWindowSizing {
-            selectable_items: 6,
+            selectable_items: 7,
             visible_section_headers: 2,
             is_empty: false,
         }
@@ -127,9 +123,10 @@ fn grouped_sizing_second_section_header_reduces_selectable_capacity() {
 }
 
 #[test]
-fn grouped_sizing_trailing_header_that_would_clip_is_not_counted() {
-    // RECENT + 7 items fills the cap (8 - 1 header = 7 selectable).
-    // The MAIN header never gets counted because we break first.
+fn grouped_sizing_trailing_header_fits_with_larger_budget() {
+    // RECENT + 7 items + MAIN header. With 440px max, 1 header → cap of 8,
+    // so all 7 items fit and the MAIN header is also counted.
+    // Then cap(2 headers) = 7, and selectable=7 >= 7 → break before Item(7).
     let grouped_items = vec![
         header("RECENT"),
         GroupedListItem::Item(0),
@@ -149,7 +146,7 @@ fn grouped_sizing_trailing_header_that_would_clip_is_not_counted() {
         sizing,
         MiniMainWindowSizing {
             selectable_items: 7,
-            visible_section_headers: 1,
+            visible_section_headers: 2,
             is_empty: false,
         }
     );

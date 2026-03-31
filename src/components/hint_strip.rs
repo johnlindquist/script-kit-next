@@ -78,7 +78,7 @@ impl RenderOnce for HintStrip {
                 .into_iter()
                 .map(|hint| hint.to_string())
                 .collect::<Vec<_>>()
-                .join(" · ")
+                .join("  ")
                 .into()
         };
 

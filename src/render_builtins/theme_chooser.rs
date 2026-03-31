@@ -1430,7 +1430,10 @@ impl ScriptListApp {
 
         // ── Footer: canonical three-key hint strip per .impeccable.md ──
         let footer = crate::components::prompt_layout_shell::render_simple_hint_strip(
-            crate::components::prompt_layout_shell::universal_prompt_hints(),
+            vec![
+                gpui::SharedString::from("↵ Apply"),
+                gpui::SharedString::from("Esc Back"),
+            ],
             None,
         );
 
@@ -1503,24 +1506,33 @@ impl ScriptListApp {
 #[cfg(test)]
 mod theme_chooser_chrome_audit {
     #[test]
-    fn theme_chooser_uses_canonical_hint_strip_footer() {
+    fn theme_chooser_uses_truthful_two_item_footer() {
         let source = include_str!("theme_chooser.rs");
         assert!(
-            source.contains("universal_prompt_hints()"),
-            "theme_chooser should use universal_prompt_hints for its footer"
+            !source.contains("universal_prompt_hints()"),
+            "theme_chooser should not use universal hints (no actions dialog wired)"
         );
         assert!(
             source.contains("render_simple_hint_strip("),
             "theme_chooser should use render_simple_hint_strip"
+        );
+        assert!(
+            source.contains(r#"SharedString::from("↵ Apply")"#),
+            "theme_chooser should use truthful '↵ Apply' footer label"
+        );
+        assert!(
+            source.contains(r#"SharedString::from("Esc Back")"#),
+            "theme_chooser should use 'Esc Back' footer label"
+        );
+        assert!(
+            !source.contains("⌘K Actions"),
+            "theme_chooser should not advertise ⌘K Actions without a working dialog"
         );
     }
 
     #[test]
     fn theme_chooser_has_no_legacy_multi_shortcut_footer() {
         let source = include_str!("theme_chooser.rs");
-        // The old footer had two rows of shortcuts centered with justify_center
-        // and individual shortcut labels like "Preview", "Apply", "Cancel" etc.
-        // The canonical footer only has three keys: Run, Actions, Tab AI.
         assert!(
             !source.contains(r#".child(shortcut("⌘[]", "Accent"))"#),
             "theme_chooser should not have legacy multi-shortcut footer"
