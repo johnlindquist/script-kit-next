@@ -3490,10 +3490,9 @@ mod from_dialog_builtin_action_validation_tests_23 {
         };
         let actions = get_file_context_actions(&file);
         let reveal = actions.iter().find(|a| a.id == "file:reveal_in_finder").unwrap();
-        // ⌘↵ is now reserved for AI in file search; Reveal in Finder has no shortcut.
-        assert_eq!(reveal.shortcut.as_deref(), None);
+        assert_eq!(reveal.shortcut.as_deref(), Some("⌘⇧F"));
     }
-    
+
     #[test]
     fn batch23_file_copy_path_shortcut() {
         let file = FileInfo {
@@ -5776,8 +5775,8 @@ mod from_dialog_builtin_action_validation_tests_24 {
             is_dir: false,
         };
         let actions = get_file_context_actions(&f);
-        // open_file, reveal, attach_to_ai, quick_look, open_with, show_info, copy_path, copy_filename = 8
-        assert_eq!(actions.len(), 8);
+        // open_file, reveal, open_in_editor, open_in_terminal, attach_to_ai, quick_look, show_info, copy_path, copy_filename, move_to_trash = 10
+        assert_eq!(actions.len(), 10);
     }
     
     #[cfg(target_os = "macos")]
@@ -5790,9 +5789,9 @@ mod from_dialog_builtin_action_validation_tests_24 {
             is_dir: true,
         };
         let actions = get_file_context_actions(&f);
-        // open_directory, reveal, open_with, show_info, copy_path, copy_filename = 6
-        // (no quick_look for dirs)
-        assert_eq!(actions.len(), 6);
+        // open_directory, reveal, open_in_editor, open_in_terminal, show_info, copy_path, copy_filename, move_to_trash = 8
+        // (no quick_look or attach_to_ai for dirs)
+        assert_eq!(actions.len(), 8);
     }
     
     // ============================================================
@@ -7233,8 +7232,7 @@ mod from_dialog_builtin_action_validation_tests_26 {
         };
         let actions = get_file_context_actions(&info);
         let reveal = actions.iter().find(|a| a.id == "file:reveal_in_finder").unwrap();
-        // ⌘↵ is now reserved for AI in file search; Reveal in Finder has no shortcut.
-        assert_eq!(reveal.shortcut.as_deref(), None);
+        assert_eq!(reveal.shortcut.as_deref(), Some("⌘⇧F"));
     }
     
     // ─────────────────────────────────────────────

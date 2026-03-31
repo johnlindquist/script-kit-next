@@ -621,9 +621,9 @@ fn looks_like_descriptive_artifact_phrase(intent: &str) -> bool {
         return false;
     }
     // Check if the phrase ends with an artifact noun.
-    ARTIFACT_AUTHORING_WORDS.iter().any(|artifact| {
-        intent.ends_with(artifact)
-    })
+    ARTIFACT_AUTHORING_WORDS
+        .iter()
+        .any(|artifact| intent.ends_with(artifact))
 }
 
 /// Returns `true` when the intent looks like a request to create/scaffold a

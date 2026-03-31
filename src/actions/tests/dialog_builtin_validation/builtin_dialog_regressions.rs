@@ -284,10 +284,9 @@ mod from_dialog_builtin_action_validation_tests_32 {
         };
         let actions = get_file_context_actions(&info);
         let reveal = actions.iter().find(|a| a.id == "file:reveal_in_finder").unwrap();
-        // ⌘↵ is now reserved for AI in file search; Reveal in Finder has no shortcut.
-        assert_eq!(reveal.shortcut.as_deref(), None);
+        assert_eq!(reveal.shortcut.as_deref(), Some("⌘⇧F"));
     }
-    
+
     #[test]
     fn batch32_file_reveal_desc_says_reveal_in_finder() {
         let info = FileInfo {
@@ -2364,7 +2363,7 @@ mod from_dialog_builtin_action_validation_tests_33 {
     
     #[cfg(target_os = "macos")]
     #[test]
-    fn file_context_file_macos_has_7_actions() {
+    fn file_context_file_macos_has_10_actions() {
         let file_info = FileInfo {
             path: "/tmp/test.txt".to_string(),
             name: "test.txt".to_string(),
@@ -2372,13 +2371,13 @@ mod from_dialog_builtin_action_validation_tests_33 {
             is_dir: false,
         };
         let actions = get_file_context_actions(&file_info);
-        // open_file + reveal + attach_to_ai + quick_look + open_with + show_info + copy_path + copy_filename = 8
-        assert_eq!(actions.len(), 8);
+        // open_file + reveal + open_in_editor + open_in_terminal + attach_to_ai + quick_look + show_info + copy_path + copy_filename + move_to_trash = 10
+        assert_eq!(actions.len(), 10);
     }
-    
+
     #[cfg(target_os = "macos")]
     #[test]
-    fn file_context_dir_macos_has_6_actions() {
+    fn file_context_dir_macos_has_8_actions() {
         let file_info = FileInfo {
             path: "/tmp/mydir".to_string(),
             name: "mydir".to_string(),
@@ -2386,8 +2385,8 @@ mod from_dialog_builtin_action_validation_tests_33 {
             is_dir: true,
         };
         let actions = get_file_context_actions(&file_info);
-        // open_directory + reveal + open_with + show_info + copy_path + copy_filename = 6 (no quick_look)
-        assert_eq!(actions.len(), 6);
+        // open_directory + reveal + open_in_editor + open_in_terminal + show_info + copy_path + copy_filename + move_to_trash = 8
+        assert_eq!(actions.len(), 8);
     }
     
     #[test]
@@ -8374,8 +8373,7 @@ mod from_dialog_builtin_action_validation_tests_38 {
             };
             let actions = get_file_context_actions(&file);
             let reveal = actions.iter().find(|a| a.id == "file:reveal_in_finder").unwrap();
-            // ⌘↵ is now reserved for AI in file search; Reveal in Finder has no shortcut.
-            assert_eq!(reveal.shortcut.as_deref(), None);
+            assert_eq!(reveal.shortcut.as_deref(), Some("⌘⇧F"));
         }
     
         #[cfg(target_os = "macos")]
@@ -10775,7 +10773,7 @@ mod from_dialog_builtin_action_validation_tests_40 {
         }
     
         #[test]
-        fn file_dir_has_open_with_on_macos() {
+        fn file_dir_has_open_in_editor_on_macos() {
             let file_info = FileInfo {
                 name: "Documents".into(),
                 path: "/Users/test/Documents".into(),
@@ -10784,7 +10782,7 @@ mod from_dialog_builtin_action_validation_tests_40 {
             };
             let actions = get_file_context_actions(&file_info);
             #[cfg(target_os = "macos")]
-            assert!(actions.iter().any(|a| a.id == "file:open_with"));
+            assert!(actions.iter().any(|a| a.id == "file:open_in_editor"));
         }
     
         #[test]
@@ -15239,10 +15237,10 @@ mod from_dialog_builtin_action_validation_tests_45 {
         assert!(action.description.as_ref().unwrap().contains("CleanShot X"));
     }
     
-    // =========== 9. File context: macOS file=7 dir=6 action count ===========
-    
+    // =========== 9. File context: macOS file=10 dir=8 action count ===========
+
     #[test]
-    fn file_context_file_has_7_actions() {
+    fn file_context_file_has_10_actions() {
         let file_info = FileInfo {
             name: "test.txt".into(),
             path: "/tmp/test.txt".into(),
@@ -15250,11 +15248,11 @@ mod from_dialog_builtin_action_validation_tests_45 {
             file_type: FileType::File,
         };
         let actions = get_file_context_actions(&file_info);
-        assert_eq!(actions.len(), 8);
+        assert_eq!(actions.len(), 10);
     }
-    
+
     #[test]
-    fn file_context_dir_has_6_actions() {
+    fn file_context_dir_has_8_actions() {
         let file_info = FileInfo {
             name: "mydir".into(),
             path: "/tmp/mydir".into(),
@@ -15262,7 +15260,7 @@ mod from_dialog_builtin_action_validation_tests_45 {
             file_type: FileType::Directory,
         };
         let actions = get_file_context_actions(&file_info);
-        assert_eq!(actions.len(), 6);
+        assert_eq!(actions.len(), 8);
     }
     
     #[test]
