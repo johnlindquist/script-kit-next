@@ -2,61 +2,359 @@
 // Screen Capture for AI Commands
 // ============================================================================
 
-/// Capture a screenshot of the entire primary screen.
+/// Capture a screenshot of the entire primary screen, excluding Script Kit windows.
+///
+/// On macOS, uses `CGWindowListCreateImageFromArray` to composite all on-screen
+/// windows except those owned by this process, so the capture shows what is
+/// behind the Script Kit panel. Falls back to xcap on other platforms.
 ///
 /// # Returns
 /// A tuple of (png_data, width, height) on success.
 pub fn capture_screen_screenshot(
+) -> Result<(Vec<u8>, u32, u32), Box<dyn std::error::Error + Send + Sync>> {
+    #[cfg(target_os = "macos")]
+    {
+        capture_screen_excluding_self()
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        capture_screen_xcap_fallback()
+    }
+}
+
+/// xcap-based full-screen capture (no window exclusion). Used on non-macOS.
+#[cfg(not(target_os = "macos"))]
+fn capture_screen_xcap_fallback(
 ) -> Result<(Vec<u8>, u32, u32), Box<dyn std::error::Error + Send + Sync>> {
     use image::codecs::png::PngEncoder;
     use image::ImageEncoder;
     use xcap::Monitor;
 
     let monitors = Monitor::all()?;
-
-    // Get the primary monitor (first one, usually the main display)
     let monitor = monitors.into_iter().next().ok_or("No monitors found")?;
 
     tracing::debug!(
         name = %monitor.name().unwrap_or_default(),
-        "Capturing primary monitor screenshot"
+        "Capturing primary monitor screenshot (xcap fallback)"
     );
 
     let image = monitor.capture_image()?;
     let width = image.width();
     let height = image.height();
 
-    // Scale down to 1x for efficiency (monitors capture at retina resolution on macOS)
-    let (final_image, final_width, final_height) = {
-        let new_width = width / 2;
-        let new_height = height / 2;
-        let resized = image::imageops::resize(
-            &image,
-            new_width,
-            new_height,
-            image::imageops::FilterType::Lanczos3,
-        );
-        (resized, new_width, new_height)
-    };
-
-    // Encode to PNG in memory
-    let mut png_data = Vec::new();
-    let encoder = PngEncoder::new(&mut png_data);
-    encoder.write_image(
-        &final_image,
-        final_width,
-        final_height,
-        image::ExtendedColorType::Rgba8,
-    )?;
-
-    tracing::debug!(
-        width = final_width,
-        height = final_height,
-        file_size = png_data.len(),
-        "Screen screenshot captured"
+    let new_width = width / 2;
+    let new_height = height / 2;
+    let resized = image::imageops::resize(
+        &image,
+        new_width,
+        new_height,
+        image::imageops::FilterType::Lanczos3,
     );
 
-    Ok((png_data, final_width, final_height))
+    let mut png_data = Vec::new();
+    let encoder = PngEncoder::new(&mut png_data);
+    encoder.write_image(&resized, new_width, new_height, image::ExtendedColorType::Rgba8)?;
+
+    tracing::debug!(
+        width = new_width,
+        height = new_height,
+        file_size = png_data.len(),
+        "Screen screenshot captured (xcap fallback)"
+    );
+
+    Ok((png_data, new_width, new_height))
+}
+
+/// macOS-native screen capture that excludes Script Kit windows.
+///
+/// 1. Enumerates on-screen windows via `CGWindowListCopyWindowInfo`.
+/// 2. Filters out windows owned by our PID.
+/// 3. Composites the remaining windows into a single image via
+///    `CGWindowListCreateImageFromArray`.
+#[cfg(target_os = "macos")]
+fn capture_screen_excluding_self(
+) -> Result<(Vec<u8>, u32, u32), Box<dyn std::error::Error + Send + Sync>> {
+    use core_foundation::array::CFArray;
+    use core_foundation::base::TCFType;
+    use core_foundation::dictionary::CFDictionaryRef;
+    use core_foundation::number::CFNumber;
+    use core_foundation::string::CFString;
+    use core_graphics::display::CGDisplay;
+    use image::codecs::png::PngEncoder;
+    use image::ImageEncoder;
+    use std::ffi::c_void;
+
+    // CGWindowList constants
+    const K_CG_WINDOW_LIST_OPTION_ON_SCREEN_ONLY: u32 = 1 << 0;
+    const K_CG_NULL_WINDOW_ID: u32 = 0;
+    const K_CG_WINDOW_IMAGE_DEFAULT: u32 = 0;
+    const K_CG_WINDOW_IMAGE_NOMINAL_RESOLUTION: u32 = 1 << 9;
+
+    #[link(name = "CoreGraphics", kind = "framework")]
+    unsafe extern "C" {
+        fn CGWindowListCopyWindowInfo(
+            option: u32,
+            relative_to_window: u32,
+        ) -> core_foundation::array::CFArrayRef;
+
+        fn CGWindowListCreateImageFromArray(
+            screen_bounds: core_graphics::display::CGRect,
+            window_array: core_foundation::array::CFArrayRef,
+            image_option: u32,
+        ) -> *mut c_void; // CGImageRef
+
+        fn CGImageGetWidth(image: *const c_void) -> usize;
+        fn CGImageGetHeight(image: *const c_void) -> usize;
+        fn CGImageRelease(image: *mut c_void);
+    }
+
+    let my_pid = std::process::id() as i64;
+
+    // SAFETY: CGWindowListCopyWindowInfo is a CoreGraphics API that returns a
+    // CFArray of CFDictionary entries describing on-screen windows. We pass
+    // valid constants and a null window ID to enumerate all on-screen windows.
+    let window_info_list = unsafe {
+        CGWindowListCopyWindowInfo(
+            K_CG_WINDOW_LIST_OPTION_ON_SCREEN_ONLY,
+            K_CG_NULL_WINDOW_ID,
+        )
+    };
+    if window_info_list.is_null() {
+        return Err("CGWindowListCopyWindowInfo returned null".into());
+    }
+
+    // SAFETY: We just checked that window_info_list is non-null and it was
+    // returned by a CoreGraphics API that produces a valid CFArray.
+    let info_array: CFArray =
+        unsafe { CFArray::wrap_under_create_rule(window_info_list) };
+
+    let k_owner_pid = CFString::new("kCGWindowOwnerPID");
+    let k_window_number = CFString::new("kCGWindowNumber");
+
+    let mut window_ids: Vec<i32> = Vec::new();
+    let mut excluded_count: u32 = 0;
+
+    for i in 0..info_array.len() {
+        let dict_ref: CFDictionaryRef = match info_array.get(i) {
+            Some(item_ref) => *item_ref as CFDictionaryRef,
+            None => continue,
+        };
+        if dict_ref.is_null() {
+            continue;
+        }
+
+        // Read the owner PID
+        let mut pid_value: *const c_void = std::ptr::null();
+        // SAFETY: dict_ref is a valid CFDictionary from the window list.
+        // CFDictionaryGetValueIfPresent returns a pointer to the value or
+        // false if the key is absent. We check the return value before using
+        // pid_value.
+        let has_pid = unsafe {
+            core_foundation::dictionary::CFDictionaryGetValueIfPresent(
+                dict_ref,
+                k_owner_pid.as_concrete_TypeRef() as *const c_void,
+                &mut pid_value,
+            )
+        };
+        if has_pid == 0 || pid_value.is_null() {
+            continue;
+        }
+
+        // SAFETY: pid_value points to a CFNumber returned by CoreGraphics for
+        // the kCGWindowOwnerPID key. We wrap without retaining because the
+        // CFDictionary owns the value and will keep it alive while we read it.
+        let pid_cf: CFNumber =
+            unsafe { CFNumber::wrap_under_get_rule(pid_value as *const _) };
+        let owner_pid: i64 = pid_cf
+            .to_i64()
+            .unwrap_or(-1);
+
+        if owner_pid == my_pid {
+            excluded_count += 1;
+            continue;
+        }
+
+        // Read the window number (kCGWindowNumber)
+        let mut wnum_value: *const c_void = std::ptr::null();
+        // SAFETY: Same pattern as above — reading a CFNumber from a valid
+        // CFDictionary entry.
+        let has_wnum = unsafe {
+            core_foundation::dictionary::CFDictionaryGetValueIfPresent(
+                dict_ref,
+                k_window_number.as_concrete_TypeRef() as *const c_void,
+                &mut wnum_value,
+            )
+        };
+        if has_wnum == 0 || wnum_value.is_null() {
+            continue;
+        }
+
+        // SAFETY: wnum_value is a CFNumber for the kCGWindowNumber key.
+        let wnum_cf: CFNumber =
+            unsafe { CFNumber::wrap_under_get_rule(wnum_value as *const _) };
+        if let Some(wnum) = wnum_cf.to_i32() {
+            window_ids.push(wnum);
+        }
+    }
+
+    tracing::debug!(
+        total_windows = window_ids.len() + excluded_count as usize,
+        excluded = excluded_count,
+        included = window_ids.len(),
+        "Screen capture: filtered Script Kit windows"
+    );
+
+    if window_ids.is_empty() {
+        return Err("No non-Script-Kit windows found on screen".into());
+    }
+
+    // Build a CFArray of CGWindowID (i32) values
+    let cf_numbers: Vec<CFNumber> = window_ids.iter().map(|&id| CFNumber::from(id)).collect();
+    let cf_array = CFArray::from_CFTypes(&cf_numbers);
+
+    // Get the main display bounds for the capture rect
+    let main_display = CGDisplay::main();
+    let screen_bounds = main_display.bounds();
+
+    // SAFETY: CGWindowListCreateImageFromArray composites the listed windows
+    // into a CGImage. screen_bounds is the main display rect, cf_array is a
+    // valid CFArray of CGWindowID values, and we use nominal resolution to
+    // get 1x output (avoids needing to halve retina pixels).
+    let cg_image = unsafe {
+        CGWindowListCreateImageFromArray(
+            screen_bounds,
+            cf_array.as_concrete_TypeRef(),
+            K_CG_WINDOW_IMAGE_DEFAULT | K_CG_WINDOW_IMAGE_NOMINAL_RESOLUTION,
+        )
+    };
+
+    if cg_image.is_null() {
+        return Err("CGWindowListCreateImageFromArray returned null".into());
+    }
+
+    // SAFETY: cg_image is a non-null CGImageRef returned by CoreGraphics.
+    let width = unsafe { CGImageGetWidth(cg_image) } as u32;
+    let height = unsafe { CGImageGetHeight(cg_image) } as u32;
+
+    // Convert CGImage -> RGBA bytes via a bitmap context.
+    let rgba_result = cgimage_to_rgba(cg_image, width, height);
+
+    // SAFETY: We are done reading the CGImage and must release it exactly once
+    // on both success and error paths to avoid leaking the CoreGraphics
+    // allocation.
+    unsafe { CGImageRelease(cg_image) };
+
+    let rgba_data = rgba_result?;
+
+    // Encode to PNG
+    let mut png_data = Vec::new();
+    let encoder = PngEncoder::new(&mut png_data);
+    encoder.write_image(&rgba_data, width, height, image::ExtendedColorType::Rgba8)?;
+
+    tracing::debug!(
+        width,
+        height,
+        file_size = png_data.len(),
+        excluded_windows = excluded_count,
+        "Screen screenshot captured (Script Kit excluded)"
+    );
+
+    Ok((png_data, width, height))
+}
+
+/// Convert a CGImageRef to RGBA pixel bytes via a CGBitmapContext.
+#[cfg(target_os = "macos")]
+fn cgimage_to_rgba(
+    cg_image: *mut std::ffi::c_void,
+    width: u32,
+    height: u32,
+) -> Result<Vec<u8>, Box<dyn std::error::Error + Send + Sync>> {
+    use std::ffi::c_void;
+
+    const K_CG_IMAGE_ALPHA_PREMULTIPLIED_LAST: u32 = 1;
+    const K_CG_BITMAP_BYTE_ORDER_32_BIG: u32 = 1 << 12;
+
+    #[link(name = "CoreGraphics", kind = "framework")]
+    unsafe extern "C" {
+        fn CGColorSpaceCreateDeviceRGB() -> *mut c_void;
+        fn CGColorSpaceRelease(space: *mut c_void);
+        fn CGBitmapContextCreate(
+            data: *mut c_void,
+            width: usize,
+            height: usize,
+            bits_per_component: usize,
+            bytes_per_row: usize,
+            color_space: *mut c_void,
+            bitmap_info: u32,
+        ) -> *mut c_void;
+        fn CGContextDrawImage(
+            context: *mut c_void,
+            rect: core_graphics::display::CGRect,
+            image: *mut c_void,
+        );
+        fn CGContextRelease(context: *mut c_void);
+    }
+
+    let w = width as usize;
+    let h = height as usize;
+    let bytes_per_row = w * 4;
+    let mut rgba = vec![0u8; h * bytes_per_row];
+
+    // SAFETY: CGColorSpaceCreateDeviceRGB returns a valid CGColorSpaceRef.
+    let color_space = unsafe { CGColorSpaceCreateDeviceRGB() };
+    if color_space.is_null() {
+        return Err("Failed to create RGB color space".into());
+    }
+
+    let bitmap_info = K_CG_IMAGE_ALPHA_PREMULTIPLIED_LAST | K_CG_BITMAP_BYTE_ORDER_32_BIG;
+
+    // SAFETY: We pass a valid buffer, correct dimensions, and a valid color
+    // space. The buffer is large enough for width * height * 4 bytes.
+    let context = unsafe {
+        CGBitmapContextCreate(
+            rgba.as_mut_ptr() as *mut c_void,
+            w,
+            h,
+            8,
+            bytes_per_row,
+            color_space,
+            bitmap_info,
+        )
+    };
+
+    // SAFETY: color_space is no longer needed after context creation.
+    unsafe { CGColorSpaceRelease(color_space) };
+
+    if context.is_null() {
+        return Err("Failed to create bitmap context".into());
+    }
+
+    let draw_rect = core_graphics::display::CGRect {
+        origin: core_graphics::display::CGPoint { x: 0.0, y: 0.0 },
+        size: core_graphics::display::CGSize {
+            width: width as f64,
+            height: height as f64,
+        },
+    };
+
+    // SAFETY: context is a valid bitmap context, draw_rect matches its
+    // dimensions, and cg_image is a valid CGImageRef.
+    unsafe { CGContextDrawImage(context, draw_rect, cg_image) };
+
+    // SAFETY: We are done drawing; release the bitmap context.
+    unsafe { CGContextRelease(context) };
+
+    // Un-premultiply alpha (CGBitmapContext gives premultiplied RGBA)
+    for pixel in rgba.chunks_exact_mut(4) {
+        let a = pixel[3] as u16;
+        if a > 0 && a < 255 {
+            pixel[0] = ((pixel[0] as u16 * 255) / a).min(255) as u8;
+            pixel[1] = ((pixel[1] as u16 * 255) / a).min(255) as u8;
+            pixel[2] = ((pixel[2] as u16 * 255) / a).min(255) as u8;
+        }
+    }
+
+    Ok(rgba)
 }
 
 /// Result of a focused window capture, including whether a fallback was used.
@@ -493,4 +791,3 @@ pub fn hide_cursor_until_mouse_moves() {
 pub fn hide_cursor_until_mouse_moves() {
     // No-op on non-macOS platforms
 }
-
