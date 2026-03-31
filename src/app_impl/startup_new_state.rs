@@ -68,6 +68,7 @@
             file_search_current_dir: None,
             file_search_frozen_filter: None,
             file_search_actions_path: None,
+            file_search_sort_mode: crate::actions::FileSearchSortMode::default(),
             file_search_gen: 0,
             file_search_cancel: None,
             file_search_display_indices: Vec::new(),

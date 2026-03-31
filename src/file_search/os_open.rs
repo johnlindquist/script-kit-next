@@ -443,8 +443,7 @@ fn duplicate_target_path(path: &Path) -> Result<std::path::PathBuf, String> {
 }
 
 fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<(), String> {
-    std::fs::create_dir(dst)
-        .map_err(|e| format!("Failed to create duplicate folder: {}", e))?;
+    std::fs::create_dir(dst).map_err(|e| format!("Failed to create duplicate folder: {}", e))?;
     for entry in
         std::fs::read_dir(src).map_err(|e| format!("Failed to read source folder: {}", e))?
     {
@@ -492,8 +491,7 @@ pub fn duplicate_path(path: &str) -> Result<String, String> {
     if src.is_dir() {
         copy_dir_recursive(src, &target)?;
     } else {
-        std::fs::copy(src, &target)
-            .map_err(|e| format!("Failed to duplicate item: {}", e))?;
+        std::fs::copy(src, &target).map_err(|e| format!("Failed to duplicate item: {}", e))?;
     }
     Ok(target.to_string_lossy().to_string())
 }

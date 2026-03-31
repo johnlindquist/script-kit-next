@@ -37,8 +37,8 @@ pub(crate) use builders::{
     get_global_actions, get_script_context_actions, get_scriptlet_context_actions_with_custom,
 };
 pub use builders::{
-    to_deeplink_name, ChatModelInfo, ChatPromptInfo, ClipboardEntryInfo, NewChatModelInfo,
-    NewChatPresetInfo, NoteSwitcherNoteInfo, NotesInfo,
+    to_deeplink_name, ChatModelInfo, ChatPromptInfo, ClipboardEntryInfo, FileSearchDirectoryInfo,
+    FileSearchSortMode, NewChatModelInfo, NewChatPresetInfo, NoteSwitcherNoteInfo, NotesInfo,
 };
 pub use command_bar::{CommandBar, CommandBarConfig};
 pub use dialog::ActionsDialog;

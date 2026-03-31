@@ -4,6 +4,126 @@ use crate::file_search::FileInfo;
 use crate::prompts::PathInfo;
 
 // =========================================================================
+// Current-directory context for file-search view-level actions
+// =========================================================================
+
+/// Sort mode for directory-browse file search views.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum FileSearchSortMode {
+    #[default]
+    NameAsc,
+    NameDesc,
+    ModifiedDesc,
+    ModifiedAsc,
+}
+
+/// Context for current-directory actions in the file-search actions dialog.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FileSearchDirectoryInfo {
+    pub path: String,
+    pub name: String,
+    pub sort_mode: FileSearchSortMode,
+}
+
+impl FileSearchDirectoryInfo {
+    pub fn new(
+        path: impl Into<String>,
+        name: impl Into<String>,
+        sort_mode: FileSearchSortMode,
+    ) -> Self {
+        Self {
+            path: path.into(),
+            name: name.into(),
+            sort_mode,
+        }
+    }
+}
+
+/// Build view-level actions for the current browsed directory.
+pub fn get_file_search_directory_actions(dir_info: &FileSearchDirectoryInfo) -> Vec<Action> {
+    let actions = vec![
+        Action::new(
+            "file:refresh_directory",
+            "Refresh Directory",
+            Some("Reloads the current directory listing".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_shortcut("\u{2318}R")
+        .with_icon(IconName::Refresh)
+        .with_section("Directory"),
+        Action::new(
+            "file:reveal_current_directory",
+            "Reveal in Finder",
+            Some("Shows the current directory in Finder".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_shortcut("\u{2318}\u{21e7}F")
+        .with_icon(IconName::FolderOpen)
+        .with_section("Directory"),
+        Action::new(
+            "file:open_current_directory_in_terminal",
+            "Open in Terminal",
+            Some("Opens a terminal at the current directory".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_shortcut("\u{2318}T")
+        .with_icon(IconName::Terminal)
+        .with_section("Directory"),
+        Action::new(
+            "file:copy_current_directory_path",
+            "Copy Directory Path",
+            Some("Copies the current directory path to the clipboard".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_shortcut("\u{2318}\u{21e7}C")
+        .with_icon(IconName::Copy)
+        .with_section("Directory"),
+        Action::new(
+            "file:sort_name_asc",
+            "Sort by Name (A\u{2192}Z)",
+            Some("Sorts alphabetically".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_icon(IconName::ArrowUp)
+        .with_section("Sort"),
+        Action::new(
+            "file:sort_name_desc",
+            "Sort by Name (Z\u{2192}A)",
+            Some("Sorts reverse alphabetically".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_icon(IconName::ArrowDown)
+        .with_section("Sort"),
+        Action::new(
+            "file:sort_modified_desc",
+            "Sort by Modified (Newest)",
+            Some("Sorts by most recently modified".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_icon(IconName::ArrowDown)
+        .with_section("Sort"),
+        Action::new(
+            "file:sort_modified_asc",
+            "Sort by Modified (Oldest)",
+            Some("Sorts by least recently modified".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_icon(IconName::ArrowUp)
+        .with_section("Sort"),
+    ];
+
+    tracing::debug!(
+        target: "script_kit::actions",
+        dir_path = %dir_info.path,
+        ?dir_info.sort_mode,
+        action_count = actions.len(),
+        "Building current-directory actions for file search"
+    );
+
+    actions
+}
+
+// =========================================================================
 // Shared secondary-command contract for file search
 // =========================================================================
 

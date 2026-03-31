@@ -1,9 +1,12 @@
 impl ScriptListApp {
-    /// Toggle the actions dialog for file search results
-    /// Opens a popup with file-specific actions: Open, Show in Finder, Quick Look, etc.
+    /// Toggle the actions dialog for file search results.
+    ///
+    /// When a row is selected, shows both row-scoped file actions and
+    /// current-directory actions.  When no row is selected but a browsed
+    /// directory exists, shows directory-only actions.
     fn toggle_file_search_actions(
         &mut self,
-        file: &file_search::FileResult,
+        selected_file: Option<&file_search::FileResult>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -32,116 +35,150 @@ impl ScriptListApp {
                 "FOCUS",
                 "File search actions closed, focus restored via coordinator",
             );
-        } else {
-            // Open actions popup for the selected file
-            self.show_actions_popup = true;
+            cx.notify();
+            return;
+        }
 
-            // Use coordinator to push overlay - saves current focus state for restore
-            self.push_focus_overlay(focus_coordinator::FocusRequest::actions_dialog(), cx);
+        // Build current-directory context if browsing a concrete directory
+        let dir_path = self.current_file_search_directory_abs();
+        let dir_info = dir_path.as_ref().map(|path| {
+            let dir_name = std::path::Path::new(path)
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .filter(|s| !s.is_empty())
+                .unwrap_or_else(|| path.clone());
+            crate::actions::FileSearchDirectoryInfo::new(
+                path.clone(),
+                dir_name,
+                self.file_search_sort_mode,
+            )
+        });
 
-            // CRITICAL: Transfer focus from Input to main focus_handle
-            // This prevents the Input from receiving text (which would go to file search filter)
-            // while keeping keyboard focus in main window for routing to actions dialog
-            self.focus_handle.focus(window, cx);
-            self.gpui_input_focused = false;
-            self.focused_input = FocusedInput::ActionsSearch;
+        // Need at least one context source to open the dialog
+        if selected_file.is_none() && dir_info.is_none() {
+            return;
+        }
 
-            // Store the file path for action handling
-            self.file_search_actions_path = Some(file.path.clone());
+        // Open actions popup
+        self.show_actions_popup = true;
 
-            // Create file info from the result
-            let file_info = file_search::FileInfo::from_result(file);
+        // Use coordinator to push overlay - saves current focus state for restore
+        self.push_focus_overlay(focus_coordinator::FocusRequest::actions_dialog(), cx);
 
-            // Create the dialog entity
-            let theme_arc = std::sync::Arc::clone(&self.theme);
-            let file_name = file_info.name.clone();
-            let dialog = cx.new(|cx| {
-                let focus_handle = cx.focus_handle();
-                let mut dialog = ActionsDialog::with_file(
-                    focus_handle,
-                    std::sync::Arc::new(|_action_id| {}), // Callback handled via main app
-                    &file_info,
-                    theme_arc,
-                );
+        // CRITICAL: Transfer focus from Input to main focus_handle
+        self.focus_handle.focus(window, cx);
+        self.gpui_input_focused = false;
+        self.focused_input = FocusedInput::ActionsSearch;
 
-                // Match the mini main menu's actions dialog config:
-                // search at top, anchor top, centered, icons visible
-                dialog.set_config(crate::actions::ActionsDialogConfig {
-                    search_position: crate::actions::SearchPosition::Top,
-                    section_style: crate::actions::SectionStyle::Headers,
-                    anchor: crate::actions::AnchorPosition::Top,
-                    show_icons: true,
-                    search_placeholder: Some(file_name),
-                    show_context_header: false,
-                    ..crate::actions::ActionsDialogConfig::default()
-                });
+        // Store the file path for action handling
+        self.file_search_actions_path = selected_file.map(|file| file.path.clone());
 
-                dialog
-            });
+        // Create file info from the result
+        let file_info = selected_file.map(file_search::FileInfo::from_result);
 
-            // Store the dialog entity for keyboard routing
-            self.actions_dialog = Some(dialog.clone());
+        // Determine placeholder text
+        let placeholder_text = file_info
+            .as_ref()
+            .map(|info| info.name.clone())
+            .or_else(|| dir_info.as_ref().map(|dir| dir.name.clone()))
+            .unwrap_or_else(|| "Actions".to_string());
 
-            // Set up the on_close callback to restore focus when escape is pressed in ActionsWindow
-            // Match what close_actions_popup does for FileSearch host
-            let app_entity = cx.entity().clone();
-            dialog.update(cx, |d, _cx| {
-                d.set_on_close(std::sync::Arc::new(move |cx| {
-                    let app_entity = app_entity.clone();
-                    cx.defer(move |cx| {
-                        app_entity.update(cx, |app, cx| {
-                            if !app.show_actions_popup && app.actions_dialog.is_none() {
-                                app.file_search_actions_path = None;
-                                return;
-                            }
-
-                            app.show_actions_popup = false;
-                            app.actions_dialog = None;
-                            app.file_search_actions_path = None;
-                            // Use coordinator to pop overlay and restore previous focus
-                            app.pop_focus_overlay(cx);
-                            logging::log(
-                                "FOCUS",
-                                "File search actions closed via escape, focus restored via coordinator",
-                            );
-                        });
-                    });
-                }));
-            });
-
-            // Get main window bounds and display_id for positioning
-            let main_bounds = window.bounds();
-            let display_id = window.display(cx).map(|d| d.id());
-
-            logging::log(
-                "ACTIONS",
-                &format!(
-                    "Opening file search actions for: {} (is_dir={})",
-                    file_info.name, file_info.is_dir
-                ),
+        // Create the dialog entity
+        let theme_arc = std::sync::Arc::clone(&self.theme);
+        let dialog = cx.new(|cx| {
+            let focus_handle = cx.focus_handle();
+            let mut dialog = ActionsDialog::with_file_search_context(
+                focus_handle,
+                std::sync::Arc::new(|_action_id| {}), // Callback handled via main app
+                file_info.as_ref(),
+                dir_info.as_ref(),
+                theme_arc,
             );
 
-            // Open the actions window — centered like the mini main menu
-            cx.spawn(async move |_this, cx| {
-                cx.update(|cx| {
-                    match open_actions_window(
-                        cx,
-                        main_bounds,
-                        display_id,
-                        dialog,
-                        crate::actions::WindowPosition::TopCenter,
-                    ) {
-                        Ok(_handle) => {
-                            logging::log("ACTIONS", "File search actions popup window opened");
+            // Match the mini main menu's actions dialog config:
+            // search at top, anchor top, centered, icons visible
+            dialog.set_config(crate::actions::ActionsDialogConfig {
+                search_position: crate::actions::SearchPosition::Top,
+                section_style: crate::actions::SectionStyle::Headers,
+                anchor: crate::actions::AnchorPosition::Top,
+                show_icons: true,
+                search_placeholder: Some(placeholder_text),
+                show_context_header: false,
+                ..crate::actions::ActionsDialogConfig::default()
+            });
+
+            dialog
+        });
+
+        // Store the dialog entity for keyboard routing
+        self.actions_dialog = Some(dialog.clone());
+
+        // Set up the on_close callback to restore focus when escape is pressed in ActionsWindow
+        // Match what close_actions_popup does for FileSearch host
+        let app_entity = cx.entity().clone();
+        dialog.update(cx, |d, _cx| {
+            d.set_on_close(std::sync::Arc::new(move |cx| {
+                let app_entity = app_entity.clone();
+                cx.defer(move |cx| {
+                    app_entity.update(cx, |app, cx| {
+                        if !app.show_actions_popup && app.actions_dialog.is_none() {
+                            app.file_search_actions_path = None;
+                            return;
                         }
-                        Err(e) => {
-                            logging::log("ERROR", &format!("Failed to open actions window: {}", e));
-                        }
-                    }
+
+                        app.show_actions_popup = false;
+                        app.actions_dialog = None;
+                        app.file_search_actions_path = None;
+                        // Use coordinator to pop overlay and restore previous focus
+                        app.pop_focus_overlay(cx);
+                        logging::log(
+                            "FOCUS",
+                            "File search actions closed via escape, focus restored via coordinator",
+                        );
+                    });
                 });
-            })
-            .detach();
-        }
+            }));
+        });
+
+        // Get main window bounds and display_id for positioning
+        let main_bounds = window.bounds();
+        let display_id = window.display(cx).map(|d| d.id());
+
+        logging::log(
+            "ACTIONS",
+            &format!(
+                "Opening file search actions: file={}, dir={}",
+                selected_file
+                    .map(|f| f.name.as_str())
+                    .unwrap_or("none"),
+                dir_info
+                    .as_ref()
+                    .map(|d| d.name.as_str())
+                    .unwrap_or("none"),
+            ),
+        );
+
+        // Open the actions window — centered like the mini main menu
+        cx.spawn(async move |_this, cx| {
+            cx.update(|cx| {
+                match open_actions_window(
+                    cx,
+                    main_bounds,
+                    display_id,
+                    dialog,
+                    crate::actions::WindowPosition::TopCenter,
+                ) {
+                    Ok(_handle) => {
+                        logging::log("ACTIONS", "File search actions popup window opened");
+                    }
+                    Err(e) => {
+                        logging::log("ERROR", &format!("Failed to open actions window: {}", e));
+                    }
+                }
+            });
+        })
+        .detach();
+
         cx.notify();
     }
 

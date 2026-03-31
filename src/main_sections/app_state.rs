@@ -111,6 +111,8 @@ struct ScriptListApp {
     file_search_frozen_filter: Option<Option<String>>,
     // Path of the file selected for actions (for file search actions handling)
     file_search_actions_path: Option<String>,
+    // Active sort mode for directory-browse file search views (session-local)
+    file_search_sort_mode: crate::actions::FileSearchSortMode,
     // Generation counter for ignoring stale search results
     // Incremented on each new search, results with old gen are discarded
     file_search_gen: u64,

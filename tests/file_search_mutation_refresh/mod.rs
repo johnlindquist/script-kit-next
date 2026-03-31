@@ -42,8 +42,7 @@ fn refresh_mutation_patches_cache_in_place_for_directory_browse() {
         "must have a can_patch_in_place decision branch"
     );
     assert!(
-        FILES_SOURCE
-            .contains("self.cached_file_results.retain(|entry| entry.path != old_path)"),
+        FILES_SOURCE.contains("self.cached_file_results.retain(|entry| entry.path != old_path)"),
         "must remove old entry from cache via retain"
     );
     assert!(

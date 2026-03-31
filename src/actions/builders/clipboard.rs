@@ -339,11 +339,13 @@ mod tests {
 
     #[test]
     fn test_get_clipboard_history_context_actions_assigns_named_sections() {
-        let actions =
-            get_clipboard_history_context_actions(&entry_info(ContentType::Text, false));
+        let actions = get_clipboard_history_context_actions(&entry_info(ContentType::Text, false));
         let allowed = ["Actions", "Edit", "Share", "Destructive"];
 
-        assert!(!actions.is_empty(), "expected at least one clipboard action");
+        assert!(
+            !actions.is_empty(),
+            "expected at least one clipboard action"
+        );
         assert!(
             actions.iter().all(|action| action.section.is_some()),
             "every clipboard action should declare a section"
@@ -355,8 +357,7 @@ mod tests {
 
     #[test]
     fn test_get_clipboard_history_context_actions_delete_actions_are_destructive() {
-        let actions =
-            get_clipboard_history_context_actions(&entry_info(ContentType::Text, false));
+        let actions = get_clipboard_history_context_actions(&entry_info(ContentType::Text, false));
 
         for id in [
             "clip:clipboard_delete",
@@ -373,8 +374,7 @@ mod tests {
 
     #[test]
     fn test_get_clipboard_history_context_actions_image_actions_use_expected_sections() {
-        let actions =
-            get_clipboard_history_context_actions(&entry_info(ContentType::Image, false));
+        let actions = get_clipboard_history_context_actions(&entry_info(ContentType::Image, false));
 
         let ocr = actions
             .iter()

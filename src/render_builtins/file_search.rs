@@ -516,9 +516,8 @@ impl ScriptListApp {
 
                             // Handle Cmd+K (toggle actions)
                             if has_cmd && key.eq_ignore_ascii_case("k") && !has_shift {
-                                if let Some(file) = get_selected_file() {
-                                    this.toggle_file_search_actions(&file, window, cx);
-                                }
+                                let selected = get_selected_file();
+                                this.toggle_file_search_actions(selected.as_ref(), window, cx);
                                 return;
                             }
                             // Handle Cmd+Shift+F (Reveal in Finder) — kept explicit
@@ -732,12 +731,24 @@ impl ScriptListApp {
                                         .build(window, cx)
                                     })
                                     .on_click(click_handler)
-                                    .on_drag(drag_payload, move |_payload, _position, _window, cx| {
+                                    .on_drag(drag_payload, move |_payload, _position, window, cx| {
                                         // Initiate native macOS drag session so the file
                                         // can be dropped into Finder or other apps.
-                                        let _ = crate::platform::begin_native_file_drag(
+                                        if let Err(error) = crate::platform::begin_native_file_drag(
                                             &drag_path_for_native,
-                                        );
+                                        ) {
+                                            tracing::warn!(
+                                                path = %drag_path_for_native,
+                                                error = %error,
+                                                "failed to start native file drag"
+                                            );
+                                        }
+                                        // GPUI started an internal drag because this row
+                                        // uses .on_drag(...).  Once we hand off to AppKit's
+                                        // native file drag session, clear GPUI's active
+                                        // drag state so keyboard dismissal (Escape) still
+                                        // works afterward.
+                                        cx.stop_active_drag(window);
                                         cx.new(|_| file_search::FileDragPayload {
                                             name: std::path::Path::new(&drag_path_for_native)
                                                 .file_name()

@@ -65,9 +65,10 @@ fn native_file_drag_has_macos_implementation() {
 #[test]
 fn native_file_drag_has_non_macos_stub() {
     assert!(
-        PATH_ACTIONS_SOURCE
-            .contains(r#"cfg(not(target_os = "macos"))]
-pub fn begin_native_file_drag"#),
+        PATH_ACTIONS_SOURCE.contains(
+            r#"cfg(not(target_os = "macos"))]
+pub fn begin_native_file_drag"#
+        ),
         "must have a non-macOS stub for begin_native_file_drag"
     );
 }
@@ -79,8 +80,7 @@ fn native_file_drag_registers_dragging_source_protocol() {
         "must register NSDraggingSource protocol before starting drag"
     );
     assert!(
-        PATH_ACTIONS_SOURCE
-            .contains("sourceOperationMaskForDraggingContext"),
+        PATH_ACTIONS_SOURCE.contains("sourceOperationMaskForDraggingContext"),
         "must implement the required NSDraggingSource method"
     );
 }
@@ -309,5 +309,96 @@ fn action_builder_filters_by_supports() {
     assert!(
         FILE_PATH_SOURCE.contains("command.supports(file_info.is_dir)"),
         "action builder must filter commands by supports(is_dir)"
+    );
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Drag/Escape regression: native drag handoff clears GPUI drag state
+// ──────────────────────────────────────────────────────────────────────
+
+#[test]
+fn file_search_native_drag_stops_gpui_drag_state() {
+    assert!(
+        FILE_SEARCH_SOURCE.contains("cx.stop_active_drag(window)"),
+        "native file drag handoff must stop GPUI drag state so Escape keeps dismissing the view"
+    );
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// File-search actions use context builder (not file-only builder)
+// ──────────────────────────────────────────────────────────────────────
+
+const ACTIONS_SOURCE: &str = include_str!("../../src/render_builtins/actions.rs");
+
+#[test]
+fn file_search_actions_use_context_builder_not_file_only_builder() {
+    assert!(
+        ACTIONS_SOURCE.contains("ActionsDialog::with_file_search_context"),
+        "file search actions should be built from file-search context, not only ActionsDialog::with_file"
+    );
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Current-directory action IDs exist
+// ──────────────────────────────────────────────────────────────────────
+
+#[test]
+fn current_directory_action_ids_exist() {
+    for action_id in [
+        "refresh_directory",
+        "reveal_current_directory",
+        "open_current_directory_in_terminal",
+        "copy_current_directory_path",
+        "sort_name_asc",
+        "sort_name_desc",
+        "sort_modified_desc",
+        "sort_modified_asc",
+    ] {
+        assert!(
+            FILE_PATH_SOURCE.contains(&format!("\"file:{action_id}\"")),
+            "missing current-directory action: {action_id}"
+        );
+    }
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// App state tracks file_search_sort_mode
+// ──────────────────────────────────────────────────────────────────────
+
+#[test]
+fn app_state_tracks_file_search_sort_mode() {
+    let source = include_str!("../../src/main_sections/app_state.rs");
+    assert!(
+        source.contains("file_search_sort_mode"),
+        "ScriptListApp state must track file_search_sort_mode for directory actions"
+    );
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Sort mode is reset when opening a fresh file search session
+// ──────────────────────────────────────────────────────────────────────
+
+#[test]
+fn sort_mode_resets_on_fresh_file_search_open() {
+    let source = include_str!("../../src/app_impl/filter_input_core.rs");
+    let open_fn_start = source
+        .find("fn open_file_search_view(")
+        .expect("open_file_search_view must exist");
+    let open_fn = &source[open_fn_start..];
+    assert!(
+        open_fn.contains("file_search_sort_mode"),
+        "open_file_search_view must reset file_search_sort_mode"
+    );
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Toggle function accepts optional file (directory-only mode)
+// ──────────────────────────────────────────────────────────────────────
+
+#[test]
+fn toggle_file_search_actions_accepts_optional_file() {
+    assert!(
+        ACTIONS_SOURCE.contains("selected_file: Option<&file_search::FileResult>"),
+        "toggle_file_search_actions must accept Option<&FileResult> for directory-only mode"
     );
 }
