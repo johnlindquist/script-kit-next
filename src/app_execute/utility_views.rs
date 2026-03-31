@@ -189,8 +189,11 @@ impl ScriptListApp {
         &self,
         selected_index: usize,
     ) -> Option<usize> {
-        (!self.file_search_display_indices.is_empty())
-            .then_some(selected_index.min(self.file_search_display_indices.len() - 1))
+        if self.file_search_display_indices.is_empty() {
+            None
+        } else {
+            Some(selected_index.min(self.file_search_display_indices.len() - 1))
+        }
     }
 
     /// Return the currently selected file-search entry in display order.
