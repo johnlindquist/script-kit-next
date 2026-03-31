@@ -780,74 +780,99 @@ Create `~/.scriptkit/kit/config.ts` to customize Script Kit:
 import type { Config } from "@scriptkit/sdk";
 
 export default {
-  // Required: Global hotkey to show/hide Script Kit
   hotkey: {
-    modifiers: ["meta"],    // "meta" (Cmd/Win), "ctrl", "alt", "shift"
-    key: "Semicolon"        // Key codes: "KeyK", "Digit0", "Space", etc.
+    modifiers: ["meta"],
+    key: "Semicolon",
   },
 
-  // UI Settings
   padding: {
-    top: 8,                 // Top padding in pixels (default: 8)
-    left: 12,               // Left padding in pixels (default: 12)
-    right: 12               // Right padding in pixels (default: 12)
+    top: 8,
+    left: 12,
+    right: 12,
   },
-  editorFontSize: 16,       // Editor prompt font size (default: 14)
-  terminalFontSize: 14,     // Terminal prompt font size (default: 14)
-  uiScale: 1.0,             // UI scale factor (default: 1.0)
+  editorFontSize: 16,
+  terminalFontSize: 14,
+  uiScale: 1.0,
 
-  // Built-in Features
   builtIns: {
-    clipboardHistory: true, // Enable clipboard history (default: true)
-    appLauncher: true,      // Enable app launcher (default: true)
-    windowSwitcher: true    // Enable window switcher (default: true)
+    clipboardHistory: true,
+    appLauncher: true,
+    windowSwitcher: true,
   },
 
-  // Clipboard History Settings
-  clipboardHistoryMaxTextLength: 100000,  // Max text length in bytes (default: 100000)
+  clipboardHistoryMaxTextLength: 100000,
 
-  // Process Limits
   processLimits: {
-    maxMemoryMb: 512,              // Max memory per script (optional)
-    maxRuntimeSeconds: 300,        // Max runtime in seconds (optional)
-    healthCheckIntervalMs: 5000    // Health check interval (default: 5000)
+    maxMemoryMb: 512,
+    maxRuntimeSeconds: 300,
+    healthCheckIntervalMs: 5000,
   },
 
-  // Frecency Settings (for script ranking)
-  frecency: {
-    enabled: true,           // Enable frecency tracking (default: true)
-    halfLifeDays: 7.0,       // Decay half-life in days (default: 7.0)
-    maxRecentItems: 10       // Max items in RECENT section (default: 10)
+  suggested: {
+    enabled: true,
+    maxItems: 10,
+    minScore: 0.1,
+    halfLifeDays: 7,
+    trackUsage: true,
+    excludedCommands: ["builtin-quit-script-kit"],
   },
 
-  // Secondary Window Hotkeys
-  notesHotkey: {
-    modifiers: ["meta", "shift"],
-    key: "KeyN"              // Default: Cmd+Shift+N
-  },
-  aiHotkey: {
-    modifiers: ["meta", "shift"],
-    key: "Space"             // Default: Cmd+Shift+Space
+  // No default notes shortcut — set one only if you want it.
+  // notesHotkey: { modifiers: ["meta", "shift"], key: "KeyN" },
+
+  // Defaults to Cmd+Shift+Space when enabled and unset.
+  // aiHotkey: { modifiers: ["meta", "shift"], key: "Space" },
+  aiHotkeyEnabled: true,
+
+  // Defaults to Cmd+Shift+L when enabled and unset.
+  // logsHotkey: { modifiers: ["meta", "shift"], key: "KeyL" },
+  logsHotkeyEnabled: true,
+
+  // No default dictation shortcut — set one only if you want it.
+  // dictationHotkey: { modifiers: ["meta", "shift"], key: "KeyD" },
+  dictationHotkeyEnabled: true,
+
+  watcher: {
+    debounceMs: 500,
+    stormThreshold: 200,
+    initialBackoffMs: 100,
+    maxBackoffMs: 30000,
+    maxNotifyErrors: 10,
   },
 
-  // Custom Paths
-  bun_path: "/opt/homebrew/bin/bun",  // Custom bun path (optional)
-  editor: "code",                      // Editor command (default: $EDITOR or "code")
+  layout: {
+    standardHeight: 500,
+    maxHeight: 700,
+  },
 
-  // Per-Command Configuration
+  bun_path: "/opt/homebrew/bin/bun",
+  editor: "code",
+
   commands: {
     "builtin/clipboard-history": {
       shortcut: {
         modifiers: ["meta", "shift"],
-        key: "KeyV"
-      }
+        key: "KeyV",
+      },
     },
-    "app/com.apple.Safari": {
-      hidden: true  // Hide Safari from app launcher
-    }
-  }
+    "builtin/empty-trash": {
+      confirmationRequired: true,
+    },
+  },
 } satisfies Config;
 ```
+
+Dictation microphone selection is stored separately in `~/.scriptkit/kit/settings.json`:
+
+```json
+{
+  "dictation": {
+    "selectedDeviceId": "usb-mic"
+  }
+}
+```
+
+Use the built-in **Select Microphone** action in the app to change that value, or edit `settings.json` directly.
 
 ### Hotkey Configuration
 
@@ -1100,7 +1125,7 @@ A floating notes window with Markdown support for quick note-taking.
 
 ### Opening the Notes Window
 
-- **Hotkey**: `Cmd+Shift+N` (default, configurable)
+- **Hotkey**: No default — set `notesHotkey` in `kit/config.ts` to enable
 - **From script**: See [SDK Reference](#sdk-quick-reference)
 
 ### Features

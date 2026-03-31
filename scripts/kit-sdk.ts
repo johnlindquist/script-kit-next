@@ -1285,7 +1285,7 @@ export interface Config {
   /**
    * Suggested-commands (frecency) configuration.
    *
-   * @default { enabled: true, maxItems: 10, minScore: 0.1, halfLifeDays: 7, trackUsage: true }
+   * @default { enabled: true, maxItems: 10, minScore: 0.1, halfLifeDays: 7, trackUsage: true, excludedCommands: ["builtin-quit-script-kit"] }
    */
   suggested?: SuggestedConfig;
 

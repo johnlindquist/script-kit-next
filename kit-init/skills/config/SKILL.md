@@ -126,7 +126,7 @@ suggested: {
   minScore: 0.1,       // default: 0.1
   halfLifeDays: 7,     // default: 7.0
   trackUsage: true,    // default: true
-  excludedCommands: [] // default: []
+  excludedCommands: ["builtin-quit-script-kit"] // default: ["builtin-quit-script-kit"]
 }
 ```
 

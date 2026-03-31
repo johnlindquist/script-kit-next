@@ -239,7 +239,7 @@ export default {
   //   minScore: 0.1,       // Minimum frecency score to include
   //   halfLifeDays: 7,     // Decay half-life in days
   //   trackUsage: true,    // Track command usage
-  //   excludedCommands: [] // Command IDs to exclude
+  //   excludedCommands: ["builtin-quit-script-kit"] // Command IDs to exclude
   // },
 
   // ===========================================================================
