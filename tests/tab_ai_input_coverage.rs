@@ -1268,3 +1268,132 @@ fn tab_ai_context_schema_version_is_stable() {
         "Context blob schema version changed — update downstream consumers"
     );
 }
+
+// ---------------------------------------------------------------------------
+// Stale-selection clamping in file search
+// ---------------------------------------------------------------------------
+
+const FILE_SEARCH_RENDER_SOURCE: &str = include_str!("../src/render_builtins/file_search.rs");
+const UTILITY_VIEWS_SOURCE: &str = include_str!("../src/app_execute/utility_views.rs");
+
+#[test]
+fn file_search_render_clamps_selected_index() {
+    // render_file_search must clamp selected_index via clamp_file_search_display_index
+    // before computing selected_file, so a stale index from a shrinking result set
+    // still resolves to a valid row.
+    let render_fn_start = FILE_SEARCH_RENDER_SOURCE
+        .find("fn render_file_search(")
+        .expect("render_file_search must exist");
+    let render_fn_body = &FILE_SEARCH_RENDER_SOURCE[render_fn_start..];
+    // Look within the first ~2000 chars for the clamping call
+    let early_body = &render_fn_body[..2000.min(render_fn_body.len())];
+
+    assert!(
+        early_body.contains("clamp_file_search_display_index"),
+        "render_file_search must clamp selected_index before computing selected_file"
+    );
+    assert!(
+        early_body.contains("clamped_selected_index"),
+        "render_file_search must use a clamped variable name for clarity"
+    );
+}
+
+#[test]
+fn file_search_key_handler_clamps_for_get_selected_file() {
+    // The get_selected_file closure inside the key handler must also use
+    // clamp_file_search_display_index to avoid out-of-bounds access.
+    let handler_start = FILE_SEARCH_RENDER_SOURCE
+        .find("let get_selected_file = ||")
+        .or_else(|| FILE_SEARCH_RENDER_SOURCE.find("let get_selected_file"))
+        .expect("get_selected_file closure must exist in file_search.rs");
+    let handler_body =
+        &FILE_SEARCH_RENDER_SOURCE[handler_start..handler_start + 300.min(FILE_SEARCH_RENDER_SOURCE.len() - handler_start)];
+
+    assert!(
+        handler_body.contains("clamp_file_search_display_index"),
+        "get_selected_file must clamp the index to avoid out-of-bounds on shrinking results"
+    );
+}
+
+#[test]
+fn clamp_file_search_display_index_returns_none_for_empty() {
+    // clamp_file_search_display_index must return None when there are no
+    // display indices, not panic or return a garbage index.
+    let fn_start = UTILITY_VIEWS_SOURCE
+        .find("fn clamp_file_search_display_index(")
+        .expect("clamp_file_search_display_index must exist");
+    let fn_body = &UTILITY_VIEWS_SOURCE[fn_start..fn_start + 300.min(UTILITY_VIEWS_SOURCE.len() - fn_start)];
+
+    assert!(
+        fn_body.contains("file_search_display_indices.is_empty()"),
+        "clamping must check for empty display indices"
+    );
+}
+
+#[test]
+fn clamp_uses_min_not_modulo() {
+    // Clamping must use .min(len - 1), not modulo, so the last valid row is
+    // selected rather than wrapping around to the top.
+    let fn_start = UTILITY_VIEWS_SOURCE
+        .find("fn clamp_file_search_display_index(")
+        .expect("clamp_file_search_display_index must exist");
+    let fn_body = &UTILITY_VIEWS_SOURCE[fn_start..fn_start + 300.min(UTILITY_VIEWS_SOURCE.len() - fn_start)];
+
+    assert!(
+        fn_body.contains(".min("),
+        "clamping must use .min() to clamp to the last valid index"
+    );
+    assert!(
+        !fn_body.contains(" % "),
+        "clamping must NOT use modulo — that causes confusing wrap-around"
+    );
+}
+
+#[test]
+fn selected_file_search_result_uses_clamping() {
+    // selected_file_search_result must delegate to clamp_file_search_display_index
+    // so AI and preview share the same clamped resolution.
+    let fn_start = UTILITY_VIEWS_SOURCE
+        .find("fn selected_file_search_result(")
+        .expect("selected_file_search_result must exist");
+    let fn_body = &UTILITY_VIEWS_SOURCE[fn_start..fn_start + 300.min(UTILITY_VIEWS_SOURCE.len() - fn_start)];
+
+    assert!(
+        fn_body.contains("clamp_file_search_display_index"),
+        "selected_file_search_result must use the clamped helper"
+    );
+}
+
+#[test]
+fn row_highlight_uses_clamped_index() {
+    // The row highlight in render_file_search must use the clamped index,
+    // not the raw selected_index, so highlight stays on a valid row.
+    let render_fn_start = FILE_SEARCH_RENDER_SOURCE
+        .find("fn render_file_search(")
+        .expect("render_file_search must exist");
+    let render_fn_body = &FILE_SEARCH_RENDER_SOURCE[render_fn_start..];
+
+    assert!(
+        render_fn_body.contains("clamped_selected_index.unwrap_or(usize::MAX)"),
+        "row highlight must use clamped_selected_index (not raw selected_index)"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// FileSearchView in current_input_text coverage
+// ---------------------------------------------------------------------------
+
+#[test]
+fn file_search_view_is_in_current_input_text() {
+    // FileSearchView must be explicitly handled in current_input_text
+    // so Tab AI input extraction works from file search.
+    let fn_start = TAB_AI_SOURCE
+        .find("fn current_input_text(")
+        .expect("current_input_text must exist");
+    let fn_body = &TAB_AI_SOURCE[fn_start..fn_start + 4000.min(TAB_AI_SOURCE.len() - fn_start)];
+
+    assert!(
+        fn_body.contains("FileSearchView"),
+        "current_input_text must handle FileSearchView"
+    );
+}
