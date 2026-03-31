@@ -129,7 +129,7 @@ pub const DEFAULT_SEARCH_LIMIT: usize = 500;
 pub const DEFAULT_CACHE_LIMIT: usize = 2000;
 /// Check if the query looks like an advanced mdfind query (with operators)
 /// If so, pass it through directly; otherwise wrap as filename query
-fn looks_like_advanced_mdquery(q: &str) -> bool {
+pub(crate) fn looks_like_advanced_mdquery(q: &str) -> bool {
     let q = q.trim();
     q.contains("kMDItem")
         || q.contains("==")

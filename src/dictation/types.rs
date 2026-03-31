@@ -161,6 +161,8 @@ pub enum DictationModelStatus {
         total_bytes: u64,
         /// Transfer speed in bytes/sec (0 when not yet measured).
         speed_bytes_per_sec: u64,
+        /// Estimated seconds remaining, or `None` when not enough data exists yet.
+        eta_seconds: Option<u64>,
     },
     /// Model is being extracted from the archive.
     Extracting,

@@ -3635,7 +3635,8 @@ fn dictation_model_status_variants() {
             percentage: 50,
             downloaded_bytes: 250_000_000,
             total_bytes: 500_000_000,
-            speed_bytes_per_sec: 0,
+            speed_bytes_per_sec: 10_000_000,
+            eta_seconds: Some(25),
         },
         DictationModelStatus::Extracting,
         DictationModelStatus::DownloadFailed("err".to_string()),
@@ -3643,6 +3644,46 @@ fn dictation_model_status_variants() {
 
     assert_eq!(statuses.len(), 5);
     assert_ne!(statuses[0], statuses[1]);
+}
+
+#[test]
+fn format_eta_covers_ranges() {
+    use crate::dictation::download::format_eta;
+
+    assert_eq!(format_eta(None), "ETA --");
+    assert_eq!(format_eta(Some(0)), "ETA <1s");
+    assert_eq!(format_eta(Some(15)), "ETA 15s");
+    assert_eq!(format_eta(Some(75)), "ETA 1m 15s");
+    assert_eq!(format_eta(Some(3600)), "ETA 1h");
+    assert_eq!(format_eta(Some(3672)), "ETA 1h 1m");
+}
+
+#[test]
+fn downloading_prompt_includes_eta_and_cancel_action() {
+    let src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("read builtin_execution.rs");
+
+    let prompt_start = src
+        .find("fn build_dictation_model_prompt")
+        .expect("build_dictation_model_prompt must exist");
+    let prompt_src = &src[prompt_start..prompt_start + 5000.min(src.len() - prompt_start)];
+
+    assert!(
+        prompt_src.contains("format_eta"),
+        "downloading prompt must render ETA text"
+    );
+    assert!(
+        prompt_src.contains("Cancel download"),
+        "downloading prompt must expose a cancel action"
+    );
+    assert!(
+        prompt_src.contains("retry resumes from the partial file"),
+        "cancel action must explain resume behavior"
+    );
+    assert!(
+        prompt_src.contains("Partial download kept. Retry resumes"),
+        "cancelled downloads must explain resume behavior"
+    );
 }
 
 // ---------------------------------------------------------------------------

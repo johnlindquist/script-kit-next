@@ -216,6 +216,21 @@ pub(crate) fn resize_to_mini_main_window_sync(sizing: MiniMainWindowSizing) {
     resize_first_window_to_size(target_height, Some(MINI_MAIN_WINDOW_WIDTH));
 }
 
+/// File search mini mode has no section headers, so sizing is a straight row cap.
+#[allow(dead_code)] // Called from include!()-ed code in app_impl/filter_input_*.rs
+pub(crate) fn mini_file_search_sizing(result_count: usize) -> MiniMainWindowSizing {
+    MiniMainWindowSizing {
+        selectable_items: result_count.min(MINI_MAIN_WINDOW_MAX_VISIBLE_ROWS),
+        visible_section_headers: 0,
+        is_empty: result_count == 0,
+    }
+}
+
+#[allow(dead_code)] // Called from include!()-ed code in app_impl/filter_input_*.rs
+pub(crate) fn resize_to_mini_file_search_window_sync(result_count: usize) {
+    resize_to_mini_main_window_sync(mini_file_search_sizing(result_count));
+}
+
 /// Width for mini main window (compact launcher)
 const MINI_MAIN_WINDOW_WIDTH: f32 = 480.0;
 /// Width for full main window (standard launcher)

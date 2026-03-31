@@ -53,6 +53,19 @@ impl ScriptListApp {
         }
     }
 
+    /// Choose the correct resize path for file search based on presentation mode.
+    pub(crate) fn resize_file_search_window_for_presentation(
+        presentation: FileSearchPresentation,
+        result_count: usize,
+    ) {
+        match presentation {
+            FileSearchPresentation::Mini => {
+                crate::window_resize::resize_to_mini_file_search_window_sync(result_count);
+            }
+            FileSearchPresentation::Full => resize_to_view_sync(ViewType::ScriptList, 0),
+        }
+    }
+
     /// Shared helper that opens file search in the given presentation mode.
     /// Used by both the builtin "Search Files" entry (Full) and the `~`
     /// trigger from ScriptList (Mini).
@@ -86,11 +99,14 @@ impl ScriptListApp {
         self.pending_focus = Some(FocusTarget::MainFilter);
         self.focused_input = FocusedInput::MainFilter;
 
-        resize_to_view_sync(ViewType::ScriptList, 0);
-
         self.file_search_gen = 0;
         self.file_search_cancel = None;
         self.update_file_search_results(results);
+
+        Self::resize_file_search_window_for_presentation(
+            presentation,
+            self.file_search_display_indices.len(),
+        );
 
         cx.notify();
     }

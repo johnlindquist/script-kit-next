@@ -1189,11 +1189,95 @@ impl ScriptListApp {
             .collect()
     }
 
-    /// Convert a file search result into a `TabAiTargetContext`.
+    /// Determine the query mode label for file search AI context.
+    fn file_search_query_mode(query: &str) -> &'static str {
+        if crate::file_search::parse_directory_path(query).is_some() {
+            "path-browse"
+        } else if crate::file_search::looks_like_advanced_mdquery(query) {
+            "spotlight-advanced"
+        } else {
+            "spotlight-basic"
+        }
+    }
+
+    /// Build surface-level metadata for the file search view, shared across
+    /// all targets so the AI can reason about the query and visible result set.
+    fn file_search_surface_metadata(
+        &self,
+        query: &str,
+    ) -> serde_json::Map<String, serde_json::Value> {
+        let mut metadata = serde_json::Map::new();
+
+        let visible_results: Vec<serde_json::Value> = self
+            .visible_file_search_results(TAB_AI_VISIBLE_TARGET_LIMIT)
+            .into_iter()
+            .map(|(display_index, entry)| {
+                serde_json::json!({
+                    "displayIndex": display_index,
+                    "name": entry.name.clone(),
+                    "path": entry.path.clone(),
+                    "fileType": format!("{:?}", entry.file_type),
+                })
+            })
+            .collect();
+
+        metadata.insert(
+            "query".to_string(),
+            serde_json::Value::String(query.to_string()),
+        );
+        metadata.insert(
+            "queryMode".to_string(),
+            serde_json::Value::String(Self::file_search_query_mode(query).to_string()),
+        );
+        metadata.insert(
+            "visibleResultCount".to_string(),
+            serde_json::json!(self.file_search_display_indices.len()),
+        );
+        metadata.insert(
+            "visibleResults".to_string(),
+            serde_json::Value::Array(visible_results),
+        );
+
+        if let Some(parsed) = crate::file_search::parse_directory_path(query) {
+            metadata.insert(
+                "directory".to_string(),
+                serde_json::Value::String(parsed.directory),
+            );
+            metadata.insert(
+                "directoryFilter".to_string(),
+                match parsed.filter {
+                    Some(filter) => serde_json::Value::String(filter),
+                    None => serde_json::Value::Null,
+                },
+            );
+        }
+
+        metadata
+    }
+
+    /// Convert a file search result into a `TabAiTargetContext`, enriched
+    /// with surface-level metadata about the query mode and visible results.
     fn tab_ai_target_from_file_search_result(
         display_index: usize,
         entry: &crate::file_search::FileResult,
+        surface_metadata: &serde_json::Map<String, serde_json::Value>,
     ) -> crate::ai::TabAiTargetContext {
+        let mut metadata = surface_metadata.clone();
+        metadata.insert(
+            "displayIndex".to_string(),
+            serde_json::json!(display_index),
+        );
+        metadata.insert(
+            "path".to_string(),
+            serde_json::Value::String(entry.path.clone()),
+        );
+        metadata.insert(
+            "fileType".to_string(),
+            serde_json::Value::String(format!("{:?}", entry.file_type)),
+        );
+        metadata.insert("size".to_string(), serde_json::json!(entry.size));
+        metadata.insert("modified".to_string(), serde_json::json!(entry.modified));
+
         crate::ai::TabAiTargetContext {
             source: "FileSearch".to_string(),
             kind: if entry.file_type == crate::file_search::FileType::Directory {
@@ -1207,12 +1291,7 @@ impl ScriptListApp {
                 &entry.name,
             ),
             label: entry.name.clone(),
-            metadata: Some(serde_json::json!({
-                "path": entry.path.clone(),
-                "fileType": format!("{:?}", entry.file_type),
-                "size": entry.size,
-                "modified": entry.modified,
-            })),
+            metadata: Some(serde_json::Value::Object(metadata)),
         }
     }
 
@@ -1300,17 +1379,30 @@ impl ScriptListApp {
                     .collect();
                 (focused_target, visible_targets)
             }
-            AppView::FileSearchView { selected_index, .. } => {
+            AppView::FileSearchView {
+                query,
+                selected_index,
+                ..
+            } => {
+                let surface_metadata = self.file_search_surface_metadata(query);
                 let focused_target = self
                     .file_search_result_at_display_index(*selected_index)
                     .map(|entry| {
-                        Self::tab_ai_target_from_file_search_result(*selected_index, entry)
+                        Self::tab_ai_target_from_file_search_result(
+                            *selected_index,
+                            entry,
+                            &surface_metadata,
+                        )
                     });
                 let visible_targets = self
                     .visible_file_search_results(TAB_AI_VISIBLE_TARGET_LIMIT)
                     .into_iter()
                     .map(|(display_index, entry)| {
-                        Self::tab_ai_target_from_file_search_result(display_index, entry)
+                        Self::tab_ai_target_from_file_search_result(
+                            display_index,
+                            entry,
+                            &surface_metadata,
+                        )
                     })
                     .collect();
                 (focused_target, visible_targets)
