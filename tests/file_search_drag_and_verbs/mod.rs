@@ -238,29 +238,53 @@ fn file_search_key_handler_reads_from_shared_contract() {
 }
 
 #[test]
-fn file_search_footer_only_advertises_actions_with_selection() {
+fn file_search_footer_advertises_actions_with_selection_or_directory() {
+    // Selected-file branch must advertise ⌘K Actions.
     let selected_branch = FILE_SEARCH_SOURCE
         .split("if let Some(file) = selected_file.as_ref()")
         .nth(1)
         .expect("selected file footer branch must exist");
     let selected_branch = selected_branch
-        .split("} else if is_loading {")
+        .split("} else if self.file_search_current_dir.is_some()")
         .next()
-        .expect("selected file footer branch must end before loading branch");
+        .expect("selected file footer branch must end before directory branch");
 
     assert!(
         selected_branch.contains("\\u{2318}K Actions"),
         "selected file footer branch must advertise actions"
     );
 
-    let no_selection_branch = FILE_SEARCH_SOURCE
-        .split("} else if is_loading {")
+    // Directory-browse branch (no selection but browsing a directory) must
+    // also advertise ⌘K Actions for current-directory verbs.
+    let dir_branch = FILE_SEARCH_SOURCE
+        .split("} else if self.file_search_current_dir.is_some()")
         .nth(1)
-        .expect("no-selection footer branches must exist");
+        .expect("directory-browse footer branch must exist");
+    let dir_branch = dir_branch
+        .split("} else if is_loading {")
+        .next()
+        .expect("directory-browse branch must end before loading branch");
 
     assert!(
-        !no_selection_branch.contains("\\u{2318}K Actions"),
-        "file search footer must not advertise actions when no selection exists"
+        dir_branch.contains("\\u{2318}K Actions"),
+        "directory-browse footer branch must advertise actions for current-directory verbs"
+    );
+
+    // Non-directory no-selection branches (loading, empty, fallback) must NOT
+    // advertise ⌘K Actions.  Split from the directory branch onward to isolate
+    // the footer's loading/empty/fallback arms (not the preview panel's).
+    let after_dir_branch = FILE_SEARCH_SOURCE
+        .split("} else if self.file_search_current_dir.is_some()")
+        .nth(1)
+        .expect("directory-browse footer branch must exist for tail split");
+    let no_dir_branch = after_dir_branch
+        .split("} else if is_loading {")
+        .nth(1)
+        .expect("no-selection footer branches must exist after directory branch");
+
+    assert!(
+        !no_dir_branch.contains("\\u{2318}K Actions"),
+        "file search footer must not advertise actions when no selection and no directory context"
     );
 }
 
