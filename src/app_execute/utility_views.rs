@@ -170,39 +170,7 @@ impl ScriptListApp {
     /// - Enter: Open file in default application
     /// - Cmd+Enter: Reveal in Finder
     pub fn open_file_search(&mut self, query: String, cx: &mut Context<Self>) {
-        tracing::info!(message = %&format!("Opening File Search with query: {}", query),
-        );
-
-        let results = Self::resolve_file_search_results(&query);
-        tracing::info!(message = %&format!("File search found {} results", results.len()),
-        );
-
-        // Set up the view state
-        self.filter_text = query.clone();
-        self.pending_filter_sync = true;
-        self.pending_placeholder = Some("Search files...".to_string());
-
-        // Switch to file search view
-        self.current_view = AppView::FileSearchView {
-            query,
-            selected_index: 0,
-            presentation: FileSearchPresentation::Full,
-        };
-        self.hovered_index = None;
-
-        // Use standard height for file search view (same as window switcher)
-        resize_to_view_sync(ViewType::ScriptList, 0);
-
-        // Focus the main filter input so cursor blinks and typing works
-        self.pending_focus = Some(FocusTarget::MainFilter);
-        self.focused_input = FocusedInput::MainFilter;
-
-        // Initialize file search state for streaming
-        self.file_search_gen = 0;
-        self.file_search_cancel = None;
-        self.update_file_search_results(results);
-
-        cx.notify();
+        self.open_file_search_view(query, FileSearchPresentation::Full, cx);
     }
 
     /// Sort directory listing results: directories first, then alphabetically

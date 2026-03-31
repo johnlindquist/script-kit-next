@@ -1070,6 +1070,61 @@ impl ScriptListApp {
         }
     }
 
+    /// Look up a file search result by its position in the *display* list
+    /// (i.e. after filtering/scoring), not the raw `cached_file_results` vec.
+    fn file_search_result_at_display_index(
+        &self,
+        display_index: usize,
+    ) -> Option<&crate::file_search::FileResult> {
+        self.file_search_display_indices
+            .get(display_index)
+            .and_then(|&result_index| self.cached_file_results.get(result_index))
+    }
+
+    /// Return the first `limit` file search results in display order.
+    fn visible_file_search_results(
+        &self,
+        limit: usize,
+    ) -> Vec<(usize, &crate::file_search::FileResult)> {
+        self.file_search_display_indices
+            .iter()
+            .enumerate()
+            .filter_map(|(display_index, &result_index)| {
+                self.cached_file_results
+                    .get(result_index)
+                    .map(|result| (display_index, result))
+            })
+            .take(limit)
+            .collect()
+    }
+
+    /// Convert a file search result into a `TabAiTargetContext`.
+    fn tab_ai_target_from_file_search_result(
+        display_index: usize,
+        entry: &crate::file_search::FileResult,
+    ) -> crate::ai::TabAiTargetContext {
+        crate::ai::TabAiTargetContext {
+            source: "FileSearch".to_string(),
+            kind: if entry.file_type == crate::file_search::FileType::Directory {
+                "directory".to_string()
+            } else {
+                "file".to_string()
+            },
+            semantic_id: crate::protocol::generate_semantic_id(
+                "choice",
+                display_index,
+                &entry.name,
+            ),
+            label: entry.name.clone(),
+            metadata: Some(serde_json::json!({
+                "path": entry.path.clone(),
+                "fileType": format!("{:?}", entry.file_type),
+                "size": entry.size,
+                "modified": entry.modified,
+            })),
+        }
+    }
+
     /// Source-view-aware target resolution: resolves targets against an explicit view
     /// instead of `self.current_view`. Used at submit time when `current_view`
     /// has already switched to the harness terminal.
@@ -1155,48 +1210,16 @@ impl ScriptListApp {
                 (focused_target, visible_targets)
             }
             AppView::FileSearchView { selected_index, .. } => {
-                let focused_target = self.cached_file_results.get(*selected_index).map(|entry| {
-                    crate::ai::TabAiTargetContext {
-                        source: "FileSearch".to_string(),
-                        kind: if entry.file_type == crate::file_search::FileType::Directory {
-                            "directory".to_string()
-                        } else {
-                            "file".to_string()
-                        },
-                        semantic_id: crate::protocol::generate_semantic_id(
-                            "choice",
-                            *selected_index,
-                            &entry.name,
-                        ),
-                        label: entry.name.clone(),
-                        metadata: Some(serde_json::json!({
-                            "path": entry.path.clone(),
-                            "fileType": format!("{:?}", entry.file_type),
-                        })),
-                    }
-                });
+                let focused_target = self
+                    .file_search_result_at_display_index(*selected_index)
+                    .map(|entry| {
+                        Self::tab_ai_target_from_file_search_result(*selected_index, entry)
+                    });
                 let visible_targets = self
-                    .cached_file_results
-                    .iter()
-                    .take(TAB_AI_VISIBLE_TARGET_LIMIT)
-                    .enumerate()
-                    .map(|(index, entry)| crate::ai::TabAiTargetContext {
-                        source: "FileSearch".to_string(),
-                        kind: if entry.file_type == crate::file_search::FileType::Directory {
-                            "directory".to_string()
-                        } else {
-                            "file".to_string()
-                        },
-                        semantic_id: crate::protocol::generate_semantic_id(
-                            "choice",
-                            index,
-                            &entry.name,
-                        ),
-                        label: entry.name.clone(),
-                        metadata: Some(serde_json::json!({
-                            "path": entry.path.clone(),
-                            "fileType": format!("{:?}", entry.file_type),
-                        })),
+                    .visible_file_search_results(TAB_AI_VISIBLE_TARGET_LIMIT)
+                    .into_iter()
+                    .map(|(display_index, entry)| {
+                        Self::tab_ai_target_from_file_search_result(display_index, entry)
                     })
                     .collect();
                 (focused_target, visible_targets)
@@ -1441,52 +1464,70 @@ impl ScriptListApp {
         selected_index: usize,
         plan_mode: bool,
     ) -> Option<String> {
-        let filter_pattern =
-            if let Some(parsed) = crate::file_search::parse_directory_path(query) {
-                parsed.filter
-            } else if !query.is_empty() {
-                Some(query.to_string())
-            } else {
-                None
-            };
+        let selected = self.file_search_result_at_display_index(selected_index)?;
 
-        let filtered_results: Vec<(usize, &crate::file_search::FileResult)> =
-            if let Some(ref pattern) = filter_pattern {
-                crate::file_search::filter_results_nucleo_simple(
-                    &self.cached_file_results,
-                    pattern,
+        let subject = if selected.file_type == crate::file_search::FileType::Directory {
+            "directory"
+        } else {
+            "file"
+        };
+
+        let nearby = self
+            .visible_file_search_results(6)
+            .into_iter()
+            .map(|(display_index, entry)| {
+                let marker = if display_index == selected_index {
+                    "*"
+                } else {
+                    "-"
+                };
+                format!(
+                    "{marker} [{}] {} ({})",
+                    display_index,
+                    entry.path,
+                    if entry.file_type == crate::file_search::FileType::Directory {
+                        "directory"
+                    } else {
+                        "file"
+                    }
                 )
-            } else {
-                self.cached_file_results
-                    .iter()
-                    .enumerate()
-                    .collect()
-            };
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
 
-        let (_, selected) = filtered_results.get(selected_index)?;
-
-        let subject =
-            if selected.file_type == crate::file_search::FileType::Directory {
-                "directory"
-            } else {
-                "file"
-            };
+        let presentation = match &self.current_view {
+            AppView::FileSearchView {
+                presentation: FileSearchPresentation::Mini,
+                ..
+            } => "mini",
+            AppView::FileSearchView {
+                presentation: FileSearchPresentation::Full,
+                ..
+            } => "full",
+            _ => "unknown",
+        };
 
         Some(if plan_mode {
             format!(
                 "I am browsing files in Script Kit.\n\
+                 File-search presentation: {presentation}\n\
                  Current file-search query: {query}\n\
-                 Selected {subject}: {}\n\n\
-                 Use this selection plus nearby files to propose a concrete plan, \
-                 related files to inspect, and verification steps.",
+                 Selected {subject}: {}\n\
+                 Nearby visible results:\n\
+                 {nearby}\n\n\
+                 Use the selected item as the primary target. Use nearby results only as supporting context.\n\
+                 Propose a concrete plan, related files to inspect, and verification steps.",
                 selected.path
             )
         } else {
             format!(
-                "I selected this {subject} in Script Kit file search:\n\
-                 {}\n\n\
-                 Explain what it is, summarize why it matters, and tell me the \
-                 highest-leverage next thing to inspect or change.",
+                "I selected this {subject} in Script Kit file search.\n\
+                 File-search presentation: {presentation}\n\
+                 Current file-search query: {query}\n\
+                 Selected {subject}: {}\n\
+                 Nearby visible results:\n\
+                 {nearby}\n\n\
+                 Explain what it is, summarize why it matters, and tell me the highest-leverage next thing to inspect or change.",
                 selected.path
             )
         })

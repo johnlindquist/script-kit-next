@@ -174,9 +174,10 @@ impl ScriptListApp {
                 ..
             } => {
                 let rows: Vec<String> = self
-                    .cached_file_results
+                    .file_search_display_indices
                     .iter()
-                    .map(|entry| entry.name.clone())
+                    .filter_map(|&result_index| self.cached_file_results.get(result_index))
+                    .map(|entry| format!("{} — {}", entry.name, entry.path))
                     .collect();
                 self.collect_named_rows(
                     "file-search-input",
