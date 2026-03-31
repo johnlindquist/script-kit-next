@@ -60,7 +60,7 @@ impl ScriptListApp {
     ///
     /// Routes to the harness terminal (`QuickTerminalView`), which connects
     /// to a pre-running CLI harness (Claude Code, Codex, Gemini CLI, etc.)
-    /// and injects hierarchical context via PTY stdin.
+    /// and injects a flat text-native context block via PTY stdin.
     pub(crate) fn open_tab_ai_chat(&mut self, cx: &mut Context<Self>) {
         self.open_tab_ai_chat_with_entry_intent(None, cx);
     }
@@ -495,6 +495,25 @@ impl ScriptListApp {
         // Save the originating surface so Escape and re-entry can use it
         self.tab_ai_harness_return_view = Some(request.source_view.clone());
         self.tab_ai_harness_return_focus_target = Some(self.tab_ai_return_focus_target());
+
+        // Seed apply-back route synchronously so the footer shows the correct
+        // Cmd+Enter label on first render and the first ⌘↩ press works without
+        // waiting for the deferred capture.  Desktop snapshot is not available
+        // yet, but for known-source views (ClipboardHistory, running prompts,
+        // ScriptList) the prompt type alone is sufficient for classification.
+        // The deferred capture callback will overwrite this with the full
+        // desktop-aware route once it completes.
+        let early_source_type = detect_tab_ai_source_type_early(&request.source_view, &request.ui_snapshot);
+        if let Some(ref source_type) = early_source_type {
+            let apply_back_hint = build_tab_ai_apply_back_hint(Some(source_type));
+            self.tab_ai_harness_apply_back_route = apply_back_hint.map(|hint| {
+                crate::ai::TabAiApplyBackRoute {
+                    source_type: source_type.clone(),
+                    hint,
+                    focused_target: None,
+                }
+            });
+        }
 
         // --- View switch FIRST: user sees the terminal immediately ---
         self.current_view = AppView::QuickTerminalView {
@@ -2513,6 +2532,31 @@ fn app_view_to_prompt_type_str(view: &AppView) -> &'static str {
         AppView::ChatPrompt { .. } => "ChatPrompt",
         AppView::NamingPrompt { .. } => "NamingPrompt",
         _ => "Other",
+    }
+}
+
+/// Early source type detection using only the view and UI snapshot — no
+/// desktop context required.  Returns `Some` for known-source views where
+/// the prompt type alone is sufficient (ClipboardHistory, running prompts,
+/// ScriptList with a focused semantic ID).  Returns `None` for generic
+/// desktop/selection cases that need the deferred desktop snapshot.
+fn detect_tab_ai_source_type_early(
+    source_view: &AppView,
+    ui: &crate::ai::TabAiUiSnapshot,
+) -> Option<crate::ai::TabAiSourceType> {
+    let prompt_type = app_view_to_prompt_type_str(source_view);
+    match prompt_type {
+        "ScriptList" if ui.focused_semantic_id.is_some() => {
+            Some(crate::ai::TabAiSourceType::ScriptListItem)
+        }
+        "ClipboardHistory" => Some(crate::ai::TabAiSourceType::ClipboardEntry),
+        "ArgPrompt" | "MiniPrompt" | "MicroPrompt" | "DivPrompt" | "FormPrompt"
+        | "EditorPrompt" | "SelectPrompt" | "PathPrompt" | "DropPrompt" | "TemplatePrompt"
+        | "TermPrompt" | "EnvPrompt" | "ChatPrompt" | "NamingPrompt" => {
+            Some(crate::ai::TabAiSourceType::RunningCommand)
+        }
+        // Desktop / DesktopSelection require the deferred capture's selected_text.
+        _ => None,
     }
 }
 

@@ -1,19 +1,10 @@
 //! AI surfaces and shared contracts.
 //!
-//! This module contains both:
-//! - the legacy AI window/chat stack (`model`, `storage`, `providers`, `window`)
-//! - the current Tab AI harness/context stack (`harness`, `tab_context`, `message_parts`, `context_contract`, `current_app_automation_memory`)
-//!
-//! The primary Tab-triggered AI experience is **not** the old inline chat UI.
-//! Pressing Tab routes to a warm harness terminal in `AppView::QuickTerminalView`
-//! and injects `TabAiContextBlob` into the running CLI harness via
-//! `build_tab_ai_harness_submission()` and PTY-backed text injection.
-//!
 //! # Architecture
 //!
 //! ```text
 //! src/ai/
-//! ├── harness/     - Harness config + `<scriptKitContext>` / `<scriptKitHints>` formatting
+//! ├── harness/     - Harness config + flat context-block / artifact-authoring guidance formatting
 //! ├── tab_context.rs - Tab AI context, receipts, memory lookup, compatibility types
 //! ├── message_parts.rs - MCP/file context-part composition
 //! ├── context_contract.rs - Shared context contract enforcement
@@ -27,6 +18,7 @@
 //! - Entry path: `open_tab_ai_chat()` → `begin_tab_ai_harness_entry()` → `open_tab_ai_harness_terminal_from_request()`
 //! - Surface: `AppView::QuickTerminalView` rendered by `TermPrompt`
 //! - Submission modes: `TabAiHarnessSubmissionMode::PasteOnly` and `TabAiHarnessSubmissionMode::Submit`
+//! - Submission shape: flat text-native `Script Kit context` block + optional artifact authoring guidance
 //! - Capture profile: `CaptureContextOptions::tab_ai_submit()` for the landed PTY path
 //! - Legacy chat/window code still exists, but it is not the default Tab AI surface.
 

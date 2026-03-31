@@ -323,19 +323,53 @@ fn push_block(out: &mut String, label: &str, value: &str) {
     }
 }
 
-fn format_target_line(target: &crate::ai::TabAiTargetContext) -> Result<String, String> {
-    let mut parts = vec![
-        format!("source={}", target.source),
-        format!("kind={}", target.kind),
-        format!("semantic_id={}", target.semantic_id),
-        format!("label={}", collapse_inline_text(&target.label)),
-    ];
-    if let Some(metadata) = target.metadata.as_ref() {
-        let metadata_json = serde_json::to_string(metadata)
-            .map_err(|e| format!("tab_ai_harness_target_metadata_serialize_failed: {e}"))?;
-        parts.push(format!("metadata={metadata_json}"));
+/// Emit scalar fields from a JSON object as individual labeled lines.
+/// Non-scalar values (arrays, nested objects) are silently skipped so the
+/// output stays flat and token-efficient.
+fn push_json_scalar_lines(out: &mut String, label_prefix: &str, value: &serde_json::Value) {
+    let Some(object) = value.as_object() else {
+        return;
+    };
+    for (key, value) in object {
+        match value {
+            serde_json::Value::Null => {}
+            serde_json::Value::Bool(v) => {
+                push_line(out, &format!("{label_prefix} {key}"), v.to_string());
+            }
+            serde_json::Value::Number(v) => {
+                push_line(out, &format!("{label_prefix} {key}"), v.to_string());
+            }
+            serde_json::Value::String(v) => {
+                push_line(
+                    out,
+                    &format!("{label_prefix} {key}"),
+                    collapse_inline_text(v),
+                );
+            }
+            _ => {}
+        }
     }
-    Ok(parts.join(" | "))
+}
+
+/// Emit a target's fields as sequential labeled lines instead of a single
+/// pipe-delimited line.  This is more readable in the terminal and wastes
+/// fewer tokens for the consuming LLM.
+fn push_target_lines(out: &mut String, label_prefix: &str, target: &crate::ai::TabAiTargetContext) {
+    push_line(out, &format!("{label_prefix} source"), &target.source);
+    push_line(out, &format!("{label_prefix} kind"), &target.kind);
+    push_line(
+        out,
+        &format!("{label_prefix} semantic id"),
+        &target.semantic_id,
+    );
+    push_line(
+        out,
+        &format!("{label_prefix} label"),
+        collapse_inline_text(&target.label),
+    );
+    if let Some(metadata) = target.metadata.as_ref() {
+        push_json_scalar_lines(out, &format!("{label_prefix} metadata"), metadata);
+    }
 }
 
 fn format_visible_element_line(element: &crate::protocol::ElementInfo) -> String {
@@ -432,14 +466,10 @@ pub fn build_tab_ai_harness_context_block(
     }
 
     if let Some(target) = context.focused_target.as_ref() {
-        push_line(&mut out, "focused target", format_target_line(target)?);
+        push_target_lines(&mut out, "focused target", target);
     }
     for (index, target) in context.visible_targets.iter().take(6).enumerate() {
-        push_line(
-            &mut out,
-            &format!("visible target {}", index + 1),
-            format_target_line(target)?,
-        );
+        push_target_lines(&mut out, &format!("visible target {}", index + 1), target);
     }
     for (index, element) in context.ui.visible_elements.iter().take(6).enumerate() {
         push_line(
@@ -775,18 +805,26 @@ pub fn build_tab_ai_harness_submission(
     context: &crate::ai::TabAiContextBlob,
     intent: Option<&str>,
     mode: TabAiHarnessSubmissionMode,
-    _quick_submit: Option<&TabAiQuickSubmitPlan>,
+    quick_submit: Option<&TabAiQuickSubmitPlan>,
     _invocation_receipt: Option<&crate::ai::TabAiInvocationReceipt>,
     _suggested_intents: &[crate::ai::TabAiSuggestedIntentSpec],
 ) -> Result<String, String> {
     let mut output = build_tab_ai_harness_context_block(context)?;
 
-    if should_include_artifact_authoring_guidance(intent) {
+    // Prefer the quick-submit plan's submission_intent() (which returns
+    // raw_query for Fallback sources) over the caller-provided intent string.
+    let effective_intent = quick_submit
+        .map(TabAiQuickSubmitPlan::submission_intent)
+        .or(intent)
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+
+    if should_include_artifact_authoring_guidance(effective_intent) {
         output.push_str("\n\n");
         output.push_str(build_tab_ai_artifact_authoring_guidance_block());
     }
 
-    match intent.map(str::trim).filter(|v| !v.is_empty()) {
+    match effective_intent {
         Some(intent) => {
             output.push_str("\n\nUser intent:\n");
             output.push_str(intent);
@@ -1297,7 +1335,7 @@ mod tests {
 
     fn extract_tab_ai_quick_terminal_section(doc: &str) -> &str {
         let start = doc
-            .find("### Tab AI — Quick Terminal with Context Injection")
+            .find("### Tab AI — Quick Terminal with Flat Context Injection")
             .expect("doc must contain Tab AI quick terminal section");
         let rest = &doc[start..];
         let end = rest[1..]
