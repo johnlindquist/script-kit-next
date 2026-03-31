@@ -197,13 +197,13 @@ impl ScriptListApp {
                             return true;
                         }
 
-                        // QuickTerminalView close semantics contract:
+                        // QuickTerminalView wrapper semantics contract:
                         // - Plain Escape is forwarded to the PTY (harness TUI owns it).
+                        // - Cmd+Enter applies the terminal selection or last output
+                        //   back to the captured source context.
                         // - Cmd+W closes the wrapper and restores the previous view/focus.
-                        // - The footer hint strip advertises only "⌘W Close".
                         // This is intentional: CLI harnesses (Claude Code, Codex, etc.)
                         // use Escape for their own TUI navigation (cancel, dismiss, etc.).
-                        // ⌘⏎ applies clipboard content back to the source context.
                         if is_quick_terminal
                             && has_cmd
                             && !has_shift
@@ -350,7 +350,9 @@ impl ScriptListApp {
                     })
                     .child(entity)
             })
-            // Terminal-specific footer: only advertise close so the PTY keeps full keyboard control.
+            // Terminal-specific footer: advertise the route-aware apply-back
+            // action plus close while the PTY keeps full control of plain
+            // Escape and unhandled keys.
             .child(render_terminal_prompt_hint_strip(
                 if matches!(self.current_view, AppView::QuickTerminalView { .. }) {
                     self.tab_ai_harness_apply_back_route.as_ref()

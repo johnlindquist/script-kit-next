@@ -505,8 +505,8 @@ fn quick_terminal_close_semantics_documented_in_code() {
 #[test]
 fn quick_terminal_render_documents_close_contract() {
     assert!(
-        TERM_RENDER_SOURCE.contains("close semantics contract"),
-        "render_prompts/term.rs must document the close semantics contract"
+        TERM_RENDER_SOURCE.contains("wrapper semantics contract"),
+        "render_prompts/term.rs must document the wrapper semantics contract"
     );
     assert!(
         TERM_RENDER_SOURCE.contains("Cmd+W closes the wrapper"),
@@ -2513,8 +2513,9 @@ fn tab_ai_harness_tracks_apply_back_route_state() {
 #[test]
 fn quick_terminal_cmd_enter_routes_to_apply_back() {
     assert!(
-        TERM_RENDER_SOURCE.contains("this.apply_tab_ai_result_from_clipboard(cx);"),
-        "QuickTerminalView must route Cmd+Enter into apply-back"
+        TERM_RENDER_SOURCE
+            .contains("this.apply_tab_ai_result_from_terminal(entity.clone(), cx);"),
+        "QuickTerminalView must route Cmd+Enter into apply-back via the terminal helper"
     );
 }
 
