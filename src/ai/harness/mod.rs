@@ -891,8 +891,8 @@ mod tests {
             .next()
             .expect("file has content before #[cfg(test)]");
         assert!(
-            production.contains("open_tab_ai_chat_with_entry_intent(Some(query), cx)"),
-            "Shift+Tab in ScriptList must route the filter text into harness entry intent"
+            production.contains("submit_to_current_or_new_tab_ai_harness_from_text"),
+            "Shift+Tab in ScriptList must route the filter text through the quick-submit planner"
         );
         let legacy_call = format!("{}(query, cx)", "dispatch_ai_script_generation_from_query");
         assert!(

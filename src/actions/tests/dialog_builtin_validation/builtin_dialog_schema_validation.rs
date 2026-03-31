@@ -9614,7 +9614,12 @@ mod from_dialog_builtin_action_validation_tests_5 {
                 is_dir: false,
             };
             let actions = get_file_context_actions(&file_info);
+            // reveal_in_finder no longer has a shortcut (⌘↵ reserved for AI).
+            let shortcut_exempt = ["file:reveal_in_finder"];
             for action in &actions {
+                if shortcut_exempt.contains(&action.id.as_str()) {
+                    continue;
+                }
                 assert!(
                     action.shortcut.is_some(),
                     "File action '{}' should have a shortcut",

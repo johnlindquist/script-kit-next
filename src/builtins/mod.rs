@@ -290,6 +290,8 @@ pub enum BuiltInFeature {
     Webcam,
     /// Voice dictation overlay + paste flow
     Dictation,
+    /// Voice dictation that always targets the AI harness
+    DictationToAiHarness,
     /// Settings hub for viewing configuration panels
     Settings,
 }
@@ -1627,6 +1629,21 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
                 "whisper",
             ],
             BuiltInFeature::Dictation,
+            "🎙️",
+        ));
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin-dictation-to-ai",
+            "Dictate to AI",
+            "Voice dictation — speak and submit to AI harness",
+            vec![
+                "dictate ai",
+                "voice ai",
+                "speech ai",
+                "dictation harness",
+                "speak to ai",
+            ],
+            BuiltInFeature::DictationToAiHarness,
             "🎙️",
         ));
     }

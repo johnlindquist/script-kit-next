@@ -154,8 +154,8 @@ fn tab_ai_routing_preserves_chat_prompt_tab() {
 #[test]
 fn tab_ai_routing_shift_tab_routes_through_harness() {
     assert!(
-        TAB_SOURCE.contains("open_tab_ai_chat_with_entry_intent(Some(query), cx)"),
-        "Shift+Tab must route typed queries through the harness terminal"
+        TAB_SOURCE.contains("submit_to_current_or_new_tab_ai_harness_from_text"),
+        "Shift+Tab must route typed queries through the quick-submit planner"
     );
     assert!(
         !TAB_SOURCE.contains("dispatch_ai_script_generation_from_query(query, cx)"),
@@ -163,8 +163,8 @@ fn tab_ai_routing_shift_tab_routes_through_harness() {
     );
 
     let shift_tab_pos = TAB_SOURCE
-        .find("open_tab_ai_chat_with_entry_intent(Some(query), cx)")
-        .expect("Shift+Tab harness route must exist");
+        .find("submit_to_current_or_new_tab_ai_harness_from_text")
+        .expect("Shift+Tab quick-submit route must exist");
     let ai_pos = TAB_SOURCE
         .find("open_tab_ai_chat(cx)")
         .expect("open_tab_ai_chat must exist");
@@ -195,8 +195,8 @@ fn assert_shift_tab_script_list_routes_query_to_harness_entry_intent(source: &st
         "{label} must clone the ScriptList filter text before routing",
     );
     assert!(
-        source.contains("this.open_tab_ai_chat_with_entry_intent(Some(query), cx);"),
-        "{label} must route the typed query into the harness entry-intent path",
+        source.contains("submit_to_current_or_new_tab_ai_harness_from_text"),
+        "{label} must route the typed query through the quick-submit planner",
     );
     assert!(
         !source.contains("dispatch_ai_script_generation_from_query(query, cx);"),
@@ -1932,8 +1932,8 @@ fn legacy_tab_ai_chat_not_in_app_state() {
 #[test]
 fn startup_tab_interceptor_routes_nonempty_script_list_query_into_harness() {
     assert!(
-        TAB_SOURCE.contains("open_tab_ai_chat_with_entry_intent(Some(query), cx)"),
-        "startup.rs must route non-empty ScriptList Tab queries into the harness"
+        TAB_SOURCE.contains("submit_to_current_or_new_tab_ai_harness_from_text"),
+        "startup.rs must route non-empty ScriptList Shift+Tab queries through the quick-submit planner"
     );
     assert!(
         !TAB_SOURCE.contains("dispatch_ai_script_generation_from_query(query, cx)"),
@@ -3230,5 +3230,213 @@ fn live_quick_submit_helper_builds_full_harness_submission() {
     assert!(
         helper_src.contains("request.quick_submit_plan.as_ref()"),
         "live quick submit must preserve quick submit metadata in scriptKitHints"
+    );
+}
+
+// =========================================================================
+// ~ mini entry: file search presentation and query normalization
+// =========================================================================
+
+const FILTER_INPUT_CHANGE_SOURCE: &str = include_str!("../src/app_impl/filter_input_change.rs");
+const FILTER_INPUT_CORE_SOURCE: &str = include_str!("../src/app_impl/filter_input_core.rs");
+const FILE_SEARCH_SOURCE: &str = include_str!("../src/render_builtins/file_search.rs");
+const UTILITY_VIEWS_SOURCE: &str = include_str!("../src/app_execute/utility_views.rs");
+
+#[test]
+fn tilde_trigger_enters_file_search_as_mini() {
+    // When the user types `~` in ScriptList, filter_input_change must hand off
+    // to mini file search with FileSearchPresentation::Mini.
+    assert!(
+        FILTER_INPUT_CHANGE_SOURCE.contains("should_enter_file_search_from_script_list"),
+        "filter_input_change must call should_enter_file_search_from_script_list for ~ trigger"
+    );
+    assert!(
+        FILTER_INPUT_CHANGE_SOURCE.contains("FileSearchPresentation::Mini"),
+        "filter_input_change must open file search as Mini presentation"
+    );
+}
+
+#[test]
+fn tilde_trigger_normalizes_bare_tilde_to_tilde_slash() {
+    // Bare `~` must normalize to `~/` so directory listing starts immediately.
+    assert!(
+        FILTER_INPUT_CHANGE_SOURCE.contains("normalize_mini_file_search_query"),
+        "filter_input_change must normalize the query before opening file search"
+    );
+    assert!(
+        FILTER_INPUT_CORE_SOURCE.contains("fn normalize_mini_file_search_query"),
+        "normalize_mini_file_search_query must be defined in filter_input_core"
+    );
+    // The function must convert bare `~` to `~/`
+    assert!(
+        FILTER_INPUT_CORE_SOURCE.contains(r#"if new_text == "~""#),
+        "normalize_mini_file_search_query must detect bare ~"
+    );
+    assert!(
+        FILTER_INPUT_CORE_SOURCE.contains(r#""~/".to_string()"#),
+        "normalize_mini_file_search_query must produce ~/ from bare ~"
+    );
+}
+
+#[test]
+fn tilde_trigger_predicate_matches_tilde_and_tilde_slash_prefix() {
+    // should_enter_file_search_from_script_list must match `~` and `~/...`
+    assert!(
+        FILTER_INPUT_CORE_SOURCE.contains(r#"new_text == "~" || new_text.starts_with("~/")"#),
+        "should_enter_file_search_from_script_list must match ~ and ~/... patterns"
+    );
+}
+
+#[test]
+fn mini_presentation_exits_when_trigger_no_longer_matches() {
+    // If the user edits the query so it no longer starts with ~, mini mode
+    // must return to ScriptList rather than staying stuck in file search.
+    let exit_check = FILTER_INPUT_CHANGE_SOURCE
+        .find("FileSearchPresentation::Mini")
+        .expect("Mini presentation check must exist");
+    let nearby = &FILTER_INPUT_CHANGE_SOURCE
+        [exit_check..exit_check + 500.min(FILTER_INPUT_CHANGE_SOURCE.len() - exit_check)];
+
+    assert!(
+        nearby.contains("should_enter_file_search_from_script_list"),
+        "Mini presentation must recheck the ~ trigger and exit when it no longer matches"
+    );
+}
+
+// =========================================================================
+// File search AI routing: selection vs query fallback
+// =========================================================================
+
+#[test]
+fn file_search_cmd_enter_routes_through_selection_or_query() {
+    // ⌘↵ in file search must call open_file_search_selection_or_query_in_tab_ai,
+    // which tries the selected row first, then falls back to query-level intent.
+    assert!(
+        FILE_SEARCH_SOURCE.contains("open_file_search_selection_or_query_in_tab_ai"),
+        "file_search.rs Enter handler must call the fallback-capable AI opener"
+    );
+}
+
+#[test]
+fn selection_or_query_tries_selection_first() {
+    // open_file_search_selection_or_query_in_tab_ai must attempt the selection
+    // path before falling back to query-level intent.
+    let fn_start = TAB_AI_MODE_SOURCE
+        .find("fn open_file_search_selection_or_query_in_tab_ai(")
+        .expect("open_file_search_selection_or_query_in_tab_ai must exist");
+    let fn_body = &TAB_AI_MODE_SOURCE[fn_start..fn_start + 800.min(TAB_AI_MODE_SOURCE.len() - fn_start)];
+
+    assert!(
+        fn_body.contains("open_file_search_selection_in_tab_ai"),
+        "must try selection-based AI first"
+    );
+    // The selection attempt must come before the query fallback
+    let sel_pos = fn_body.find("open_file_search_selection_in_tab_ai").unwrap();
+    let query_pos = fn_body
+        .find("build_file_search_ai_query_intent")
+        .expect("must have query fallback");
+    assert!(
+        sel_pos < query_pos,
+        "selection AI must be attempted before query fallback"
+    );
+}
+
+#[test]
+fn query_fallback_returns_none_for_empty_state() {
+    // build_file_search_ai_query_intent must return None when both query is
+    // empty and there are no visible results, so ⌘↵ is a no-op only in the
+    // truly empty state.
+    let fn_start = TAB_AI_MODE_SOURCE
+        .find("fn build_file_search_ai_query_intent(")
+        .expect("build_file_search_ai_query_intent must exist");
+    let fn_body = &TAB_AI_MODE_SOURCE[fn_start..fn_start + 400.min(TAB_AI_MODE_SOURCE.len() - fn_start)];
+
+    assert!(
+        fn_body.contains("query.is_empty() && self.file_search_display_indices.is_empty()"),
+        "query intent must return None only when both query and results are empty"
+    );
+    assert!(
+        fn_body.contains("return None"),
+        "must explicitly return None for the empty state"
+    );
+}
+
+#[test]
+fn selection_ai_uses_quick_submit_with_file_search_source() {
+    // open_file_search_selection_in_tab_ai must build a TabAiQuickSubmitPlan
+    // with source = FileSearch so harness logging has provenance.
+    let fn_start = TAB_AI_MODE_SOURCE
+        .find("fn open_file_search_selection_in_tab_ai(")
+        .expect("open_file_search_selection_in_tab_ai must exist");
+    let fn_body = &TAB_AI_MODE_SOURCE[fn_start..fn_start + 800.min(TAB_AI_MODE_SOURCE.len() - fn_start)];
+
+    assert!(
+        fn_body.contains("TabAiQuickSubmitSource::FileSearch"),
+        "selection AI must use FileSearch as the quick submit source"
+    );
+    assert!(
+        fn_body.contains("TabAiQuickSubmitKind::FileDrop"),
+        "selection AI must use FileDrop as the quick submit kind"
+    );
+    assert!(
+        fn_body.contains("open_tab_ai_chat_with_quick_submit_plan"),
+        "selection AI must route through the quick submit plan path"
+    );
+}
+
+#[test]
+fn query_fallback_uses_entry_intent_not_quick_submit() {
+    // When no row is selected, query-level AI uses open_tab_ai_chat_with_entry_intent
+    // (not quick submit), because there is no specific file to submit.
+    let fn_start = TAB_AI_MODE_SOURCE
+        .find("fn open_file_search_selection_or_query_in_tab_ai(")
+        .expect("open_file_search_selection_or_query_in_tab_ai must exist");
+    let fn_body = &TAB_AI_MODE_SOURCE[fn_start..fn_start + 800.min(TAB_AI_MODE_SOURCE.len() - fn_start)];
+
+    assert!(
+        fn_body.contains("open_tab_ai_chat_with_entry_intent"),
+        "query fallback must use entry intent (not quick submit)"
+    );
+}
+
+#[test]
+fn file_search_ai_intent_includes_presentation_label() {
+    // Both build_file_search_ai_entry_intent and build_file_search_ai_query_intent
+    // must embed the current presentation (mini vs full) so the AI model knows
+    // which surface the user is on.
+    let entry_fn_start = TAB_AI_MODE_SOURCE
+        .find("fn build_file_search_ai_entry_intent(")
+        .expect("build_file_search_ai_entry_intent must exist");
+    let entry_fn_body = &TAB_AI_MODE_SOURCE
+        [entry_fn_start..entry_fn_start + 2000.min(TAB_AI_MODE_SOURCE.len() - entry_fn_start)];
+    assert!(
+        entry_fn_body.contains("File-search presentation:"),
+        "entry intent must include presentation label"
+    );
+
+    let query_fn_start = TAB_AI_MODE_SOURCE
+        .find("fn build_file_search_ai_query_intent(")
+        .expect("build_file_search_ai_query_intent must exist");
+    let query_fn_body = &TAB_AI_MODE_SOURCE
+        [query_fn_start..query_fn_start + 2000.min(TAB_AI_MODE_SOURCE.len() - query_fn_start)];
+    assert!(
+        query_fn_body.contains("File-search presentation:"),
+        "query intent must include presentation label"
+    );
+}
+
+#[test]
+fn file_search_cmd_enter_passes_shift_for_plan_mode() {
+    // The ⌘↵ handler must check shift state and pass it as plan_mode,
+    // distinguishing ⌘↵ (explain) from ⌘⇧↵ (plan).
+    let handler_area = FILE_SEARCH_SOURCE
+        .find("open_file_search_selection_or_query_in_tab_ai")
+        .expect("AI opener call must exist in file_search.rs");
+    let nearby = &FILE_SEARCH_SOURCE
+        [handler_area.saturating_sub(300)..handler_area + 200.min(FILE_SEARCH_SOURCE.len() - handler_area)];
+
+    assert!(
+        nearby.contains("has_shift") || nearby.contains("modifiers.shift"),
+        "⌘↵ handler must distinguish shift for plan_mode"
     );
 }

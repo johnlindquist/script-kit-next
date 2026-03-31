@@ -1,10 +1,16 @@
 //! Deterministic quick-submit planner for Tab AI harness entries.
 //!
-//! Classifies raw dropped text (from Send to AI fallback or dictation
-//! transcripts) into a structured plan that picks the right capture kind,
-//! synthesizes a better `User intent:` turn, and always submits immediately.
+//! Classifies raw dropped text (from Send to AI fallback, dictation
+//! transcripts, or Shift+Tab quick entry) into a structured plan that
+//! picks the right capture kind, synthesizes a better `User intent:`
+//! turn, and always submits immediately.
+//!
+//! The planner uses token-based matching (whole-word `BTreeSet` lookups)
+//! instead of substring checks to avoid misrouting — e.g. `"build a
+//! Rust parser"` no longer false-positives on `"ui"` inside `"build"`.
 
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeSet;
 
 // ---------------------------------------------------------------------------
 // Source / kind enums
@@ -16,6 +22,8 @@ use serde::{Deserialize, Serialize};
 pub enum TabAiQuickSubmitSource {
     Fallback,
     Dictation,
+    ShiftTab,
+    FileSearch,
 }
 
 /// Classification of what the dropped text represents.
@@ -83,34 +91,22 @@ pub fn plan_tab_ai_quick_submit(
     }
 
     let normalized_query = normalize_query(&raw_query);
+    let tokens = tokenize_normalized_query(&normalized_query);
 
-    let (kind, capture_kind, synthesized_intent) = if wants_visual_context(&normalized_query) {
+    let (kind, capture_kind, synthesized_intent) = if wants_visual_context(&tokens, &normalized_query)
+    {
         (
             TabAiQuickSubmitKind::VisualAsk,
-            visual_capture_kind(&normalized_query),
+            visual_capture_kind(&tokens, &normalized_query),
             raw_query.clone(),
         )
-    } else if let Some(url) = normalize_url_drop(&raw_query) {
+    } else if let Some(url) =
+        normalize_url_drop(&raw_query).or_else(|| normalize_repo_shorthand(&raw_query))
+    {
         (
             TabAiQuickSubmitKind::UrlDrop,
             "browserTab".to_string(),
-            format!(
-                "Analyze this URL. If the frontmost browser tab matches it, \
-                 use the live browser context as the primary source of truth.\
-                 \n\nURL:\n{}",
-                url
-            ),
-        )
-    } else if looks_like_file_path(&raw_query) {
-        (
-            TabAiQuickSubmitKind::FileDrop,
-            "defaultContext".to_string(),
-            format!(
-                "Inspect this path and do the most useful next step. \
-                 If it is a file, summarize it. If it is a directory, \
-                 explain what matters inside it.\n\nPath:\n{}",
-                raw_query
-            ),
+            build_url_drop_intent(&url),
         )
     } else if looks_like_diff_patch(&raw_query) {
         (
@@ -118,7 +114,7 @@ pub fn plan_tab_ai_quick_submit(
             "defaultContext".to_string(),
             format!(
                 "Review this patch, explain the behavior change, point out \
-                 the biggest risk, and suggest the next edit or test.\n\n\
+                 the biggest risk, and suggest the next edit or verification step.\n\n\
                  Patch:\n{}",
                 raw_query
             ),
@@ -154,21 +150,25 @@ pub fn plan_tab_ai_quick_submit(
                 raw_query
             ),
         )
-    } else if looks_like_browser_request(&normalized_query) {
+    } else if looks_like_file_path(&raw_query) {
+        (
+            TabAiQuickSubmitKind::FileDrop,
+            "defaultContext".to_string(),
+            build_file_drop_intent(&raw_query),
+        )
+    } else if looks_like_browser_request(&tokens, &normalized_query) {
         (
             TabAiQuickSubmitKind::GeneralAsk,
             "browserTab".to_string(),
             raw_query.clone(),
         )
-    } else if looks_like_text_transform_request(&normalized_query) {
+    } else if let Some(intent) =
+        build_selected_input_intent(&raw_query, &normalized_query, &tokens)
+    {
         (
             TabAiQuickSubmitKind::TextTransform,
             "selectedText".to_string(),
-            format!(
-                "Use the current selection as the primary input and apply \
-                 this requested transform.\n\nRequested transform:\n{}",
-                raw_query
-            ),
+            intent,
         )
     } else {
         (
@@ -187,6 +187,28 @@ pub fn plan_tab_ai_quick_submit(
         capture_kind,
         submit: true,
     })
+}
+
+// ---------------------------------------------------------------------------
+// Token helpers
+// ---------------------------------------------------------------------------
+
+/// Split normalized query into a set of whole-word tokens for O(1) lookup.
+fn tokenize_normalized_query(normalized: &str) -> BTreeSet<&str> {
+    normalized.split_whitespace().collect()
+}
+
+/// Check whether *any* of the `candidates` appear as whole tokens.
+fn has_any_token(tokens: &BTreeSet<&str>, candidates: &[&str]) -> bool {
+    candidates.iter().any(|candidate| tokens.contains(candidate))
+}
+
+/// Check for multi-word phrase in the normalized string using word boundaries.
+fn has_phrase(normalized: &str, phrase: &str) -> bool {
+    normalized == phrase
+        || normalized.starts_with(&format!("{phrase} "))
+        || normalized.ends_with(&format!(" {phrase}"))
+        || normalized.contains(&format!(" {phrase} "))
 }
 
 // ---------------------------------------------------------------------------
@@ -234,14 +256,72 @@ fn normalize_url_drop(input: &str) -> Option<String> {
     looks_like_bare_domain.then(|| format!("https://{trimmed}"))
 }
 
+/// Recognize `owner/repo` shorthand and normalize to a GitHub URL.
+///
+/// Rejects absolute paths, relative paths, home-dir paths, URLs, and
+/// multi-segment paths (`a/b/c`).
+fn normalize_repo_shorthand(input: &str) -> Option<String> {
+    let trimmed = input.trim();
+    if trimmed.contains(' ')
+        || trimmed.contains('\n')
+        || trimmed.starts_with('/')
+        || trimmed.starts_with("./")
+        || trimmed.starts_with("../")
+        || trimmed.starts_with("~/")
+        || trimmed.contains("://")
+        || trimmed.starts_with("www.")
+    {
+        return None;
+    }
+    let mut parts = trimmed.split('/');
+    let owner = parts.next()?;
+    let repo = parts.next()?;
+    if parts.next().is_some() {
+        return None;
+    }
+    let is_valid_segment = |value: &str| {
+        !value.is_empty()
+            && value
+                .chars()
+                .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '.' | '_' | '-'))
+    };
+    if !is_valid_segment(owner) || !is_valid_segment(repo) {
+        return None;
+    }
+    Some(format!("https://github.com/{owner}/{repo}"))
+}
+
+fn build_url_drop_intent(url: &str) -> String {
+    format!(
+        "Analyze this link. If the frontmost browser tab matches it, \
+         use the live browser context as the primary source of truth.\n\n\
+         URL:\n{}",
+        url
+    )
+}
+
+fn build_file_drop_intent(path: &str) -> String {
+    format!(
+        "Inspect this path and do the most useful next step. \
+         If it is a file, summarize it. If it is a directory, \
+         explain what matters inside it.\n\nPath:\n{}",
+        path
+    )
+}
+
 fn looks_like_file_path(input: &str) -> bool {
     let trimmed = input.trim();
+    // Repo shorthand (`owner/repo`) must not be classified as a file path.
+    if normalize_repo_shorthand(trimmed).is_some() {
+        return false;
+    }
     trimmed.starts_with("~/")
         || trimmed.starts_with('/')
         || trimmed.starts_with("./")
         || trimmed.starts_with("../")
         || (trimmed.contains('/')
             && !trimmed.contains(' ')
+            && !trimmed.contains('\n')
             && normalize_url_drop(trimmed).is_none())
 }
 
@@ -259,10 +339,20 @@ fn looks_like_shell_command(input: &str) -> bool {
         "git"
             | "npm"
             | "pnpm"
+            | "pnpx"
             | "bun"
             | "cargo"
-            | "kubectl"
+            | "just"
+            | "make"
             | "docker"
+            | "kubectl"
+            | "uv"
+            | "pip"
+            | "pytest"
+            | "python"
+            | "node"
+            | "deno"
+            | "go"
             | "cd"
             | "ls"
             | "cat"
@@ -273,11 +363,11 @@ fn looks_like_shell_command(input: &str) -> bool {
             | "curl"
             | "ssh"
             | "ffmpeg"
-            | "python"
-            | "node"
             | "open"
             | "defaults"
             | "osascript"
+            | "xcodebuild"
+            | "cmake"
     )
 }
 
@@ -303,30 +393,6 @@ fn looks_like_code_block(input: &str) -> bool {
             || input.contains("</"))
 }
 
-fn looks_like_text_transform_request(normalized: &str) -> bool {
-    let implicit_target = normalized.contains(" this ")
-        || normalized.starts_with("this ")
-        || normalized.ends_with(" this")
-        || normalized.contains(" it ")
-        || normalized.starts_with("it ")
-        || normalized.ends_with(" it")
-        || normalized.contains(" that ")
-        || normalized.contains(" selected ")
-        || normalized.contains(" current ")
-        || normalized.contains(" focused ");
-
-    let transform_verb = normalized.contains("rewrite")
-        || normalized.contains("summarize")
-        || normalized.contains("translate")
-        || normalized.contains("fix")
-        || normalized.contains("format")
-        || normalized.contains("shorten")
-        || normalized.contains("expand")
-        || normalized.contains("clean up");
-
-    implicit_target && transform_verb
-}
-
 fn looks_like_diff_patch(input: &str) -> bool {
     input.contains('\n')
         && (input.starts_with("diff --git ")
@@ -336,41 +402,122 @@ fn looks_like_diff_patch(input: &str) -> bool {
             || (input.contains("\n+++ ") && input.contains("\n--- ")))
 }
 
-fn looks_like_browser_request(normalized: &str) -> bool {
-    normalized.contains("page")
-        || normalized.contains("site")
-        || normalized.contains("article")
-        || normalized.contains("tab")
-        || normalized.contains("url")
-        || normalized.contains("browser")
-        || normalized.contains("docs")
-        || normalized.contains("documentation")
-        || normalized.contains("repo")
-        || normalized.contains("issue")
-        || normalized.contains("pull request")
-        || normalized.contains("link")
+fn looks_like_browser_request(tokens: &BTreeSet<&str>, normalized: &str) -> bool {
+    has_any_token(
+        tokens,
+        &[
+            "page",
+            "site",
+            "article",
+            "tab",
+            "url",
+            "browser",
+            "docs",
+            "documentation",
+            "repo",
+            "repository",
+            "link",
+            "website",
+        ],
+    ) || has_phrase(normalized, "browser tab")
+        || has_phrase(normalized, "pull request")
+        || has_phrase(normalized, "github issue")
+        || has_phrase(normalized, "gitlab issue")
 }
 
-fn wants_visual_context(normalized: &str) -> bool {
-    normalized.contains("screen")
-        || normalized.contains("screenshot")
-        || normalized.contains("ui")
-        || normalized.contains("layout")
-        || normalized.contains("dialog")
-        || normalized.contains("button")
-        || normalized.contains("menu")
-        || normalized.contains("what am i looking at")
+fn wants_visual_context(tokens: &BTreeSet<&str>, normalized: &str) -> bool {
+    has_any_token(
+        tokens,
+        &[
+            "screen",
+            "screenshot",
+            "ui",
+            "layout",
+            "dialog",
+            "modal",
+            "button",
+            "menu",
+            "tooltip",
+            "popover",
+        ],
+    ) || has_phrase(normalized, "focused window")
+        || has_phrase(normalized, "full screen")
+        || has_phrase(normalized, "whole screen")
+        || has_phrase(normalized, "entire screen")
+        || has_phrase(normalized, "what is on screen")
 }
 
-fn visual_capture_kind(normalized: &str) -> String {
-    if normalized.contains("window")
-        || normalized.contains("dialog")
-        || normalized.contains("modal")
-    {
+fn visual_capture_kind(tokens: &BTreeSet<&str>, normalized: &str) -> String {
+    let wants_focused_window = has_any_token(tokens, &["window", "dialog", "modal"])
+        || has_phrase(normalized, "focused window");
+    if wants_focused_window {
         "focusedWindow".to_string()
     } else {
         "fullScreen".to_string()
     }
+}
+
+/// Build a synthesized intent for queries that imply operating on selected text.
+///
+/// Returns `None` if the query does not imply an implicit target.
+fn build_selected_input_intent(
+    raw_query: &str,
+    normalized: &str,
+    tokens: &BTreeSet<&str>,
+) -> Option<String> {
+    let implicit_target = has_any_token(
+        tokens,
+        &["this", "it", "that", "selected", "current", "focused"],
+    );
+    if !implicit_target {
+        return None;
+    }
+
+    if has_any_token(tokens, &["reply", "respond"]) {
+        return Some(format!(
+            "Use the current selection or focused content as the primary input \
+             and draft the requested reply.\n\nReply request:\n{}",
+            raw_query
+        ));
+    }
+
+    let is_transform = has_any_token(
+        tokens,
+        &[
+            "rewrite",
+            "summarize",
+            "translate",
+            "fix",
+            "format",
+            "shorten",
+            "expand",
+        ],
+    ) || has_phrase(normalized, "clean up")
+        || has_phrase(normalized, "make this shorter")
+        || has_phrase(normalized, "turn this into")
+        || has_phrase(normalized, "convert this to");
+
+    if is_transform {
+        return Some(format!(
+            "Use the current selection as the primary input and apply \
+             this requested transform.\n\nRequested transform:\n{}",
+            raw_query
+        ));
+    }
+
+    let is_extract = has_any_token(tokens, &["extract", "list", "identify", "pull"])
+        || has_phrase(normalized, "action items")
+        || has_phrase(normalized, "key points");
+
+    if is_extract {
+        return Some(format!(
+            "Use the current selection as the primary input and extract exactly \
+             what was requested.\n\nRequested extraction:\n{}",
+            raw_query
+        ));
+    }
+
+    None
 }
 
 // ---------------------------------------------------------------------------
@@ -611,5 +758,141 @@ mod tests {
         )
         .expect("plan");
         assert_eq!(plan.capture_kind, "browserTab");
+    }
+
+    // -----------------------------------------------------------------------
+    // Token-aware planner: anti-collision tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn build_a_rust_parser_is_general_ask_not_visual() {
+        let plan = plan_tab_ai_quick_submit(
+            TabAiQuickSubmitSource::Fallback,
+            "build a Rust parser for this",
+        )
+        .expect("plan");
+        // "build" contains "ui" as a substring but the token-aware planner
+        // must not match it as the whole word "ui".
+        assert_eq!(plan.kind, TabAiQuickSubmitKind::GeneralAsk);
+        assert_eq!(plan.capture_kind, "defaultContext");
+        assert!(plan.submit);
+    }
+
+    #[test]
+    fn repo_shorthand_is_url_drop_not_file_path() {
+        let plan =
+            plan_tab_ai_quick_submit(TabAiQuickSubmitSource::Fallback, "owner/repo")
+                .expect("plan");
+        assert_eq!(plan.kind, TabAiQuickSubmitKind::UrlDrop);
+        assert_eq!(plan.capture_kind, "browserTab");
+        assert!(
+            plan.synthesized_intent
+                .contains("https://github.com/owner/repo"),
+            "repo shorthand should be normalized to a GitHub URL"
+        );
+    }
+
+    #[test]
+    fn repo_shorthand_with_dots_and_dashes() {
+        let plan = plan_tab_ai_quick_submit(
+            TabAiQuickSubmitSource::Fallback,
+            "zed-industries/zed",
+        )
+        .expect("plan");
+        assert_eq!(plan.kind, TabAiQuickSubmitKind::UrlDrop);
+        assert!(
+            plan.synthesized_intent
+                .contains("https://github.com/zed-industries/zed"),
+        );
+    }
+
+    #[test]
+    fn reply_to_this_politely_is_text_transform() {
+        let plan = plan_tab_ai_quick_submit(
+            TabAiQuickSubmitSource::Fallback,
+            "reply to this politely",
+        )
+        .expect("plan");
+        assert_eq!(plan.kind, TabAiQuickSubmitKind::TextTransform);
+        assert_eq!(plan.capture_kind, "selectedText");
+        assert!(
+            plan.synthesized_intent
+                .starts_with("Use the current selection"),
+            "intent should reference the current selection"
+        );
+    }
+
+    #[test]
+    fn cargo_test_workspace_is_shell_command() {
+        let plan = plan_tab_ai_quick_submit(
+            TabAiQuickSubmitSource::Fallback,
+            "cargo test --workspace",
+        )
+        .expect("plan");
+        assert_eq!(plan.kind, TabAiQuickSubmitKind::ShellCommand);
+        assert_eq!(plan.capture_kind, "defaultContext");
+        assert!(
+            plan.synthesized_intent.starts_with("Explain this command"),
+            "shell commands should get an explanatory intent"
+        );
+    }
+
+    #[test]
+    fn write_a_report_is_not_browser_request() {
+        // "report" contains "repo" as a substring — must not match.
+        let plan = plan_tab_ai_quick_submit(
+            TabAiQuickSubmitSource::Fallback,
+            "write a report about performance",
+        )
+        .expect("plan");
+        assert_eq!(plan.kind, TabAiQuickSubmitKind::GeneralAsk);
+        assert_eq!(
+            plan.capture_kind, "defaultContext",
+            "\"report\" should not trigger browserTab capture"
+        );
+    }
+
+    #[test]
+    fn absolute_path_still_works_as_file_drop() {
+        let plan = plan_tab_ai_quick_submit(
+            TabAiQuickSubmitSource::Fallback,
+            "/usr/local/bin/some-tool",
+        )
+        .expect("plan");
+        assert_eq!(plan.kind, TabAiQuickSubmitKind::FileDrop);
+    }
+
+    #[test]
+    fn multi_segment_path_is_not_repo_shorthand() {
+        // `a/b/c` has more than two segments — should not be repo shorthand.
+        let plan = plan_tab_ai_quick_submit(
+            TabAiQuickSubmitSource::Fallback,
+            "src/ai/harness",
+        )
+        .expect("plan");
+        // Could be FileDrop (not UrlDrop).
+        assert_ne!(plan.kind, TabAiQuickSubmitKind::UrlDrop);
+    }
+
+    #[test]
+    fn shift_tab_source_is_preserved() {
+        let plan = plan_tab_ai_quick_submit(
+            TabAiQuickSubmitSource::ShiftTab,
+            "cargo test --workspace",
+        )
+        .expect("plan");
+        assert_eq!(plan.source, TabAiQuickSubmitSource::ShiftTab);
+    }
+
+    #[test]
+    fn extract_action_items_is_text_transform() {
+        let plan = plan_tab_ai_quick_submit(
+            TabAiQuickSubmitSource::Fallback,
+            "extract action items from this",
+        )
+        .expect("plan");
+        assert_eq!(plan.kind, TabAiQuickSubmitKind::TextTransform);
+        assert_eq!(plan.capture_kind, "selectedText");
+        assert!(plan.synthesized_intent.contains("extract exactly"));
     }
 }

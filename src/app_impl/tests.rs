@@ -52,8 +52,8 @@ fn test_shift_tab_routes_through_harness_entry_intent() {
     assert!(
         startup_tab.contains("if has_shift")
             && startup_tab
-                .contains("this.open_tab_ai_chat_with_entry_intent(Some(query), cx);"),
-        "Shift+Tab in ScriptList should route through the harness terminal with entry intent. \
+                .contains("submit_to_current_or_new_tab_ai_harness_from_text"),
+        "Shift+Tab in ScriptList should route through the quick-submit planner. \
          Missing expected branch in startup_new_tab.rs"
     );
 }
@@ -152,8 +152,8 @@ fn script_list_shift_tab_routes_into_harness_entry_intent_in_standard_startup() 
         .expect("Failed to read src/app_impl/startup.rs");
 
     assert!(
-        source.contains("open_tab_ai_chat_with_entry_intent(Some(query), cx)"),
-        "Shift+Tab in ScriptList must route the filter text into harness entry intent"
+        source.contains("submit_to_current_or_new_tab_ai_harness_from_text"),
+        "Shift+Tab in ScriptList must route the filter text through the quick-submit planner"
     );
     assert!(
         !source.contains("dispatch_ai_script_generation_from_query(query, cx)"),

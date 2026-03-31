@@ -3490,7 +3490,8 @@ mod from_dialog_builtin_action_validation_tests_23 {
         };
         let actions = get_file_context_actions(&file);
         let reveal = actions.iter().find(|a| a.id == "file:reveal_in_finder").unwrap();
-        assert_eq!(reveal.shortcut.as_ref().unwrap(), "⌘↵");
+        // ⌘↵ is now reserved for AI in file search; Reveal in Finder has no shortcut.
+        assert_eq!(reveal.shortcut.as_deref(), None);
     }
     
     #[test]
@@ -7232,7 +7233,8 @@ mod from_dialog_builtin_action_validation_tests_26 {
         };
         let actions = get_file_context_actions(&info);
         let reveal = actions.iter().find(|a| a.id == "file:reveal_in_finder").unwrap();
-        assert_eq!(reveal.shortcut.as_deref(), Some("⌘↵"));
+        // ⌘↵ is now reserved for AI in file search; Reveal in Finder has no shortcut.
+        assert_eq!(reveal.shortcut.as_deref(), None);
     }
     
     // ─────────────────────────────────────────────
