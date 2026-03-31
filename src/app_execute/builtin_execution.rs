@@ -4268,14 +4268,17 @@ impl ScriptListApp {
 
         let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
         *parakeet_model_download_cancel_slot().lock() = Some(cancel.clone());
-        // Channel carries typed progress events from the blocking download
-        // thread to the async context so we can update the prompt on the
-        // main thread.
+        // Shallow channel — cosmetic updates use try_send so the download
+        // thread is never blocked on UI repaints.
         let (progress_tx, progress_rx) =
-            async_channel::bounded::<DictationModelProgressEvent>(32);
+            async_channel::bounded::<DictationModelProgressEvent>(4);
+        let ui_emitter = std::sync::Arc::new(parking_lot::Mutex::new(
+            DictationModelUiEmitter::default(),
+        ));
 
         // Spawn a concurrent reader that updates the in-prompt progress
-        // display as events arrive (not after the download completes).
+        // display as events arrive.  HUD only shows when the rich prompt
+        // is not visible — they no longer compete.
         cx.spawn({
             let progress_rx = progress_rx.clone();
             async move |this, cx| {
@@ -4288,6 +4291,7 @@ impl ScriptListApp {
                             speed_bytes_per_sec,
                             eta_seconds,
                         } => {
+                            let prompt_visible = this.is_dictation_model_prompt_visible();
                             this.update_dictation_model_prompt_if_visible(
                                 crate::dictation::DictationModelStatus::Downloading {
                                     percentage,
@@ -4298,35 +4302,35 @@ impl ScriptListApp {
                                 },
                                 cx,
                             );
-                            let filled = (percentage / 10) as usize;
-                            let empty = 10usize.saturating_sub(filled);
-                            let bar = format!(
-                                "{}{}",
-                                "\u{2588}".repeat(filled),
-                                "\u{2591}".repeat(empty),
-                            );
-                            let dl = crate::dictation::download::format_bytes(downloaded_bytes);
-                            let total = crate::dictation::download::format_bytes(total_bytes);
-                            let speed = crate::dictation::download::format_speed(speed_bytes_per_sec);
-                            let eta = crate::dictation::download::format_eta(eta_seconds);
-                            this.show_hud(
-                                format!(
-                                    "Downloading model\u{2026} [{bar}] {percentage}% \u{00b7} {dl}/{total} \u{00b7} {speed} \u{00b7} {eta}"
-                                ),
-                                Some(HUD_SHORT_MS),
-                                cx,
-                            );
+                            if !prompt_visible {
+                                let summary =
+                                    crate::dictation::download::format_progress_summary(
+                                        percentage,
+                                        downloaded_bytes,
+                                        total_bytes,
+                                        speed_bytes_per_sec,
+                                        eta_seconds,
+                                    );
+                                this.show_hud(
+                                    format!("Downloading model\u{2026} {summary}"),
+                                    Some(HUD_SHORT_MS),
+                                    cx,
+                                );
+                            }
                         }
                         DictationModelProgressEvent::Extracting => {
+                            let prompt_visible = this.is_dictation_model_prompt_visible();
                             this.update_dictation_model_prompt_if_visible(
                                 crate::dictation::DictationModelStatus::Extracting,
                                 cx,
                             );
-                            this.show_hud(
-                                "Extracting dictation model\u{2026}".to_string(),
-                                Some(HUD_SHORT_MS),
-                                cx,
-                            );
+                            if !prompt_visible {
+                                this.show_hud(
+                                    "Extracting dictation model\u{2026}".to_string(),
+                                    Some(HUD_SHORT_MS),
+                                    cx,
+                                );
+                            }
                         }
                     });
                 }
@@ -4340,53 +4344,58 @@ impl ScriptListApp {
                 .spawn({
                     let cancel = cancel.clone();
                     async move {
-                        let last_pct = std::sync::Arc::new(
-                            std::sync::atomic::AtomicU8::new(0),
-                        );
                         let speed_tracker = std::sync::Arc::new(parking_lot::Mutex::new(
                             SpeedTracker::new(),
                         ));
+                        let ui_emitter = ui_emitter.clone();
                         crate::dictation::download::download_parakeet_model(
                             {
-                                let last_pct = last_pct.clone();
                                 let speed_tracker = speed_tracker.clone();
+                                let ui_emitter = ui_emitter.clone();
                                 let progress_tx = progress_tx;
                                 move |phase, progress| {
                                     match phase {
                                         crate::dictation::download::DownloadPhase::Downloading => {
                                             let pct = progress.percentage();
-                                            let prev = last_pct.load(
-                                                std::sync::atomic::Ordering::Relaxed,
-                                            );
-                                            // Update speed tracker on every callback.
                                             let speed = {
                                                 let mut tracker = speed_tracker.lock();
                                                 tracker.update(progress.downloaded);
                                                 tracker.speed_bytes_per_sec()
                                             };
-                                            if pct >= prev.saturating_add(1) || pct == 100 {
-                                                last_pct.store(
-                                                    pct,
-                                                    std::sync::atomic::Ordering::Relaxed,
-                                                );
-                                                tracing::info!(
-                                                    category = "DICTATION",
-                                                    pct,
-                                                    downloaded = progress.downloaded,
-                                                    total = progress.total,
-                                                    speed,
-                                                    "Model download progress"
-                                                );
-                                                let eta = crate::dictation::download::estimate_eta_seconds(progress, speed);
-                                                let _ = progress_tx.send_blocking(
-                                                    DictationModelProgressEvent::Downloading {
-                                                        percentage: pct,
-                                                        downloaded_bytes: progress.downloaded,
-                                                        total_bytes: progress.total,
-                                                        speed_bytes_per_sec: speed,
-                                                        eta_seconds: eta,
-                                                    },
-                                                );
+                                            let eta = crate::dictation::download::estimate_eta_seconds(progress, speed);
+
+                                            let snapshot =
+                                                DictationModelUiSnapshot::downloading(pct, eta);
+                                            let now = std::time::Instant::now();
+                                            let should_emit = {
+                                                let emitter = ui_emitter.lock();
+                                                emitter.should_emit(now, &snapshot)
+                                            };
+
+                                            if should_emit {
+                                                let sent = progress_tx
+                                                    .try_send(
+                                                        DictationModelProgressEvent::Downloading {
+                                                            percentage: pct,
+                                                            downloaded_bytes: progress.downloaded,
+                                                            total_bytes: progress.total,
+                                                            speed_bytes_per_sec: speed,
+                                                            eta_seconds: eta,
+                                                        },
+                                                    )
+                                                    .is_ok();
+                                                if sent {
+                                                    tracing::info!(
+                                                        category = "DICTATION",
+                                                        pct,
+                                                        downloaded = progress.downloaded,
+                                                        total = progress.total,
+                                                        speed,
+                                                        "Model download progress"
+                                                    );
+                                                    let mut emitter = ui_emitter.lock();
+                                                    emitter.record_emit(now, &snapshot);
+                                                }
                                             }
                                         }
                                         crate::dictation::download::DownloadPhase::Extracting => {
@@ -4394,9 +4403,19 @@ impl ScriptListApp {
                                                 category = "DICTATION",
                                                 "Extracting dictation model"
                                             );
-                                            let _ = progress_tx.send_blocking(
-                                                DictationModelProgressEvent::Extracting,
-                                            );
+                                            let snapshot = DictationModelUiSnapshot::extracting();
+                                            let now = std::time::Instant::now();
+                                            // Extracting is critical — use blocking send
+                                            // so it always reaches the UI.
+                                            if progress_tx
+                                                .send_blocking(
+                                                    DictationModelProgressEvent::Extracting,
+                                                )
+                                                .is_ok()
+                                            {
+                                                let mut emitter = ui_emitter.lock();
+                                                emitter.record_emit(now, &snapshot);
+                                            }
                                         }
                                         crate::dictation::download::DownloadPhase::Failed(_)
                                         | crate::dictation::download::DownloadPhase::Cancelled
@@ -4513,16 +4532,16 @@ impl ScriptListApp {
                 speed_bytes_per_sec,
                 eta_seconds,
             } => {
-                let filled = (percentage / 10) as usize;
-                let empty = 10usize.saturating_sub(filled);
-                let bar = format!("{}{}", "\u{2588}".repeat(filled), "\u{2591}".repeat(empty));
-                let dl = crate::dictation::download::format_bytes(downloaded_bytes);
-                let total = crate::dictation::download::format_bytes(total_bytes);
-                let speed = crate::dictation::download::format_speed(speed_bytes_per_sec);
-                let eta = crate::dictation::download::format_eta(eta_seconds);
+                let summary = crate::dictation::download::format_progress_summary(
+                    percentage,
+                    downloaded_bytes,
+                    total_bytes,
+                    speed_bytes_per_sec,
+                    eta_seconds,
+                );
                 (
                     format!("Preparing local dictation\u{2026} {percentage}%"),
-                    format!("[{bar}] {dl}/{total} \u{00b7} {speed} \u{00b7} {eta}"),
+                    summary,
                     vec![
                         Choice {
                             name: "Cancel download".to_string(),

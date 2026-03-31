@@ -483,8 +483,9 @@ fn build_tab_ai_suggested_intents_prefers_app_verbs() {
 
 #[test]
 fn build_tab_ai_suggested_intents_file_target() {
+    // Generic file target (non-FileSearch source) gets generic suggestions
     let target = TabAiTargetContext {
-        source: "FileSearch".to_string(),
+        source: "ScriptList".to_string(),
         kind: "file".to_string(),
         semantic_id: "choice:0:readme".to_string(),
         label: "README.md".to_string(),
@@ -493,6 +494,45 @@ fn build_tab_ai_suggested_intents_file_target() {
     let suggestions = build_tab_ai_suggested_intents(Some(&target), None, &[]);
     assert_eq!(suggestions.len(), 3);
     assert_eq!(suggestions[0].intent, "summarize this file");
+}
+
+#[test]
+fn build_tab_ai_suggested_intents_file_search_file_target() {
+    let target = TabAiTargetContext {
+        source: "FileSearch".to_string(),
+        kind: "file".to_string(),
+        semantic_id: "choice:0:readme".to_string(),
+        label: "README.md".to_string(),
+        metadata: Some(serde_json::json!({
+            "queryMode": "spotlight-basic",
+            "visibleResultCount": 12
+        })),
+    };
+    let suggestions = build_tab_ai_suggested_intents(Some(&target), None, &[]);
+    assert_eq!(suggestions.len(), 3);
+    assert_eq!(suggestions[0].intent, "summarize this file in the context of this search");
+    assert_eq!(suggestions[1].label, "Related");
+    assert!(suggestions[2].intent.contains("12 visible results"));
+}
+
+#[test]
+fn build_tab_ai_suggested_intents_file_search_directory_target() {
+    let target = TabAiTargetContext {
+        source: "FileSearch".to_string(),
+        kind: "directory".to_string(),
+        semantic_id: "choice:0:src".to_string(),
+        label: "src/".to_string(),
+        metadata: Some(serde_json::json!({
+            "queryMode": "path-browse",
+            "visibleResultCount": 24
+        })),
+    };
+    let suggestions = build_tab_ai_suggested_intents(Some(&target), None, &[]);
+    assert_eq!(suggestions.len(), 3);
+    assert_eq!(suggestions[0].label, "Map");
+    assert!(suggestions[0].intent.contains("path-browse"));
+    assert_eq!(suggestions[1].label, "Batch Rename");
+    assert_eq!(suggestions[2].label, "Compare");
 }
 
 #[test]

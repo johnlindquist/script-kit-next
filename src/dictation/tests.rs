@@ -3669,8 +3669,8 @@ fn downloading_prompt_includes_eta_and_cancel_action() {
     let prompt_src = &src[prompt_start..prompt_start + 5000.min(src.len() - prompt_start)];
 
     assert!(
-        prompt_src.contains("format_eta"),
-        "downloading prompt must render ETA text"
+        prompt_src.contains("format_progress_summary"),
+        "downloading prompt must use the shared progress summary (which includes ETA)"
     );
     assert!(
         prompt_src.contains("Cancel download"),

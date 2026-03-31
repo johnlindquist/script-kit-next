@@ -2407,6 +2407,30 @@ impl TabAiSuggestedIntentSpec {
     }
 }
 
+/// Look up a string field inside the optional `metadata` JSON blob on a target.
+fn suggested_intent_metadata_str<'a>(
+    target: &'a TabAiTargetContext,
+    key: &str,
+) -> Option<&'a str> {
+    target
+        .metadata
+        .as_ref()
+        .and_then(|value| value.get(key))
+        .and_then(|value| value.as_str())
+}
+
+/// Look up an integer field inside the optional `metadata` JSON blob on a target.
+fn suggested_intent_metadata_u64(
+    target: &TabAiTargetContext,
+    key: &str,
+) -> Option<u64> {
+    target
+        .metadata
+        .as_ref()
+        .and_then(|value| value.get(key))
+        .and_then(|value| value.as_u64())
+}
+
 /// Build deterministic suggested intents based on the focused target, clipboard,
 /// and prior automations.  Returns at most 3 suggestions and prefers app-specific
 /// verbs when `kind == "app"`.
@@ -2428,6 +2452,49 @@ pub fn build_tab_ai_suggested_intents(
                 suggestions.push(TabAiSuggestedIntentSpec::new(
                     "Automate",
                     "create a quick automation for this app",
+                ));
+            }
+            "file" if target.source == "FileSearch" => {
+                let query_mode = suggested_intent_metadata_str(target, "queryMode")
+                    .unwrap_or("spotlight-basic");
+                let visible_count =
+                    suggested_intent_metadata_u64(target, "visibleResultCount").unwrap_or(0);
+                suggestions.push(TabAiSuggestedIntentSpec::new(
+                    "Summarize",
+                    "summarize this file in the context of this search",
+                ));
+                suggestions.push(TabAiSuggestedIntentSpec::new(
+                    "Related",
+                    format!(
+                        "what other files in this {} search are most related to this one?",
+                        query_mode
+                    ),
+                ));
+                suggestions.push(TabAiSuggestedIntentSpec::new(
+                    "Plan",
+                    format!(
+                        "use this selected file as the primary target and the other {} visible results as supporting context; propose the next edits",
+                        visible_count
+                    ),
+                ));
+            }
+            "directory" if target.source == "FileSearch" => {
+                let query_mode = suggested_intent_metadata_str(target, "queryMode")
+                    .unwrap_or("path-browse");
+                suggestions.push(TabAiSuggestedIntentSpec::new(
+                    "Map",
+                    format!(
+                        "map this directory and explain what matters in this {} view",
+                        query_mode
+                    ),
+                ));
+                suggestions.push(TabAiSuggestedIntentSpec::new(
+                    "Batch Rename",
+                    "propose a safe batch-rename plan for the currently visible files",
+                ));
+                suggestions.push(TabAiSuggestedIntentSpec::new(
+                    "Compare",
+                    "group the currently visible results by purpose and tell me what to inspect first",
                 ));
             }
             "file" => {
