@@ -1,62 +1,134 @@
-# Skill: Configuration & Theming
+# Skill: Configuration & Workspace Settings
 
-Manage Script Kit settings, hotkeys, and visual theme.
+Manage the files under `~/.scriptkit` that control launcher behavior, hotkeys, dictation, theming, and Tab AI.
 
-## Configuration File
+## Files That Matter
 
-```
-~/.scriptkit/kit/config.ts
-```
+| File | Purpose | Reload behavior |
+| --- | --- | --- |
+| `~/.scriptkit/skills/` | Agent-readable skills. Claude Code opens the workspace at the root and expects `./skills` here. | Read from workspace root |
+| `~/.scriptkit/kit/config.ts` | Static app config: launcher hotkey, built-ins, command overrides, AI/logs/dictation hotkeys, Claude Code. | Auto-reloads |
+| `~/.scriptkit/kit/settings.json` | Runtime-persisted preferences: layout, theme preset, dictation microphone selection. | Read by runtime |
+| `~/.scriptkit/kit/theme.json` | Theme colors. | Auto-reloads |
+| `~/.scriptkit/harness.json` | Tab AI harness backend and startup behavior. | Read on next Tab AI invocation |
 
-### Full Config Example
+## Main Config File
 
 ```typescript
 import type { Config } from "@scriptkit/sdk";
 
 export default {
-  // Global hotkey to open Script Kit
   hotkey: {
-    key: "Space",
-    modifiers: ["command"],
+    modifiers: ["meta"],
+    key: "Semicolon",
   },
 
-  // Font sizes
-  editorFontSize: 14,
-  terminalFontSize: 14,
+  aiHotkey: {
+    modifiers: ["meta", "shift"],
+    key: "Space",
+  },
+  aiHotkeyEnabled: true,
 
-  // Built-in features
-  builtIns: {
-    clipboardHistory: true,
-    appLauncher: true,
+  logsHotkey: {
+    modifiers: ["meta", "shift"],
+    key: "KeyL",
+  },
+  logsHotkeyEnabled: true,
+
+  dictationHotkey: {
+    modifiers: ["meta", "shift"],
+    key: "KeyD",
+  },
+  dictationHotkeyEnabled: true,
+
+  commands: {
+    "builtin/clipboard-history": {
+      shortcut: { modifiers: ["meta", "shift"], key: "KeyV" },
+    },
+    "builtin/empty-trash": {
+      confirmationRequired: true,
+    },
+  },
+
+  claudeCode: {
+    enabled: true,
+    permissionMode: "plan",
   },
 } satisfies Config;
 ```
 
-### Hotkey Format
+## Hotkey Format
 
-```typescript
-hotkey: {
-  key: "Semicolon",          // Key name
-  modifiers: ["meta"],        // "meta" = Cmd on macOS
+Use `KeyboardEvent.code` values for keys. Valid modifiers: `meta`, `ctrl`, `alt`, `shift`
+
+Common keys: `Semicolon`, `Space`, `Enter`, `KeyK`, `KeyL`, `KeyD`, `Digit1`
+
+**Do not** use `command` or `control` in config.ts — use `meta` and `ctrl`.
+
+## Auxiliary Hotkeys
+
+These all live in `~/.scriptkit/kit/config.ts`:
+
+- `notesHotkey` — no default; set it explicitly if you want one
+- `aiHotkey` — defaults to Cmd+Shift+Space when enabled and unset
+- `aiHotkeyEnabled` — defaults to `true`
+- `logsHotkey` — defaults to Cmd+Shift+L when enabled and unset
+- `logsHotkeyEnabled` — defaults to `true`
+- `dictationHotkey` — no default; set it explicitly if you want one
+- `dictationHotkeyEnabled` — defaults to `true`
+
+## Dictation Microphone Selection
+
+The dictation **shortcut** is part of `config.ts`. The selected **microphone** is not part of `config.ts`.
+
+Script Kit persists it in `~/.scriptkit/kit/settings.json`:
+
+```json
+{
+  "dictation": {
+    "selectedDeviceId": "usb-mic"
+  }
 }
 ```
 
-Common key names: `Space`, `Semicolon`, `Slash`, `Period`, `Comma`, `A`-`Z`, `0`-`9`
-Modifiers: `meta` (Cmd), `alt` (Option), `shift`, `control`
+Behavior:
+- No `selectedDeviceId` → use the macOS default microphone
+- Saved microphone missing → fall back to the best available device and clear the stale preference
 
-### Editing Config
+## Command Overrides
 
-1. Edit `~/.scriptkit/kit/config.ts`
-2. Save — Script Kit reloads automatically
-3. New hotkey takes effect immediately
+Configure per-command behavior in `config.ts`:
+
+```typescript
+commands: {
+  "script/my-workflow": {
+    shortcut: { modifiers: ["meta", "shift"], key: "KeyW" }
+  },
+  "builtin/app-launcher": {
+    hidden: true
+  },
+  "builtin/empty-trash": {
+    confirmationRequired: true
+  }
+}
+```
+
+Command deeplinks use: `scriptkit://commands/{id}`
+
+## Claude Code Provider
+
+```typescript
+claudeCode: {
+  enabled: true,
+  permissionMode: "plan",
+  allowedTools: "Read,Edit,Bash(git:*)",
+  addDirs: ["/Users/you/projects"]
+}
+```
 
 ## Theme File
 
-```
-~/.scriptkit/kit/theme.json
-```
-
-### Theme Structure
+`~/.scriptkit/kit/theme.json`
 
 ```json
 {
@@ -82,41 +154,9 @@ Modifiers: `meta` (Cmd), `alt` (Option), `shift`, `control`
 }
 ```
 
-### Color Formats
-
-All of these work:
-- Hex: `"#FBBF24"` or `"FBBF24"`
-- RGB: `"rgb(251, 191, 36)"`
-- RGBA: `"rgba(251, 191, 36, 1.0)"`
-
-### Editing Theme
-
-1. Edit `~/.scriptkit/kit/theme.json`
-2. Save — colors apply immediately, no restart needed
-
-## TypeScript Config
-
-```
-~/.scriptkit/kit/tsconfig.json
-```
-
-Managed by the app. Maps `@scriptkit/sdk` to the SDK. Do not edit unless you know what you're doing.
-
-## Package Config
-
-```
-~/.scriptkit/kit/package.json
-```
-
-Sets `"type": "module"` to enable top-level await in all scripts. Do not remove this.
-
 ## Harness Config
 
-```
-~/.scriptkit/harness.json
-```
-
-Controls which AI CLI harness Script Kit uses for Tab AI:
+`~/.scriptkit/harness.json`
 
 ```json
 {
@@ -127,20 +167,12 @@ Controls which AI CLI harness Script Kit uses for Tab AI:
 }
 ```
 
-Supported backends: `claudeCode`, `codex`, `geminiCli`, `copilotCli`, `custom`
-
-## File Watching Summary
-
-| File | Auto-reloads |
-|------|-------------|
-| `kit/config.ts` | Yes — hotkeys, settings |
-| `kit/theme.json` | Yes — colors |
-| `kit/main/scripts/*.ts` | Yes — script list |
-| `kit/main/extensions/*.md` | Yes — extensions |
-| `harness.json` | Next Tab AI invocation |
+Supported backends: `claudeCode`, `codex`, `geminiCli`, `copilotCli`, `custom`.
 
 ## Common Mistakes
 
-- **Wrong config path**: Config is at `kit/config.ts`, not `config.ts` at root
-- **Invalid JSON in theme**: Validate JSON before saving `theme.json`
-- **Missing type module**: Don't remove `"type": "module"` from `package.json`
+- Putting `skills/` under `kit/` instead of at `~/.scriptkit/skills/`
+- Editing `~/.scriptkit/config.ts` instead of `~/.scriptkit/kit/config.ts`
+- Using `command` / `control` instead of `meta` / `ctrl`
+- Putting dictation microphone selection in `config.ts` instead of `kit/settings.json`
+- Using `kit://commands/...` instead of `scriptkit://commands/...`

@@ -39,7 +39,7 @@ type KeyCode =
   | "KeyV" | "KeyW" | "KeyX" | "KeyY" | "KeyZ"
   | "Digit0" | "Digit1" | "Digit2" | "Digit3" | "Digit4"
   | "Digit5" | "Digit6" | "Digit7" | "Digit8" | "Digit9"
-  | "Space" | "Enter" | "Semicolon"
+  | "Space" | "Enter" | "Semicolon" | "Comma" | "Period" | "Slash"
   | "F1" | "F2" | "F3" | "F4" | "F5" | "F6"
   | "F7" | "F8" | "F9" | "F10" | "F11" | "F12";
 
@@ -66,6 +66,20 @@ interface ProcessLimits {
   healthCheckIntervalMs?: number;
 }
 
+interface CommandConfig {
+  shortcut?: HotkeyConfig;
+  hidden?: boolean;
+  confirmationRequired?: boolean;
+}
+
+interface ClaudeCodeConfig {
+  enabled?: boolean;
+  path?: string;
+  permissionMode?: string;
+  allowedTools?: string;
+  addDirs?: string[];
+}
+
 export interface Config {
   hotkey: HotkeyConfig;
   bun_path?: string;
@@ -77,6 +91,15 @@ export interface Config {
   builtIns?: BuiltInConfig;
   clipboardHistoryMaxTextLength?: number;
   processLimits?: ProcessLimits;
+  notesHotkey?: HotkeyConfig;
+  aiHotkey?: HotkeyConfig;
+  aiHotkeyEnabled?: boolean;
+  logsHotkey?: HotkeyConfig;
+  logsHotkeyEnabled?: boolean;
+  dictationHotkey?: HotkeyConfig;
+  dictationHotkeyEnabled?: boolean;
+  commands?: Record<string, CommandConfig>;
+  claudeCode?: ClaudeCodeConfig;
 }
 
 export interface ConfigOption {
