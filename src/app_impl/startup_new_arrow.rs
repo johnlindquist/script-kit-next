@@ -55,62 +55,38 @@
                             match &mut this.current_view {
                                 AppView::FileSearchView {
                                     selected_index,
-                                    query,
                                     ..
                                 } => {
-                                    // CRITICAL: If actions popup is open, route to actions dialog instead
-                                    if this.show_actions_popup {
-                                        if let Some(ref dialog) = this.actions_dialog {
-                                            if is_up {
-                                                dialog.update(cx, |d, cx| d.move_up(cx));
-                                            } else if is_down {
-                                                dialog.update(cx, |d, cx| d.move_down(cx));
-                                            }
-                                            // Notify the actions window to re-render
-                                            crate::actions::notify_actions_window(cx);
-                                        }
+                                    // Actions popup routing is handled by the
+                                    // universal guard above; this arm only runs
+                                    // when the popup is closed.
+
+                                    // Use precomputed display list length —
+                                    // never re-filter ad hoc.
+                                    let filtered_len =
+                                        this.file_search_display_indices.len();
+
+                                    if filtered_len == 0 {
+                                        *selected_index = 0;
                                         cx.stop_propagation();
                                         return;
                                     }
 
-                                    // Compute filtered length using same logic as render
-                                    let filter_pattern = if let Some(parsed) =
-                                        crate::file_search::parse_directory_path(query)
-                                    {
-                                        parsed.filter
-                                    } else if !query.is_empty() {
-                                        Some(query.clone())
-                                    } else {
-                                        None
-                                    };
-
-                                    // Use Nucleo fuzzy matching for consistent filtering with render
-                                    let filtered_len = if let Some(ref pattern) = filter_pattern {
-                                        crate::file_search::filter_results_nucleo_simple(
-                                            &this.cached_file_results,
-                                            pattern,
-                                        )
-                                        .len()
-                                    } else {
-                                        this.cached_file_results.len()
-                                    };
+                                    if *selected_index >= filtered_len {
+                                        *selected_index = filtered_len - 1;
+                                    }
 
                                     if is_up && *selected_index > 0 {
                                         *selected_index -= 1;
-                                        this.file_search_scroll_handle.scroll_to_item(
-                                            *selected_index,
-                                            gpui::ScrollStrategy::Nearest,
-                                        );
-                                        cx.notify();
                                     } else if is_down && *selected_index + 1 < filtered_len {
                                         *selected_index += 1;
-                                        this.file_search_scroll_handle.scroll_to_item(
-                                            *selected_index,
-                                            gpui::ScrollStrategy::Nearest,
-                                        );
-                                        cx.notify();
                                     }
-                                    // Stop propagation so Input doesn't handle it
+
+                                    this.file_search_scroll_handle.scroll_to_item(
+                                        *selected_index,
+                                        gpui::ScrollStrategy::Nearest,
+                                    );
+                                    cx.notify();
                                     cx.stop_propagation();
                                 }
                                 AppView::ClipboardHistoryView {

@@ -1,13 +1,28 @@
 impl ScriptListApp {
     fn resolve_file_search_results_with(
         query: &str,
+        parse_directory_path: impl Fn(&str) -> Option<crate::file_search::ParsedDirPath>,
         is_directory_path: impl Fn(&str) -> bool,
         expand_path: impl Fn(&str) -> Option<String>,
         list_directory: impl Fn(&str, usize) -> Vec<crate::file_search::FileResult>,
         search_files: impl Fn(&str, Option<&str>, usize) -> Vec<crate::file_search::FileResult>,
     ) -> Vec<crate::file_search::FileResult> {
+        // Try structured parse first — handles ~/dev/fin → list ~/dev/
+        if let Some(parsed) = parse_directory_path(query) {
+            tracing::info!(
+                message = %format!(
+                    "Detected browseable path, listing parent directory: {}",
+                    parsed.directory
+                ),
+            );
+            return list_directory(
+                &parsed.directory,
+                crate::file_search::DEFAULT_CACHE_LIMIT,
+            );
+        }
+
         if is_directory_path(query) {
-            tracing::info!(message = %&format!("Detected directory path, listing: {}", query),
+            tracing::info!(message = %format!("Detected directory path, listing: {}", query),
             );
 
             let expanded = expand_path(query);
@@ -32,6 +47,7 @@ impl ScriptListApp {
     pub(crate) fn resolve_file_search_results(query: &str) -> Vec<crate::file_search::FileResult> {
         Self::resolve_file_search_results_with(
             query,
+            crate::file_search::parse_directory_path,
             crate::file_search::is_directory_path,
             crate::file_search::expand_path,
             crate::file_search::list_directory,
@@ -204,6 +220,52 @@ impl ScriptListApp {
         let display_index = self.clamp_file_search_display_index(selected_index)?;
         let entry = self.file_search_result_at_display_index(display_index)?;
         Some((display_index, entry))
+    }
+
+    /// Number of rows in the precomputed file-search display list.
+    pub(crate) fn file_search_display_len(&self) -> usize {
+        self.file_search_display_indices.len()
+    }
+
+    /// Clamp the file-search selection to the visible row count, updating
+    /// `selected_index` inside `AppView::FileSearchView` in place.
+    /// Returns the clamped index, or `None` when the display list is empty.
+    pub(crate) fn clamp_current_file_search_selection(&mut self) -> Option<usize> {
+        let len = self.file_search_display_len();
+        let AppView::FileSearchView { selected_index, .. } = &mut self.current_view else {
+            return None;
+        };
+        if len == 0 {
+            *selected_index = 0;
+            None
+        } else {
+            let clamped = (*selected_index).min(len - 1);
+            *selected_index = clamped;
+            Some(clamped)
+        }
+    }
+
+    /// Return the currently selected file-search entry (owned clone) after
+    /// clamping the selection to the visible display list.
+    pub(crate) fn selected_file_search_result_owned(
+        &mut self,
+    ) -> Option<(usize, crate::file_search::FileResult)> {
+        let display_index = self.clamp_current_file_search_selection()?;
+        let entry = self.file_search_result_at_display_index(display_index)?.clone();
+        Some((display_index, entry))
+    }
+
+    /// Cancel any in-flight file-search work and advance the generation
+    /// counter. Returns the new generation value.
+    pub(crate) fn begin_file_search_session(&mut self) -> u64 {
+        if let Some(cancel) = self.file_search_cancel.take() {
+            cancel.store(true, std::sync::atomic::Ordering::Relaxed);
+        }
+        self.file_search_debounce_task = None;
+        self.file_search_loading = false;
+        self.file_search_frozen_filter = None;
+        self.file_search_gen = self.file_search_gen.wrapping_add(1);
+        self.file_search_gen
     }
 
     /// Row labels for file search in the exact order shown to the user.
@@ -508,6 +570,7 @@ mod utility_views_file_search_tests {
     {
         let results = ScriptListApp::resolve_file_search_results_with(
             "~/missing-dir",
+            |_| None, // parse_directory_path returns None
             |_| true,
             |_| Some("/definitely/not/a/real/dir".to_string()),
             |_, _| Vec::new(),
@@ -527,6 +590,7 @@ mod utility_views_file_search_tests {
     fn test_resolve_file_search_results_with_uses_directory_listing_when_results_exist() {
         let results = ScriptListApp::resolve_file_search_results_with(
             "~/dir",
+            |_| None, // parse_directory_path returns None
             |_| true,
             |_| Some("/definitely/not/a/real/dir".to_string()),
             |query, limit| {
@@ -547,6 +611,7 @@ mod utility_views_file_search_tests {
     fn test_resolve_file_search_results_with_uses_search_for_non_directory_queries() {
         let results = ScriptListApp::resolve_file_search_results_with(
             "invoice",
+            |_| None, // parse_directory_path returns None
             |_| false,
             |_| None,
             |_, _| panic!("list_directory should not be called for non-directory query"),
@@ -560,5 +625,30 @@ mod utility_views_file_search_tests {
 
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].name, "search-result");
+    }
+
+    #[test]
+    fn test_resolve_file_search_results_with_uses_parsed_directory_when_available() {
+        use crate::file_search::ParsedDirPath;
+        let results = ScriptListApp::resolve_file_search_results_with(
+            "~/dev/fin",
+            |_| Some(ParsedDirPath {
+                directory: "~/dev/".to_string(),
+                filter: Some("fin".to_string()),
+            }),
+            |_| true,
+            |_| None,
+            |query, limit| {
+                assert_eq!(query, "~/dev/");
+                assert_eq!(limit, crate::file_search::DEFAULT_CACHE_LIMIT);
+                vec![test_file_result("parsed-dir-result")]
+            },
+            |_, _, _| {
+                panic!("search_files should not be called when parse_directory_path succeeds")
+            },
+        );
+
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].name, "parsed-dir-result");
     }
 }

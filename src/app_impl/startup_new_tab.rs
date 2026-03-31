@@ -30,145 +30,97 @@
                         app.update(cx, |this, cx| {
                             // Handle Tab/Shift+Tab in FileSearchView for directory/file navigation
                             // CRITICAL: ALWAYS consume Tab/Shift+Tab to prevent focus traversal
-                            if let AppView::FileSearchView {
-                                query,
-                                selected_index,
-                                ..
-                            } = &mut this.current_view
-                            {
-                                // ALWAYS stop propagation for Tab/Shift+Tab in FileSearchView
-                                // This prevents Tab from falling through to focus traversal
+                            if matches!(this.current_view, AppView::FileSearchView { .. }) {
+                                // Always consume Tab in file search so GPUI focus traversal never wins.
                                 cx.stop_propagation();
 
+                                // While the actions popup is open, do nothing here.
+                                if this.show_actions_popup {
+                                    return;
+                                }
+
                                 if has_shift {
-                                    // Shift+Tab: Go up one directory level using parent_dir_display helper
-                                    // This handles ~/, /, ./, ../ and regular paths correctly
-                                    if let Some(parent_path) =
-                                        crate::file_search::parent_dir_display(query)
+                                    // Shift+Tab: Go up one directory level
+                                    let current_query = match &this.current_view {
+                                        AppView::FileSearchView { query, .. } => query.clone(),
+                                        _ => String::new(),
+                                    };
+
+                                    let next_path = if let Some(parsed) =
+                                        crate::file_search::parse_directory_path(&current_query)
                                     {
+                                        if parsed.filter.is_some() {
+                                            // Has filter fragment — strip it back to the parent dir
+                                            Some(parsed.directory)
+                                        } else {
+                                            crate::file_search::parent_dir_display(&parsed.directory)
+                                        }
+                                    } else {
+                                        None
+                                    };
+
+                                    if let Some(parent_path) = next_path {
                                         crate::logging::log(
                                             "KEY",
                                             &format!(
                                                 "Shift+Tab: Navigating up from '{}' to '{}'",
-                                                query, parent_path
+                                                current_query, parent_path
                                             ),
                                         );
-
-                                        // Update the input - handle_filter_input_change will:
-                                        // - Update query
-                                        // - Reset selected_index to 0
-                                        // - Detect directory change
-                                        // - Trigger async directory load
                                         this.gpui_input_state.update(cx, |state, cx| {
                                             state.set_value(parent_path.clone(), window, cx);
-                                            // Ensure cursor is at end with no selection after programmatic set_value
-                                            // This prevents issues where GPUI might leave caret at wrong position
                                             let len = parent_path.len();
                                             state.set_selection(len, len, window, cx);
                                         });
-
                                         cx.notify();
                                     } else {
-                                        // At root (/ or ~/) - no parent to navigate to
-                                        // Key is consumed (stop_propagation called above) but no action taken
                                         crate::logging::log(
                                             "KEY",
                                             &format!(
                                                 "Shift+Tab: Already at root '{}', no-op",
-                                                query
+                                                current_query
                                             ),
                                         );
                                     }
-                                } else {
-                                    // Tab: Enter directory OR autocomplete file name
-                                    // Reuse the precomputed display order instead of
-                                    // re-running Nucleo on every Tab keypress.
-                                    // Use direct field access to avoid borrow conflict
-                                    // with the &mut selected_index from the pattern match.
-                                    let display_len =
-                                        this.file_search_display_indices.len();
-                                    if display_len > 0 {
-                                        let clamped =
-                                            (*selected_index).min(display_len - 1);
-                                        *selected_index = clamped;
-
-                                        let file_info = this
-                                            .file_search_display_indices
-                                            .get(clamped)
-                                            .and_then(|&ri| {
-                                                this.cached_file_results.get(ri)
-                                            })
-                                            .map(|f| (f.file_type.clone(), f.path.clone()));
-
-                                        if let Some((file_type, path)) = file_info {
-                                            if file_type
-                                                == crate::file_search::FileType::Directory
-                                            {
-                                                let shortened =
-                                                    crate::file_search::shorten_path(&path);
-                                                let new_path = format!(
-                                                    "{}/",
-                                                    shortened.trim_end_matches('/')
-                                                );
-                                                crate::logging::log(
-                                                    "KEY",
-                                                    &format!(
-                                                        "Tab: Entering directory: {}",
-                                                        new_path
-                                                    ),
-                                                );
-
-                                                this.gpui_input_state.update(
-                                                    cx,
-                                                    |state, cx| {
-                                                        state.set_value(
-                                                            new_path.clone(),
-                                                            window,
-                                                            cx,
-                                                        );
-                                                        let len = new_path.len();
-                                                        state.set_selection(
-                                                            len, len, window, cx,
-                                                        );
-                                                    },
-                                                );
-
-                                                cx.notify();
-                                            } else {
-                                                let shortened =
-                                                    crate::file_search::shorten_path(&path);
-                                                crate::logging::log(
-                                                    "KEY",
-                                                    &format!(
-                                                        "Tab: Autocompleting file path: {}",
-                                                        shortened
-                                                    ),
-                                                );
-
-                                                this.gpui_input_state.update(
-                                                    cx,
-                                                    |state, cx| {
-                                                        state.set_value(
-                                                            shortened.clone(),
-                                                            window,
-                                                            cx,
-                                                        );
-                                                        let len = shortened.len();
-                                                        state.set_selection(
-                                                            len, len, window, cx,
-                                                        );
-                                                    },
-                                                );
-
-                                                cx.notify();
-                                            }
-                                        }
-                                    } else {
-                                        crate::logging::log(
-                                            "KEY",
-                                            "Tab: No selection to autocomplete, no-op",
-                                        );
+                                } else if let Some((display_index, file)) =
+                                    this.selected_file_search_result_owned()
+                                {
+                                    if let AppView::FileSearchView {
+                                        selected_index, ..
+                                    } = &mut this.current_view
+                                    {
+                                        *selected_index = display_index;
                                     }
+
+                                    let shortened = crate::file_search::shorten_path(&file.path);
+                                    let new_path =
+                                        if file.file_type == crate::file_search::FileType::Directory
+                                        {
+                                            format!("{}/", shortened.trim_end_matches('/'))
+                                        } else {
+                                            shortened
+                                        };
+
+                                    let log_message =
+                                        if file.file_type == crate::file_search::FileType::Directory
+                                        {
+                                            format!("Tab: Entering directory: {}", new_path)
+                                        } else {
+                                            format!("Tab: Autocompleting file path: {}", new_path)
+                                        };
+                                    crate::logging::log("KEY", &log_message);
+
+                                    this.gpui_input_state.update(cx, |state, cx| {
+                                        state.set_value(new_path.clone(), window, cx);
+                                        let len = new_path.len();
+                                        state.set_selection(len, len, window, cx);
+                                    });
+                                    cx.notify();
+                                } else {
+                                    crate::logging::log(
+                                        "KEY",
+                                        "Tab: No selection to autocomplete, no-op",
+                                    );
                                 }
                                 return;
                             }
