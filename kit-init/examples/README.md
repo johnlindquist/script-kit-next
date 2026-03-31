@@ -11,7 +11,7 @@ Working examples demonstrating Script Kit patterns. Learn by reading, then creat
 | Goal | Copy from | Write to | Read next |
 |------|-----------|----------|-----------|
 | New script | `scripts/hello-world.ts` | `~/.scriptkit/kit/main/scripts/<name>.ts` | `~/.scriptkit/skills/script-authoring/SKILL.md` |
-| New extension bundle | `extensions/howto.md` then `extensions/main.md` | `~/.scriptkit/kit/main/extensions/<name>.md` | `~/.scriptkit/skills/scriptlets/SKILL.md` |
+| New extension bundle | `extensions/starter.md` | `~/.scriptkit/kit/main/extensions/<name>.md` | `~/.scriptkit/skills/scriptlets/SKILL.md` |
 | New mdflow agent | `agents/review-pr.claude.md` | `~/.scriptkit/kit/main/agents/<name>.<backend>.md` | `~/.scriptkit/skills/agents/SKILL.md` |
 
 Pick one artifact, copy one starter, save it under `kit/main/`, then stop. Do not create multiple artifact types for one request.
@@ -31,7 +31,8 @@ Reference markdown bundles copied from the built-in examples kit.
 
 | File | Pattern Demonstrated |
 |------|---------------------|
-| `howto.md` | Best first read for creating a new bundle |
+| `starter.md` | Smallest copyable bundle for one-shot authoring |
+| `howto.md` | Best first read for bundle rules and metadata |
 | `main.md` | Core scriptlet patterns |
 | `advanced.md` | Richer bundle patterns and edge cases |
 
@@ -54,7 +55,7 @@ Copy any example to your workspace:
 
 ```bash
 cp ~/.scriptkit/examples/scripts/hello-world.ts ~/.scriptkit/kit/main/scripts/my-script.ts
-cp ~/.scriptkit/examples/extensions/main.md ~/.scriptkit/kit/main/extensions/my-bundle.md
+cp ~/.scriptkit/examples/extensions/starter.md ~/.scriptkit/kit/main/extensions/my-bundle.md
 cp ~/.scriptkit/examples/agents/review-pr.claude.md ~/.scriptkit/kit/main/agents/my-agent.claude.md
 ```
 

@@ -95,6 +95,14 @@ Return:
 - For extension bundles, prefer `metadata` code fences instead of HTML comments.
 - For `tool:<name>` scriptlets, the first line must be `import "@scriptkit/sdk";`.
 
+## Fastest One-Shot Path
+
+When the request is "make one new Script Kit artifact fast," open:
+
+- `~/.scriptkit/examples/START_HERE.md`
+
+That file gives one starter per artifact, exact destinations, and ready-to-run copy commands.
+
 ## Quick Start
 
 ```typescript

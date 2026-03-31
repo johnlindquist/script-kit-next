@@ -696,7 +696,10 @@ pub fn should_include_artifact_authoring_guidance(intent: Option<&str>) -> bool 
 /// strip or misparse XML-ish tags.
 fn build_tab_ai_artifact_authoring_guidance_block() -> &'static str {
     r#"--- Script Kit artifact authoring guidance ---
-Pick the smallest artifact that fits before writing files.
+Choose one artifact. Copy one starter. Save it under ~/.scriptkit/kit/main/. Then stop.
+
+Fastest path:
+- ~/.scriptkit/examples/START_HERE.md
 
 Decision:
 - Use Script for Script Kit UI APIs, Bun APIs, files, HTTP, or multi-step logic.
@@ -707,9 +710,24 @@ Artifact: Script
 Write:
 - ~/.scriptkit/kit/main/scripts/<name>.ts
 Read next:
-- ~/.scriptkit/skills/script-authoring/SKILL.md
 - ~/.scriptkit/examples/scripts/hello-world.ts
-Starter:
+- ~/.scriptkit/skills/script-authoring/SKILL.md
+
+Artifact: Extension bundle
+Write:
+- ~/.scriptkit/kit/main/extensions/<name>.md
+Read next:
+- ~/.scriptkit/examples/extensions/starter.md
+- ~/.scriptkit/skills/scriptlets/SKILL.md
+
+Artifact: mdflow agent
+Write:
+- ~/.scriptkit/kit/main/agents/<name>.<backend>.md
+Read next:
+- ~/.scriptkit/examples/agents/review-pr.claude.md
+- ~/.scriptkit/skills/agents/SKILL.md
+
+Starter: Script
 ~~~ts
 import "@scriptkit/sdk";
 
@@ -722,13 +740,7 @@ const value = await arg("What should this script do?");
 await div(`<div class="p-8 text-2xl">${value}</div>`);
 ~~~
 
-Artifact: Extension bundle
-Write:
-- ~/.scriptkit/kit/main/extensions/<name>.md
-Read next:
-- ~/.scriptkit/examples/extensions/howto.md
-- ~/.scriptkit/skills/scriptlets/SKILL.md
-Starter:
+Starter: Extension bundle
 ~~~md
 ---
 name: My Bundle
@@ -762,13 +774,7 @@ await notify("Saved");
 ```
 ~~~
 
-Artifact: mdflow agent
-Write:
-- ~/.scriptkit/kit/main/agents/<name>.<backend>.md
-Read next:
-- ~/.scriptkit/skills/agents/SKILL.md
-- ~/.scriptkit/examples/agents/review-pr.claude.md
-Starter:
+Starter: mdflow agent
 ~~~md
 ---
 _sk_name: "Review PR"
@@ -786,12 +792,11 @@ Return:
 ~~~
 
 Rules:
-- Do not create a .ts script when the request is really an extension bundle or mdflow agent.
-- Do not write runnable user files outside ~/.scriptkit/kit/main/.
+- Pick the smallest artifact that fits.
+- Save only under ~/.scriptkit/kit/main/.
 - For scripts, always use export const metadata with name and description.
-- For extension bundles, each ## heading is one scriptlet.
 - For extension bundles, prefer metadata code fences over HTML comments.
-- For extension bundles, tool:<name> fences still need import "@scriptkit/sdk"; as the first line.
+- For tool:<name> scriptlets, the first line must be import "@scriptkit/sdk";.
 --- end artifact authoring guidance ---"#
 }
 
@@ -1687,7 +1692,8 @@ mod tests {
     #[test]
     fn authoring_guidance_block_references_exact_files() {
         let block = build_tab_ai_artifact_authoring_guidance_block();
-        assert!(block.contains("~/.scriptkit/examples/extensions/howto.md"));
+        assert!(block.contains("~/.scriptkit/examples/START_HERE.md"));
+        assert!(block.contains("~/.scriptkit/examples/extensions/starter.md"));
         assert!(block.contains("~/.scriptkit/skills/scriptlets/SKILL.md"));
         assert!(block.contains("~/.scriptkit/examples/scripts/hello-world.ts"));
         assert!(block.contains("tool:<name>"));
