@@ -511,11 +511,20 @@ pub fn build_tab_ai_harness_context_block(
     if let Some(target) = context.focused_target.as_ref() {
         push_target_lines(&mut out, "focused target", target);
     }
+    let has_visible_targets = !context.visible_targets.is_empty();
     for (index, target) in context.visible_targets.iter().take(6).enumerate() {
         push_target_lines(&mut out, &format!("visible target {}", index + 1), target);
     }
-    for (index, element) in context.ui.visible_elements.iter().take(6).enumerate() {
-        push_visible_element_lines(&mut out, &format!("visible element {}", index + 1), element);
+    // Only emit raw visible elements when target resolution did not already
+    // project the surface into higher-signal targets.
+    if !has_visible_targets {
+        for (index, element) in context.ui.visible_elements.iter().take(6).enumerate() {
+            push_visible_element_lines(
+                &mut out,
+                &format!("visible element {}", index + 1),
+                element,
+            );
+        }
     }
 
     if let Some(text) = context.desktop.selected_text.as_deref() {
@@ -1586,6 +1595,90 @@ mod tests {
         assert!(
             !block.contains("slug="),
             "no pipe-delimited compound fields"
+        );
+    }
+
+    #[test]
+    fn context_block_suppresses_visible_elements_when_visible_targets_exist() {
+        let blob = crate::ai::TabAiContextBlob::from_parts_with_targets(
+            crate::ai::TabAiUiSnapshot {
+                prompt_type: "ScriptList".to_string(),
+                input_text: None,
+                focused_semantic_id: None,
+                selected_semantic_id: None,
+                visible_elements: vec![crate::protocol::ElementInfo {
+                    semantic_id: "choice:0:apple".to_string(),
+                    element_type: crate::protocol::ElementType::Choice,
+                    text: Some("Apple".to_string()),
+                    value: Some("apple".to_string()),
+                    selected: Some(true),
+                    focused: None,
+                    index: Some(0),
+                }],
+            },
+            None,
+            vec![crate::ai::TabAiTargetContext {
+                source: "ScriptList".to_string(),
+                kind: "script".to_string(),
+                semantic_id: "choice:0:apple".to_string(),
+                label: "Apple".to_string(),
+                metadata: None,
+            }],
+            crate::context_snapshot::AiContextSnapshot::default(),
+            vec![],
+            None,
+            vec![],
+            vec![],
+            "2026-03-31T00:00:00Z".to_string(),
+        );
+
+        let block = build_tab_ai_harness_context_block(&blob).expect("context block");
+
+        // Visible target should be present
+        assert!(
+            block.contains("visible target 1 source: ScriptList"),
+            "visible target should appear"
+        );
+        // Raw visible element should be suppressed
+        assert!(
+            !block.contains("visible element 1"),
+            "raw visible elements must be suppressed when visible targets exist"
+        );
+    }
+
+    #[test]
+    fn context_block_emits_visible_elements_when_no_visible_targets() {
+        let blob = crate::ai::TabAiContextBlob::from_parts_with_targets(
+            crate::ai::TabAiUiSnapshot {
+                prompt_type: "ScriptList".to_string(),
+                input_text: None,
+                focused_semantic_id: None,
+                selected_semantic_id: None,
+                visible_elements: vec![crate::protocol::ElementInfo {
+                    semantic_id: "choice:0:banana".to_string(),
+                    element_type: crate::protocol::ElementType::Choice,
+                    text: Some("Banana".to_string()),
+                    value: None,
+                    selected: None,
+                    focused: None,
+                    index: Some(0),
+                }],
+            },
+            None,
+            vec![], // no visible targets
+            crate::context_snapshot::AiContextSnapshot::default(),
+            vec![],
+            None,
+            vec![],
+            vec![],
+            "2026-03-31T00:00:00Z".to_string(),
+        );
+
+        let block = build_tab_ai_harness_context_block(&blob).expect("context block");
+
+        assert!(
+            block.contains("visible element 1 semantic id: choice:0:banana"),
+            "raw visible elements should appear when no visible targets exist"
         );
     }
 

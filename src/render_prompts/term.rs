@@ -81,7 +81,7 @@ fn render_terminal_prompt_hint_strip(
 ) -> AnyElement {
     let apply_label =
         crate::ai::tab_ai_apply_back_footer_label(route.map(|r| &r.source_type));
-    let text = format!("⌘↩ {apply_label} (selection or last output) · ⌘W Close");
+    let text = format!("⌘↩ {apply_label} · ⌘W Close");
     crate::components::prompt_layout_shell::render_simple_hint_strip(text, None)
 }
 
@@ -199,8 +199,8 @@ impl ScriptListApp {
 
                         // QuickTerminalView wrapper semantics contract:
                         // - Plain Escape is forwarded to the PTY (harness TUI owns it).
-                        // - Cmd+Enter applies the terminal selection or last output
-                        //   back to the captured source context.
+                        // - Cmd+Enter pastes back the terminal selection or last output
+                        //   to the captured source context.
                         // - Cmd+W closes the wrapper and restores the previous view/focus.
                         // This is intentional: CLI harnesses (Claude Code, Codex, etc.)
                         // use Escape for their own TUI navigation (cancel, dismiss, etc.).
@@ -350,7 +350,7 @@ impl ScriptListApp {
                     })
                     .child(entity)
             })
-            // Terminal-specific footer: advertise the route-aware apply-back
+            // Terminal-specific footer: advertise the route-aware paste-back
             // action plus close while the PTY keeps full control of plain
             // Escape and unhandled keys.
             .child(render_terminal_prompt_hint_strip(
