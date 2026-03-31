@@ -2513,8 +2513,7 @@ fn tab_ai_harness_tracks_apply_back_route_state() {
 #[test]
 fn quick_terminal_cmd_enter_routes_to_apply_back() {
     assert!(
-        TERM_RENDER_SOURCE
-            .contains("this.apply_tab_ai_result_from_terminal(entity.clone(), cx);"),
+        TERM_RENDER_SOURCE.contains("this.apply_tab_ai_result_from_terminal(entity.clone(), cx);"),
         "QuickTerminalView must route Cmd+Enter into apply-back via the terminal helper"
     );
 }

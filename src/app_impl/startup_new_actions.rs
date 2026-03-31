@@ -46,21 +46,22 @@
                                     return;
                                 }
                                 AppView::FileSearchView { .. } => {
-                                    let Some((display_index, file_clone)) =
-                                        this.selected_file_search_result_owned()
-                                    else {
-                                        cx.stop_propagation();
-                                        return;
-                                    };
+                                    let selected = this.selected_file_search_result_owned();
 
-                                    if let AppView::FileSearchView {
-                                        selected_index, ..
-                                    } = &mut this.current_view
-                                    {
-                                        *selected_index = display_index;
+                                    if let Some((display_index, _)) = &selected {
+                                        if let AppView::FileSearchView {
+                                            selected_index, ..
+                                        } = &mut this.current_view
+                                        {
+                                            *selected_index = *display_index;
+                                        }
                                     }
 
-                                    this.toggle_file_search_actions(&file_clone, window, cx);
+                                    this.toggle_file_search_actions(
+                                        selected.as_ref().map(|(_, f)| f),
+                                        window,
+                                        cx,
+                                    );
                                     cx.stop_propagation();
                                     return;
                                 }

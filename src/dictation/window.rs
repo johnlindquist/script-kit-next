@@ -210,12 +210,12 @@ pub(crate) enum OverlayEscapeAction {
 ///
 /// The headline is the primary status text (e.g. "Listening…", "Cancel dictation?").
 /// The hint is the footer/shortcut hint (e.g. "Esc Cancel", "↵ Cancel · Esc Resume").
-pub(crate) fn overlay_phase_copy(
-    phase: &DictationSessionPhase,
-) -> (&'static str, &'static str) {
+pub(crate) fn overlay_phase_copy(phase: &DictationSessionPhase) -> (&'static str, &'static str) {
     match phase {
         DictationSessionPhase::Recording => ("Listening\u{2026}", "Esc Cancel"),
-        DictationSessionPhase::Confirming => ("Cancel dictation?", "\u{21b5} Cancel \u{00b7} Esc Resume"),
+        DictationSessionPhase::Confirming => {
+            ("Cancel dictation?", "\u{21b5} Cancel \u{00b7} Esc Resume")
+        }
         DictationSessionPhase::Transcribing => ("Transcribing\u{2026}", "Esc Close"),
         DictationSessionPhase::Delivering => ("Delivering\u{2026}", "Esc Close"),
         DictationSessionPhase::Finished => ("Done", "Esc Close"),

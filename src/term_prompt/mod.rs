@@ -468,11 +468,7 @@ impl TermPrompt {
     ///
     /// Converts line or pixel deltas into whole-line scroll commands, accumulating
     /// fractional remainders across events so trackpad/momentum scrolling is smooth.
-    fn apply_scroll_wheel_delta(
-        &mut self,
-        event: &ScrollWheelEvent,
-        cx: &mut Context<Self>,
-    ) {
+    fn apply_scroll_wheel_delta(&mut self, event: &ScrollWheelEvent, cx: &mut Context<Self>) {
         let lines = match event.delta {
             ScrollDelta::Lines(point) => point.y,
             ScrollDelta::Pixels(point) => {

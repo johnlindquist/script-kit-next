@@ -5,7 +5,6 @@ use gpui::{
     Window,
 };
 
-use crate::list_item::FONT_MONO;
 use crate::ui::chrome::{
     alpha_from_opacity, HINT_STRIP_HEIGHT, HINT_STRIP_PADDING_X, HINT_STRIP_PADDING_Y,
     HINT_TEXT_OPACITY,
@@ -99,8 +98,7 @@ impl RenderOnce for HintStrip {
         row.child(div().flex_1()).child(
             div()
                 .text_xs()
-                .font_family(FONT_MONO)
-                .font_weight(FontWeight::MEDIUM)
+                .font_weight(FontWeight::SEMIBOLD)
                 .text_color(rgba(text_rgba))
                 .child(joined_hints),
         )

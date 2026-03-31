@@ -124,6 +124,7 @@ impl ScriptListApp {
         self.file_search_display_indices.clear();
         self.file_search_current_dir = None;
         self.file_search_frozen_filter = None;
+        self.file_search_sort_mode = crate::actions::FileSearchSortMode::default();
 
         // Full view still needs its split-view resize immediately.
         // Mini opens small and grows only as results arrive.

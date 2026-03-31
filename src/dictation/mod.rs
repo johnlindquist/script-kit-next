@@ -34,12 +34,12 @@ pub use types::{
     DictationTarget, DictationToggleOutcome, RawAudioChunk,
 };
 pub use visualizer::{animate_bars, bars_for_level, compute_level};
+pub(crate) use window::overlay_phase_copy;
 pub use window::{
     begin_overlay_session, close_dictation_overlay, is_dictation_overlay_open,
     open_dictation_overlay, overlay_generation, set_overlay_abort_callback,
     update_dictation_overlay, DictationOverlay, DictationOverlayState,
 };
-pub(crate) use window::overlay_phase_copy;
 
 #[cfg(test)]
 mod tests;

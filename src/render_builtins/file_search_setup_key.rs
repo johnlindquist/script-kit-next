@@ -168,9 +168,8 @@
                         _ => {
                             // Handle Cmd+K (toggle actions)
                             if has_cmd && key.eq_ignore_ascii_case("k") {
-                                if let Some(file) = get_selected_file() {
-                                    this.toggle_file_search_actions(&file, window, cx);
-                                }
+                                let selected = get_selected_file();
+                                this.toggle_file_search_actions(selected.as_ref(), window, cx);
                                 return;
                             }
                             // Handle Cmd+Y (Quick Look) - macOS only

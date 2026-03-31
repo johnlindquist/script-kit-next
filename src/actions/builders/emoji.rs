@@ -38,7 +38,9 @@ pub fn get_emoji_context_actions(emoji: &EmojiActionInfo) -> Vec<Action> {
         Action::new(
             "emoji:emoji_paste",
             paste_title,
-            Some("Copies the emoji to the clipboard and pastes it into the focused app".to_string()),
+            Some(
+                "Copies the emoji to the clipboard and pastes it into the focused app".to_string(),
+            ),
             ActionCategory::ScriptContext,
         )
         .with_shortcut("↵")
@@ -171,7 +173,10 @@ mod tests {
         assert!(ids.contains(&"emoji:emoji_unpin"));
         assert!(!ids.contains(&"emoji:emoji_pin"));
 
-        let unpin = actions.iter().find(|a| a.id == "emoji:emoji_unpin").unwrap();
+        let unpin = actions
+            .iter()
+            .find(|a| a.id == "emoji:emoji_unpin")
+            .unwrap();
         assert_eq!(unpin.title, "Unpin Emoji");
         assert_eq!(unpin.icon, Some(IconName::StarFilled));
     }
@@ -192,14 +197,20 @@ mod tests {
     #[test]
     fn test_get_emoji_context_actions_paste_title_includes_app_name() {
         let actions = get_emoji_context_actions(&emoji_info(false, Some("TextEdit")));
-        let paste = actions.iter().find(|a| a.id == "emoji:emoji_paste").unwrap();
+        let paste = actions
+            .iter()
+            .find(|a| a.id == "emoji:emoji_paste")
+            .unwrap();
         assert_eq!(paste.title, "Paste to TextEdit");
     }
 
     #[test]
     fn test_get_emoji_context_actions_paste_title_fallback_without_app_name() {
         let actions = get_emoji_context_actions(&emoji_info(false, None));
-        let paste = actions.iter().find(|a| a.id == "emoji:emoji_paste").unwrap();
+        let paste = actions
+            .iter()
+            .find(|a| a.id == "emoji:emoji_paste")
+            .unwrap();
         assert_eq!(paste.title, "Paste to Active App");
     }
 
@@ -207,9 +218,15 @@ mod tests {
     fn test_get_emoji_context_actions_assigns_consistent_icons() {
         let actions = get_emoji_context_actions(&emoji_info(false, None));
 
-        let paste = actions.iter().find(|a| a.id == "emoji:emoji_paste").unwrap();
+        let paste = actions
+            .iter()
+            .find(|a| a.id == "emoji:emoji_paste")
+            .unwrap();
         let copy = actions.iter().find(|a| a.id == "emoji:emoji_copy").unwrap();
-        let paste_keep = actions.iter().find(|a| a.id == "emoji:emoji_paste_keep_open").unwrap();
+        let paste_keep = actions
+            .iter()
+            .find(|a| a.id == "emoji:emoji_paste_keep_open")
+            .unwrap();
 
         assert_eq!(paste.icon, Some(IconName::ArrowUp));
         assert_eq!(copy.icon, Some(IconName::Copy));

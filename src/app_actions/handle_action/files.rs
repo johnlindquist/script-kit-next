@@ -773,7 +773,136 @@ impl ScriptListApp {
                 self.restore_file_search_input_focus(cx);
                 DispatchOutcome::success()
             }
+            // ── Current-directory actions ────────────────────────────────
+            "sort_name_asc" | "sort_name_desc" | "sort_modified_desc" | "sort_modified_asc" => {
+                let mode = match action_id {
+                    "sort_name_asc" => crate::actions::FileSearchSortMode::NameAsc,
+                    "sort_name_desc" => crate::actions::FileSearchSortMode::NameDesc,
+                    "sort_modified_desc" => crate::actions::FileSearchSortMode::ModifiedDesc,
+                    "sort_modified_asc" => crate::actions::FileSearchSortMode::ModifiedAsc,
+                    _ => unreachable!(),
+                };
+                self.file_search_sort_mode = mode;
+                self.apply_file_search_sort_mode();
+                self.recompute_file_search_display_indices();
+                let label = match mode {
+                    crate::actions::FileSearchSortMode::NameAsc => "Sorted by Name (A\u{2192}Z)",
+                    crate::actions::FileSearchSortMode::NameDesc => "Sorted by Name (Z\u{2192}A)",
+                    crate::actions::FileSearchSortMode::ModifiedDesc => "Sorted by Modified (Newest)",
+                    crate::actions::FileSearchSortMode::ModifiedAsc => "Sorted by Modified (Oldest)",
+                };
+                self.show_hud(label.to_string(), Some(HUD_SHORT_MS), cx);
+                cx.notify();
+                DispatchOutcome::success()
+            }
+            "refresh_directory" => {
+                let Some(dir) = self.current_file_search_directory_abs() else {
+                    return DispatchOutcome::error(
+                        crate::action_helpers::ERROR_ACTION_FAILED,
+                        "No current directory to refresh",
+                    );
+                };
+                let (query, presentation) = if let AppView::FileSearchView {
+                    query, presentation, ..
+                } = &self.current_view
+                {
+                    (query.clone(), *presentation)
+                } else {
+                    (format!("{dir}/"), FileSearchPresentation::Mini)
+                };
+                self.restart_file_search_stream_for_query(query, presentation, None, false, cx);
+                self.show_hud("Refreshing Directory".to_string(), Some(HUD_SHORT_MS), cx);
+                DispatchOutcome::success()
+            }
+            "reveal_current_directory" => {
+                let Some(dir) = self.current_file_search_directory_abs() else {
+                    return DispatchOutcome::error(
+                        crate::action_helpers::ERROR_ACTION_FAILED,
+                        "No current directory to reveal",
+                    );
+                };
+                match crate::file_search::reveal_in_finder(&dir) {
+                    Ok(()) => {
+                        self.show_hud("Opened in Finder".to_string(), Some(HUD_SHORT_MS), cx);
+                        DispatchOutcome::success()
+                    }
+                    Err(e) => DispatchOutcome::error(
+                        crate::action_helpers::ERROR_ACTION_FAILED,
+                        format!("Failed to reveal current directory: {e}"),
+                    ),
+                }
+            }
+            "copy_current_directory_path" => {
+                let Some(dir) = self.current_file_search_directory_abs() else {
+                    return DispatchOutcome::error(
+                        crate::action_helpers::ERROR_ACTION_FAILED,
+                        "No current directory to copy",
+                    );
+                };
+                self.copy_to_clipboard_with_feedback(
+                    &dir,
+                    format!("Copied: {dir}"),
+                    true,
+                    cx,
+                );
+                DispatchOutcome::success()
+            }
+            "open_current_directory_in_terminal" => {
+                let Some(dir) = self.current_file_search_directory_abs() else {
+                    return DispatchOutcome::error(
+                        crate::action_helpers::ERROR_ACTION_FAILED,
+                        "No current directory to open",
+                    );
+                };
+                match crate::file_search::open_in_terminal(&dir, true) {
+                    Ok(_) => {
+                        self.show_hud(
+                            "Opened in Terminal".to_string(),
+                            Some(HUD_SHORT_MS),
+                            cx,
+                        );
+                        self.hide_main_and_reset(cx);
+                        DispatchOutcome::success()
+                    }
+                    Err(e) => DispatchOutcome::error(
+                        crate::action_helpers::ERROR_ACTION_FAILED,
+                        format!("Failed to open current directory in terminal: {e}"),
+                    ),
+                }
+            }
             _ => DispatchOutcome::not_handled(),
         }
+    }
+
+    /// Apply the current sort mode to cached file results.
+    fn apply_file_search_sort_mode(&mut self) {
+        self.cached_file_results.sort_by(|a, b| {
+            let a_is_dir = matches!(a.file_type, crate::file_search::FileType::Directory);
+            let b_is_dir = matches!(b.file_type, crate::file_search::FileType::Directory);
+            // Directories always sort first
+            match (a_is_dir, b_is_dir) {
+                (true, false) => return std::cmp::Ordering::Less,
+                (false, true) => return std::cmp::Ordering::Greater,
+                _ => {}
+            }
+            match self.file_search_sort_mode {
+                crate::actions::FileSearchSortMode::NameAsc => {
+                    a.name.to_lowercase().cmp(&b.name.to_lowercase())
+                }
+                crate::actions::FileSearchSortMode::NameDesc => {
+                    b.name.to_lowercase().cmp(&a.name.to_lowercase())
+                }
+                crate::actions::FileSearchSortMode::ModifiedDesc => {
+                    b.modified.cmp(&a.modified).then_with(|| {
+                        a.name.to_lowercase().cmp(&b.name.to_lowercase())
+                    })
+                }
+                crate::actions::FileSearchSortMode::ModifiedAsc => {
+                    a.modified.cmp(&b.modified).then_with(|| {
+                        a.name.to_lowercase().cmp(&b.name.to_lowercase())
+                    })
+                }
+            }
+        });
     }
 }

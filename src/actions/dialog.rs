@@ -22,8 +22,7 @@ use super::builders::{
     format_shortcut_hint as format_shortcut_hint_shared, get_chat_context_actions,
     get_clipboard_history_context_actions, get_emoji_context_actions, get_file_context_actions,
     get_global_actions, get_path_context_actions, get_script_context_actions,
-    get_scriptlet_context_actions_with_custom, ChatPromptInfo, ClipboardEntryInfo,
-    EmojiActionInfo,
+    get_scriptlet_context_actions_with_custom, ChatPromptInfo, ClipboardEntryInfo, EmojiActionInfo,
 };
 use super::constants::{
     ACTION_ROW_INSET, HEADER_HEIGHT, POPUP_MAX_HEIGHT, POPUP_WIDTH, SEARCH_INPUT_HEIGHT,
@@ -613,6 +612,54 @@ impl ActionsDialog {
             DesignVariant::Default,
             Some(file_info.name.clone()),
             config,
+        )
+    }
+
+    /// Create ActionsDialog for the file-search view, combining selected-row
+    /// file actions (when a row is selected) and current-directory actions
+    /// (when browsing a concrete directory).
+    pub fn with_file_search_context(
+        focus_handle: FocusHandle,
+        on_select: ActionCallback,
+        file_info: Option<&FileInfo>,
+        dir_info: Option<&crate::actions::FileSearchDirectoryInfo>,
+        theme: Arc<theme::Theme>,
+    ) -> Self {
+        let mut actions = Vec::new();
+
+        if let Some(file_info) = file_info {
+            actions.extend(get_file_context_actions(file_info));
+        }
+        if let Some(dir_info) = dir_info {
+            actions.extend(crate::actions::builders::get_file_search_directory_actions(
+                dir_info,
+            ));
+        }
+
+        let context_title = file_info
+            .map(|info| info.name.clone())
+            .or_else(|| dir_info.map(|dir| dir.name.clone()));
+
+        logging::log(
+            "ACTIONS",
+            &format!(
+                "ActionsDialog created for file search context: file={}, dir={}, {} actions",
+                file_info.map(|f| f.name.as_str()).unwrap_or("none"),
+                dir_info.map(|d| d.name.as_str()).unwrap_or("none"),
+                actions.len()
+            ),
+        );
+
+        Self::from_actions_with_context(
+            focus_handle,
+            on_select,
+            actions,
+            None,
+            None,
+            theme,
+            DesignVariant::Default,
+            context_title,
+            ActionsDialogConfig::default(),
         )
     }
 

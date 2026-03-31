@@ -386,6 +386,7 @@ impl ScriptListApp {
             file_search_current_dir: None,
             file_search_frozen_filter: None,
             file_search_actions_path: None,
+            file_search_sort_mode: crate::actions::FileSearchSortMode::default(),
             file_search_gen: 0,
             file_search_cancel: None,
             file_search_display_indices: Vec::new(),
@@ -1480,10 +1481,14 @@ impl ScriptListApp {
                                         *selected_index = filtered_len - 1;
                                     }
 
-                                    if let Some((_, file)) = filtered_results.get(*selected_index) {
-                                        let file_clone = (*file).clone();
-                                        this.toggle_file_search_actions(&file_clone, window, cx);
-                                    }
+                                    let selected_file = filtered_results
+                                        .get(*selected_index)
+                                        .map(|(_, file)| (*file).clone());
+                                    this.toggle_file_search_actions(
+                                        selected_file.as_ref(),
+                                        window,
+                                        cx,
+                                    );
                                     cx.stop_propagation();
                                     return;
                                 }
