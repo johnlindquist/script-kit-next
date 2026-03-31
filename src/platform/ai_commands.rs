@@ -65,6 +65,35 @@ fn capture_screen_xcap_fallback(
     Ok((png_data, new_width, new_height))
 }
 
+/// The title used when a focused-window screenshot falls back to the
+/// self-excluding screen capture because Script Kit is the frontmost app.
+fn script_kit_excluded_capture_title() -> String {
+    "Screen behind Script Kit panel".to_string()
+}
+
+/// Return the capture bounds for self-excluding screen capture.
+///
+/// Prefers the active display (the one containing the key window) so that
+/// multi-monitor setups capture the screen behind the Script Kit panel rather
+/// than always defaulting to `CGDisplay::main()`.
+#[cfg(target_os = "macos")]
+fn capture_target_bounds() -> core_graphics::display::CGRect {
+    if let Some(display) = get_active_display() {
+        let v = display.visible_area;
+        return core_graphics::display::CGRect {
+            origin: core_graphics::display::CGPoint {
+                x: v.origin_x,
+                y: v.origin_y,
+            },
+            size: core_graphics::display::CGSize {
+                width: v.width,
+                height: v.height,
+            },
+        };
+    }
+    core_graphics::display::CGDisplay::main().bounds()
+}
+
 /// macOS-native screen capture that excludes Script Kit windows.
 ///
 /// 1. Enumerates on-screen windows via `CGWindowListCopyWindowInfo`.
@@ -79,7 +108,6 @@ fn capture_screen_excluding_self(
     use core_foundation::dictionary::CFDictionaryRef;
     use core_foundation::number::CFNumber;
     use core_foundation::string::CFString;
-    use core_graphics::display::CGDisplay;
     use image::codecs::png::PngEncoder;
     use image::ImageEncoder;
     use std::ffi::c_void;
@@ -212,9 +240,9 @@ fn capture_screen_excluding_self(
     let cf_numbers: Vec<CFNumber> = window_ids.iter().map(|&id| CFNumber::from(id)).collect();
     let cf_array = CFArray::from_CFTypes(&cf_numbers);
 
-    // Get the main display bounds for the capture rect
-    let main_display = CGDisplay::main();
-    let screen_bounds = main_display.bounds();
+    // Use the active display bounds so multi-monitor setups capture the
+    // screen behind the Script Kit panel, not always the main display.
+    let screen_bounds = capture_target_bounds();
 
     // SAFETY: CGWindowListCreateImageFromArray composites the listed windows
     // into a CGImage. screen_bounds is the main display rect, cf_array is a
@@ -369,9 +397,14 @@ pub struct FocusedWindowCapture {
 
 /// Capture a screenshot of the currently focused window (not our app).
 ///
-/// This function finds the frontmost window that is NOT Script Kit and captures it.
-/// If no focused window is found, it falls back to the first available window and
-/// sets `used_fallback = true` so the caller can warn the user.
+/// When Script Kit itself is the frontmost (focused) app, this function
+/// captures the entire screen *excluding* Script Kit windows via
+/// `capture_screen_screenshot()` so the result shows what is behind the
+/// panel. In that case `used_fallback` is `true` and `window_title` is
+/// `"Screen behind Script Kit panel"`.
+///
+/// When a non-Script-Kit window is focused, the existing per-window capture
+/// path is used.
 ///
 /// # Returns
 /// A `FocusedWindowCapture` on success.
@@ -386,6 +419,8 @@ pub fn capture_focused_window_screenshot(
     // Find the focused window that is NOT our app
     let mut target_window = None;
     let mut found_focused = false;
+    let mut script_kit_is_frontmost = false;
+
     for window in windows {
         let app_name = window.app_name().unwrap_or_else(|_| String::new());
         let is_minimized = window.is_minimized().unwrap_or(true);
@@ -401,6 +436,10 @@ pub fn capture_focused_window_screenshot(
         let height = window.height().unwrap_or(0);
         let is_reasonable_size = width >= 100 && height >= 100;
 
+        if is_focused && is_our_app {
+            script_kit_is_frontmost = true;
+        }
+
         if !is_our_app && !is_minimized && is_reasonable_size {
             if is_focused {
                 target_window = Some(window);
@@ -412,6 +451,22 @@ pub fn capture_focused_window_screenshot(
                 target_window = Some(window);
             }
         }
+    }
+
+    // When Script Kit owns the focused window, capture the screen excluding
+    // our own windows instead of picking an arbitrary fallback window.
+    if script_kit_is_frontmost {
+        tracing::debug!(
+            "Script Kit is frontmost — using self-excluding screen capture"
+        );
+        let (png_data, width, height) = capture_screen_screenshot()?;
+        return Ok(FocusedWindowCapture {
+            png_data,
+            width,
+            height,
+            window_title: script_kit_excluded_capture_title(),
+            used_fallback: true,
+        });
     }
 
     let used_fallback = target_window.is_some() && !found_focused;
@@ -494,9 +549,12 @@ pub struct FocusedWindowMetadata {
 
 /// Return focused-window metadata (title, dimensions) without capturing pixels.
 ///
-/// Uses the same window-enumeration logic as `capture_focused_window_screenshot()`
-/// but stops before `capture_image()`, making it suitable for the Tab AI submit
-/// path where only metadata is needed.
+/// Uses the same window-enumeration and Script-Kit-frontmost detection logic
+/// as `capture_focused_window_screenshot()` but stops before `capture_image()`,
+/// making it suitable for the Tab AI submit path where only metadata is needed.
+///
+/// When Script Kit is the frontmost app, returns the excluded-capture title
+/// with `used_fallback = true` to stay consistent with the screenshot path.
 pub fn capture_focused_window_metadata(
 ) -> Result<FocusedWindowMetadata, Box<dyn std::error::Error + Send + Sync>> {
     use xcap::Window;
@@ -505,6 +563,8 @@ pub fn capture_focused_window_metadata(
 
     let mut target_window = None;
     let mut found_focused = false;
+    let mut script_kit_is_frontmost = false;
+
     for window in windows {
         let app_name = window.app_name().unwrap_or_else(|_| String::new());
         let is_minimized = window.is_minimized().unwrap_or(true);
@@ -518,6 +578,10 @@ pub fn capture_focused_window_metadata(
         let height = window.height().unwrap_or(0);
         let is_reasonable_size = width >= 100 && height >= 100;
 
+        if is_focused && is_our_app {
+            script_kit_is_frontmost = true;
+        }
+
         if !is_our_app && !is_minimized && is_reasonable_size {
             if is_focused {
                 target_window = Some(window);
@@ -528,6 +592,28 @@ pub fn capture_focused_window_metadata(
                 target_window = Some(window);
             }
         }
+    }
+
+    if script_kit_is_frontmost {
+        tracing::debug!(
+            "Script Kit is frontmost — metadata uses excluded-capture title"
+        );
+        // Derive dimensions from the active display so metadata stays
+        // consistent with the self-excluding screenshot path.
+        #[cfg(target_os = "macos")]
+        let (w, h) = {
+            let bounds = capture_target_bounds();
+            (bounds.size.width.max(0.0) as u32, bounds.size.height.max(0.0) as u32)
+        };
+        #[cfg(not(target_os = "macos"))]
+        let (w, h) = (0u32, 0u32);
+
+        return Ok(FocusedWindowMetadata {
+            window_title: script_kit_excluded_capture_title(),
+            width: w,
+            height: h,
+            used_fallback: true,
+        });
     }
 
     let used_fallback = target_window.is_some() && !found_focused;
