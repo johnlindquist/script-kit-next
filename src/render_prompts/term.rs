@@ -76,12 +76,52 @@ fn is_term_prompt_actions_toggle_shortcut(has_cmd: bool, has_shift: bool, key: &
 }
 
 #[inline]
+fn predicted_apply_footer_label(return_view: Option<&AppView>) -> &'static str {
+    match return_view {
+        Some(AppView::ScriptList) => "Save as Script & Run",
+        Some(AppView::ClipboardHistoryView { .. }) => "Copy Result",
+        Some(
+            AppView::ArgPrompt { .. }
+            | AppView::MiniPrompt { .. }
+            | AppView::MicroPrompt { .. }
+            | AppView::DivPrompt { .. }
+            | AppView::FormPrompt { .. }
+            | AppView::EditorPrompt { .. }
+            | AppView::SelectPrompt { .. }
+            | AppView::PathPrompt { .. }
+            | AppView::DropPrompt { .. }
+            | AppView::TemplatePrompt { .. }
+            | AppView::TermPrompt { .. }
+            | AppView::EnvPrompt { .. }
+            | AppView::ChatPrompt { .. }
+            | AppView::NamingPrompt { .. },
+        ) => "Paste Back to Prompt",
+        Some(_) => "Paste Back",
+        None => "Preparing Paste Back\u{2026}",
+    }
+}
+
+#[inline]
 fn render_terminal_prompt_hint_strip(
     route: Option<&crate::ai::TabAiApplyBackRoute>,
+    return_view: Option<&AppView>,
 ) -> AnyElement {
-    let apply_label =
-        crate::ai::tab_ai_apply_back_footer_label(route.map(|r| &r.source_type));
-    let text = format!("⌘↩ {apply_label} · ⌘W Close");
+    let text = match route {
+        Some(route) => {
+            let apply_label =
+                crate::ai::tab_ai_apply_back_footer_label(Some(&route.source_type));
+            match route.hint.target_label.as_deref() {
+                Some(target_label) => {
+                    format!("⌘↩ {apply_label} \u{2192} {target_label} \u{00b7} ⌘W Close")
+                }
+                None => format!("⌘↩ {apply_label} \u{00b7} ⌘W Close"),
+            }
+        }
+        None => format!(
+            "⌘↩ {} \u{00b7} ⌘W Close",
+            predicted_apply_footer_label(return_view)
+        ),
+    };
     crate::components::prompt_layout_shell::render_simple_hint_strip(text, None)
 }
 
@@ -356,6 +396,11 @@ impl ScriptListApp {
             .child(render_terminal_prompt_hint_strip(
                 if matches!(self.current_view, AppView::QuickTerminalView { .. }) {
                     self.tab_ai_harness_apply_back_route.as_ref()
+                } else {
+                    None
+                },
+                if matches!(self.current_view, AppView::QuickTerminalView { .. }) {
+                    self.tab_ai_harness_return_view.as_ref()
                 } else {
                     None
                 },
