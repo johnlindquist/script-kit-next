@@ -3859,6 +3859,14 @@ impl ScriptListApp {
                             }
                         }
                     }
+                    crate::dictation::DictationTarget::TabAiHarness => {
+                        self.submit_to_current_or_new_tab_ai_harness_from_text(
+                            transcript.clone(),
+                            crate::ai::TabAiQuickSubmitSource::Dictation,
+                            cx,
+                        );
+                        true
+                    }
                     crate::dictation::DictationTarget::ExternalApp => false,
                 };
 
@@ -3872,6 +3880,9 @@ impl ScriptListApp {
                         }
                         crate::dictation::DictationTarget::AiChatComposer => {
                             crate::dictation::DictationDestination::AiChatComposer
+                        }
+                        crate::dictation::DictationTarget::TabAiHarness => {
+                            crate::dictation::DictationDestination::TabAiHarness
                         }
                         crate::dictation::DictationTarget::ExternalApp => {
                             crate::dictation::DictationDestination::FrontmostApp
@@ -4548,6 +4559,9 @@ impl ScriptListApp {
     ///
     /// Priority: notes editor > AI chat composer > active prompt > external app.
     fn resolve_dictation_target(&self) -> crate::dictation::DictationTarget {
+        if matches!(self.current_view, AppView::QuickTerminalView { .. }) {
+            return crate::dictation::DictationTarget::TabAiHarness;
+        }
         if notes::is_notes_window_open() {
             return crate::dictation::DictationTarget::NotesEditor;
         }

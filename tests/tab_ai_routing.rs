@@ -1553,6 +1553,7 @@ fn smoke_matrix_claude_code_paste_only_stages_context() {
         None,
         script_kit_gpui::ai::TabAiHarnessSubmissionMode::PasteOnly,
         None,
+        None,
         &[],
     )
     .expect("Claude Code PasteOnly submission must succeed");
@@ -1572,6 +1573,7 @@ fn smoke_matrix_codex_paste_only_stages_context() {
         None,
         script_kit_gpui::ai::TabAiHarnessSubmissionMode::PasteOnly,
         None,
+        None,
         &[],
     )
     .expect("Codex PasteOnly submission must succeed");
@@ -1590,6 +1592,7 @@ fn smoke_matrix_gemini_cli_paste_only_stages_context() {
         None,
         script_kit_gpui::ai::TabAiHarnessSubmissionMode::PasteOnly,
         None,
+        None,
         &[],
     )
     .expect("Gemini CLI PasteOnly submission must succeed");
@@ -1607,6 +1610,7 @@ fn smoke_matrix_copilot_cli_paste_only_stages_context() {
         &context,
         None,
         script_kit_gpui::ai::TabAiHarnessSubmissionMode::PasteOnly,
+        None,
         None,
         &[],
     )
@@ -1684,6 +1688,7 @@ fn smoke_matrix_intent_appends_for_all_backends() {
             &context,
             Some("rename this file"),
             mode,
+            None,
             None,
             &[],
         )

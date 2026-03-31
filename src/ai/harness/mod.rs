@@ -5,8 +5,12 @@
 //! The context assembly pipeline (`TabAiContextBlob`) is unchanged — this
 //! module only consumes it.
 
+pub mod quick_submit;
 pub(crate) mod screenshot_files;
 
+pub use quick_submit::{
+    plan_tab_ai_quick_submit, TabAiQuickSubmitKind, TabAiQuickSubmitPlan, TabAiQuickSubmitSource,
+};
 pub use screenshot_files::{
     capture_tab_ai_focused_window_screenshot_file, capture_tab_ai_screen_screenshot_file,
     cleanup_old_tab_ai_screenshot_files, cleanup_old_tab_ai_screenshot_files_in_dir,
@@ -319,21 +323,25 @@ pub fn build_tab_ai_harness_context_block(
 #[serde(rename_all = "camelCase")]
 struct TabAiHarnessHints<'a> {
     #[serde(skip_serializing_if = "Option::is_none")]
+    quick_submit: Option<&'a TabAiQuickSubmitPlan>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     invocation_receipt: Option<&'a crate::ai::TabAiInvocationReceipt>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     suggested_intents: Vec<crate::ai::TabAiSuggestedIntentSpec>,
 }
 
 /// Build the optional `<scriptKitHints>` block from receipt + suggestions.
-/// Returns `None` when both are empty (no block emitted).
+/// Returns `None` when all inputs are empty (no block emitted).
 fn build_tab_ai_harness_hints_block(
+    quick_submit: Option<&TabAiQuickSubmitPlan>,
     invocation_receipt: Option<&crate::ai::TabAiInvocationReceipt>,
     suggested_intents: &[crate::ai::TabAiSuggestedIntentSpec],
 ) -> Result<Option<String>, String> {
-    if invocation_receipt.is_none() && suggested_intents.is_empty() {
+    if quick_submit.is_none() && invocation_receipt.is_none() && suggested_intents.is_empty() {
         return Ok(None);
     }
     let hints = TabAiHarnessHints {
+        quick_submit,
         invocation_receipt,
         suggested_intents: suggested_intents.to_vec(),
     };
@@ -366,13 +374,14 @@ pub fn build_tab_ai_harness_submission(
     context: &crate::ai::TabAiContextBlob,
     intent: Option<&str>,
     mode: TabAiHarnessSubmissionMode,
+    quick_submit: Option<&TabAiQuickSubmitPlan>,
     invocation_receipt: Option<&crate::ai::TabAiInvocationReceipt>,
     suggested_intents: &[crate::ai::TabAiSuggestedIntentSpec],
 ) -> Result<String, String> {
     let mut output = build_tab_ai_harness_context_block(context)?;
 
     if let Some(hints_block) =
-        build_tab_ai_harness_hints_block(invocation_receipt, suggested_intents)?
+        build_tab_ai_harness_hints_block(quick_submit, invocation_receipt, suggested_intents)?
     {
         output.push_str("\n\n");
         output.push_str(&hints_block);
@@ -534,6 +543,7 @@ mod tests {
             Some("rename this file"),
             TabAiHarnessSubmissionMode::Submit,
             None,
+            None,
             &[],
         )
         .expect("should build");
@@ -547,6 +557,7 @@ mod tests {
             &context,
             None,
             TabAiHarnessSubmissionMode::Submit,
+            None,
             None,
             &[],
         )
@@ -576,6 +587,7 @@ mod tests {
             None,
             TabAiHarnessSubmissionMode::PasteOnly,
             None,
+            None,
             &[],
         )
         .expect("should build");
@@ -603,6 +615,7 @@ mod tests {
             &context,
             Some("open settings"),
             TabAiHarnessSubmissionMode::PasteOnly,
+            None,
             None,
             &[],
         )
@@ -692,6 +705,7 @@ mod tests {
             None,
             TabAiHarnessSubmissionMode::PasteOnly,
             None,
+            None,
             &[],
         )
         .expect("submission");
@@ -713,6 +727,7 @@ mod tests {
             None,
             TabAiHarnessSubmissionMode::Submit,
             None,
+            None,
             &[],
         )
         .expect("submission");
@@ -725,6 +740,7 @@ mod tests {
             &sample_context_with_focused_window(),
             None,
             TabAiHarnessSubmissionMode::PasteOnly,
+            None,
             None,
             &[],
         )
@@ -743,6 +759,7 @@ mod tests {
             &sample_context_with_focused_window(),
             None,
             TabAiHarnessSubmissionMode::PasteOnly,
+            None,
             None,
             &[],
         )
@@ -806,6 +823,7 @@ mod tests {
             &context,
             None,
             TabAiHarnessSubmissionMode::PasteOnly,
+            None,
             Some(&receipt),
             &suggestions,
         )
@@ -836,6 +854,7 @@ mod tests {
             &context,
             None,
             TabAiHarnessSubmissionMode::PasteOnly,
+            None,
             None,
             &[],
         )
@@ -1105,9 +1124,13 @@ mod cleanup_contract_audits {
         );
         assert!(
             source.contains(&compact(
-                "self.open_tab_ai_chat_with_entry_intent(Some(normalized), cx);"
+                "self.submit_to_current_or_new_tab_ai_harness_from_text("
             )),
-            "non-empty send-to-ai fallback queries must open the harness with entry intent"
+            "non-empty send-to-ai fallback queries must use the quick-submit planner"
+        );
+        assert!(
+            source.contains(&compact("TabAiQuickSubmitSource::Fallback")),
+            "send-to-ai fallback must tag source as Fallback"
         );
     }
 

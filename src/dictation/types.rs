@@ -99,6 +99,7 @@ pub enum DictationDestination {
     FrontmostApp,
     NotesEditor,
     AiChatComposer,
+    TabAiHarness,
 }
 
 /// The Script Kit surface that was active when dictation was invoked.
@@ -115,6 +116,8 @@ pub enum DictationTarget {
     NotesEditor,
     /// The AI chat window composer.
     AiChatComposer,
+    /// The Tab AI harness terminal (`QuickTerminalView`).
+    TabAiHarness,
     /// No internal Script Kit surface was active — deliver to the
     /// frontmost external app via simulated paste.
     ExternalApp,

@@ -82,11 +82,7 @@ pub fn set_overlay_phase(phase: DictationSessionPhase) -> bool {
 /// and `HotkeyAction::Dictation`.  The caller owns transcription, overlay
 /// transitions, and delivery — the runtime only captures audio.
 pub fn toggle_dictation(target: DictationTarget) -> Result<DictationToggleOutcome> {
-    tracing::info!(
-        category = "DICTATION",
-        ?target,
-        "toggle_dictation called"
-    );
+    tracing::info!(category = "DICTATION", ?target, "toggle_dictation called");
 
     if SESSION.lock().is_some() {
         return Ok(DictationToggleOutcome::Stopped(stop_recording()?));
@@ -411,10 +407,7 @@ pub(crate) fn resolve_preferred_device() -> Result<Option<DictationDeviceId>> {
             Ok(Some(res.device.id))
         }
         None => {
-            tracing::warn!(
-                category = "DICTATION",
-                "No input devices available"
-            );
+            tracing::warn!(category = "DICTATION", "No input devices available");
             Ok(None)
         }
     }

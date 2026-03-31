@@ -19,6 +19,8 @@ struct TabAiLaunchRequest {
     source_view: AppView,
     /// Optional user intent (from Shift+Tab typed query).
     entry_intent: Option<String>,
+    /// Quick-submit plan from the deterministic planner (fallback / dictation).
+    quick_submit_plan: Option<crate::ai::TabAiQuickSubmitPlan>,
     /// UI snapshot taken synchronously before the view switch.
     ui_snapshot: crate::ai::TabAiUiSnapshot,
     /// Invocation receipt for logging and downstream consumption.
@@ -93,7 +95,81 @@ impl ScriptListApp {
         if self.tab_ai_save_offer_state.is_some() {
             return;
         }
-        self.begin_tab_ai_harness_entry(entry_intent, capture_kind, cx);
+        self.begin_tab_ai_harness_entry(entry_intent, None, capture_kind, cx);
+    }
+
+    /// Open the harness with a pre-computed quick-submit plan.
+    ///
+    /// The plan's `synthesized_intent` becomes the entry intent, the plan's
+    /// `capture_kind` selects the right screenshot/context profile, and the
+    /// plan itself is embedded in the `<scriptKitHints>` block.
+    pub(crate) fn open_tab_ai_chat_with_quick_submit_plan(
+        &mut self,
+        plan: crate::ai::TabAiQuickSubmitPlan,
+        cx: &mut Context<Self>,
+    ) {
+        if self.tab_ai_save_offer_state.is_some() {
+            return;
+        }
+        let capture_kind = plan.capture_kind_enum();
+        let intent = Some(plan.synthesized_intent.clone());
+        self.begin_tab_ai_harness_entry(intent, Some(plan), capture_kind, cx);
+    }
+
+    /// Route raw text (from Send to AI fallback or dictation) through the
+    /// quick-submit planner and into the harness — either an existing live
+    /// session or a fresh one.
+    pub(crate) fn submit_to_current_or_new_tab_ai_harness_from_text(
+        &mut self,
+        raw_text: String,
+        source: crate::ai::TabAiQuickSubmitSource,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(plan) = crate::ai::plan_tab_ai_quick_submit(source, &raw_text) else {
+            // Empty input — open the harness without intent.
+            self.open_tab_ai_chat(cx);
+            return;
+        };
+
+        // If the harness is already the active surface and alive, inject directly.
+        if let Some(session) = self
+            .tab_ai_harness
+            .as_ref()
+            .filter(|_| matches!(self.current_view, AppView::QuickTerminalView { .. }))
+            .filter(|session| session.entity.read(cx).is_alive())
+        {
+            let wait_for_readiness =
+                Self::tab_ai_harness_needs_readiness_wait(&session.entity, cx);
+
+            tracing::info!(
+                target: "script_kit::tab_ai",
+                event = "tab_ai_quick_submit_live_session",
+                source = ?plan.source,
+                kind = ?plan.kind,
+                capture_kind = %plan.capture_kind,
+                input_len = plan.raw_query.len(),
+            );
+
+            self.inject_tab_ai_harness_submission(
+                session.entity.clone(),
+                format!("{}\n", plan.synthesized_intent),
+                wait_for_readiness,
+                true,
+                cx,
+            );
+            return;
+        }
+
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "tab_ai_quick_submit_new_session",
+            source = ?plan.source,
+            kind = ?plan.kind,
+            capture_kind = %plan.capture_kind,
+            input_len = plan.raw_query.len(),
+        );
+
+        self.open_tab_ai_chat_with_quick_submit_plan(plan, cx);
     }
 
     /// Deferred-capture entry point: build a launch request from pre-switch
@@ -105,6 +181,7 @@ impl ScriptListApp {
     fn begin_tab_ai_harness_entry(
         &mut self,
         entry_intent: Option<String>,
+        quick_submit_plan: Option<crate::ai::TabAiQuickSubmitPlan>,
         capture_kind: crate::ai::TabAiCaptureKind,
         cx: &mut Context<Self>,
     ) {
@@ -136,6 +213,7 @@ impl ScriptListApp {
         let request = TabAiLaunchRequest {
             source_view,
             entry_intent,
+            quick_submit_plan,
             ui_snapshot,
             invocation_receipt,
             capture_kind,
@@ -373,7 +451,19 @@ impl ScriptListApp {
                         apply_back_hint,
                     );
 
-                    let submission_mode = if request.entry_intent.is_some() {
+                    let effective_intent = request
+                        .quick_submit_plan
+                        .as_ref()
+                        .map(|plan| plan.synthesized_intent.as_str())
+                        .or(request.entry_intent.as_deref());
+
+                    let submit_now = request
+                        .quick_submit_plan
+                        .as_ref()
+                        .map(|plan| plan.submit)
+                        .unwrap_or(request.entry_intent.is_some());
+
+                    let submission_mode = if submit_now {
                         crate::ai::TabAiHarnessSubmissionMode::Submit
                     } else {
                         crate::ai::TabAiHarnessSubmissionMode::PasteOnly
@@ -381,8 +471,9 @@ impl ScriptListApp {
 
                     match crate::ai::build_tab_ai_harness_submission(
                         &context,
-                        request.entry_intent.as_deref(),
+                        effective_intent,
                         submission_mode,
+                        request.quick_submit_plan.as_ref(),
                         Some(&resolved.invocation_receipt),
                         &resolved.suggested_intents,
                     ) {
@@ -391,7 +482,7 @@ impl ScriptListApp {
                                 entity.clone(),
                                 submission,
                                 wait_for_readiness,
-                                request.entry_intent.is_some(),
+                                submit_now,
                                 cx,
                             );
                         }
