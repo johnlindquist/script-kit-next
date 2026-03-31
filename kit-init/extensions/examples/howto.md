@@ -14,6 +14,12 @@ icon: graduation-cap
 
 This guide explains how to create custom text expansions for Script Kit.
 
+> One-shot path:
+> 1. Create `~/.scriptkit/kit/main/extensions/<name>.md`
+> 2. Copy the Quick Start Template below
+> 3. Use `metadata` code fences for new bundles
+> 4. Use `tool:<name>` only when you need TypeScript + SDK
+
 ---
 
 # File Location
@@ -135,25 +141,6 @@ import "@scriptkit/sdk";
 
 ---
 
-# Legacy Format
-
-HTML comments also work:
-
-```markdown
-## My Scriptlet
-
-<!--
-keyword: !trigger
-description: What it does
--->
-
-```paste
-Expansion text
-```
-```
-
----
-
 # Quick Start Template
 
 Copy this to create your first scriptlet:
@@ -180,6 +167,26 @@ Your Name
 ```
 
 Save as: `~/.scriptkit/kit/main/extensions/my-snippets.md`
+
+---
+
+# Compatibility Only: Legacy HTML Comment Metadata
+
+> Compatibility only. Do not copy this format for new harness-authored bundles.
+> Prefer the `metadata` code fence format shown above.
+
+```markdown
+## My Scriptlet
+
+<!--
+keyword: !trigger
+description: What it does
+-->
+
+```paste
+Expansion text
+```
+```
 
 ---
 
