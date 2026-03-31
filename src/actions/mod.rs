@@ -27,9 +27,7 @@ mod window;
 // - Window functions for separate vibrancy window
 
 #[allow(unused_imports)] // used by binary target via include!() in main.rs
-pub(crate) use builders::{
-    build_file_search_footer_leading_text, resolve_file_search_secondary_action_id,
-};
+pub(crate) use builders::resolve_file_search_secondary_action_id;
 pub use builders::{
     get_ai_command_bar_actions, get_new_chat_actions, get_note_switcher_actions,
     get_notes_command_bar_actions,

@@ -1071,75 +1071,23 @@ impl ScriptListApp {
             )
         };
 
-        let can_shift_tab_up = crate::file_search::parse_directory_path(query)
-            .map(|parsed| {
-                if parsed.filter.is_some() {
-                    true
-                } else {
-                    crate::file_search::parent_dir_display(&parsed.directory).is_some()
-                }
-            })
-            .unwrap_or(false);
-
-        // Footer contract must match the real key wiring:
-        // ↵ opens/browses, Tab enters folders or fills the path,
-        // ⌘K opens actions, and ⌘↵ sends the selection/query to AI.
-        // Shared across mini and full presentations.
+        // Footer: three-key pattern matching the universal design.
+        // All secondary commands are discoverable via ⌘K Actions.
         let file_search_hints: Vec<SharedString> = if let Some(file) = selected_file.as_ref() {
             let primary = if file.file_type == FileType::Directory {
                 "\u{21b5} Browse"
             } else {
                 "\u{21b5} Open"
             };
-            let tab_hint = if file.file_type == FileType::Directory {
-                "Tab Enter Folder"
-            } else {
-                "Tab Fill Path"
-            };
-            let mut hints: Vec<SharedString> = vec![primary.into(), tab_hint.into()];
-            if file.file_type != FileType::Directory {
-                hints.push("Space Preview".into());
-            }
-            hints.push("\u{2318}K Actions \u{b7} \u{2318}\u{21b5} AI".into());
-            hints
+            vec![primary.into(), "\u{2318}K Actions".into(), "Tab AI".into()]
         } else if is_loading {
-            vec![
-                "Searching\u{2026}".into(),
-                if can_shift_tab_up {
-                    "\u{21e7}Tab Up".into()
-                } else {
-                    "Tab Browse".into()
-                },
-                "\u{2318}\u{21b5} AI".into(),
-            ]
+            vec!["Tab AI".into()]
         } else if filtered_len == 0 {
-            vec![
-                "Type a path".into(),
-                if can_shift_tab_up {
-                    "\u{21e7}Tab Up".into()
-                } else {
-                    "Tab Browse".into()
-                },
-                "\u{2318}\u{21b5} AI".into(),
-            ]
+            vec!["Tab AI".into()]
         } else {
-            vec![
-                "\u{21b5} Open".into(),
-                "Tab Complete".into(),
-                "\u{2318}K Actions \u{b7} \u{2318}\u{21b5} AI".into(),
-            ]
+            vec!["Tab AI".into()]
         };
 
-        // Secondary shortcut hints for the leading footer slot —
-        // derived from the shared file-search secondary-command contract
-        // so the footer, action sheet, and keyboard dispatch always agree.
-        let footer_leading_text: Option<String> = selected_file.as_ref().map(|file| {
-            let file_info = crate::file_search::FileInfo::from_result(file);
-            crate::actions::build_file_search_footer_leading_text(
-                &file_info,
-                can_shift_tab_up,
-            )
-        });
 
         // Header: bare input + file count (scaffold adds padding/layout)
         let input_height = CURSOR_HEIGHT_LG + (CURSOR_MARGIN_Y * 2.0);
@@ -1239,13 +1187,7 @@ impl ScriptListApp {
                 header_element,
                 list_pane,
                 file_search_hints.clone(),
-                footer_leading_text.clone().map(|text| {
-                    div()
-                        .text_xs()
-                        .text_color(rgb(text_muted))
-                        .child(text)
-                        .into_any_element()
-                }),
+                None,
             )
             .key_context("FileSearchView")
             .track_focus(&self.focus_handle)
@@ -1257,13 +1199,7 @@ impl ScriptListApp {
                 list_pane,
                 preview_pane,
                 file_search_hints,
-                footer_leading_text.map(|text| {
-                    div()
-                        .text_xs()
-                        .text_color(rgb(text_muted))
-                        .child(text)
-                        .into_any_element()
-                }),
+                None,
             )
             .key_context("FileSearchView")
             .track_focus(&self.focus_handle)

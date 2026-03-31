@@ -214,18 +214,6 @@ fn rename_and_move_work_for_both_files_and_directories() {
 }
 
 #[test]
-fn footer_builder_uses_shared_contract() {
-    assert!(
-        FILE_PATH_SOURCE.contains("fn build_file_search_footer_leading_text("),
-        "must define build_file_search_footer_leading_text"
-    );
-    assert!(
-        FILE_PATH_SOURCE.contains("FILE_SEARCH_SECONDARY_COMMANDS.iter()"),
-        "footer builder must iterate over the shared command array"
-    );
-}
-
-#[test]
 fn key_resolver_uses_shared_contract() {
     assert!(
         FILE_PATH_SOURCE.contains("fn resolve_file_search_secondary_action_id("),
@@ -238,22 +226,41 @@ fn key_resolver_uses_shared_contract() {
 }
 
 // ──────────────────────────────────────────────────────────────────────
-// Footer text and key handler use the shared contract (not hardcoded)
+// Key handler uses the shared contract (not hardcoded)
 // ──────────────────────────────────────────────────────────────────────
-
-#[test]
-fn file_search_footer_reads_from_shared_contract() {
-    assert!(
-        FILE_SEARCH_SOURCE.contains("build_file_search_footer_leading_text"),
-        "file_search.rs footer must use the shared footer builder"
-    );
-}
 
 #[test]
 fn file_search_key_handler_reads_from_shared_contract() {
     assert!(
         FILE_SEARCH_SOURCE.contains("resolve_file_search_secondary_action_id"),
         "file_search.rs key handler must use the shared key resolver"
+    );
+}
+
+#[test]
+fn file_search_footer_only_advertises_actions_with_selection() {
+    let selected_branch = FILE_SEARCH_SOURCE
+        .split("if let Some(file) = selected_file.as_ref()")
+        .nth(1)
+        .expect("selected file footer branch must exist");
+    let selected_branch = selected_branch
+        .split("} else if is_loading {")
+        .next()
+        .expect("selected file footer branch must end before loading branch");
+
+    assert!(
+        selected_branch.contains("\\u{2318}K Actions"),
+        "selected file footer branch must advertise actions"
+    );
+
+    let no_selection_branch = FILE_SEARCH_SOURCE
+        .split("} else if is_loading {")
+        .nth(1)
+        .expect("no-selection footer branches must exist");
+
+    assert!(
+        !no_selection_branch.contains("\\u{2318}K Actions"),
+        "file search footer must not advertise actions when no selection exists"
     );
 }
 

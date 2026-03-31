@@ -15,8 +15,9 @@ pub(crate) struct FileSearchSecondaryCommand {
     pub title: &'static str,
     pub description: &'static str,
     pub shortcut: &'static str,
-    pub footer_label: &'static str,
     pub icon: IconName,
+    /// Section header label for grouping in the actions dialog.
+    pub section: &'static str,
     pub key: &'static str,
     pub requires_shift: bool,
     /// When true, this command is only available for files (not directories).
@@ -71,6 +72,7 @@ impl FileSearchSecondaryCommand {
         )
         .with_shortcut(self.shortcut)
         .with_icon(self.icon)
+        .with_section(self.section)
     }
 }
 
@@ -82,8 +84,8 @@ pub(crate) const FILE_SEARCH_SECONDARY_COMMANDS: [FileSearchSecondaryCommand; 10
         title: "Rename\u{2026}",
         description: "Renames the selected file or folder",
         shortcut: "\u{2318}R",
-        footer_label: "\u{2318}R Rename",
         icon: IconName::Pencil,
+        section: "Edit",
         key: "r",
         requires_shift: false,
         files_only: false,
@@ -94,8 +96,8 @@ pub(crate) const FILE_SEARCH_SECONDARY_COMMANDS: [FileSearchSecondaryCommand; 10
         title: "Move\u{2026}",
         description: "Moves the selected file or folder to another folder",
         shortcut: "\u{2318}\u{21e7}M",
-        footer_label: "\u{2318}\u{21e7}M Move",
         icon: IconName::FolderOpen,
+        section: "Edit",
         key: "m",
         requires_shift: true,
         files_only: false,
@@ -106,8 +108,8 @@ pub(crate) const FILE_SEARCH_SECONDARY_COMMANDS: [FileSearchSecondaryCommand; 10
         title: "Duplicate",
         description: "Creates a copy of the selected file or folder",
         shortcut: "\u{2318}D",
-        footer_label: "\u{2318}D Duplicate",
         icon: IconName::Copy,
+        section: "Edit",
         key: "d",
         requires_shift: false,
         files_only: false,
@@ -118,8 +120,8 @@ pub(crate) const FILE_SEARCH_SECONDARY_COMMANDS: [FileSearchSecondaryCommand; 10
         title: "Copy Filename",
         description: "Copies only the filename to the clipboard",
         shortcut: "\u{2318}C",
-        footer_label: "\u{2318}C Name",
         icon: IconName::Copy,
+        section: "Share",
         key: "c",
         requires_shift: false,
         files_only: false,
@@ -130,8 +132,8 @@ pub(crate) const FILE_SEARCH_SECONDARY_COMMANDS: [FileSearchSecondaryCommand; 10
         title: "Open in Editor",
         description: "Opens this item in $EDITOR",
         shortcut: "\u{2318}E",
-        footer_label: "\u{2318}E Editor",
         icon: IconName::Pencil,
+        section: "Edit",
         key: "e",
         requires_shift: false,
         files_only: false,
@@ -142,8 +144,8 @@ pub(crate) const FILE_SEARCH_SECONDARY_COMMANDS: [FileSearchSecondaryCommand; 10
         title: "Copy Path",
         description: "Copies the full path to the clipboard",
         shortcut: "\u{2318}\u{21e7}C",
-        footer_label: "\u{2318}\u{21e7}C Path",
         icon: IconName::Copy,
+        section: "Share",
         key: "c",
         requires_shift: true,
         files_only: false,
@@ -154,8 +156,8 @@ pub(crate) const FILE_SEARCH_SECONDARY_COMMANDS: [FileSearchSecondaryCommand; 10
         title: "Move to Trash",
         description: "Moves the selected item to the Trash",
         shortcut: "\u{2318}\u{232b}",
-        footer_label: "\u{2318}\u{232b} Trash",
         icon: IconName::Trash,
+        section: "Destructive",
         key: "backspace_or_delete",
         requires_shift: false,
         files_only: false,
@@ -166,8 +168,8 @@ pub(crate) const FILE_SEARCH_SECONDARY_COMMANDS: [FileSearchSecondaryCommand; 10
         title: "Open in Terminal",
         description: "Opens a terminal at this location",
         shortcut: "\u{2318}T",
-        footer_label: "\u{2318}T Terminal",
         icon: IconName::Terminal,
+        section: "Actions",
         key: "t",
         requires_shift: false,
         files_only: false,
@@ -178,8 +180,8 @@ pub(crate) const FILE_SEARCH_SECONDARY_COMMANDS: [FileSearchSecondaryCommand; 10
         title: "Quick Look",
         description: "Previews this item with Quick Look",
         shortcut: "\u{2318}Y",
-        footer_label: "\u{2318}Y Quick Look",
         icon: IconName::File,
+        section: "Actions",
         key: "y",
         requires_shift: false,
         files_only: true,
@@ -190,35 +192,14 @@ pub(crate) const FILE_SEARCH_SECONDARY_COMMANDS: [FileSearchSecondaryCommand; 10
         title: "Show Info",
         description: "Shows file information in Finder",
         shortcut: "\u{2318}I",
-        footer_label: "\u{2318}I Info",
         icon: IconName::File,
+        section: "Actions",
         key: "i",
         requires_shift: false,
         files_only: false,
         macos_only: true,
     },
 ];
-
-/// Build the leading footer text from the shared secondary-command contract.
-#[allow(dead_code)] // used by binary target via include!() in main.rs
-pub(crate) fn build_file_search_footer_leading_text(
-    file_info: &FileInfo,
-    can_shift_tab_up: bool,
-) -> String {
-    let mut parts: Vec<&str> = Vec::new();
-
-    if can_shift_tab_up {
-        parts.push("\u{21e7}Tab Up");
-    }
-
-    for command in FILE_SEARCH_SECONDARY_COMMANDS.iter().copied() {
-        if command.supports(file_info.is_dir) {
-            parts.push(command.footer_label);
-        }
-    }
-
-    parts.join(" \u{b7} ")
-}
 
 /// Resolve a keyboard shortcut to a secondary action ID using the shared contract.
 #[allow(dead_code)] // used by binary target via include!() in main.rs
@@ -278,7 +259,8 @@ pub fn get_file_context_actions(file_info: &FileInfo) -> Vec<Action> {
                 ActionCategory::ScriptContext,
             )
             .with_shortcut("\u{21b5}")
-            .with_icon(IconName::FolderOpen),
+            .with_icon(IconName::FolderOpen)
+            .with_section("Actions"),
         );
     } else {
         actions.push(
@@ -289,7 +271,8 @@ pub fn get_file_context_actions(file_info: &FileInfo) -> Vec<Action> {
                 ActionCategory::ScriptContext,
             )
             .with_shortcut("\u{21b5}")
-            .with_icon(IconName::File),
+            .with_icon(IconName::File)
+            .with_section("Actions"),
         );
     }
 
@@ -302,7 +285,8 @@ pub fn get_file_context_actions(file_info: &FileInfo) -> Vec<Action> {
             ActionCategory::ScriptContext,
         )
         .with_shortcut("\u{2318}\u{21e7}F")
-        .with_icon(IconName::FolderOpen),
+        .with_icon(IconName::FolderOpen)
+        .with_section("Share"),
     );
 
     // Secondary commands from the shared contract
@@ -322,7 +306,8 @@ pub fn get_file_context_actions(file_info: &FileInfo) -> Vec<Action> {
                     ActionCategory::ScriptContext,
                 )
                 .with_shortcut("\u{2303}\u{2318}A")
-                .with_icon(IconName::MessageCircle),
+                .with_icon(IconName::MessageCircle)
+                .with_section("Actions"),
             );
         }
     }
@@ -803,54 +788,6 @@ mod secondary_command_contract_tests {
         assert!(
             !ids.contains(&"file:attach_to_ai"),
             "Directories must not have Attach to AI Chat"
-        );
-    }
-
-    // --- Footer builder ---
-
-    #[test]
-    fn footer_for_directory_excludes_quick_look() {
-        let dir = make_dir("photos", "/tmp/photos");
-        let footer = build_file_search_footer_leading_text(&dir, false);
-        assert!(
-            !footer.contains("Quick Look"),
-            "Directory footer must not mention Quick Look"
-        );
-    }
-
-    #[test]
-    fn footer_for_directory_includes_core_labels() {
-        let dir = make_dir("photos", "/tmp/photos");
-        let footer = build_file_search_footer_leading_text(&dir, false);
-        assert!(footer.contains("Rename"), "Footer should mention Rename");
-        assert!(footer.contains("Move"), "Footer should mention Move");
-        assert!(footer.contains("Name"), "Footer should mention Name");
-        assert!(footer.contains("Editor"), "Footer should mention Editor");
-        assert!(footer.contains("Path"), "Footer should mention Path");
-        assert!(footer.contains("Trash"), "Footer should mention Trash");
-        assert!(
-            footer.contains("Terminal"),
-            "Footer should mention Terminal"
-        );
-    }
-
-    #[test]
-    fn footer_with_shift_tab_prefix() {
-        let dir = make_dir("photos", "/tmp/photos");
-        let footer = build_file_search_footer_leading_text(&dir, true);
-        assert!(
-            footer.starts_with("\u{21e7}Tab Up"),
-            "Footer should start with shift-tab when can_shift_tab_up"
-        );
-    }
-
-    #[test]
-    fn footer_without_shift_tab_prefix() {
-        let dir = make_dir("photos", "/tmp/photos");
-        let footer = build_file_search_footer_leading_text(&dir, false);
-        assert!(
-            !footer.contains("Tab Up"),
-            "Footer should not include shift-tab when can_shift_tab_up is false"
         );
     }
 
