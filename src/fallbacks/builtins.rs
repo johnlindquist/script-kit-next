@@ -238,7 +238,7 @@ impl BuiltinFallback {
             FallbackAction::ExecuteBuiltin { .. } => {
                 format!("Run command with '{}'", truncated)
             }
-            FallbackAction::SendToAiHarness => format!("Auto-submit '{}'", truncated),
+            FallbackAction::SendToAiHarness => format!("Auto Submit '{}'", truncated),
         }
     }
 }
@@ -629,7 +629,7 @@ mod tests {
             .expect("send-to-ai fallback should exist");
 
         let subtitle = send_to_ai.get_subtitle("rename these files");
-        assert_eq!(subtitle, "Auto-submit 'rename these files'");
+        assert_eq!(subtitle, "Auto Submit 'rename these files'");
     }
 
     #[test]

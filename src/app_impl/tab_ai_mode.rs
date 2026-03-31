@@ -2631,6 +2631,26 @@ impl ScriptListApp {
     const TAB_AI_APPLY_BACK_CLIPBOARD_PRIME_MS: u64 = 25;
     const TAB_AI_APPLY_BACK_ROUTE_POLL_MS: u64 = 20;
 
+    /// Show a route-aware error toast when ⌘↩ is pressed but there is
+    /// neither a terminal selection nor harness output available yet.
+    fn toast_tab_ai_apply_back_unavailable(&mut self, cx: &mut Context<Self>) {
+        let apply_label = crate::ai::tab_ai_apply_back_footer_label(
+            self.tab_ai_harness_apply_back_route
+                .as_ref()
+                .map(|route| &route.source_type),
+        );
+        self.toast_manager.push(
+            crate::components::toast::Toast::error(
+                format!(
+                    "{apply_label} failed: select terminal text or wait for output."
+                ),
+                &self.theme,
+            )
+            .duration_ms(Some(TOAST_ERROR_MS)),
+        );
+        cx.notify();
+    }
+
     /// Unified apply handler — routes `text` to the correct destination
     /// based on `route.source_type`.  Called by both the terminal-selection
     /// fast path and the clipboard fallback.
@@ -2939,18 +2959,8 @@ impl ScriptListApp {
     pub(crate) fn apply_tab_ai_result_from_clipboard(&mut self, cx: &mut Context<Self>) {
         let text = match read_tab_ai_apply_back_clipboard_text() {
             Ok(text) => text,
-            Err(error) => {
-                self.toast_manager.push(
-                    crate::components::toast::Toast::error(
-                        format!(
-                            "No terminal selection or harness output was available: {error}. \
-                             Select output, or let ⌘↩ use the last output."
-                        ),
-                        &self.theme,
-                    )
-                    .duration_ms(Some(TOAST_ERROR_MS)),
-                );
-                cx.notify();
+            Err(_error) => {
+                self.toast_tab_ai_apply_back_unavailable(cx);
                 return;
             }
         };

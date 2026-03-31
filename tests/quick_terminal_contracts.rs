@@ -13,7 +13,7 @@ fn quick_terminal_mouse_wheel_and_modern_interaction_contract() {
         "TermPrompt must register a mouse-wheel handler"
     );
     assert!(
-        TERM_PROMPT_SOURCE.contains("this.terminal.scroll(scroll_lines);"),
+        TERM_PROMPT_SOURCE.contains("this.terminal.scroll(whole_lines);"),
         "mouse-wheel handler must forward wheel movement into terminal scrollback"
     );
     // The scroll handler must trigger a view refresh after scrolling

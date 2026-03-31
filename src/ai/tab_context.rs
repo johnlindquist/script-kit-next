@@ -1389,12 +1389,12 @@ pub struct TabAiApplyBackRoute {
 /// Return a concise footer label describing what ⌘↩ Apply does for a given source type.
 pub fn tab_ai_apply_back_footer_label(source_type: Option<&TabAiSourceType>) -> &'static str {
     match source_type {
-        Some(TabAiSourceType::RunningCommand) => "Paste to Prompt",
-        Some(TabAiSourceType::ClipboardEntry) => "Copy to Clipboard",
-        Some(TabAiSourceType::ScriptListItem) => "Save & Run Script",
+        Some(TabAiSourceType::RunningCommand) => "Paste Back to Prompt",
+        Some(TabAiSourceType::ClipboardEntry) => "Copy Result",
+        Some(TabAiSourceType::ScriptListItem) => "Save as Script & Run",
         Some(TabAiSourceType::DesktopSelection) => "Replace Selection",
-        Some(TabAiSourceType::Desktop) => "Paste to Frontmost App",
-        None => "Preparing Apply Target\u{2026}",
+        Some(TabAiSourceType::Desktop) => "Paste Back to App",
+        None => "Preparing Paste Back\u{2026}",
     }
 }
 
@@ -4619,15 +4619,15 @@ mod tab_ai_source_type_tests {
     fn apply_back_footer_label_matches_source_type() {
         assert_eq!(
             tab_ai_apply_back_footer_label(Some(&TabAiSourceType::RunningCommand)),
-            "Paste to Prompt"
+            "Paste Back to Prompt"
         );
         assert_eq!(
             tab_ai_apply_back_footer_label(Some(&TabAiSourceType::ClipboardEntry)),
-            "Copy to Clipboard"
+            "Copy Result"
         );
         assert_eq!(
             tab_ai_apply_back_footer_label(Some(&TabAiSourceType::ScriptListItem)),
-            "Save & Run Script"
+            "Save as Script & Run"
         );
         assert_eq!(
             tab_ai_apply_back_footer_label(Some(&TabAiSourceType::DesktopSelection)),
@@ -4635,11 +4635,11 @@ mod tab_ai_source_type_tests {
         );
         assert_eq!(
             tab_ai_apply_back_footer_label(Some(&TabAiSourceType::Desktop)),
-            "Paste to Frontmost App"
+            "Paste Back to App"
         );
         assert_eq!(
             tab_ai_apply_back_footer_label(None),
-            "Preparing Apply Target\u{2026}"
+            "Preparing Paste Back\u{2026}"
         );
     }
 }
