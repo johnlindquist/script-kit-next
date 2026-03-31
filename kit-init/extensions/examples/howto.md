@@ -18,12 +18,13 @@ This guide explains how to create custom text expansions for Script Kit.
 
 # File Location
 
-Create `.md` files in: `~/.scriptkit/kit/YOUR-KIT-NAME/extensions/`
+For harness-generated user bundles, create `.md` files in:
+`~/.scriptkit/kit/main/extensions/`
 
-Example paths:
+Example path:
 - `~/.scriptkit/kit/main/extensions/snippets.md`
-- `~/.scriptkit/kit/work/extensions/emails.md`
-- `~/.scriptkit/kit/personal/extensions/signatures.md`
+
+Do not create new user bundles in app-managed built-in kits or example kits.
 
 ---
 
@@ -120,12 +121,17 @@ Both `${var}` and `{{var}}` syntax work.
 
 The code fence language determines what happens:
 
-| Tool | Behavior |
+| Fence | Behavior |
 |------|----------|
 | `paste` | Pastes text directly |
-| `ts` | Runs TypeScript |
 | `bash` | Runs shell command |
-| `template` | Expands template |
+| `tool:name` | Runs TypeScript with the Script Kit SDK |
+| `template:name` | Expands a named template |
+
+`tool:` fences still need:
+```ts
+import "@scriptkit/sdk";
+```
 
 ---
 

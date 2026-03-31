@@ -65,6 +65,7 @@ pub use self::current_app_automation_memory::{
 };
 pub use self::harness::{
     build_tab_ai_harness_context_block, build_tab_ai_harness_submission,
+    should_include_artifact_authoring_guidance,
     cleanup_old_tab_ai_screenshot_files_in_dir, read_tab_ai_harness_config,
     tab_ai_harness_config_path, tab_ai_screenshot_prefix, validate_tab_ai_harness_config,
     HarnessBackendKind, HarnessConfig, TabAiCaptureKind, TabAiHarnessSessionState,

@@ -3229,7 +3229,7 @@ fn live_quick_submit_helper_builds_full_harness_submission() {
     );
     assert!(
         helper_src.contains("request.quick_submit_plan.as_ref()"),
-        "live quick submit must preserve quick submit metadata in scriptKitHints"
+        "live quick submit must pass quick submit plan to submission builder"
     );
 }
 

@@ -5,9 +5,10 @@
 //! and that the harness session lifecycle supports warm reuse.
 
 use script_kit_gpui::ai::{
-    build_tab_ai_harness_submission, validate_tab_ai_harness_config, HarnessConfig,
-    TabAiContextBlob, TabAiFieldStatus, TabAiHarnessSubmissionMode, TabAiInvocationReceipt,
-    TabAiSuggestedIntentSpec, TabAiUiSnapshot, TAB_AI_INVOCATION_RECEIPT_SCHEMA_VERSION,
+    build_tab_ai_harness_submission, should_include_artifact_authoring_guidance,
+    validate_tab_ai_harness_config, HarnessConfig, TabAiContextBlob, TabAiFieldStatus,
+    TabAiHarnessSubmissionMode, TabAiInvocationReceipt, TabAiSuggestedIntentSpec,
+    TabAiUiSnapshot, TAB_AI_INVOCATION_RECEIPT_SCHEMA_VERSION,
 };
 
 fn make_context(prompt_type: &str, input_text: Option<&str>) -> TabAiContextBlob {
@@ -341,7 +342,7 @@ fn warm_reentry_does_not_respawn_pty() {
 }
 
 // =========================================================================
-// Hints block regression: receipt + suggestions → <scriptKitHints>
+// Hints block removed: submission is flat context lines only (no XML blobs)
 // =========================================================================
 
 fn sample_invocation_receipt(prompt_type: &str) -> TabAiInvocationReceipt {
@@ -361,7 +362,7 @@ fn sample_invocation_receipt(prompt_type: &str) -> TabAiInvocationReceipt {
 }
 
 #[test]
-fn paste_only_includes_hints_block_when_receipt_and_suggestions_provided() {
+fn paste_only_omits_hints_block_even_with_receipt_and_suggestions() {
     let context = make_context("FileSearch", Some("readme"));
     let receipt = sample_invocation_receipt("FileSearch");
     let suggestions = vec![
@@ -380,24 +381,12 @@ fn paste_only_includes_hints_block_when_receipt_and_suggestions_provided() {
     .expect("submission should build");
 
     assert!(
-        submission.contains("<scriptKitHints>"),
-        "PasteOnly with receipt+suggestions must include the hints block"
+        !submission.contains("<scriptKitHints>"),
+        "submission must not contain XML blob wrappers"
     );
     assert!(
-        submission.contains("</scriptKitHints>"),
-        "hints block must be properly closed"
-    );
-    assert!(
-        submission.contains("\"promptType\": \"FileSearch\""),
-        "hints block must include the invocation receipt prompt type"
-    );
-    assert!(
-        submission.contains("\"intent\": \"summarize this file\""),
-        "hints block must include suggested intents"
-    );
-    assert!(
-        submission.contains("\"intent\": \"rename this file\""),
-        "hints block must include all suggested intents"
+        submission.contains("Script Kit context"),
+        "flat context block must still be present"
     );
     assert!(
         submission.ends_with('\n'),
@@ -430,7 +419,7 @@ fn paste_only_omits_hints_block_when_no_receipt_or_suggestions() {
 }
 
 #[test]
-fn submit_mode_also_includes_hints_block_when_provided() {
+fn submit_mode_omits_hints_block_even_when_receipt_provided() {
     let context = make_context("ScriptList", None);
     let receipt = sample_invocation_receipt("ScriptList");
     let suggestions = vec![TabAiSuggestedIntentSpec::new(
@@ -449,17 +438,17 @@ fn submit_mode_also_includes_hints_block_when_provided() {
     .expect("submission should build");
 
     assert!(
-        submission.contains("<scriptKitHints>"),
-        "Submit mode with receipt must include hints block"
+        !submission.contains("<scriptKitHints>"),
+        "Submit mode must not contain XML blob wrappers"
     );
     assert!(
         submission.contains("Await the user's next terminal input."),
-        "Submit mode without intent must still append wait sentinel after hints"
+        "Submit mode without intent must still append wait sentinel"
     );
 }
 
 #[test]
-fn hints_block_appears_between_context_and_intent() {
+fn submission_is_flat_context_then_intent_no_xml_blobs() {
     let context = make_context("FileSearch", Some("readme"));
     let receipt = sample_invocation_receipt("FileSearch");
     let suggestions = vec![TabAiSuggestedIntentSpec::new("Summarize", "summarize this")];
@@ -477,18 +466,15 @@ fn hints_block_appears_between_context_and_intent() {
     let context_start = submission
         .find("Script Kit context")
         .expect("context block must exist");
-    let hints_start = submission
-        .find("<scriptKitHints>")
-        .expect("hints block must exist");
     let intent_start = submission.find("User intent:").expect("intent must exist");
 
     assert!(
-        context_start < hints_start,
-        "hints block must come after the context block"
+        context_start < intent_start,
+        "intent must come after the context block"
     );
     assert!(
-        hints_start < intent_start,
-        "hints block must come before the user intent"
+        !submission.contains("<scriptKitHints>"),
+        "no XML blob wrappers between context and intent"
     );
 }
 
@@ -665,7 +651,7 @@ fn harness_submission_contains_source_type_screenshot_and_apply_back_hint() {
 // =========================================================================
 
 #[test]
-fn submission_includes_quick_submit_hint_and_synthesized_intent() {
+fn submission_quick_submit_no_hints_blob_but_intent_preserved() {
     use script_kit_gpui::ai::{plan_tab_ai_quick_submit, TabAiQuickSubmitSource};
 
     let plan = plan_tab_ai_quick_submit(TabAiQuickSubmitSource::Fallback, "git status")
@@ -683,25 +669,21 @@ fn submission_includes_quick_submit_hint_and_synthesized_intent() {
     .expect("submission should build");
 
     assert!(
-        submission.contains("\"kind\": \"shellCommand\""),
-        "hints block must include quick-submit kind as shellCommand"
-    );
-    assert!(
-        submission.contains("Command:\ngit status"),
-        "synthesized intent must include the original command"
+        !submission.contains("<scriptKitHints>"),
+        "submission must not contain XML blob wrappers"
     );
     assert!(
         submission.contains("User intent:"),
         "submission must include User intent section"
     );
     assert!(
-        submission.contains("<scriptKitHints>"),
-        "submission must include the hints block with quick-submit metadata"
+        submission.contains("Command:\ngit status"),
+        "synthesized intent must include the original command"
     );
 }
 
 #[test]
-fn submission_quick_submit_visual_ask_uses_full_screen_capture() {
+fn submission_quick_submit_visual_ask_capture_kind_in_plan() {
     use script_kit_gpui::ai::{plan_tab_ai_quick_submit, TabAiQuickSubmitSource};
 
     let plan = plan_tab_ai_quick_submit(
@@ -710,29 +692,19 @@ fn submission_quick_submit_visual_ask_uses_full_screen_capture() {
     )
     .expect("plan should exist for visual ask");
 
-    let context = make_context("ScriptList", None);
-    let submission = build_tab_ai_harness_submission(
-        &context,
-        Some(&plan.synthesized_intent),
-        TabAiHarnessSubmissionMode::Submit,
-        Some(&plan),
-        None,
-        &[],
-    )
-    .expect("submission should build");
-
-    assert!(
-        submission.contains("\"kind\": \"visualAsk\""),
-        "hints block must include quick-submit kind as visualAsk"
+    assert_eq!(
+        plan.capture_kind, "fullScreen",
+        "visual ask must use fullScreen capture kind"
     );
-    assert!(
-        submission.contains("\"captureKind\": \"fullScreen\""),
-        "hints block must include captureKind as fullScreen"
+    assert_eq!(
+        plan.kind,
+        script_kit_gpui::ai::TabAiQuickSubmitKind::VisualAsk,
+        "must classify as visual ask"
     );
 }
 
 #[test]
-fn submission_quick_submit_dictation_source_preserved_in_hints() {
+fn submission_quick_submit_dictation_source_in_plan() {
     use script_kit_gpui::ai::{plan_tab_ai_quick_submit, TabAiQuickSubmitSource};
 
     let plan = plan_tab_ai_quick_submit(
@@ -741,27 +713,147 @@ fn submission_quick_submit_dictation_source_preserved_in_hints() {
     )
     .expect("plan should exist for text transform");
 
-    let context = make_context("ScriptList", None);
+    assert_eq!(
+        plan.source,
+        TabAiQuickSubmitSource::Dictation,
+        "plan must preserve the dictation source"
+    );
+    assert_eq!(
+        plan.kind,
+        script_kit_gpui::ai::TabAiQuickSubmitKind::TextTransform,
+        "must classify as text transform"
+    );
+    assert_eq!(
+        plan.capture_kind, "selectedText",
+        "text transform must use selectedText capture kind"
+    );
+}
+
+// =========================================================================
+// Artifact authoring guidance: scriptlet / agent / non-authoring intents
+// =========================================================================
+
+#[test]
+fn submit_with_scriptlet_authoring_intent_includes_artifact_authoring_guidance() {
+    let context = make_context("ScriptList", Some("scriptlet bundle"));
     let submission = build_tab_ai_harness_submission(
         &context,
-        Some(&plan.synthesized_intent),
+        Some("Create a scriptlet bundle that copies today's date"),
         TabAiHarnessSubmissionMode::Submit,
-        Some(&plan),
+        None,
         None,
         &[],
     )
     .expect("submission should build");
 
+    assert!(submission.contains("<scriptKitArtifactAuthoring>"));
+    assert!(submission.contains("~/.scriptkit/kit/main/extensions/<name>.md"));
+    assert!(submission.contains("~/.scriptkit/skills/scriptlets/SKILL.md"));
+    assert!(submission.contains("~/.scriptkit/examples/extensions/"));
+    assert!(submission
+        .contains("User intent:\nCreate a scriptlet bundle that copies today's date"));
+}
+
+#[test]
+fn submit_with_agent_authoring_intent_includes_agent_destination() {
+    let context = make_context("ScriptList", Some("agent"));
+    let submission = build_tab_ai_harness_submission(
+        &context,
+        Some("Create an mdflow agent that reviews staged changes"),
+        TabAiHarnessSubmissionMode::Submit,
+        None,
+        None,
+        &[],
+    )
+    .expect("submission should build");
+
+    assert!(submission.contains("<scriptKitArtifactAuthoring>"));
+    assert!(submission.contains("~/.scriptkit/kit/main/agents/<name>.<backend>.md"));
+    assert!(submission.contains("~/.scriptkit/skills/agents/SKILL.md"));
+    assert!(submission.contains("~/.scriptkit/examples/agents/"));
+}
+
+#[test]
+fn non_authoring_intent_omits_artifact_authoring_guidance() {
+    let context = make_context("FileSearch", Some("readme"));
+    let submission = build_tab_ai_harness_submission(
+        &context,
+        Some("rename this file"),
+        TabAiHarnessSubmissionMode::Submit,
+        None,
+        None,
+        &[],
+    )
+    .expect("submission should build");
+
+    assert!(!submission.contains("<scriptKitArtifactAuthoring>"));
+}
+
+#[test]
+fn artifact_authoring_block_appears_between_context_and_intent() {
+    let context = make_context("ScriptList", Some("agent"));
+
+    let submission = build_tab_ai_harness_submission(
+        &context,
+        Some("Generate a Script Kit agent for PR review"),
+        TabAiHarnessSubmissionMode::Submit,
+        None,
+        None,
+        &[],
+    )
+    .expect("submission should build");
+
+    let context_start = submission
+        .find("Script Kit context")
+        .expect("context block must exist");
+    let authoring_start = submission
+        .find("<scriptKitArtifactAuthoring>")
+        .expect("authoring block must exist");
+    let intent_start = submission
+        .find("User intent:")
+        .expect("intent must exist");
+
     assert!(
-        submission.contains("\"source\": \"dictation\""),
-        "hints block must preserve the dictation source"
+        context_start < authoring_start,
+        "authoring block must come after context block"
     );
     assert!(
-        submission.contains("\"kind\": \"textTransform\""),
-        "hints block must include quick-submit kind as textTransform"
+        authoring_start < intent_start,
+        "authoring block must come before user intent"
     );
-    assert!(
-        submission.contains("\"captureKind\": \"selectedText\""),
-        "text transform must use selectedText capture kind"
-    );
+    assert!(!submission.contains("<scriptKitHints>"));
+    assert!(submission.contains("~/.scriptkit/kit/main/agents/<name>.<backend>.md"));
+    assert!(submission
+        .contains("User intent:\nGenerate a Script Kit agent for PR review"));
+}
+
+#[test]
+fn should_include_artifact_authoring_guidance_detects_authoring_intents() {
+    // Positive cases
+    assert!(should_include_artifact_authoring_guidance(Some(
+        "Create a script"
+    )));
+    assert!(should_include_artifact_authoring_guidance(Some(
+        "Build an agent"
+    )));
+    assert!(should_include_artifact_authoring_guidance(Some(
+        "Generate a scriptlet"
+    )));
+    assert!(should_include_artifact_authoring_guidance(Some(
+        "scaffold an extension"
+    )));
+    assert!(should_include_artifact_authoring_guidance(Some(
+        "Make an mdflow agent"
+    )));
+
+    // Negative cases
+    assert!(!should_include_artifact_authoring_guidance(Some(
+        "rename this file"
+    )));
+    assert!(!should_include_artifact_authoring_guidance(Some(
+        "run the script"
+    )));
+    assert!(!should_include_artifact_authoring_guidance(None));
+    assert!(!should_include_artifact_authoring_guidance(Some("")));
+    assert!(!should_include_artifact_authoring_guidance(Some("   ")));
 }

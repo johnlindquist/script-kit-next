@@ -492,6 +492,28 @@ fn test_script_creation_dirs_follow_sk_path_override() {
     });
 }
 
+/// extensions/examples/howto.md must match the current harness authoring contract.
+#[test]
+fn test_extensions_howto_matches_current_harness_authoring_contract() {
+    with_temp_sk_path(|kit_root| {
+        let _ = ensure_kit_setup();
+        let howto = fs::read_to_string(
+            kit_root
+                .join("examples")
+                .join("extensions")
+                .join("howto.md"),
+        )
+        .expect("read examples/extensions/howto.md");
+
+        assert!(howto.contains("~/.scriptkit/kit/main/extensions/"));
+        assert!(!howto.contains("YOUR-KIT-NAME"));
+        assert!(!howto.contains("kit/work/extensions"));
+        assert!(!howto.contains("kit/personal/extensions"));
+        assert!(howto.contains("tool:name"));
+        assert!(!howto.contains("| `ts` | Runs TypeScript |"));
+    });
+}
+
 /// MCP resource descriptions for scripts:// and kit://scripts must reference kit/main/scripts.
 #[test]
 fn test_resource_definitions_use_kit_main_scripts_path() {

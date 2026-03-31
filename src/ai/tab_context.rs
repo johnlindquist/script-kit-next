@@ -1402,25 +1402,17 @@ pub fn tab_ai_apply_back_footer_label(source_type: Option<&TabAiSourceType>) -> 
 /// This is the canonical detection logic, usable from both include!() files
 /// and proper module tests.
 ///
-/// Priority order:
-/// 1. Desktop selected text present → `DesktopSelection`
-/// 2. `"ScriptList"` with a resolved focused target → `ScriptListItem`
-/// 3. `"ClipboardHistory"` → `ClipboardEntry`
-/// 4. Prompt-like surfaces → `RunningCommand`
+/// Priority order (Script Kit origin surfaces beat incidental desktop selection):
+/// 1. `"ScriptList"` with a resolved focused target → `ScriptListItem`
+/// 2. `"ClipboardHistory"` → `ClipboardEntry`
+/// 3. Prompt-like surfaces → `RunningCommand`
+/// 4. Desktop selected text present (no stronger Script Kit origin) → `DesktopSelection`
 /// 5. Fallback → `Desktop`
 pub fn detect_tab_ai_source_type_from_prompt(
     prompt_type: &str,
     desktop: &crate::context_snapshot::AiContextSnapshot,
     focused_target: Option<&TabAiTargetContext>,
 ) -> Option<TabAiSourceType> {
-    if desktop
-        .selected_text
-        .as_ref()
-        .is_some_and(|t| !t.trim().is_empty())
-    {
-        return Some(TabAiSourceType::DesktopSelection);
-    }
-
     match prompt_type {
         "ScriptList" if focused_target.is_some() => Some(TabAiSourceType::ScriptListItem),
         "ClipboardHistory" => Some(TabAiSourceType::ClipboardEntry),
@@ -1428,6 +1420,13 @@ pub fn detect_tab_ai_source_type_from_prompt(
         | "EditorPrompt" | "SelectPrompt" | "PathPrompt" | "DropPrompt" | "TemplatePrompt"
         | "TermPrompt" | "EnvPrompt" | "ChatPrompt" | "NamingPrompt" => {
             Some(TabAiSourceType::RunningCommand)
+        }
+        _ if desktop
+            .selected_text
+            .as_ref()
+            .is_some_and(|t| !t.trim().is_empty()) =>
+        {
+            Some(TabAiSourceType::DesktopSelection)
         }
         _ => Some(TabAiSourceType::Desktop),
     }
@@ -4413,7 +4412,30 @@ mod tab_ai_source_type_tests {
     use super::*;
 
     #[test]
-    fn desktop_selection_beats_script_list_classification() {
+    fn script_list_origin_beats_desktop_selection() {
+        // When the user is on ScriptList with a focused target AND desktop
+        // happens to have selected text, the Script Kit origin surface wins.
+        let desktop = crate::context_snapshot::AiContextSnapshot {
+            selected_text: Some("hello".to_string()),
+            ..Default::default()
+        };
+        let target = TabAiTargetContext {
+            source: "ScriptList".to_string(),
+            kind: "script".to_string(),
+            semantic_id: "script:0".to_string(),
+            label: "hello-world".to_string(),
+            metadata: None,
+        };
+        assert_eq!(
+            detect_tab_ai_source_type_from_prompt("ScriptList", &desktop, Some(&target)),
+            Some(TabAiSourceType::ScriptListItem),
+            "ScriptList with focused target should beat incidental desktop selection"
+        );
+    }
+
+    #[test]
+    fn desktop_selection_wins_when_no_stronger_origin() {
+        // Without a Script Kit-specific origin surface, desktop selection applies.
         let desktop = crate::context_snapshot::AiContextSnapshot {
             selected_text: Some("hello".to_string()),
             ..Default::default()

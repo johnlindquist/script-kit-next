@@ -100,9 +100,8 @@ impl ScriptListApp {
 
     /// Open the harness with a pre-computed quick-submit plan.
     ///
-    /// The plan's `synthesized_intent` becomes the entry intent, the plan's
-    /// `capture_kind` selects the right screenshot/context profile, and the
-    /// plan itself is embedded in the `<scriptKitHints>` block.
+    /// The plan's `submission_intent()` becomes the entry intent and the
+    /// plan's `capture_kind` selects the right screenshot/context profile.
     pub(crate) fn open_tab_ai_chat_with_quick_submit_plan(
         &mut self,
         plan: crate::ai::TabAiQuickSubmitPlan,
@@ -112,7 +111,7 @@ impl ScriptListApp {
             return;
         }
         let capture_kind = plan.capture_kind_enum();
-        let intent = Some(plan.synthesized_intent.clone());
+        let intent = Some(plan.submission_intent().to_string());
         self.begin_tab_ai_harness_entry(intent, Some(plan), capture_kind, cx);
     }
 
@@ -133,7 +132,7 @@ impl ScriptListApp {
 
         // If the harness is already the active surface and alive, route through
         // the full structured submission builder so live-session quick submits
-        // get fresh context, quick-submit metadata, and scriptKitHints — not
+        // get fresh context and quick-submit metadata — not
         // just raw intent text.
         if let Some(session) = self
             .tab_ai_harness
@@ -187,9 +186,10 @@ impl ScriptListApp {
         let (ui_snapshot, invocation_receipt) = self.snapshot_tab_ai_ui(cx);
         self.tab_ai_harness_capture_generation += 1;
 
+        let entry_intent = plan.submission_intent().to_string();
         let request = TabAiLaunchRequest {
             source_view,
-            entry_intent: Some(plan.synthesized_intent.clone()),
+            entry_intent: Some(entry_intent),
             quick_submit_plan: Some(plan),
             ui_snapshot,
             invocation_receipt,
@@ -587,7 +587,7 @@ impl ScriptListApp {
                     let effective_intent = request
                         .quick_submit_plan
                         .as_ref()
-                        .map(|plan| plan.synthesized_intent.as_str())
+                        .map(|plan| plan.submission_intent())
                         .or(request.entry_intent.as_deref());
 
                     let submit_now = request
@@ -777,7 +777,7 @@ impl ScriptListApp {
         let term_height = crate::window_resize::layout::MAX_HEIGHT
             - gpui::px(crate::window_resize::layout::FOOTER_HEIGHT);
 
-        let prompt = crate::term_prompt::TermPrompt::with_height(
+        let mut prompt = crate::term_prompt::TermPrompt::with_height(
             "tab-ai-harness".to_string(),
             Some(config.command_line()),
             self.focus_handle.clone(),
@@ -787,6 +787,10 @@ impl ScriptListApp {
             Some(term_height),
         )
         .map_err(|e| format!("tab_ai_harness_terminal_create_failed: {e}"))?;
+
+        // Harness terminals should always use local scrollback for wheel events
+        // so users can scroll through output history without fighting PTY mouse mode.
+        prompt.prefer_buffer_scroll_on_wheel = true;
 
         let entity = cx.new(|_| prompt);
 

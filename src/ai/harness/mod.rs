@@ -518,77 +518,95 @@ pub fn build_tab_ai_harness_context_block(
     Ok(out.trim_end().to_string())
 }
 
+// Hints block removed: submission uses flat context lines only (no XML blobs).
+
 // ---------------------------------------------------------------------------
-// Hints block (invocation receipt + suggested intents)
+// Artifact authoring guidance
 // ---------------------------------------------------------------------------
 
-/// Serializable hints block appended after the context block.
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct TabAiHarnessHints<'a> {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    quick_submit: Option<&'a TabAiQuickSubmitPlan>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    invocation_receipt: Option<&'a crate::ai::TabAiInvocationReceipt>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    suggested_intents: Vec<crate::ai::TabAiSuggestedIntentSpec>,
+/// Returns `true` when the intent looks like a request to create/scaffold a
+/// Script Kit artifact (script, scriptlet bundle, agent).  Used to decide
+/// whether to inject the `<scriptKitArtifactAuthoring>` guidance block.
+pub fn should_include_artifact_authoring_guidance(intent: Option<&str>) -> bool {
+    let Some(intent) = intent.map(str::trim).filter(|value| !value.is_empty()) else {
+        return false;
+    };
+    let intent = intent.to_ascii_lowercase();
+
+    let has_authoring_verb = [
+        "create", "make", "write", "build", "generate", "scaffold",
+    ]
+    .iter()
+    .any(|needle| intent.contains(needle));
+
+    let has_artifact_word = [
+        "script",
+        "scriptlet",
+        "extension",
+        "snippet",
+        "template",
+        "agent",
+        "mdflow",
+    ]
+    .iter()
+    .any(|needle| intent.contains(needle));
+
+    has_authoring_verb && has_artifact_word
 }
 
-/// Build the optional `<scriptKitHints>` block from receipt + suggestions.
-/// Returns `None` when all inputs are empty (no block emitted).
-fn build_tab_ai_harness_hints_block(
-    quick_submit: Option<&TabAiQuickSubmitPlan>,
-    invocation_receipt: Option<&crate::ai::TabAiInvocationReceipt>,
-    suggested_intents: &[crate::ai::TabAiSuggestedIntentSpec],
-) -> Result<Option<String>, String> {
-    if quick_submit.is_none() && invocation_receipt.is_none() && suggested_intents.is_empty() {
-        return Ok(None);
-    }
-    let hints = TabAiHarnessHints {
-        quick_submit,
-        invocation_receipt,
-        suggested_intents: suggested_intents.to_vec(),
-    };
-    let hints_json = serde_json::to_string_pretty(&hints)
-        .map_err(|e| format!("tab_ai_harness_hints_serialize_failed: {e}"))?;
-    Ok(Some(format!(
-        "<scriptKitHints>\n\
-         Use these to understand capture quality and suggest strong first actions.\n\
-         ```json\n\
-         {hints_json}\n\
-         ```\n\
-         </scriptKitHints>"
-    )))
+/// Static guidance block that tells the harness how to pick the right artifact
+/// type and where to write the result.
+fn build_tab_ai_artifact_authoring_guidance_block() -> &'static str {
+    r#"<scriptKitArtifactAuthoring>
+Pick the artifact type before writing files.
+
+Artifact: Script
+- write: ~/.scriptkit/kit/main/scripts/<name>.ts
+- learn: ~/.scriptkit/skills/script-authoring/SKILL.md
+- reference: ~/.scriptkit/examples/scripts/
+
+Artifact: Extension bundle
+- write: ~/.scriptkit/kit/main/extensions/<name>.md
+- learn: ~/.scriptkit/skills/scriptlets/SKILL.md
+- reference: ~/.scriptkit/examples/extensions/
+
+Artifact: mdflow agent
+- write: ~/.scriptkit/kit/main/agents/<name>.<backend>.md
+- learn: ~/.scriptkit/skills/agents/SKILL.md
+- reference: ~/.scriptkit/examples/agents/
+
+Rules:
+- Do not create a .ts script when the request is really a scriptlet bundle or mdflow agent.
+- Do not write runnable user files outside ~/.scriptkit/kit/main/.
+</scriptKitArtifactAuthoring>"#
 }
 
 // ---------------------------------------------------------------------------
 // Full submission builder
 // ---------------------------------------------------------------------------
 
-/// Build a full harness submission: context block + optional hints + optional user intent.
+/// Build a full harness submission: flat context block + optional user intent.
 ///
 /// Behavior depends on `mode`:
 /// - `Submit` without intent: appends a sentinel asking the harness to wait.
 /// - `PasteOnly` without intent: stages context only, no synthetic turn text.
 /// - With intent (either mode): appends the intent as `User intent:`.
 ///
-/// When `invocation_receipt` or `suggested_intents` are provided, a
-/// `<scriptKitHints>` block is appended between the context and intent.
+/// When the intent contains an authoring verb + artifact word, a
+/// `<scriptKitArtifactAuthoring>` block is appended between context and intent.
 pub fn build_tab_ai_harness_submission(
     context: &crate::ai::TabAiContextBlob,
     intent: Option<&str>,
     mode: TabAiHarnessSubmissionMode,
-    quick_submit: Option<&TabAiQuickSubmitPlan>,
-    invocation_receipt: Option<&crate::ai::TabAiInvocationReceipt>,
-    suggested_intents: &[crate::ai::TabAiSuggestedIntentSpec],
+    _quick_submit: Option<&TabAiQuickSubmitPlan>,
+    _invocation_receipt: Option<&crate::ai::TabAiInvocationReceipt>,
+    _suggested_intents: &[crate::ai::TabAiSuggestedIntentSpec],
 ) -> Result<String, String> {
     let mut output = build_tab_ai_harness_context_block(context)?;
 
-    if let Some(hints_block) =
-        build_tab_ai_harness_hints_block(quick_submit, invocation_receipt, suggested_intents)?
-    {
+    if should_include_artifact_authoring_guidance(intent) {
         output.push_str("\n\n");
-        output.push_str(&hints_block);
+        output.push_str(build_tab_ai_artifact_authoring_guidance_block());
     }
 
     match intent.map(str::trim).filter(|v| !v.is_empty()) {
@@ -986,7 +1004,7 @@ mod tests {
     }
 
     #[test]
-    fn paste_only_submission_includes_hints_block_when_receipt_or_suggestions_exist() {
+    fn paste_only_submission_omits_hints_block_even_with_receipt_or_suggestions() {
         let context = crate::ai::TabAiContextBlob::from_parts(
             crate::ai::TabAiUiSnapshot {
                 prompt_type: "FileSearch".to_string(),
@@ -1029,9 +1047,8 @@ mod tests {
         )
         .expect("submission");
 
-        assert!(submission.contains("<scriptKitHints>"));
-        assert!(submission.contains("\"promptType\": \"FileSearch\""));
-        assert!(submission.contains("\"intent\": \"summarize this file\""));
+        assert!(!submission.contains("<scriptKitHints>"));
+        assert!(submission.contains("Script Kit context"));
         assert!(submission.ends_with('\n'));
     }
 
