@@ -98,10 +98,15 @@ impl ScriptListApp {
         presentation: FileSearchPresentation,
         cx: &mut Context<Self>,
     ) {
+        // Preserve sort mode when already inside file search (e.g. browsing
+        // into a subdirectory) — only reset on fresh entry from outside.
+        let preserve_sort_mode = matches!(self.current_view, AppView::FileSearchView { .. });
+
         tracing::info!(
             category = "FILE_SEARCH",
             %query,
             ?presentation,
+            preserve_sort_mode,
             "Opening file search view"
         );
 
@@ -124,7 +129,9 @@ impl ScriptListApp {
         self.file_search_display_indices.clear();
         self.file_search_current_dir = None;
         self.file_search_frozen_filter = None;
-        self.file_search_sort_mode = crate::actions::FileSearchSortMode::default();
+        if !preserve_sort_mode {
+            self.file_search_sort_mode = crate::actions::FileSearchSortMode::default();
+        }
 
         // Full view still needs its split-view resize immediately.
         // Mini opens small and grows only as results arrive.

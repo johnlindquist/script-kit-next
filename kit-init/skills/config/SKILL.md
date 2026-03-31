@@ -115,6 +115,46 @@ commands: {
 
 Command deeplinks use: `scriptkit://commands/{id}`
 
+## Suggested Commands (Frecency)
+
+Controls the "Suggested" section in the main menu:
+
+```typescript
+suggested: {
+  enabled: true,       // default: true
+  maxItems: 10,        // default: 10
+  minScore: 0.1,       // default: 0.1
+  halfLifeDays: 7,     // default: 7.0
+  trackUsage: true,    // default: true
+  excludedCommands: [] // default: []
+}
+```
+
+## File Watcher
+
+Debounce and back-off settings for the file watcher:
+
+```typescript
+watcher: {
+  debounceMs: 500,        // default: 500
+  stormThreshold: 200,    // default: 200
+  initialBackoffMs: 100,  // default: 100
+  maxBackoffMs: 30000,    // default: 30000
+  maxNotifyErrors: 10,    // default: 10
+}
+```
+
+## Window Layout
+
+Sizing defaults for the launcher window:
+
+```typescript
+layout: {
+  standardHeight: 500,  // default: 500
+  maxHeight: 700,       // default: 700
+}
+```
+
 ## Claude Code Provider
 
 ```typescript
