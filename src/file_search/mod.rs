@@ -235,7 +235,9 @@ pub use mdfind::{
     new_cancel_token, search_files, search_files_streaming, CancelToken, SearchEvent,
 };
 pub use os_open::{
-    move_to_trash, open_file, open_in_terminal, open_with, quick_look, reveal_in_finder, show_info,
+    move_path, move_to_trash, open_file, open_in_terminal, open_with,
+    prompt_move_destination_dir, prompt_rename_target_name, quick_look, rename_path,
+    reveal_in_finder, show_info,
 };
 
 #[cfg(test)]

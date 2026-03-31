@@ -189,6 +189,18 @@ impl ScriptListApp {
         self.open_file_search_view(query, FileSearchPresentation::Full, cx);
     }
 
+    /// Return the rendered display index for the first visible row matching `path`.
+    pub(crate) fn file_search_display_index_for_path(&self, path: &str) -> Option<usize> {
+        self.file_search_display_indices
+            .iter()
+            .position(|&result_index| {
+                self.cached_file_results
+                    .get(result_index)
+                    .map(|entry| entry.path == path)
+                    .unwrap_or(false)
+            })
+    }
+
     /// Look up a file search result by its position in the rendered display list
     /// (after filtering, scoring, and directory-first sorting).
     pub(crate) fn file_search_result_at_display_index(

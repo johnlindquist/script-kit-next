@@ -74,6 +74,28 @@ pub fn get_file_context_actions(file_info: &FileInfo) -> Vec<Action> {
 
     actions.push(
         Action::new(
+            "file:rename_path",
+            "Rename\u{2026}",
+            Some("Renames the selected file or folder".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_shortcut("\u{2318}R")
+        .with_icon(IconName::Pencil),
+    );
+
+    actions.push(
+        Action::new(
+            "file:move_path",
+            "Move\u{2026}",
+            Some("Moves the selected file or folder to another folder".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_shortcut("\u{2318}\u{21e7}M")
+        .with_icon(IconName::FolderOpen),
+    );
+
+    actions.push(
+        Action::new(
             "file:open_in_editor",
             "Open in Editor",
             Some("Opens this item in $EDITOR".to_string()),

@@ -5775,10 +5775,10 @@ mod from_dialog_builtin_action_validation_tests_24 {
             is_dir: false,
         };
         let actions = get_file_context_actions(&f);
-        // open_file, reveal, open_in_editor, open_in_terminal, attach_to_ai, quick_look, show_info, copy_path, copy_filename, move_to_trash = 10
-        assert_eq!(actions.len(), 10);
+        // open_file, reveal, rename, move, open_in_editor, open_in_terminal, attach_to_ai, quick_look, show_info, copy_path, copy_filename, move_to_trash = 12
+        assert_eq!(actions.len(), 12);
     }
-    
+
     #[cfg(target_os = "macos")]
     #[test]
     fn batch24_file_context_macos_dir_count() {
@@ -5789,9 +5789,9 @@ mod from_dialog_builtin_action_validation_tests_24 {
             is_dir: true,
         };
         let actions = get_file_context_actions(&f);
-        // open_directory, reveal, open_in_editor, open_in_terminal, show_info, copy_path, copy_filename, move_to_trash = 8
+        // open_directory, reveal, rename, move, open_in_editor, open_in_terminal, show_info, copy_path, copy_filename, move_to_trash = 10
         // (no quick_look or attach_to_ai for dirs)
-        assert_eq!(actions.len(), 8);
+        assert_eq!(actions.len(), 10);
     }
     
     // ============================================================

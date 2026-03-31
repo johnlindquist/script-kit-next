@@ -444,6 +444,66 @@ pub(crate) fn render_expanded_view_scaffold(
         .child(render_simple_hint_strip(hints, None))
 }
 
+/// Expanded-view scaffold with caller-supplied hints and optional leading element.
+///
+/// Same layout as [`render_expanded_view_scaffold`] but lets the caller specify
+/// custom footer hints instead of the generic [`universal_prompt_hints`].
+#[allow(dead_code)]
+pub(crate) fn render_expanded_view_scaffold_with_hints(
+    header: impl IntoElement,
+    list_pane: impl IntoElement,
+    preview_pane: impl IntoElement,
+    hints: impl crate::components::hint_strip::IntoHints,
+    leading: Option<AnyElement>,
+) -> Div {
+    div()
+        .w_full()
+        .h_full()
+        .flex()
+        .flex_col()
+        // Header row with shared padding
+        .child(
+            div()
+                .w_full()
+                .px(px(crate::ui::chrome::HEADER_PADDING_X))
+                .py(px(crate::ui::chrome::HEADER_PADDING_Y))
+                .flex()
+                .flex_row()
+                .items_center()
+                .child(header),
+        )
+        // 50/50 split content area — no divider, no wrapper chrome
+        .child(
+            div()
+                .flex()
+                .flex_row()
+                .flex_1()
+                .min_h(px(0.))
+                .w_full()
+                .overflow_hidden()
+                // Left: mini-style list pane
+                .child(
+                    div()
+                        .flex_1()
+                        .h_full()
+                        .min_h(px(0.))
+                        .overflow_hidden()
+                        .child(list_pane),
+                )
+                // Right: chromeless preview slot
+                .child(
+                    div()
+                        .flex_1()
+                        .h_full()
+                        .min_h(px(0.))
+                        .overflow_hidden()
+                        .child(preview_pane),
+                ),
+        )
+        // Footer — caller-supplied hints
+        .child(render_simple_hint_strip(hints, leading))
+}
+
 /// Expanded-view scaffold wrapped in the shared prompt shell container.
 ///
 /// Same as [`render_expanded_view_scaffold`] but wrapped in

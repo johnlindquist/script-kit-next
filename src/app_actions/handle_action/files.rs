@@ -47,8 +47,14 @@ impl ScriptListApp {
         Some((entry.path.clone(), is_dir, entry.name.clone()))
     }
 
-    /// After a mutation (trash, etc.), re-resolve directory contents and refresh the display.
-    fn refresh_file_search_after_mutation(&mut self, cx: &mut Context<Self>) {
+    /// After a mutation (trash, rename, move, etc.), re-resolve directory contents
+    /// and keep the user's place instead of hard-resetting to the top.
+    fn refresh_file_search_after_mutation(
+        &mut self,
+        preferred_path: Option<&str>,
+        previous_display_index: usize,
+        cx: &mut Context<Self>,
+    ) {
         let AppView::FileSearchView {
             query, presentation, ..
         } = &self.current_view
@@ -60,21 +66,33 @@ impl ScriptListApp {
         let results = Self::resolve_file_search_results(&query_value);
         self.update_file_search_results(results);
 
-        // Reset selection to top
+        let next_index = preferred_path
+            .and_then(|path| self.file_search_display_index_for_path(path))
+            .or_else(|| {
+                let len = self.file_search_display_len();
+                if len == 0 {
+                    None
+                } else {
+                    Some(previous_display_index.min(len - 1))
+                }
+            });
+
         if let AppView::FileSearchView {
             ref mut selected_index,
             ..
         } = self.current_view
         {
-            *selected_index = 0;
+            *selected_index = next_index.unwrap_or(0);
         }
 
         Self::resize_file_search_window_for_presentation(
             presentation_value,
             self.file_search_display_indices.len(),
         );
-        self.file_search_scroll_handle
-            .scroll_to_item(0, gpui::ScrollStrategy::Top);
+        if let Some(index) = next_index {
+            self.file_search_scroll_handle
+                .scroll_to_item(index, gpui::ScrollStrategy::Nearest);
+        }
         cx.notify();
     }
 
@@ -320,12 +338,144 @@ impl ScriptListApp {
                 }
                 DispatchOutcome::success()
             }
+            "rename_path" => {
+                let Some((path, _, _name)) = self.resolve_file_search_path_info() else {
+                    return DispatchOutcome::error(
+                        crate::action_helpers::ERROR_ACTION_FAILED,
+                        "No file selected",
+                    );
+                };
+                let previous_display_index = match &self.current_view {
+                    AppView::FileSearchView { selected_index, .. } => *selected_index,
+                    _ => 0,
+                };
+
+                cx.spawn(async move |this, cx| {
+                    let new_name = match crate::file_search::prompt_rename_target_name(&path) {
+                        Ok(Some(value)) => value,
+                        Ok(None) => {
+                            let _ = this.update(cx, |this, _cx| {
+                                this.file_search_actions_path = None;
+                            });
+                            return;
+                        }
+                        Err(e) => {
+                            let _ = this.update(cx, |this, cx| {
+                                this.file_search_actions_path = None;
+                                this.show_error_toast(
+                                    format!("Failed to rename: {}", e),
+                                    cx,
+                                );
+                            });
+                            return;
+                        }
+                    };
+
+                    let _ = this.update(cx, |this, cx| {
+                        match crate::file_search::rename_path(&path, &new_name) {
+                            Ok(new_path) => {
+                                this.file_search_actions_path = None;
+                                this.show_hud(
+                                    format!("Renamed to {}", new_name),
+                                    Some(HUD_MEDIUM_MS),
+                                    cx,
+                                );
+                                this.refresh_file_search_after_mutation(
+                                    Some(&new_path),
+                                    previous_display_index,
+                                    cx,
+                                );
+                            }
+                            Err(e) => {
+                                this.file_search_actions_path = None;
+                                this.show_error_toast(
+                                    format!("Failed to rename: {}", e),
+                                    cx,
+                                );
+                            }
+                        }
+                    });
+                })
+                .detach();
+
+                DispatchOutcome::success()
+            }
+            "move_path" => {
+                let Some((path, is_dir, _name)) = self.resolve_file_search_path_info() else {
+                    return DispatchOutcome::error(
+                        crate::action_helpers::ERROR_ACTION_FAILED,
+                        "No file selected",
+                    );
+                };
+                let previous_display_index = match &self.current_view {
+                    AppView::FileSearchView { selected_index, .. } => *selected_index,
+                    _ => 0,
+                };
+
+                cx.spawn(async move |this, cx| {
+                    let destination_dir =
+                        match crate::file_search::prompt_move_destination_dir(&path, is_dir) {
+                            Ok(Some(value)) => value,
+                            Ok(None) => {
+                                let _ = this.update(cx, |this, _cx| {
+                                    this.file_search_actions_path = None;
+                                });
+                                return;
+                            }
+                            Err(e) => {
+                                let _ = this.update(cx, |this, cx| {
+                                    this.file_search_actions_path = None;
+                                    this.show_error_toast(
+                                        format!("Failed to move: {}", e),
+                                        cx,
+                                    );
+                                });
+                                return;
+                            }
+                        };
+
+                    let _ = this.update(cx, |this, cx| {
+                        match crate::file_search::move_path(&path, &destination_dir) {
+                            Ok(new_path) => {
+                                this.file_search_actions_path = None;
+                                this.show_hud(
+                                    format!(
+                                        "Moved to {}",
+                                        crate::file_search::shorten_path(&destination_dir)
+                                    ),
+                                    Some(HUD_MEDIUM_MS),
+                                    cx,
+                                );
+                                this.refresh_file_search_after_mutation(
+                                    Some(&new_path),
+                                    previous_display_index,
+                                    cx,
+                                );
+                            }
+                            Err(e) => {
+                                this.file_search_actions_path = None;
+                                this.show_error_toast(
+                                    format!("Failed to move: {}", e),
+                                    cx,
+                                );
+                            }
+                        }
+                    });
+                })
+                .detach();
+
+                DispatchOutcome::success()
+            }
             "move_to_trash" => {
                 let Some((path, _, name)) = self.resolve_file_search_path_info() else {
                     return DispatchOutcome::error(
                         crate::action_helpers::ERROR_ACTION_FAILED,
                         "No file selected",
                     );
+                };
+                let previous_display_index = match &self.current_view {
+                    AppView::FileSearchView { selected_index, .. } => *selected_index,
+                    _ => 0,
                 };
                 let trace_id = trace_id.to_string();
                 let start = std::time::Instant::now();
@@ -389,7 +539,11 @@ impl ScriptListApp {
                                     Some(HUD_MEDIUM_MS),
                                     cx,
                                 );
-                                this.refresh_file_search_after_mutation(cx);
+                                this.refresh_file_search_after_mutation(
+                                    None,
+                                    previous_display_index,
+                                    cx,
+                                );
                             }
                             Err(e) => {
                                 tracing::error!(
