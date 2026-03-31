@@ -276,12 +276,12 @@ Composable context attachments for AI chat flows with deterministic resolution a
 - `tests/context_part_start_chat_flow.rs` — empty message + parts, message + parts, invalid parts, mixed success, order
 - `tests/context_part_submission_flow.rs` — mixed success tracking, full success prefix persistence
 
-### Tab AI — Quick Terminal with Context Injection
+### Tab AI — Quick Terminal with Flat Context Injection
 
-Tab AI is not the old inline chat surface anymore. The primary Tab AI experience is a warm harness terminal rendered in `AppView::QuickTerminalView` via `TermPrompt`.
+Tab AI is a warm harness terminal rendered in `AppView::QuickTerminalView` via `TermPrompt`.
 
 **Entry path:**
-- Plain `Tab` opens the harness terminal, captures hierarchical context, and stages a schema-versioned `<scriptKitContext>` block in the running harness using `TabAiHarnessSubmissionMode::PasteOnly`.
+- Plain `Tab` opens the harness terminal and stages a flat labeled `Script Kit context` block using `TabAiHarnessSubmissionMode::PasteOnly`.
 - `Shift+Tab` in `AppView::ScriptList` with non-empty filter text opens the same harness surface and submits that filter text as `User intent:` using `TabAiHarnessSubmissionMode::Submit`.
 - `Tab` / `Shift+Tab` inside `AppView::QuickTerminalView` are forwarded to the PTY. Do not describe them as focus-navigation keys once the harness terminal is open.
 
@@ -291,14 +291,15 @@ Tab AI is not the old inline chat surface anymore. The primary Tab AI experience
 - The footer hint strip advertises only `⌘W Close`.
 
 **Runtime contract:**
-- Entry path: `open_tab_ai_chat()` → `open_tab_ai_chat_with_entry_intent()` → `open_tab_ai_harness_terminal()`
+- Entry path: `open_tab_ai_chat()` → `begin_tab_ai_harness_entry()` → `open_tab_ai_harness_terminal_from_request()`
 - Harness session state: `TabAiHarnessSessionState`
 - Harness config: `~/.scriptkit/harness.json`
 - Supported backends: Claude Code, Codex, Gemini CLI, Copilot CLI, and custom commands
 - `warmOnStartup` defaults to `true`
 - Context assembly stays intact: `snapshot_tab_ai_ui()` + `capture_context_snapshot(CaptureContextOptions::tab_ai_submit())` + `build_tab_ai_context_from()`
-- The `kit://context` MCP resource system still exists, but the landed default Tab flow is PTY-backed text injection
-- `build_tab_ai_harness_submission()` emits `<scriptKitContext>` and optional `<scriptKitHints>`
+- The landed default Tab flow is PTY-backed text injection
+- `build_tab_ai_harness_submission()` emits a flat text-native context block plus optional artifact authoring guidance
+- No XML wrappers are used in the landed PTY path
 - `PasteOnly` stages context on a fresh line and does not auto-submit
 - `Submit` with a non-empty intent appends `User intent:` and submits immediately
 - `Submit` without a non-empty intent appends `Await the user's next terminal input.`
