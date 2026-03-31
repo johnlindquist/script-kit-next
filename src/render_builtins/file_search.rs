@@ -439,24 +439,25 @@ impl ScriptListApp {
                         _ if is_key_enter(key) => {
                             if has_cmd {
                                 // ⌘↵ / ⌘⇧↵ → launch AI harness with file context
+                                // via quick-submit plan for richer harness hints.
                                 let has_shift = event.keystroke.modifiers.shift;
-                                if let AppView::FileSearchView {
+                                let ai_args = if let AppView::FileSearchView {
                                     ref query,
                                     selected_index,
                                     ..
                                 } = this.current_view
                                 {
-                                    if let Some(intent) =
-                                        this.build_file_search_ai_entry_intent(
-                                            query,
-                                            selected_index,
-                                            has_shift,
-                                        )
-                                    {
-                                        this.open_tab_ai_chat_with_entry_intent(
-                                            Some(intent),
-                                            cx,
-                                        );
+                                    Some((query.clone(), selected_index))
+                                } else {
+                                    None
+                                };
+                                if let Some((query, sel_idx)) = ai_args {
+                                    if this.open_file_search_selection_in_tab_ai(
+                                        &query,
+                                        sel_idx,
+                                        has_shift,
+                                        cx,
+                                    ) {
                                         cx.stop_propagation();
                                         return;
                                     }
