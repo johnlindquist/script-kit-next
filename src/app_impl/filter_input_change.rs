@@ -267,11 +267,8 @@ impl ScriptListApp {
                 if presentation == FileSearchPresentation::Mini
                     && !Self::should_enter_file_search_from_script_list(&new_text)
                 {
-                    if let Some(cancel) = self.file_search_cancel.take() {
-                        cancel.store(true, std::sync::atomic::Ordering::Relaxed);
-                    }
-                    self.file_search_debounce_task = None;
-                    self.file_search_loading = false;
+                    let _ = self.begin_file_search_session();
+                    self.file_search_current_dir = None;
                     self.current_view = AppView::ScriptList;
                     self.filter_text = new_text.clone();
                     self.pending_placeholder = None;
@@ -309,19 +306,9 @@ impl ScriptListApp {
                     *query = new_text.clone();
                     *selected_index = 0;
 
-                    // CRITICAL: Increment generation and cancel previous search
-                    // This ensures stale results are ignored AND mdfind process is killed
-                    self.file_search_gen += 1;
-                    let gen = self.file_search_gen;
+                    // Cancel previous session and advance generation
+                    let gen = self.begin_file_search_session();
                     logging::log("SEARCH", &format!("Generation incremented to {}", gen));
-
-                    // Cancel any in-flight search by setting the cancel token
-                    if let Some(cancel) = self.file_search_cancel.take() {
-                        cancel.store(true, std::sync::atomic::Ordering::Relaxed);
-                    }
-
-                    // Cancel existing debounce task (drops the Task, stopping the async work)
-                    self.file_search_debounce_task = None;
 
                     // Check if this is a directory path with potential filter
                     // e.g., ~/dev/fin -> list ~/dev/ and filter by "fin"

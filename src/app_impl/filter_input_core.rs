@@ -82,6 +82,11 @@ impl ScriptListApp {
             "Opening file search view"
         );
 
+        let _ = self.begin_file_search_session();
+
+        let current_dir =
+            crate::file_search::parse_directory_path(&query).map(|parsed| parsed.directory);
+
         let results = Self::resolve_file_search_results(&query);
 
         self.filter_text = query.clone();
@@ -99,8 +104,7 @@ impl ScriptListApp {
         self.pending_focus = Some(FocusTarget::MainFilter);
         self.focused_input = FocusedInput::MainFilter;
 
-        self.file_search_gen = 0;
-        self.file_search_cancel = None;
+        self.file_search_current_dir = current_dir;
         self.update_file_search_results(results);
 
         Self::resize_file_search_window_for_presentation(

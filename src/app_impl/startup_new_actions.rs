@@ -45,42 +45,22 @@
                                     cx.stop_propagation();
                                     return;
                                 }
-                                AppView::FileSearchView {
-                                    selected_index,
-                                    query,
-                                    ..
-                                } => {
-                                    // Get the filter pattern for directory path parsing
-                                    let filter_pattern = if let Some(parsed) =
-                                        crate::file_search::parse_directory_path(query)
-                                    {
-                                        parsed.filter
-                                    } else if !query.is_empty() {
-                                        Some(query.clone())
-                                    } else {
-                                        None
+                                AppView::FileSearchView { .. } => {
+                                    let Some((display_index, file_clone)) =
+                                        this.selected_file_search_result_owned()
+                                    else {
+                                        cx.stop_propagation();
+                                        return;
                                     };
 
-                                    let filtered_results: Vec<_> =
-                                        if let Some(ref pattern) = filter_pattern {
-                                            crate::file_search::filter_results_nucleo_simple(
-                                                &this.cached_file_results,
-                                                pattern,
-                                            )
-                                        } else {
-                                            this.cached_file_results.iter().enumerate().collect()
-                                        };
-
-                                    // Defensive bounds check: clamp selected_index if out of bounds
-                                    let filtered_len = filtered_results.len();
-                                    if filtered_len > 0 && *selected_index >= filtered_len {
-                                        *selected_index = filtered_len - 1;
+                                    if let AppView::FileSearchView {
+                                        selected_index, ..
+                                    } = &mut this.current_view
+                                    {
+                                        *selected_index = display_index;
                                     }
 
-                                    if let Some((_, file)) = filtered_results.get(*selected_index) {
-                                        let file_clone = (*file).clone();
-                                        this.toggle_file_search_actions(&file_clone, window, cx);
-                                    }
+                                    this.toggle_file_search_actions(&file_clone, window, cx);
                                     cx.stop_propagation();
                                     return;
                                 }

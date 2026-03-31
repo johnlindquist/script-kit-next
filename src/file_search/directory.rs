@@ -424,10 +424,10 @@ pub fn parse_directory_path(path: &str) -> Option<ParsedDirPath> {
         return None;
     }
 
-    // Handle special case: just ~ or ~/ (home directory)
+    // Normalize home root so all callers compare the same string.
     if trimmed == "~" || trimmed == "~/" {
         return Some(ParsedDirPath {
-            directory: "~".to_string(),
+            directory: "~/".to_string(),
             filter: None,
         });
     }

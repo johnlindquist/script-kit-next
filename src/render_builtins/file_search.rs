@@ -1076,39 +1076,60 @@ impl ScriptListApp {
             )
         };
 
-        // Footer: three-slot pattern — ↵ Run · ⌘K Actions · Tab AI
-        // AI shortcuts (⌘↵ Explain, ⌘⇧↵ Plan) are discoverable via Tab AI,
-        // not the footer. Keep footer truthful and minimal.
+        let can_shift_tab_up = crate::file_search::parse_directory_path(query)
+            .map(|parsed| {
+                if parsed.filter.is_some() {
+                    true
+                } else {
+                    crate::file_search::parent_dir_display(&parsed.directory).is_some()
+                }
+            })
+            .unwrap_or(false);
+
+        // Footer contract must match the real key wiring:
+        // ↵ opens/browses, Tab enters folders or fills the path,
+        // ⌘K opens actions, and ⌘↵ sends the selection/query to AI.
         let mini_hints: Vec<SharedString> = if let Some(file) = selected_file.as_ref() {
-            if file.file_type == FileType::Directory {
-                vec![
-                    "\u{21b5} Browse".into(),
-                    "\u{2318}K Actions".into(),
-                    "Tab AI".into(),
-                ]
+            let primary = if file.file_type == FileType::Directory {
+                "\u{21b5} Browse"
             } else {
-                vec![
-                    "\u{21b5} Open".into(),
-                    "\u{2318}K Actions".into(),
-                    "Tab AI".into(),
-                ]
-            }
+                "\u{21b5} Open"
+            };
+            let tab_hint = if file.file_type == FileType::Directory {
+                "Tab Enter Folder"
+            } else {
+                "Tab Fill Path"
+            };
+            vec![
+                primary.into(),
+                tab_hint.into(),
+                "\u{2318}K Actions \u{b7} \u{2318}\u{21b5} AI".into(),
+            ]
         } else if is_loading {
             vec![
                 "Searching\u{2026}".into(),
-                "\u{2318}K Actions".into(),
-                "Tab AI".into(),
+                if can_shift_tab_up {
+                    "\u{21e7}Tab Up".into()
+                } else {
+                    "Tab Browse".into()
+                },
+                "\u{2318}\u{21b5} AI".into(),
             ]
         } else if filtered_len == 0 {
             vec![
-                "Type a path or search".into(),
-                "Tab AI".into(),
+                "Type a path".into(),
+                if can_shift_tab_up {
+                    "\u{21e7}Tab Up".into()
+                } else {
+                    "Tab Browse".into()
+                },
+                "\u{2318}\u{21b5} AI".into(),
             ]
         } else {
             vec![
-                "\u{21b5} Run".into(),
-                "\u{2318}K Actions".into(),
-                "Tab AI".into(),
+                "\u{21b5} Open".into(),
+                "Tab Complete".into(),
+                "\u{2318}K Actions \u{b7} \u{2318}\u{21b5} AI".into(),
             ]
         };
 
