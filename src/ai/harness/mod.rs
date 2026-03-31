@@ -692,6 +692,38 @@ fn looks_like_descriptive_artifact_phrase(intent: &str) -> bool {
         .any(|artifact| intent.ends_with(artifact))
 }
 
+/// Words that users treat as synonyms for "Script Kit artifact" without using
+/// any of the canonical artifact nouns (script, bundle, agent, etc.).
+const COMMAND_LIKE_ARTIFACT_WORDS: &[&str] = &[
+    "command",
+    "commands",
+    "helper",
+    "helpers",
+    "tool",
+    "tools",
+    "workflow",
+    "workflows",
+];
+
+/// Returns `true` for short command-like requests that end with an artifact
+/// synonym (e.g. "clipboard cleanup command", "jira helper") but whose leading
+/// verb is not a non-creation verb ("run", "fix", "edit", …).
+fn looks_like_command_like_artifact_request(intent: &str) -> bool {
+    let words: Vec<&str> = intent.split_whitespace().collect();
+    if words.len() < 2 || words.len() > 8 {
+        return false;
+    }
+    if NON_CREATION_LEADING_VERBS
+        .iter()
+        .any(|verb| intent.starts_with(verb))
+    {
+        return false;
+    }
+    COMMAND_LIKE_ARTIFACT_WORDS
+        .iter()
+        .any(|word| intent.ends_with(word))
+}
+
 /// Returns `true` when the intent looks like a request to create/scaffold a
 /// Script Kit artifact (script, scriptlet bundle, agent).  Used to decide
 /// whether to inject the artifact authoring guidance block.
@@ -712,9 +744,14 @@ pub fn should_include_artifact_authoring_guidance(intent: Option<&str>) -> bool 
         .iter()
         .any(|needle| intent.contains(needle));
 
-    (has_authoring_signal && has_artifact_word)
+    let has_command_like_suffix = COMMAND_LIKE_ARTIFACT_WORDS
+        .iter()
+        .any(|word| intent.ends_with(word));
+
+    (has_authoring_signal && (has_artifact_word || has_command_like_suffix))
         || looks_like_bare_artifact_request(&intent)
         || looks_like_descriptive_artifact_phrase(&intent)
+        || looks_like_command_like_artifact_request(&intent)
 }
 
 /// The authoritative one-shot launchpad content, sourced from the same file
@@ -1664,6 +1701,50 @@ mod tests {
     }
 
     #[test]
+    fn authoring_guidance_triggers_on_command_like_artifact_requests() {
+        // Acceptance criteria from START_HERE alignment
+        assert!(should_include_artifact_authoring_guidance(Some(
+            "make a clipboard cleanup command"
+        )));
+        assert!(should_include_artifact_authoring_guidance(Some(
+            "new jira helper"
+        )));
+        // Other command-like synonyms
+        assert!(should_include_artifact_authoring_guidance(Some(
+            "build a deployment tool"
+        )));
+        assert!(should_include_artifact_authoring_guidance(Some(
+            "create a release workflow"
+        )));
+        assert!(should_include_artifact_authoring_guidance(Some(
+            "daily standup helper"
+        )));
+    }
+
+    #[test]
+    fn authoring_guidance_skips_non_creation_command_like_intents() {
+        // "run this command" — non-creation verb
+        assert!(!should_include_artifact_authoring_guidance(Some(
+            "run this command"
+        )));
+        // "make this command work" — "work" is not an artifact synonym,
+        // and "command" is not at the end
+        assert!(!should_include_artifact_authoring_guidance(Some(
+            "make this command work"
+        )));
+        // Non-creation verbs with command-like nouns
+        assert!(!should_include_artifact_authoring_guidance(Some(
+            "fix this tool"
+        )));
+        assert!(!should_include_artifact_authoring_guidance(Some(
+            "edit the helper"
+        )));
+        assert!(!should_include_artifact_authoring_guidance(Some(
+            "delete old commands"
+        )));
+    }
+
+    #[test]
     fn authoring_guidance_block_mentions_scriptlet_bundle() {
         let block = build_tab_ai_artifact_authoring_guidance_block();
         assert!(block.contains("Extension bundle / scriptlet bundle"));
@@ -1679,6 +1760,35 @@ mod tests {
         assert!(block.contains("scripts/hello-world.ts"));
         assert!(block.contains("`tool:<name>`"));
         assert!(block.contains("_sk_*"));
+    }
+
+    #[test]
+    fn start_here_includes_command_helper_tool_decision_section() {
+        let block = build_tab_ai_artifact_authoring_guidance_block();
+        assert!(block.contains("When the request says"));
+        assert!(block.contains("command"));
+        assert!(block.contains("helper"));
+        assert!(block.contains("tool"));
+    }
+
+    #[test]
+    fn start_here_includes_agent_backend_suffix_table() {
+        let block = build_tab_ai_artifact_authoring_guidance_block();
+        assert!(block.contains("Agent Backend Quick Pick"));
+        assert!(block.contains(".claude.md"));
+        assert!(block.contains(".gemini.md"));
+        assert!(block.contains(".codex.md"));
+        assert!(block.contains(".copilot.md"));
+        assert!(block.contains(".i.gemini.md"));
+    }
+
+    #[test]
+    fn start_here_includes_fast_pick_examples_with_concrete_paths() {
+        let block = build_tab_ai_artifact_authoring_guidance_block();
+        assert!(block.contains("Fast Picks"));
+        assert!(block.contains("~/.scriptkit/kit/main/scripts/clipboard-cleanup.ts"));
+        assert!(block.contains("~/.scriptkit/kit/main/extensions/snippets.md"));
+        assert!(block.contains("~/.scriptkit/kit/main/agents/review-pr.claude.md"));
     }
 }
 
