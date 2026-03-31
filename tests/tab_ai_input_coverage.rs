@@ -1306,8 +1306,8 @@ fn file_search_key_handler_clamps_for_get_selected_file() {
         .find("let get_selected_file = ||")
         .or_else(|| FILE_SEARCH_RENDER_SOURCE.find("let get_selected_file"))
         .expect("get_selected_file closure must exist in file_search.rs");
-    let handler_body =
-        &FILE_SEARCH_RENDER_SOURCE[handler_start..handler_start + 300.min(FILE_SEARCH_RENDER_SOURCE.len() - handler_start)];
+    let handler_body = &FILE_SEARCH_RENDER_SOURCE
+        [handler_start..handler_start + 300.min(FILE_SEARCH_RENDER_SOURCE.len() - handler_start)];
 
     assert!(
         handler_body.contains("clamp_file_search_display_index"),
@@ -1322,7 +1322,8 @@ fn clamp_file_search_display_index_returns_none_for_empty() {
     let fn_start = UTILITY_VIEWS_SOURCE
         .find("fn clamp_file_search_display_index(")
         .expect("clamp_file_search_display_index must exist");
-    let fn_body = &UTILITY_VIEWS_SOURCE[fn_start..fn_start + 300.min(UTILITY_VIEWS_SOURCE.len() - fn_start)];
+    let fn_body =
+        &UTILITY_VIEWS_SOURCE[fn_start..fn_start + 300.min(UTILITY_VIEWS_SOURCE.len() - fn_start)];
 
     assert!(
         fn_body.contains("file_search_display_indices.is_empty()"),
@@ -1337,7 +1338,8 @@ fn clamp_uses_min_not_modulo() {
     let fn_start = UTILITY_VIEWS_SOURCE
         .find("fn clamp_file_search_display_index(")
         .expect("clamp_file_search_display_index must exist");
-    let fn_body = &UTILITY_VIEWS_SOURCE[fn_start..fn_start + 300.min(UTILITY_VIEWS_SOURCE.len() - fn_start)];
+    let fn_body =
+        &UTILITY_VIEWS_SOURCE[fn_start..fn_start + 300.min(UTILITY_VIEWS_SOURCE.len() - fn_start)];
 
     assert!(
         fn_body.contains(".min("),
@@ -1356,7 +1358,8 @@ fn selected_file_search_result_uses_clamping() {
     let fn_start = UTILITY_VIEWS_SOURCE
         .find("fn selected_file_search_result(")
         .expect("selected_file_search_result must exist");
-    let fn_body = &UTILITY_VIEWS_SOURCE[fn_start..fn_start + 300.min(UTILITY_VIEWS_SOURCE.len() - fn_start)];
+    let fn_body =
+        &UTILITY_VIEWS_SOURCE[fn_start..fn_start + 300.min(UTILITY_VIEWS_SOURCE.len() - fn_start)];
 
     assert!(
         fn_body.contains("clamp_file_search_display_index"),

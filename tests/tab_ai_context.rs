@@ -510,7 +510,10 @@ fn build_tab_ai_suggested_intents_file_search_file_target() {
     };
     let suggestions = build_tab_ai_suggested_intents(Some(&target), None, &[]);
     assert_eq!(suggestions.len(), 3);
-    assert_eq!(suggestions[0].intent, "summarize this file in the context of this search");
+    assert_eq!(
+        suggestions[0].intent,
+        "summarize this file in the context of this search"
+    );
     assert_eq!(suggestions[1].label, "Related");
     assert!(suggestions[2].intent.contains("12 visible results"));
 }
@@ -1369,8 +1372,8 @@ fn file_search_entry_intent_distinguishes_file_from_directory() {
     let fn_start = TAB_AI_MODE_FOR_CONTEXT
         .find("fn build_file_search_ai_entry_intent(")
         .expect("build_file_search_ai_entry_intent must exist");
-    let fn_body =
-        &TAB_AI_MODE_FOR_CONTEXT[fn_start..fn_start + 2000.min(TAB_AI_MODE_FOR_CONTEXT.len() - fn_start)];
+    let fn_body = &TAB_AI_MODE_FOR_CONTEXT
+        [fn_start..fn_start + 2000.min(TAB_AI_MODE_FOR_CONTEXT.len() - fn_start)];
 
     assert!(
         fn_body.contains(r#""directory""#),
@@ -1392,8 +1395,8 @@ fn file_search_entry_intent_has_plan_and_explain_modes() {
     let fn_start = TAB_AI_MODE_FOR_CONTEXT
         .find("fn build_file_search_ai_entry_intent(")
         .expect("build_file_search_ai_entry_intent must exist");
-    let fn_body =
-        &TAB_AI_MODE_FOR_CONTEXT[fn_start..fn_start + 2500.min(TAB_AI_MODE_FOR_CONTEXT.len() - fn_start)];
+    let fn_body = &TAB_AI_MODE_FOR_CONTEXT
+        [fn_start..fn_start + 2500.min(TAB_AI_MODE_FOR_CONTEXT.len() - fn_start)];
 
     assert!(
         fn_body.contains("plan_mode"),
@@ -1415,8 +1418,8 @@ fn file_search_query_intent_has_plan_and_explain_modes() {
     let fn_start = TAB_AI_MODE_FOR_CONTEXT
         .find("fn build_file_search_ai_query_intent(")
         .expect("build_file_search_ai_query_intent must exist");
-    let fn_body =
-        &TAB_AI_MODE_FOR_CONTEXT[fn_start..fn_start + 2500.min(TAB_AI_MODE_FOR_CONTEXT.len() - fn_start)];
+    let fn_body = &TAB_AI_MODE_FOR_CONTEXT
+        [fn_start..fn_start + 2500.min(TAB_AI_MODE_FOR_CONTEXT.len() - fn_start)];
 
     assert!(
         fn_body.contains("plan_mode"),
@@ -1438,8 +1441,8 @@ fn file_search_intent_includes_nearby_visible_results() {
     let entry_fn_start = TAB_AI_MODE_FOR_CONTEXT
         .find("fn build_file_search_ai_entry_intent(")
         .expect("build_file_search_ai_entry_intent must exist");
-    let entry_fn_body =
-        &TAB_AI_MODE_FOR_CONTEXT[entry_fn_start..entry_fn_start + 2000.min(TAB_AI_MODE_FOR_CONTEXT.len() - entry_fn_start)];
+    let entry_fn_body = &TAB_AI_MODE_FOR_CONTEXT
+        [entry_fn_start..entry_fn_start + 2000.min(TAB_AI_MODE_FOR_CONTEXT.len() - entry_fn_start)];
 
     assert!(
         entry_fn_body.contains("format_file_search_ai_visible_results"),
@@ -1449,8 +1452,8 @@ fn file_search_intent_includes_nearby_visible_results() {
     let query_fn_start = TAB_AI_MODE_FOR_CONTEXT
         .find("fn build_file_search_ai_query_intent(")
         .expect("build_file_search_ai_query_intent must exist");
-    let query_fn_body =
-        &TAB_AI_MODE_FOR_CONTEXT[query_fn_start..query_fn_start + 2000.min(TAB_AI_MODE_FOR_CONTEXT.len() - query_fn_start)];
+    let query_fn_body = &TAB_AI_MODE_FOR_CONTEXT
+        [query_fn_start..query_fn_start + 2000.min(TAB_AI_MODE_FOR_CONTEXT.len() - query_fn_start)];
 
     assert!(
         query_fn_body.contains("format_file_search_ai_visible_results"),
@@ -1465,8 +1468,8 @@ fn file_search_query_intent_includes_query_mode() {
     let fn_start = TAB_AI_MODE_FOR_CONTEXT
         .find("fn build_file_search_ai_query_intent(")
         .expect("build_file_search_ai_query_intent must exist");
-    let fn_body =
-        &TAB_AI_MODE_FOR_CONTEXT[fn_start..fn_start + 2000.min(TAB_AI_MODE_FOR_CONTEXT.len() - fn_start)];
+    let fn_body = &TAB_AI_MODE_FOR_CONTEXT
+        [fn_start..fn_start + 2000.min(TAB_AI_MODE_FOR_CONTEXT.len() - fn_start)];
 
     assert!(
         fn_body.contains("file_search_query_mode"),

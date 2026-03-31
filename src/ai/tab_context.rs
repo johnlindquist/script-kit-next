@@ -2418,10 +2418,7 @@ impl TabAiSuggestedIntentSpec {
 }
 
 /// Look up a string field inside the optional `metadata` JSON blob on a target.
-fn suggested_intent_metadata_str<'a>(
-    target: &'a TabAiTargetContext,
-    key: &str,
-) -> Option<&'a str> {
+fn suggested_intent_metadata_str<'a>(target: &'a TabAiTargetContext, key: &str) -> Option<&'a str> {
     target
         .metadata
         .as_ref()
@@ -2430,10 +2427,7 @@ fn suggested_intent_metadata_str<'a>(
 }
 
 /// Look up an integer field inside the optional `metadata` JSON blob on a target.
-fn suggested_intent_metadata_u64(
-    target: &TabAiTargetContext,
-    key: &str,
-) -> Option<u64> {
+fn suggested_intent_metadata_u64(target: &TabAiTargetContext, key: &str) -> Option<u64> {
     target
         .metadata
         .as_ref()
@@ -2465,8 +2459,8 @@ pub fn build_tab_ai_suggested_intents(
                 ));
             }
             "file" if target.source == "FileSearch" => {
-                let query_mode = suggested_intent_metadata_str(target, "queryMode")
-                    .unwrap_or("spotlight-basic");
+                let query_mode =
+                    suggested_intent_metadata_str(target, "queryMode").unwrap_or("spotlight-basic");
                 let visible_count =
                     suggested_intent_metadata_u64(target, "visibleResultCount").unwrap_or(0);
                 suggestions.push(TabAiSuggestedIntentSpec::new(
@@ -2489,8 +2483,8 @@ pub fn build_tab_ai_suggested_intents(
                 ));
             }
             "directory" if target.source == "FileSearch" => {
-                let query_mode = suggested_intent_metadata_str(target, "queryMode")
-                    .unwrap_or("path-browse");
+                let query_mode =
+                    suggested_intent_metadata_str(target, "queryMode").unwrap_or("path-browse");
                 suggestions.push(TabAiSuggestedIntentSpec::new(
                     "Map",
                     format!(

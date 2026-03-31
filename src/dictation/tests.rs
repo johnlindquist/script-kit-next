@@ -3347,11 +3347,14 @@ fn escape_abort_never_reaches_transcript_handler() {
     // overlay_escape_action routes Recording to TransitionToConfirming and
     // Confirming to ResumeRecording (confirm-first pattern).
     assert!(
-        window_src.contains("DictationSessionPhase::Recording => OverlayEscapeAction::TransitionToConfirming"),
+        window_src.contains(
+            "DictationSessionPhase::Recording => OverlayEscapeAction::TransitionToConfirming"
+        ),
         "overlay_escape_action must map Recording to TransitionToConfirming"
     );
     assert!(
-        window_src.contains("DictationSessionPhase::Confirming => OverlayEscapeAction::ResumeRecording"),
+        window_src
+            .contains("DictationSessionPhase::Confirming => OverlayEscapeAction::ResumeRecording"),
         "overlay_escape_action must map Confirming to ResumeRecording"
     );
 
@@ -4430,7 +4433,8 @@ fn missing_model_entry_gate_opens_download_prompt() {
         .find("BuiltInFeature::Dictation =>")
         .expect("builtin_execution must have a Dictation arm");
     // Scope to the first ~2000 chars of the arm to stay in the preflight.
-    let arm_src = &src[dictation_arm_start..dictation_arm_start + 2000.min(src.len() - dictation_arm_start)];
+    let arm_src =
+        &src[dictation_arm_start..dictation_arm_start + 2000.min(src.len() - dictation_arm_start)];
 
     // Must check model availability before starting capture.
     assert!(
@@ -4478,7 +4482,8 @@ fn missing_model_transcription_recovery_opens_download_prompt() {
         .find("Parakeet model not downloaded")
         .expect("handler must detect the Parakeet-missing error string");
     // Scope to ~500 chars after the detection to capture the branch body.
-    let branch_src = &handler_src[parakeet_branch_start..parakeet_branch_start + 500.min(handler_src.len() - parakeet_branch_start)];
+    let branch_src = &handler_src[parakeet_branch_start
+        ..parakeet_branch_start + 500.min(handler_src.len() - parakeet_branch_start)];
 
     // Must close the dictation overlay before opening the prompt.
     assert!(
@@ -4505,7 +4510,8 @@ fn missing_model_transcription_recovery_opens_download_prompt() {
     );
 
     // Must NOT show a dead-end toast in this branch (the prompt IS the UX).
-    let branch_before_return = &branch_src[..branch_src.find("return;").unwrap_or(branch_src.len())];
+    let branch_before_return =
+        &branch_src[..branch_src.find("return;").unwrap_or(branch_src.len())];
     assert!(
         !branch_before_return.contains("show_error_toast"),
         "Parakeet-missing branch must NOT show a dead-end toast — the prompt is the recovery UX"

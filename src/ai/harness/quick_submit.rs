@@ -104,90 +104,90 @@ pub fn plan_tab_ai_quick_submit(
     let normalized_query = normalize_query(&raw_query);
     let tokens = tokenize_normalized_query(&normalized_query);
 
-    let (kind, capture_kind, synthesized_intent) = if wants_visual_context(&tokens, &normalized_query)
-    {
-        (
-            TabAiQuickSubmitKind::VisualAsk,
-            visual_capture_kind(&tokens, &normalized_query),
-            raw_query.clone(),
-        )
-    } else if let Some(url) =
-        normalize_url_drop(&raw_query).or_else(|| normalize_repo_shorthand(&raw_query))
-    {
-        (
-            TabAiQuickSubmitKind::UrlDrop,
-            "browserTab".to_string(),
-            build_url_drop_intent(&url),
-        )
-    } else if looks_like_diff_patch(&raw_query) {
-        (
-            TabAiQuickSubmitKind::DiffPatch,
-            "defaultContext".to_string(),
-            format!(
-                "Review this patch, explain the behavior change, point out \
+    let (kind, capture_kind, synthesized_intent) =
+        if wants_visual_context(&tokens, &normalized_query) {
+            (
+                TabAiQuickSubmitKind::VisualAsk,
+                visual_capture_kind(&tokens, &normalized_query),
+                raw_query.clone(),
+            )
+        } else if let Some(url) =
+            normalize_url_drop(&raw_query).or_else(|| normalize_repo_shorthand(&raw_query))
+        {
+            (
+                TabAiQuickSubmitKind::UrlDrop,
+                "browserTab".to_string(),
+                build_url_drop_intent(&url),
+            )
+        } else if looks_like_diff_patch(&raw_query) {
+            (
+                TabAiQuickSubmitKind::DiffPatch,
+                "defaultContext".to_string(),
+                format!(
+                    "Review this patch, explain the behavior change, point out \
                  the biggest risk, and suggest the next edit or verification step.\n\n\
                  Patch:\n{}",
-                raw_query
-            ),
-        )
-    } else if looks_like_error_log(&raw_query) {
-        (
-            TabAiQuickSubmitKind::ErrorLog,
-            "defaultContext".to_string(),
-            format!(
-                "Diagnose this error output and give the next concrete fix.\n\n\
+                    raw_query
+                ),
+            )
+        } else if looks_like_error_log(&raw_query) {
+            (
+                TabAiQuickSubmitKind::ErrorLog,
+                "defaultContext".to_string(),
+                format!(
+                    "Diagnose this error output and give the next concrete fix.\n\n\
                  Error output:\n{}",
-                raw_query
-            ),
-        )
-    } else if looks_like_code_block(&raw_query) {
-        (
-            TabAiQuickSubmitKind::CodeBlock,
-            "defaultContext".to_string(),
-            format!(
-                "Review this code or structured snippet. Explain what it does, \
+                    raw_query
+                ),
+            )
+        } else if looks_like_code_block(&raw_query) {
+            (
+                TabAiQuickSubmitKind::CodeBlock,
+                "defaultContext".to_string(),
+                format!(
+                    "Review this code or structured snippet. Explain what it does, \
                  identify the biggest issue, and suggest the next edit.\n\n\
                  Snippet:\n{}",
-                raw_query
-            ),
-        )
-    } else if looks_like_shell_command(&raw_query) {
-        (
-            TabAiQuickSubmitKind::ShellCommand,
-            "defaultContext".to_string(),
-            format!(
-                "Explain this command, point out risks, and suggest a safer \
+                    raw_query
+                ),
+            )
+        } else if looks_like_shell_command(&raw_query) {
+            (
+                TabAiQuickSubmitKind::ShellCommand,
+                "defaultContext".to_string(),
+                format!(
+                    "Explain this command, point out risks, and suggest a safer \
                  or better version if needed.\n\nCommand:\n{}",
-                raw_query
-            ),
-        )
-    } else if looks_like_file_path(&raw_query) {
-        (
-            TabAiQuickSubmitKind::FileDrop,
-            "defaultContext".to_string(),
-            build_file_drop_intent(&raw_query),
-        )
-    } else if looks_like_browser_request(&tokens, &normalized_query) {
-        (
-            TabAiQuickSubmitKind::GeneralAsk,
-            "browserTab".to_string(),
-            raw_query.clone(),
-        )
-    } else if let Some(intent) =
-        build_selected_input_intent(&raw_query, &normalized_query, &tokens)
-    {
-        (
-            TabAiQuickSubmitKind::TextTransform,
-            "selectedText".to_string(),
-            intent,
-        )
-    } else {
-        (
-            TabAiQuickSubmitKind::GeneralAsk,
-            "defaultContext".to_string(),
-            raw_query.clone(),
-        )
-    };
+                    raw_query
+                ),
+            )
+        } else if looks_like_file_path(&raw_query) {
+            (
+                TabAiQuickSubmitKind::FileDrop,
+                "defaultContext".to_string(),
+                build_file_drop_intent(&raw_query),
+            )
+        } else if looks_like_browser_request(&tokens, &normalized_query) {
+            (
+                TabAiQuickSubmitKind::GeneralAsk,
+                "browserTab".to_string(),
+                raw_query.clone(),
+            )
+        } else if let Some(intent) =
+            build_selected_input_intent(&raw_query, &normalized_query, &tokens)
+        {
+            (
+                TabAiQuickSubmitKind::TextTransform,
+                "selectedText".to_string(),
+                intent,
+            )
+        } else {
+            (
+                TabAiQuickSubmitKind::GeneralAsk,
+                "defaultContext".to_string(),
+                raw_query.clone(),
+            )
+        };
 
     Some(TabAiQuickSubmitPlan {
         source,
@@ -211,7 +211,9 @@ fn tokenize_normalized_query(normalized: &str) -> BTreeSet<&str> {
 
 /// Check whether *any* of the `candidates` appear as whole tokens.
 fn has_any_token(tokens: &BTreeSet<&str>, candidates: &[&str]) -> bool {
-    candidates.iter().any(|candidate| tokens.contains(candidate))
+    candidates
+        .iter()
+        .any(|candidate| tokens.contains(candidate))
 }
 
 /// Check for multi-word phrase in the normalized string using word boundaries.
@@ -792,8 +794,7 @@ mod tests {
     #[test]
     fn repo_shorthand_is_url_drop_not_file_path() {
         let plan =
-            plan_tab_ai_quick_submit(TabAiQuickSubmitSource::Fallback, "owner/repo")
-                .expect("plan");
+            plan_tab_ai_quick_submit(TabAiQuickSubmitSource::Fallback, "owner/repo").expect("plan");
         assert_eq!(plan.kind, TabAiQuickSubmitKind::UrlDrop);
         assert_eq!(plan.capture_kind, "browserTab");
         assert!(
@@ -805,25 +806,19 @@ mod tests {
 
     #[test]
     fn repo_shorthand_with_dots_and_dashes() {
-        let plan = plan_tab_ai_quick_submit(
-            TabAiQuickSubmitSource::Fallback,
-            "zed-industries/zed",
-        )
-        .expect("plan");
+        let plan = plan_tab_ai_quick_submit(TabAiQuickSubmitSource::Fallback, "zed-industries/zed")
+            .expect("plan");
         assert_eq!(plan.kind, TabAiQuickSubmitKind::UrlDrop);
-        assert!(
-            plan.synthesized_intent
-                .contains("https://github.com/zed-industries/zed"),
-        );
+        assert!(plan
+            .synthesized_intent
+            .contains("https://github.com/zed-industries/zed"),);
     }
 
     #[test]
     fn reply_to_this_politely_is_text_transform() {
-        let plan = plan_tab_ai_quick_submit(
-            TabAiQuickSubmitSource::Fallback,
-            "reply to this politely",
-        )
-        .expect("plan");
+        let plan =
+            plan_tab_ai_quick_submit(TabAiQuickSubmitSource::Fallback, "reply to this politely")
+                .expect("plan");
         assert_eq!(plan.kind, TabAiQuickSubmitKind::TextTransform);
         assert_eq!(plan.capture_kind, "selectedText");
         assert!(
@@ -835,11 +830,9 @@ mod tests {
 
     #[test]
     fn cargo_test_workspace_is_shell_command() {
-        let plan = plan_tab_ai_quick_submit(
-            TabAiQuickSubmitSource::Fallback,
-            "cargo test --workspace",
-        )
-        .expect("plan");
+        let plan =
+            plan_tab_ai_quick_submit(TabAiQuickSubmitSource::Fallback, "cargo test --workspace")
+                .expect("plan");
         assert_eq!(plan.kind, TabAiQuickSubmitKind::ShellCommand);
         assert_eq!(plan.capture_kind, "defaultContext");
         assert!(
@@ -865,33 +858,26 @@ mod tests {
 
     #[test]
     fn absolute_path_still_works_as_file_drop() {
-        let plan = plan_tab_ai_quick_submit(
-            TabAiQuickSubmitSource::Fallback,
-            "/usr/local/bin/some-tool",
-        )
-        .expect("plan");
+        let plan =
+            plan_tab_ai_quick_submit(TabAiQuickSubmitSource::Fallback, "/usr/local/bin/some-tool")
+                .expect("plan");
         assert_eq!(plan.kind, TabAiQuickSubmitKind::FileDrop);
     }
 
     #[test]
     fn multi_segment_path_is_not_repo_shorthand() {
         // `a/b/c` has more than two segments — should not be repo shorthand.
-        let plan = plan_tab_ai_quick_submit(
-            TabAiQuickSubmitSource::Fallback,
-            "src/ai/harness",
-        )
-        .expect("plan");
+        let plan = plan_tab_ai_quick_submit(TabAiQuickSubmitSource::Fallback, "src/ai/harness")
+            .expect("plan");
         // Could be FileDrop (not UrlDrop).
         assert_ne!(plan.kind, TabAiQuickSubmitKind::UrlDrop);
     }
 
     #[test]
     fn shift_tab_source_is_preserved() {
-        let plan = plan_tab_ai_quick_submit(
-            TabAiQuickSubmitSource::ShiftTab,
-            "cargo test --workspace",
-        )
-        .expect("plan");
+        let plan =
+            plan_tab_ai_quick_submit(TabAiQuickSubmitSource::ShiftTab, "cargo test --workspace")
+                .expect("plan");
         assert_eq!(plan.source, TabAiQuickSubmitSource::ShiftTab);
     }
 

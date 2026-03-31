@@ -886,10 +886,7 @@ pub fn ensure_kit_setup() -> SetupResult {
     // App-managed: Example extension references (refresh if changed)
     // These are copies of the built-in extension bundles for agent discoverability
     write_string_if_changed(
-        &kit_dir
-            .join("examples")
-            .join("extensions")
-            .join("main.md"),
+        &kit_dir.join("examples").join("extensions").join("main.md"),
         EMBEDDED_EXAMPLES_MAIN,
         &mut warnings,
         "examples/extensions/main.md",
@@ -904,10 +901,7 @@ pub fn ensure_kit_setup() -> SetupResult {
         "examples/extensions/advanced.md",
     );
     write_string_if_changed(
-        &kit_dir
-            .join("examples")
-            .join("extensions")
-            .join("howto.md"),
+        &kit_dir.join("examples").join("extensions").join("howto.md"),
         EMBEDDED_EXAMPLES_HOWTO,
         &mut warnings,
         "examples/extensions/howto.md",
