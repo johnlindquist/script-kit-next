@@ -238,6 +238,47 @@ pub use os_open::{
     prompt_rename_target_name, quick_look, rename_path, reveal_in_finder, show_info,
 };
 
+/// Payload for file drag-out from the mini explorer.
+///
+/// Stored as the GPUI drag value. When the drag starts, we also initiate
+/// a native macOS drag session so the file can be dropped into Finder
+/// or other apps.
+#[derive(Clone, Debug)]
+pub struct FileDragPayload {
+    pub name: String,
+}
+
+impl FileDragPayload {
+    pub fn from_result(result: &FileResult) -> Self {
+        Self {
+            name: result.name.clone(),
+        }
+    }
+}
+
+/// Render implementation for the drag preview overlay.
+impl gpui::Render for FileDragPayload {
+    fn render(
+        &mut self,
+        _window: &mut gpui::Window,
+        _cx: &mut gpui::Context<Self>,
+    ) -> impl gpui::IntoElement {
+        use gpui::{div, px, rgb, ParentElement, Styled};
+
+        let theme = crate::theme::get_cached_theme();
+        div()
+            .px(px(8.))
+            .py(px(4.))
+            .rounded(px(6.))
+            .bg(rgb(theme.colors.background.title_bar))
+            .border_1()
+            .border_color(rgb(theme.colors.ui.border))
+            .text_sm()
+            .text_color(rgb(theme.colors.text.primary))
+            .child(self.name.clone())
+    }
+}
+
 #[cfg(test)]
 pub(crate) use os_open::terminal_working_directory;
 /// Get detailed metadata for a specific file

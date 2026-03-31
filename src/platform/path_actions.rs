@@ -459,3 +459,172 @@ fn copy_text_to_clipboard_impl(text: &str) -> Result<(), String> {
 
     Ok(())
 }
+
+// ============================================================================
+// Native File Drag-Out
+// ============================================================================
+
+/// Start a native macOS drag session carrying the given file path.
+///
+/// This allows users to drag files from the mini explorer directly into
+/// Finder, other apps, or the Desktop. The function must be called from
+/// the main thread during a mouse event (typically from an `on_drag` callback).
+#[cfg(target_os = "macos")]
+pub fn begin_native_file_drag(path: &str) -> Result<(), String> {
+    use cocoa::base::{id, nil};
+    use cocoa::foundation::{NSArray, NSPoint, NSString};
+    use objc::{class, msg_send, sel, sel_impl};
+
+    if require_main_thread("begin_native_file_drag") {
+        return Err("begin_native_file_drag requires main thread".to_string());
+    }
+
+    let resolved = resolve_existing_path(std::path::Path::new(path), "begin_native_file_drag")?;
+    let path_str = resolved.to_string_lossy();
+
+    // SAFETY: Main thread verified above. All ObjC objects are nil-checked.
+    // We use standard NSURL, NSPasteboardItem, NSDraggingItem, and NSView APIs.
+    // The dragging session is owned by AppKit and cleaned up automatically.
+    unsafe {
+        // Ensure the GPUIView class has NSDraggingSource support
+        ensure_dragging_source_protocol();
+
+        let window = crate::window_manager::get_main_window().ok_or_else(|| {
+            "begin_native_file_drag: no main window available".to_string()
+        })?;
+        let content_view: id = msg_send![window, contentView];
+        if content_view.is_null() {
+            return Err("begin_native_file_drag: no content view".to_string());
+        }
+
+        // Create file URL
+        let ns_path = NSString::alloc(nil).init_str(&path_str);
+        let file_url: id = msg_send![class!(NSURL), fileURLWithPath: ns_path];
+        if file_url.is_null() {
+            return Err("begin_native_file_drag: failed to create NSURL".to_string());
+        }
+
+        // Create pasteboard item with file URL
+        let pb_item: id = msg_send![class!(NSPasteboardItem), new];
+        if pb_item.is_null() {
+            return Err("begin_native_file_drag: failed to create NSPasteboardItem".to_string());
+        }
+        let url_string: id = msg_send![file_url, absoluteString];
+        let uti = NSString::alloc(nil).init_str("public.file-url");
+        let _ok: bool = msg_send![pb_item, setString: url_string forType: uti];
+
+        // Create dragging item from pasteboard item
+        let drag_item: id = msg_send![class!(NSDraggingItem), alloc];
+        let drag_item: id = msg_send![drag_item, initWithPasteboardWriter: pb_item];
+        if drag_item.is_null() {
+            return Err("begin_native_file_drag: failed to create NSDraggingItem".to_string());
+        }
+
+        // Set the dragging frame (icon position) — use a small rect at the current mouse location
+        let mouse_loc: NSPoint = msg_send![window, mouseLocationOutsideOfEventStream];
+        let null_view: id = nil;
+        let view_mouse: NSPoint = msg_send![content_view, convertPoint: mouse_loc fromView: null_view];
+        let frame = cocoa::foundation::NSRect::new(
+            NSPoint::new(view_mouse.x - 16.0, view_mouse.y - 16.0),
+            cocoa::foundation::NSSize::new(32.0, 32.0),
+        );
+        let null_image: id = nil;
+        let _: () = msg_send![drag_item, setDraggingFrame: frame contents: null_image];
+
+        // Get the current event for the drag session
+        let app: id = msg_send![class!(NSApplication), sharedApplication];
+        let current_event: id = msg_send![app, currentEvent];
+        if current_event.is_null() {
+            return Err("begin_native_file_drag: no current event".to_string());
+        }
+
+        // Start the drag session
+        let items = NSArray::arrayWithObject(nil, drag_item);
+        let _session: id = msg_send![
+            content_view,
+            beginDraggingSessionWithItems: items
+            event: current_event
+            source: content_view
+        ];
+
+        tracing::info!(
+            action = "begin_native_file_drag",
+            path = %path_str,
+            "native file drag session started"
+        );
+    }
+
+    Ok(())
+}
+
+/// Register NSDraggingSource protocol methods on the GPUIView class at runtime.
+///
+/// This is called once lazily before the first drag. It adds the required
+/// `draggingSession:sourceOperationMaskForDraggingContext:` method so that
+/// AppKit accepts the view as a drag source.
+#[cfg(target_os = "macos")]
+fn ensure_dragging_source_protocol() {
+    use std::sync::Once;
+    static REGISTER: Once = Once::new();
+
+    REGISTER.call_once(|| {
+        // SAFETY: We use the ObjC runtime API to add a method to an existing class.
+        // The function pointer signature matches the expected ObjC method signature.
+        // This is safe because: (1) the class is already registered, (2) class_addMethod
+        // is thread-safe for adding methods, (3) we only call this once via Once.
+        unsafe {
+            let cls = objc::runtime::Class::get("GPUIView");
+            let cls = match cls {
+                Some(c) => c,
+                None => {
+                    tracing::warn!("GPUIView class not found; skipping drag source registration");
+                    return;
+                }
+            };
+
+            // Add draggingSession:sourceOperationMaskForDraggingContext:
+            // NSDragOperation is an NSUInteger (u64 on 64-bit)
+            // NSDraggingContext is an NSInteger (i64 on 64-bit)
+            extern "C" fn dragging_source_operation_mask(
+                _this: &objc::runtime::Object,
+                _sel: objc::runtime::Sel,
+                _session: cocoa::base::id,
+                _context: i64,
+            ) -> u64 {
+                // NSDragOperationCopy = 1
+                1u64
+            }
+
+            let sel = objc::runtime::Sel::register(
+                "draggingSession:sourceOperationMaskForDraggingContext:",
+            );
+
+            // Encoding: Q@:@q  (return=NSUInteger, self=@, _cmd=:, session=@, context=NSInteger)
+            let encoding = c"Q@:@q";
+
+            #[allow(clippy::missing_transmute_annotations)]
+            let imp: objc::runtime::Imp = std::mem::transmute(
+                dragging_source_operation_mask
+                    as extern "C" fn(
+                        &objc::runtime::Object,
+                        objc::runtime::Sel,
+                        cocoa::base::id,
+                        i64,
+                    ) -> u64,
+            );
+
+            // class_addMethod returns false if method already exists — that's fine
+            let cls_ptr = cls as *const objc::runtime::Class as *mut objc::runtime::Class;
+            let _added =
+                objc::runtime::class_addMethod(cls_ptr, sel, imp, encoding.as_ptr());
+
+            tracing::debug!("registered NSDraggingSource on GPUIView");
+        }
+    });
+}
+
+/// Non-macOS stub for native file drag.
+#[cfg(not(target_os = "macos"))]
+pub fn begin_native_file_drag(_path: &str) -> Result<(), String> {
+    Err("Native file drag is only supported on macOS".to_string())
+}

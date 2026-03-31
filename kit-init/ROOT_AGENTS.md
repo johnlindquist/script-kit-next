@@ -11,8 +11,10 @@ Before writing files, decide which artifact the user actually asked for.
 | Artifact | Use when | Write here | Learn here | Reference here |
 |----------|----------|------------|------------|----------------|
 | Script | Full TypeScript workflow with Script Kit UI or Bun APIs | `~/.scriptkit/kit/main/scripts/<name>.ts` | `~/.scriptkit/skills/script-authoring/SKILL.md` | `~/.scriptkit/examples/scripts/` |
-| Extension bundle | One markdown file containing multiple scriptlets, snippets, or quick commands | `~/.scriptkit/kit/main/extensions/<name>.md` | `~/.scriptkit/skills/scriptlets/SKILL.md` | `~/.scriptkit/examples/extensions/` |
+| Extension bundle / scriptlet bundle | One markdown file containing multiple scriptlets, snippets, or quick commands | `~/.scriptkit/kit/main/extensions/<name>.md` | `~/.scriptkit/skills/scriptlets/SKILL.md` | `~/.scriptkit/examples/extensions/` |
 | mdflow agent | Backend-specific markdown prompt/automation | `~/.scriptkit/kit/main/agents/<name>.<backend>.md` | `~/.scriptkit/skills/agents/SKILL.md` | `~/.scriptkit/examples/agents/` |
+
+Script Kit uses **extension bundle** and **scriptlet bundle** to mean the same artifact: one markdown file under `~/.scriptkit/kit/main/extensions/`.
 
 Do not create a `.ts` script when the request is really a scriptlet bundle or mdflow agent.
 Do not write runnable user files outside `~/.scriptkit/kit/main/`.

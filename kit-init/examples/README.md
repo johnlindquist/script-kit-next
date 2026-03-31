@@ -11,8 +11,10 @@ Working examples demonstrating Script Kit patterns. Learn by reading, then creat
 | Goal | Copy from | Write to | Read next |
 |------|-----------|----------|-----------|
 | New script | `scripts/hello-world.ts` | `~/.scriptkit/kit/main/scripts/<name>.ts` | `~/.scriptkit/skills/script-authoring/SKILL.md` |
-| New extension bundle | `extensions/starter.md` | `~/.scriptkit/kit/main/extensions/<name>.md` | `~/.scriptkit/skills/scriptlets/SKILL.md` |
+| New extension / scriptlet bundle | `extensions/starter.md` | `~/.scriptkit/kit/main/extensions/<name>.md` | `~/.scriptkit/skills/scriptlets/SKILL.md` |
 | New mdflow agent | `agents/review-pr.claude.md` | `~/.scriptkit/kit/main/agents/<name>.<backend>.md` | `~/.scriptkit/skills/agents/SKILL.md` |
+
+In this repo, "extension bundle" and "scriptlet bundle" mean the same thing.
 
 Pick one artifact, copy one starter, save it under `kit/main/`, then stop. Do not create multiple artifact types for one request.
 
