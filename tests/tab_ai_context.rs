@@ -1347,3 +1347,145 @@ fn screenshot_retention_cap_is_ten() {
         "screenshot retention cap must be 10"
     );
 }
+
+// =========================================================================
+// File search AI intent structure regression tests
+// =========================================================================
+
+const TAB_AI_MODE_FOR_CONTEXT: &str = include_str!("../src/app_impl/tab_ai_mode.rs");
+
+#[test]
+fn file_search_entry_intent_distinguishes_file_from_directory() {
+    // build_file_search_ai_entry_intent must check file_type and use
+    // "file" vs "directory" as the subject label.
+    let fn_start = TAB_AI_MODE_FOR_CONTEXT
+        .find("fn build_file_search_ai_entry_intent(")
+        .expect("build_file_search_ai_entry_intent must exist");
+    let fn_body =
+        &TAB_AI_MODE_FOR_CONTEXT[fn_start..fn_start + 2000.min(TAB_AI_MODE_FOR_CONTEXT.len() - fn_start)];
+
+    assert!(
+        fn_body.contains(r#""directory""#),
+        "entry intent must label directories"
+    );
+    assert!(
+        fn_body.contains(r#""file""#),
+        "entry intent must label files"
+    );
+    assert!(
+        fn_body.contains("FileType::Directory"),
+        "entry intent must check FileType::Directory"
+    );
+}
+
+#[test]
+fn file_search_entry_intent_has_plan_and_explain_modes() {
+    // plan_mode: true → "Propose a concrete plan", false → "Explain what it is"
+    let fn_start = TAB_AI_MODE_FOR_CONTEXT
+        .find("fn build_file_search_ai_entry_intent(")
+        .expect("build_file_search_ai_entry_intent must exist");
+    let fn_body =
+        &TAB_AI_MODE_FOR_CONTEXT[fn_start..fn_start + 2500.min(TAB_AI_MODE_FOR_CONTEXT.len() - fn_start)];
+
+    assert!(
+        fn_body.contains("plan_mode"),
+        "entry intent must accept plan_mode parameter"
+    );
+    assert!(
+        fn_body.contains("Propose a concrete plan"),
+        "plan mode must ask for a concrete plan"
+    );
+    assert!(
+        fn_body.contains("Explain what it is"),
+        "explain mode must ask for an explanation"
+    );
+}
+
+#[test]
+fn file_search_query_intent_has_plan_and_explain_modes() {
+    // Same split for query-level intent.
+    let fn_start = TAB_AI_MODE_FOR_CONTEXT
+        .find("fn build_file_search_ai_query_intent(")
+        .expect("build_file_search_ai_query_intent must exist");
+    let fn_body =
+        &TAB_AI_MODE_FOR_CONTEXT[fn_start..fn_start + 2500.min(TAB_AI_MODE_FOR_CONTEXT.len() - fn_start)];
+
+    assert!(
+        fn_body.contains("plan_mode"),
+        "query intent must accept plan_mode parameter"
+    );
+    assert!(
+        fn_body.contains("Propose a concrete next-step plan"),
+        "query plan mode must ask for next-step plan"
+    );
+    assert!(
+        fn_body.contains("Summarize what this search is likely showing"),
+        "query explain mode must ask for search summary"
+    );
+}
+
+#[test]
+fn file_search_intent_includes_nearby_visible_results() {
+    // Both intent builders must include nearby visible results for context.
+    let entry_fn_start = TAB_AI_MODE_FOR_CONTEXT
+        .find("fn build_file_search_ai_entry_intent(")
+        .expect("build_file_search_ai_entry_intent must exist");
+    let entry_fn_body =
+        &TAB_AI_MODE_FOR_CONTEXT[entry_fn_start..entry_fn_start + 2000.min(TAB_AI_MODE_FOR_CONTEXT.len() - entry_fn_start)];
+
+    assert!(
+        entry_fn_body.contains("format_file_search_ai_visible_results"),
+        "entry intent must include visible results"
+    );
+
+    let query_fn_start = TAB_AI_MODE_FOR_CONTEXT
+        .find("fn build_file_search_ai_query_intent(")
+        .expect("build_file_search_ai_query_intent must exist");
+    let query_fn_body =
+        &TAB_AI_MODE_FOR_CONTEXT[query_fn_start..query_fn_start + 2000.min(TAB_AI_MODE_FOR_CONTEXT.len() - query_fn_start)];
+
+    assert!(
+        query_fn_body.contains("format_file_search_ai_visible_results"),
+        "query intent must include visible results"
+    );
+}
+
+#[test]
+fn file_search_query_intent_includes_query_mode() {
+    // query-level intent must embed queryMode so the AI model knows
+    // whether this is path-browse, spotlight, or keyword search.
+    let fn_start = TAB_AI_MODE_FOR_CONTEXT
+        .find("fn build_file_search_ai_query_intent(")
+        .expect("build_file_search_ai_query_intent must exist");
+    let fn_body =
+        &TAB_AI_MODE_FOR_CONTEXT[fn_start..fn_start + 2000.min(TAB_AI_MODE_FOR_CONTEXT.len() - fn_start)];
+
+    assert!(
+        fn_body.contains("file_search_query_mode"),
+        "query intent must include query mode classification"
+    );
+    assert!(
+        fn_body.contains("Query mode:"),
+        "query intent must label the query mode in the output"
+    );
+}
+
+#[test]
+fn quick_submit_source_has_file_search_variant() {
+    // TabAiQuickSubmitSource must have a FileSearch variant so harness
+    // logging can distinguish file-search AI entries from other sources.
+    use script_kit_gpui::ai::TabAiQuickSubmitSource;
+    let _fs = TabAiQuickSubmitSource::FileSearch;
+    // If this compiles, the variant exists.
+}
+
+#[test]
+fn quick_submit_source_file_search_serializes_as_camel_case() {
+    use script_kit_gpui::ai::TabAiQuickSubmitSource;
+    let json = serde_json::to_string(&TabAiQuickSubmitSource::FileSearch)
+        .expect("serialize FileSearch source");
+    assert_eq!(
+        json, r#""fileSearch""#,
+        "FileSearch source must serialize as camelCase \"fileSearch\""
+    );
+}
