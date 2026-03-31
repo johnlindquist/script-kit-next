@@ -131,16 +131,16 @@ impl ScriptListApp {
             return;
         };
 
-        // If the harness is already the active surface and alive, inject directly.
+        // If the harness is already the active surface and alive, route through
+        // the full structured submission builder so live-session quick submits
+        // get fresh context, quick-submit metadata, and scriptKitHints — not
+        // just raw intent text.
         if let Some(session) = self
             .tab_ai_harness
             .as_ref()
             .filter(|_| matches!(self.current_view, AppView::QuickTerminalView { .. }))
             .filter(|session| session.entity.read(cx).is_alive())
         {
-            let wait_for_readiness =
-                Self::tab_ai_harness_needs_readiness_wait(&session.entity, cx);
-
             tracing::info!(
                 target: "script_kit::tab_ai",
                 event = "tab_ai_quick_submit_live_session",
@@ -150,13 +150,7 @@ impl ScriptListApp {
                 input_len = plan.raw_query.len(),
             );
 
-            self.inject_tab_ai_harness_submission(
-                session.entity.clone(),
-                format!("{}\n", plan.synthesized_intent),
-                wait_for_readiness,
-                true,
-                cx,
-            );
+            self.submit_live_tab_ai_harness_from_plan(session.entity.clone(), plan, cx);
             return;
         }
 
@@ -170,6 +164,145 @@ impl ScriptListApp {
         );
 
         self.open_tab_ai_chat_with_quick_submit_plan(plan, cx);
+    }
+
+    /// Submit a structured turn into an already-open, live harness session.
+    ///
+    /// Captures fresh desktop context, rebuilds the full `<scriptKitContext>`
+    /// submission with quick-submit metadata, and injects via Submit mode.
+    /// On build failure, shows an error toast instead of falling back to
+    /// raw intent-only PTY injection.
+    fn submit_live_tab_ai_harness_from_plan(
+        &mut self,
+        entity: gpui::Entity<crate::term_prompt::TermPrompt>,
+        plan: crate::ai::TabAiQuickSubmitPlan,
+        cx: &mut Context<Self>,
+    ) {
+        let capture_kind = plan.capture_kind_enum();
+        let source_view = self
+            .tab_ai_harness_return_view
+            .clone()
+            .unwrap_or(AppView::ScriptList);
+
+        let (ui_snapshot, invocation_receipt) = self.snapshot_tab_ai_ui(cx);
+        self.tab_ai_harness_capture_generation += 1;
+
+        let request = TabAiLaunchRequest {
+            source_view,
+            entry_intent: Some(plan.synthesized_intent.clone()),
+            quick_submit_plan: Some(plan),
+            ui_snapshot,
+            invocation_receipt,
+            capture_kind,
+            capture_generation: self.tab_ai_harness_capture_generation,
+        };
+
+        let wait_for_readiness = Self::tab_ai_harness_needs_readiness_wait(&entity, cx);
+        let capture_rx = self.spawn_tab_ai_pre_switch_capture(&request);
+        let app_weak = cx.entity().downgrade();
+        let capture_gen = request.capture_generation;
+
+        cx.spawn(async move |_this, cx| {
+            let capture_result = match capture_rx.recv().await {
+                Ok(result) => result,
+                Err(_) => Err("deferred capture channel closed".to_string()),
+            };
+
+            let artifacts = match capture_result {
+                Ok(artifacts) => artifacts,
+                Err(error) => {
+                    tracing::warn!(
+                        event = "tab_ai_live_quick_submit_capture_failed",
+                        error = %error,
+                    );
+                    TabAiDeferredCaptureArtifacts::default()
+                }
+            };
+
+            let _ = cx.update(|cx| {
+                let Some(app) = app_weak.upgrade() else {
+                    return;
+                };
+                app.update(cx, |this, cx| {
+                    if this.tab_ai_harness_capture_generation != capture_gen {
+                        tracing::debug!(
+                            event = "tab_ai_live_quick_submit_stale",
+                            expected = capture_gen,
+                            current = this.tab_ai_harness_capture_generation,
+                        );
+                        return;
+                    }
+
+                    let resolved = this.build_tab_ai_context_from(
+                        request.entry_intent.clone().unwrap_or_default(),
+                        request.source_view.clone(),
+                        request.ui_snapshot.clone(),
+                        artifacts.desktop,
+                        request.invocation_receipt.clone(),
+                        cx,
+                    );
+
+                    let source_type = detect_tab_ai_source_type(
+                        &request.source_view,
+                        &resolved.context.desktop,
+                        resolved.context.focused_target.as_ref(),
+                    );
+                    let apply_back_hint =
+                        build_tab_ai_apply_back_hint(source_type.as_ref());
+
+                    this.tab_ai_harness_apply_back_route = source_type
+                        .clone()
+                        .zip(apply_back_hint.clone())
+                        .map(|(source_type, hint)| crate::ai::TabAiApplyBackRoute {
+                            source_type,
+                            hint,
+                            focused_target: resolved.context.focused_target.clone(),
+                        });
+
+                    let context = resolved.context.with_deferred_capture_fields(
+                        source_type,
+                        artifacts.screenshot_path,
+                        apply_back_hint,
+                    );
+
+                    match crate::ai::build_tab_ai_harness_submission(
+                        &context,
+                        request.entry_intent.as_deref(),
+                        crate::ai::TabAiHarnessSubmissionMode::Submit,
+                        request.quick_submit_plan.as_ref(),
+                        Some(&resolved.invocation_receipt),
+                        &resolved.suggested_intents,
+                    ) {
+                        Ok(submission) => {
+                            this.inject_tab_ai_harness_submission(
+                                entity.clone(),
+                                submission,
+                                wait_for_readiness,
+                                true,
+                                cx,
+                            );
+                        }
+                        Err(error) => {
+                            tracing::warn!(
+                                event = "tab_ai_live_quick_submit_build_failed",
+                                error = %error,
+                            );
+                            this.toast_manager.push(
+                                crate::components::toast::Toast::error(
+                                    format!(
+                                        "Failed to build quick-submit context: {error}"
+                                    ),
+                                    &this.theme,
+                                )
+                                .duration_ms(Some(TOAST_ERROR_MS)),
+                            );
+                            cx.notify();
+                        }
+                    }
+                });
+            });
+        })
+        .detach();
     }
 
     /// Deferred-capture entry point: build a launch request from pre-switch

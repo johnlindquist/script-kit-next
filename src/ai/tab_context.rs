@@ -4446,9 +4446,12 @@ mod tab_ai_source_type_tests {
             .find("cx.notify();")
             .map(|idx| open_idx + idx)
             .expect("notify after view switch");
-        let await_idx = TAB_AI_MODE_SRC
+        // Search from the view switch onwards so we find the await in the
+        // new-session path, not the live-session helper above it.
+        let await_idx = TAB_AI_MODE_SRC[open_idx..]
             .find("capture_rx.recv().await")
-            .expect("deferred capture await");
+            .map(|idx| open_idx + idx)
+            .expect("deferred capture await after view switch");
         assert!(
             open_idx < await_idx,
             "QuickTerminalView must be visible before deferred capture is awaited"
