@@ -76,7 +76,7 @@ impl FileSearchSecondaryCommand {
 
 /// The canonical list of secondary commands for the file-search surface.
 /// Order here determines action-list order and footer label order.
-pub(crate) const FILE_SEARCH_SECONDARY_COMMANDS: [FileSearchSecondaryCommand; 9] = [
+pub(crate) const FILE_SEARCH_SECONDARY_COMMANDS: [FileSearchSecondaryCommand; 10] = [
     FileSearchSecondaryCommand {
         action_id: "rename_path",
         title: "Rename\u{2026}",
@@ -98,6 +98,18 @@ pub(crate) const FILE_SEARCH_SECONDARY_COMMANDS: [FileSearchSecondaryCommand; 9]
         icon: IconName::FolderOpen,
         key: "m",
         requires_shift: true,
+        files_only: false,
+        macos_only: false,
+    },
+    FileSearchSecondaryCommand {
+        action_id: "duplicate_path",
+        title: "Duplicate",
+        description: "Creates a copy of the selected file or folder",
+        shortcut: "\u{2318}D",
+        footer_label: "\u{2318}D Duplicate",
+        icon: IconName::Copy,
+        key: "d",
+        requires_shift: false,
         files_only: false,
         macos_only: false,
     },
@@ -692,6 +704,7 @@ mod secondary_command_contract_tests {
             vec![
                 "rename_path",
                 "move_path",
+                "duplicate_path",
                 "copy_filename",
                 "open_in_editor",
                 "copy_path",
@@ -714,6 +727,7 @@ mod secondary_command_contract_tests {
             vec![
                 "\u{2318}R",
                 "\u{2318}\u{21e7}M",
+                "\u{2318}D",
                 "\u{2318}C",
                 "\u{2318}E",
                 "\u{2318}\u{21e7}C",

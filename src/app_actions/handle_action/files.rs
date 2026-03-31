@@ -153,14 +153,81 @@ impl ScriptListApp {
         cx.notify();
     }
 
+    /// Clear the pending file-search action target so the next verb acts on
+    /// the current selection, not a stale path from a cancelled/failed action.
+    fn clear_file_search_action_target(&mut self) {
+        self.file_search_actions_path = None;
+    }
+
     /// Restore keyboard focus to the file-search input after an async
     /// file verb (rename, move, trash, copy-name) completes.
+    ///
+    /// Routes through the focus coordinator so popup-close and post-verb
+    /// restore follow the same path, then syncs to legacy fields.
     fn restore_file_search_input_focus(&mut self, cx: &mut Context<Self>) {
         if matches!(self.current_view, AppView::FileSearchView { .. }) {
-            self.pending_focus = Some(FocusTarget::MainFilter);
-            self.focused_input = FocusedInput::MainFilter;
+            self.focus_coordinator
+                .request(crate::focus_coordinator::FocusRequest::main_filter());
+            self.sync_coordinator_to_legacy();
             cx.notify();
         }
+    }
+
+    /// After an insertion (duplicate), patch the cached directory listing
+    /// in place when possible and fall back to a full refresh for global search.
+    fn refresh_file_search_after_insert(
+        &mut self,
+        preferred_path: &str,
+        previous_display_index: usize,
+        cx: &mut Context<Self>,
+    ) {
+        let AppView::FileSearchView { presentation, .. } = &self.current_view else {
+            return;
+        };
+        let presentation_value = *presentation;
+
+        let current_dir = self.current_file_search_directory_abs();
+        let new_dir = Self::parent_directory_abs(preferred_path);
+
+        if current_dir.is_some() && new_dir.as_ref() == current_dir.as_ref() {
+            if let Some(new_entry) = Self::build_file_result_from_metadata(preferred_path) {
+                self.cached_file_results.push(new_entry);
+                self.sort_directory_results();
+                self.recompute_file_search_display_indices();
+            }
+        } else {
+            let AppView::FileSearchView { query, .. } = &self.current_view else {
+                return;
+            };
+            let query_value = query.clone();
+            let results = Self::resolve_file_search_results(&query_value);
+            self.update_file_search_results(results);
+        }
+
+        let next_index = self
+            .file_search_display_index_for_path(preferred_path)
+            .or_else(|| {
+                let len = self.file_search_display_len();
+                (len > 0).then_some(previous_display_index.min(len.saturating_sub(1)))
+            });
+
+        if let AppView::FileSearchView {
+            ref mut selected_index,
+            ..
+        } = self.current_view
+        {
+            *selected_index = next_index.unwrap_or(0);
+        }
+
+        Self::resize_file_search_window_for_presentation(
+            presentation_value,
+            self.file_search_display_indices.len(),
+        );
+        if let Some(index) = next_index {
+            self.file_search_scroll_handle
+                .scroll_to_item(index, gpui::ScrollStrategy::Nearest);
+        }
+        cx.notify();
     }
 
     /// Handle file-related actions. Returns `true` if handled.
@@ -284,8 +351,7 @@ impl ScriptListApp {
             }
             "__cancel__" => {
                 tracing::info!(category = "UI", "actions dialog cancelled");
-                // Clear file search actions path on cancel
-                self.file_search_actions_path = None;
+                self.clear_file_search_action_target();
                 DispatchOutcome::success()
             }
             // File search specific actions
@@ -327,7 +393,7 @@ impl ScriptListApp {
                                     );
                                 }
                             }
-                            self.file_search_actions_path = None;
+                            self.clear_file_search_action_target();
                             if action_id == "open_file" || action_id == "open_directory" {
                                 self.hide_main_and_reset(cx);
                             }
@@ -340,7 +406,7 @@ impl ScriptListApp {
                                 file_search_action_error_hud_prefix(action_id)
                                     .unwrap_or("Failed to complete action")
                             };
-                            self.file_search_actions_path = None;
+                            self.clear_file_search_action_target();
                             return DispatchOutcome::error(
                                 crate::action_helpers::ERROR_ACTION_FAILED,
                                 format!("{}: {}", prefix, e),
@@ -360,7 +426,7 @@ impl ScriptListApp {
                 let path_buf = std::path::PathBuf::from(&path);
                 match crate::script_creation::open_in_editor(&path_buf, &self.config) {
                     Ok(()) => {
-                        self.file_search_actions_path = None;
+                        self.clear_file_search_action_target();
                         self.show_hud(
                             "Opened in Editor".to_string(),
                             Some(HUD_SHORT_MS),
@@ -369,7 +435,7 @@ impl ScriptListApp {
                         self.hide_main_and_reset(cx);
                     }
                     Err(e) => {
-                        self.file_search_actions_path = None;
+                        self.clear_file_search_action_target();
                         return DispatchOutcome::error(
                             crate::action_helpers::ERROR_ACTION_FAILED,
                             format!("Failed to open in editor: {}", e),
@@ -387,7 +453,7 @@ impl ScriptListApp {
                 };
                 match crate::file_search::open_in_terminal(&path, is_dir) {
                     Ok(_) => {
-                        self.file_search_actions_path = None;
+                        self.clear_file_search_action_target();
                         self.show_hud(
                             "Opened in Terminal".to_string(),
                             Some(HUD_SHORT_MS),
@@ -396,7 +462,7 @@ impl ScriptListApp {
                         self.hide_main_and_reset(cx);
                     }
                     Err(e) => {
-                        self.file_search_actions_path = None;
+                        self.clear_file_search_action_target();
                         return DispatchOutcome::error(
                             crate::action_helpers::ERROR_ACTION_FAILED,
                             format!("Failed to open in terminal: {}", e),
@@ -422,14 +488,14 @@ impl ScriptListApp {
                         Ok(Some(value)) => value,
                         Ok(None) => {
                             let _ = this.update(cx, |this, cx| {
-                                this.file_search_actions_path = None;
+                                this.clear_file_search_action_target();
                                 this.restore_file_search_input_focus(cx);
                             });
                             return;
                         }
                         Err(e) => {
                             let _ = this.update(cx, |this, cx| {
-                                this.file_search_actions_path = None;
+                                this.clear_file_search_action_target();
                                 this.show_error_toast(
                                     format!("Failed to rename: {}", e),
                                     cx,
@@ -443,7 +509,7 @@ impl ScriptListApp {
                     let _ = this.update(cx, |this, cx| {
                         match crate::file_search::rename_path(&path, &new_name) {
                             Ok(new_path) => {
-                                this.file_search_actions_path = None;
+                                this.clear_file_search_action_target();
                                 this.show_hud(
                                     format!("Renamed to {}", new_name),
                                     Some(HUD_MEDIUM_MS),
@@ -490,14 +556,14 @@ impl ScriptListApp {
                             Ok(Some(value)) => value,
                             Ok(None) => {
                                 let _ = this.update(cx, |this, cx| {
-                                    this.file_search_actions_path = None;
+                                    this.clear_file_search_action_target();
                                     this.restore_file_search_input_focus(cx);
                                 });
                                 return;
                             }
                             Err(e) => {
                                 let _ = this.update(cx, |this, cx| {
-                                    this.file_search_actions_path = None;
+                                    this.clear_file_search_action_target();
                                     this.show_error_toast(
                                         format!("Failed to move: {}", e),
                                         cx,
@@ -511,7 +577,7 @@ impl ScriptListApp {
                     let _ = this.update(cx, |this, cx| {
                         match crate::file_search::move_path(&path, &destination_dir) {
                             Ok(new_path) => {
-                                this.file_search_actions_path = None;
+                                this.clear_file_search_action_target();
                                 this.show_hud(
                                     format!(
                                         "Moved to {}",
@@ -529,7 +595,7 @@ impl ScriptListApp {
                                 this.restore_file_search_input_focus(cx);
                             }
                             Err(e) => {
-                                this.file_search_actions_path = None;
+                                this.clear_file_search_action_target();
                                 this.show_error_toast(
                                     format!("Failed to move: {}", e),
                                     cx,
@@ -580,7 +646,7 @@ impl ScriptListApp {
                                 "Async action cancelled: move_to_trash"
                             );
                             let _ = this.update(cx, |this, cx| {
-                                this.file_search_actions_path = None;
+                                this.clear_file_search_action_target();
                                 this.restore_file_search_input_focus(cx);
                             });
                             return;
@@ -594,7 +660,7 @@ impl ScriptListApp {
                                     error = %e,
                                     "failed to open confirmation modal"
                                 );
-                                this.file_search_actions_path = None;
+                                this.clear_file_search_action_target();
                                 this.show_error_toast_with_code(
                                     "Failed to open confirmation dialog",
                                     Some(crate::action_helpers::ERROR_MODAL_FAILED),
@@ -616,7 +682,7 @@ impl ScriptListApp {
                                     path = %path,
                                     "file moved to trash"
                                 );
-                                this.file_search_actions_path = None;
+                                this.clear_file_search_action_target();
                                 this.show_hud(
                                     format!("Moved to Trash: {}", name),
                                     Some(HUD_MEDIUM_MS),
@@ -639,7 +705,7 @@ impl ScriptListApp {
                                     path = %path,
                                     "failed to move to trash"
                                 );
-                                this.file_search_actions_path = None;
+                                this.clear_file_search_action_target();
                                 this.show_error_toast(
                                     format!("Failed to move to Trash: {}", e),
                                     cx,
@@ -653,6 +719,42 @@ impl ScriptListApp {
 
                 DispatchOutcome::success()
             }
+            "duplicate_path" => {
+                let Some((path, _, name)) = self.resolve_file_search_path_info() else {
+                    return DispatchOutcome::error(
+                        crate::action_helpers::ERROR_ACTION_FAILED,
+                        "No file selected",
+                    );
+                };
+                let previous_display_index = match &self.current_view {
+                    AppView::FileSearchView { selected_index, .. } => *selected_index,
+                    _ => 0,
+                };
+                match crate::file_search::duplicate_path(&path) {
+                    Ok(new_path) => {
+                        self.clear_file_search_action_target();
+                        self.show_hud(
+                            format!("Duplicated {}", name),
+                            Some(HUD_MEDIUM_MS),
+                            cx,
+                        );
+                        self.refresh_file_search_after_insert(
+                            &new_path,
+                            previous_display_index,
+                            cx,
+                        );
+                        self.restore_file_search_input_focus(cx);
+                    }
+                    Err(e) => {
+                        self.clear_file_search_action_target();
+                        return DispatchOutcome::error(
+                            crate::action_helpers::ERROR_ACTION_FAILED,
+                            format!("Failed to duplicate: {}", e),
+                        );
+                    }
+                }
+                DispatchOutcome::success()
+            }
             "copy_filename" => {
                 let Some((_path, _is_dir, name)) = self.resolve_file_search_path_info() else {
                     return DispatchOutcome::error(
@@ -661,7 +763,7 @@ impl ScriptListApp {
                     );
                 };
                 tracing::info!(category = "UI", filename = %name, "copy filename");
-                self.file_search_actions_path = None;
+                self.clear_file_search_action_target();
                 self.copy_to_clipboard_with_feedback(
                     &name,
                     format!("Copied filename: {}", name),

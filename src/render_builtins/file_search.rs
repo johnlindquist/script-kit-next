@@ -428,6 +428,24 @@ impl ScriptListApp {
                             .cloned()
                     };
 
+                    // Space (unmodified) triggers Quick Look for non-directory files
+                    let is_space = key.eq_ignore_ascii_case("space") || key_char == Some(" ");
+                    if is_space
+                        && !event.keystroke.modifiers.platform
+                        && !event.keystroke.modifiers.shift
+                        && !event.keystroke.modifiers.control
+                        && !event.keystroke.modifiers.alt
+                    {
+                        if let Some(file) = get_selected_file() {
+                            if file.file_type != FileType::Directory {
+                                this.file_search_actions_path = Some(file.path.clone());
+                                this.handle_action("quick_look".to_string(), window, cx);
+                                cx.stop_propagation();
+                                return;
+                            }
+                        }
+                    }
+
                     match key {
                         // Arrow keys are handled by arrow_interceptor in app_impl.rs
                         // which calls stop_propagation(). This is the single source of truth
@@ -1078,11 +1096,12 @@ impl ScriptListApp {
             } else {
                 "Tab Fill Path"
             };
-            vec![
-                primary.into(),
-                tab_hint.into(),
-                "\u{2318}K Actions \u{b7} \u{2318}\u{21b5} AI".into(),
-            ]
+            let mut hints: Vec<SharedString> = vec![primary.into(), tab_hint.into()];
+            if file.file_type != FileType::Directory {
+                hints.push("Space Preview".into());
+            }
+            hints.push("\u{2318}K Actions \u{b7} \u{2318}\u{21b5} AI".into());
+            hints
         } else if is_loading {
             vec![
                 "Searching\u{2026}".into(),

@@ -2371,8 +2371,8 @@ mod from_dialog_builtin_action_validation_tests_33 {
             is_dir: false,
         };
         let actions = get_file_context_actions(&file_info);
-        // open_file + reveal + rename + move + open_in_editor + open_in_terminal + attach_to_ai + quick_look + show_info + copy_path + copy_filename + move_to_trash = 12
-        assert_eq!(actions.len(), 12);
+        // open_file + reveal + rename + move + duplicate + open_in_editor + open_in_terminal + attach_to_ai + quick_look + show_info + copy_path + copy_filename + move_to_trash = 13
+        assert_eq!(actions.len(), 13);
     }
 
     #[cfg(target_os = "macos")]
@@ -2385,8 +2385,8 @@ mod from_dialog_builtin_action_validation_tests_33 {
             is_dir: true,
         };
         let actions = get_file_context_actions(&file_info);
-        // open_directory + reveal + rename + move + open_in_editor + open_in_terminal + show_info + copy_path + copy_filename + move_to_trash = 10
-        assert_eq!(actions.len(), 10);
+        // open_directory + reveal + rename + move + duplicate + open_in_editor + open_in_terminal + show_info + copy_path + copy_filename + move_to_trash = 11
+        assert_eq!(actions.len(), 11);
     }
     
     #[test]
@@ -15248,7 +15248,7 @@ mod from_dialog_builtin_action_validation_tests_45 {
             file_type: FileType::File,
         };
         let actions = get_file_context_actions(&file_info);
-        assert_eq!(actions.len(), 12);
+        assert_eq!(actions.len(), 13);
     }
 
     #[test]
@@ -15260,9 +15260,9 @@ mod from_dialog_builtin_action_validation_tests_45 {
             file_type: FileType::Directory,
         };
         let actions = get_file_context_actions(&file_info);
-        assert_eq!(actions.len(), 10);
+        assert_eq!(actions.len(), 11);
     }
-    
+
     #[test]
     fn file_context_file_has_quick_look() {
         let file_info = FileInfo {
