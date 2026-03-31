@@ -76,8 +76,13 @@ fn is_term_prompt_actions_toggle_shortcut(has_cmd: bool, has_shift: bool, key: &
 }
 
 #[inline]
-fn render_terminal_prompt_hint_strip() -> AnyElement {
-    crate::components::prompt_layout_shell::render_simple_hint_strip("⌘↩ Apply · ⌘W Close", None)
+fn render_terminal_prompt_hint_strip(
+    route: Option<&crate::ai::TabAiApplyBackRoute>,
+) -> AnyElement {
+    let apply_label =
+        crate::ai::tab_ai_apply_back_footer_label(route.map(|r| &r.source_type));
+    let text = format!("⌘↩ {apply_label} · ⌘W Close");
+    crate::components::prompt_layout_shell::render_simple_hint_strip(text, None)
 }
 
 impl ScriptListApp {
@@ -315,7 +320,13 @@ impl ScriptListApp {
             // preserve vibrancy/translucency compositing when rendered as an overlay.
             .child(div().flex_1().min_h(px(0.)).overflow_hidden().child(entity))
             // Terminal-specific footer: only advertise close so the PTY keeps full keyboard control.
-            .child(render_terminal_prompt_hint_strip())
+            .child(render_terminal_prompt_hint_strip(
+                if matches!(self.current_view, AppView::QuickTerminalView { .. }) {
+                    self.tab_ai_harness_apply_back_route.as_ref()
+                } else {
+                    None
+                },
+            ))
             // Actions dialog overlay
             .when_some(
                 render_actions_backdrop_bottom_anchored(
@@ -488,8 +499,8 @@ mod term_prompt_render_tests {
             "term prompt should no longer use exception chrome audit"
         );
         assert!(
-            TERM_RENDER_SOURCE.contains("render_terminal_prompt_hint_strip()"),
-            "term prompt should use the terminal-specific close-only footer"
+            TERM_RENDER_SOURCE.contains("render_terminal_prompt_hint_strip("),
+            "term prompt should use the terminal-specific hint strip footer"
         );
     }
 

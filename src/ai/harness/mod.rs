@@ -45,7 +45,7 @@ pub enum TabAiCaptureKind {
 /// Schema version for `HarnessConfig` wire format.
 pub const TAB_AI_HARNESS_CONFIG_SCHEMA_VERSION: u32 = 1;
 
-/// Schema version for the `<scriptKitContext>` block injected into harnesses.
+/// Schema version for the context block injected into harnesses.
 pub const TAB_AI_HARNESS_CONTEXT_SCHEMA_VERSION: u32 = 1;
 
 // ---------------------------------------------------------------------------
@@ -295,23 +295,227 @@ pub enum TabAiHarnessSubmissionMode {
     PasteOnly,
 }
 
-/// Build a `<scriptKitContext>` XML block from a resolved context blob.
+fn collapse_inline_text(value: &str) -> String {
+    value.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+fn push_line(out: &mut String, label: &str, value: impl AsRef<str>) {
+    let value = value.as_ref().trim();
+    if value.is_empty() {
+        return;
+    }
+    out.push_str(label);
+    out.push_str(": ");
+    out.push_str(value);
+    out.push('\n');
+}
+
+fn push_block(out: &mut String, label: &str, value: &str) {
+    let value = value.trim();
+    if value.is_empty() {
+        return;
+    }
+    out.push_str(label);
+    out.push_str(":\n");
+    out.push_str(value);
+    if !value.ends_with('\n') {
+        out.push('\n');
+    }
+}
+
+fn format_target_line(target: &crate::ai::TabAiTargetContext) -> Result<String, String> {
+    let mut parts = vec![
+        format!("source={}", target.source),
+        format!("kind={}", target.kind),
+        format!("semantic_id={}", target.semantic_id),
+        format!("label={}", collapse_inline_text(&target.label)),
+    ];
+    if let Some(metadata) = target.metadata.as_ref() {
+        let metadata_json = serde_json::to_string(metadata)
+            .map_err(|e| format!("tab_ai_harness_target_metadata_serialize_failed: {e}"))?;
+        parts.push(format!("metadata={metadata_json}"));
+    }
+    Ok(parts.join(" | "))
+}
+
+fn format_visible_element_line(element: &crate::protocol::ElementInfo) -> String {
+    let label = element
+        .text
+        .as_deref()
+        .or(element.value.as_deref())
+        .unwrap_or(element.semantic_id.as_str());
+    let mut parts = vec![
+        format!("semantic_id={}", element.semantic_id),
+        format!("label={}", collapse_inline_text(label)),
+    ];
+    if element.selected == Some(true) {
+        parts.push("selected=true".to_string());
+    }
+    if element.focused == Some(true) {
+        parts.push("focused=true".to_string());
+    }
+    if let Some(index) = element.index {
+        parts.push(format!("index={index}"));
+    }
+    parts.join(" | ")
+}
+
+fn format_clipboard_history_line(entry: &crate::ai::TabAiClipboardHistoryEntry) -> String {
+    let mut parts = vec![
+        format!("type={}", entry.content_type),
+        format!("preview={}", collapse_inline_text(&entry.preview)),
+        format!("timestamp={}", entry.timestamp),
+    ];
+    if let Some(text) = entry.full_text.as_deref().filter(|text| !text.trim().is_empty()) {
+        parts.push(format!("text={}", collapse_inline_text(text)));
+    }
+    if let Some(ocr) = entry.ocr_text.as_deref().filter(|text| !text.trim().is_empty()) {
+        parts.push(format!("ocr={}", collapse_inline_text(ocr)));
+    }
+    if let Some(width) = entry.image_width {
+        parts.push(format!("image_width={width}"));
+    }
+    if let Some(height) = entry.image_height {
+        parts.push(format!("image_height={height}"));
+    }
+    parts.join(" | ")
+}
+
+fn format_prior_automation_line(item: &crate::ai::TabAiMemorySuggestion) -> String {
+    format!(
+        "slug={} | query={} | prompt_type={} | bundle_id={} | written_at={} | score={:.3}",
+        item.slug,
+        collapse_inline_text(&item.effective_query),
+        item.prompt_type,
+        item.bundle_id,
+        item.written_at,
+        item.score,
+    )
+}
+
+/// Build a flat, labeled context block from a resolved context blob.
 pub fn build_tab_ai_harness_context_block(
     context: &crate::ai::TabAiContextBlob,
 ) -> Result<String, String> {
-    let context_json = serde_json::to_string_pretty(context)
-        .map_err(|e| format!("tab_ai_harness_context_serialize_failed: {e}"))?;
-    Ok(format!(
-        "<scriptKitContext schemaVersion=\"{schema}\">\n\
-         Use this as ambient context for the next user request.\n\
-         Do not quote the whole block back unless the user asks.\n\
-         Prefer focusedTarget over visibleTargets when the user says \"this\", \"it\", or \"selected\".\n\
-         ```json\n\
-         {context_json}\n\
-         ```\n\
-         </scriptKitContext>",
-        schema = TAB_AI_HARNESS_CONTEXT_SCHEMA_VERSION,
-    ))
+    let mut out = String::new();
+
+    out.push_str("Script Kit context\n");
+    out.push_str("Use this as ambient context for the next user request.\n");
+    out.push_str(
+        "Prefer focused target over visible targets when the user says \"this\", \"it\", or \"selected\".\n\n",
+    );
+
+    push_line(&mut out, "schema version", context.schema_version.to_string());
+    push_line(&mut out, "timestamp", &context.timestamp);
+    push_line(&mut out, "prompt type", &context.ui.prompt_type);
+
+    if let Some(input_text) = context.ui.input_text.as_deref() {
+        push_block(&mut out, "current input", input_text);
+    }
+    if let Some(id) = context.ui.focused_semantic_id.as_deref() {
+        push_line(&mut out, "focused semantic id", id);
+    }
+    if let Some(id) = context.ui.selected_semantic_id.as_deref() {
+        push_line(&mut out, "selected semantic id", id);
+    }
+
+    if let Some(target) = context.focused_target.as_ref() {
+        push_line(&mut out, "focused target", format_target_line(target)?);
+    }
+    for (index, target) in context.visible_targets.iter().take(6).enumerate() {
+        push_line(
+            &mut out,
+            &format!("visible target {}", index + 1),
+            format_target_line(target)?,
+        );
+    }
+    for (index, element) in context.ui.visible_elements.iter().take(6).enumerate() {
+        push_line(
+            &mut out,
+            &format!("visible element {}", index + 1),
+            format_visible_element_line(element),
+        );
+    }
+
+    if let Some(text) = context.desktop.selected_text.as_deref() {
+        push_block(&mut out, "selected text", text);
+    }
+    if let Some(app) = context.desktop.frontmost_app.as_ref() {
+        push_line(
+            &mut out,
+            "frontmost app",
+            format!("{} | bundle_id={} | pid={}", app.name, app.bundle_id, app.pid),
+        );
+    }
+    if let Some(browser) = context.desktop.browser.as_ref() {
+        push_line(&mut out, "browser url", &browser.url);
+    }
+    if let Some(window) = context.desktop.focused_window.as_ref() {
+        push_line(
+            &mut out,
+            "focused window",
+            format!(
+                "{} | {}x{} | used_fallback={}",
+                collapse_inline_text(&window.title),
+                window.width,
+                window.height,
+                window.used_fallback
+            ),
+        );
+    }
+    for (index, warning) in context.desktop.warnings.iter().enumerate() {
+        push_line(&mut out, &format!("desktop warning {}", index + 1), warning);
+    }
+
+    for (index, recent_input) in context.recent_inputs.iter().take(5).enumerate() {
+        push_line(
+            &mut out,
+            &format!("recent input {}", index + 1),
+            collapse_inline_text(recent_input),
+        );
+    }
+
+    if let Some(clipboard) = context.clipboard.as_ref() {
+        push_line(&mut out, "clipboard type", &clipboard.content_type);
+        push_line(
+            &mut out,
+            "clipboard preview",
+            collapse_inline_text(&clipboard.preview),
+        );
+        if let Some(ocr) = clipboard.ocr_text.as_deref() {
+            push_line(&mut out, "clipboard ocr", collapse_inline_text(ocr));
+        }
+    }
+
+    for (index, entry) in context.clipboard_history.iter().take(5).enumerate() {
+        push_line(
+            &mut out,
+            &format!("clipboard history {}", index + 1),
+            format_clipboard_history_line(entry),
+        );
+    }
+    for (index, item) in context.prior_automations.iter().take(3).enumerate() {
+        push_line(
+            &mut out,
+            &format!("prior automation {}", index + 1),
+            format_prior_automation_line(item),
+        );
+    }
+
+    if let Some(source_type) = context.source_type.as_ref() {
+        push_line(&mut out, "source type", format!("{source_type:?}"));
+    }
+    if let Some(path) = context.screenshot_path.as_deref() {
+        push_line(&mut out, "screenshot path", path);
+    }
+    if let Some(hint) = context.apply_back_hint.as_ref() {
+        push_line(&mut out, "apply back action", &hint.action);
+        if let Some(label) = hint.target_label.as_deref() {
+            push_line(&mut out, "apply back target", label);
+        }
+    }
+
+    Ok(out.trim_end().to_string())
 }
 
 // ---------------------------------------------------------------------------
@@ -547,8 +751,8 @@ mod tests {
             &[],
         )
         .expect("should build");
-        assert!(with_intent.contains("<scriptKitContext schemaVersion=\"1\">"));
-        assert!(with_intent.contains("\"promptType\": \"FileSearch\""));
+        assert!(with_intent.contains("Script Kit context"));
+        assert!(with_intent.contains("prompt type: FileSearch"));
         assert!(with_intent.contains("User intent:\nrename this file"));
         assert!(!with_intent.contains("Await the user"));
 
@@ -562,7 +766,7 @@ mod tests {
             &[],
         )
         .expect("should build");
-        assert!(without_intent.contains("<scriptKitContext schemaVersion=\"1\">"));
+        assert!(without_intent.contains("Script Kit context"));
         assert!(without_intent.contains("Await the user's next terminal input."));
         assert!(!without_intent.contains("User intent:"));
     }
@@ -591,7 +795,7 @@ mod tests {
             &[],
         )
         .expect("should build");
-        assert!(paste.contains("<scriptKitContext schemaVersion=\"1\">"));
+        assert!(paste.contains("Script Kit context"));
         assert!(!paste.contains("Await the user's next terminal input."));
         assert!(!paste.contains("User intent:"));
     }
@@ -709,13 +913,9 @@ mod tests {
             &[],
         )
         .expect("submission");
-        let expected_open = format!(
-            "<scriptKitContext schemaVersion=\"{}\">",
-            TAB_AI_HARNESS_CONTEXT_SCHEMA_VERSION
-        );
-        assert!(submission.contains(&expected_open));
-        assert!(submission.contains("\"focusedWindow\""));
-        assert!(!submission.contains("\"focusedWindowImage\""));
+        assert!(submission.contains("Script Kit context"));
+        assert!(submission.contains("focused window: Finder — Downloads"));
+        assert!(!submission.contains("focusedWindowImage"));
         assert!(!submission.contains("Await the user's next terminal input."));
         assert!(!submission.contains("User intent:"));
     }
@@ -746,7 +946,7 @@ mod tests {
         )
         .expect("submission");
         assert!(
-            submission.ends_with("</scriptKitContext>\n"),
+            submission.ends_with('\n'),
             "PasteOnly must leave the cursor on the next line after the context block: {submission:?}"
         );
         assert!(!submission.contains("Await the user's next terminal input."));
@@ -766,7 +966,7 @@ mod tests {
         .expect("submission");
         let composed = format!("{submission}rename this file\n");
         assert!(
-            composed.contains("</scriptKitContext>\nrename this file\n"),
+            composed.contains("rename this file\n"),
             "user input must start on a fresh line after the context block: {composed:?}"
         );
     }
@@ -861,7 +1061,7 @@ mod tests {
         .expect("submission");
 
         assert!(!submission.contains("<scriptKitHints>"));
-        assert!(submission.contains("<scriptKitContext"));
+        assert!(submission.contains("Script Kit context"));
     }
 
     #[test]
@@ -1071,6 +1271,84 @@ mod tests {
             source.contains("term.terminal.input(bytes)"),
             "QuickTerminal Tab handling must write raw bytes to the PTY"
         );
+    }
+
+    #[test]
+    fn harness_context_block_is_flat_labeled_text() {
+        let blob = crate::ai::TabAiContextBlob::from_parts_with_targets(
+            crate::ai::TabAiUiSnapshot {
+                prompt_type: "ScriptList".to_string(),
+                input_text: Some("calculate fibonacci".to_string()),
+                focused_semantic_id: Some("input:filter".to_string()),
+                selected_semantic_id: Some("choice:0:fibonacci-ts".to_string()),
+                visible_elements: vec![],
+            },
+            Some(crate::ai::TabAiTargetContext {
+                source: "ScriptList".to_string(),
+                kind: "script".to_string(),
+                semantic_id: "choice:0:fibonacci-ts".to_string(),
+                label: "fibonacci.ts".to_string(),
+                metadata: None,
+            }),
+            vec![],
+            crate::context_snapshot::AiContextSnapshot {
+                selected_text: Some(
+                    "function fib(n) { return n <= 1 ? n : fib(n - 1) + fib(n - 2); }"
+                        .to_string(),
+                ),
+                frontmost_app: Some(crate::context_snapshot::FrontmostAppContext {
+                    pid: 42,
+                    bundle_id: "com.microsoft.VSCode".to_string(),
+                    name: "VS Code".to_string(),
+                }),
+                menu_bar_items: vec![],
+                browser: Some(crate::context_snapshot::BrowserContext {
+                    url: "https://docs.rs/gpui".to_string(),
+                }),
+                focused_window: Some(crate::context_snapshot::FocusedWindowContext {
+                    title: "fibonacci.ts".to_string(),
+                    width: 1440,
+                    height: 900,
+                    used_fallback: false,
+                }),
+                ..Default::default()
+            },
+            vec!["fib".to_string()],
+            Some(crate::ai::TabAiClipboardContext {
+                content_type: "text".to_string(),
+                preview: "fn fib(n)".to_string(),
+                ocr_text: None,
+            }),
+            vec![],
+            vec![crate::ai::TabAiMemorySuggestion {
+                slug: "run-fibonacci".to_string(),
+                bundle_id: "com.microsoft.VSCode".to_string(),
+                raw_query: "run fibonacci".to_string(),
+                effective_query: "run fibonacci".to_string(),
+                prompt_type: "QuickTerminal".to_string(),
+                written_at: "2026-03-30T12:00:00Z".to_string(),
+                score: 1.0,
+            }],
+            "2026-03-31T04:58:57Z".to_string(),
+        )
+        .with_deferred_capture_fields(
+            Some(crate::ai::TabAiSourceType::RunningCommand),
+            Some("/tmp/scriptkit-screenshot-abc123.png".to_string()),
+            Some(crate::ai::TabAiApplyBackHint {
+                action: "pasteToPrompt".to_string(),
+                target_label: Some("Active prompt".to_string()),
+            }),
+        );
+
+        let block = build_tab_ai_harness_context_block(&blob).expect("context block");
+
+        assert!(block.contains("Script Kit context"));
+        assert!(block.contains("prompt type: ScriptList"));
+        assert!(block.contains("current input:\ncalculate fibonacci"));
+        assert!(block.contains("browser url: https://docs.rs/gpui"));
+        assert!(block.contains("screenshot path: /tmp/scriptkit-screenshot-abc123.png"));
+        assert!(!block.contains("<scriptKitContext"));
+        assert!(!block.contains("```json"));
     }
 }
 

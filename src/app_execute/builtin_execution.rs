@@ -2570,17 +2570,24 @@ impl ScriptListApp {
                             })
                             .collect();
 
+                        // Follow the canonical ShowMini pattern from prompt_handler
+                        // (not open_builtin_filterable_view which targets MainFilter focus)
+                        let choice_count = choices.len();
                         self.opened_from_main_menu = true;
+                        self.arg_input.clear();
                         self.arg_selected_index = start_index;
-                        self.open_builtin_filterable_view(
-                            AppView::MiniPrompt {
-                                id: BUILTIN_MIC_SELECT_PROMPT_ID.to_string(),
-                                placeholder: "Select microphone...".to_string(),
-                                choices,
-                            },
-                            "Select microphone...",
-                            cx,
+                        self.focused_input = FocusedInput::ArgPrompt;
+                        self.pending_focus = Some(FocusTarget::AppRoot);
+                        self.current_view = AppView::MiniPrompt {
+                            id: BUILTIN_MIC_SELECT_PROMPT_ID.to_string(),
+                            placeholder: "Select microphone...".to_string(),
+                            choices,
+                        };
+                        resize_to_view_sync(
+                            ViewType::ArgPromptWithChoices,
+                            choice_count.min(5),
                         );
+                        cx.notify();
 
                         Self::builtin_success(dctx, "select_microphone")
                     }

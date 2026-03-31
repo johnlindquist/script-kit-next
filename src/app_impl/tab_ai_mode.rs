@@ -2586,7 +2586,7 @@ impl ScriptListApp {
             Err(error) => {
                 self.toast_manager.push(
                     crate::components::toast::Toast::error(
-                        format!("Nothing usable found in clipboard: {error}"),
+                        format!("Nothing usable found in the clipboard: {error}. Copy the harness output first, then press ⌘↩ again."),
                         &self.theme,
                     )
                     .duration_ms(Some(TOAST_ERROR_MS)),

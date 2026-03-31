@@ -1389,7 +1389,13 @@ impl Render for TermPrompt {
                 let scroll_lines = -lines.round() as i32;
 
                 if scroll_lines != 0 {
-                    this.terminal.scroll(scroll_lines);
+                    // Route scroll based on terminal mode:
+                    // - Mouse mode: send mouse wheel escape sequences to PTY
+                    // - Alt screen + alternate scroll: send arrow key sequences to PTY
+                    // - Normal: scroll the display buffer
+                    if !this.terminal.scroll_to_pty(scroll_lines) {
+                        this.terminal.scroll(scroll_lines);
+                    }
                     trace!(delta = scroll_lines, "Mouse wheel scroll");
                     cx.notify();
                 }

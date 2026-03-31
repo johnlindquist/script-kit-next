@@ -3,6 +3,19 @@
 You are working inside `~/.scriptkit`, the Script Kit workspace.
 Script Kit is a **Rust (GPUI) + Bun** launcher — NOT the old Electron/Node.js version.
 
+## Pick the Artifact Type First
+
+Before writing files, decide which artifact the user actually asked for.
+
+| Artifact | Use when | Write here | Learn here | Reference here |
+|----------|----------|------------|------------|----------------|
+| Script | Full TypeScript workflow with Script Kit UI or Bun APIs | `~/.scriptkit/kit/main/scripts/<name>.ts` | `~/.scriptkit/skills/script-authoring/SKILL.md` | `~/.scriptkit/examples/scripts/` |
+| Extension bundle | One markdown file containing multiple scriptlets, snippets, or quick commands | `~/.scriptkit/kit/main/extensions/<name>.md` | `~/.scriptkit/skills/scriptlets/SKILL.md` | `~/.scriptkit/examples/extensions/` |
+| mdflow agent | Backend-specific markdown prompt/automation | `~/.scriptkit/kit/main/agents/<name>.<backend>.md` | `~/.scriptkit/skills/agents/SKILL.md` | `~/.scriptkit/examples/agents/` |
+
+Do not create a `.ts` script when the request is really a scriptlet bundle or mdflow agent.
+Do not write runnable user files outside `~/.scriptkit/kit/main/`.
+
 ## Quick Start
 
 ```typescript
@@ -28,11 +41,13 @@ await div(`<h1>${choice}</h1>`);
 ├── skills/                        ← agent skills (read these!)
 │   ├── script-authoring/SKILL.md
 │   ├── scriptlets/SKILL.md
+│   ├── agents/SKILL.md
 │   ├── config/SKILL.md
 │   └── troubleshooting/SKILL.md
 ├── examples/
 │   ├── scripts/                   ← runnable .ts examples
-│   └── extensions/                ← built-in scriptlet bundles
+│   ├── extensions/                ← built-in scriptlet bundles
+│   └── agents/                    ← mdflow agent examples
 ├── kit/                           ← user workspace (version-controllable)
 │   ├── main/
 │   │   ├── scripts/               ← PUT NEW SCRIPTS HERE
@@ -115,6 +130,7 @@ await notify("Task complete!");
 Read `skills/` for detailed guidance on:
 - **script-authoring** — creating and structuring scripts
 - **scriptlets** — markdown extension bundles with embedded commands
+- **agents** — mdflow-backed agent files
 - **config** — configuration and theming
 - **troubleshooting** — common issues and debugging
 

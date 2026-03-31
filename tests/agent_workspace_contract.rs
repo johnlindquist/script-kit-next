@@ -49,10 +49,11 @@ fn test_setup_seeds_root_agent_workspace() {
             "Root GUIDE.md must exist"
         );
 
-        // Skills directory with all four skills
+        // Skills directory with all skills
         for skill in &[
             "script-authoring",
             "scriptlets",
+            "agents",
             "config",
             "troubleshooting",
         ] {
@@ -228,6 +229,7 @@ fn test_seeded_skills_do_not_reference_legacy_v1_contract() {
         for skill in &[
             "script-authoring",
             "scriptlets",
+            "agents",
             "config",
             "troubleshooting",
         ] {
@@ -531,6 +533,68 @@ fn test_sdk_reference_example_scriptlet_matches_current_extension_contract() {
     assert!(scriptlet.contains("<!-- description:"));
     assert!(!scriptlet.contains("```js"));
     assert!(!scriptlet.contains("// Shortcut:"));
+}
+
+/// Fresh setup must seed the full artifact authoring pack: skills, examples for scripts,
+/// extensions, and agents.
+#[test]
+fn test_seeded_workspace_has_full_artifact_authoring_pack() {
+    with_temp_sk_path(|kit_root| {
+        let _ = ensure_kit_setup();
+
+        for path in [
+            "skills/script-authoring/SKILL.md",
+            "skills/scriptlets/SKILL.md",
+            "skills/agents/SKILL.md",
+            "examples/scripts/hello-world.ts",
+            "examples/extensions/main.md",
+            "examples/extensions/advanced.md",
+            "examples/extensions/howto.md",
+            "examples/agents/review-pr.claude.md",
+            "examples/agents/plan-feature.i.gemini.md",
+        ] {
+            assert!(
+                kit_root.join(path).exists(),
+                "missing seeded authoring file: {path}"
+            );
+        }
+    });
+}
+
+/// Root docs must route scripts, scriptlets, and agents to the correct artifact paths.
+#[test]
+fn test_root_docs_route_scripts_scriptlets_and_agents_to_real_paths() {
+    with_temp_sk_path(|kit_root| {
+        let _ = ensure_kit_setup();
+
+        let root_claude = fs::read_to_string(kit_root.join("CLAUDE.md")).expect("read CLAUDE.md");
+        let root_agents = fs::read_to_string(kit_root.join("AGENTS.md")).expect("read AGENTS.md");
+        let examples_readme =
+            fs::read_to_string(kit_root.join("examples").join("README.md")).expect("read README");
+
+        for content in [&root_claude, &root_agents] {
+            for needle in [
+                "~/.scriptkit/kit/main/scripts/",
+                "~/.scriptkit/kit/main/extensions/",
+                "~/.scriptkit/kit/main/agents/",
+                "~/.scriptkit/skills/script-authoring/SKILL.md",
+                "~/.scriptkit/skills/scriptlets/SKILL.md",
+                "~/.scriptkit/skills/agents/SKILL.md",
+                "~/.scriptkit/examples/scripts/",
+                "~/.scriptkit/examples/extensions/",
+                "~/.scriptkit/examples/agents/",
+            ] {
+                assert!(content.contains(needle), "doc missing `{needle}`");
+            }
+        }
+
+        for needle in ["## Scripts", "## Extensions", "## Agents"] {
+            assert!(
+                examples_readme.contains(needle),
+                "examples/README.md missing `{needle}` section"
+            );
+        }
+    });
 }
 
 /// Root agent docs are the canonical agent entrypoint and must stay free of legacy v1 tokens.

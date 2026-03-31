@@ -195,17 +195,25 @@ const TRANSCRIBING_TICK_MS: u64 = 50;
 /// What the overlay should do when Escape is pressed in a given phase.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum OverlayEscapeAction {
+    /// First Escape during recording — show confirmation UI, don't abort yet.
+    TransitionToConfirming,
+    /// Escape during Confirming — dismiss confirmation and resume recording.
+    ResumeRecording,
+    /// Enter during Confirming — actually abort the session.
     AbortSession,
     CloseOverlay,
     Propagate,
 }
 
 /// Map a dictation session phase to the appropriate Escape behavior.
+///
+/// Follows the vercel-voice confirm-first pattern:
+/// - Recording → show confirmation (first Escape)
+/// - Confirming → dismiss confirmation and resume recording
 pub(crate) fn overlay_escape_action(phase: &DictationSessionPhase) -> OverlayEscapeAction {
     match phase {
-        DictationSessionPhase::Recording | DictationSessionPhase::Confirming => {
-            OverlayEscapeAction::AbortSession
-        }
+        DictationSessionPhase::Recording => OverlayEscapeAction::TransitionToConfirming,
+        DictationSessionPhase::Confirming => OverlayEscapeAction::ResumeRecording,
         DictationSessionPhase::Transcribing
         | DictationSessionPhase::Delivering
         | DictationSessionPhase::Finished
@@ -295,8 +303,11 @@ impl DictationOverlay {
 
     /// Handle key-down events for the overlay.
     ///
-    /// Escape semantics:
-    /// - Recording / Confirming → abort the capture session immediately
+    /// Escape semantics (vercel-voice confirm-first pattern):
+    /// - Recording → first Escape transitions to Confirming (shows abort/resume)
+    /// - Confirming + Escape → resume Recording
+    /// - Confirming + Enter → actually abort the session
+    /// - Confirming + any other key → resume Recording
     /// - Transcribing / Delivering / Finished / Failed → dismiss overlay only
     /// - Idle → propagate (no-op)
     fn handle_key_down(
@@ -306,17 +317,74 @@ impl DictationOverlay {
         cx: &mut Context<Self>,
     ) {
         let key = event.keystroke.key.as_str();
+
+        // In Confirming state, non-Escape/non-Enter keys resume recording.
+        if self.state.phase == DictationSessionPhase::Confirming
+            && !crate::ui_foundation::is_key_escape(key)
+            && !crate::ui_foundation::is_key_enter(key)
+        {
+            tracing::info!(
+                category = "DICTATION",
+                key,
+                "Key pressed during confirmation, resuming recording"
+            );
+            self.state.phase = DictationSessionPhase::Recording;
+            crate::dictation::set_overlay_phase(DictationSessionPhase::Recording);
+            cx.notify();
+            cx.stop_propagation();
+            return;
+        }
+
+        // In Confirming state, Enter also aborts (deliberate confirm action).
+        if self.state.phase == DictationSessionPhase::Confirming
+            && crate::ui_foundation::is_key_enter(key)
+        {
+            tracing::info!(
+                category = "DICTATION",
+                "Enter pressed during confirmation, aborting dictation session"
+            );
+            let callback = OVERLAY_ABORT_CALLBACK.lock().take();
+            if let Some(cb) = callback {
+                cb(cx);
+            } else {
+                let _ = crate::dictation::close_dictation_overlay(cx);
+            }
+            cx.stop_propagation();
+            return;
+        }
+
         if !crate::ui_foundation::is_key_escape(key) {
             cx.propagate();
             return;
         }
 
         match overlay_escape_action(&self.state.phase) {
+            OverlayEscapeAction::TransitionToConfirming => {
+                tracing::info!(
+                    category = "DICTATION",
+                    "Escape pressed during recording, showing confirmation"
+                );
+                self.state.phase = DictationSessionPhase::Confirming;
+                crate::dictation::set_overlay_phase(DictationSessionPhase::Confirming);
+                cx.notify();
+                cx.stop_propagation();
+            }
+            OverlayEscapeAction::ResumeRecording => {
+                tracing::info!(
+                    category = "DICTATION",
+                    phase = ?self.state.phase,
+                    "Escape pressed in confirmation, resuming recording"
+                );
+                self.state.phase = DictationSessionPhase::Recording;
+                crate::dictation::set_overlay_phase(DictationSessionPhase::Recording);
+                cx.notify();
+                cx.stop_propagation();
+            }
             OverlayEscapeAction::AbortSession => {
                 tracing::info!(
                     category = "DICTATION",
                     phase = ?self.state.phase,
-                    "Escape pressed, aborting dictation session"
+                    "Confirm action pressed, aborting dictation session"
                 );
                 let callback = OVERLAY_ABORT_CALLBACK.lock().take();
                 if let Some(cb) = callback {
@@ -417,14 +485,14 @@ impl Render for DictationOverlay {
                             .text_size(px(STATUS_TEXT_SIZE_PX))
                             .font_family(FONT_MONO)
                             .text_color(abort_color)
-                            .child("Esc Abort"),
+                            .child("Enter Abort"),
                     )
                     .child(
                         div()
                             .text_size(px(STATUS_TEXT_SIZE_PX))
                             .font_family(FONT_MONO)
                             .text_color(resume_color)
-                            .child("Any key Resume"),
+                            .child("Esc Resume"),
                     )
             }
             DictationSessionPhase::Transcribing => {

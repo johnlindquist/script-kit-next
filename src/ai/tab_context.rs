@@ -1386,6 +1386,17 @@ pub struct TabAiApplyBackRoute {
     pub focused_target: Option<TabAiTargetContext>,
 }
 
+/// Return a concise footer label describing what ⌘↩ Apply does for a given source type.
+pub fn tab_ai_apply_back_footer_label(source_type: Option<&TabAiSourceType>) -> &'static str {
+    match source_type {
+        Some(TabAiSourceType::RunningCommand) => "Apply to Prompt",
+        Some(TabAiSourceType::ClipboardEntry) => "Copy to Clipboard",
+        Some(TabAiSourceType::ScriptListItem) => "Run as Script",
+        Some(TabAiSourceType::DesktopSelection) => "Replace Selection",
+        Some(TabAiSourceType::Desktop) | None => "Paste Back",
+    }
+}
+
 /// Detect the source type from the originating prompt type string and desktop snapshot.
 ///
 /// This is the canonical detection logic, usable from both include!() files
@@ -4585,6 +4596,31 @@ mod tab_ai_source_type_tests {
             );
         }
         assert!(build_tab_ai_apply_back_hint_from_source(None).is_none());
+    }
+
+    #[test]
+    fn apply_back_footer_label_matches_source_type() {
+        assert_eq!(
+            tab_ai_apply_back_footer_label(Some(&TabAiSourceType::RunningCommand)),
+            "Apply to Prompt"
+        );
+        assert_eq!(
+            tab_ai_apply_back_footer_label(Some(&TabAiSourceType::ClipboardEntry)),
+            "Copy to Clipboard"
+        );
+        assert_eq!(
+            tab_ai_apply_back_footer_label(Some(&TabAiSourceType::ScriptListItem)),
+            "Run as Script"
+        );
+        assert_eq!(
+            tab_ai_apply_back_footer_label(Some(&TabAiSourceType::DesktopSelection)),
+            "Replace Selection"
+        );
+        assert_eq!(
+            tab_ai_apply_back_footer_label(Some(&TabAiSourceType::Desktop)),
+            "Paste Back"
+        );
+        assert_eq!(tab_ai_apply_back_footer_label(None), "Paste Back");
     }
 }
 

@@ -394,8 +394,8 @@ fn harness_injection_supports_paste_only_mode() {
 #[test]
 fn harness_submission_uses_script_kit_context_block() {
     assert!(
-        HARNESS_SOURCE.contains("<scriptKitContext schemaVersion="),
-        "harness submission must wrap context in a structured scriptKitContext block"
+        HARNESS_SOURCE.contains("Script Kit context"),
+        "harness submission must contain the flat labeled context header"
     );
 }
 
@@ -1512,7 +1512,7 @@ fn harness_submission_builder_preserves_fresh_line_staging_for_paste_only() {
         fn_body.contains("if !output.ends_with('\\n') {")
             || fn_body.contains("output.push('\\n');")
             || fn_body.contains("output.push_str(\"\\n\")"),
-        "PasteOnly must leave the staged context on a fresh line so the next user keystrokes do not join </scriptKitContext>"
+        "PasteOnly must leave the staged context on a fresh line so the next user keystrokes do not join the context block"
     );
 }
 
@@ -1566,8 +1566,8 @@ fn smoke_matrix_claude_code_paste_only_stages_context() {
     )
     .expect("Claude Code PasteOnly submission must succeed");
 
-    assert!(submission.contains("<scriptKitContext schemaVersion="));
-    assert!(submission.ends_with("</scriptKitContext>\n"));
+    assert!(submission.contains("Script Kit context"));
+    assert!(submission.ends_with('\n'));
     assert!(!submission.contains("Await the user"));
     assert!(!submission.contains("User intent:"));
 }
@@ -1586,8 +1586,8 @@ fn smoke_matrix_codex_paste_only_stages_context() {
     )
     .expect("Codex PasteOnly submission must succeed");
 
-    assert!(submission.contains("<scriptKitContext schemaVersion="));
-    assert!(submission.ends_with("</scriptKitContext>\n"));
+    assert!(submission.contains("Script Kit context"));
+    assert!(submission.ends_with('\n'));
     assert!(!submission.contains("Await the user"));
 }
 
@@ -1605,8 +1605,8 @@ fn smoke_matrix_gemini_cli_paste_only_stages_context() {
     )
     .expect("Gemini CLI PasteOnly submission must succeed");
 
-    assert!(submission.contains("<scriptKitContext schemaVersion="));
-    assert!(submission.ends_with("</scriptKitContext>\n"));
+    assert!(submission.contains("Script Kit context"));
+    assert!(submission.ends_with('\n'));
     assert!(!submission.contains("Await the user"));
 }
 
@@ -1624,8 +1624,8 @@ fn smoke_matrix_copilot_cli_paste_only_stages_context() {
     )
     .expect("Copilot CLI PasteOnly submission must succeed");
 
-    assert!(submission.contains("<scriptKitContext schemaVersion="));
-    assert!(submission.ends_with("</scriptKitContext>\n"));
+    assert!(submission.contains("Script Kit context"));
+    assert!(submission.ends_with('\n'));
     assert!(!submission.contains("Await the user"));
 }
 
@@ -3030,8 +3030,8 @@ const SELECTION_FALLBACK_SOURCE: &str = include_str!("../src/app_impl/selection_
 fn send_to_ai_fallback_label_is_constant() {
     assert!(
         FALLBACK_BUILTINS_SOURCE
-            .contains("pub const SEND_TO_AI_FALLBACK_LABEL: &str = \"Send to AI\""),
-        "the top fallback label must be the constant 'Send to AI'",
+            .contains("pub const SEND_TO_AI_FALLBACK_LABEL: &str = \"Auto Submit\""),
+        "the top fallback label must be the constant 'Auto Submit'",
     );
 }
 
