@@ -306,154 +306,33 @@ impl ScriptListApp {
                     *query = new_text.clone();
                     *selected_index = 0;
 
-                    // Cancel previous session and advance generation
-                    let gen = self.begin_file_search_session();
-                    logging::log("SEARCH", &format!("Generation incremented to {}", gen));
-
                     // Check if this is a directory path with potential filter
-                    // e.g., ~/dev/fin -> list ~/dev/ and filter by "fin"
                     if let Some(parsed) = crate::file_search::parse_directory_path(&new_text) {
-                        // Directory path mode - check if we need to reload directory
                         let dir_changed =
                             self.file_search_current_dir.as_ref() != Some(&parsed.directory);
 
                         if dir_changed {
-                            // Directory changed - need to load new directory contents
-                            // DON'T clear results - keep old results with frozen filter
-                            // This prevents visual flash during directory transitions
-                            // Freeze the OLD filter so old results display correctly
-                            self.file_search_frozen_filter = Some(old_filter);
-                            self.file_search_current_dir = Some(parsed.directory.clone());
-                            self.file_search_loading = true;
-                            // Don't reset scroll - keep position stable during transition
-                            cx.notify();
-
-                            // Create new cancel token for this search
-                            let cancel = crate::file_search::new_cancel_token();
-                            self.file_search_cancel = Some(cancel.clone());
-
-                            let dir_to_list = parsed.directory.clone();
-                            let task = cx.spawn(async move |this, cx| {
-                                // Small debounce for directory listing (reduced from 50ms to 30ms)
-                                cx.background_executor().timer(std::time::Duration::from_millis(30)).await;
-
-                                // Use channel for streaming results
-                                let (tx, rx) = std::sync::mpsc::channel();
-
-                                // Start streaming directory listing in background thread
-                                std::thread::spawn({
-                                    let cancel = cancel.clone();
-                                    let dir = dir_to_list.clone();
-                                    move || {
-                                        crate::file_search::list_directory_streaming(
-                                            &dir,
-                                            cancel,
-                                            false, // include metadata
-                                            |event| {
-                                                let _ = tx.send(event);
-                                            },
-                                        );
-                                    }
-                                });
-
-                                let mut pending: Vec<crate::file_search::FileResult> = Vec::new();
-                                let mut done = false;
-                                let mut first_batch = true; // Track if we need to clear old results
-
-                                // Batch UI updates at ~60fps (16ms intervals)
-                                while !done {
-                                    cx.background_executor().timer(std::time::Duration::from_millis(16)).await;
-
-                                    // Drain all available results
-                                    while let Ok(event) = rx.try_recv() {
-                                        match event {
-                                            crate::file_search::SearchEvent::Result(r) => {
-                                                pending.push(r);
-                                            }
-                                            crate::file_search::SearchEvent::Done => {
-                                                done = true;
-                                                break;
-                                            }
-                                        }
-                                    }
-
-                                    // Update UI with batched results
-                                    if !pending.is_empty() || done {
-                                        let batch = std::mem::take(&mut pending);
-                                        let is_done = done;
-                                        let is_first = first_batch;
-                                        first_batch = false;
-                                        let _ = cx.update(|cx| {
-                                            this.update(cx, |app, cx| {
-                                                // Ignore stale generations
-                                                if app.file_search_gen != gen {
-                                                    return;
-                                                }
-
-                                                // Clear old results on first batch to prevent accumulation
-                                                // This happens AFTER debounce so frozen filter had time to display
-                                                if is_first {
-                                                    app.cached_file_results.clear();
-                                                }
-
-                                                // Append batch
-                                                for r in batch {
-                                                    app.cached_file_results.push(r);
-                                                }
-
-                                                // Keep the rendered list in sync with streaming
-                                                // batches so results become visible immediately
-                                                // instead of waiting for the final Done event.
-                                                app.recompute_file_search_display_indices();
-
-                                                if is_done {
-                                                    app.file_search_loading = false;
-                                                    // Clear frozen filter - now using real results
-                                                    app.file_search_frozen_filter = None;
-                                                    // Sort by directories first, then alphabetically
-                                                    app.sort_directory_results();
-                                                    // Recompute display indices after loading completes
-                                                    app.recompute_file_search_display_indices();
-                                                    // Reset selected_index when results finish loading
-                                                    if let AppView::FileSearchView {
-                                                        selected_index,
-                                                        ..
-                                                    } = &mut app.current_view
-                                                    {
-                                                        *selected_index = 0;
-                                                    }
-                                                    app.file_search_scroll_handle
-                                                        .scroll_to_item(0, ScrollStrategy::Top);
-                                                }
-
-                                                if let AppView::FileSearchView { presentation, .. } = &app.current_view {
-                                                    Self::resize_file_search_window_for_presentation(
-                                                        *presentation,
-                                                        app.file_search_display_indices.len(),
-                                                    );
-                                                }
-
-                                                cx.notify();
-                                            })
-                                        });
-                                    }
-                                }
-                            });
-                            self.file_search_debounce_task = Some(task);
+                            self.restart_file_search_stream_for_query(
+                                new_text.clone(),
+                                presentation,
+                                Some(old_filter),
+                                true,
+                                cx,
+                            );
                         } else {
                             // Same directory - just filter existing results (instant!)
-                            // Clear any frozen filter since we're not in transition
                             self.file_search_frozen_filter = None;
                             self.file_search_loading = false;
-                            // Recompute display indices for new filter
                             self.recompute_file_search_display_indices();
-                            Self::resize_file_search_window_for_presentation(
+                            Self::resize_file_search_window_after_results_change(
                                 presentation,
                                 self.file_search_display_indices.len(),
+                                true,
+                                true,
                             );
                             cx.notify();
                         }
-                        return; // Don't run main menu filter logic
+                        return;
                     }
 
                     // Not a directory path - do regular file search with streaming
@@ -461,146 +340,13 @@ impl ScriptListApp {
                         "SEARCH",
                         &format!("Starting mdfind search for query: '{}'", new_text),
                     );
-                    self.file_search_current_dir = None;
-                    self.file_search_loading = true;
-                    // Clear cached results for new search
-                    self.cached_file_results.clear();
-                    self.file_search_display_indices.clear();
-                    Self::resize_file_search_window_for_presentation(presentation, 0);
-                    cx.notify();
-
-                    // Create new cancel token for this search
-                    let cancel = crate::file_search::new_cancel_token();
-                    self.file_search_cancel = Some(cancel.clone());
-
-                    // Shorter debounce for streaming (75ms instead of 200ms)
-                    let search_query = new_text.clone();
-                    let task = cx.spawn(async move |this, cx| {
-                        // Wait for debounce period
-                        cx.background_executor().timer(std::time::Duration::from_millis(75)).await;
-
-                        // Use channel for streaming results
-                        let (tx, rx) = std::sync::mpsc::channel();
-
-                        // Start streaming search in background thread
-                        std::thread::spawn({
-                            let cancel = cancel.clone();
-                            let q = search_query.clone();
-                            move || {
-                                crate::file_search::search_files_streaming(
-                                    &q,
-                                    None,
-                                    crate::file_search::DEFAULT_SEARCH_LIMIT,
-                                    cancel,
-                                    false, // include metadata (can set true for faster first results)
-                                    |event| {
-                                        let _ = tx.send(event);
-                                    },
-                                );
-                            }
-                        });
-
-                        let mut pending: Vec<crate::file_search::FileResult> = Vec::new();
-                        let mut done = false;
-
-                        // Batch UI updates at ~60fps (16ms intervals)
-                        while !done {
-                            cx.background_executor().timer(std::time::Duration::from_millis(16)).await;
-
-                            // Drain all available results
-                            while let Ok(event) = rx.try_recv() {
-                                match event {
-                                    crate::file_search::SearchEvent::Result(r) => {
-                                        pending.push(r);
-                                    }
-                                    crate::file_search::SearchEvent::Done => {
-                                        done = true;
-                                        break;
-                                    }
-                                }
-                            }
-
-                            // Update UI with batched results
-                            if !pending.is_empty() || done {
-                                let batch = std::mem::take(&mut pending);
-                                let batch_count = batch.len();
-                                let is_done = done;
-                                let query_for_log = search_query.clone();
-                                let _ = cx.update(|cx| {
-                                    this.update(cx, |app, cx| {
-                                        // Ignore stale generations
-                                        if app.file_search_gen != gen {
-                                            return;
-                                        }
-
-                                        // Verify query still matches (extra safety)
-                                        if let AppView::FileSearchView { query, .. } =
-                                            &app.current_view
-                                        {
-                                            if *query != query_for_log {
-                                                return;
-                                            }
-                                        }
-
-                                        // Append batch
-                                        let old_count = app.cached_file_results.len();
-                                        for r in batch {
-                                            app.cached_file_results.push(r);
-                                        }
-
-                                        // Recompute the rendered ordering for each batch so the
-                                        // visible list updates while the search is still streaming.
-                                        app.recompute_file_search_display_indices();
-
-                                        if is_done {
-                                            logging::log(
-                                                "EXEC",
-                                                &format!(
-                                                    "File search for '{}' found {} results (streaming)",
-                                                    query_for_log,
-                                                    app.cached_file_results.len()
-                                                ),
-                                            );
-                                            app.file_search_loading = false;
-                                            // Recompute display indices now that all results are in
-                                            app.recompute_file_search_display_indices();
-                                            // Reset selected_index when search completes
-                                            if let AppView::FileSearchView {
-                                                selected_index,
-                                                ..
-                                            } = &mut app.current_view
-                                            {
-                                                *selected_index = 0;
-                                            }
-                                            app.file_search_scroll_handle
-                                                .scroll_to_item(0, ScrollStrategy::Top);
-                                        } else if batch_count > 0 && old_count == 0 {
-                                            // First batch arrived - log it
-                                            logging::log(
-                                                "EXEC",
-                                                &format!(
-                                                    "File search first batch: {} results",
-                                                    batch_count
-                                                ),
-                                            );
-                                        }
-
-                                        if let AppView::FileSearchView { presentation, .. } = &app.current_view {
-                                            Self::resize_file_search_window_for_presentation(
-                                                *presentation,
-                                                app.file_search_display_indices.len(),
-                                            );
-                                        }
-
-                                        cx.notify();
-                                    })
-                                });
-                            }
-                        }
-                    });
-
-                    // Store task so it can be cancelled if user types more
-                    self.file_search_debounce_task = Some(task);
+                    self.restart_file_search_stream_for_query(
+                        new_text.clone(),
+                        presentation,
+                        None,
+                        false,
+                        cx,
+                    );
                 }
                 return; // Don't run main menu filter logic
             }

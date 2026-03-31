@@ -628,32 +628,20 @@ impl ScriptListApp {
                 DispatchOutcome::success()
             }
             "copy_filename" => {
-                if let Some(path) = self.file_search_actions_path.clone() {
-                    let Some(filename) = std::path::Path::new(&path)
-                        .file_name()
-                        .map(|name| name.to_string_lossy().to_string())
-                    else {
-                        tracing::error!(
-                            event = "copy_filename_missing_filename",
-                            attempted = "copy_filename",
-                            path = %path,
-                            "No filename found for path"
-                        );
-                        self.file_search_actions_path = None;
-                        return DispatchOutcome::error(
-                            crate::action_helpers::ERROR_ACTION_FAILED,
-                            "No filename found for selected path",
-                        );
-                    };
-                    tracing::info!(category = "UI", filename = %filename, "copy filename");
-                    self.file_search_actions_path = None;
-                    self.copy_to_clipboard_with_feedback(
-                        &filename,
-                        format!("Copied: {}", filename),
-                        true,
-                        cx,
+                let Some((_path, _is_dir, name)) = self.resolve_file_search_path_info() else {
+                    return DispatchOutcome::error(
+                        crate::action_helpers::ERROR_ACTION_FAILED,
+                        "No file selected",
                     );
-                }
+                };
+                tracing::info!(category = "UI", filename = %name, "copy filename");
+                self.file_search_actions_path = None;
+                self.copy_to_clipboard_with_feedback(
+                    &name,
+                    format!("Copied filename: {}", name),
+                    true,
+                    cx,
+                );
                 DispatchOutcome::success()
             }
             _ => DispatchOutcome::not_handled(),
