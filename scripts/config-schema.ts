@@ -62,14 +62,14 @@
  * DEEPLINK MAPPING
  * ═══════════════════════════════════════════════════════════════════════════
  *
- * Command IDs map 1:1 to deeplinks with the `kit://commands/` prefix:
+ * Command IDs map 1:1 to deeplinks with the `scriptkit://commands/` prefix:
  *
  * | Config Key                    | Deeplink URL                                  |
  * |-------------------------------|-----------------------------------------------|
- * | builtin/clipboard-history     | kit://commands/builtin/clipboard-history      |
- * | app/com.apple.Safari          | kit://commands/app/com.apple.Safari           |
- * | script/my-script              | kit://commands/script/my-script               |
- * | scriptlet/abc123              | kit://commands/scriptlet/abc123               |
+ * | builtin/clipboard-history     | scriptkit://commands/builtin/clipboard-history      |
+ * | app/com.apple.Safari          | scriptkit://commands/app/com.apple.Safari           |
+ * | script/my-script              | scriptkit://commands/script/my-script               |
+ * | scriptlet/abc123              | scriptkit://commands/scriptlet/abc123               |
  *
  * IMPORTANT: The `commands/` prefix is part of the URL namespace, NOT the config key.
  * In config.ts, use the ID without the prefix.
@@ -775,11 +775,11 @@ export type ScriptletCommandId = `scriptlet/${string}`;
  * @example
  * ```typescript
  * function getDeeplink(commandId: CommandId): string {
- *   return `kit://commands/${commandId}`;
+ *   return `scriptkit://commands/${commandId}`;
  * }
  * 
- * getDeeplink("builtin/clipboard-history");  // "kit://commands/builtin/clipboard-history"
- * getDeeplink("app/com.apple.Safari");       // "kit://commands/app/com.apple.Safari"
+ * getDeeplink("builtin/clipboard-history");  // "scriptkit://commands/builtin/clipboard-history"
+ * getDeeplink("app/com.apple.Safari");       // "scriptkit://commands/app/com.apple.Safari"
  * ```
  */
 export type CommandId = 
@@ -846,16 +846,25 @@ export interface CommandConfig {
    * When true, the command won't appear in the Script Kit main menu
    * or search results. However, it can still be invoked via:
    * - Its keyboard shortcut (if configured)
-   * - Deeplink URL (kit://commands/{id})
+   * - Deeplink URL (scriptkit://commands/{id})
    * - Programmatic invocation
-   * 
+   *
    * Use this for commands you want accessible but not cluttering the menu.
-   * 
+   *
    * @default false (visible in menu)
    * @example true // Hide from menu
    * @example false // Show in menu (default)
    */
   hidden?: boolean;
+
+  /**
+   * Whether this command requires confirmation before execution.
+   * Use this for potentially destructive operations.
+   *
+   * @default false
+   * @example true // Require confirmation dialog
+   */
+  confirmationRequired?: boolean;
 }
 
 /**
@@ -929,7 +938,7 @@ export interface Config extends BaseConfig {
    * 
    * Each value is a CommandConfig object with optional shortcut and hidden fields.
    * 
-   * Command IDs map 1:1 to deeplinks: `kit://commands/{id}`
+   * Command IDs map 1:1 to deeplinks: `scriptkit://commands/{id}`
    * 
    * @default undefined (no command customizations)
    * @example
@@ -981,7 +990,7 @@ export type CommandIdentifier<T extends CommandId> =
 /**
  * Construct a deeplink URL from a command ID.
  * 
- * The deeplink format is: `kit://commands/{commandId}`
+ * The deeplink format is: `scriptkit://commands/{commandId}`
  * 
  * @param commandId - The command ID (e.g., "builtin/clipboard-history")
  * @returns The full deeplink URL
@@ -989,22 +998,22 @@ export type CommandIdentifier<T extends CommandId> =
  * @example
  * ```typescript
  * const link = toDeeplink("builtin/clipboard-history");
- * // Returns: "kit://commands/builtin/clipboard-history"
+ * // Returns: "scriptkit://commands/builtin/clipboard-history"
  * ```
  */
 export function toDeeplink(commandId: CommandId): string {
-  return `kit://commands/${commandId}`;
+  return `scriptkit://commands/${commandId}`;
 }
 
 /**
  * Parse a deeplink URL to extract the command ID.
  * 
- * @param deeplink - The deeplink URL (e.g., "kit://commands/builtin/clipboard-history")
+ * @param deeplink - The deeplink URL (e.g., "scriptkit://commands/builtin/clipboard-history")
  * @returns The command ID, or null if the URL is not a valid command deeplink
  * 
  * @example
  * ```typescript
- * const id = fromDeeplink("kit://commands/builtin/clipboard-history");
+ * const id = fromDeeplink("scriptkit://commands/builtin/clipboard-history");
  * // Returns: "builtin/clipboard-history"
  * 
  * const invalid = fromDeeplink("kit://other/path");
@@ -1012,7 +1021,7 @@ export function toDeeplink(commandId: CommandId): string {
  * ```
  */
 export function fromDeeplink(deeplink: string): CommandId | null {
-  const prefix = "kit://commands/";
+  const prefix = "scriptkit://commands/";
   if (!deeplink.startsWith(prefix)) {
     return null;
   }

@@ -1104,7 +1104,60 @@ export interface Config {
    * @example { maxMemoryMb: 256, maxRuntimeSeconds: 30, healthCheckIntervalMs: 1000 }
    */
   processLimits?: ProcessLimits;
-  
+
+  /**
+   * Hotkey for opening the Notes window.
+   * No default is registered; set this explicitly if you want one.
+   *
+   * @default undefined
+   */
+  notesHotkey?: HotkeyConfig;
+
+  /**
+   * Hotkey for opening the AI chat window.
+   * Falls back to Cmd+Shift+Space when enabled and unset.
+   *
+   * @default undefined
+   */
+  aiHotkey?: HotkeyConfig;
+
+  /**
+   * Whether the AI hotkey should be registered.
+   *
+   * @default true
+   */
+  aiHotkeyEnabled?: boolean;
+
+  /**
+   * Hotkey for toggling log capture.
+   * Falls back to Cmd+Shift+L when enabled and unset.
+   *
+   * @default undefined
+   */
+  logsHotkey?: HotkeyConfig;
+
+  /**
+   * Whether the logs hotkey should be registered.
+   *
+   * @default true
+   */
+  logsHotkeyEnabled?: boolean;
+
+  /**
+   * Hotkey for toggling dictation.
+   * No default shortcut is registered; set this explicitly if you want one.
+   *
+   * @default undefined
+   */
+  dictationHotkey?: HotkeyConfig;
+
+  /**
+   * Whether the dictation hotkey should be registered.
+   *
+   * @default true
+   */
+  dictationHotkeyEnabled?: boolean;
+
   /**
    * Per-command configuration for shortcuts and visibility.
    * Override default shortcuts or hide commands from the main menu.
@@ -1115,7 +1168,7 @@ export interface Config {
    * - `script/` - User scripts by filename without .ts (my-script, etc.)
    * - `scriptlet/` - Inline scriptlets by UUID or name
    * 
-   * Each command also has a deeplink: `kit://commands/{id}`
+   * Each command also has a deeplink: `scriptkit://commands/{id}`
    * 
    * @default undefined (no overrides)
    * @example

@@ -105,6 +105,29 @@ export default {
   // clipboardHistoryMaxTextLength: 100000,
 
   // ===========================================================================
+  // Auxiliary Window / Tool Hotkeys
+  // ===========================================================================
+
+  // Notes has no default shortcut; set it explicitly if you want one.
+  // notesHotkey: { modifiers: ["meta", "shift"], key: "KeyN" },
+
+  // AI falls back to Cmd+Shift+Space when enabled and not explicitly set.
+  // aiHotkey: { modifiers: ["meta", "shift"], key: "Space" },
+  // aiHotkeyEnabled: true,
+
+  // Logs fall back to Cmd+Shift+L when enabled and not explicitly set.
+  // logsHotkey: { modifiers: ["meta", "shift"], key: "KeyL" },
+  // logsHotkeyEnabled: true,
+
+  // Dictation has no default shortcut; set it explicitly if you want one.
+  // dictationHotkey: { modifiers: ["meta", "shift"], key: "KeyD" },
+  // dictationHotkeyEnabled: true,
+
+  // The selected dictation microphone is persisted separately in:
+  //   ~/.scriptkit/kit/settings.json
+  //   { "dictation": { "selectedDeviceId": "usb-mic" } }
+
+  // ===========================================================================
   // Command Configuration
   // ===========================================================================
   // Configure shortcuts and visibility for any command in Script Kit.
@@ -116,8 +139,8 @@ export default {
   //   script/    - User scripts by filename without .ts (my-script, etc.)
   //   scriptlet/ - Inline scriptlets by UUID or name
   //
-  // DEEPLINKS: Each command maps to kit://commands/{id}
-  //   Example: "builtin/clipboard-history" → kit://commands/builtin/clipboard-history
+  // DEEPLINKS: Each command maps to scriptkit://commands/{id}
+  //   Example: "builtin/clipboard-history" → scriptkit://commands/builtin/clipboard-history
   //
   // OPTIONS:
   //   shortcut - Global keyboard shortcut to invoke directly
@@ -132,6 +155,11 @@ export default {
   //   "builtin/clipboard-history": {
   //     shortcut: { modifiers: ["meta", "shift"], key: "KeyV" }
   //   },
+  //
+  //   // Require a confirmation dialog for a destructive built-in
+  //   // "builtin/empty-trash": {
+  //   //   confirmationRequired: true,
+  //   // },
   //
   //   // Hide app launcher if you prefer Spotlight/Raycast
   //   // "builtin/app-launcher": {

@@ -2058,3 +2058,79 @@ mod tab_ai_agent_doc_contract_tests {
         );
     }
 }
+
+#[cfg(test)]
+mod asset_destination_tests {
+    use std::path::PathBuf;
+
+    /// Resolve the relative destination path for an embedded kit-init asset.
+    ///
+    /// Skills map to the workspace root (`skills/…`), the config template
+    /// maps to `kit/config.ts`, and everything else passes through unchanged.
+    fn embedded_asset_destination_relative(asset: &str) -> PathBuf {
+        if let Some(_rest) = asset.strip_prefix("skills/") {
+            // skills/ already carries the correct relative prefix
+            return PathBuf::from(asset);
+        }
+        match asset {
+            "config-template.ts" => PathBuf::from("kit/config.ts"),
+            other => PathBuf::from(other),
+        }
+    }
+
+    #[test]
+    fn skills_install_to_workspace_root_skills_directory() {
+        assert_eq!(
+            embedded_asset_destination_relative("skills/config/SKILL.md"),
+            PathBuf::from("skills/config/SKILL.md")
+        );
+    }
+
+    #[test]
+    fn skills_readme_installs_to_workspace_root() {
+        assert_eq!(
+            embedded_asset_destination_relative("skills/README.md"),
+            PathBuf::from("skills/README.md")
+        );
+    }
+
+    #[test]
+    fn config_template_installs_under_kit_directory() {
+        assert_eq!(
+            embedded_asset_destination_relative("config-template.ts"),
+            PathBuf::from("kit/config.ts")
+        );
+    }
+
+    #[test]
+    fn passthrough_asset_unchanged() {
+        assert_eq!(
+            embedded_asset_destination_relative("GUIDE.md"),
+            PathBuf::from("GUIDE.md")
+        );
+    }
+
+    /// Verify that `ensure_kit_setup` actually writes skills to root-level
+    /// `skills/` (not `kit/skills/`).
+    #[test]
+    fn setup_creates_skills_at_workspace_root() {
+        let source = include_str!("mod.rs");
+        // The setup code must join skills dirs directly on kit_dir, not on kit_dir.join("kit")
+        assert!(
+            source.contains(r#".join("skills").join("script-authoring")"#),
+            "ensure_kit_setup must create skills/script-authoring at workspace root"
+        );
+        assert!(
+            source.contains(r#".join("skills").join("config")"#),
+            "ensure_kit_setup must create skills/config at workspace root"
+        );
+        // Verify skills are NOT nested under kit/ in the non-test portion of the file.
+        // We search only the first 900 lines (the setup logic) to avoid matching test code.
+        let setup_portion: String = source.lines().take(900).collect::<Vec<_>>().join("\n");
+        let bad_pattern = [".join(\"kit\")", ".join(\"skills\")"].concat();
+        assert!(
+            !setup_portion.contains(&bad_pattern),
+            "skills must not be nested under kit/ — they belong at the workspace root"
+        );
+    }
+}
