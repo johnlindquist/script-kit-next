@@ -232,8 +232,12 @@ fn entry_intent_is_trimmed_before_submit_mode_is_selected() {
         "whitespace-only entry intent must collapse to None",
     );
     assert!(
-        TAB_AI_MODE_SOURCE.contains("let submission_mode = if request.entry_intent.is_some()"),
-        "submission mode must branch on the normalized entry intent",
+        TAB_AI_MODE_SOURCE.contains("let submit_now = request"),
+        "submission mode must derive from quick_submit_plan or entry_intent",
+    );
+    assert!(
+        TAB_AI_MODE_SOURCE.contains("let submission_mode = if submit_now"),
+        "submission mode must branch on the resolved submit_now flag",
     );
     assert!(
         TAB_AI_MODE_SOURCE.contains("crate::ai::TabAiHarnessSubmissionMode::Submit"),
@@ -244,8 +248,8 @@ fn entry_intent_is_trimmed_before_submit_mode_is_selected() {
         "empty normalized entry intent must use PasteOnly mode",
     );
     assert!(
-        TAB_AI_MODE_SOURCE.contains("request.entry_intent.as_deref()"),
-        "the normalized entry intent must be what gets passed into harness submission construction",
+        TAB_AI_MODE_SOURCE.contains("effective_intent"),
+        "quick-submit plan's synthesized_intent must be preferred over raw entry_intent",
     );
 }
 
@@ -362,16 +366,20 @@ fn harness_terminal_entry_derives_mode_from_intent() {
         "Zero-intent Tab entry must use PasteOnly so context is staged without auto-submitting"
     );
     assert!(
-        open_fn_body.contains("let submission_mode = if request.entry_intent.is_some()"),
-        "tab_ai_mode.rs must derive submission mode from entry-intent presence"
+        open_fn_body.contains("let submit_now = request"),
+        "tab_ai_mode.rs must derive submit flag from quick_submit_plan or entry_intent"
+    );
+    assert!(
+        open_fn_body.contains("let submission_mode = if submit_now"),
+        "tab_ai_mode.rs must derive submission mode from resolved submit flag"
     );
     assert!(
         open_fn_body.contains("TabAiHarnessSubmissionMode::Submit"),
         "Typed Tab entry must submit immediately through the harness"
     );
     assert!(
-        open_fn_body.contains("entry_intent.as_deref()"),
-        "Typed Tab entry must pass the user's query into build_tab_ai_harness_submission"
+        open_fn_body.contains("effective_intent"),
+        "Typed Tab entry must prefer quick-submit synthesized intent over raw entry_intent"
     );
 }
 
@@ -1628,16 +1636,16 @@ fn smoke_matrix_all_backends_produce_identical_context_block() {
     let mode = script_kit_gpui::ai::TabAiHarnessSubmissionMode::PasteOnly;
 
     let claude =
-        script_kit_gpui::ai::build_tab_ai_harness_submission(&context, None, mode, None, &[])
+        script_kit_gpui::ai::build_tab_ai_harness_submission(&context, None, mode, None, None, &[])
             .expect("Claude Code");
     let codex =
-        script_kit_gpui::ai::build_tab_ai_harness_submission(&context, None, mode, None, &[])
+        script_kit_gpui::ai::build_tab_ai_harness_submission(&context, None, mode, None, None, &[])
             .expect("Codex");
     let gemini =
-        script_kit_gpui::ai::build_tab_ai_harness_submission(&context, None, mode, None, &[])
+        script_kit_gpui::ai::build_tab_ai_harness_submission(&context, None, mode, None, None, &[])
             .expect("Gemini CLI");
     let copilot =
-        script_kit_gpui::ai::build_tab_ai_harness_submission(&context, None, mode, None, &[])
+        script_kit_gpui::ai::build_tab_ai_harness_submission(&context, None, mode, None, None, &[])
             .expect("Copilot CLI");
 
     assert_eq!(
@@ -1660,9 +1668,15 @@ fn smoke_matrix_submit_mode_appends_sentinel_for_all_backends() {
     let mode = script_kit_gpui::ai::TabAiHarnessSubmissionMode::Submit;
 
     for label in ["Claude Code", "Codex", "Gemini CLI", "Copilot CLI"] {
-        let submission =
-            script_kit_gpui::ai::build_tab_ai_harness_submission(&context, None, mode, None, &[])
-                .unwrap_or_else(|e| panic!("{label} Submit failed: {e}"));
+        let submission = script_kit_gpui::ai::build_tab_ai_harness_submission(
+            &context,
+            None,
+            mode,
+            None,
+            None,
+            &[],
+        )
+        .unwrap_or_else(|e| panic!("{label} Submit failed: {e}"));
         assert!(
             submission.contains("Await the user's next terminal input."),
             "{label} Submit mode must append wait sentinel"
@@ -1934,16 +1948,16 @@ fn typed_tab_entry_uses_submit_mode_in_harness() {
         "tab_ai_mode.rs must expose an entry-intent-aware harness entry point"
     );
     assert!(
-        TAB_AI_MODE_SOURCE.contains("let submission_mode = if request.entry_intent.is_some()"),
-        "tab_ai_mode.rs must derive submission mode from entry-intent presence"
+        TAB_AI_MODE_SOURCE.contains("let submit_now = request"),
+        "tab_ai_mode.rs must derive submit flag from quick_submit_plan or entry_intent"
     );
     assert!(
         TAB_AI_MODE_SOURCE.contains("crate::ai::TabAiHarnessSubmissionMode::Submit"),
         "typed Tab entry must submit immediately through the harness"
     );
     assert!(
-        TAB_AI_MODE_SOURCE.contains("request.entry_intent.as_deref()"),
-        "typed Tab entry must pass the user's query into build_tab_ai_harness_submission"
+        TAB_AI_MODE_SOURCE.contains("effective_intent"),
+        "typed Tab entry must prefer quick-submit synthesized intent over raw entry_intent"
     );
 }
 
@@ -3046,11 +3060,15 @@ fn selection_fallback_recognizes_harness_result() {
 }
 
 #[test]
-fn selection_fallback_opens_harness_with_entry_intent() {
+fn selection_fallback_routes_through_quick_submit_planner() {
     assert!(
         SELECTION_FALLBACK_SOURCE
-            .contains("self.open_tab_ai_chat_with_entry_intent(Some(normalized), cx);"),
-        "non-empty Send to AI fallback input must open the harness with entry intent",
+            .contains("self.submit_to_current_or_new_tab_ai_harness_from_text("),
+        "non-empty Send to AI fallback must route through the quick-submit planner",
+    );
+    assert!(
+        SELECTION_FALLBACK_SOURCE.contains("TabAiQuickSubmitSource::Fallback"),
+        "Send to AI fallback must identify its source as Fallback",
     );
 }
 
