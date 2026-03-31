@@ -763,16 +763,19 @@ pub fn should_include_artifact_authoring_guidance(intent: Option<&str>) -> bool 
         || looks_like_command_like_artifact_request(&intent)
 }
 
-/// The authoritative one-shot launchpad content, sourced from the same file
-/// that `src/setup/mod.rs` publishes to `~/.scriptkit/examples/START_HERE.md`.
-const TAB_AI_ARTIFACT_AUTHORING_GUIDANCE_SOURCE: &str =
+/// Canonical one-shot authoring launchpad for harness mode.
+///
+/// Keep `kit-init/examples/START_HERE.md` as the single source of truth.
+/// `ROOT_CLAUDE.md` and `ROOT_AGENTS.md` should route here instead of
+/// duplicating starter templates or artifact-branching copy.
+const TAB_AI_ONE_SHOT_LAUNCHPAD_SOURCE: &str =
     include_str!("../../../kit-init/examples/START_HERE.md");
 
-/// Wraps the launchpad content in delimiters for PTY injection.
+/// Wrap the canonical launchpad content in delimiters for PTY injection.
 fn build_tab_ai_artifact_authoring_guidance_block() -> String {
     format!(
         "--- Script Kit artifact authoring guidance ---\n{}\n--- end artifact authoring guidance ---",
-        TAB_AI_ARTIFACT_AUTHORING_GUIDANCE_SOURCE.trim_end()
+        TAB_AI_ONE_SHOT_LAUNCHPAD_SOURCE.trim_end()
     )
 }
 

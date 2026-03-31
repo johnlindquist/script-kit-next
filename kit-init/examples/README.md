@@ -1,5 +1,8 @@
 # Script Kit Examples
 
+`~/.scriptkit/examples/START_HERE.md` is the canonical one-shot authoring guide.
+Use this README for browsing and pattern study after the artifact type is already chosen.
+
 Working examples demonstrating Script Kit patterns. Learn by reading, then create your own in the matching workspace directory:
 
 - scripts → `~/.scriptkit/kit/main/scripts/`

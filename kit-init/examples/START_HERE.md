@@ -1,5 +1,8 @@
 # Script Kit One-Shot Starters
 
+> Canonical one-shot authoring guide for harness mode.
+> `ROOT_CLAUDE.md`, `ROOT_AGENTS.md`, and harness artifact guidance should route here instead of duplicating starter content.
+
 Use this file when the fastest harness answer is:
 pick one artifact, copy one starter, save it under `kit/main/`, then stop.
 
