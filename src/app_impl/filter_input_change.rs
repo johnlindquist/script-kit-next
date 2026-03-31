@@ -256,7 +256,23 @@ impl ScriptListApp {
             AppView::FileSearchView {
                 query,
                 selected_index,
+                presentation,
             } => {
+                // ── Mini presentation: return to ScriptList when query
+                //    no longer matches the ~ trigger ──────────────────
+                if *presentation == FileSearchPresentation::Mini
+                    && !Self::should_enter_file_search_from_script_list(&new_text)
+                {
+                    self.current_view = AppView::ScriptList;
+                    self.filter_text = new_text.clone();
+                    self.pending_placeholder = None;
+                    self.pending_focus = Some(FocusTarget::MainFilter);
+                    self.focused_input = FocusedInput::MainFilter;
+                    self.queue_filter_compute(new_text.clone(), cx);
+                    cx.notify();
+                    return;
+                }
+
                 self.filter_text = new_text.clone();
                 if *query != new_text {
                     logging::log(
@@ -575,6 +591,14 @@ impl ScriptListApp {
             }
             _ => {} // Continue with main menu logic
         }
+
+        // ── ~ trigger: hand off to mini file search ──────────────────
+        if Self::should_enter_file_search_from_script_list(&new_text) {
+            let query = Self::normalize_mini_file_search_query(&new_text);
+            self.open_file_search_view(query, FileSearchPresentation::Mini, cx);
+            return;
+        }
+
         if new_text == self.filter_text {
             return;
         }

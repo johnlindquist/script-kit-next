@@ -270,11 +270,12 @@ impl ScriptListApp {
         .detach();
     }
 
-    /// Render file search view with 50/50 split (list + preview)
+    /// Render file search view with 50/50 split (list + preview) or mini list-only
     pub(crate) fn render_file_search(
         &mut self,
         query: &str,
         selected_index: usize,
+        presentation: FileSearchPresentation,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         use crate::file_search::{self, FileType};
@@ -414,6 +415,7 @@ impl ScriptListApp {
                 if let AppView::FileSearchView {
                     query: _,
                     selected_index,
+                    ..
                 } = &mut this.current_view
                 {
                     // Use pre-computed display_indices to get the selected file
@@ -435,10 +437,29 @@ impl ScriptListApp {
                         // Tab/Shift+Tab handled by intercept_keystrokes in app_impl.rs
                         // (interceptor fires BEFORE input component can capture Tab)
                         _ if is_key_enter(key) => {
-                            // Check for Cmd+Enter (reveal in finder) first
                             if has_cmd {
-                                if let Some(file) = get_selected_file() {
-                                    let _ = file_search::reveal_in_finder(&file.path);
+                                // ⌘↵ / ⌘⇧↵ → launch AI harness with file context
+                                let has_shift = event.keystroke.modifiers.shift;
+                                if let AppView::FileSearchView {
+                                    ref query,
+                                    selected_index,
+                                    ..
+                                } = this.current_view
+                                {
+                                    if let Some(intent) =
+                                        this.build_file_search_ai_entry_intent(
+                                            query,
+                                            selected_index,
+                                            has_shift,
+                                        )
+                                    {
+                                        this.open_tab_ai_chat_with_entry_intent(
+                                            Some(intent),
+                                            cx,
+                                        );
+                                        cx.stop_propagation();
+                                        return;
+                                    }
                                 }
                             } else {
                                 // Open file with default app
@@ -1006,19 +1027,43 @@ impl ScriptListApp {
         // Preview pane: file detail or placeholder
         let preview_pane = preview_content;
 
-        // Assemble via shared expanded-view scaffold (owns header padding, 50/50 split, footer)
+        let is_mini = matches!(presentation, FileSearchPresentation::Mini);
+
+        // Assemble layout: mini = list-only, full = list + preview split
+        let layout_mode = if is_mini { "mini" } else { "expanded" };
         tracing::info!(
             surface = "file_search",
-            layout_mode = "expanded",
-            custom_footer_removed = true,
-            custom_divider_removed = true,
-            "file_search_chrome_checkpoint: migrated to render_expanded_view_scaffold"
+            %layout_mode,
+            "file_search_chrome_checkpoint"
         );
-        crate::components::render_expanded_view_scaffold(header_element, list_pane, preview_pane)
+
+        if is_mini {
+            let hints: Vec<SharedString> = vec![
+                "\u{21b5} Open".into(),
+                "\u{2318}\u{21b5} Ask AI".into(),
+                "\u{21e5} Navigate".into(),
+            ];
+            crate::components::render_minimal_list_prompt_scaffold(
+                header_element,
+                list_pane,
+                hints,
+                None,
+            )
             .key_context("FileSearchView")
             .track_focus(&self.focus_handle)
             .on_key_down(handle_key)
             .into_any_element()
+        } else {
+            crate::components::render_expanded_view_scaffold(
+                header_element,
+                list_pane,
+                preview_pane,
+            )
+            .key_context("FileSearchView")
+            .track_focus(&self.focus_handle)
+            .on_key_down(handle_key)
+            .into_any_element()
+        }
 
     }
 }

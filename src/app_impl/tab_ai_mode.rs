@@ -1429,6 +1429,69 @@ impl ScriptListApp {
         }
     }
 
+    /// Build an entry intent string for launching the AI harness from file
+    /// search.  Returns `None` when no file is selected.
+    ///
+    /// `plan_mode`:
+    /// - `false` (⌘↵) — "explain this file/directory"
+    /// - `true`  (⌘⇧↵) — "propose a plan using this selection + query"
+    pub(crate) fn build_file_search_ai_entry_intent(
+        &self,
+        query: &str,
+        selected_index: usize,
+        plan_mode: bool,
+    ) -> Option<String> {
+        let filter_pattern =
+            if let Some(parsed) = crate::file_search::parse_directory_path(query) {
+                parsed.filter
+            } else if !query.is_empty() {
+                Some(query.to_string())
+            } else {
+                None
+            };
+
+        let filtered_results: Vec<(usize, &crate::file_search::FileResult)> =
+            if let Some(ref pattern) = filter_pattern {
+                crate::file_search::filter_results_nucleo_simple(
+                    &self.cached_file_results,
+                    pattern,
+                )
+            } else {
+                self.cached_file_results
+                    .iter()
+                    .enumerate()
+                    .collect()
+            };
+
+        let (_, selected) = filtered_results.get(selected_index)?;
+
+        let subject =
+            if selected.file_type == crate::file_search::FileType::Directory {
+                "directory"
+            } else {
+                "file"
+            };
+
+        Some(if plan_mode {
+            format!(
+                "I am browsing files in Script Kit.\n\
+                 Current file-search query: {query}\n\
+                 Selected {subject}: {}\n\n\
+                 Use this selection plus nearby files to propose a concrete plan, \
+                 related files to inspect, and verification steps.",
+                selected.path
+            )
+        } else {
+            format!(
+                "I selected this {subject} in Script Kit file search:\n\
+                 {}\n\n\
+                 Explain what it is, summarize why it matters, and tell me the \
+                 highest-leverage next thing to inspect or change.",
+                selected.path
+            )
+        })
+    }
+
     /// Capture a snapshot of the current UI state for context assembly.
     ///
     /// Returns the snapshot and a machine-readable invocation receipt that

@@ -33,6 +33,7 @@
                             if let AppView::FileSearchView {
                                 query,
                                 selected_index,
+                                ..
                             } = &mut this.current_view
                             {
                                 // ALWAYS stop propagation for Tab/Shift+Tab in FileSearchView

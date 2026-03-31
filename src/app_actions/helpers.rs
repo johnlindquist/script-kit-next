@@ -512,6 +512,7 @@ mod app_actions_tests {
             &AppView::FileSearchView {
                 query: String::new(),
                 selected_index: 0,
+                presentation: FileSearchPresentation::Full,
             }
         ));
     }

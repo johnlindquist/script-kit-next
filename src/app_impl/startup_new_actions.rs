@@ -48,6 +48,7 @@
                                 AppView::FileSearchView {
                                     selected_index,
                                     query,
+                                    ..
                                 } => {
                                     // Get the filter pattern for directory path parsing
                                     let filter_pattern = if let Some(parsed) =

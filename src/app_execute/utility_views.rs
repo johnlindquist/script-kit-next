@@ -186,6 +186,7 @@ impl ScriptListApp {
         self.current_view = AppView::FileSearchView {
             query,
             selected_index: 0,
+            presentation: FileSearchPresentation::Full,
         };
         self.hovered_index = None;
 

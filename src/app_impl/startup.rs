@@ -627,6 +627,7 @@ impl ScriptListApp {
                             if let AppView::FileSearchView {
                                 query,
                                 selected_index,
+                                ..
                             } = &mut this.current_view
                             {
                                 // ALWAYS stop propagation for Tab/Shift+Tab in FileSearchView
@@ -967,6 +968,7 @@ impl ScriptListApp {
                                 AppView::FileSearchView {
                                     selected_index,
                                     query,
+                                    ..
                                 } => {
                                     // CRITICAL: If actions popup is open, route to actions dialog instead
                                     if this.show_actions_popup {
@@ -1433,6 +1435,7 @@ impl ScriptListApp {
                                 AppView::FileSearchView {
                                     selected_index,
                                     query,
+                                    ..
                                 } => {
                                     // Get the filter pattern for directory path parsing
                                     let filter_pattern = if let Some(parsed) =

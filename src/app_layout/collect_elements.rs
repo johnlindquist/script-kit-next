@@ -171,6 +171,7 @@ impl ScriptListApp {
             AppView::FileSearchView {
                 ref query,
                 selected_index,
+                ..
             } => {
                 let rows: Vec<String> = self
                     .cached_file_results

@@ -56,6 +56,7 @@
                                 AppView::FileSearchView {
                                     selected_index,
                                     query,
+                                    ..
                                 } => {
                                     // CRITICAL: If actions popup is open, route to actions dialog instead
                                     if this.show_actions_popup {

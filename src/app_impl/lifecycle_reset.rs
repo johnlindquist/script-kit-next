@@ -321,6 +321,7 @@ impl ScriptListApp {
             AppView::FileSearchView {
                 query,
                 selected_index,
+                ..
             } => {
                 Self::clear_builtin_query_state(query, selected_index);
                 // Cancel any pending search

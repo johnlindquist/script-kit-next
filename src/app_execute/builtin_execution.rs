@@ -25,10 +25,47 @@ const BUILTIN_DICTATION_MODEL_HIDE: &str = "builtin-dictation-model-hide";
 
 /// Typed progress events sent from the blocking download thread to the
 /// async context for updating the in-prompt progress display.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 enum DictationModelProgressEvent {
-    Downloading(u8),
+    Downloading {
+        percentage: u8,
+        downloaded_bytes: u64,
+        total_bytes: u64,
+        speed_bytes_per_sec: u64,
+    },
     Extracting,
+}
+
+/// Simple rolling-window speed tracker for download progress.
+struct SpeedTracker {
+    last_bytes: u64,
+    last_time: std::time::Instant,
+    speed: u64,
+}
+
+impl SpeedTracker {
+    fn new() -> Self {
+        Self {
+            last_bytes: 0,
+            last_time: std::time::Instant::now(),
+            speed: 0,
+        }
+    }
+
+    fn update(&mut self, downloaded: u64) {
+        let now = std::time::Instant::now();
+        let elapsed = now.duration_since(self.last_time).as_secs_f64();
+        if elapsed >= 0.5 {
+            let delta = downloaded.saturating_sub(self.last_bytes);
+            self.speed = (delta as f64 / elapsed) as u64;
+            self.last_bytes = downloaded;
+            self.last_time = now;
+        }
+    }
+
+    fn speed_bytes_per_sec(&self) -> u64 {
+        self.speed
+    }
 }
 
 /// Prevent overlapping Parakeet model downloads when the dictation hotkey is
@@ -3618,7 +3655,18 @@ impl ScriptListApp {
                     }
                 }
 
-                match crate::dictation::toggle_dictation() {
+                // Resolve the delivery target at start time based on what
+                // Script Kit surface is currently active.  On the stop edge
+                // the target stored in the session is used instead.
+                let dictation_target = if !crate::dictation::is_dictation_recording() {
+                    self.resolve_dictation_target()
+                } else {
+                    // Stop edge — the target was captured at start time.
+                    crate::dictation::get_dictation_target()
+                        .unwrap_or(crate::dictation::DictationTarget::ExternalApp)
+                };
+
+                match crate::dictation::toggle_dictation(dictation_target) {
                     Ok(crate::dictation::DictationToggleOutcome::Started) => {
                         // Bump generation at logical session start — not at
                         // window creation — so stale delayed closes from a
@@ -3656,6 +3704,8 @@ impl ScriptListApp {
                         );
                         let audio_duration = capture.audio_duration;
                         let chunks = capture.chunks;
+                        // Capture the target that was stored at session start.
+                        let saved_target = dictation_target;
                         cx.spawn(async move |this, cx| {
                             let transcript_result = cx
                                 .background_executor()
@@ -3669,6 +3719,7 @@ impl ScriptListApp {
                                     this,
                                     transcript_result,
                                     audio_duration,
+                                    saved_target,
                                     cx,
                                 );
                             });
@@ -3736,14 +3787,14 @@ impl ScriptListApp {
     // =========================================================================
 
     /// Periodically snapshot the live capture session and push state to the
-    /// dictation overlay.  Runs every 50 ms and stops automatically when the
-    /// session ends (i.e. `snapshot_overlay_state()` returns `None`).
+    /// dictation overlay.  Runs every 16 ms (~60 fps) for smooth waveform
+    /// animation and stops automatically when the session ends.
     fn spawn_dictation_overlay_pump(&mut self, cx: &mut Context<Self>) {
         let gen = crate::dictation::overlay_generation();
         cx.spawn(async move |_this, cx| {
             loop {
                 cx.background_executor()
-                    .timer(std::time::Duration::from_millis(50))
+                    .timer(std::time::Duration::from_millis(16))
                     .await;
                 // Bail if a newer overlay session has started.
                 if crate::dictation::overlay_generation() != gen {
@@ -3765,20 +3816,70 @@ impl ScriptListApp {
     }
 
     /// Handle the result of background transcription: deliver the transcript
-    /// to either the active prompt or the frontmost app, update the overlay,
-    /// and schedule cleanup timers.
+    /// to the target surface that was active when dictation started, update
+    /// the overlay, and schedule cleanup timers.
     fn handle_dictation_transcript(
         &mut self,
         result: anyhow::Result<Option<String>>,
         audio_duration: std::time::Duration,
+        target: crate::dictation::DictationTarget,
         cx: &mut Context<Self>,
     ) {
         match result {
             Ok(Some(transcript)) => {
-                if self.try_set_prompt_input(transcript.clone(), cx) {
+                // Route delivery based on the target that was captured at
+                // session start, not the current UI state.
+                let delivered_internally = match target {
+                    crate::dictation::DictationTarget::MainWindowPrompt => {
+                        self.try_set_prompt_input(transcript.clone(), cx)
+                    }
+                    crate::dictation::DictationTarget::NotesEditor => {
+                        match notes::inject_text_into_notes(&mut **cx, &transcript) {
+                            Ok(()) => true,
+                            Err(error) => {
+                                tracing::warn!(
+                                    category = "DICTATION",
+                                    error = %error,
+                                    "Notes delivery failed, falling back to frontmost app"
+                                );
+                                false
+                            }
+                        }
+                    }
+                    crate::dictation::DictationTarget::AiChatComposer => {
+                        match ai::set_ai_input(&mut **cx, &transcript, false) {
+                            Ok(()) => true,
+                            Err(error) => {
+                                tracing::warn!(
+                                    category = "DICTATION",
+                                    error = %error,
+                                    "AI chat delivery failed, falling back to frontmost app"
+                                );
+                                false
+                            }
+                        }
+                    }
+                    crate::dictation::DictationTarget::ExternalApp => false,
+                };
+
+                if delivered_internally {
+                    let destination = match target {
+                        crate::dictation::DictationTarget::MainWindowPrompt => {
+                            crate::dictation::DictationDestination::ActivePrompt
+                        }
+                        crate::dictation::DictationTarget::NotesEditor => {
+                            crate::dictation::DictationDestination::NotesEditor
+                        }
+                        crate::dictation::DictationTarget::AiChatComposer => {
+                            crate::dictation::DictationDestination::AiChatComposer
+                        }
+                        crate::dictation::DictationTarget::ExternalApp => {
+                            crate::dictation::DictationDestination::FrontmostApp
+                        }
+                    };
                     tracing::info!(
                         category = "DICTATION",
-                        destination = ?crate::dictation::DictationDestination::ActivePrompt,
+                        destination = ?destination,
                         transcript_len = transcript.len(),
                         "Transcript delivered"
                     );
@@ -4071,10 +4172,18 @@ impl ScriptListApp {
             async move |this, cx| {
                 while let Ok(event) = progress_rx.recv().await {
                     let _ = this.update(cx, |this, cx| match event {
-                        DictationModelProgressEvent::Downloading(percentage) => {
+                        DictationModelProgressEvent::Downloading {
+                            percentage,
+                            downloaded_bytes,
+                            total_bytes,
+                            speed_bytes_per_sec,
+                        } => {
                             this.update_dictation_model_prompt_if_visible(
                                 crate::dictation::DictationModelStatus::Downloading {
                                     percentage,
+                                    downloaded_bytes,
+                                    total_bytes,
+                                    speed_bytes_per_sec,
                                 },
                                 cx,
                             );
@@ -4085,9 +4194,12 @@ impl ScriptListApp {
                                 "\u{2588}".repeat(filled),
                                 "\u{2591}".repeat(empty),
                             );
+                            let dl = crate::dictation::download::format_bytes(downloaded_bytes);
+                            let total = crate::dictation::download::format_bytes(total_bytes);
+                            let speed = crate::dictation::download::format_speed(speed_bytes_per_sec);
                             this.show_hud(
                                 format!(
-                                    "Downloading dictation model\u{2026} [{bar}] {percentage}%"
+                                    "Downloading model\u{2026} [{bar}] {percentage}% \u{00b7} {dl}/{total} \u{00b7} {speed}"
                                 ),
                                 Some(HUD_SHORT_MS),
                                 cx,
@@ -4119,9 +4231,13 @@ impl ScriptListApp {
                         let last_pct = std::sync::Arc::new(
                             std::sync::atomic::AtomicU8::new(0),
                         );
+                        let speed_tracker = std::sync::Arc::new(parking_lot::Mutex::new(
+                            SpeedTracker::new(),
+                        ));
                         crate::dictation::download::download_parakeet_model(
                             {
                                 let last_pct = last_pct.clone();
+                                let speed_tracker = speed_tracker.clone();
                                 let progress_tx = progress_tx;
                                 move |phase, progress| {
                                     match phase {
@@ -4130,7 +4246,13 @@ impl ScriptListApp {
                                             let prev = last_pct.load(
                                                 std::sync::atomic::Ordering::Relaxed,
                                             );
-                                            if pct >= prev + 5 || pct == 100 {
+                                            // Update speed tracker on every callback.
+                                            let speed = {
+                                                let mut tracker = speed_tracker.lock();
+                                                tracker.update(progress.downloaded);
+                                                tracker.speed_bytes_per_sec()
+                                            };
+                                            if pct >= prev + 2 || pct == 100 {
                                                 last_pct.store(
                                                     pct,
                                                     std::sync::atomic::Ordering::Relaxed,
@@ -4138,10 +4260,18 @@ impl ScriptListApp {
                                                 tracing::info!(
                                                     category = "DICTATION",
                                                     pct,
+                                                    downloaded = progress.downloaded,
+                                                    total = progress.total,
+                                                    speed,
                                                     "Model download progress"
                                                 );
                                                 let _ = progress_tx.send_blocking(
-                                                    DictationModelProgressEvent::Downloading(pct),
+                                                    DictationModelProgressEvent::Downloading {
+                                                        percentage: pct,
+                                                        downloaded_bytes: progress.downloaded,
+                                                        total_bytes: progress.total,
+                                                        speed_bytes_per_sec: speed,
+                                                    },
                                                 );
                                             }
                                         }
@@ -4238,13 +4368,21 @@ impl ScriptListApp {
                     },
                 ],
             ),
-            DictationModelStatus::Downloading { percentage } => {
+            DictationModelStatus::Downloading {
+                percentage,
+                downloaded_bytes,
+                total_bytes,
+                speed_bytes_per_sec,
+            } => {
                 let filled = (percentage / 10) as usize;
                 let empty = 10usize.saturating_sub(filled);
                 let bar = format!("{}{}", "\u{2588}".repeat(filled), "\u{2591}".repeat(empty));
+                let dl = crate::dictation::download::format_bytes(downloaded_bytes);
+                let total = crate::dictation::download::format_bytes(total_bytes);
+                let speed = crate::dictation::download::format_speed(speed_bytes_per_sec);
                 (
                     "Downloading dictation model\u{2026}".to_string(),
-                    format!("[{bar}] {percentage}%"),
+                    format!("[{bar}] {percentage}% \u{00b7} {dl}/{total} \u{00b7} {speed}"),
                     vec![Choice {
                         name: "Hide".to_string(),
                         value: BUILTIN_DICTATION_MODEL_HIDE.to_string(),
@@ -4357,7 +4495,12 @@ impl ScriptListApp {
                 );
                 // Transition the prompt to downloading state instead of closing it.
                 self.render_dictation_model_prompt(
-                    crate::dictation::DictationModelStatus::Downloading { percentage: 0 },
+                    crate::dictation::DictationModelStatus::Downloading {
+                        percentage: 0,
+                        downloaded_bytes: 0,
+                        total_bytes: 0,
+                        speed_bytes_per_sec: 0,
+                    },
                     cx,
                 );
                 self.start_parakeet_model_download(cx);
@@ -4398,6 +4541,23 @@ impl ScriptListApp {
         crate::frontmost_app_tracker::get_last_real_app_bundle_id()
             .context("no previously tracked frontmost app is available for dictation paste")?;
         Ok(())
+    }
+
+    /// Determine the delivery target for a new dictation session based on
+    /// which Script Kit surface is currently active.
+    ///
+    /// Priority: notes editor > AI chat composer > active prompt > external app.
+    fn resolve_dictation_target(&self) -> crate::dictation::DictationTarget {
+        if notes::is_notes_window_open() {
+            return crate::dictation::DictationTarget::NotesEditor;
+        }
+        if ai::is_ai_window_open() {
+            return crate::dictation::DictationTarget::AiChatComposer;
+        }
+        if self.can_accept_dictation_into_prompt() {
+            return crate::dictation::DictationTarget::MainWindowPrompt;
+        }
+        crate::dictation::DictationTarget::ExternalApp
     }
 
     /// Close the dictation overlay and hide Script Kit so macOS naturally
@@ -4620,12 +4780,28 @@ mod dictation_model_prompt_tests {
     use super::*;
 
     #[test]
-    fn downloading_prompt_shows_progress_bar() {
+    fn downloading_prompt_shows_progress_bar_with_bytes_and_speed() {
         let (title, placeholder, choices) = ScriptListApp::build_dictation_model_prompt(
-            crate::dictation::DictationModelStatus::Downloading { percentage: 35 },
+            crate::dictation::DictationModelStatus::Downloading {
+                percentage: 35,
+                downloaded_bytes: 175_000_000,
+                total_bytes: 500_000_000,
+                speed_bytes_per_sec: 10_485_760,
+            },
         );
         assert_eq!(title, "Downloading dictation model\u{2026}");
-        assert_eq!(placeholder, "[\u{2588}\u{2588}\u{2588}\u{2591}\u{2591}\u{2591}\u{2591}\u{2591}\u{2591}\u{2591}] 35%");
+        assert!(
+            placeholder.contains("35%"),
+            "placeholder must show percentage, got: {placeholder}"
+        );
+        assert!(
+            placeholder.contains("166.9 MB"),
+            "placeholder must show downloaded bytes, got: {placeholder}"
+        );
+        assert!(
+            placeholder.contains("10.0 MB/s"),
+            "placeholder must show speed, got: {placeholder}"
+        );
         assert_eq!(choices.len(), 1);
         assert_eq!(choices[0].name, "Hide");
         assert_eq!(choices[0].value, BUILTIN_DICTATION_MODEL_HIDE);

@@ -1,3 +1,13 @@
+/// Controls whether the file search view renders as a full split-view (list + preview)
+/// or a compact list-only surface.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FileSearchPresentation {
+    /// Full split-view with list + preview panel (opened via builtin "Search Files")
+    Full,
+    /// Compact list-only surface (opened via `~` trigger from ScriptList)
+    Mini,
+}
+
 /// Application state - what view are we currently showing
 #[derive(Debug, Clone)]
 enum AppView {
@@ -136,6 +146,7 @@ enum AppView {
     FileSearchView {
         query: String,
         selected_index: usize,
+        presentation: FileSearchPresentation,
     },
     /// Showing theme chooser with live preview and search
     ThemeChooserView {

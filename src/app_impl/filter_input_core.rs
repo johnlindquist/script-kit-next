@@ -36,6 +36,64 @@ impl ScriptListApp {
         query.clear();
         *selected_index = 0;
     }
+
+    /// Returns `true` when the typed text should hand off from ScriptList into
+    /// mini file search (the `~` trigger).
+    pub(crate) fn should_enter_file_search_from_script_list(new_text: &str) -> bool {
+        new_text == "~" || new_text.starts_with("~/")
+    }
+
+    /// Normalises the mini file-search query: bare `~` becomes `~/` so the
+    /// directory listing starts immediately.
+    pub(crate) fn normalize_mini_file_search_query(new_text: &str) -> String {
+        if new_text == "~" {
+            "~/".to_string()
+        } else {
+            new_text.to_string()
+        }
+    }
+
+    /// Shared helper that opens file search in the given presentation mode.
+    /// Used by both the builtin "Search Files" entry (Full) and the `~`
+    /// trigger from ScriptList (Mini).
+    pub(crate) fn open_file_search_view(
+        &mut self,
+        query: String,
+        presentation: FileSearchPresentation,
+        cx: &mut Context<Self>,
+    ) {
+        tracing::info!(
+            category = "FILE_SEARCH",
+            %query,
+            ?presentation,
+            "Opening file search view"
+        );
+
+        let results = Self::resolve_file_search_results(&query);
+
+        self.filter_text = query.clone();
+        self.pending_filter_sync = true;
+        self.pending_placeholder = Some("Search files...".to_string());
+
+        self.current_view = AppView::FileSearchView {
+            query,
+            selected_index: 0,
+            presentation,
+        };
+        self.hovered_index = None;
+        self.opened_from_main_menu = true;
+
+        self.pending_focus = Some(FocusTarget::MainFilter);
+        self.focused_input = FocusedInput::MainFilter;
+
+        resize_to_view_sync(ViewType::ScriptList, 0);
+
+        self.file_search_gen = 0;
+        self.file_search_cancel = None;
+        self.update_file_search_results(results);
+
+        cx.notify();
+    }
 }
 
 #[cfg(test)]
@@ -64,5 +122,36 @@ mod tests {
                 view
             );
         }
+    }
+
+    #[test]
+    fn test_should_enter_file_search_from_script_list() {
+        use super::ScriptListApp;
+        assert!(ScriptListApp::should_enter_file_search_from_script_list("~"));
+        assert!(ScriptListApp::should_enter_file_search_from_script_list(
+            "~/src"
+        ));
+        assert!(!ScriptListApp::should_enter_file_search_from_script_list(
+            "foo"
+        ));
+        assert!(!ScriptListApp::should_enter_file_search_from_script_list(
+            "/tmp"
+        ));
+        assert!(!ScriptListApp::should_enter_file_search_from_script_list(
+            ""
+        ));
+    }
+
+    #[test]
+    fn test_normalize_mini_file_search_query() {
+        use super::ScriptListApp;
+        assert_eq!(
+            ScriptListApp::normalize_mini_file_search_query("~"),
+            "~/"
+        );
+        assert_eq!(
+            ScriptListApp::normalize_mini_file_search_query("~/src"),
+            "~/src"
+        );
     }
 }

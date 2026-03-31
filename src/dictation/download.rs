@@ -32,6 +32,32 @@ impl DownloadProgress {
     }
 }
 
+/// Format a byte count as a human-readable string (e.g. "142.5 MB").
+pub fn format_bytes(bytes: u64) -> String {
+    const KB: f64 = 1024.0;
+    const MB: f64 = 1024.0 * 1024.0;
+    const GB: f64 = 1024.0 * 1024.0 * 1024.0;
+
+    let b = bytes as f64;
+    if b >= GB {
+        format!("{:.1} GB", b / GB)
+    } else if b >= MB {
+        format!("{:.1} MB", b / MB)
+    } else if b >= KB {
+        format!("{:.0} KB", b / KB)
+    } else {
+        format!("{bytes} B")
+    }
+}
+
+/// Format a download speed as a human-readable string (e.g. "12.3 MB/s").
+pub fn format_speed(bytes_per_sec: u64) -> String {
+    if bytes_per_sec == 0 {
+        return "-- MB/s".to_string();
+    }
+    format!("{}/s", format_bytes(bytes_per_sec))
+}
+
 /// Download phase reported to callers.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DownloadPhase {

@@ -1531,13 +1531,13 @@ fn frontmost_app_delivery_shows_done_state_before_close_and_paste() {
 
 /// Extract the frontmost-app else branch from handle_dictation_transcript.
 fn frontmost_dictation_delivery_branch(handler_src: &str) -> &str {
-    let prompt_if = handler_src
-        .find("if self.try_set_prompt_input")
-        .expect("handler must branch on prompt delivery");
-    let else_offset = handler_src[prompt_if..]
+    let internal_if = handler_src
+        .find("if delivered_internally")
+        .expect("handler must branch on internal delivery");
+    let else_offset = handler_src[internal_if..]
         .find("} else {")
         .expect("handler must have a frontmost-app else branch");
-    &handler_src[prompt_if + else_offset..]
+    &handler_src[internal_if + else_offset..]
 }
 
 #[test]
@@ -2140,13 +2140,28 @@ use crate::dictation::device::{
     build_device_menu_items, resolve_selected_input_device, DictationDeviceMenuItem,
     DictationDeviceSelectionAction,
 };
-use crate::dictation::types::{DictationDeviceId, DictationDeviceInfo};
+use crate::dictation::types::{DictationDeviceId, DictationDeviceInfo, DictationDeviceTransport};
 
 fn device(id: &str, name: &str, is_default: bool) -> DictationDeviceInfo {
     DictationDeviceInfo {
         id: DictationDeviceId(id.to_string()),
         name: name.to_string(),
         is_default,
+        transport: DictationDeviceTransport::Unknown,
+    }
+}
+
+fn device_with_transport(
+    id: &str,
+    name: &str,
+    is_default: bool,
+    transport: DictationDeviceTransport,
+) -> DictationDeviceInfo {
+    DictationDeviceInfo {
+        id: DictationDeviceId(id.to_string()),
+        name: name.to_string(),
+        is_default,
+        transport,
     }
 }
 
@@ -2156,9 +2171,10 @@ fn resolve_selected_input_device_prefers_saved_device() {
         device("builtin", "MacBook Pro Microphone", true),
         device("usb", "USB Microphone", false),
     ];
-    let selected = resolve_selected_input_device(&devices, Some("usb")).unwrap();
-    assert_eq!(selected.id.0, "usb");
-    assert_eq!(selected.name, "USB Microphone");
+    let res = resolve_selected_input_device(&devices, Some("usb")).unwrap();
+    assert_eq!(res.device.id.0, "usb");
+    assert_eq!(res.device.name, "USB Microphone");
+    assert!(!res.fell_back);
 }
 
 #[test]
@@ -2167,9 +2183,10 @@ fn resolve_selected_input_device_falls_back_to_default_for_stale_saved_id() {
         device("builtin", "MacBook Pro Microphone", true),
         device("usb", "USB Microphone", false),
     ];
-    let selected = resolve_selected_input_device(&devices, Some("missing")).unwrap();
-    assert_eq!(selected.id.0, "builtin");
-    assert!(selected.is_default);
+    let res = resolve_selected_input_device(&devices, Some("missing")).unwrap();
+    assert_eq!(res.device.id.0, "builtin");
+    assert!(res.device.is_default);
+    assert!(res.fell_back);
 }
 
 #[test]
@@ -2178,8 +2195,9 @@ fn resolve_selected_input_device_returns_default_when_no_preference() {
         device("builtin", "MacBook Pro Microphone", true),
         device("usb", "USB Microphone", false),
     ];
-    let selected = resolve_selected_input_device(&devices, None).unwrap();
-    assert_eq!(selected.id.0, "builtin");
+    let res = resolve_selected_input_device(&devices, None).unwrap();
+    assert_eq!(res.device.id.0, "builtin");
+    assert!(!res.fell_back);
 }
 
 #[test]
@@ -2427,7 +2445,7 @@ fn dictation_start_preflights_delivery_target_before_toggle() {
         .find("ensure_dictation_delivery_target_available")
         .expect("dictation start must preflight delivery target");
     let toggle_pos = branch_src
-        .find("crate::dictation::toggle_dictation()")
+        .find("crate::dictation::toggle_dictation(dictation_target)")
         .expect("dictation builtin must call toggle_dictation");
     assert!(
         preflight_pos < toggle_pos,
@@ -2728,7 +2746,7 @@ fn dictation_start_preflight_runs_before_toggle() {
         .find("builtins::BuiltInFeature::Dictation")
         .expect("dictation builtin must exist");
     let dictation_src =
-        &src[dictation_start..dictation_start + 3000.min(src.len() - dictation_start)];
+        &src[dictation_start..dictation_start + 4000.min(src.len() - dictation_start)];
 
     let recording_guard_pos = dictation_src
         .find("if !crate::dictation::is_dictation_recording()")
@@ -2737,7 +2755,7 @@ fn dictation_start_preflight_runs_before_toggle() {
         .find("ensure_dictation_delivery_target_available")
         .expect("dictation start path must preflight the delivery target");
     let toggle_pos = dictation_src
-        .find("crate::dictation::toggle_dictation()")
+        .find("crate::dictation::toggle_dictation(dictation_target)")
         .expect("dictation start path must toggle dictation");
 
     assert!(
@@ -3068,18 +3086,27 @@ fn set_overlay_phase_is_exported() {
 fn overlay_key_handler_writes_through_to_runtime_phase() {
     let window_src = std::fs::read_to_string("src/dictation/window.rs").expect("read window.rs");
 
-    // The overlay must call set_overlay_phase when transitioning to Confirming.
+    // The overlay key handler must use overlay_escape_action to decide behavior.
     assert!(
-        window_src.contains("crate::dictation::set_overlay_phase(phase.clone())"),
-        "overlay key handler must write through to runtime via set_overlay_phase"
+        window_src.contains("overlay_escape_action(&self.state.phase)"),
+        "overlay key handler must delegate to overlay_escape_action"
     );
 
-    // Count occurrences — should appear for both Recording→Confirming and
-    // Confirming→Recording transitions.
-    let count = window_src.matches("set_overlay_phase").count();
+    // AbortSession must invoke the stored abort callback.
     assert!(
-        count >= 2,
-        "set_overlay_phase must be called for both Confirming and Resume transitions, found {count}"
+        window_src.contains("OVERLAY_ABORT_CALLBACK"),
+        "overlay key handler must invoke the stored abort callback on AbortSession"
+    );
+
+    // CloseOverlay must call close_dictation_overlay.
+    let handler_start = window_src
+        .find("fn handle_key_down")
+        .expect("overlay must have a key-down handler");
+    let handler_src =
+        &window_src[handler_start..handler_start + 2000.min(window_src.len() - handler_start)];
+    assert!(
+        handler_src.contains("close_dictation_overlay"),
+        "overlay key handler must call close_dictation_overlay on CloseOverlay"
     );
 }
 
@@ -3301,7 +3328,7 @@ fn abort_dictation_clears_session_state() {
 /// phase.  A second Escape in Confirming must call the abort callback (which
 /// invokes `abort_dictation` + close), NOT `handle_dictation_transcript`.
 #[test]
-fn escape_confirming_escape_abort_never_reaches_transcript_handler() {
+fn escape_abort_never_reaches_transcript_handler() {
     let window_src = std::fs::read_to_string("src/dictation/window.rs").expect("read window.rs");
 
     let handler_start = window_src
@@ -3310,16 +3337,16 @@ fn escape_confirming_escape_abort_never_reaches_transcript_handler() {
     let handler_src =
         &window_src[handler_start..handler_start + 2000.min(window_src.len() - handler_start)];
 
-    // Recording + Escape → Confirming.
-    assert!(
-        handler_src.contains("DictationSessionPhase::Confirming"),
-        "Escape during Recording must transition to Confirming"
-    );
-
-    // Confirming + Escape → invoke the stored abort callback.
+    // AbortSession arm invokes the stored abort callback.
     assert!(
         handler_src.contains("OVERLAY_ABORT_CALLBACK"),
-        "Escape during Confirming must invoke the stored abort callback"
+        "Escape abort must invoke the stored abort callback"
+    );
+
+    // overlay_escape_action routes Recording and Confirming to AbortSession.
+    assert!(
+        window_src.contains("DictationSessionPhase::Recording | DictationSessionPhase::Confirming"),
+        "overlay_escape_action must map Recording and Confirming to AbortSession"
     );
 
     // The key handler must NEVER invoke transcript delivery functions.
@@ -3604,7 +3631,12 @@ fn dictation_model_status_variants() {
     let statuses = vec![
         DictationModelStatus::Available,
         DictationModelStatus::NotDownloaded,
-        DictationModelStatus::Downloading { percentage: 50 },
+        DictationModelStatus::Downloading {
+            percentage: 50,
+            downloaded_bytes: 250_000_000,
+            total_bytes: 500_000_000,
+            speed_bytes_per_sec: 0,
+        },
         DictationModelStatus::Extracting,
         DictationModelStatus::DownloadFailed("err".to_string()),
     ];
@@ -3738,10 +3770,11 @@ fn overlay_render_uses_outer_wrapper_for_full_bounds() {
     let window_source = std::fs::read_to_string("src/dictation/window.rs").expect("read window.rs");
 
     // The render must have a dedicated outer root div that claims full bounds
-    // with the pill surface as a child — not the pill div as root.
+    // with overflow hidden and the pill surface as a child.
+    let compact: String = window_source.chars().filter(|c| !c.is_whitespace()).collect();
     assert!(
-        window_source.contains(".w_full()\n            .h_full()\n            .child(surface)"),
-        "overlay render must use an outer wrapper div with w_full().h_full().child(surface)"
+        compact.contains(".w_full().h_full().overflow_hidden().child(surface)"),
+        "overlay render must use an outer wrapper div with w_full().h_full().overflow_hidden().child(surface)"
     );
 }
 
@@ -3750,11 +3783,7 @@ fn overlay_render_uses_outer_wrapper_for_full_bounds() {
 // and generation guards
 // ---------------------------------------------------------------------------
 
-fn extract_delta_contract_section<'a>(
-    source: &'a str,
-    start_pat: &str,
-    end_pat: &str,
-) -> &'a str {
+fn extract_delta_contract_section<'a>(source: &'a str, start_pat: &str, end_pat: &str) -> &'a str {
     let start = source
         .find(start_pat)
         .unwrap_or_else(|| panic!("missing section start: {start_pat}"));
@@ -3772,8 +3801,7 @@ fn compact_delta_contract(s: &str) -> String {
 
 #[test]
 fn dictation_overlay_singleton_nonactivating_contract() {
-    let src =
-        std::fs::read_to_string("src/dictation/window.rs").expect("read window.rs");
+    let src = std::fs::read_to_string("src/dictation/window.rs").expect("read window.rs");
     let body = compact_delta_contract(extract_delta_contract_section(
         &src,
         "pub fn open_dictation_overlay(",
@@ -3816,9 +3844,7 @@ fn dictation_overlay_singleton_nonactivating_contract() {
 
     // Re-hide main window when Script Kit was hidden
     assert!(
-        body.contains(&compact_delta_contract(
-            "if !main_was_visible {"
-        )),
+        body.contains(&compact_delta_contract("if !main_was_visible {")),
         "overlay open path must check main window visibility and re-hide when it was hidden"
     );
 
@@ -3831,28 +3857,27 @@ fn dictation_overlay_singleton_nonactivating_contract() {
 
 #[test]
 fn dictation_overlay_claims_full_popup_bounds_contract() {
-    let src =
-        std::fs::read_to_string("src/dictation/window.rs").expect("read window.rs");
+    let src = std::fs::read_to_string("src/dictation/window.rs").expect("read window.rs");
     let body = compact_delta_contract(extract_delta_contract_section(
         &src,
         "let surface = div()",
         "pub(crate) fn finished_label",
     ));
 
-    // Inner pill surface must claim full popup content bounds
+    // Inner pill surface must claim full popup content bounds with overflow hidden
     assert!(
         body.contains(&compact_delta_contract(
-            "let surface = div().flex().flex_row().items_center().justify_center().w_full().h_full()"
+            "let surface = div().flex().flex_row().items_center().justify_center().w_full().h_full().overflow_hidden()"
         )),
-        "inner dictation pill must fill the popup content bounds"
+        "inner dictation pill must fill the popup content bounds with overflow_hidden"
     );
 
-    // Root overlay node must fill the popup window edge-to-edge
+    // Root overlay node must fill the popup window edge-to-edge with overflow hidden
     assert!(
         body.contains(&compact_delta_contract(
-            "div().track_focus(&self.focus_handle).on_key_down(cx.listener(Self::handle_key_down)).w_full().h_full().child(surface)"
+            "div().track_focus(&self.focus_handle).on_key_down(cx.listener(Self::handle_key_down)).w_full().h_full().overflow_hidden().child(surface)"
         )),
-        "root overlay node must fill the popup window edge-to-edge"
+        "root overlay node must fill the popup window edge-to-edge with overflow_hidden"
     );
 }
 
@@ -3876,5 +3901,424 @@ fn dictation_overlay_generation_guards_pump_and_delayed_close_contract() {
             "if crate::dictation::overlay_generation() != gen {"
         )),
         "overlay pump and delayed close must bail when a newer session exists"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Overlay escape action mapping
+// ---------------------------------------------------------------------------
+
+#[test]
+fn overlay_escape_aborts_recording_and_confirming() {
+    use super::types::DictationSessionPhase;
+    use super::window::{overlay_escape_action, OverlayEscapeAction};
+
+    assert_eq!(
+        overlay_escape_action(&DictationSessionPhase::Recording),
+        OverlayEscapeAction::AbortSession
+    );
+    assert_eq!(
+        overlay_escape_action(&DictationSessionPhase::Confirming),
+        OverlayEscapeAction::AbortSession
+    );
+}
+
+#[test]
+fn overlay_escape_closes_non_recording_phases() {
+    use super::types::DictationSessionPhase;
+    use super::window::{overlay_escape_action, OverlayEscapeAction};
+
+    assert_eq!(
+        overlay_escape_action(&DictationSessionPhase::Transcribing),
+        OverlayEscapeAction::CloseOverlay
+    );
+    assert_eq!(
+        overlay_escape_action(&DictationSessionPhase::Delivering),
+        OverlayEscapeAction::CloseOverlay
+    );
+    assert_eq!(
+        overlay_escape_action(&DictationSessionPhase::Finished),
+        OverlayEscapeAction::CloseOverlay
+    );
+    assert_eq!(
+        overlay_escape_action(&DictationSessionPhase::Failed("boom".to_string())),
+        OverlayEscapeAction::CloseOverlay
+    );
+}
+
+#[test]
+fn overlay_escape_propagates_only_when_idle() {
+    use super::types::DictationSessionPhase;
+    use super::window::{overlay_escape_action, OverlayEscapeAction};
+
+    assert_eq!(
+        overlay_escape_action(&DictationSessionPhase::Idle),
+        OverlayEscapeAction::Propagate
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Waveform animation quality
+// ---------------------------------------------------------------------------
+
+#[test]
+fn waveform_center_bar_leads_edges_on_speech() {
+    use super::visualizer::bars_for_level;
+
+    let bars = bars_for_level(DictationLevel {
+        rms: 0.35,
+        peak: 0.85,
+    });
+    assert!(bars[4] > bars[0]);
+    assert!(bars[4] > bars[8]);
+    assert!(bars.iter().all(|bar| *bar >= 0.08 && *bar <= 1.0));
+}
+
+#[test]
+fn waveform_attack_is_faster_than_decay() {
+    use super::visualizer::animate_bars;
+
+    let rise = animate_bars([0.08; 9], [1.0; 9], Duration::from_millis(16))[4];
+    let fall = animate_bars([1.0; 9], [0.08; 9], Duration::from_millis(16))[4];
+    // Rise delta should exceed fall delta (fast attack, slow decay).
+    assert!(rise - 0.08 > 1.0 - fall);
+}
+
+// ---------------------------------------------------------------------------
+// Mic selection heuristic tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn mic_resolution_prefers_saved_device() {
+    let devices = vec![
+        device_with_transport("mic-1", "Built-in", true, DictationDeviceTransport::BuiltIn),
+        device_with_transport("mic-2", "USB Mic", false, DictationDeviceTransport::Usb),
+    ];
+    let res = resolve_selected_input_device(&devices, Some("mic-2")).expect("should resolve");
+    assert_eq!(res.device.id.0, "mic-2");
+    assert!(!res.fell_back);
+}
+
+#[test]
+fn mic_resolution_falls_back_when_saved_device_missing() {
+    let devices = vec![
+        device_with_transport("mic-1", "Built-in", true, DictationDeviceTransport::BuiltIn),
+    ];
+    let res = resolve_selected_input_device(&devices, Some("disappeared-mic")).expect("should resolve");
+    assert_eq!(res.device.id.0, "mic-1");
+    assert!(res.fell_back);
+}
+
+#[test]
+fn mic_resolution_prefers_system_default_when_no_preference() {
+    let devices = vec![
+        device_with_transport("mic-1", "USB Mic", false, DictationDeviceTransport::Usb),
+        device_with_transport("mic-2", "Built-in", true, DictationDeviceTransport::BuiltIn),
+    ];
+    let res = resolve_selected_input_device(&devices, None).expect("should resolve");
+    assert_eq!(res.device.id.0, "mic-2", "should prefer is_default device");
+    assert!(!res.fell_back);
+}
+
+#[test]
+fn mic_resolution_prefers_builtin_over_virtual_when_no_default() {
+    let devices = vec![
+        device_with_transport("mic-v", "Virtual Audio", false, DictationDeviceTransport::Virtual),
+        device_with_transport("mic-b", "MacBook Mic", false, DictationDeviceTransport::BuiltIn),
+    ];
+    let res = resolve_selected_input_device(&devices, None).expect("should resolve");
+    assert_eq!(res.device.id.0, "mic-b", "should prefer built-in over virtual");
+}
+
+#[test]
+fn mic_resolution_prefers_usb_over_virtual_when_no_builtin() {
+    let devices = vec![
+        device_with_transport("mic-v", "Virtual Audio", false, DictationDeviceTransport::Virtual),
+        device_with_transport("mic-u", "USB Mic", false, DictationDeviceTransport::Usb),
+    ];
+    let res = resolve_selected_input_device(&devices, None).expect("should resolve");
+    assert_eq!(res.device.id.0, "mic-u", "should prefer USB over virtual");
+}
+
+#[test]
+fn mic_resolution_uses_first_device_as_last_resort() {
+    let devices = vec![
+        device_with_transport("mic-v", "Virtual Audio", false, DictationDeviceTransport::Virtual),
+    ];
+    let res = resolve_selected_input_device(&devices, None).expect("should resolve");
+    assert_eq!(res.device.id.0, "mic-v", "should fall back to any device");
+}
+
+#[test]
+fn mic_resolution_returns_none_for_empty_list() {
+    let res = resolve_selected_input_device(&[], None);
+    assert!(res.is_none());
+}
+
+#[test]
+fn mic_resolution_returns_none_for_empty_list_with_saved_pref() {
+    let res = resolve_selected_input_device(&[], Some("mic-1"));
+    assert!(res.is_none());
+}
+
+// ---------------------------------------------------------------------------
+// Download progress formatting tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn format_bytes_covers_ranges() {
+    use crate::dictation::download::format_bytes;
+
+    assert_eq!(format_bytes(0), "0 B");
+    assert_eq!(format_bytes(512), "512 B");
+    assert_eq!(format_bytes(1024), "1 KB");
+    assert_eq!(format_bytes(1_048_576), "1.0 MB");
+    assert_eq!(format_bytes(500_000_000), "476.8 MB");
+    assert_eq!(format_bytes(1_073_741_824), "1.0 GB");
+}
+
+#[test]
+fn format_speed_shows_dash_for_zero() {
+    use crate::dictation::download::format_speed;
+
+    assert_eq!(format_speed(0), "-- MB/s");
+    assert!(format_speed(10_485_760).contains("10.0 MB/s"));
+}
+
+#[test]
+fn download_progress_percentage_edge_cases() {
+    use crate::dictation::download::DownloadProgress;
+
+    assert_eq!(
+        DownloadProgress { downloaded: 1, total: 3 }.percentage(),
+        33
+    );
+    assert_eq!(
+        DownloadProgress { downloaded: 999, total: 1000 }.percentage(),
+        99
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Internal dictation target routing tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn dictation_target_enum_covers_all_surfaces() {
+    use crate::dictation::types::DictationTarget;
+
+    // Exhaustive match proves all variants exist and are reachable.
+    let targets = [
+        DictationTarget::MainWindowPrompt,
+        DictationTarget::NotesEditor,
+        DictationTarget::AiChatComposer,
+        DictationTarget::ExternalApp,
+    ];
+    for target in &targets {
+        match target {
+            DictationTarget::MainWindowPrompt => {}
+            DictationTarget::NotesEditor => {}
+            DictationTarget::AiChatComposer => {}
+            DictationTarget::ExternalApp => {}
+        }
+    }
+}
+
+#[test]
+fn dictation_destination_includes_internal_surfaces() {
+    use crate::dictation::types::DictationDestination;
+
+    // NotesEditor and AiChatComposer must exist alongside the original variants.
+    let destinations = [
+        DictationDestination::ActivePrompt,
+        DictationDestination::FrontmostApp,
+        DictationDestination::NotesEditor,
+        DictationDestination::AiChatComposer,
+    ];
+    assert_eq!(destinations.len(), 4);
+}
+
+#[test]
+fn resolve_dictation_target_exists_in_builtin_execution() {
+    let src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("read builtin_execution.rs");
+
+    assert!(
+        src.contains("fn resolve_dictation_target"),
+        "builtin_execution.rs must define resolve_dictation_target"
+    );
+
+    // Must check notes and AI windows before falling back to prompt or external.
+    let resolver_start = src
+        .find("fn resolve_dictation_target")
+        .expect("resolver must exist");
+    let resolver_src = &src[resolver_start..resolver_start + 800.min(src.len() - resolver_start)];
+
+    assert!(
+        resolver_src.contains("notes::is_notes_window_open()"),
+        "resolver must check notes window"
+    );
+    assert!(
+        resolver_src.contains("ai::is_ai_window_open()"),
+        "resolver must check AI window"
+    );
+    assert!(
+        resolver_src.contains("can_accept_dictation_into_prompt()"),
+        "resolver must check prompt acceptance"
+    );
+    assert!(
+        resolver_src.contains("DictationTarget::ExternalApp"),
+        "resolver must fall back to ExternalApp"
+    );
+}
+
+#[test]
+fn resolve_dictation_target_checks_notes_before_ai() {
+    let src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("read builtin_execution.rs");
+
+    let resolver_start = src
+        .find("fn resolve_dictation_target")
+        .expect("resolver must exist");
+    let resolver_src = &src[resolver_start..resolver_start + 800.min(src.len() - resolver_start)];
+
+    let notes_pos = resolver_src
+        .find("notes::is_notes_window_open()")
+        .expect("resolver must check notes");
+    let ai_pos = resolver_src
+        .find("ai::is_ai_window_open()")
+        .expect("resolver must check AI");
+    let prompt_pos = resolver_src
+        .find("can_accept_dictation_into_prompt()")
+        .expect("resolver must check prompt");
+
+    assert!(
+        notes_pos < ai_pos,
+        "notes must be checked before AI (notes_pos={notes_pos}, ai_pos={ai_pos})"
+    );
+    assert!(
+        ai_pos < prompt_pos,
+        "AI must be checked before prompt (ai_pos={ai_pos}, prompt_pos={prompt_pos})"
+    );
+}
+
+#[test]
+fn handle_dictation_transcript_accepts_target_parameter() {
+    let src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("read builtin_execution.rs");
+
+    let handler_start = src
+        .find("fn handle_dictation_transcript")
+        .expect("handler must exist");
+    let handler_sig = &src[handler_start..handler_start + 300.min(src.len() - handler_start)];
+
+    assert!(
+        handler_sig.contains("target: crate::dictation::DictationTarget"),
+        "handle_dictation_transcript must accept a DictationTarget parameter"
+    );
+}
+
+#[test]
+fn delivery_routes_notes_transcript_via_inject_text() {
+    let src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("read builtin_execution.rs");
+
+    let handler_start = src
+        .find("fn handle_dictation_transcript")
+        .expect("handler must exist");
+    let handler_src = &src[handler_start..handler_start + 3000.min(src.len() - handler_start)];
+
+    assert!(
+        handler_src.contains("notes::inject_text_into_notes"),
+        "handler must deliver to notes via inject_text_into_notes"
+    );
+    assert!(
+        handler_src.contains("DictationTarget::NotesEditor"),
+        "handler must match on NotesEditor target"
+    );
+}
+
+#[test]
+fn delivery_routes_ai_chat_transcript_via_set_ai_input() {
+    let src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("read builtin_execution.rs");
+
+    let handler_start = src
+        .find("fn handle_dictation_transcript")
+        .expect("handler must exist");
+    let handler_src = &src[handler_start..handler_start + 3000.min(src.len() - handler_start)];
+
+    assert!(
+        handler_src.contains("ai::set_ai_input"),
+        "handler must deliver to AI chat via set_ai_input"
+    );
+    assert!(
+        handler_src.contains("DictationTarget::AiChatComposer"),
+        "handler must match on AiChatComposer target"
+    );
+}
+
+#[test]
+fn internal_delivery_failure_falls_back_to_frontmost_app() {
+    let src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("read builtin_execution.rs");
+
+    let handler_start = src
+        .find("fn handle_dictation_transcript")
+        .expect("handler must exist");
+    let handler_src = &src[handler_start..handler_start + 3000.min(src.len() - handler_start)];
+
+    // Both notes and AI delivery must have fallback logging on failure.
+    assert!(
+        handler_src.contains("Notes delivery failed, falling back"),
+        "notes delivery must log fallback on failure"
+    );
+    assert!(
+        handler_src.contains("AI chat delivery failed, falling back"),
+        "AI chat delivery must log fallback on failure"
+    );
+}
+
+#[test]
+fn toggle_dictation_accepts_target_parameter() {
+    let src = std::fs::read_to_string("src/dictation/runtime.rs")
+        .expect("read runtime.rs");
+
+    assert!(
+        src.contains("pub fn toggle_dictation(target: DictationTarget)"),
+        "toggle_dictation must accept a DictationTarget parameter"
+    );
+}
+
+#[test]
+fn get_dictation_target_is_exported() {
+    let src = std::fs::read_to_string("src/dictation/mod.rs").expect("read dictation/mod.rs");
+    assert!(
+        src.contains("get_dictation_target"),
+        "get_dictation_target must be re-exported from the dictation module"
+    );
+}
+
+#[test]
+fn dictation_session_stores_target() {
+    let src = std::fs::read_to_string("src/dictation/runtime.rs")
+        .expect("read runtime.rs");
+
+    assert!(
+        src.contains("target: DictationTarget"),
+        "DictationSession must store the target"
+    );
+    assert!(
+        src.contains("pub fn get_dictation_target()"),
+        "runtime must expose get_dictation_target()"
+    );
+}
+
+#[test]
+fn inject_text_into_notes_is_exported() {
+    let src = std::fs::read_to_string("src/notes/mod.rs").expect("read notes/mod.rs");
+    assert!(
+        src.contains("inject_text_into_notes"),
+        "inject_text_into_notes must be re-exported from the notes module"
     );
 }
