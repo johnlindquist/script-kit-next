@@ -147,4 +147,82 @@ impl TerminalHandle {
         let state = self.state.lock().unwrap_or_else(|e| e.into_inner());
         state.term.selection.is_some()
     }
+
+    /// Send mouse scroll wheel events to the PTY as escape sequences.
+    ///
+    /// When the terminal is in mouse mode, scroll events must be encoded
+    /// as mouse button events and sent to the running application. When on
+    /// the alternate screen with `ALTERNATE_SCROLL` enabled (but no mouse
+    /// mode), scroll events are converted to arrow key sequences.
+    ///
+    /// Returns `true` if the scroll was handled by sending to PTY,
+    /// `false` if the caller should fall back to display buffer scrolling.
+    pub fn scroll_to_pty(&mut self, lines: i32) -> bool {
+        use alacritty_terminal::term::TermMode;
+
+        let state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let mode = *state.term.mode();
+        let is_mouse = mode.intersects(TermMode::MOUSE_MODE);
+        let is_alt = mode.contains(TermMode::ALT_SCREEN);
+        let is_alt_scroll = mode.contains(TermMode::ALTERNATE_SCROLL);
+        let is_sgr = mode.contains(TermMode::SGR_MOUSE);
+        drop(state);
+
+        if is_mouse {
+            // Mouse mode: send SGR or legacy mouse wheel sequences.
+            // Button 64 = scroll up, button 65 = scroll down (SGR encoding).
+            let (button, count) = if lines > 0 {
+                (64u8, lines as u32) // scroll up
+            } else {
+                (65u8, (-lines) as u32) // scroll down
+            };
+
+            for _ in 0..count {
+                let seq = if is_sgr {
+                    // SGR: \x1b[<button;col;rowM  (col/row 1-based, use 1;1 as position)
+                    format!("\x1b[<{button};1;1M")
+                } else {
+                    // Legacy X10: \x1b[M + (button+32) + (col+33) + (row+33)
+                    let cb = (button + 32) as char;
+                    let cx = 33u8 as char; // column 1
+                    let cy = 33u8 as char; // row 1
+                    format!("\x1b[M{cb}{cx}{cy}")
+                };
+                let _ = self.input(seq.as_bytes());
+            }
+            debug!(lines, sgr = is_sgr, "Sent mouse wheel to PTY");
+            true
+        } else if is_alt && is_alt_scroll {
+            // Alt screen + alternate scroll: convert to arrow keys.
+            let is_app_cursor = {
+                let state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+                state.term.mode().contains(TermMode::APP_CURSOR)
+            };
+            let (seq, count) = if lines > 0 {
+                // Scroll up → up arrow
+                (
+                    if is_app_cursor { "\x1bOA" } else { "\x1b[A" },
+                    lines as u32,
+                )
+            } else {
+                // Scroll down → down arrow
+                (
+                    if is_app_cursor { "\x1bOB" } else { "\x1b[B" },
+                    (-lines) as u32,
+                )
+            };
+            for _ in 0..count {
+                let _ = self.input(seq.as_bytes());
+            }
+            debug!(
+                lines,
+                app_cursor = is_app_cursor,
+                "Sent alternate scroll arrows to PTY"
+            );
+            true
+        } else {
+            // Normal screen, no mouse mode: caller should scroll display buffer.
+            false
+        }
+    }
 }

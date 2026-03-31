@@ -66,10 +66,13 @@ impl FallbackCondition {
     }
 }
 
-/// Fallback ID for the "Send to AI" harness-native action.
+/// Fallback ID for the "Auto Submit" harness-native action.
 pub const SEND_TO_AI_FALLBACK_ID: &str = "send-to-ai";
-/// Display label for the "Send to AI" fallback.
-pub const SEND_TO_AI_FALLBACK_LABEL: &str = "Send to AI";
+/// Display label for the "Auto Submit" fallback.
+pub const SEND_TO_AI_FALLBACK_LABEL: &str = "Auto Submit";
+/// Description for the "Auto Submit" fallback.
+pub const SEND_TO_AI_FALLBACK_DESCRIPTION: &str =
+    "Open Tab AI and immediately submit the current input";
 
 /// Action type that determines how the fallback executes
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -92,7 +95,7 @@ pub enum FallbackAction {
     SearchFiles,
     /// Execute a Script Kit built-in command by ID
     ExecuteBuiltin { builtin_id: String },
-    /// Open the instant AI harness terminal with the query
+    /// Open Tab AI and immediately submit the current input
     SendToAiHarness,
 }
 
@@ -235,7 +238,7 @@ impl BuiltinFallback {
             FallbackAction::ExecuteBuiltin { .. } => {
                 format!("Run command with '{}'", truncated)
             }
-            FallbackAction::SendToAiHarness => format!("Ask AI about '{}'", truncated),
+            FallbackAction::SendToAiHarness => format!("Auto-submit '{}'", truncated),
         }
     }
 }
@@ -268,11 +271,11 @@ pub enum FallbackResult {
 /// Returns a vector of all default fallbacks in priority order
 pub fn get_builtin_fallbacks() -> Vec<BuiltinFallback> {
     vec![
-        // Send to AI — top fallback when no script matches; opens the instant harness
+        // Auto Submit — top fallback when no script matches; opens the instant harness
         BuiltinFallback {
             id: SEND_TO_AI_FALLBACK_ID,
             name: SEND_TO_AI_FALLBACK_LABEL,
-            description: "Open the instant harness with this query and inferred context",
+            description: SEND_TO_AI_FALLBACK_DESCRIPTION,
             icon: "sparkles",
             action: FallbackAction::SendToAiHarness,
             condition: FallbackCondition::Always,
@@ -626,7 +629,7 @@ mod tests {
             .expect("send-to-ai fallback should exist");
 
         let subtitle = send_to_ai.get_subtitle("rename these files");
-        assert_eq!(subtitle, "Ask AI about 'rename these files'");
+        assert_eq!(subtitle, "Auto-submit 'rename these files'");
     }
 
     #[test]

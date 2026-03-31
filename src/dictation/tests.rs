@@ -2959,11 +2959,11 @@ fn overlay_confirming_phase_renders_abort_resume() {
     let window_src = std::fs::read_to_string("src/dictation/window.rs").expect("read window.rs");
 
     assert!(
-        window_src.contains("Esc Abort"),
+        window_src.contains("Enter Abort"),
         "confirming phase must show Abort affordance"
     );
     assert!(
-        window_src.contains("Any key Resume"),
+        window_src.contains("Esc Resume"),
         "confirming phase must show Resume affordance"
     );
 }
@@ -3325,8 +3325,9 @@ fn abort_dictation_clears_session_state() {
 
 /// The overlay Escape key handler must write `Confirming` through to the
 /// runtime (via `set_overlay_phase`) so the pump reads the authoritative
-/// phase.  A second Escape in Confirming must call the abort callback (which
-/// invokes `abort_dictation` + close), NOT `handle_dictation_transcript`.
+/// phase. Escape in Confirming must resume recording, while Enter remains the
+/// deliberate abort action that invokes `abort_dictation` + close, NOT
+/// `handle_dictation_transcript`.
 #[test]
 fn escape_abort_never_reaches_transcript_handler() {
     let window_src = std::fs::read_to_string("src/dictation/window.rs").expect("read window.rs");
@@ -3343,10 +3344,15 @@ fn escape_abort_never_reaches_transcript_handler() {
         "Escape abort must invoke the stored abort callback"
     );
 
-    // overlay_escape_action routes Recording and Confirming to AbortSession.
+    // overlay_escape_action routes Recording to TransitionToConfirming and
+    // Confirming to ResumeRecording (confirm-first pattern).
     assert!(
-        window_src.contains("DictationSessionPhase::Recording | DictationSessionPhase::Confirming"),
-        "overlay_escape_action must map Recording and Confirming to AbortSession"
+        window_src.contains("DictationSessionPhase::Recording => OverlayEscapeAction::TransitionToConfirming"),
+        "overlay_escape_action must map Recording to TransitionToConfirming"
+    );
+    assert!(
+        window_src.contains("DictationSessionPhase::Confirming => OverlayEscapeAction::ResumeRecording"),
+        "overlay_escape_action must map Confirming to ResumeRecording"
     );
 
     // The key handler must NEVER invoke transcript delivery functions.
@@ -3954,17 +3960,19 @@ fn dictation_overlay_generation_guards_pump_and_delayed_close_contract() {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn overlay_escape_aborts_recording_and_confirming() {
+fn overlay_escape_confirms_before_aborting() {
     use super::types::DictationSessionPhase;
     use super::window::{overlay_escape_action, OverlayEscapeAction};
 
+    // First Escape during Recording transitions to Confirming (not abort).
     assert_eq!(
         overlay_escape_action(&DictationSessionPhase::Recording),
-        OverlayEscapeAction::AbortSession
+        OverlayEscapeAction::TransitionToConfirming
     );
+    // Second Escape during Confirming resumes recording.
     assert_eq!(
         overlay_escape_action(&DictationSessionPhase::Confirming),
-        OverlayEscapeAction::AbortSession
+        OverlayEscapeAction::ResumeRecording
     );
 }
 

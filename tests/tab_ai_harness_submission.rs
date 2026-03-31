@@ -43,7 +43,7 @@ fn paste_only_without_intent_omits_sentinel() {
     )
     .expect("submission should build");
 
-    assert!(submission.contains("<scriptKitContext schemaVersion=\"1\">"));
+    assert!(submission.contains("Script Kit context"));
     assert!(
         !submission.contains("Await the user's next terminal input."),
         "PasteOnly mode must not append the wait sentinel"
@@ -88,15 +88,11 @@ fn paste_only_stages_context_block_with_schema_version() {
     .expect("should build");
 
     assert!(
-        submission.starts_with("<scriptKitContext schemaVersion=\"1\">"),
-        "staged context must start with the schema-versioned XML block"
+        submission.starts_with("Script Kit context"),
+        "staged context must start with the flat labeled header"
     );
     assert!(
-        submission.contains("</scriptKitContext>"),
-        "staged context must close the XML block"
-    );
-    assert!(
-        submission.contains("\"promptType\": \"ScriptList\""),
+        submission.contains("prompt type: ScriptList"),
         "staged context must include the UI snapshot prompt type"
     );
 }
@@ -118,7 +114,7 @@ fn submit_without_intent_includes_sentinel() {
     )
     .expect("submission should build");
 
-    assert!(submission.contains("<scriptKitContext schemaVersion=\"1\">"));
+    assert!(submission.contains("Script Kit context"));
     assert!(
         submission.contains("Await the user's next terminal input."),
         "Submit mode without intent must append the wait sentinel"
@@ -428,7 +424,7 @@ fn paste_only_omits_hints_block_when_no_receipt_or_suggestions() {
         "PasteOnly without receipt/suggestions must NOT include hints block"
     );
     assert!(
-        submission.contains("<scriptKitContext"),
+        submission.contains("Script Kit context"),
         "context block must still be present"
     );
 }
@@ -478,8 +474,8 @@ fn hints_block_appears_between_context_and_intent() {
     )
     .expect("submission should build");
 
-    let context_end = submission
-        .find("</scriptKitContext>")
+    let context_start = submission
+        .find("Script Kit context")
         .expect("context block must exist");
     let hints_start = submission
         .find("<scriptKitHints>")
@@ -487,7 +483,7 @@ fn hints_block_appears_between_context_and_intent() {
     let intent_start = submission.find("User intent:").expect("intent must exist");
 
     assert!(
-        context_end < hints_start,
+        context_start < hints_start,
         "hints block must come after the context block"
     );
     assert!(
@@ -621,75 +617,46 @@ fn harness_submission_contains_source_type_screenshot_and_apply_back_hint() {
     )
     .expect("submission should build");
 
-    // --- Assert against the rendered <scriptKitContext> payload, not just blob serialization ---
+    // --- Assert against the rendered flat labeled context ---
 
-    // The submission must wrap context in the schema-versioned XML block
+    // The submission must start with the flat header
     assert!(
-        submission.contains("<scriptKitContext schemaVersion="),
-        "submission must contain the <scriptKitContext> wrapper"
-    );
-    assert!(
-        submission.contains("</scriptKitContext>"),
-        "submission must close the <scriptKitContext> block"
+        submission.contains("Script Kit context"),
+        "submission must contain the flat context header"
     );
 
-    // sourceType must appear as a JSON key-value pair in the rendered payload
-    // (serde_json::to_string_pretty produces `"key": "value"` with a space after colon)
+    // sourceType must appear as a flat labeled line
     assert!(
-        submission.contains("\"sourceType\": \"clipboardEntry\""),
-        "rendered submission must contain the JSON pair \"sourceType\": \"clipboardEntry\""
+        submission.contains("source type: ClipboardEntry"),
+        "rendered submission must contain 'source type: ClipboardEntry'"
     );
 
-    // screenshotPath must appear as a JSON key-value pair with the exact path
+    // screenshotPath must appear as a flat labeled line
     assert!(
-        submission.contains("\"screenshotPath\": \"/tmp/tab-ai-clip.png\""),
-        "rendered submission must contain the JSON pair \"screenshotPath\": \"/tmp/tab-ai-clip.png\""
+        submission.contains("screenshot path: /tmp/tab-ai-clip.png"),
+        "rendered submission must contain 'screenshot path: /tmp/tab-ai-clip.png'"
     );
 
-    // applyBackHint must be a nested JSON object with action and targetLabel
+    // applyBackHint must appear as labeled lines
     assert!(
-        submission.contains("\"applyBackHint\":"),
-        "rendered submission must contain the \"applyBackHint\" object key"
+        submission.contains("apply back action: copyToClipboard"),
+        "rendered submission must contain 'apply back action: copyToClipboard'"
     );
     assert!(
-        submission.contains("\"action\": \"copyToClipboard\""),
-        "applyBackHint block must contain \"action\": \"copyToClipboard\""
-    );
-    assert!(
-        submission.contains("\"targetLabel\": \"Clipboard\""),
-        "applyBackHint block must contain \"targetLabel\": \"Clipboard\""
+        submission.contains("apply back target: Clipboard"),
+        "rendered submission must contain 'apply back target: Clipboard'"
     );
 
-    // Verify structural ordering: sourceType and applyBackHint are inside the context block
-    let context_start = submission
-        .find("<scriptKitContext")
-        .expect("context block must exist");
-    let context_end = submission
-        .find("</scriptKitContext>")
-        .expect("context close must exist");
-    let source_type_pos = submission
-        .find("\"sourceType\": \"clipboardEntry\"")
-        .expect("sourceType pair must exist");
-    let apply_back_pos = submission
-        .find("\"applyBackHint\":")
-        .expect("applyBackHint must exist");
-
-    assert!(
-        source_type_pos > context_start && source_type_pos < context_end,
-        "sourceType must be inside the <scriptKitContext> block"
-    );
-    assert!(
-        apply_back_pos > context_start && apply_back_pos < context_end,
-        "applyBackHint must be inside the <scriptKitContext> block"
-    );
-
-    // The user intent must appear after the context block (not inside it)
+    // The user intent must appear after the context block
     let intent_pos = submission
         .find("User intent:\nSummarize this")
         .expect("user intent must be present");
+    let context_pos = submission
+        .find("Script Kit context")
+        .expect("context header must exist");
     assert!(
-        intent_pos > context_end,
-        "user intent must appear after the </scriptKitContext> block"
+        intent_pos > context_pos,
+        "user intent must appear after the context block"
     );
 }
 

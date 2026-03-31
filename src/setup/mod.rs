@@ -85,6 +85,14 @@ const EMBEDDED_EXAMPLE_PATH_PICKER: &str =
     include_str!("../../kit-init/examples/scripts/path-picker.ts");
 /// Examples README
 const EMBEDDED_EXAMPLES_README: &str = include_str!("../../kit-init/examples/README.md");
+/// Skill: agent authoring
+const EMBEDDED_SKILL_AGENTS: &str = include_str!("../../kit-init/skills/agents/SKILL.md");
+/// Example agent: review-pr
+const EMBEDDED_EXAMPLE_AGENT_REVIEW_PR: &str =
+    include_str!("../../kit-init/examples/agents/review-pr.claude.md");
+/// Example agent: plan-feature
+const EMBEDDED_EXAMPLE_AGENT_PLAN_FEATURE: &str =
+    include_str!("../../kit-init/examples/agents/plan-feature.i.gemini.md");
 // --- merged from part_001.rs ---
 /// Embedded AGENTS.md guide for AI agents writing user scripts
 const EMBEDDED_AGENTS_MD: &str = concat!(
@@ -548,7 +556,10 @@ pub fn ensure_kit_setup() -> SetupResult {
         kit_dir.join("skills").join("scriptlets"),
         kit_dir.join("skills").join("config"),
         kit_dir.join("skills").join("troubleshooting"),
+        kit_dir.join("skills").join("agents"),
         kit_dir.join("examples").join("scripts"),
+        kit_dir.join("examples").join("extensions"),
+        kit_dir.join("examples").join("agents"),
         kit_dir.join("docs"),
         // Root-level harness temp workspace used by kit://sdk-reference
         kit_dir.join("tmp").join("test-scripts"),
@@ -821,6 +832,12 @@ pub fn ensure_kit_setup() -> SetupResult {
         &mut warnings,
         "skills/troubleshooting/SKILL.md",
     );
+    write_string_if_changed(
+        &kit_dir.join("skills").join("agents").join("SKILL.md"),
+        EMBEDDED_SKILL_AGENTS,
+        &mut warnings,
+        "skills/agents/SKILL.md",
+    );
 
     // App-managed: Example scripts (refresh if changed)
     write_string_if_changed(
@@ -864,6 +881,56 @@ pub fn ensure_kit_setup() -> SetupResult {
         EMBEDDED_EXAMPLE_PATH_PICKER,
         &mut warnings,
         "examples/scripts/path-picker.ts",
+    );
+
+    // App-managed: Example extension references (refresh if changed)
+    // These are copies of the built-in extension bundles for agent discoverability
+    write_string_if_changed(
+        &kit_dir
+            .join("examples")
+            .join("extensions")
+            .join("main.md"),
+        EMBEDDED_EXAMPLES_MAIN,
+        &mut warnings,
+        "examples/extensions/main.md",
+    );
+    write_string_if_changed(
+        &kit_dir
+            .join("examples")
+            .join("extensions")
+            .join("advanced.md"),
+        EMBEDDED_EXAMPLES_ADVANCED,
+        &mut warnings,
+        "examples/extensions/advanced.md",
+    );
+    write_string_if_changed(
+        &kit_dir
+            .join("examples")
+            .join("extensions")
+            .join("howto.md"),
+        EMBEDDED_EXAMPLES_HOWTO,
+        &mut warnings,
+        "examples/extensions/howto.md",
+    );
+
+    // App-managed: Example agents (refresh if changed)
+    write_string_if_changed(
+        &kit_dir
+            .join("examples")
+            .join("agents")
+            .join("review-pr.claude.md"),
+        EMBEDDED_EXAMPLE_AGENT_REVIEW_PR,
+        &mut warnings,
+        "examples/agents/review-pr.claude.md",
+    );
+    write_string_if_changed(
+        &kit_dir
+            .join("examples")
+            .join("agents")
+            .join("plan-feature.i.gemini.md"),
+        EMBEDDED_EXAMPLE_AGENT_PLAN_FEATURE,
+        &mut warnings,
+        "examples/agents/plan-feature.i.gemini.md",
     );
 
     // App-managed: .gitignore (refresh if changed)

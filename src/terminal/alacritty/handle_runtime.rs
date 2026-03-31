@@ -229,6 +229,46 @@ impl TerminalHandle {
         state.term.mode().contains(TermMode::APP_CURSOR)
     }
 
+    /// Check if any mouse reporting mode is enabled.
+    ///
+    /// TUI applications (Claude Code, vim, htop, etc.) enable mouse mode to
+    /// receive mouse events including scroll wheel. When mouse mode is active,
+    /// scroll events must be sent as escape sequences to the PTY instead of
+    /// scrolling the terminal display buffer.
+    pub fn is_mouse_mode(&self) -> bool {
+        let state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        state.term.mode().intersects(TermMode::MOUSE_MODE)
+    }
+
+    /// Check if SGR mouse encoding is enabled.
+    ///
+    /// When enabled, mouse events use the SGR format (`\x1b[<...M` / `\x1b[<...m`)
+    /// instead of the legacy X10/normal format.
+    pub fn is_sgr_mouse(&self) -> bool {
+        let state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        state.term.mode().contains(TermMode::SGR_MOUSE)
+    }
+
+    /// Check if the terminal is using the alternate screen buffer.
+    ///
+    /// TUI applications switch to the alternate screen buffer for their UI.
+    /// In alt screen mode, there is no scrollback history, so scroll events
+    /// should be converted to arrow key sequences when `ALTERNATE_SCROLL` is set.
+    pub fn is_alt_screen(&self) -> bool {
+        let state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        state.term.mode().contains(TermMode::ALT_SCREEN)
+    }
+
+    /// Check if alternate scroll mode is enabled (enabled by default).
+    ///
+    /// When on the alternate screen and not in mouse mode, scroll events
+    /// should be converted to arrow key sequences (up/down) so the TUI
+    /// application can handle them.
+    pub fn is_alternate_scroll(&self) -> bool {
+        let state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        state.term.mode().contains(TermMode::ALTERNATE_SCROLL)
+    }
+
     /// Updates the theme adapter for focus state.
     ///
     /// # Arguments
