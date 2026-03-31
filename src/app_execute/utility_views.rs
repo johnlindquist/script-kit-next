@@ -173,6 +173,45 @@ impl ScriptListApp {
         self.open_file_search_view(query, FileSearchPresentation::Full, cx);
     }
 
+    /// Look up a file search result by its position in the rendered display list
+    /// (after filtering, scoring, and directory-first sorting).
+    pub(crate) fn file_search_result_at_display_index(
+        &self,
+        display_index: usize,
+    ) -> Option<&crate::file_search::FileResult> {
+        self.file_search_display_indices
+            .get(display_index)
+            .and_then(|&result_index| self.cached_file_results.get(result_index))
+    }
+
+    /// Clamp a display index to the currently rendered file search list.
+    pub(crate) fn clamp_file_search_display_index(
+        &self,
+        selected_index: usize,
+    ) -> Option<usize> {
+        (!self.file_search_display_indices.is_empty())
+            .then_some(selected_index.min(self.file_search_display_indices.len() - 1))
+    }
+
+    /// Return the currently selected file-search entry in display order.
+    pub(crate) fn selected_file_search_result(
+        &self,
+        selected_index: usize,
+    ) -> Option<(usize, &crate::file_search::FileResult)> {
+        let display_index = self.clamp_file_search_display_index(selected_index)?;
+        let entry = self.file_search_result_at_display_index(display_index)?;
+        Some((display_index, entry))
+    }
+
+    /// Row labels for file search in the exact order shown to the user.
+    pub(crate) fn file_search_display_row_names(&self) -> Vec<String> {
+        self.file_search_display_indices
+            .iter()
+            .filter_map(|&result_index| self.cached_file_results.get(result_index))
+            .map(|entry| entry.name.clone())
+            .collect()
+    }
+
     /// Sort directory listing results: directories first, then alphabetically
     pub fn sort_directory_results(&mut self) {
         // Sort the cached results in place

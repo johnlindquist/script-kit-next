@@ -1294,31 +1294,17 @@ impl ScriptListApp {
         }
     }
 
-    /// Look up a file search result by its position in the *display* list
-    /// (i.e. after filtering/scoring), not the raw `cached_file_results` vec.
-    fn file_search_result_at_display_index(
-        &self,
-        display_index: usize,
-    ) -> Option<&crate::file_search::FileResult> {
-        self.file_search_display_indices
-            .get(display_index)
-            .and_then(|&result_index| self.cached_file_results.get(result_index))
-    }
-
     /// Return the first `limit` file search results in display order.
     fn visible_file_search_results(
         &self,
         limit: usize,
     ) -> Vec<(usize, &crate::file_search::FileResult)> {
-        self.file_search_display_indices
-            .iter()
-            .enumerate()
-            .filter_map(|(display_index, &result_index)| {
-                self.cached_file_results
-                    .get(result_index)
+        (0..self.file_search_display_indices.len())
+            .take(limit)
+            .filter_map(|display_index| {
+                self.file_search_result_at_display_index(display_index)
                     .map(|result| (display_index, result))
             })
-            .take(limit)
             .collect()
     }
 
@@ -1519,10 +1505,10 @@ impl ScriptListApp {
             } => {
                 let surface_metadata = self.file_search_surface_metadata(query);
                 let focused_target = self
-                    .file_search_result_at_display_index(*selected_index)
-                    .map(|entry| {
+                    .selected_file_search_result(*selected_index)
+                    .map(|(display_index, entry)| {
                         Self::tab_ai_target_from_file_search_result(
-                            *selected_index,
+                            display_index,
                             entry,
                             &surface_metadata,
                         )

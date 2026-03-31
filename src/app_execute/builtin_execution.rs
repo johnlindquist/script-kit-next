@@ -69,6 +69,93 @@ impl SpeedTracker {
     }
 }
 
+/// Phases tracked by the UI coalescing emitter.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DictationModelUiPhase {
+    Downloading,
+    Extracting,
+}
+
+/// Snapshot of the last UI-visible state, used to decide whether a new
+/// progress event is worth publishing.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct DictationModelUiSnapshot {
+    phase: DictationModelUiPhase,
+    percentage: u8,
+    eta_bucket_seconds: Option<u64>,
+}
+
+impl DictationModelUiSnapshot {
+    fn downloading(percentage: u8, eta_seconds: Option<u64>) -> Self {
+        Self {
+            phase: DictationModelUiPhase::Downloading,
+            percentage,
+            eta_bucket_seconds: bucket_dictation_eta_seconds(eta_seconds),
+        }
+    }
+
+    fn extracting() -> Self {
+        Self {
+            phase: DictationModelUiPhase::Extracting,
+            percentage: 100,
+            eta_bucket_seconds: Some(0),
+        }
+    }
+}
+
+/// Gates cosmetic UI updates so the download thread is never blocked on
+/// repaints.  Publishes on meaningful change or after a ~300 ms heartbeat.
+#[derive(Debug, Default)]
+struct DictationModelUiEmitter {
+    last_emit_at: Option<std::time::Instant>,
+    last_snapshot: Option<DictationModelUiSnapshot>,
+}
+
+impl DictationModelUiEmitter {
+    fn should_emit(
+        &self,
+        now: std::time::Instant,
+        next: &DictationModelUiSnapshot,
+    ) -> bool {
+        const HEARTBEAT: std::time::Duration = std::time::Duration::from_millis(300);
+
+        let Some(last_snapshot) = self.last_snapshot.as_ref() else {
+            return true;
+        };
+        let Some(last_emit_at) = self.last_emit_at else {
+            return true;
+        };
+
+        if last_snapshot.phase != next.phase {
+            return true;
+        }
+        if last_snapshot.percentage != next.percentage {
+            return true;
+        }
+        if last_snapshot.eta_bucket_seconds != next.eta_bucket_seconds {
+            return true;
+        }
+
+        now.duration_since(last_emit_at) >= HEARTBEAT
+    }
+
+    fn record_emit(&mut self, now: std::time::Instant, next: &DictationModelUiSnapshot) {
+        self.last_emit_at = Some(now);
+        self.last_snapshot = Some(next.clone());
+    }
+}
+
+/// Bucket ETA seconds into human-friendly steps so minor fluctuations
+/// don't trigger a UI repaint.
+fn bucket_dictation_eta_seconds(eta_seconds: Option<u64>) -> Option<u64> {
+    eta_seconds.map(|value| match value {
+        0..=15 => value,
+        16..=60 => value - (value % 5),
+        61..=300 => value - (value % 15),
+        _ => value - (value % 60),
+    })
+}
+
 /// Prevent overlapping Parakeet model downloads when the dictation hotkey is
 /// pressed repeatedly while the model is still missing.
 static PARAKEET_MODEL_DOWNLOAD_IN_PROGRESS: std::sync::atomic::AtomicBool =
@@ -4548,6 +4635,14 @@ impl ScriptListApp {
             &title,
             cx,
         );
+    }
+
+    /// Returns `true` when the dictation model prompt is currently on-screen.
+    fn is_dictation_model_prompt_visible(&self) -> bool {
+        matches!(
+            &self.current_view,
+            AppView::MiniPrompt { id, .. } if id == BUILTIN_DICTATION_MODEL_PROMPT_ID
+        )
     }
 
     /// If the dictation model prompt is currently visible, update it in-place

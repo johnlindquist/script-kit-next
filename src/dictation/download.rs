@@ -58,11 +58,51 @@ pub fn format_speed(bytes_per_sec: u64) -> String {
     format!("{}/s", format_bytes(bytes_per_sec))
 }
 
+/// Render a fixed-width textual progress bar.
+///
+/// Example: `format_progress_bar(50, 10)` -> `"█████░░░░░"`
+pub fn format_progress_bar(percentage: u8, width: usize) -> String {
+    let clamped = percentage.min(100) as usize;
+    let filled = (clamped * width) / 100;
+    let empty = width.saturating_sub(filled);
+    format!(
+        "{}{}",
+        "\u{2588}".repeat(filled),
+        "\u{2591}".repeat(empty)
+    )
+}
+
+/// Render the shared progress summary used by both the prompt and HUD.
+///
+/// Example output:
+/// `[█████░░░░░] 50% · 256.0 MB/512.0 MB · 8.0 MB/s · ETA 32s`
+pub fn format_progress_summary(
+    percentage: u8,
+    downloaded_bytes: u64,
+    total_bytes: u64,
+    speed_bytes_per_sec: u64,
+    eta_seconds: Option<u64>,
+) -> String {
+    let bar = format_progress_bar(percentage, 10);
+    let dl = format_bytes(downloaded_bytes);
+    let total = format_bytes(total_bytes);
+    let speed = format_speed(speed_bytes_per_sec);
+    let eta = format_eta(eta_seconds);
+    format!("[{bar}] {percentage}% · {dl}/{total} · {speed} · {eta}")
+}
+
 /// Estimate remaining time from total bytes and current speed.
-/// Returns `None` when we do not yet have enough information.
+///
+/// Returns:
+/// - `None` when total size is unknown or speed is zero
+/// - `Some(0)` when the transfer is complete
+/// - `Some(n)` for `n` seconds otherwise
 pub fn estimate_eta_seconds(progress: DownloadProgress, bytes_per_sec: u64) -> Option<u64> {
-    if progress.total == 0 || bytes_per_sec == 0 || progress.downloaded >= progress.total {
+    if progress.total == 0 || bytes_per_sec == 0 {
         return None;
+    }
+    if progress.downloaded >= progress.total {
+        return Some(0);
     }
     let remaining = progress.total.saturating_sub(progress.downloaded);
     Some(remaining.div_ceil(bytes_per_sec))
@@ -386,6 +426,73 @@ fn extract_tar_gz(archive_path: &Path, extracting_dir: &Path, final_dir: &Path) 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn format_progress_bar_half() {
+        assert_eq!(format_progress_bar(50, 10), "█████░░░░░");
+    }
+
+    #[test]
+    fn format_progress_bar_boundaries() {
+        assert_eq!(format_progress_bar(0, 10), "░░░░░░░░░░");
+        assert_eq!(format_progress_bar(100, 10), "██████████");
+        // Clamp above 100
+        assert_eq!(format_progress_bar(200, 10), "██████████");
+        // Zero width
+        assert_eq!(format_progress_bar(50, 0), "");
+    }
+
+    #[test]
+    fn format_progress_summary_output() {
+        let line = format_progress_summary(
+            50,
+            256 * 1024 * 1024,
+            512 * 1024 * 1024,
+            8 * 1024 * 1024,
+            Some(32),
+        );
+        assert!(line.starts_with("[█████░░░░░] 50%"));
+        assert!(line.contains("256.0 MB/512.0 MB"));
+        assert!(line.contains("8.0 MB/s"));
+        assert!(line.contains("ETA 32s"));
+    }
+
+    #[test]
+    fn estimate_eta_complete_returns_zero() {
+        let p = DownloadProgress {
+            downloaded: 500,
+            total: 500,
+        };
+        assert_eq!(estimate_eta_seconds(p, 100), Some(0));
+    }
+
+    #[test]
+    fn estimate_eta_unknown_total_returns_none() {
+        let p = DownloadProgress {
+            downloaded: 100,
+            total: 0,
+        };
+        assert_eq!(estimate_eta_seconds(p, 100), None);
+    }
+
+    #[test]
+    fn estimate_eta_zero_speed_returns_none() {
+        let p = DownloadProgress {
+            downloaded: 100,
+            total: 500,
+        };
+        assert_eq!(estimate_eta_seconds(p, 0), None);
+    }
+
+    #[test]
+    fn estimate_eta_in_progress() {
+        let p = DownloadProgress {
+            downloaded: 250,
+            total: 500,
+        };
+        // 250 remaining / 50 bps = 5 seconds
+        assert_eq!(estimate_eta_seconds(p, 50), Some(5));
+    }
 
     #[test]
     fn download_progress_percentage() {
