@@ -43,9 +43,11 @@ Script Kit is a powerful automation tool that lets you create scripts to automat
 
 2. **Create your first script** at `~/.scriptkit/kit/main/scripts/hello.ts`:
    ```typescript
+   import "@scriptkit/sdk";
+
    export const metadata = {
      name: "Hello World",
-     description: "My first Script Kit script"
+     description: "My first Script Kit script",
    };
 
    const name = await arg("What's your name?");
@@ -78,26 +80,33 @@ Script Kit stores all its data in `~/.scriptkit/`. Here's the layout:
 
 ```
 ~/.scriptkit/
-├── kit/                     # All kits (version control friendly)
-│   ├── main/                # Default kit (your scripts)
-│   │   ├── scripts/         # Your script files (.ts, .js)
-│   │   ├── extensions/      # Markdown extension files (.md)
-│   │   └── agents/          # AI agent definitions (.md)
-│   ├── config.ts            # Your configuration
-│   ├── theme.json           # Your theme customization
-│   ├── package.json         # Node.js module config (enables top-level await)
-│   ├── tsconfig.json        # TypeScript path mappings
-│   ├── AGENTS.md            # SDK docs for AI agents
-│   └── CLAUDE.md            # Claude-specific instructions
-├── sdk/                     # SDK runtime (auto-managed)
-│   └── kit-sdk.ts           # The Script Kit SDK
-├── db/                      # Databases
-│   ├── notes.sqlite         # Notes window data
-│   └── ai-chats.sqlite      # AI chat history
-├── logs/                    # Application logs
-│   └── script-kit-gpui.jsonl
-├── cache/                   # Cached data (frecency, etc.)
-└── GUIDE.md                 # This user guide
+├── CLAUDE.md                    # Canonical harness instructions
+├── AGENTS.md                    # SDK reference for agentic authoring
+├── GUIDE.md                     # User guide
+├── skills/
+│   ├── script-authoring/SKILL.md
+│   ├── scriptlets/SKILL.md
+│   ├── agents/SKILL.md
+│   ├── config/SKILL.md
+│   └── troubleshooting/SKILL.md
+├── examples/
+│   ├── scripts/
+│   ├── extensions/
+│   └── agents/
+├── kit/
+│   ├── main/
+│   │   ├── scripts/
+│   │   ├── extensions/
+│   │   └── agents/
+│   ├── config.ts
+│   ├── theme.json
+│   ├── package.json
+│   └── tsconfig.json
+├── sdk/
+│   └── kit-sdk.ts
+├── db/
+├── logs/
+└── cache/
 ```
 
 ### Key Directories
@@ -121,70 +130,37 @@ Create a `.ts` file in `~/.scriptkit/kit/main/scripts/`:
 
 ```typescript
 // ~/.scriptkit/kit/main/scripts/my-script.ts
+import "@scriptkit/sdk";
 
 export const metadata = {
   name: "My Script",
   description: "What this script does",
-  shortcut: "cmd+shift+m",  // Optional: global shortcut
+  shortcut: "cmd shift m",
 };
 
-// Your script code here
 const result = await arg("Pick an option", ["Option A", "Option B", "Option C"]);
-console.log("You chose:", result);
+await div(`<div class="p-8 text-xl">${result}</div>`);
 ```
 
 ### Script Metadata
 
-Use the global `metadata` variable to define script properties:
+Use `export const metadata = { ... }` for new scripts:
 
 ```typescript
 export const metadata = {
-  // Required
-  name: "My Script",           // Display name in launcher
-
-  // Optional
-  description: "Description",  // Shown below the name
-  author: "Your Name",         // Script author
-  shortcut: "cmd+shift+m",     // Global keyboard shortcut
-  alias: "ms",                 // Short alias for quick triggering
-  icon: "File",                // Icon name (e.g., "Terminal", "Star")
-  tags: ["utility", "dev"],    // Categories for organization
-  hidden: false,               // Hide from main list
-  
-  // Scheduling
-  schedule: "every day at 2pm", // Natural language schedule
-  cron: "0 14 * * *",          // Or use cron syntax
-  
-  // Advanced
-  background: false,           // Run without UI
-  watch: ["~/Documents/*.md"], // Trigger on file changes
+  name: "My Script",
+  description: "Shown in the launcher",
+  shortcut: "cmd shift m",
+  alias: "ms",
 };
 ```
 
-### Legacy Comment-Based Metadata
+### Harness-Safe Authoring Rules
 
-For backwards compatibility, comment-based metadata still works:
-
-```typescript
-// Name: My Script
-// Description: What this script does
-// Shortcut: cmd+shift+m
-// Author: Your Name
-
-const result = await arg("Pick something");
-```
-
-> **Recommendation:** Use the global `metadata` format for better TypeScript support and IDE autocomplete.
-
-### Importing the SDK
-
-The SDK is automatically preloaded, so all functions are available globally. However, for TypeScript type hints, you can import it:
-
-```typescript
-import "@scriptkit/sdk";
-
-// Now you get full autocomplete for arg(), div(), editor(), etc.
-```
+- Start new scripts with `import "@scriptkit/sdk";`.
+- Use `export const metadata = { name, description }`.
+- Write new scripts as `.ts` files in `kit/main/scripts/`.
+- Treat legacy comment headers as compatibility-only for older files; do not generate them for new harness-authored scripts.
 
 ---
 
@@ -468,68 +444,57 @@ Extensions (also called "scriptlets") are markdown files containing one or more 
 
 Create a `.md` file in `~/.scriptkit/kit/main/extensions/`:
 
-```markdown
+~~~md
 ---
 name: My Tools
 description: A collection of useful tools
-author: Your Name
-icon: wrench
+icon: sparkles
 ---
-
-# My Tools
-
-A collection of quick automation tools.
 
 ## Say Hello
-<!-- description: Greet the user -->
-<!-- shortcut: cmd+shift+h -->
 
-\`\`\`bash
-echo "Hello, World!"
-\`\`\`
-
-## Open VS Code
-<!-- description: Launch VS Code in current directory -->
-
-\`\`\`bash
-code .
-\`\`\`
+```metadata
+keyword: !hello
+description: Greet the user
 ```
 
-### File Structure
-
-An extension file has three main parts:
-
-1. **Frontmatter** (optional) - YAML metadata between `---` markers at the top
-2. **H1 Header** - The bundle title (displayed as a category)
-3. **H2 Headers** - Individual scriptlets (each becomes a separate command)
-
-### Frontmatter Metadata
-
-The optional YAML frontmatter at the top of the file:
-
-```markdown
----
-name: Quick Links          # Display name for the bundle
-description: Common URLs   # Description of the bundle
-author: Your Name          # Author name
-icon: link                 # Icon name (lucide icon)
----
+```paste
+Hello, World!
 ```
+
+## Quick Note
+
+```metadata
+description: Save a quick note
+```
+
+```tool:quick-note
+import "@scriptkit/sdk";
+
+const note = await arg("Note");
+await Bun.write(`${env.HOME}/quick-note.txt`, note);
+await notify("Saved");
+```
+~~~
 
 ### Scriptlet Metadata
 
-Each H2 scriptlet can have its own metadata in HTML comments:
+Prefer `metadata` code fences for new bundles:
 
-```markdown
+~~~md
 ## Open Dashboard
-<!-- description: Open the admin dashboard -->
-<!-- shortcut: cmd+shift+d -->
 
-\`\`\`open
-https://admin.example.com/dashboard
-\`\`\`
+```metadata
+description: Open the admin dashboard
+shortcut: cmd shift d
 ```
+
+```open
+https://admin.example.com/dashboard
+```
+~~~
+
+Legacy HTML comment metadata still works for backwards compatibility, but do not use it for new harness-authored bundles.
 
 Available scriptlet metadata:
 - `description` - Shown below the scriptlet name
@@ -770,6 +735,40 @@ await Bun.write(tmp, "{{content}}");
 await \$\`code \${tmp}\`;
 \`\`\`
 ```
+
+---
+
+## Agents (mdflow)
+
+Agent files are reusable backend-specific markdown prompts. They are not TypeScript scripts and they do not use `export const metadata`.
+
+Write them in `~/.scriptkit/kit/main/agents/` with a backend suffix in the filename:
+
+- `review.claude.md`
+- `plan.gemini.md`
+- `code.codex.md`
+- `assist.copilot.md`
+- `chat.i.gemini.md` for interactive Gemini agents
+
+Minimal example:
+
+```markdown
+---
+_sk_name: "Review PR"
+_sk_description: "Review staged changes and call out risks"
+_sk_icon: "git-pull-request"
+model: sonnet
+---
+
+Review the current git diff.
+
+Return:
+1. findings ordered by severity
+2. concrete fixes
+3. tests to add
+```
+
+For more patterns, read `~/.scriptkit/examples/agents/`.
 
 ---
 

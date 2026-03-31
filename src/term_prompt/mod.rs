@@ -463,6 +463,61 @@ impl TermPrompt {
         }
     }
 
+    /// Handle a scroll wheel event forwarded from an external wrapper.
+    ///
+    /// This is the public entry point for scroll forwarding from
+    /// `QuickTerminalView` in `render_prompts/term.rs`, which wraps the
+    /// `TermPrompt` entity in an `overflow_hidden()` div.  Without explicit
+    /// forwarding, GPUI may target the wrapper div instead of the entity,
+    /// causing scroll events to be silently swallowed.
+    #[allow(dead_code)] // Called from include!() binary code (render_prompts/term.rs)
+    pub fn handle_external_scroll_wheel(
+        &mut self,
+        event: &ScrollWheelEvent,
+        cx: &mut Context<Self>,
+    ) {
+        let lines = match event.delta {
+            ScrollDelta::Lines(point) => point.y,
+            ScrollDelta::Pixels(point) => {
+                let cell_height = px(self.cell_height());
+                point.y / cell_height
+            }
+        };
+
+        if lines == 0.0 {
+            return;
+        }
+
+        self.wheel_scroll_remainder += -lines;
+
+        let whole_lines = if self.wheel_scroll_remainder > 0.0 {
+            self.wheel_scroll_remainder.floor() as i32
+        } else {
+            self.wheel_scroll_remainder.ceil() as i32
+        };
+
+        if whole_lines == 0 {
+            return;
+        }
+
+        self.wheel_scroll_remainder -= whole_lines as f32;
+
+        let routed_to_pty = if self.prefer_buffer_scroll_on_wheel {
+            false
+        } else {
+            self.terminal.scroll_to_pty(whole_lines)
+        };
+        if !routed_to_pty {
+            self.terminal.scroll(whole_lines);
+        }
+        trace!(
+            delta = whole_lines,
+            remainder = self.wheel_scroll_remainder,
+            "Mouse wheel scroll (external)"
+        );
+        cx.notify();
+    }
+
     /// Convert pixel position to terminal grid cell (col, row)
     fn pixel_to_cell(&self, position: gpui::Point<Pixels>) -> (usize, usize) {
         let padding = self.config.get_padding();

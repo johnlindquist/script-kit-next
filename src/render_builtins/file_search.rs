@@ -494,8 +494,10 @@ impl ScriptListApp {
                             }
                         }
                         _ => {
+                            let has_shift = event.keystroke.modifiers.shift;
+
                             // Handle Cmd+K (toggle actions)
-                            if has_cmd && key.eq_ignore_ascii_case("k") {
+                            if has_cmd && key.eq_ignore_ascii_case("k") && !has_shift {
                                 if let Some(file) = get_selected_file() {
                                     this.toggle_file_search_actions(&file, window, cx);
                                 }
@@ -503,7 +505,7 @@ impl ScriptListApp {
                             }
                             // Handle Cmd+Y (Quick Look) - macOS only
                             #[cfg(target_os = "macos")]
-                            if has_cmd && key.eq_ignore_ascii_case("y") {
+                            if has_cmd && !has_shift && key.eq_ignore_ascii_case("y") {
                                 if let Some(file) = get_selected_file() {
                                     let _ = file_search::quick_look(&file.path);
                                 }
@@ -511,17 +513,59 @@ impl ScriptListApp {
                             }
                             // Handle Cmd+I (Show Info) - macOS only
                             #[cfg(target_os = "macos")]
-                            if has_cmd && key.eq_ignore_ascii_case("i") {
+                            if has_cmd && !has_shift && key.eq_ignore_ascii_case("i") {
                                 if let Some(file) = get_selected_file() {
                                     let _ = file_search::show_info(&file.path);
                                 }
+                                return;
                             }
-                            // Handle Cmd+O (Open With) - macOS only
-                            #[cfg(target_os = "macos")]
-                            if has_cmd && key.eq_ignore_ascii_case("o") {
+                            // Handle Cmd+E (Open in Editor)
+                            if has_cmd && !has_shift && key.eq_ignore_ascii_case("e") {
                                 if let Some(file) = get_selected_file() {
-                                    let _ = file_search::open_with(&file.path);
+                                    this.file_search_actions_path = Some(file.path.clone());
+                                    this.handle_action("open_in_editor".to_string(), window, cx);
                                 }
+                                return;
+                            }
+                            // Handle Cmd+T (Open in Terminal)
+                            if has_cmd && !has_shift && key.eq_ignore_ascii_case("t") {
+                                if let Some(file) = get_selected_file() {
+                                    this.file_search_actions_path = Some(file.path.clone());
+                                    this.handle_action("open_in_terminal".to_string(), window, cx);
+                                }
+                                return;
+                            }
+                            // Handle Cmd+Shift+F (Reveal in Finder)
+                            if has_cmd && has_shift && key.eq_ignore_ascii_case("f") {
+                                if let Some(file) = get_selected_file() {
+                                    this.file_search_actions_path = Some(file.path.clone());
+                                    this.handle_action("reveal_in_finder".to_string(), window, cx);
+                                }
+                                return;
+                            }
+                            // Handle Cmd+Shift+C (Copy Path)
+                            if has_cmd && has_shift && key.eq_ignore_ascii_case("c") {
+                                if let Some(file) = get_selected_file() {
+                                    this.file_search_actions_path = Some(file.path.clone());
+                                    this.handle_action("copy_path".to_string(), window, cx);
+                                }
+                                return;
+                            }
+                            // Handle Cmd+C (Copy Filename)
+                            if has_cmd && !has_shift && key.eq_ignore_ascii_case("c") {
+                                if let Some(file) = get_selected_file() {
+                                    this.file_search_actions_path = Some(file.path.clone());
+                                    this.handle_action("copy_filename".to_string(), window, cx);
+                                }
+                                return;
+                            }
+                            // Handle Cmd+Backspace (Move to Trash)
+                            if has_cmd && (key == "backspace" || key == "Backspace" || key == "delete") {
+                                if let Some(file) = get_selected_file() {
+                                    this.file_search_actions_path = Some(file.path.clone());
+                                    this.handle_action("move_to_trash".to_string(), window, cx);
+                                }
+                                return;
                             }
                         }
                     }
@@ -1032,53 +1076,39 @@ impl ScriptListApp {
             )
         };
 
+        // Footer: three-slot pattern — ↵ Run · ⌘K Actions · Tab AI
+        // AI shortcuts (⌘↵ Explain, ⌘⇧↵ Plan) are discoverable via Tab AI,
+        // not the footer. Keep footer truthful and minimal.
         let mini_hints: Vec<SharedString> = if let Some(file) = selected_file.as_ref() {
             if file.file_type == FileType::Directory {
                 vec![
                     "\u{21b5} Browse".into(),
-                    "\u{2318}\u{21b5} Explain".into(),
-                    "\u{2318}\u{21e7}\u{21b5} Plan".into(),
                     "\u{2318}K Actions".into(),
+                    "Tab AI".into(),
                 ]
             } else {
                 vec![
                     "\u{21b5} Open".into(),
-                    "\u{2318}\u{21b5} Explain".into(),
-                    "\u{2318}\u{21e7}\u{21b5} Plan".into(),
                     "\u{2318}K Actions".into(),
+                    "Tab AI".into(),
                 ]
             }
         } else if is_loading {
             vec![
                 "Searching\u{2026}".into(),
-                "\u{2318}\u{21b5} Explain search".into(),
-                "\u{2318}\u{21e7}\u{21b5} Plan next steps".into(),
+                "\u{2318}K Actions".into(),
+                "Tab AI".into(),
             ]
         } else if filtered_len == 0 {
             vec![
                 "Type a path or search".into(),
-                "\u{2318}\u{21b5} Explain search".into(),
-                "\u{2318}\u{21e7}\u{21b5} Plan next steps".into(),
-            ]
-        } else if is_directory_query {
-            vec![
-                "Browse by path".into(),
-                "\u{2318}\u{21b5} Explain folder".into(),
-                "\u{2318}\u{21e7}\u{21b5} Plan next steps".into(),
-                "\u{2318}K Actions".into(),
-            ]
-        } else if is_advanced_query {
-            vec![
-                "Spotlight query".into(),
-                "\u{2318}\u{21b5} Explain results".into(),
-                "\u{2318}\u{21e7}\u{21b5} Plan next steps".into(),
-                "\u{2318}K Actions".into(),
+                "Tab AI".into(),
             ]
         } else {
             vec![
-                "\u{2318}\u{21b5} Explain results".into(),
-                "\u{2318}\u{21e7}\u{21b5} Plan next steps".into(),
+                "\u{21b5} Run".into(),
                 "\u{2318}K Actions".into(),
+                "Tab AI".into(),
             ]
         };
 

@@ -4697,8 +4697,8 @@ mod tab_ai_apply_back_route_tests {
     fn quick_terminal_cmd_enter_routes_to_apply_back() {
         let source = std::fs::read_to_string("src/render_prompts/term.rs").expect("read term.rs");
         assert!(
-            source.contains("this.apply_tab_ai_result_from_clipboard(cx);"),
-            "QuickTerminalView must route Cmd+Enter into apply-back"
+            source.contains("this.apply_tab_ai_result_from_terminal(entity.clone(), cx);"),
+            "QuickTerminalView must route Cmd+Enter through the de-raced apply-back helper"
         );
     }
 

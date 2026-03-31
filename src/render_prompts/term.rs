@@ -209,16 +209,12 @@ impl ScriptListApp {
                             && !has_shift
                             && crate::ui_foundation::is_key_enter(key)
                         {
-                            // Prime the clipboard from terminal selection (or
-                            // last-output heuristic) so the user doesn't need
-                            // to manually copy before pressing ⌘↩.
+                            // Use the de-raced helper that primes clipboard
+                            // then waits a tick before applying, so the
+                            // clipboard write completes before the read.
                             if let AppView::QuickTerminalView { entity } = &this.current_view {
-                                let entity = entity.clone();
-                                entity.update(cx, |term_prompt, cx| {
-                                    term_prompt.prime_apply_clipboard(cx);
-                                });
+                                this.apply_tab_ai_result_from_terminal(entity.clone(), cx);
                             }
-                            this.apply_tab_ai_result_from_clipboard(cx);
                             return true;
                         }
 
@@ -324,10 +320,31 @@ impl ScriptListApp {
             .h(content_height)
             .key_context(TERM_PROMPT_KEY_CONTEXT)
             .capture_key_down(handle_key)
-            // Terminal content takes remaining space
+            // Terminal content takes remaining space.
             // Keep overflow clipping scoped to terminal output so the actions popup can
             // preserve vibrancy/translucency compositing when rendered as an overlay.
-            .child(div().flex_1().min_h(px(0.)).overflow_hidden().child(entity))
+            // The wrapper forwards wheel events into the TermPrompt entity so
+            // scroll works even when GPUI targets the wrapper div.
+            .child({
+                let terminal_entity_for_scroll = entity.clone();
+                div()
+                    .flex_1()
+                    .min_h(px(0.))
+                    .overflow_hidden()
+                    .on_scroll_wheel(cx.listener(
+                        move |_this: &mut Self,
+                              event: &gpui::ScrollWheelEvent,
+                              _window: &mut Window,
+                              cx: &mut Context<Self>| {
+                            let entity = terminal_entity_for_scroll.clone();
+                            entity.update(cx, |term_prompt, cx| {
+                                term_prompt.handle_external_scroll_wheel(event, cx);
+                            });
+                            cx.stop_propagation();
+                        },
+                    ))
+                    .child(entity)
+            })
             // Terminal-specific footer: only advertise close so the PTY keeps full keyboard control.
             .child(render_terminal_prompt_hint_strip(
                 if matches!(self.current_view, AppView::QuickTerminalView { .. }) {
@@ -422,9 +439,9 @@ mod term_prompt_render_tests {
             "term root container should not clip overflow before key handling, so overlay vibrancy can composite correctly"
         );
         assert!(
-            TERM_RENDER_SOURCE
-                .contains(".child(div().flex_1().min_h(px(0.)).overflow_hidden().child(entity))"),
-            "term render should keep overflow clipping scoped to the terminal content child"
+            TERM_RENDER_SOURCE.contains(".overflow_hidden()")
+                && TERM_RENDER_SOURCE.contains("on_scroll_wheel"),
+            "term render should keep overflow clipping scoped to the terminal content child and forward wheel events"
         );
     }
 

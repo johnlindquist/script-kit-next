@@ -2569,8 +2569,54 @@ fn write_tab_ai_apply_back_clipboard_text(text: &str) -> Result<(), String> {
 // Apply-back: entry point (⌘⏎ in QuickTerminalView)
 // ---------------------------------------------------------------------------
 
+/// Route-aware success message for the apply-back toast.
+fn tab_ai_apply_back_success_message(source_type: &crate::ai::TabAiSourceType) -> &'static str {
+    match source_type {
+        crate::ai::TabAiSourceType::RunningCommand => "Applied result to the active prompt",
+        crate::ai::TabAiSourceType::ClipboardEntry => "Copied result to the clipboard",
+        crate::ai::TabAiSourceType::ScriptListItem => "Saved and ran the generated script",
+        crate::ai::TabAiSourceType::DesktopSelection => "Replaced the frontmost selection",
+        crate::ai::TabAiSourceType::Desktop => "Pasted into the frontmost app",
+    }
+}
+
 impl ScriptListApp {
     const TAB_AI_APPLY_BACK_FOCUS_SETTLE_MS: u64 = 250;
+    const TAB_AI_APPLY_BACK_CLIPBOARD_PRIME_MS: u64 = 25;
+
+    /// Prime the clipboard from the terminal, then apply after a short delay
+    /// so the clipboard write completes before the read.  This prevents the
+    /// stale-clipboard race that occurs when `prime_apply_clipboard()` and
+    /// `apply_tab_ai_result_from_clipboard()` run back-to-back in the same
+    /// synchronous call.
+    #[allow(dead_code)] // Called from include!() binary code (render_prompts/term.rs)
+    pub(crate) fn apply_tab_ai_result_from_terminal(
+        &mut self,
+        entity: Entity<term_prompt::TermPrompt>,
+        cx: &mut Context<Self>,
+    ) {
+        entity.update(cx, |term_prompt, cx| {
+            term_prompt.prime_apply_clipboard(cx);
+        });
+
+        let app = cx.entity().downgrade();
+        cx.spawn(async move |_this, cx| {
+            cx.background_executor()
+                .timer(std::time::Duration::from_millis(
+                    Self::TAB_AI_APPLY_BACK_CLIPBOARD_PRIME_MS,
+                ))
+                .await;
+            let _ = cx.update(|cx| {
+                let Some(app) = app.upgrade() else {
+                    return;
+                };
+                app.update(cx, |this, cx| {
+                    this.apply_tab_ai_result_from_clipboard(cx);
+                });
+            });
+        })
+        .detach();
+    }
 
     pub(crate) fn apply_tab_ai_result_from_clipboard(&mut self, cx: &mut Context<Self>) {
         let Some(route) = self.tab_ai_harness_apply_back_route.clone() else {
@@ -2610,7 +2656,7 @@ impl ScriptListApp {
                 if self.try_set_prompt_input(text.clone(), cx) {
                     self.toast_manager.push(
                         crate::components::toast::Toast::success(
-                            "Applied clipboard result back to the active prompt".to_string(),
+                            tab_ai_apply_back_success_message(&route.source_type).to_string(),
                             &self.theme,
                         )
                         .duration_ms(Some(TOAST_SUCCESS_MS)),
@@ -2633,7 +2679,7 @@ impl ScriptListApp {
                     Ok(()) => {
                         self.toast_manager.push(
                             crate::components::toast::Toast::success(
-                                "Copied clipboard result back to the clipboard".to_string(),
+                                tab_ai_apply_back_success_message(&route.source_type).to_string(),
                                 &self.theme,
                             )
                             .duration_ms(Some(TOAST_SUCCESS_MS)),
@@ -2726,6 +2772,7 @@ impl ScriptListApp {
                 .await;
 
             let route_for_apply = route.clone();
+            let route_for_toast = route.clone();
             let text_for_apply = text.clone();
 
             let result = cx
@@ -2756,7 +2803,8 @@ impl ScriptListApp {
                         Ok(()) => {
                             this.toast_manager.push(
                                 crate::components::toast::Toast::success(
-                                    "Applied clipboard result back to the source".to_string(),
+                                    tab_ai_apply_back_success_message(&route_for_toast.source_type)
+                                        .to_string(),
                                     &this.theme,
                                 )
                                 .duration_ms(Some(TOAST_SUCCESS_MS)),

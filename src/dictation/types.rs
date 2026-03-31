@@ -128,7 +128,7 @@ pub enum DictationSessionPhase {
     Idle,
     Recording,
     /// Escape pressed during recording — overlay shows Abort/Resume affordances.
-    /// A second Escape aborts; any other key resumes recording.
+    /// Escape again resumes recording; Enter or clicking Abort cancels the session.
     Confirming,
     Transcribing,
     Delivering,

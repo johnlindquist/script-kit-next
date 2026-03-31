@@ -152,7 +152,8 @@ impl Default for DictationOverlayState {
 
 use gpui::{
     div, prelude::*, px, rgb, App, Context, FocusHandle, Focusable, IntoElement, KeyDownEvent,
-    ParentElement, Render, Styled, Task, Window, WindowBounds, WindowOptions,
+    MouseButton, MouseDownEvent, ParentElement, Render, Styled, Task, Window, WindowBounds,
+    WindowOptions,
 };
 
 use crate::list_item::FONT_MONO;
@@ -251,6 +252,23 @@ impl DictationOverlay {
         }
     }
 
+    /// Dismiss the confirmation state and resume recording.
+    fn resume_recording(&mut self, cx: &mut Context<Self>) {
+        self.state.phase = DictationSessionPhase::Recording;
+        crate::dictation::set_overlay_phase(DictationSessionPhase::Recording);
+        cx.notify();
+    }
+
+    /// Abort the dictation session via the registered callback, or close the overlay.
+    fn abort_overlay_session(&mut self, cx: &mut Context<Self>) {
+        let callback = OVERLAY_ABORT_CALLBACK.lock().take();
+        if let Some(cb) = callback {
+            cb(cx);
+        } else {
+            let _ = crate::dictation::close_dictation_overlay(cx);
+        }
+    }
+
     /// Replace the visual state snapshot (called from the dictation runtime).
     pub fn set_state(&mut self, state: DictationOverlayState, cx: &mut Context<Self>) {
         let entering_transcribing = state.phase == DictationSessionPhase::Transcribing
@@ -328,9 +346,7 @@ impl DictationOverlay {
                 key,
                 "Key pressed during confirmation, resuming recording"
             );
-            self.state.phase = DictationSessionPhase::Recording;
-            crate::dictation::set_overlay_phase(DictationSessionPhase::Recording);
-            cx.notify();
+            self.resume_recording(cx);
             cx.stop_propagation();
             return;
         }
@@ -343,12 +359,7 @@ impl DictationOverlay {
                 category = "DICTATION",
                 "Enter pressed during confirmation, aborting dictation session"
             );
-            let callback = OVERLAY_ABORT_CALLBACK.lock().take();
-            if let Some(cb) = callback {
-                cb(cx);
-            } else {
-                let _ = crate::dictation::close_dictation_overlay(cx);
-            }
+            self.abort_overlay_session(cx);
             cx.stop_propagation();
             return;
         }
@@ -375,9 +386,7 @@ impl DictationOverlay {
                     phase = ?self.state.phase,
                     "Escape pressed in confirmation, resuming recording"
                 );
-                self.state.phase = DictationSessionPhase::Recording;
-                crate::dictation::set_overlay_phase(DictationSessionPhase::Recording);
-                cx.notify();
+                self.resume_recording(cx);
                 cx.stop_propagation();
             }
             OverlayEscapeAction::AbortSession => {
@@ -386,12 +395,7 @@ impl DictationOverlay {
                     phase = ?self.state.phase,
                     "Confirm action pressed, aborting dictation session"
                 );
-                let callback = OVERLAY_ABORT_CALLBACK.lock().take();
-                if let Some(cb) = callback {
-                    cb(cx);
-                } else {
-                    let _ = crate::dictation::close_dictation_overlay(cx);
-                }
+                self.abort_overlay_session(cx);
                 cx.stop_propagation();
             }
             OverlayEscapeAction::CloseOverlay => {
@@ -475,24 +479,75 @@ impl Render for DictationOverlay {
                 let resume_color = theme.colors.text.muted.with_opacity(OPACITY_TEXT_MUTED);
                 div()
                     .flex()
-                    .flex_row()
+                    .flex_col()
                     .items_center()
                     .justify_center()
-                    .gap(px(16.))
+                    .gap(px(4.))
                     .w_full()
                     .child(
                         div()
                             .text_size(px(STATUS_TEXT_SIZE_PX))
                             .font_family(FONT_MONO)
-                            .text_color(abort_color)
-                            .child("Enter Abort"),
+                            .text_color(text_color)
+                            .child("Cancel dictation?"),
                     )
                     .child(
                         div()
-                            .text_size(px(STATUS_TEXT_SIZE_PX))
-                            .font_family(FONT_MONO)
-                            .text_color(resume_color)
-                            .child("Esc Resume"),
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .justify_center()
+                            .gap(px(10.))
+                            .child(
+                                div()
+                                    .px(px(10.))
+                                    .py(px(4.))
+                                    .rounded(px(999.))
+                                    .border_1()
+                                    .border_color(
+                                        theme.colors.ui.error.with_opacity(0.35),
+                                    )
+                                    .text_size(px(STATUS_TEXT_SIZE_PX))
+                                    .font_family(FONT_MONO)
+                                    .text_color(abort_color)
+                                    .on_mouse_down(
+                                        MouseButton::Left,
+                                        cx.listener(
+                                            |this,
+                                             _event: &MouseDownEvent,
+                                             _window,
+                                             cx| {
+                                                this.abort_overlay_session(cx);
+                                            },
+                                        ),
+                                    )
+                                    .child("Abort ↵"),
+                            )
+                            .child(
+                                div()
+                                    .px(px(10.))
+                                    .py(px(4.))
+                                    .rounded(px(999.))
+                                    .border_1()
+                                    .border_color(
+                                        theme.colors.text.muted.with_opacity(0.25),
+                                    )
+                                    .text_size(px(STATUS_TEXT_SIZE_PX))
+                                    .font_family(FONT_MONO)
+                                    .text_color(resume_color)
+                                    .on_mouse_down(
+                                        MouseButton::Left,
+                                        cx.listener(
+                                            |this,
+                                             _event: &MouseDownEvent,
+                                             _window,
+                                             cx| {
+                                                this.resume_recording(cx);
+                                            },
+                                        ),
+                                    )
+                                    .child("Resume Esc"),
+                            ),
                     )
             }
             DictationSessionPhase::Transcribing => {
