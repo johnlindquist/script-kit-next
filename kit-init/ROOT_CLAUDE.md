@@ -3,122 +3,32 @@
 You are working inside `~/.scriptkit`, the Script Kit workspace.
 Script Kit is a **Rust (GPUI) + Bun** launcher — NOT the old Electron/Node.js version.
 
-## Pick the Artifact Type First
+## Start Here
 
-Before writing files, decide which artifact the user actually asked for.
+When the user wants one new Script Kit artifact fast:
 
-| Artifact | Use when | Write here | Learn here | Reference here |
-|----------|----------|------------|------------|----------------|
-| Script | Full TypeScript workflow with Script Kit UI or Bun APIs | `~/.scriptkit/kit/main/scripts/<name>.ts` | `~/.scriptkit/skills/script-authoring/SKILL.md` | `~/.scriptkit/examples/scripts/` |
-| Extension bundle / scriptlet bundle | One markdown file containing multiple scriptlets, snippets, or quick commands | `~/.scriptkit/kit/main/extensions/<name>.md` | `~/.scriptkit/skills/scriptlets/SKILL.md` | `~/.scriptkit/examples/extensions/` |
-| mdflow agent | Backend-specific markdown prompt/automation | `~/.scriptkit/kit/main/agents/<name>.<backend>.md` | `~/.scriptkit/skills/agents/SKILL.md` | `~/.scriptkit/examples/agents/` |
+1. Open `~/.scriptkit/examples/START_HERE.md`
+2. Pick exactly one artifact
+3. Copy exactly one starter into `~/.scriptkit/kit/main/`
+4. Stop at the smallest working version
 
-Script Kit uses **extension bundle** and **scriptlet bundle** to mean the same artifact: one markdown file under `~/.scriptkit/kit/main/extensions/`.
+## Quick Decision
 
-Do not create a `.ts` script when the request is really a scriptlet bundle or mdflow agent.
-Do not write runnable user files outside `~/.scriptkit/kit/main/`.
+| If the request is for... | Use | Write to |
+|--------------------------|-----|----------|
+| Script Kit UI, Bun APIs, files, HTTP, or multi-step logic | Script | `~/.scriptkit/kit/main/scripts/<name>.ts` |
+| snippets, text expansion, quick shell commands, or grouped helpers | Extension bundle / scriptlet bundle | `~/.scriptkit/kit/main/extensions/<name>.md` |
+| reusable backend-specific prompt or automation | mdflow agent | `~/.scriptkit/kit/main/agents/<name>.<backend>.md` |
 
-## Minimal Starter Templates
+Script Kit uses **extension bundle** and **scriptlet bundle** to mean the same artifact.
 
-Use one of these and stop at the smallest working version.
+## Read Next
 
-### Script → `~/.scriptkit/kit/main/scripts/<name>.ts`
-
-```typescript
-import "@scriptkit/sdk";
-
-export const metadata = {
-  name: "My Script",
-  description: "What it does",
-};
-
-const value = await arg("What should this script do?");
-await div(`<div class="p-8 text-2xl">${value}</div>`);
-```
-
-### Extension bundle / scriptlet bundle → `~/.scriptkit/kit/main/extensions/<name>.md`
-
-~~~md
----
-name: My Bundle
-description: Personal helpers
-icon: sparkles
----
-
-## Hello Snippet
-
-```metadata
-keyword: !hello
-description: Quick greeting
-```
-
-```paste
-Hello!
-```
-
-## Quick Note
-
-```metadata
-description: Save a quick note
-```
-
-```tool:quick-note
-import "@scriptkit/sdk";
-
-const note = await arg("Note");
-await Bun.write(`${env.HOME}/quick-note.txt`, note);
-await notify("Saved");
-```
-~~~
-
-### mdflow agent → `~/.scriptkit/kit/main/agents/<name>.<backend>.md`
-
-```markdown
----
-_sk_name: "Review PR"
-_sk_description: "Review staged changes and call out risks"
-_sk_icon: "git-pull-request"
-model: sonnet
----
-
-Review the current git diff.
-
-Return:
-1. findings ordered by severity
-2. concrete fixes
-3. tests to add
-```
-
-### One-shot Rules
-
-- Pick the smallest artifact that fits.
-- Save only under `~/.scriptkit/kit/main/`.
-- For scripts, always start with `import "@scriptkit/sdk";`.
-- For extension bundles / scriptlet bundles, prefer `metadata` code fences instead of HTML comments.
-- For `tool:<name>` scriptlets, the first line must be `import "@scriptkit/sdk";`.
-
-## Fastest One-Shot Path
-
-When the request is "make one new Script Kit artifact fast," open:
-
-- `~/.scriptkit/examples/START_HERE.md`
-
-That file gives one starter per artifact, exact destinations, and ready-to-run copy commands.
-
-## Quick Start
-
-```typescript
-// ~/.scriptkit/kit/main/scripts/my-script.ts
-import "@scriptkit/sdk";
-
-export const metadata = {
-  name: "My Script",
-  description: "What it does",
-};
-
-const choice = await arg("Pick one", ["A", "B", "C"]);
-await div(`<h1>${choice}</h1>`);
-```
+- Script → `~/.scriptkit/examples/scripts/hello-world.ts`
+- Extension bundle / scriptlet bundle → `~/.scriptkit/examples/extensions/starter.md`
+- mdflow agent → `~/.scriptkit/examples/agents/review-pr.claude.md`
+- More bundle rules → `~/.scriptkit/skills/scriptlets/SKILL.md`
+- More agent rules → `~/.scriptkit/skills/agents/SKILL.md`
 
 ## Directory Layout
 
