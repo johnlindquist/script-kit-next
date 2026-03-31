@@ -1091,6 +1091,10 @@ impl ScriptListApp {
                 "\u{21b5} Open"
             };
             vec![primary.into(), "\u{2318}K Actions".into(), "Tab AI".into()]
+        } else if self.file_search_current_dir.is_some() {
+            // Browsing a concrete directory — ⌘K exposes directory-level actions
+            // even without a selected row.
+            vec!["\u{2318}K Actions".into(), "Tab AI".into()]
         } else if is_loading {
             vec!["Tab AI".into()]
         } else if filtered_len == 0 {
