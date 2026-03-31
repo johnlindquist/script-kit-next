@@ -2629,7 +2629,6 @@ fn tab_ai_apply_back_success_message(source_type: &crate::ai::TabAiSourceType) -
 impl ScriptListApp {
     const TAB_AI_APPLY_BACK_FOCUS_SETTLE_MS: u64 = 250;
     const TAB_AI_APPLY_BACK_CLIPBOARD_PRIME_MS: u64 = 25;
-    const TAB_AI_APPLY_BACK_ROUTE_WAIT_MS: u64 = 500;
     const TAB_AI_APPLY_BACK_ROUTE_POLL_MS: u64 = 20;
 
     /// Unified apply handler — routes `text` to the correct destination
@@ -2829,8 +2828,10 @@ impl ScriptListApp {
         }
     }
 
-    /// Apply `text` immediately when the route is known; otherwise poll briefly
-    /// for deferred capture to finish instead of failing the first ⌘↩ press.
+    /// Apply `text` immediately when the route is known; otherwise wait
+    /// indefinitely for deferred capture to resolve.  Cancels silently if
+    /// the harness closes (view leaves `QuickTerminalView`) or the entity
+    /// is dropped.
     fn apply_tab_ai_result_text_or_wait_for_route(
         &mut self,
         text: String,
@@ -2843,57 +2844,49 @@ impl ScriptListApp {
 
         let app_weak = cx.entity().downgrade();
         cx.spawn(async move |_this, cx| {
-            let deadline = std::time::Instant::now()
-                + std::time::Duration::from_millis(
-                    ScriptListApp::TAB_AI_APPLY_BACK_ROUTE_WAIT_MS,
-                );
             loop {
-                let maybe_route = cx.update(|cx| {
+                enum WaitState {
+                    Ready(crate::ai::TabAiApplyBackRoute),
+                    Pending,
+                    Cancelled,
+                }
+
+                let state = cx.update(|cx| {
                     let Some(app) = app_weak.upgrade() else {
-                        return None;
+                        return WaitState::Cancelled;
                     };
                     app.update(cx, |this, _cx| {
-                        this.tab_ai_harness_apply_back_route.clone()
+                        if !matches!(this.current_view, AppView::QuickTerminalView { .. }) {
+                            return WaitState::Cancelled;
+                        }
+                        match this.tab_ai_harness_apply_back_route.clone() {
+                            Some(route) => WaitState::Ready(route),
+                            None => WaitState::Pending,
+                        }
                     })
                 });
 
-                if let Some(route) = maybe_route {
-                    let _ = cx.update(|cx| {
-                        let Some(app) = app_weak.upgrade() else {
-                            return;
-                        };
-                        app.update(cx, |this, cx| {
-                            this.apply_tab_ai_result_text(route, text.clone(), cx);
+                match state {
+                    WaitState::Ready(route) => {
+                        let _ = cx.update(|cx| {
+                            let Some(app) = app_weak.upgrade() else {
+                                return;
+                            };
+                            app.update(cx, |this, cx| {
+                                this.apply_tab_ai_result_text(route, text.clone(), cx);
+                            });
                         });
-                    });
-                    break;
+                        break;
+                    }
+                    WaitState::Cancelled => break,
+                    WaitState::Pending => {
+                        cx.background_executor()
+                            .timer(std::time::Duration::from_millis(
+                                ScriptListApp::TAB_AI_APPLY_BACK_ROUTE_POLL_MS,
+                            ))
+                            .await;
+                    }
                 }
-
-                if std::time::Instant::now() >= deadline {
-                    let _ = cx.update(|cx| {
-                        let Some(app) = app_weak.upgrade() else {
-                            return;
-                        };
-                        app.update(cx, |this, cx| {
-                            this.toast_manager.push(
-                                crate::components::toast::Toast::error(
-                                    "Still preparing the Apply target. Wait a moment for context capture, then press ⌘↩ again."
-                                        .to_string(),
-                                    &this.theme,
-                                )
-                                .duration_ms(Some(TOAST_ERROR_MS)),
-                            );
-                            cx.notify();
-                        });
-                    });
-                    break;
-                }
-
-                cx.background_executor()
-                    .timer(std::time::Duration::from_millis(
-                        ScriptListApp::TAB_AI_APPLY_BACK_ROUTE_POLL_MS,
-                    ))
-                    .await;
             }
         })
         .detach();
