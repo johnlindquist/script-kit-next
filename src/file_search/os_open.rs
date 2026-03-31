@@ -451,10 +451,12 @@ fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<(), String> {
         let entry = entry.map_err(|e| format!("Failed to read folder entry: {}", e))?;
         let entry_path = entry.path();
         let target_path = dst.join(entry.file_name());
-        let file_type = entry
-            .file_type()
+        let metadata = std::fs::symlink_metadata(&entry_path)
             .map_err(|e| format!("Failed to inspect folder entry: {}", e))?;
-        if file_type.is_dir() {
+        let file_type = metadata.file_type();
+        if file_type.is_symlink() {
+            copy_symlink(&entry_path, &target_path)?;
+        } else if file_type.is_dir() {
             copy_dir_recursive(&entry_path, &target_path)?;
         } else {
             std::fs::copy(&entry_path, &target_path)
@@ -462,6 +464,22 @@ fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+#[cfg(target_family = "unix")]
+fn copy_symlink(src: &Path, dst: &Path) -> Result<(), String> {
+    let target = std::fs::read_link(src)
+        .map_err(|e| format!("Failed to read symlink '{}': {}", src.display(), e))?;
+    std::os::unix::fs::symlink(&target, dst)
+        .map_err(|e| format!("Failed to duplicate symlink '{}': {}", src.display(), e))
+}
+
+#[cfg(not(target_family = "unix"))]
+fn copy_symlink(src: &Path, _dst: &Path) -> Result<(), String> {
+    Err(format!(
+        "Duplicating symlinks is not currently supported on this platform: {}",
+        src.display()
+    ))
 }
 
 /// Duplicate a file or directory and return the new path.
@@ -483,9 +501,10 @@ pub fn duplicate_path(path: &str) -> Result<String, String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        escape_windows_cmd_open_target, move_destination_default_directory,
+        duplicate_path, escape_windows_cmd_open_target, move_destination_default_directory,
         terminal_working_directory,
     };
+    use tempfile::tempdir;
 
     #[test]
     fn test_terminal_working_directory_returns_parent_for_file_paths() {
@@ -503,5 +522,47 @@ mod tests {
     fn test_escape_windows_cmd_open_target_escapes_shell_metacharacters() {
         let escaped = escape_windows_cmd_open_target(r#"C:\tmp\a&b|c<d>e(f)g^h%i!j"k.txt"#);
         assert_eq!(escaped, r#"C:\tmp\a^&b^|c^<d^>e^(f^)g^^h^%i^!j^"k.txt"#);
+    }
+
+    #[test]
+    fn test_duplicate_path_copies_regular_file() {
+        let dir = tempdir().expect("tempdir should be created");
+        let source = dir.path().join("note.txt");
+        std::fs::write(&source, "hello").expect("source file should be written");
+
+        let duplicated = duplicate_path(source.to_str().expect("utf8 path")).expect("duplicate");
+        let duplicated_path = std::path::PathBuf::from(duplicated);
+
+        assert!(duplicated_path.exists());
+        assert_eq!(
+            std::fs::read_to_string(duplicated_path).expect("duplicate file should be readable"),
+            "hello"
+        );
+    }
+
+    #[cfg(target_family = "unix")]
+    #[test]
+    fn test_duplicate_path_preserves_directory_symlinks() {
+        let dir = tempdir().expect("tempdir should be created");
+        let source = dir.path().join("folder");
+        let nested = source.join("nested");
+        std::fs::create_dir_all(&nested).expect("source directory should be created");
+
+        let target_dir = dir.path().join("linked-target");
+        std::fs::create_dir(&target_dir).expect("symlink target dir should be created");
+        let symlink_path = source.join("link");
+        std::os::unix::fs::symlink(&target_dir, &symlink_path)
+            .expect("directory symlink should be created");
+
+        let duplicated = duplicate_path(source.to_str().expect("utf8 path")).expect("duplicate");
+        let duplicated_link = std::path::PathBuf::from(duplicated).join("link");
+        let metadata =
+            std::fs::symlink_metadata(&duplicated_link).expect("duplicate symlink metadata");
+
+        assert!(metadata.file_type().is_symlink());
+        assert_eq!(
+            std::fs::read_link(&duplicated_link).expect("duplicate symlink target"),
+            target_dir
+        );
     }
 }
