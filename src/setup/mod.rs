@@ -223,14 +223,52 @@ pub fn migrate_from_kenv() -> bool {
         }
     }
 
-    // Move config files to new root
-    let config_files = ["config.ts", "theme.json", "tsconfig.json", ".gitignore"];
-    for file in config_files {
+    // Move user config files into ~/.scriptkit/kit/
+    let kit_root = new_scriptkit.join("kit");
+    if let Err(e) = fs::create_dir_all(&kit_root) {
+        warn!(
+            error = %e,
+            path = %kit_root.display(),
+            "Failed to create ~/.scriptkit/kit during migration"
+        );
+        return false;
+    }
+
+    let kit_files = [
+        "config.ts",
+        "theme.json",
+        "tsconfig.json",
+        "package.json",
+        "settings.json",
+    ];
+    for file in kit_files {
+        let old_path = old_kenv.join(file);
+        let new_path = kit_root.join(file);
+        if old_path.exists() && !new_path.exists() {
+            if let Err(e) = fs::rename(&old_path, &new_path) {
+                warn!(
+                    error = %e,
+                    old = %old_path.display(),
+                    new = %new_path.display(),
+                    "Failed to move kit-owned config file"
+                );
+            }
+        }
+    }
+
+    // Root-owned workspace files remain at ~/.scriptkit/
+    let root_files = [".gitignore"];
+    for file in root_files {
         let old_path = old_kenv.join(file);
         let new_path = new_scriptkit.join(file);
         if old_path.exists() && !new_path.exists() {
             if let Err(e) = fs::rename(&old_path, &new_path) {
-                warn!(error = %e, file = file, "Failed to move config file");
+                warn!(
+                    error = %e,
+                    old = %old_path.display(),
+                    new = %new_path.display(),
+                    "Failed to move root-owned workspace file"
+                );
             }
         }
     }

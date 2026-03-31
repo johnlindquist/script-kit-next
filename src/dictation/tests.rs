@@ -4074,6 +4074,90 @@ fn confirming_state_no_longer_resumes_on_unrelated_keys() {
     );
 }
 
+#[test]
+fn dictation_elapsed_is_exported() {
+    let mod_src = std::fs::read_to_string("src/dictation/mod.rs").expect("read mod.rs");
+    assert!(
+        mod_src.contains("dictation_elapsed"),
+        "dictation_elapsed must be re-exported from dictation module"
+    );
+}
+
+#[test]
+fn overlay_phase_copy_confirming_uses_stop_continue() {
+    use super::types::DictationSessionPhase;
+    use super::window::overlay_phase_copy;
+
+    let (headline, hint) = overlay_phase_copy(&DictationSessionPhase::Confirming);
+    assert_eq!(headline, "Stop dictation?");
+    assert!(
+        hint.contains("Stop"),
+        "confirming hint must mention Stop"
+    );
+    assert!(
+        hint.contains("Continue"),
+        "confirming hint must mention Continue"
+    );
+}
+
+#[test]
+fn overlay_escape_action_boundary_just_below_threshold() {
+    use super::types::DictationSessionPhase;
+    use super::window::{overlay_escape_action, OverlayEscapeAction};
+
+    // 4999ms is below the 5-second threshold → immediate abort.
+    assert_eq!(
+        overlay_escape_action(
+            &DictationSessionPhase::Recording,
+            Duration::from_millis(4999),
+        ),
+        OverlayEscapeAction::AbortSession
+    );
+}
+
+#[test]
+fn overlay_escape_action_confirms_well_above_threshold() {
+    use super::types::DictationSessionPhase;
+    use super::window::{overlay_escape_action, OverlayEscapeAction};
+
+    // 30 seconds is well above the threshold → still transition to confirming.
+    assert_eq!(
+        overlay_escape_action(
+            &DictationSessionPhase::Recording,
+            Duration::from_secs(30),
+        ),
+        OverlayEscapeAction::TransitionToConfirming
+    );
+}
+
+#[test]
+fn confirming_render_shows_stop_and_continue_buttons() {
+    let src = std::fs::read_to_string("src/dictation/window.rs").expect("read window.rs");
+    // Stop button with Enter key hint (↵ = \u{21b5})
+    assert!(
+        src.contains(r#""Stop \u{21b5}""#),
+        "confirming UI must render Stop ↵ button"
+    );
+    // Continue button with Escape key hint (⎋ = \u{238b})
+    assert!(
+        src.contains(r#""Continue \u{238b}""#),
+        "confirming UI must render Continue ⎋ button"
+    );
+}
+
+#[test]
+fn confirming_render_uses_error_and_success_colors() {
+    let src = std::fs::read_to_string("src/dictation/window.rs").expect("read window.rs");
+    assert!(
+        src.contains("theme.colors.ui.error"),
+        "Stop button must use error color"
+    );
+    assert!(
+        src.contains("theme.colors.ui.success"),
+        "Continue button must use success color"
+    );
+}
+
 // ---------------------------------------------------------------------------
 // Waveform animation quality
 // ---------------------------------------------------------------------------
