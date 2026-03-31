@@ -36,7 +36,7 @@ const value = await arg("What should this script do?");
 await div(`<div class="p-8 text-2xl">${value}</div>`);
 ```
 
-### Extension bundle → `~/.scriptkit/kit/main/extensions/<name>.md`
+### Extension bundle / scriptlet bundle → `~/.scriptkit/kit/main/extensions/<name>.md`
 
 ~~~md
 ---
@@ -94,7 +94,7 @@ Return:
 - Pick the smallest artifact that fits.
 - Save only under `~/.scriptkit/kit/main/`.
 - For scripts, always start with `import "@scriptkit/sdk";`.
-- For extension bundles, prefer `metadata` code fences instead of HTML comments.
+- For extension bundles / scriptlet bundles, prefer `metadata` code fences instead of HTML comments.
 - For `tool:<name>` scriptlets, the first line must be `import "@scriptkit/sdk";`.
 
 ## Fastest One-Shot Path

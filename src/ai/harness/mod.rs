@@ -717,116 +717,17 @@ pub fn should_include_artifact_authoring_guidance(intent: Option<&str>) -> bool 
         || looks_like_descriptive_artifact_phrase(&intent)
 }
 
-/// Static guidance block that tells the harness how to pick the right artifact
-/// type and where to write the result, with exact file pointers.
-///
-/// Uses text-native labeled sections (no XML wrappers) so the block reads
-/// naturally in a PTY terminal and does not confuse harness backends that
-/// strip or misparse XML-ish tags.
-fn build_tab_ai_artifact_authoring_guidance_block() -> &'static str {
-    r#"--- Script Kit artifact authoring guidance ---
-Choose one artifact. Copy one starter. Save it under ~/.scriptkit/kit/main/. Then stop.
+/// The authoritative one-shot launchpad content, sourced from the same file
+/// that `src/setup/mod.rs` publishes to `~/.scriptkit/examples/START_HERE.md`.
+const TAB_AI_ARTIFACT_AUTHORING_GUIDANCE_SOURCE: &str =
+    include_str!("../../../kit-init/examples/START_HERE.md");
 
-Fastest path:
-- ~/.scriptkit/examples/START_HERE.md
-
-Decision:
-- Use Script for Script Kit UI APIs, Bun APIs, files, HTTP, or multi-step logic.
-- Use Extension bundle / scriptlet bundle for snippets, text expansion, quick shell commands, or a small grouped helper set.
-- Use mdflow agent for reusable backend-specific prompts or automations.
-
-Artifact: Script
-Write:
-- ~/.scriptkit/kit/main/scripts/<name>.ts
-Read next:
-- ~/.scriptkit/examples/scripts/hello-world.ts
-- ~/.scriptkit/skills/script-authoring/SKILL.md
-
-Artifact: Extension bundle / scriptlet bundle
-Write:
-- ~/.scriptkit/kit/main/extensions/<name>.md
-Read next:
-- ~/.scriptkit/examples/extensions/starter.md
-- ~/.scriptkit/skills/scriptlets/SKILL.md
-
-Artifact: mdflow agent
-Write:
-- ~/.scriptkit/kit/main/agents/<name>.<backend>.md
-Read next:
-- ~/.scriptkit/examples/agents/review-pr.claude.md
-- ~/.scriptkit/skills/agents/SKILL.md
-
-Starter: Script
-~~~ts
-import "@scriptkit/sdk";
-
-export const metadata = {
-  name: "My Script",
-  description: "What it does",
-};
-
-const value = await arg("What should this script do?");
-await div(`<div class="p-8 text-2xl">${value}</div>`);
-~~~
-
-Starter: Extension bundle / scriptlet bundle
-~~~md
----
-name: My Bundle
-description: Personal helpers
-icon: sparkles
----
-
-## Hello Snippet
-
-```metadata
-keyword: !hello
-description: Quick greeting
-```
-
-```paste
-Hello!
-```
-
-## Quick Note
-
-```metadata
-description: Save a quick note
-```
-
-```tool:quick-note
-import "@scriptkit/sdk";
-
-const note = await arg("Note");
-await Bun.write(`${env.HOME}/quick-note.txt`, note);
-await notify("Saved");
-```
-~~~
-
-Starter: mdflow agent
-~~~md
----
-_sk_name: "Review PR"
-_sk_description: "Review staged changes and call out risks"
-_sk_icon: "git-pull-request"
-model: sonnet
----
-
-Review the current git diff.
-
-Return:
-1. findings ordered by severity
-2. concrete fixes
-3. tests to add
-~~~
-
-Rules:
-- Pick the smallest artifact that fits.
-- Save only under ~/.scriptkit/kit/main/.
-- For scripts, always use export const metadata with name and description.
-- For extension bundles, prefer metadata code fences over HTML comments.
-- For tool:<name> scriptlets, the first line must be import "@scriptkit/sdk";.
---- end artifact authoring guidance ---"#
+/// Wraps the launchpad content in delimiters for PTY injection.
+fn build_tab_ai_artifact_authoring_guidance_block() -> String {
+    format!(
+        "--- Script Kit artifact authoring guidance ---\n{}\n--- end artifact authoring guidance ---",
+        TAB_AI_ARTIFACT_AUTHORING_GUIDANCE_SOURCE.trim_end()
+    )
 }
 
 // ---------------------------------------------------------------------------
@@ -862,7 +763,7 @@ pub fn build_tab_ai_harness_submission(
 
     if should_include_artifact_authoring_guidance(effective_intent) {
         output.push_str("\n\n");
-        output.push_str(build_tab_ai_artifact_authoring_guidance_block());
+        output.push_str(&build_tab_ai_artifact_authoring_guidance_block());
     }
 
     match effective_intent {
@@ -1771,11 +1672,13 @@ mod tests {
     #[test]
     fn authoring_guidance_block_references_exact_files() {
         let block = build_tab_ai_artifact_authoring_guidance_block();
-        assert!(block.contains("~/.scriptkit/examples/START_HERE.md"));
-        assert!(block.contains("~/.scriptkit/examples/extensions/starter.md"));
-        assert!(block.contains("~/.scriptkit/skills/scriptlets/SKILL.md"));
-        assert!(block.contains("~/.scriptkit/examples/scripts/hello-world.ts"));
-        assert!(block.contains("tool:<name>"));
+        assert!(block.contains("--- Script Kit artifact authoring guidance ---"));
+        assert!(block.contains("--- end artifact authoring guidance ---"));
+        assert!(block.contains("Extension bundle / scriptlet bundle"));
+        assert!(block.contains("extensions/starter.md"));
+        assert!(block.contains("scripts/hello-world.ts"));
+        assert!(block.contains("`tool:<name>`"));
+        assert!(block.contains("_sk_*"));
     }
 }
 

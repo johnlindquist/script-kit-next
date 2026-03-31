@@ -688,6 +688,263 @@ impl ScriptListApp {
     }
 }
 
+/// Describes the source of a file search stream.
+#[derive(Clone, Debug)]
+enum FileSearchStreamSource {
+    Directory { dir: String },
+    Spotlight { query: String },
+}
+
+impl ScriptListApp {
+    /// Spawn a streaming file-search task that feeds batched results back
+    /// into `apply_file_search_stream_batch`.  Used by both the directory
+    /// and Spotlight paths so the batch/cancel/resize logic lives in one
+    /// place.
+    fn spawn_file_search_stream_task(
+        &mut self,
+        gen: u64,
+        source: FileSearchStreamSource,
+        presentation: FileSearchPresentation,
+        debounce_ms: u64,
+        query_guard: Option<String>,
+        clear_on_first_batch: bool,
+        sort_on_done: bool,
+        cx: &mut Context<Self>,
+    ) {
+        let cancel = crate::file_search::new_cancel_token();
+        self.file_search_cancel = Some(cancel.clone());
+
+        let task = cx.spawn(async move |this, cx| {
+            cx.background_executor()
+                .timer(std::time::Duration::from_millis(debounce_ms))
+                .await;
+
+            let (tx, rx) = std::sync::mpsc::channel();
+
+            std::thread::spawn({
+                let cancel = cancel.clone();
+                let source = source.clone();
+                move || match source {
+                    FileSearchStreamSource::Directory { dir } => {
+                        crate::file_search::list_directory_streaming(
+                            &dir,
+                            cancel,
+                            false,
+                            |event| {
+                                let _ = tx.send(event);
+                            },
+                        );
+                    }
+                    FileSearchStreamSource::Spotlight { query } => {
+                        crate::file_search::search_files_streaming(
+                            &query,
+                            None,
+                            crate::file_search::DEFAULT_SEARCH_LIMIT,
+                            cancel,
+                            false,
+                            |event| {
+                                let _ = tx.send(event);
+                            },
+                        );
+                    }
+                }
+            });
+
+            let mut pending: Vec<crate::file_search::FileResult> = Vec::new();
+            let mut done = false;
+            let mut first_batch = true;
+
+            while !done {
+                cx.background_executor()
+                    .timer(std::time::Duration::from_millis(16))
+                    .await;
+
+                while let Ok(event) = rx.try_recv() {
+                    match event {
+                        crate::file_search::SearchEvent::Result(result) => {
+                            pending.push(result);
+                        }
+                        crate::file_search::SearchEvent::Done => {
+                            done = true;
+                            break;
+                        }
+                    }
+                }
+
+                if !pending.is_empty() || done {
+                    let batch = std::mem::take(&mut pending);
+                    let is_done = done;
+                    let is_first_batch = first_batch;
+                    let guard = query_guard.clone();
+                    first_batch = false;
+
+                    let _ = cx.update(|cx| {
+                        this.update(cx, |app, cx| {
+                            app.apply_file_search_stream_batch(
+                                gen,
+                                presentation,
+                                guard.as_deref(),
+                                batch,
+                                clear_on_first_batch,
+                                sort_on_done,
+                                is_first_batch,
+                                is_done,
+                                cx,
+                            );
+                        })
+                    });
+                }
+            }
+        });
+
+        self.file_search_debounce_task = Some(task);
+    }
+
+    /// Apply one batch of streaming results.  Stale generations and
+    /// query-guard mismatches are silently dropped.
+    fn apply_file_search_stream_batch(
+        &mut self,
+        gen: u64,
+        presentation: FileSearchPresentation,
+        query_guard: Option<&str>,
+        batch: Vec<crate::file_search::FileResult>,
+        clear_on_first_batch: bool,
+        sort_on_done: bool,
+        is_first_batch: bool,
+        is_done: bool,
+        cx: &mut Context<Self>,
+    ) {
+        if self.file_search_gen != gen {
+            return;
+        }
+
+        if let Some(expected_query) = query_guard {
+            let AppView::FileSearchView { query, .. } = &self.current_view else {
+                return;
+            };
+            if query != expected_query {
+                return;
+            }
+        }
+
+        let mut needs_recompute = false;
+
+        if clear_on_first_batch && is_first_batch {
+            self.cached_file_results.clear();
+            needs_recompute = true;
+        }
+
+        if !batch.is_empty() {
+            self.cached_file_results.extend(batch);
+            needs_recompute = true;
+        }
+
+        if needs_recompute {
+            self.recompute_file_search_display_indices();
+        }
+
+        if is_done {
+            self.file_search_loading = false;
+            self.file_search_frozen_filter = None;
+
+            if sort_on_done {
+                self.sort_directory_results();
+                self.recompute_file_search_display_indices();
+            }
+
+            if let AppView::FileSearchView { selected_index, .. } = &mut self.current_view {
+                *selected_index = 0;
+            }
+            self.file_search_scroll_handle
+                .scroll_to_item(0, ScrollStrategy::Top);
+        }
+
+        Self::resize_file_search_window_after_results_change(
+            presentation,
+            self.file_search_display_indices.len(),
+            is_first_batch,
+            is_done,
+        );
+        cx.notify();
+    }
+
+    /// Kick off a new streaming file-search session.  Cancels any
+    /// in-flight work, advances the generation counter, and delegates
+    /// to `spawn_file_search_stream_task`.
+    pub(crate) fn restart_file_search_stream_for_query(
+        &mut self,
+        query: String,
+        presentation: FileSearchPresentation,
+        old_filter: Option<Option<String>>,
+        preserve_old_results_until_first_batch: bool,
+        cx: &mut Context<Self>,
+    ) {
+        let gen = self.begin_file_search_session();
+        self.file_search_loading = true;
+
+        if let Some(parsed) = crate::file_search::parse_directory_path(&query) {
+            self.file_search_current_dir = Some(parsed.directory.clone());
+            self.file_search_frozen_filter = if preserve_old_results_until_first_batch {
+                old_filter
+            } else {
+                None
+            };
+
+            if !preserve_old_results_until_first_batch {
+                self.cached_file_results.clear();
+                self.file_search_display_indices.clear();
+                Self::resize_file_search_window_after_results_change(
+                    presentation,
+                    0,
+                    true,
+                    false,
+                );
+            }
+
+            self.spawn_file_search_stream_task(
+                gen,
+                FileSearchStreamSource::Directory {
+                    dir: parsed.directory,
+                },
+                presentation,
+                30,
+                None,
+                preserve_old_results_until_first_batch,
+                true,
+                cx,
+            );
+            cx.notify();
+            return;
+        }
+
+        // Spotlight search path
+        self.file_search_current_dir = None;
+        self.file_search_frozen_filter = None;
+        self.cached_file_results.clear();
+        self.file_search_display_indices.clear();
+        Self::resize_file_search_window_after_results_change(
+            presentation,
+            0,
+            true,
+            false,
+        );
+
+        self.spawn_file_search_stream_task(
+            gen,
+            FileSearchStreamSource::Spotlight {
+                query: query.clone(),
+            },
+            presentation,
+            75,
+            Some(query),
+            false,
+            false,
+            cx,
+        );
+        cx.notify();
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::fs;

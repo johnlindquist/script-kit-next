@@ -66,9 +66,32 @@ impl ScriptListApp {
         }
     }
 
+    /// Resize only when the mini explorer's row count change should actually
+    /// affect window height.  Full presentation is fixed-size and should not
+    /// re-enter synchronous resize work on every stream batch.
+    pub(crate) fn resize_file_search_window_after_results_change(
+        presentation: FileSearchPresentation,
+        result_count: usize,
+        is_first_batch: bool,
+        is_done: bool,
+    ) {
+        match presentation {
+            FileSearchPresentation::Mini if is_first_batch || is_done => {
+                crate::window_resize::resize_to_mini_file_search_window_sync(result_count);
+            }
+            FileSearchPresentation::Full if is_first_batch => {
+                resize_to_view_sync(ViewType::ScriptList, 0);
+            }
+            _ => {} // skip intermediate batch resizes
+        }
+    }
+
     /// Shared helper that opens file search in the given presentation mode.
     /// Used by both the builtin "Search Files" entry (Full) and the `~`
     /// trigger from ScriptList (Mini).
+    ///
+    /// The view paints immediately with an empty/loading state; results
+    /// stream in asynchronously via `restart_file_search_stream_for_query`.
     pub(crate) fn open_file_search_view(
         &mut self,
         query: String,
@@ -82,19 +105,12 @@ impl ScriptListApp {
             "Opening file search view"
         );
 
-        let _ = self.begin_file_search_session();
-
-        let current_dir =
-            crate::file_search::parse_directory_path(&query).map(|parsed| parsed.directory);
-
-        let results = Self::resolve_file_search_results(&query);
-
         self.filter_text = query.clone();
         self.pending_filter_sync = true;
         self.pending_placeholder = Some("Search files...".to_string());
 
         self.current_view = AppView::FileSearchView {
-            query,
+            query: query.clone(),
             selected_index: 0,
             presentation,
         };
@@ -104,15 +120,22 @@ impl ScriptListApp {
         self.pending_focus = Some(FocusTarget::MainFilter);
         self.focused_input = FocusedInput::MainFilter;
 
-        self.file_search_current_dir = current_dir;
-        self.update_file_search_results(results);
+        self.cached_file_results.clear();
+        self.file_search_display_indices.clear();
+        self.file_search_current_dir = None;
+        self.file_search_frozen_filter = None;
 
-        Self::resize_file_search_window_for_presentation(
+        // Full view still needs its split-view resize immediately.
+        // Mini opens small and grows only as results arrive.
+        Self::resize_file_search_window_for_presentation(presentation, 0);
+
+        self.restart_file_search_stream_for_query(
+            query,
             presentation,
-            self.file_search_display_indices.len(),
+            None,
+            false,
+            cx,
         );
-
-        cx.notify();
     }
 }
 
