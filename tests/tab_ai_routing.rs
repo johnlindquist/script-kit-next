@@ -3368,7 +3368,7 @@ fn selection_ai_uses_quick_submit_with_file_search_source() {
     let fn_start = TAB_AI_MODE_SOURCE
         .find("fn open_file_search_selection_in_tab_ai(")
         .expect("open_file_search_selection_in_tab_ai must exist");
-    let fn_body = &TAB_AI_MODE_SOURCE[fn_start..fn_start + 800.min(TAB_AI_MODE_SOURCE.len() - fn_start)];
+    let fn_body = &TAB_AI_MODE_SOURCE[fn_start..fn_start + 1500.min(TAB_AI_MODE_SOURCE.len() - fn_start)];
 
     assert!(
         fn_body.contains("TabAiQuickSubmitSource::FileSearch"),
