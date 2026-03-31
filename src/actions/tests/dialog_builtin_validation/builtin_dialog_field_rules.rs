@@ -6447,7 +6447,7 @@ mod from_dialog_builtin_action_validation_tests_14 {
     
         #[cfg(target_os = "macos")]
         #[test]
-        fn cat09_file_macos_has_quick_look_open_with_show_info() {
+        fn cat09_file_macos_has_quick_look_show_info() {
             let info = FileInfo {
                 path: "/test/file.txt".into(),
                 name: "file.txt".into(),
@@ -6456,7 +6456,6 @@ mod from_dialog_builtin_action_validation_tests_14 {
             };
             let ids = action_ids(&get_file_context_actions(&info));
             assert!(ids.contains(&"file:quick_look".to_string()));
-            assert!(ids.contains(&"file:open_with".to_string()));
             assert!(ids.contains(&"file:show_info".to_string()));
         }
     
@@ -6471,8 +6470,8 @@ mod from_dialog_builtin_action_validation_tests_14 {
             };
             let ids = action_ids(&get_file_context_actions(&info));
             assert!(!ids.contains(&"file:quick_look".to_string()));
-            // But still has open_with and show_info
-            assert!(ids.contains(&"file:open_with".to_string()));
+            // But still has open_in_editor and show_info
+            assert!(ids.contains(&"file:open_in_editor".to_string()));
             assert!(ids.contains(&"file:show_info".to_string()));
         }
     
@@ -11391,7 +11390,7 @@ mod from_dialog_builtin_action_validation_tests_16 {
     
         #[cfg(target_os = "macos")]
         #[test]
-        fn cat25_file_open_with_shortcut() {
+        fn cat25_file_open_in_editor_shortcut() {
             let file = FileInfo {
                 path: "/test.txt".into(),
                 name: "test.txt".into(),
@@ -11399,8 +11398,8 @@ mod from_dialog_builtin_action_validation_tests_16 {
                 is_dir: false,
             };
             let actions = get_file_context_actions(&file);
-            let ow = actions.iter().find(|a| a.id == "file:open_with").unwrap();
-            assert_eq!(ow.shortcut.as_deref(), Some("⌘O"));
+            let oe = actions.iter().find(|a| a.id == "file:open_in_editor").expect("file:open_in_editor should exist");
+            assert_eq!(oe.shortcut.as_deref(), Some("⌘E"));
         }
     
         #[cfg(target_os = "macos")]
@@ -15964,7 +15963,7 @@ mod from_dialog_builtin_action_validation_tests_19 {
     
         #[cfg(target_os = "macos")]
         #[test]
-        fn cat10_file_macos_has_open_with() {
+        fn cat10_file_macos_has_open_in_editor() {
             let info = FileInfo {
                 path: "/users/test/photo.jpg".to_string(),
                 is_dir: false,
@@ -15972,7 +15971,7 @@ mod from_dialog_builtin_action_validation_tests_19 {
                 file_type: FileType::File,
             };
             let actions = get_file_context_actions(&info);
-            assert!(actions.iter().any(|a| a.id == "file:open_with"));
+            assert!(actions.iter().any(|a| a.id == "file:open_in_editor"));
         }
     
         #[cfg(target_os = "macos")]
@@ -18542,7 +18541,7 @@ mod from_dialog_builtin_action_validation_tests_20 {
     
         #[cfg(target_os = "macos")]
         #[test]
-        fn cat22_file_dir_has_open_with() {
+        fn cat22_file_dir_has_open_in_editor() {
             let file_info = FileInfo {
                 path: "/test/Dir".into(),
                 name: "Dir".into(),
@@ -18550,7 +18549,7 @@ mod from_dialog_builtin_action_validation_tests_20 {
                 is_dir: true,
             };
             let actions = get_file_context_actions(&file_info);
-            assert!(actions.iter().any(|a| a.id == "file:open_with"));
+            assert!(actions.iter().any(|a| a.id == "file:open_in_editor"));
         }
     
         #[cfg(target_os = "macos")]

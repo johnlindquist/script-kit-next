@@ -11,9 +11,10 @@ fn has_missing_file_context_fields(name: &str, path: &str) -> bool {
 ///
 /// Actions vary based on whether the item is a file or directory:
 /// - Directory: `file:open_directory` as primary
-/// - File: `file:open_file` as primary, plus Quick Look (macOS)
+/// - File: `file:open_file` as primary, plus Quick Look and Attach to AI (macOS)
 ///
-/// Common actions for both: file:reveal_in_finder, file:copy_path, file:copy_filename
+/// Core file-manager verbs for both: reveal_in_finder, open_in_editor,
+/// open_in_terminal, copy_path, copy_filename, move_to_trash
 pub fn get_file_context_actions(file_info: &FileInfo) -> Vec<Action> {
     if has_missing_file_context_fields(&file_info.name, &file_info.path) {
         tracing::warn!(
@@ -35,6 +36,7 @@ pub fn get_file_context_actions(file_info: &FileInfo) -> Vec<Action> {
         "Building file context actions"
     );
 
+    // Primary action: open file or directory
     if file_info.is_dir {
         actions.push(
             Action::new(
@@ -66,7 +68,30 @@ pub fn get_file_context_actions(file_info: &FileInfo) -> Vec<Action> {
             Some("Shows this item in Finder".to_string()),
             ActionCategory::ScriptContext,
         )
+        .with_shortcut("⌘⇧F")
         .with_icon(IconName::FolderOpen),
+    );
+
+    actions.push(
+        Action::new(
+            "file:open_in_editor",
+            "Open in Editor",
+            Some("Opens this item in $EDITOR".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_shortcut("⌘E")
+        .with_icon(IconName::Pencil),
+    );
+
+    actions.push(
+        Action::new(
+            "file:open_in_terminal",
+            "Open in Terminal",
+            Some("Opens a terminal at this location".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_shortcut("⌘T")
+        .with_icon(IconName::Terminal),
     );
 
     if !file_info.is_dir {
@@ -95,19 +120,6 @@ pub fn get_file_context_actions(file_info: &FileInfo) -> Vec<Action> {
             .with_icon(IconName::File),
         );
     }
-
-    #[cfg(target_os = "macos")]
-    actions.push(
-        Action::new(
-            "file:open_with",
-            // NOTE: `open_with` currently triggers Finder's info window behavior.
-            "Show Info",
-            Some("Shows file information in Finder".to_string()),
-            ActionCategory::ScriptContext,
-        )
-        .with_shortcut("⌘O")
-        .with_icon(IconName::File),
-    );
 
     #[cfg(target_os = "macos")]
     actions.push(
@@ -143,16 +155,30 @@ pub fn get_file_context_actions(file_info: &FileInfo) -> Vec<Action> {
         .with_icon(IconName::Copy),
     );
 
+    actions.push(
+        Action::new(
+            "file:move_to_trash",
+            "Move to Trash",
+            Some(format!(
+                "Moves this {} to the Trash",
+                if file_info.is_dir { "folder" } else { "file" }
+            )),
+            ActionCategory::ScriptContext,
+        )
+        .with_shortcut("⌘⌫")
+        .with_icon(IconName::Trash),
+    );
+
     actions
 }
 
 #[cfg(all(test, target_os = "macos"))]
-mod tests {
+mod macos_tests {
     use super::*;
     use crate::file_search::{FileInfo, FileType};
 
     #[test]
-    fn test_get_file_context_actions_labels_open_with_as_show_info_when_macos() {
+    fn test_get_file_context_actions_includes_show_info_on_macos() {
         let file_info = FileInfo {
             path: "/tmp/example.txt".to_string(),
             name: "example.txt".to_string(),
@@ -161,15 +187,28 @@ mod tests {
         };
 
         let actions = get_file_context_actions(&file_info);
-        let open_with = actions
+        let show_info = actions
             .iter()
-            .find(|action| action.id == "file:open_with")
-            .expect("missing open_with action");
+            .find(|action| action.id == "file:show_info")
+            .expect("missing show_info action");
 
-        assert_eq!(open_with.title, "Show Info");
-        assert_eq!(
-            open_with.description.as_deref(),
-            Some("Shows file information in Finder")
+        assert_eq!(show_info.title, "Show Info");
+        assert_eq!(show_info.shortcut.as_deref(), Some("⌘I"));
+    }
+
+    #[test]
+    fn test_get_file_context_actions_does_not_expose_open_with() {
+        let file_info = FileInfo {
+            path: "/tmp/example.txt".to_string(),
+            name: "example.txt".to_string(),
+            file_type: FileType::File,
+            is_dir: false,
+        };
+
+        let actions = get_file_context_actions(&file_info);
+        assert!(
+            actions.iter().all(|action| action.id != "file:open_with"),
+            "file:open_with should not be exposed from file-search actions"
         );
     }
 }
@@ -368,6 +407,77 @@ mod namespace_tests {
                 .iter()
                 .all(|action| action.id != "file:attach_to_ai"),
             "directories should not include attach_to_ai action"
+        );
+    }
+
+    #[test]
+    fn test_get_file_context_actions_includes_core_file_manager_verbs() {
+        let file_info = FileInfo {
+            path: "/tmp/example.txt".to_string(),
+            name: "example.txt".to_string(),
+            file_type: FileType::File,
+            is_dir: false,
+        };
+
+        let actions = get_file_context_actions(&file_info);
+        let ids: Vec<&str> = actions.iter().map(|action| action.id.as_str()).collect();
+
+        assert!(ids.contains(&"file:open_file"), "missing file:open_file");
+        assert!(
+            ids.contains(&"file:reveal_in_finder"),
+            "missing file:reveal_in_finder"
+        );
+        assert!(
+            ids.contains(&"file:open_in_editor"),
+            "missing file:open_in_editor"
+        );
+        assert!(
+            ids.contains(&"file:open_in_terminal"),
+            "missing file:open_in_terminal"
+        );
+        assert!(ids.contains(&"file:copy_path"), "missing file:copy_path");
+        assert!(
+            ids.contains(&"file:copy_filename"),
+            "missing file:copy_filename"
+        );
+        assert!(
+            ids.contains(&"file:move_to_trash"),
+            "missing file:move_to_trash"
+        );
+    }
+
+    #[test]
+    fn test_get_file_context_actions_directory_uses_correct_primary_and_trash_label() {
+        let dir_info = FileInfo {
+            path: "/tmp/my_folder".to_string(),
+            name: "my_folder".to_string(),
+            file_type: FileType::Directory,
+            is_dir: true,
+        };
+
+        let actions = get_file_context_actions(&dir_info);
+        let ids: Vec<&str> = actions.iter().map(|action| action.id.as_str()).collect();
+
+        assert!(
+            ids.contains(&"file:open_directory"),
+            "directory should have file:open_directory"
+        );
+        assert!(
+            !ids.contains(&"file:open_file"),
+            "directory should not have file:open_file"
+        );
+        assert!(
+            !ids.contains(&"file:attach_to_ai"),
+            "directory should not have file:attach_to_ai"
+        );
+
+        let trash = actions
+            .iter()
+            .find(|action| action.id == "file:move_to_trash")
+            .expect("missing move_to_trash for directory");
+        assert_eq!(
+            trash.description.as_deref(),
+            Some("Moves this folder to the Trash")
         );
     }
 

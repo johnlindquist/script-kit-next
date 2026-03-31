@@ -134,8 +134,8 @@ fn file_context_macos_specific_actions() {
     #[cfg(target_os = "macos")]
     {
         assert!(
-            ids.contains(&"file:open_with"),
-            "macOS should have Open With..."
+            ids.contains(&"file:open_in_editor"),
+            "macOS should have Open in Editor"
         );
         assert!(
             ids.contains(&"file:show_info"),
@@ -146,8 +146,8 @@ fn file_context_macos_specific_actions() {
     #[cfg(not(target_os = "macos"))]
     {
         assert!(
-            !ids.contains(&"file:open_with"),
-            "Non-macOS should not have Open With"
+            !ids.contains(&"file:open_in_editor"),
+            "Non-macOS should not have Open in Editor"
         );
         assert!(
             !ids.contains(&"file:show_info"),

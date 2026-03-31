@@ -1010,7 +1010,7 @@ fn path_trash_description_folder_vs_file() {
 
 #[cfg(target_os = "macos")]
 #[test]
-fn file_directory_excludes_quick_look_includes_open_with() {
+fn file_directory_excludes_quick_look_includes_editor_terminal_trash() {
     let dir = FileInfo {
         name: "Folder".to_string(),
         path: "/Folder".to_string(),
@@ -1024,7 +1024,9 @@ fn file_directory_excludes_quick_look_includes_open_with() {
         !ids.contains(&"file:quick_look"),
         "Dir should NOT have Quick Look"
     );
-    assert!(ids.contains(&"file:open_with"), "Dir should have Open With");
+    assert!(ids.contains(&"file:open_in_editor"), "Dir should have Open in Editor");
+    assert!(ids.contains(&"file:open_in_terminal"), "Dir should have Open in Terminal");
+    assert!(ids.contains(&"file:move_to_trash"), "Dir should have Move to Trash");
     assert!(ids.contains(&"file:show_info"), "Dir should have Show Info");
 }
 

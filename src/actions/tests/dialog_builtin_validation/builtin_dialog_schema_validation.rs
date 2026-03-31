@@ -3683,7 +3683,7 @@ mod from_dialog_builtin_action_validation_tests_3 {
         let file_only = [
             "file:open_file",
             "file:open_directory",
-            "file:open_with",
+            "file:open_in_editor",
             "file:show_info",
             "file:copy_filename",
         ];
@@ -17768,7 +17768,7 @@ mod from_dialog_builtin_action_validation_tests_9 {
     
         #[cfg(target_os = "macos")]
         #[test]
-        fn file_context_has_open_with() {
+        fn file_context_has_open_in_editor() {
             let file_info = FileInfo {
                 path: "/test/doc.txt".to_string(),
                 name: "doc.txt".to_string(),
@@ -17776,9 +17776,9 @@ mod from_dialog_builtin_action_validation_tests_9 {
                 is_dir: false,
             };
             let actions = get_file_context_actions(&file_info);
-            let ow = find_action(&actions, "file:open_with");
-            assert!(ow.is_some(), "File should have open_with on macOS");
-            assert_eq!(ow.unwrap().shortcut.as_deref(), Some("⌘O"));
+            let ow = find_action(&actions, "file:open_in_editor");
+            assert!(ow.is_some(), "File should have open_in_editor on macOS");
+            assert_eq!(ow.unwrap().shortcut.as_deref(), Some("⌘E"));
         }
     
         #[cfg(target_os = "macos")]
