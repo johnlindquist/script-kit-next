@@ -65,11 +65,7 @@ pub fn format_progress_bar(percentage: u8, width: usize) -> String {
     let clamped = percentage.min(100) as usize;
     let filled = (clamped * width) / 100;
     let empty = width.saturating_sub(filled);
-    format!(
-        "{}{}",
-        "\u{2588}".repeat(filled),
-        "\u{2591}".repeat(empty)
-    )
+    format!("{}{}", "\u{2588}".repeat(filled), "\u{2591}".repeat(empty))
 }
 
 /// Render the shared progress summary used by both the prompt and HUD.
@@ -180,9 +176,7 @@ pub fn classify_download_error(error: &anyhow::Error) -> String {
     }
 
     if lower.contains("unexpected http status") {
-        return format!(
-            "The dictation model server returned an unexpected response: {text}"
-        );
+        return format!("The dictation model server returned an unexpected response: {text}");
     }
 
     text

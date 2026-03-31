@@ -579,6 +579,53 @@ fn looks_like_bare_artifact_request(intent: &str) -> bool {
     })
 }
 
+/// Non-creation verbs that, when starting a phrase, indicate the user is
+/// operating on an existing artifact rather than requesting a new one.
+const NON_CREATION_LEADING_VERBS: &[&str] = &[
+    "run ",
+    "open ",
+    "edit ",
+    "delete ",
+    "remove ",
+    "rename ",
+    "move ",
+    "copy ",
+    "list ",
+    "show ",
+    "find ",
+    "search ",
+    "debug ",
+    "fix ",
+    "update ",
+    "test ",
+    "check ",
+    "explain ",
+    "describe ",
+];
+
+/// Returns `true` for short descriptive phrases ending with an artifact noun,
+/// e.g. "PR review agent", "date snippet", "clipboard cleanup script".
+/// These imply creation intent even without an explicit verb.
+fn looks_like_descriptive_artifact_phrase(intent: &str) -> bool {
+    let words: Vec<&str> = intent.split_whitespace().collect();
+    // Only match short phrases (2-6 words) — longer sentences likely have
+    // their own verb structure and should be caught by the verb+noun path.
+    if words.len() < 2 || words.len() > 6 {
+        return false;
+    }
+    // Exclude phrases that start with a non-creation verb.
+    if NON_CREATION_LEADING_VERBS
+        .iter()
+        .any(|verb| intent.starts_with(verb))
+    {
+        return false;
+    }
+    // Check if the phrase ends with an artifact noun.
+    ARTIFACT_AUTHORING_WORDS.iter().any(|artifact| {
+        intent.ends_with(artifact)
+    })
+}
+
 /// Returns `true` when the intent looks like a request to create/scaffold a
 /// Script Kit artifact (script, scriptlet bundle, agent).  Used to decide
 /// whether to inject the `<scriptKitArtifactAuthoring>` guidance block.
@@ -599,7 +646,9 @@ pub fn should_include_artifact_authoring_guidance(intent: Option<&str>) -> bool 
         .iter()
         .any(|needle| intent.contains(needle));
 
-    (has_authoring_signal && has_artifact_word) || looks_like_bare_artifact_request(&intent)
+    (has_authoring_signal && has_artifact_word)
+        || looks_like_bare_artifact_request(&intent)
+        || looks_like_descriptive_artifact_phrase(&intent)
 }
 
 /// Static guidance block that tells the harness how to pick the right artifact
@@ -1478,6 +1527,30 @@ mod tests {
             "new extension"
         )));
         assert!(should_include_artifact_authoring_guidance(Some("my agent")));
+    }
+
+    #[test]
+    fn authoring_guidance_triggers_on_descriptive_artifact_phrase() {
+        // Acceptance criteria: these natural asks must include guidance
+        assert!(should_include_artifact_authoring_guidance(Some(
+            "need a date snippet"
+        )));
+        assert!(should_include_artifact_authoring_guidance(Some(
+            "PR review agent"
+        )));
+        assert!(should_include_artifact_authoring_guidance(Some(
+            "new script for clipboard cleanup"
+        )));
+        // Other descriptive phrases ending with artifact nouns
+        assert!(should_include_artifact_authoring_guidance(Some(
+            "clipboard cleanup script"
+        )));
+        assert!(should_include_artifact_authoring_guidance(Some(
+            "email sign-off snippet"
+        )));
+        assert!(should_include_artifact_authoring_guidance(Some(
+            "quick date template"
+        )));
     }
 
     #[test]

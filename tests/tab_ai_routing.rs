@@ -3324,14 +3324,17 @@ fn selection_or_query_tries_selection_first() {
     let fn_start = TAB_AI_MODE_SOURCE
         .find("fn open_file_search_selection_or_query_in_tab_ai(")
         .expect("open_file_search_selection_or_query_in_tab_ai must exist");
-    let fn_body = &TAB_AI_MODE_SOURCE[fn_start..fn_start + 800.min(TAB_AI_MODE_SOURCE.len() - fn_start)];
+    let fn_body =
+        &TAB_AI_MODE_SOURCE[fn_start..fn_start + 800.min(TAB_AI_MODE_SOURCE.len() - fn_start)];
 
     assert!(
         fn_body.contains("open_file_search_selection_in_tab_ai"),
         "must try selection-based AI first"
     );
     // The selection attempt must come before the query fallback
-    let sel_pos = fn_body.find("open_file_search_selection_in_tab_ai").unwrap();
+    let sel_pos = fn_body
+        .find("open_file_search_selection_in_tab_ai")
+        .unwrap();
     let query_pos = fn_body
         .find("build_file_search_ai_query_intent")
         .expect("must have query fallback");
@@ -3349,7 +3352,8 @@ fn query_fallback_returns_none_for_empty_state() {
     let fn_start = TAB_AI_MODE_SOURCE
         .find("fn build_file_search_ai_query_intent(")
         .expect("build_file_search_ai_query_intent must exist");
-    let fn_body = &TAB_AI_MODE_SOURCE[fn_start..fn_start + 400.min(TAB_AI_MODE_SOURCE.len() - fn_start)];
+    let fn_body =
+        &TAB_AI_MODE_SOURCE[fn_start..fn_start + 400.min(TAB_AI_MODE_SOURCE.len() - fn_start)];
 
     assert!(
         fn_body.contains("query.is_empty() && self.file_search_display_indices.is_empty()"),
@@ -3368,7 +3372,8 @@ fn selection_ai_uses_quick_submit_with_file_search_source() {
     let fn_start = TAB_AI_MODE_SOURCE
         .find("fn open_file_search_selection_in_tab_ai(")
         .expect("open_file_search_selection_in_tab_ai must exist");
-    let fn_body = &TAB_AI_MODE_SOURCE[fn_start..fn_start + 1500.min(TAB_AI_MODE_SOURCE.len() - fn_start)];
+    let fn_body =
+        &TAB_AI_MODE_SOURCE[fn_start..fn_start + 1500.min(TAB_AI_MODE_SOURCE.len() - fn_start)];
 
     assert!(
         fn_body.contains("TabAiQuickSubmitSource::FileSearch"),
@@ -3391,7 +3396,8 @@ fn query_fallback_uses_entry_intent_not_quick_submit() {
     let fn_start = TAB_AI_MODE_SOURCE
         .find("fn open_file_search_selection_or_query_in_tab_ai(")
         .expect("open_file_search_selection_or_query_in_tab_ai must exist");
-    let fn_body = &TAB_AI_MODE_SOURCE[fn_start..fn_start + 800.min(TAB_AI_MODE_SOURCE.len() - fn_start)];
+    let fn_body =
+        &TAB_AI_MODE_SOURCE[fn_start..fn_start + 800.min(TAB_AI_MODE_SOURCE.len() - fn_start)];
 
     assert!(
         fn_body.contains("open_tab_ai_chat_with_entry_intent"),
@@ -3432,8 +3438,8 @@ fn file_search_cmd_enter_passes_shift_for_plan_mode() {
     let handler_area = FILE_SEARCH_SOURCE
         .find("open_file_search_selection_or_query_in_tab_ai")
         .expect("AI opener call must exist in file_search.rs");
-    let nearby = &FILE_SEARCH_SOURCE
-        [handler_area.saturating_sub(300)..handler_area + 200.min(FILE_SEARCH_SOURCE.len() - handler_area)];
+    let nearby = &FILE_SEARCH_SOURCE[handler_area.saturating_sub(300)
+        ..handler_area + 200.min(FILE_SEARCH_SOURCE.len() - handler_area)];
 
     assert!(
         nearby.contains("has_shift") || nearby.contains("modifiers.shift"),

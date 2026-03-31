@@ -109,6 +109,9 @@ pub struct TermPrompt {
     /// being routed to the PTY via `scroll_to_pty()`.  Used by QuickTerminal
     /// (harness) sessions where the user scrolls to review output history.
     pub prefer_buffer_scroll_on_wheel: bool,
+    /// Fractional line remainder from pixel-based scroll events (trackpad/momentum).
+    /// Accumulated across events so small deltas aren't silently dropped.
+    wheel_scroll_remainder: f32,
 }
 
 // --- merged from part_001.rs ---
@@ -165,6 +168,7 @@ impl TermPrompt {
             escape_cancels: true,
             has_received_output: false,
             prefer_buffer_scroll_on_wheel: false,
+            wheel_scroll_remainder: 0.0,
         })
     }
 
@@ -435,6 +439,28 @@ impl TermPrompt {
     /// Get cell height scaled to configured font size
     fn cell_height(&self) -> f32 {
         self.font_size() * LINE_HEIGHT_MULTIPLIER
+    }
+
+    /// Return the current terminal selection text, if non-empty.
+    /// Used by the apply-back flow to check whether the user has
+    /// explicitly selected output before falling back to last-output.
+    #[allow(dead_code)] // Called from include!() binary code (render_prompts/term.rs)
+    pub fn selected_text_for_apply(&self) -> Option<String> {
+        self.terminal
+            .selection_to_string()
+            .filter(|text| !text.trim().is_empty())
+    }
+
+    /// Prime the system clipboard with content suitable for the apply-back
+    /// flow.  Prefers the current selection; falls back to the last-output
+    /// heuristic so `⌘↩` works without a manual copy step.
+    #[allow(dead_code)] // Called from include!() binary code (render_prompts/term.rs)
+    pub fn prime_apply_clipboard(&mut self, cx: &mut Context<Self>) {
+        if self.selected_text_for_apply().is_some() {
+            self.execute_action(crate::terminal::TerminalAction::Copy, cx);
+        } else {
+            self.execute_action(crate::terminal::TerminalAction::CopyLastOutput, cx);
+        }
     }
 
     /// Convert pixel position to terminal grid cell (col, row)
@@ -1376,40 +1402,55 @@ impl Render for TermPrompt {
                 }),
             )
             .on_scroll_wheel(cx.listener(|this, event: &ScrollWheelEvent, _window, cx| {
-                // Get scroll direction from delta
-                // Lines: direct line count, Pixels: convert based on cell height
                 let lines = match event.delta {
+                    // Discrete wheel: scroll immediately by whole lines
                     ScrollDelta::Lines(point) => point.y,
+                    // Trackpad/momentum: convert pixels to fractional lines
                     ScrollDelta::Pixels(point) => {
-                        // Convert pixels to lines by dividing by cell height
-                        // Pixels implements Div<Pixels> -> f32
                         let cell_height = px(this.cell_height());
                         point.y / cell_height
                     }
                 };
 
-                // Convert to integer lines (positive = scroll down, negative = scroll up)
-                // In terminal scrollback: negative delta scrolls up into history
-                // We invert because terminal scroll() uses positive = scroll up (into history)
-                let scroll_lines = -lines.round() as i32;
-
-                if scroll_lines != 0 {
-                    // Route scroll based on terminal mode:
-                    // - prefer_buffer_scroll_on_wheel: always local scrollback (harness)
-                    // - Mouse mode: send mouse wheel escape sequences to PTY
-                    // - Alt screen + alternate scroll: send arrow key sequences to PTY
-                    // - Normal: scroll the display buffer
-                    let routed_to_pty = if this.prefer_buffer_scroll_on_wheel {
-                        false
-                    } else {
-                        this.terminal.scroll_to_pty(scroll_lines)
-                    };
-                    if !routed_to_pty {
-                        this.terminal.scroll(scroll_lines);
-                    }
-                    trace!(delta = scroll_lines, "Mouse wheel scroll");
-                    cx.notify();
+                if lines == 0.0 {
+                    return;
                 }
+
+                // Accumulate fractional remainder so small trackpad deltas
+                // aren't silently dropped (the old code rounded each event
+                // independently, losing sub-line pixel increments).
+                this.wheel_scroll_remainder += -lines;
+
+                let whole_lines = if this.wheel_scroll_remainder > 0.0 {
+                    this.wheel_scroll_remainder.floor() as i32
+                } else {
+                    this.wheel_scroll_remainder.ceil() as i32
+                };
+
+                if whole_lines == 0 {
+                    return;
+                }
+
+                this.wheel_scroll_remainder -= whole_lines as f32;
+
+                // Route scroll based on terminal mode:
+                // - prefer_buffer_scroll_on_wheel: always local scrollback (harness)
+                // - Mouse mode / alt screen: send to PTY
+                // - Normal: scroll the display buffer
+                let routed_to_pty = if this.prefer_buffer_scroll_on_wheel {
+                    false
+                } else {
+                    this.terminal.scroll_to_pty(whole_lines)
+                };
+                if !routed_to_pty {
+                    this.terminal.scroll(whole_lines);
+                }
+                trace!(
+                    delta = whole_lines,
+                    remainder = this.wheel_scroll_remainder,
+                    "Mouse wheel scroll"
+                );
+                cx.notify();
             }))
             .on_key_down(handle_key);
 

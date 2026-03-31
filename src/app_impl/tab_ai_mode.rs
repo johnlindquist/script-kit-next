@@ -115,7 +115,7 @@ impl ScriptListApp {
         self.begin_tab_ai_harness_entry(intent, Some(plan), capture_kind, cx);
     }
 
-    /// Route raw text (from Send to AI fallback or dictation) through the
+    /// Route raw text (from Auto Submit fallback or dictation) through the
     /// quick-submit planner and into the harness — either an existing live
     /// session or a fresh one.
     pub(crate) fn submit_to_current_or_new_tab_ai_harness_from_text(
@@ -167,7 +167,7 @@ impl ScriptListApp {
 
     /// Submit a structured turn into an already-open, live harness session.
     ///
-    /// Captures fresh desktop context, rebuilds the full `<scriptKitContext>`
+    /// Captures fresh desktop context, rebuilds the full flat-line context
     /// submission with quick-submit metadata, and injects via Submit mode.
     /// On build failure, shows an error toast instead of falling back to
     /// raw intent-only PTY injection.
@@ -2576,7 +2576,8 @@ impl ScriptListApp {
         let Some(route) = self.tab_ai_harness_apply_back_route.clone() else {
             self.toast_manager.push(
                 crate::components::toast::Toast::error(
-                    "No apply-back target was captured for this Tab AI session".to_string(),
+                    "Tab AI is still capturing where Apply should go. Press ⌘↩ again in a moment."
+                        .to_string(),
                     &self.theme,
                 )
                 .duration_ms(Some(TOAST_ERROR_MS)),
@@ -2590,7 +2591,10 @@ impl ScriptListApp {
             Err(error) => {
                 self.toast_manager.push(
                     crate::components::toast::Toast::error(
-                        format!("Nothing usable found in the clipboard: {error}. Copy the harness output first, then press ⌘↩ again."),
+                        format!(
+                            "No terminal selection or harness output was available: {error}. \
+                             Select output, or let ⌘↩ use the last output."
+                        ),
                         &self.theme,
                     )
                     .duration_ms(Some(TOAST_ERROR_MS)),

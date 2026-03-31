@@ -7,8 +7,8 @@
 use script_kit_gpui::ai::{
     build_tab_ai_harness_submission, should_include_artifact_authoring_guidance,
     validate_tab_ai_harness_config, HarnessConfig, TabAiContextBlob, TabAiFieldStatus,
-    TabAiHarnessSubmissionMode, TabAiInvocationReceipt, TabAiSuggestedIntentSpec,
-    TabAiUiSnapshot, TAB_AI_INVOCATION_RECEIPT_SCHEMA_VERSION,
+    TabAiHarnessSubmissionMode, TabAiInvocationReceipt, TabAiSuggestedIntentSpec, TabAiUiSnapshot,
+    TAB_AI_INVOCATION_RECEIPT_SCHEMA_VERSION,
 };
 
 fn make_context(prompt_type: &str, input_text: Option<&str>) -> TabAiContextBlob {
@@ -750,8 +750,7 @@ fn submit_with_scriptlet_authoring_intent_includes_artifact_authoring_guidance()
     assert!(submission.contains("~/.scriptkit/kit/main/extensions/<name>.md"));
     assert!(submission.contains("~/.scriptkit/skills/scriptlets/SKILL.md"));
     assert!(submission.contains("~/.scriptkit/examples/extensions/"));
-    assert!(submission
-        .contains("User intent:\nCreate a scriptlet bundle that copies today's date"));
+    assert!(submission.contains("User intent:\nCreate a scriptlet bundle that copies today's date"));
 }
 
 #[test]
@@ -809,9 +808,7 @@ fn artifact_authoring_block_appears_between_context_and_intent() {
     let authoring_start = submission
         .find("<scriptKitArtifactAuthoring>")
         .expect("authoring block must exist");
-    let intent_start = submission
-        .find("User intent:")
-        .expect("intent must exist");
+    let intent_start = submission.find("User intent:").expect("intent must exist");
 
     assert!(
         context_start < authoring_start,
@@ -823,8 +820,7 @@ fn artifact_authoring_block_appears_between_context_and_intent() {
     );
     assert!(!submission.contains("<scriptKitHints>"));
     assert!(submission.contains("~/.scriptkit/kit/main/agents/<name>.<backend>.md"));
-    assert!(submission
-        .contains("User intent:\nGenerate a Script Kit agent for PR review"));
+    assert!(submission.contains("User intent:\nGenerate a Script Kit agent for PR review"));
 }
 
 #[test]
@@ -844,6 +840,16 @@ fn should_include_artifact_authoring_guidance_detects_authoring_intents() {
     )));
     assert!(should_include_artifact_authoring_guidance(Some(
         "Make an mdflow agent"
+    )));
+    // Descriptive noun phrases ending with artifact word
+    assert!(should_include_artifact_authoring_guidance(Some(
+        "PR review agent"
+    )));
+    assert!(should_include_artifact_authoring_guidance(Some(
+        "date snippet"
+    )));
+    assert!(should_include_artifact_authoring_guidance(Some(
+        "clipboard cleanup script"
     )));
 
     // Negative cases

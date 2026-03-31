@@ -81,7 +81,7 @@ fn render_terminal_prompt_hint_strip(
 ) -> AnyElement {
     let apply_label =
         crate::ai::tab_ai_apply_back_footer_label(route.map(|r| &r.source_type));
-    let text = format!("⌘↩ {apply_label} (copied output) · ⌘W Close");
+    let text = format!("⌘↩ {apply_label} (selection or last output) · ⌘W Close");
     crate::components::prompt_layout_shell::render_simple_hint_strip(text, None)
 }
 
@@ -209,6 +209,15 @@ impl ScriptListApp {
                             && !has_shift
                             && crate::ui_foundation::is_key_enter(key)
                         {
+                            // Prime the clipboard from terminal selection (or
+                            // last-output heuristic) so the user doesn't need
+                            // to manually copy before pressing ⌘↩.
+                            if let AppView::QuickTerminalView { entity } = &this.current_view {
+                                let entity = entity.clone();
+                                entity.update(cx, |term_prompt, cx| {
+                                    term_prompt.prime_apply_clipboard(cx);
+                                });
+                            }
                             this.apply_tab_ai_result_from_clipboard(cx);
                             return true;
                         }

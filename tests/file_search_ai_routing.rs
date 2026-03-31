@@ -44,8 +44,7 @@ fn file_search_mini_hints_advertise_ai_chord() {
 
     // The mini hint strip must advertise the updated explain / plan copy.
     assert!(
-        source.contains("Explain")
-            && source.contains("Plan next steps"),
+        source.contains("Explain") && source.contains("Plan next steps"),
         "mini file search hints must include the updated explain / plan copy"
     );
 }
