@@ -206,6 +206,24 @@ pub(crate) enum OverlayEscapeAction {
     Propagate,
 }
 
+/// Return phase-appropriate (headline, hint) copy for the dictation overlay.
+///
+/// The headline is the primary status text (e.g. "Listening…", "Cancel dictation?").
+/// The hint is the footer/shortcut hint (e.g. "Esc Cancel", "↵ Cancel · Esc Resume").
+pub(crate) fn overlay_phase_copy(
+    phase: &DictationSessionPhase,
+) -> (&'static str, &'static str) {
+    match phase {
+        DictationSessionPhase::Recording => ("Listening\u{2026}", "Esc Cancel"),
+        DictationSessionPhase::Confirming => ("Cancel dictation?", "\u{21b5} Cancel \u{00b7} Esc Resume"),
+        DictationSessionPhase::Transcribing => ("Transcribing\u{2026}", "Esc Close"),
+        DictationSessionPhase::Delivering => ("Delivering\u{2026}", "Esc Close"),
+        DictationSessionPhase::Finished => ("Done", "Esc Close"),
+        DictationSessionPhase::Failed(_) => ("Dictation failed", "Esc Close"),
+        DictationSessionPhase::Idle => ("", ""),
+    }
+}
+
 /// Map a dictation session phase to the appropriate Escape behavior.
 ///
 /// Follows the vercel-voice confirm-first pattern:
@@ -475,6 +493,7 @@ impl Render for DictationOverlay {
                     .child(div().w(px(TIMER_SPACER_WIDTH_PX)))
             }
             DictationSessionPhase::Confirming => {
+                let (headline, _hint) = overlay_phase_copy(phase);
                 let abort_color = theme.colors.ui.error.with_opacity(OPACITY_ACTIVE);
                 let resume_color = theme.colors.text.muted.with_opacity(OPACITY_TEXT_MUTED);
                 div()
@@ -489,7 +508,7 @@ impl Render for DictationOverlay {
                             .text_size(px(STATUS_TEXT_SIZE_PX))
                             .font_family(FONT_MONO)
                             .text_color(text_color)
-                            .child("Cancel dictation?"),
+                            .child(headline),
                     )
                     .child(
                         div()

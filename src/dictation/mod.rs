@@ -39,6 +39,7 @@ pub use window::{
     open_dictation_overlay, overlay_generation, set_overlay_abort_callback,
     update_dictation_overlay, DictationOverlay, DictationOverlayState,
 };
+pub(crate) use window::overlay_phase_copy;
 
 #[cfg(test)]
 mod tests;
