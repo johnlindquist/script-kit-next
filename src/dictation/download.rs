@@ -144,6 +144,50 @@ pub fn format_eta(seconds: Option<u64>) -> String {
     }
 }
 
+/// Classify a download error into a user-friendly, actionable message.
+///
+/// Maps common failure modes (network, disk space, permissions, server
+/// errors) to short guidance strings.  Unknown errors pass through
+/// verbatim so no information is lost.
+pub fn classify_download_error(error: &anyhow::Error) -> String {
+    let text = error.to_string();
+    let lower = text.to_ascii_lowercase();
+
+    if lower.contains("http request failed")
+        || lower.contains("dns")
+        || lower.contains("timed out")
+        || lower.contains("connection reset")
+        || lower.contains("connection refused")
+        || lower.contains("connection aborted")
+        || lower.contains("network")
+    {
+        return "Network issue while downloading the dictation model. Check your connection and retry.".to_string();
+    }
+
+    if lower.contains("no space")
+        || lower.contains("disk full")
+        || lower.contains("failed to write to partial file")
+    {
+        return "Not enough disk space to store the dictation model. Free some space and retry."
+            .to_string();
+    }
+
+    if lower.contains("permission denied")
+        || lower.contains("failed to create models directory")
+        || lower.contains("failed to create partial file")
+    {
+        return "Script Kit could not write the dictation model to disk. Check folder permissions and retry.".to_string();
+    }
+
+    if lower.contains("unexpected http status") {
+        return format!(
+            "The dictation model server returned an unexpected response: {text}"
+        );
+    }
+
+    text
+}
+
 /// Download phase reported to callers.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DownloadPhase {
@@ -492,6 +536,68 @@ mod tests {
         };
         // 250 remaining / 50 bps = 5 seconds
         assert_eq!(estimate_eta_seconds(p, 50), Some(5));
+    }
+
+    #[test]
+    fn classify_network_errors() {
+        let err = anyhow::anyhow!("HTTP request failed: dns error");
+        assert!(classify_download_error(&err).contains("Network issue"));
+
+        let err = anyhow::anyhow!("connection timed out after 30s");
+        assert!(classify_download_error(&err).contains("Network issue"));
+
+        let err = anyhow::anyhow!("connection reset by peer");
+        assert!(classify_download_error(&err).contains("Network issue"));
+
+        let err = anyhow::anyhow!("connection refused");
+        assert!(classify_download_error(&err).contains("Network issue"));
+
+        let err = anyhow::anyhow!("connection aborted");
+        assert!(classify_download_error(&err).contains("Network issue"));
+
+        let err = anyhow::anyhow!("network unreachable");
+        assert!(classify_download_error(&err).contains("Network issue"));
+    }
+
+    #[test]
+    fn classify_disk_space_errors() {
+        let err = anyhow::anyhow!("no space left on device");
+        assert!(classify_download_error(&err).contains("disk space"));
+
+        let err = anyhow::anyhow!("disk full");
+        assert!(classify_download_error(&err).contains("disk space"));
+
+        let err = anyhow::anyhow!("failed to write to partial file");
+        assert!(classify_download_error(&err).contains("disk space"));
+    }
+
+    #[test]
+    fn classify_permission_errors() {
+        let err = anyhow::anyhow!("permission denied");
+        assert!(classify_download_error(&err).contains("permissions"));
+
+        let err = anyhow::anyhow!("failed to create models directory: /foo/bar");
+        assert!(classify_download_error(&err).contains("permissions"));
+
+        let err = anyhow::anyhow!("failed to create partial file: /foo/bar.partial");
+        assert!(classify_download_error(&err).contains("permissions"));
+    }
+
+    #[test]
+    fn classify_http_status_errors() {
+        let err = anyhow::anyhow!("unexpected HTTP status 503 downloading model");
+        let msg = classify_download_error(&err);
+        assert!(msg.contains("unexpected response"));
+        assert!(msg.contains("503"));
+    }
+
+    #[test]
+    fn classify_unknown_errors_pass_through() {
+        let err = anyhow::anyhow!("something completely unexpected happened");
+        assert_eq!(
+            classify_download_error(&err),
+            "something completely unexpected happened"
+        );
     }
 
     #[test]

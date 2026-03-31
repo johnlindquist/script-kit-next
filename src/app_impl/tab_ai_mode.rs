@@ -1754,6 +1754,95 @@ impl ScriptListApp {
         }
     }
 
+    /// Format visible file search results for AI context injection.
+    fn format_file_search_ai_visible_results(
+        &self,
+        selected_display_index: Option<usize>,
+        limit: usize,
+    ) -> String {
+        self.visible_file_search_results(limit)
+            .into_iter()
+            .map(|(display_index, entry)| {
+                let marker = if Some(display_index) == selected_display_index {
+                    "*"
+                } else {
+                    "-"
+                };
+                let kind = if entry.file_type == crate::file_search::FileType::Directory {
+                    "directory"
+                } else {
+                    "file"
+                };
+                format!("{marker} [{}] {} ({kind})", display_index, entry.path)
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    /// Build a query-level AI intent when no valid row is selected.
+    /// Falls back to the current query and visible result set.
+    pub(crate) fn build_file_search_ai_query_intent(
+        &self,
+        query: &str,
+        plan_mode: bool,
+    ) -> Option<String> {
+        let query = query.trim();
+        if query.is_empty() && self.file_search_display_indices.is_empty() {
+            return None;
+        }
+
+        let nearby = self.format_file_search_ai_visible_results(None, 6);
+        let nearby = if nearby.is_empty() {
+            "- (no visible results yet)".to_string()
+        } else {
+            nearby
+        };
+
+        let presentation = match &self.current_view {
+            AppView::FileSearchView {
+                presentation: FileSearchPresentation::Mini,
+                ..
+            } => "mini",
+            AppView::FileSearchView {
+                presentation: FileSearchPresentation::Full,
+                ..
+            } => "full",
+            _ => "unknown",
+        };
+
+        let query_mode = if query.is_empty() {
+            "empty"
+        } else {
+            Self::file_search_query_mode(query)
+        };
+
+        Some(if plan_mode {
+            format!(
+                "I am browsing files in Script Kit.\n\
+                 File-search presentation: {presentation}\n\
+                 Current file-search query: {query}\n\
+                 Query mode: {query_mode}\n\
+                 Visible results:\n\
+                 {nearby}\n\n\
+                 Use the current search as the primary context.\n\
+                 Propose a concrete next-step plan, including which files or directories to inspect next,\n\
+                 how to refine the query, and how to verify the result."
+            )
+        } else {
+            format!(
+                "I am browsing files in Script Kit.\n\
+                 File-search presentation: {presentation}\n\
+                 Current file-search query: {query}\n\
+                 Query mode: {query_mode}\n\
+                 Visible results:\n\
+                 {nearby}\n\n\
+                 Use the current search as the primary context.\n\
+                 Summarize what this search is likely showing, point out the most important pattern,\n\
+                 and tell me the highest-leverage next search or file to inspect."
+            )
+        })
+    }
+
     /// Build an entry intent string for launching the AI harness from file
     /// search.  Returns `None` when no file is selected.
     ///
@@ -1766,7 +1855,7 @@ impl ScriptListApp {
         selected_index: usize,
         plan_mode: bool,
     ) -> Option<String> {
-        let selected = self.file_search_result_at_display_index(selected_index)?;
+        let (display_index, selected) = self.selected_file_search_result(selected_index)?;
 
         let subject = if selected.file_type == crate::file_search::FileType::Directory {
             "directory"
@@ -1774,28 +1863,7 @@ impl ScriptListApp {
             "file"
         };
 
-        let nearby = self
-            .visible_file_search_results(6)
-            .into_iter()
-            .map(|(display_index, entry)| {
-                let marker = if display_index == selected_index {
-                    "*"
-                } else {
-                    "-"
-                };
-                format!(
-                    "{marker} [{}] {} ({})",
-                    display_index,
-                    entry.path,
-                    if entry.file_type == crate::file_search::FileType::Directory {
-                        "directory"
-                    } else {
-                        "file"
-                    }
-                )
-            })
-            .collect::<Vec<_>>()
-            .join("\n");
+        let nearby = self.format_file_search_ai_visible_results(Some(display_index), 6);
 
         let presentation = match &self.current_view {
             AppView::FileSearchView {
@@ -1860,7 +1928,7 @@ impl ScriptListApp {
         };
 
         let plan = crate::ai::TabAiQuickSubmitPlan {
-            source: crate::ai::TabAiQuickSubmitSource::Fallback,
+            source: crate::ai::TabAiQuickSubmitSource::FileSearch,
             kind: crate::ai::TabAiQuickSubmitKind::FileDrop,
             raw_query: selected.path.clone(),
             normalized_query: selected.path.clone(),
@@ -1870,6 +1938,30 @@ impl ScriptListApp {
         };
 
         self.open_tab_ai_chat_with_quick_submit_plan(plan, cx);
+        true
+    }
+
+    /// Open the AI harness from file search, falling back to a query-level
+    /// intent when no valid row is selected.
+    ///
+    /// Returns `false` only when no useful context exists at all (empty query
+    /// and no visible results), so `⌘↵` / `⌘⇧↵` is never a dead keypress.
+    pub(crate) fn open_file_search_selection_or_query_in_tab_ai(
+        &mut self,
+        query: &str,
+        selected_index: usize,
+        plan_mode: bool,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if self.open_file_search_selection_in_tab_ai(query, selected_index, plan_mode, cx) {
+            return true;
+        }
+
+        let Some(intent) = self.build_file_search_ai_query_intent(query, plan_mode) else {
+            return false;
+        };
+
+        self.open_tab_ai_chat_with_entry_intent(Some(intent), cx);
         true
     }
 

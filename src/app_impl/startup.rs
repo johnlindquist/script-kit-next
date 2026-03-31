@@ -780,15 +780,20 @@ impl ScriptListApp {
                             }
 
                             // Shift+Tab in ScriptList: route typed query through the
-                            // harness terminal so Tab always means "send me to my
-                            // running harness with context."
+                            // quick-submit planner so the harness gets intelligent
+                            // classification, synthesized intent, and the right
+                            // capture kind — not just a raw string paste.
                             if has_shift
                                 && matches!(this.current_view, AppView::ScriptList)
                                 && !this.filter_text.is_empty()
                                 && !this.show_actions_popup
                             {
                                 let query = this.filter_text.clone();
-                                this.open_tab_ai_chat_with_entry_intent(Some(query), cx);
+                                this.submit_to_current_or_new_tab_ai_harness_from_text(
+                                    query,
+                                    crate::ai::TabAiQuickSubmitSource::ShiftTab,
+                                    cx,
+                                );
                                 cx.stop_propagation();
                                 return;
                             }

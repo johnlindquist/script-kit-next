@@ -3849,6 +3849,142 @@ impl ScriptListApp {
                 }
                 Self::builtin_success(dctx, "dictation_toggle")
             }
+            builtins::BuiltInFeature::DictationToAiHarness => {
+                tracing::info!(
+                    category = "BUILTIN",
+                    trace_id = %dctx.trace_id,
+                    "Opening Dictation to AI Harness"
+                );
+
+                // On the start edge, run the same model-download and
+                // delivery-target preflight as generic Dictation, but
+                // use the target-aware validator so TabAiHarness is
+                // accepted without needing the harness to be open yet.
+                if !crate::dictation::is_dictation_recording() {
+                    if !crate::dictation::is_parakeet_model_available() {
+                        if PARAKEET_MODEL_DOWNLOAD_IN_PROGRESS
+                            .load(std::sync::atomic::Ordering::Acquire)
+                        {
+                            self.open_dictation_model_prompt(cx);
+                            return Self::builtin_success(
+                                dctx,
+                                "dictation_model_download_in_progress",
+                            );
+                        }
+                        self.open_dictation_model_prompt(cx);
+                        return Self::builtin_success(
+                            dctx,
+                            "dictation_model_prompt_opened",
+                        );
+                    }
+
+                    let target = self.resolve_dictation_target_with_override(true);
+                    if let Err(error) =
+                        self.ensure_dictation_delivery_target_available_for(target)
+                    {
+                        let error_text = error.to_string();
+                        tracing::error!(
+                            category = "DICTATION",
+                            error = %error_text,
+                            "Dictation-to-AI start preflight failed"
+                        );
+                        self.show_error_toast(
+                            format!("Dictation unavailable: {error_text}"),
+                            cx,
+                        );
+                        return Self::builtin_success(dctx, "dictation_preflight_failed");
+                    }
+                }
+
+                // Force the target to TabAiHarness regardless of the
+                // currently active view.
+                let dictation_target = if !crate::dictation::is_dictation_recording() {
+                    self.resolve_dictation_target_with_override(true)
+                } else {
+                    crate::dictation::get_dictation_target()
+                        .unwrap_or(crate::dictation::DictationTarget::TabAiHarness)
+                };
+
+                match crate::dictation::toggle_dictation(dictation_target) {
+                    Ok(crate::dictation::DictationToggleOutcome::Started) => {
+                        let _ = crate::dictation::begin_overlay_session();
+                        crate::dictation::set_overlay_abort_callback(|cx| {
+                            if let Err(error) = crate::dictation::abort_dictation() {
+                                tracing::error!(
+                                    category = "DICTATION",
+                                    error = %error,
+                                    "Failed to abort dictation from overlay"
+                                );
+                            }
+                            let _ = crate::dictation::close_dictation_overlay(cx);
+                        });
+                        let _ = crate::dictation::open_dictation_overlay(cx);
+                        let _ = crate::dictation::update_dictation_overlay(
+                            crate::dictation::DictationOverlayState {
+                                phase: crate::dictation::DictationSessionPhase::Recording,
+                                ..Default::default()
+                            },
+                            cx,
+                        );
+                        self.spawn_dictation_overlay_pump(cx);
+                    }
+                    Ok(crate::dictation::DictationToggleOutcome::Stopped(Some(capture))) => {
+                        let _ = crate::dictation::update_dictation_overlay(
+                            crate::dictation::DictationOverlayState {
+                                phase: crate::dictation::DictationSessionPhase::Transcribing,
+                                elapsed: capture.audio_duration,
+                                ..Default::default()
+                            },
+                            cx,
+                        );
+                        let audio_duration = capture.audio_duration;
+                        let chunks = capture.chunks;
+                        let saved_target = dictation_target;
+                        cx.spawn(async move |this, cx| {
+                            let transcript_result = cx
+                                .background_executor()
+                                .spawn(async move {
+                                    crate::dictation::transcribe_captured_audio(&chunks)
+                                })
+                                .await;
+                            let _ = this.update(cx, |this, cx| {
+                                Self::handle_dictation_transcript(
+                                    this,
+                                    transcript_result,
+                                    audio_duration,
+                                    saved_target,
+                                    cx,
+                                );
+                            });
+                        })
+                        .detach();
+                    }
+                    Ok(crate::dictation::DictationToggleOutcome::Stopped(None)) => {
+                        let _ = crate::dictation::close_dictation_overlay(cx);
+                    }
+                    Err(error) => {
+                        tracing::error!(
+                            category = "DICTATION",
+                            error = %error,
+                            "Failed to toggle dictation to AI harness"
+                        );
+                        let _ = crate::dictation::update_dictation_overlay(
+                            crate::dictation::DictationOverlayState {
+                                phase: crate::dictation::DictationSessionPhase::Failed(
+                                    error.to_string(),
+                                ),
+                                ..Default::default()
+                            },
+                            cx,
+                        );
+                        self.schedule_dictation_overlay_close(
+                            cx,
+                            std::time::Duration::from_millis(800),
+                        );
+                    }
+                }
+                Self::builtin_success(dctx, "dictation_to_ai_toggle")
+            }
             builtins::BuiltInFeature::FileSearch => {
                 tracing::info!(
                     category = "BUILTIN",
@@ -4204,10 +4340,13 @@ impl ScriptListApp {
                 );
 
                 if error_text.contains("Parakeet model not downloaded") {
-                    self.show_error_toast(
-                        "Dictation model not downloaded. Press the dictation hotkey again to start the download.".to_string(),
+                    let _ = crate::dictation::close_dictation_overlay(cx);
+                    self.open_dictation_model_prompt(cx);
+                    self.schedule_dictation_transcriber_cleanup(
                         cx,
+                        std::time::Duration::from_secs(300),
                     );
+                    return;
                 } else {
                     self.show_error_toast(
                         format!("Dictation transcription failed: {error_text}"),
@@ -4467,10 +4606,13 @@ impl ScriptListApp {
                         );
                     }
                     Err(error) => {
-                        let error_text = error.to_string();
+                        let raw_error = error.to_string();
+                        let error_text =
+                            crate::dictation::download::classify_download_error(&error);
                         tracing::error!(
                             category = "DICTATION",
-                            error = %error_text,
+                            error = %raw_error,
+                            user_error = %error_text,
                             "Parakeet model download failed"
                         );
                         this.update_dictation_model_prompt_if_visible(
@@ -4506,7 +4648,7 @@ impl ScriptListApp {
             DictationModelStatus::NotDownloaded => (
                 "Download local dictation model".to_string(),
                 format!(
-                    "{archive_size} download \u{00b7} fully local transcription \u{00b7} no cloud round-trip"
+                    "{archive_size} download \u{00b7} fully local transcription \u{00b7} resumable if interrupted"
                 ),
                 vec![
                     Choice {
@@ -4540,7 +4682,7 @@ impl ScriptListApp {
                     eta_seconds,
                 );
                 (
-                    format!("Preparing local dictation\u{2026} {percentage}%"),
+                    format!("Downloading local dictation model\u{2026} {percentage}%"),
                     summary,
                     vec![
                         Choice {
@@ -4564,7 +4706,7 @@ impl ScriptListApp {
             }
             DictationModelStatus::Extracting => (
                 "Installing local dictation model\u{2026}".to_string(),
-                "Download finished. Unpacking model files.".to_string(),
+                "Download finished. Installing model files locally.".to_string(),
                 vec![Choice {
                     name: "Hide".to_string(),
                     value: BUILTIN_DICTATION_MODEL_HIDE.to_string(),
@@ -4623,7 +4765,7 @@ impl ScriptListApp {
             ),
             DictationModelStatus::Available => (
                 "Dictation model ready".to_string(),
-                "Everything is local now. Press the dictation hotkey again to start recording."
+                "Everything is local now. Press Enter on Done or use the dictation hotkey to start recording."
                     .to_string(),
                 vec![Choice {
                     name: "Done".to_string(),
@@ -4775,6 +4917,39 @@ impl ScriptListApp {
         crate::frontmost_app_tracker::get_last_real_app_bundle_id()
             .context("no previously tracked frontmost app is available for dictation paste")?;
         Ok(())
+    }
+
+    /// Validate that a specific delivery target is reachable before
+    /// starting dictation.  Script Kit internal targets (harness, notes,
+    /// AI composer, prompt) are always available.  `ExternalApp` requires
+    /// the frontmost-app tracker to have a previously-tracked target.
+    fn ensure_dictation_delivery_target_available_for(
+        &self,
+        target: crate::dictation::DictationTarget,
+    ) -> anyhow::Result<()> {
+        match target {
+            crate::dictation::DictationTarget::ExternalApp => {
+                Self::ensure_dictation_frontmost_target_available()
+            }
+            crate::dictation::DictationTarget::MainWindowPrompt
+            | crate::dictation::DictationTarget::NotesEditor
+            | crate::dictation::DictationTarget::AiChatComposer
+            | crate::dictation::DictationTarget::TabAiHarness => Ok(()),
+        }
+    }
+
+    /// Resolve the dictation delivery target, optionally overriding to
+    /// `TabAiHarness` so a dedicated "dictate to AI" action can force
+    /// harness delivery even when the harness is not already on-screen.
+    pub(crate) fn resolve_dictation_target_with_override(
+        &self,
+        force_tab_ai_harness: bool,
+    ) -> crate::dictation::DictationTarget {
+        if force_tab_ai_harness {
+            crate::dictation::DictationTarget::TabAiHarness
+        } else {
+            self.resolve_dictation_target()
+        }
     }
 
     /// Determine the delivery target for a new dictation session based on
@@ -5090,8 +5265,9 @@ mod dictation_model_prompt_tests {
         );
         assert_eq!(title, "Download local dictation model");
         assert!(
-            placeholder.contains("fully local transcription"),
-            "placeholder must mention local transcription, got: {placeholder}"
+            placeholder.contains("fully local transcription")
+                || placeholder.contains("resumable if interrupted"),
+            "placeholder must mention local transcription or resumability, got: {placeholder}"
         );
         assert_eq!(choices.len(), 2);
         assert_eq!(choices[0].value, BUILTIN_DICTATION_MODEL_DOWNLOAD);

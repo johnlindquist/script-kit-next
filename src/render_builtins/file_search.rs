@@ -308,13 +308,11 @@ impl ScriptListApp {
         let hover_alpha = (opacity.hover * 255.0) as u32;
 
         // Get selected file for preview (if any)
-        // Use display indices to map visible index -> actual result index.
-        // Compute this before borrowing display_indices for the rest of render,
-        // so we can safely call ensure_file_search_preview_thumbnail(&mut self, ...).
-        let selected_file = self
-            .file_search_display_indices
-            .get(selected_index)
-            .and_then(|&result_idx| self.cached_file_results.get(result_idx))
+        // Clamp the display index so a stale selected_index from a shrinking
+        // result set still resolves to a valid visible row.
+        let clamped_selected_index = self.clamp_file_search_display_index(selected_index);
+        let selected_file = clamped_selected_index
+            .and_then(|display_index| self.file_search_result_at_display_index(display_index))
             .cloned();
         self.ensure_file_search_preview_thumbnail(selected_file.as_ref(), cx);
 
@@ -418,12 +416,15 @@ impl ScriptListApp {
                     ..
                 } = &mut this.current_view
                 {
-                    // Use pre-computed display_indices to get the selected file
-                    // This is consistent with what render shows and avoids re-running Nucleo
+                    // Copy the index so the mutable borrow on current_view is
+                    // released before the closure borrows `this` immutably.
+                    let sel_idx = *selected_index;
+
                     let get_selected_file = || {
-                        this.file_search_display_indices
-                            .get(*selected_index)
-                            .and_then(|&idx| this.cached_file_results.get(idx))
+                        this.clamp_file_search_display_index(sel_idx)
+                            .and_then(|display_index| {
+                                this.file_search_result_at_display_index(display_index)
+                            })
                             .cloned()
                     };
 
@@ -438,8 +439,9 @@ impl ScriptListApp {
                         // (interceptor fires BEFORE input component can capture Tab)
                         _ if is_key_enter(key) => {
                             if has_cmd {
-                                // ⌘↵ / ⌘⇧↵ → launch AI harness with file context
-                                // via quick-submit plan for richer harness hints.
+                                // ⌘↵ / ⌘⇧↵ → launch AI harness with file context.
+                                // Falls back to query-level intent when no row is selected,
+                                // so this is never a dead keypress in mini file search.
                                 let has_shift = event.keystroke.modifiers.shift;
                                 let ai_args = if let AppView::FileSearchView {
                                     ref query,
@@ -452,7 +454,7 @@ impl ScriptListApp {
                                     None
                                 };
                                 if let Some((query, sel_idx)) = ai_args {
-                                    if this.open_file_search_selection_in_tab_ai(
+                                    if this.open_file_search_selection_or_query_in_tab_ai(
                                         &query,
                                         sel_idx,
                                         has_shift,
@@ -534,7 +536,7 @@ impl ScriptListApp {
             .iter()
             .filter_map(|&idx| self.cached_file_results.get(idx).map(|f| (idx, f.clone())))
             .collect();
-        let current_selected = selected_index;
+        let current_selected = clamped_selected_index.unwrap_or(usize::MAX);
         let is_loading = self.file_search_loading;
         let click_entity_handle = cx.entity().downgrade();
 
@@ -1004,29 +1006,80 @@ impl ScriptListApp {
         };
 
         let (empty_title, empty_subtitle) = if query.is_empty() {
-            ("Type to search files", "Use ~/ to browse a folder inline")
+            (
+                "Type to search files",
+                "Use ~/ to browse a folder inline, or press \u{2318}\u{21b5} to ask AI how to search",
+            )
         } else if is_directory_query && query.ends_with('/') {
-            ("Folder is empty", "Try another path or keep typing to narrow a parent folder")
+            (
+                "Folder is empty",
+                "Try another path, or press \u{2318}\u{21b5} for AI help deciding what to inspect next",
+            )
         } else if is_directory_query {
-            ("No matches in folder", "Keep typing to narrow the current directory")
+            (
+                "No matches in folder",
+                "Keep typing to narrow the current directory, or press \u{2318}\u{21b5} for AI help refining the browse",
+            )
         } else if is_advanced_query {
-            ("No Spotlight matches", "Try a broader predicate or fewer operators")
+            (
+                "No Spotlight matches",
+                "Try a broader predicate, or press \u{2318}\u{21b5} for AI help rewriting the query",
+            )
         } else {
-            ("No files found", "Try ~/ to browse, or \u{2318}\u{21b5} to ask AI about this search")
+            (
+                "No files found",
+                "Try a broader query, or press \u{2318}\u{21b5} to ask AI how to refine this search",
+            )
         };
 
         let mini_hints: Vec<SharedString> = if let Some(file) = selected_file.as_ref() {
             if file.file_type == FileType::Directory {
-                vec!["\u{21b5} Browse".into(), "\u{2318}\u{21b5} Ask AI".into(), "\u{2318}K Actions".into()]
+                vec![
+                    "\u{21b5} Browse".into(),
+                    "\u{2318}\u{21b5} Explain".into(),
+                    "\u{2318}\u{21e7}\u{21b5} Plan".into(),
+                    "\u{2318}K Actions".into(),
+                ]
             } else {
-                vec!["\u{21b5} Open".into(), "\u{2318}\u{21b5} Ask AI".into(), "\u{2318}K Actions".into()]
+                vec![
+                    "\u{21b5} Open".into(),
+                    "\u{2318}\u{21b5} Explain".into(),
+                    "\u{2318}\u{21e7}\u{21b5} Plan".into(),
+                    "\u{2318}K Actions".into(),
+                ]
             }
+        } else if is_loading {
+            vec![
+                "Searching\u{2026}".into(),
+                "\u{2318}\u{21b5} Explain search".into(),
+                "\u{2318}\u{21e7}\u{21b5} Plan next steps".into(),
+            ]
+        } else if filtered_len == 0 {
+            vec![
+                "Type a path or search".into(),
+                "\u{2318}\u{21b5} Explain search".into(),
+                "\u{2318}\u{21e7}\u{21b5} Plan next steps".into(),
+            ]
         } else if is_directory_query {
-            vec!["Browse by path".into(), "\u{2318}\u{21b5} Ask AI".into(), "\u{2318}K Actions".into()]
+            vec![
+                "Browse by path".into(),
+                "\u{2318}\u{21b5} Explain folder".into(),
+                "\u{2318}\u{21e7}\u{21b5} Plan next steps".into(),
+                "\u{2318}K Actions".into(),
+            ]
         } else if is_advanced_query {
-            vec!["Spotlight query".into(), "\u{2318}\u{21b5} Ask AI".into(), "\u{2318}K Actions".into()]
+            vec![
+                "Spotlight query".into(),
+                "\u{2318}\u{21b5} Explain results".into(),
+                "\u{2318}\u{21e7}\u{21b5} Plan next steps".into(),
+                "\u{2318}K Actions".into(),
+            ]
         } else {
-            vec!["\u{21b5} Open".into(), "\u{2318}\u{21b5} Ask AI".into(), "\u{2318}K Actions".into()]
+            vec![
+                "\u{2318}\u{21b5} Explain results".into(),
+                "\u{2318}\u{21e7}\u{21b5} Plan next steps".into(),
+                "\u{2318}K Actions".into(),
+            ]
         };
 
         // Header: bare input + file count (scaffold adds padding/layout)

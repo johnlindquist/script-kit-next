@@ -3368,10 +3368,11 @@ fn escape_abort_never_reaches_transcript_handler() {
 // Regression: missing-model toast includes download guidance
 // ---------------------------------------------------------------------------
 
-/// When the Parakeet model is missing at transcription time, the error toast
-/// must include a recognizable message and the resolved model path.
+/// When the Parakeet model is missing at transcription time, the error
+/// handler must detect the specific error string and log the resolved
+/// model path for diagnostics.
 #[test]
-fn missing_model_toast_includes_parakeet_download_guidance() {
+fn missing_model_error_detects_parakeet_string_and_logs_model_path() {
     let src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
         .expect("read builtin_execution.rs");
 
@@ -4224,13 +4225,14 @@ fn resolve_dictation_target_exists_in_builtin_execution() {
         .expect("read builtin_execution.rs");
 
     assert!(
-        src.contains("fn resolve_dictation_target"),
+        src.contains("fn resolve_dictation_target("),
         "builtin_execution.rs must define resolve_dictation_target"
     );
 
     // Must check notes and AI windows before falling back to prompt or external.
+    // Use the exact signature to skip resolve_dictation_target_with_override.
     let resolver_start = src
-        .find("fn resolve_dictation_target")
+        .find("fn resolve_dictation_target(&self) ->")
         .expect("resolver must exist");
     let resolver_src = &src[resolver_start..resolver_start + 800.min(src.len() - resolver_start)];
 
@@ -4257,8 +4259,9 @@ fn resolve_dictation_target_checks_notes_before_ai() {
     let src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
         .expect("read builtin_execution.rs");
 
+    // Use the exact signature to skip resolve_dictation_target_with_override.
     let resolver_start = src
-        .find("fn resolve_dictation_target")
+        .find("fn resolve_dictation_target(&self) ->")
         .expect("resolver must exist");
     let resolver_src = &src[resolver_start..resolver_start + 800.min(src.len() - resolver_start)];
 
@@ -4398,5 +4401,141 @@ fn inject_text_into_notes_is_exported() {
     assert!(
         src.contains("inject_text_into_notes"),
         "inject_text_into_notes must be re-exported from the notes module"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Missing-model entry gate opens the rich download prompt
+// ---------------------------------------------------------------------------
+
+/// When the Parakeet model is not available at dictation start time, the
+/// entry gate must open the rich model-download prompt — not just log or
+/// show a toast.  This verifies the preflight guard opens the prompt and
+/// returns early before attempting capture.
+#[test]
+fn missing_model_entry_gate_opens_download_prompt() {
+    let src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("read builtin_execution.rs");
+
+    // Find the Dictation builtin arm — the `BuiltInFeature::Dictation` match.
+    let dictation_arm_start = src
+        .find("BuiltInFeature::Dictation =>")
+        .expect("builtin_execution must have a Dictation arm");
+    // Scope to the first ~2000 chars of the arm to stay in the preflight.
+    let arm_src = &src[dictation_arm_start..dictation_arm_start + 2000.min(src.len() - dictation_arm_start)];
+
+    // Must check model availability before starting capture.
+    assert!(
+        arm_src.contains("is_parakeet_model_available()"),
+        "Dictation entry must check Parakeet model availability"
+    );
+
+    // When model is missing, must open the rich download prompt.
+    assert!(
+        arm_src.contains("open_dictation_model_prompt(cx)"),
+        "Dictation entry must open the model download prompt when model is missing"
+    );
+
+    // The model check must come before delivery target check — we don't
+    // want to fail on delivery validation when the real issue is missing model.
+    let model_check_pos = arm_src
+        .find("is_parakeet_model_available()")
+        .expect("model check must exist");
+    let delivery_check_pos = arm_src
+        .find("ensure_dictation_delivery_target_available()")
+        .expect("delivery target check must exist");
+    assert!(
+        model_check_pos < delivery_check_pos,
+        "model availability check must come BEFORE delivery target validation"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Missing-model transcription recovery opens prompt instead of dead-end toast
+// ---------------------------------------------------------------------------
+
+/// When transcription fails because the Parakeet model is missing, the
+/// handler must close the overlay and open the rich download prompt so the
+/// user can immediately start the download — rather than showing a
+/// dead-end toast that requires them to guess the next step.
+#[test]
+fn missing_model_transcription_recovery_opens_download_prompt() {
+    let src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("read builtin_execution.rs");
+
+    let handler_src = dictation_handler_source(&src);
+
+    // Find the Parakeet-missing branch within the Err arm.
+    let parakeet_branch_start = handler_src
+        .find("Parakeet model not downloaded")
+        .expect("handler must detect the Parakeet-missing error string");
+    // Scope to ~500 chars after the detection to capture the branch body.
+    let branch_src = &handler_src[parakeet_branch_start..parakeet_branch_start + 500.min(handler_src.len() - parakeet_branch_start)];
+
+    // Must close the dictation overlay before opening the prompt.
+    assert!(
+        branch_src.contains("close_dictation_overlay"),
+        "Parakeet-missing branch must close the dictation overlay"
+    );
+
+    // Must open the rich download prompt.
+    assert!(
+        branch_src.contains("open_dictation_model_prompt"),
+        "Parakeet-missing branch must open the model download prompt, not a dead-end toast"
+    );
+
+    // Must schedule transcriber cleanup.
+    assert!(
+        branch_src.contains("schedule_dictation_transcriber_cleanup"),
+        "Parakeet-missing branch must schedule transcriber cleanup"
+    );
+
+    // Must return early — no fallthrough to the generic error toast.
+    assert!(
+        branch_src.contains("return;"),
+        "Parakeet-missing branch must return early to avoid the generic error toast"
+    );
+
+    // Must NOT show a dead-end toast in this branch (the prompt IS the UX).
+    let branch_before_return = &branch_src[..branch_src.find("return;").unwrap_or(branch_src.len())];
+    assert!(
+        !branch_before_return.contains("show_error_toast"),
+        "Parakeet-missing branch must NOT show a dead-end toast — the prompt is the recovery UX"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Download failure path uses classified error messages
+// ---------------------------------------------------------------------------
+
+/// When the background model download fails, the error text surfaced to
+/// the user must go through `classify_download_error` so users see
+/// actionable guidance instead of raw error strings.
+#[test]
+fn download_failure_uses_classified_error() {
+    let src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("read builtin_execution.rs");
+
+    let download_fn_start = src
+        .find("fn start_parakeet_model_download(")
+        .expect("start_parakeet_model_download must exist");
+    // Scope from the function start to the next top-level function
+    // (`build_dictation_model_prompt`) to capture the full error handling.
+    let download_tail = &src[download_fn_start..];
+    let download_src = match download_tail.find("fn build_dictation_model_prompt(") {
+        Some(end) => &download_tail[..end],
+        None => download_tail,
+    };
+
+    // Must call classify_download_error for non-cancelled failures.
+    assert!(
+        download_src.contains("classify_download_error"),
+        "download failure path must classify errors for user-friendly messages"
+    );
+
+    // Must log the raw error AND the classified user-facing error separately.
+    assert!(
+        download_src.contains("raw_error") && download_src.contains("user_error"),
+        "download failure must log both raw_error and user_error for diagnostics"
     );
 }

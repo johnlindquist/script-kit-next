@@ -66,7 +66,6 @@ pub fn get_file_context_actions(file_info: &FileInfo) -> Vec<Action> {
             Some("Shows this item in Finder".to_string()),
             ActionCategory::ScriptContext,
         )
-        .with_shortcut("⌘↵")
         .with_icon(IconName::FolderOpen),
     );
 
