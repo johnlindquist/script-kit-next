@@ -1437,10 +1437,7 @@ mod tests {
             normalize_builtin_labeled_request(Some(""), "My Command"),
             None
         );
-        assert_eq!(
-            normalize_builtin_labeled_request(None, "My Command"),
-            None
-        );
+        assert_eq!(normalize_builtin_labeled_request(None, "My Command"), None);
     }
 
     // -----------------------------------------------------------------------

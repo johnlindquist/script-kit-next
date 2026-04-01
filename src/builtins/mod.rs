@@ -867,8 +867,20 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             "Open Notes",
             "Open the Notes window",
             vec![
-                "open", "notes", "window", "note", "new", "create", "search", "find",
-                "scratch", "scratchpad", "memo", "markdown", "write", "text",
+                "open",
+                "notes",
+                "window",
+                "note",
+                "new",
+                "create",
+                "search",
+                "find",
+                "scratch",
+                "scratchpad",
+                "memo",
+                "markdown",
+                "write",
+                "text",
             ],
             BuiltInFeature::NotesCommand(NotesCommandType::OpenNotes),
             "📝",
@@ -2202,7 +2214,10 @@ mod tests {
         assert!(entries.iter().any(|e| e.id == "builtin-quick-capture"));
 
         // Verify Open Notes absorbed the keywords from the collapsed entries
-        let open_notes = entries.iter().find(|e| e.id == "builtin-open-notes").unwrap();
+        let open_notes = entries
+            .iter()
+            .find(|e| e.id == "builtin-open-notes")
+            .unwrap();
         assert!(open_notes.keywords.contains(&"new".to_string()));
         assert!(open_notes.keywords.contains(&"create".to_string()));
         assert!(open_notes.keywords.contains(&"search".to_string()));

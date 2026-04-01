@@ -265,10 +265,7 @@ fn config_validation_rejects_empty_command() {
         ..Default::default()
     };
     let err = validate_tab_ai_harness_config(&config).expect_err("empty command must fail");
-    assert!(
-        err.contains("config.ts"),
-        "must mention config file: {err}"
-    );
+    assert!(err.contains("config.ts"), "must mention config file: {err}");
 }
 
 #[test]
