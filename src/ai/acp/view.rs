@@ -831,25 +831,37 @@ impl AcpChatView {
                     .flex()
                     .items_center()
                     .gap(px(8.0))
-                    // Mode pill
+                    // Mode pill (label + chevron)
                     .when_some(mode_label.map(str::to_string), |d, mode| {
-                        d.child(div().text_xs().opacity(0.55).child(mode))
+                        d.child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap(px(2.0))
+                                .text_xs()
+                                .opacity(0.55)
+                                .child(mode)
+                                .child("\u{25BE}"),
+                        )
                     })
-                    // Model pill
+                    // Model pill (label + chevron)
                     .child(
                         div()
+                            .flex()
+                            .items_center()
+                            .gap(px(2.0))
                             .text_xs()
                             .opacity(0.55)
-                            .child(display_name.to_string()),
+                            .child(display_name.to_string())
+                            .child("\u{25BE}"),
                     )
                     // Send / Stop button
-                    .child(self.render_send_button(status, can_send, is_streaming, &theme, cx)),
+                    .child(self.render_send_button(can_send, is_streaming, &theme, cx)),
             )
     }
 
     fn render_send_button(
         &self,
-        _status: AcpThreadStatus,
         can_send: bool,
         is_streaming: bool,
         theme: &crate::theme::Theme,
@@ -1024,7 +1036,7 @@ impl Render for AcpChatView {
                     .when(!is_empty, |d| {
                         d.px(px(8.0))
                             .py(px(8.0))
-                            .gap_1()
+                            .gap_2()
                             .flex()
                             .flex_col()
                             .children(messages.iter().map(|msg| {
