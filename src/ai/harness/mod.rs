@@ -611,6 +611,7 @@ pub fn build_tab_ai_harness_context_block(
     }
     if let Some(path) = context.screenshot_path.as_deref() {
         push_line(&mut out, "screenshot path", path);
+        out.push_str("NOTE: A screenshot of the user's focused window is saved at this path. Use your file-read tool to view it if the user asks about what's on their screen.\n");
     }
     if let Some(hint) = context.apply_back_hint.as_ref() {
         push_line(&mut out, "apply back action", &hint.action);

@@ -224,12 +224,14 @@ async fn run_acp_event_loop(
         .agent_capabilities
         .prompt_capabilities
         .embedded_context;
+    let supports_image = init_response.agent_capabilities.prompt_capabilities.image;
 
     tracing::info!(
         agent = %agent.id,
         protocol_version = ?init_response.protocol_version,
         load_session = init_response.agent_capabilities.load_session,
         supports_embedded_context,
+        supports_image,
         "acp_initialized"
     );
 

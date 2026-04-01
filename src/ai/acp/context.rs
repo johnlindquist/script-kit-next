@@ -5,7 +5,7 @@
 //! Keeps the first ACP slice text-only for capability safety — no image or
 //! resource blocks are emitted here.
 
-use agent_client_protocol::{ContentBlock, TextContent};
+use agent_client_protocol::{ContentBlock, ImageContent, TextContent};
 
 use crate::ai::{
     build_tab_ai_harness_context_block, should_include_artifact_authoring_guidance,
@@ -24,7 +24,29 @@ pub(crate) fn build_tab_ai_acp_context_blocks(
     context: &TabAiContextBlob,
 ) -> Result<Vec<ContentBlock>, String> {
     let context_text = build_tab_ai_harness_context_block(context)?;
-    Ok(vec![ContentBlock::Text(TextContent::new(context_text))])
+    let mut blocks = vec![ContentBlock::Text(TextContent::new(context_text))];
+
+    // If a screenshot was captured, embed it as an Image block so the agent
+    // can see what's on the user's screen without an extra tool call.
+    if let Some(path) = context.screenshot_path.as_deref() {
+        match std::fs::read(path) {
+            Ok(bytes) => {
+                use base64::Engine as _;
+                let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
+                blocks.push(ContentBlock::Image(ImageContent::new(b64, "image/png")));
+                tracing::debug!(
+                    path,
+                    size_bytes = bytes.len(),
+                    "acp_context_screenshot_embedded"
+                );
+            }
+            Err(error) => {
+                tracing::debug!(path, %error, "acp_context_screenshot_read_failed");
+            }
+        }
+    }
+
+    Ok(blocks)
 }
 
 /// Return guidance blocks only when the intent looks like an authoring request

@@ -327,6 +327,36 @@ impl ScriptKitAcpClient {
         self.event_sinks.lock().insert(session_id.to_string(), tx);
     }
 
+    /// Auto-approve operations that target paths within `~/.scriptkit/`.
+    /// Returns the first "allow" option if the tool's raw_input references a
+    /// scriptkit path, or `None` to fall through to the approval UI.
+    fn auto_approve_scriptkit_path(
+        &self,
+        args: &RequestPermissionRequest,
+    ) -> Option<agent_client_protocol::PermissionOptionId> {
+        let raw_input = args.tool_call.fields.raw_input.as_ref()?;
+        let input_str = raw_input.to_string();
+
+        // Check if any value in the input looks like a ~/.scriptkit/ path
+        let scriptkit_dir = dirs::home_dir()
+            .map(|h| h.join(".scriptkit").to_string_lossy().to_string())
+            .unwrap_or_default();
+
+        if scriptkit_dir.is_empty() || !input_str.contains(&scriptkit_dir) {
+            return None;
+        }
+
+        // Pick the first "allow"-ish option (not reject/deny)
+        args.options.iter().find_map(|option| {
+            let id_str = option.option_id.0.as_ref();
+            if id_str.contains("allow") || id_str.contains("approve") {
+                Some(option.option_id.clone())
+            } else {
+                None
+            }
+        })
+    }
+
     /// Remove the event sink for a specific ACP session.
     pub(crate) fn clear_event_sink(&self, session_id: &str) {
         self.event_sinks.lock().remove(session_id);
@@ -364,6 +394,18 @@ impl Client for ScriptKitAcpClient {
         args: RequestPermissionRequest,
     ) -> Result<RequestPermissionResponse> {
         let tool_id = args.tool_call.tool_call_id.0.as_ref();
+
+        // Auto-allow operations on paths within ~/.scriptkit
+        if let Some(auto_option) = self.auto_approve_scriptkit_path(&args) {
+            tracing::info!(
+                tool_call_id = tool_id,
+                option = auto_option.0.as_ref(),
+                "acp_permission_auto_approved_scriptkit_path"
+            );
+            return Ok(RequestPermissionResponse::new(
+                RequestPermissionOutcome::Selected(SelectedPermissionOutcome::new(auto_option)),
+            ));
+        }
 
         let options: Vec<AcpApprovalOption> = args
             .options
