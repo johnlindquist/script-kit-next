@@ -130,10 +130,27 @@ impl ScriptListApp {
             return;
         };
 
-        // If the harness is already the active surface and alive, route through
+        // If the ACP chat view is active, submit directly to the thread.
+        if let AppView::AcpChatView { ref entity } = self.current_view {
+            let entity = entity.clone();
+            entity.update(cx, |chat, cx| {
+                chat.thread.update(cx, |thread, cx| {
+                    thread.set_input(plan.raw_query.clone(), cx);
+                    let _ = thread.submit_input(cx);
+                });
+            });
+            tracing::info!(
+                target: "script_kit::tab_ai",
+                event = "tab_ai_quick_submit_acp_live",
+                source = ?plan.source,
+                input_len = plan.raw_query.len(),
+            );
+            return;
+        }
+
+        // If the PTY harness is already the active surface and alive, route through
         // the full structured submission builder so live-session quick submits
-        // get fresh context and quick-submit metadata — not
-        // just raw intent text.
+        // get fresh context and quick-submit metadata.
         if let Some(session) = self
             .tab_ai_harness
             .as_ref()
