@@ -560,17 +560,30 @@ impl AcpThread {
                 }
                 changed |= self.set_status(AcpThreadStatus::Idle);
 
-                // Save conversation summary to history
+                // Save conversation summary + full messages to history
                 if let Some(first_user_msg) = self
                     .messages
                     .iter()
                     .find(|m| matches!(m.role, AcpThreadMessageRole::User))
                 {
+                    let timestamp = chrono::Utc::now().to_rfc3339();
                     super::history::save_history_entry(&super::history::AcpHistoryEntry {
-                        timestamp: chrono::Utc::now().to_rfc3339(),
+                        timestamp: timestamp.clone(),
                         first_message: first_user_msg.body.chars().take(100).collect(),
                         message_count: self.messages.len(),
                         session_id: self.ui_thread_id.clone(),
+                    });
+                    super::history::save_conversation(&super::history::SavedConversation {
+                        session_id: self.ui_thread_id.clone(),
+                        timestamp,
+                        messages: self
+                            .messages
+                            .iter()
+                            .map(|m| super::history::SavedMessage {
+                                role: format!("{:?}", m.role),
+                                body: m.body.to_string(),
+                            })
+                            .collect(),
                     });
                 }
             }
