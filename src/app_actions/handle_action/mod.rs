@@ -615,6 +615,27 @@ impl ScriptListApp {
                     DispatchOutcome::not_handled()
                 }
             }
+            "acp_export_markdown" => {
+                let entity = entity.clone();
+                let messages = &entity.read(cx).thread.read(cx).messages;
+                let mut md = String::from("# AI Chat Conversation\n\n");
+                for msg in messages {
+                    let role_label = match msg.role {
+                        crate::ai::acp::thread::AcpThreadMessageRole::User => "**You**",
+                        crate::ai::acp::thread::AcpThreadMessageRole::Assistant => "**Claude Code**",
+                        crate::ai::acp::thread::AcpThreadMessageRole::Thought => "**Thinking**",
+                        crate::ai::acp::thread::AcpThreadMessageRole::Tool => "**Tool**",
+                        crate::ai::acp::thread::AcpThreadMessageRole::System => "**System**",
+                        crate::ai::acp::thread::AcpThreadMessageRole::Error => "**Error**",
+                    };
+                    md.push_str(&format!("{role_label}\n\n{}\n\n---\n\n", msg.body));
+                }
+                cx.write_to_clipboard(gpui::ClipboardItem::new_string(md));
+                let mut outcome = DispatchOutcome::success();
+                outcome.user_message =
+                    Some("Conversation copied as markdown".to_string());
+                outcome
+            }
             "acp_scroll_to_top" => {
                 let entity = entity.clone();
                 entity.update(cx, |chat, cx| {

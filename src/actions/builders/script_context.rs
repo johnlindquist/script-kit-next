@@ -450,6 +450,14 @@ pub fn get_acp_chat_actions() -> Vec<Action> {
         .with_icon(IconName::ArrowRight)
         .with_section("Chat"),
         Action::new(
+            "acp_export_markdown",
+            "Export as Markdown",
+            Some("Copy the full conversation as formatted markdown".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_icon(IconName::FileCode)
+        .with_section("Chat"),
+        Action::new(
             "acp_scroll_to_top",
             "Scroll to Top",
             Some("Jump to the first message in the conversation".to_string()),
