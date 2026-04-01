@@ -92,7 +92,9 @@ Script Kit persists it in `~/.scriptkit/kit/settings.json`:
 ```
 
 Behavior:
+- `dictationHotkeyEnabled: true` does not create a shortcut by itself; set `dictationHotkey` to register one
 - No `selectedDeviceId` → use the macOS default microphone
+- Use the built-in **Select Microphone** action to persist a device
 - Saved microphone missing → fall back to the best available device and clear the stale preference
 
 ## Command Overrides

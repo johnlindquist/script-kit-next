@@ -872,7 +872,11 @@ Dictation microphone selection is stored separately in `~/.scriptkit/kit/setting
 }
 ```
 
-Use the built-in **Select Microphone** action in the app to change that value, or edit `settings.json` directly.
+Behavior:
+- `dictationHotkeyEnabled: true` does not create a shortcut by itself; set `dictationHotkey` to register one
+- No `selectedDeviceId` → use the macOS default microphone
+- Use the built-in **Select Microphone** action to persist a device
+- Saved microphone missing → fall back to the best available device and clear the stale preference
 
 ### Hotkey Configuration
 
@@ -885,8 +889,15 @@ Valid modifier keys:
 Common key codes:
 - Letters: `"KeyA"` through `"KeyZ"`
 - Numbers: `"Digit0"` through `"Digit9"`
-- Special: `"Space"`, `"Enter"`, `"Semicolon"`
+- Special: `"Space"`, `"Enter"`, `"Semicolon"`, `"Comma"`, `"Period"`, `"Slash"`
 - Function keys: `"F1"` through `"F12"`
+
+### Common Mistakes
+
+- Putting `skills/` under `kit/` instead of at `~/.scriptkit/skills/`
+- Editing `~/.scriptkit/config.ts` instead of `~/.scriptkit/kit/config.ts`
+- Using `command` / `control` instead of `meta` / `ctrl`
+- Putting dictation microphone selection in `config.ts` instead of `kit/settings.json`
 
 ---
 

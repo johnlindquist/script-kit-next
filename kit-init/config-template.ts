@@ -267,6 +267,17 @@ export default {
   // },
 
   // ===========================================================================
+  // Claude Code CLI Provider
+  // ===========================================================================
+
+  // claudeCode: {
+  //   enabled: true,
+  //   permissionMode: "plan",
+  //   allowedTools: "Read,Edit,Bash(git:*)",
+  //   addDirs: ["/Users/you/projects"],
+  // },
+
+  // ===========================================================================
   // Advanced Settings
   // ===========================================================================
   // These settings are rarely needed but available for special cases.
