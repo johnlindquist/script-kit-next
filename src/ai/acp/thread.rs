@@ -261,12 +261,21 @@ impl AcpThread {
         selected_option_id: Option<String>,
         cx: &mut Context<Self>,
     ) {
-        let mut changed = false;
-        if let Some(request) = self.pending_permission.take() {
+        let had_request = if let Some(request) = self.pending_permission.take() {
             let _ = request.reply_tx.send_blocking(selected_option_id);
-            changed = true;
+            true
+        } else {
+            false
+        };
+
+        let mut changed = had_request;
+
+        // Stay in Streaming so submit_input() remains blocked until
+        // TurnFinished or Failed arrives — prevents mid-turn double-submit.
+        if had_request {
+            changed |= self.set_status(AcpThreadStatus::Streaming);
         }
-        changed |= self.set_status(AcpThreadStatus::Idle);
+
         if changed {
             cx.notify();
         }
@@ -407,9 +416,15 @@ impl AcpThread {
                 }
             }
             AcpEvent::TurnFinished { .. } => {
+                if self.pending_permission.take().is_some() {
+                    changed = true;
+                }
                 changed |= self.set_status(AcpThreadStatus::Idle);
             }
             AcpEvent::Failed { error } => {
+                if self.pending_permission.take().is_some() {
+                    changed = true;
+                }
                 changed |= self.push_message(AcpThreadMessageRole::Error, error);
                 changed |= self.set_status(AcpThreadStatus::Error);
             }

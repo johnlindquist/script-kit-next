@@ -466,6 +466,10 @@ impl ScriptListApp {
     ) {
         let source_view = request.source_view.clone();
 
+        // ACP replaces the Tab AI PTY surface. Drop any stale prewarm session so
+        // the new Tab path does not drag the old harness lifecycle around.
+        self.terminate_tab_ai_harness_session(cx);
+
         // Compute canonical effective intent once, matching PTY path's normalization.
         let effective_intent = Self::tab_ai_effective_submission_intent(&request);
         let auto_submit = effective_intent.is_some();
@@ -1170,6 +1174,29 @@ impl ScriptListApp {
         .detach();
     }
 
+    /// Terminate any active PTY harness session without restoring views.
+    ///
+    /// Used at ACP open to kill a stale prewarm session, and by close to
+    /// tear down the PTY for `QuickTerminalView`.
+    fn terminate_tab_ai_harness_session(&mut self, cx: &mut Context<Self>) {
+        if let Some(session) = self.tab_ai_harness.as_ref() {
+            let result = session
+                .entity
+                .update(cx, |term, _cx| term.terminate_session().map_err(|e| e.to_string()));
+            match result {
+                Ok(()) => {
+                    self.tab_ai_harness = None;
+                }
+                Err(error) => {
+                tracing::warn!(
+                    event = "tab_ai_harness_terminal_kill_failed",
+                    error = %error,
+                );
+                }
+            }
+        }
+    }
+
     /// Close the Tab AI harness terminal and restore the previous view + focus.
     ///
     /// **Close semantics contract:**
@@ -1178,37 +1205,26 @@ impl ScriptListApp {
     /// - The footer hint strip advertises only "⌘W Close".
     ///
     /// **Lifecycle contract:**
-    /// - Tears down the PTY via `TermPrompt::terminate_session()`.
-    /// - Clears `self.tab_ai_harness` so the next Tab opens a fresh session.
-    /// - Schedules a deferred `warm_tab_ai_harness_after_close()` prewarm so
-    ///   the next Tab press still gets an instant harness.
+    /// - For `QuickTerminalView`: tears down PTY, clears harness, schedules prewarm.
+    /// - For `AcpChatView`: restores view/focus without touching PTY lifecycle.
     pub(crate) fn close_tab_ai_harness_terminal(&mut self, cx: &mut Context<Self>) {
-        if !matches!(
-            self.current_view,
-            AppView::QuickTerminalView { .. } | AppView::AcpChatView { .. }
-        ) {
+        let closing_quick_terminal = matches!(self.current_view, AppView::QuickTerminalView { .. });
+        let closing_acp_chat = matches!(self.current_view, AppView::AcpChatView { .. });
+
+        if !closing_quick_terminal && !closing_acp_chat {
             return;
         }
 
         // Invalidate any in-flight deferred capture so late results cannot
-        // inject stale context after the harness has been closed.
+        // inject stale context after the surface has been closed.
         self.tab_ai_harness_capture_generation += 1;
 
         // Clear the apply-back route so stale targets cannot leak across sessions.
         self.tab_ai_harness_apply_back_route = None;
 
-        // Tear down the existing PTY session so no stale context persists.
-        let session = self.tab_ai_harness.take();
-        if let Some(session) = session {
-            let result = session
-                .entity
-                .update(cx, |term, _cx| term.terminate_session().map_err(|e| e.to_string()));
-            if let Err(error) = result {
-                tracing::warn!(
-                    event = "tab_ai_harness_terminal_kill_failed",
-                    error = %error,
-                );
-            }
+        // Only the legacy PTY-backed quick terminal owns `self.tab_ai_harness`.
+        if closing_quick_terminal {
+            self.terminate_tab_ai_harness_session(cx);
         }
 
         let return_view = self
@@ -1223,7 +1239,7 @@ impl ScriptListApp {
         tracing::info!(
             event = "tab_ai_harness_terminal_close",
             focus_target = %format!("{return_focus_target:?}"),
-            session_cleared = true,
+            session_cleared = closing_quick_terminal,
             capture_generation = self.tab_ai_harness_capture_generation,
         );
 
@@ -1235,8 +1251,10 @@ impl ScriptListApp {
             _ => FocusedInput::None,
         };
 
-        // Keep the instant feel without reusing stale context.
-        self.schedule_tab_ai_harness_prewarm(std::time::Duration::from_millis(250), cx);
+        // Keep prewarm only for the actual PTY-backed quick terminal path.
+        if closing_quick_terminal {
+            self.schedule_tab_ai_harness_prewarm(std::time::Duration::from_millis(250), cx);
+        }
         cx.notify();
     }
 

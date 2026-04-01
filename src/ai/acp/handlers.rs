@@ -285,10 +285,39 @@ impl Client for ScriptKitAcpClient {
             })
             .collect();
 
+        let mut body_parts = vec![
+            format!("Tool: {tool_title}"),
+            format!("Tool call ID: {tool_id}"),
+        ];
+
+        if let Some(content) = args.tool_call.fields.content.as_ref() {
+            if let Some(text) = summarize_tool_call_content(content) {
+                body_parts.push(text);
+            }
+        }
+
+        if let Some(raw_input) = args.tool_call.fields.raw_input.as_ref() {
+            body_parts.push(format!("Input:\n{}", summarize_json_value(raw_input)));
+        }
+
+        if let Some(raw_output) = args.tool_call.fields.raw_output.as_ref() {
+            body_parts.push(format!("Output:\n{}", summarize_json_value(raw_output)));
+        }
+
+        let option_summary = options
+            .iter()
+            .map(|option| format!("{} ({})", option.name, option.kind))
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        if !option_summary.is_empty() {
+            body_parts.push(format!("Options: {option_summary}"));
+        }
+
         let selected_id = self
             .choose_permission(AcpApprovalRequestInput {
                 title: "ACP permission request".to_string(),
-                body: format!("Tool: {tool_title}\nTool call ID: {tool_id}"),
+                body: body_parts.join("\n\n"),
                 options,
             })
             .map_err(|_| Error::internal_error())?;

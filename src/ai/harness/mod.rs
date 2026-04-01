@@ -1931,18 +1931,32 @@ mod cleanup_contract_audits {
             .expect("schedule_tab_ai_harness_prewarm should follow close fn");
         let body = compact(&rest[..end]);
 
+        // Close must still invalidate capture + clear apply-back for both paths.
         for needle in [
             "self.tab_ai_harness_capture_generation+=1;",
             "self.tab_ai_harness_apply_back_route=None;",
-            "letsession=self.tab_ai_harness.take();",
-            "term.terminate_session()",
-            "self.schedule_tab_ai_harness_prewarm(std::time::Duration::from_millis(250),cx);",
         ] {
             assert!(
                 body.contains(&compact(needle)),
                 "close_tab_ai_harness_terminal must contain: {needle}"
             );
         }
+
+        // PTY teardown + prewarm are now conditional on QuickTerminalView.
+        assert!(
+            body.contains(&compact("if closing_quick_terminal {")),
+            "close must branch PTY teardown on closing_quick_terminal"
+        );
+        assert!(
+            body.contains("terminate_tab_ai_harness_session"),
+            "close must delegate PTY teardown to terminate_tab_ai_harness_session"
+        );
+        assert!(
+            body.contains(&compact(
+                "self.schedule_tab_ai_harness_prewarm(std::time::Duration::from_millis(250), cx);"
+            )),
+            "close must queue a silent fresh prewarm for the PTY path"
+        );
     }
 
     #[test]
@@ -2119,29 +2133,39 @@ mod cleanup_contract_audits {
     #[test]
     fn close_path_tears_down_session_and_reprewarms() {
         let source = include_str!("../../app_impl/tab_ai_mode.rs");
-        let start = source
-            .find("pub(crate) fn close_tab_ai_harness_terminal")
-            .expect("close_tab_ai_harness_terminal should exist");
-        let rest = &source[start..];
-        let end = rest[1..]
-            .find("\n    fn ")
-            .or_else(|| rest[1..].find("\n    pub"))
-            .unwrap_or(rest.len());
-        let body = compact(&rest[..end]);
 
+        // The close fn delegates PTY teardown to the extracted helper.
+        let close_body = compact(&extract_fn_body(
+            source,
+            "pub(crate) fn close_tab_ai_harness_terminal",
+        ));
         assert!(
-            body.contains(&compact("let session = self.tab_ai_harness.take();")),
-            "close must clear the live harness session"
+            close_body.contains("terminate_tab_ai_harness_session"),
+            "close must delegate PTY teardown to terminate_tab_ai_harness_session"
         );
         assert!(
-            body.contains("terminate_session"),
-            "close must kill the PTY"
-        );
-        assert!(
-            body.contains(&compact(
+            close_body.contains(&compact(
                 "self.schedule_tab_ai_harness_prewarm(std::time::Duration::from_millis(250), cx);"
             )),
             "close must queue a silent fresh prewarm for the next Tab press"
+        );
+
+        // The extracted helper must terminate first, then clear the handle on success.
+        let helper_body = compact(&extract_fn_body(
+            source,
+            "fn terminate_tab_ai_harness_session",
+        ));
+        assert!(
+            helper_body.contains(&compact("self.tab_ai_harness.as_ref()")),
+            "terminate helper must read the harness session before attempting shutdown"
+        );
+        assert!(
+            helper_body.contains("terminate_session"),
+            "terminate helper must kill the PTY"
+        );
+        assert!(
+            helper_body.contains(&compact("self.tab_ai_harness = None;")),
+            "terminate helper must clear the harness handle after successful shutdown"
         );
     }
 
@@ -2296,15 +2320,21 @@ mod cleanup_contract_audits {
             source,
             "pub(crate) fn close_tab_ai_harness_terminal",
         ));
+        // PTY teardown is now delegated; close only calls the helper conditionally.
         assert!(
-            body.contains(&compact("let session = self.tab_ai_harness.take();")),
-            "close path must clear the current PTY session"
+            body.contains("terminate_tab_ai_harness_session"),
+            "close path must delegate PTY session teardown"
         );
         assert!(
             body.contains(&compact(
                 "self.schedule_tab_ai_harness_prewarm(std::time::Duration::from_millis(250), cx);"
             )),
             "close path must schedule a fresh prewarm for the next Tab press"
+        );
+        // ACP close must NOT schedule prewarm.
+        assert!(
+            body.contains(&compact("if closing_quick_terminal {")),
+            "prewarm must be conditional on closing_quick_terminal"
         );
     }
 
