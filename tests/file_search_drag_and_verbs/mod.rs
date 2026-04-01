@@ -435,7 +435,9 @@ fn toggle_file_search_actions_accepts_optional_file() {
 fn sort_mode_preserved_on_internal_browse() {
     let source = include_str!("../../src/app_impl/filter_input_core.rs");
     assert!(
-        source.contains("let preserve_sort_mode = matches!(self.current_view, AppView::FileSearchView"),
+        source.contains(
+            "let preserve_sort_mode = matches!(self.current_view, AppView::FileSearchView"
+        ),
         "open_file_search_view must detect when already in file search to preserve sort mode"
     );
     assert!(
@@ -472,7 +474,8 @@ fn refresh_directory_shows_hud_and_restores_focus() {
     let handler_start = FILES_ACTION_SOURCE
         .find("\"refresh_directory\" =>")
         .expect("refresh_directory handler must exist");
-    let handler_section = &FILES_ACTION_SOURCE[handler_start..(handler_start + 1200).min(FILES_ACTION_SOURCE.len())];
+    let handler_section =
+        &FILES_ACTION_SOURCE[handler_start..(handler_start + 1200).min(FILES_ACTION_SOURCE.len())];
 
     assert!(
         handler_section.contains("\"Refreshed Directory\""),
@@ -493,7 +496,8 @@ fn refresh_directory_returns_error_when_no_directory_active() {
     let handler_start = FILES_ACTION_SOURCE
         .find("\"refresh_directory\" =>")
         .expect("refresh_directory handler must exist");
-    let handler_section = &FILES_ACTION_SOURCE[handler_start..(handler_start + 400).min(FILES_ACTION_SOURCE.len())];
+    let handler_section =
+        &FILES_ACTION_SOURCE[handler_start..(handler_start + 400).min(FILES_ACTION_SOURCE.len())];
 
     assert!(
         handler_section.contains("current_file_search_directory_abs()"),
