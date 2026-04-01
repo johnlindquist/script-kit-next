@@ -559,6 +559,20 @@ impl AcpThread {
                     changed = true;
                 }
                 changed |= self.set_status(AcpThreadStatus::Idle);
+
+                // Save conversation summary to history
+                if let Some(first_user_msg) = self
+                    .messages
+                    .iter()
+                    .find(|m| matches!(m.role, AcpThreadMessageRole::User))
+                {
+                    super::history::save_history_entry(&super::history::AcpHistoryEntry {
+                        timestamp: chrono::Utc::now().to_rfc3339(),
+                        first_message: first_user_msg.body.chars().take(100).collect(),
+                        message_count: self.messages.len(),
+                        session_id: self.ui_thread_id.clone(),
+                    });
+                }
             }
             AcpEvent::Failed { error } => {
                 if self.pending_permission.take().is_some() {

@@ -636,6 +636,34 @@ impl ScriptListApp {
                     Some("Conversation copied as markdown".to_string());
                 outcome
             }
+            "acp_show_history" => {
+                let entries = crate::ai::acp::history::load_history();
+                if entries.is_empty() {
+                    let mut outcome = DispatchOutcome::success();
+                    outcome.user_message = Some("No conversation history yet".to_string());
+                    outcome
+                } else {
+                    // Format as a text list and copy to clipboard for now
+                    // TODO: show as a picker when Cmd+P UI is implemented
+                    let mut text = String::from("Recent AI Conversations:\n\n");
+                    for (i, entry) in entries.iter().take(20).enumerate() {
+                        text.push_str(&format!(
+                            "{}. {} ({} messages) — {}\n",
+                            i + 1,
+                            entry.first_message,
+                            entry.message_count,
+                            entry.timestamp.split('T').next().unwrap_or(&entry.timestamp),
+                        ));
+                    }
+                    cx.write_to_clipboard(gpui::ClipboardItem::new_string(text));
+                    let mut outcome = DispatchOutcome::success();
+                    outcome.user_message = Some(format!(
+                        "{} conversations copied to clipboard",
+                        entries.len().min(20)
+                    ));
+                    outcome
+                }
+            }
             "acp_scroll_to_top" => {
                 let entity = entity.clone();
                 entity.update(cx, |chat, cx| {
