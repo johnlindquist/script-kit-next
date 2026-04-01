@@ -23,6 +23,9 @@ pub(crate) mod thread;
 pub(crate) mod types;
 pub(crate) mod view;
 
+#[cfg(test)]
+mod tests;
+
 pub(crate) use client::{AcpConnection, AcpRuntime};
 pub(crate) use config::{claude_code_agent_config, AcpAgentConfig};
 pub(crate) use context::{build_tab_ai_acp_context_blocks, build_tab_ai_acp_guidance_blocks};
@@ -31,5 +34,7 @@ pub(crate) use permission_broker::{
     AcpApprovalOption, AcpApprovalRequest, AcpApprovalRequestInput, AcpPermissionBroker,
 };
 pub(crate) use provider::AcpProvider;
-pub(crate) use thread::{AcpThread, AcpThreadInit, AcpThreadMessage, AcpThreadStatus};
+pub(crate) use thread::{
+    AcpThread, AcpThreadInit, AcpThreadMessage, AcpThreadStatus, AcpToolCallState,
+};
 pub(crate) use view::AcpChatView;

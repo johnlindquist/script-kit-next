@@ -3446,3 +3446,172 @@ fn file_search_cmd_enter_passes_shift_for_plan_mode() {
         "⌘↵ handler must distinguish shift for plan_mode"
     );
 }
+
+// =========================================================================
+// ACP routing: Tab now opens AcpChatView instead of QuickTerminalView
+// =========================================================================
+
+const ACP_VIEW_SOURCE: &str = include_str!("../src/ai/acp/view.rs");
+const ACP_THREAD_SOURCE: &str = include_str!("../src/ai/acp/thread.rs");
+const ACP_MOD_SOURCE: &str = include_str!("../src/ai/acp/mod.rs");
+
+#[test]
+fn tab_ai_mode_opens_acp_chat_view_for_tab() {
+    // Tab AI entry path must create an AcpChatView, not just QuickTerminalView.
+    assert!(
+        TAB_AI_MODE_SOURCE.contains("AcpChatView::new"),
+        "tab_ai_mode must create an AcpChatView for Tab AI"
+    );
+    assert!(
+        TAB_AI_MODE_SOURCE.contains("AppView::AcpChatView"),
+        "tab_ai_mode must set current_view to AppView::AcpChatView"
+    );
+}
+
+#[test]
+fn tab_ai_mode_creates_acp_thread_with_permission_broker() {
+    assert!(
+        TAB_AI_MODE_SOURCE.contains("AcpThread::new"),
+        "tab_ai_mode must create an AcpThread"
+    );
+    assert!(
+        TAB_AI_MODE_SOURCE.contains("AcpPermissionBroker::new"),
+        "tab_ai_mode must create a permission broker for tool approval"
+    );
+    assert!(
+        TAB_AI_MODE_SOURCE.contains("spawn_with_approval"),
+        "AcpConnection must be spawned with approval wiring"
+    );
+}
+
+#[test]
+fn tab_ai_mode_stages_context_on_acp_thread() {
+    assert!(
+        TAB_AI_MODE_SOURCE.contains("stage_context"),
+        "tab_ai_mode must stage context on the AcpThread for first-turn injection"
+    );
+}
+
+#[test]
+fn startup_guards_against_double_acp_open() {
+    // Both startup.rs variants must check for AcpChatView to prevent
+    // stacking a second ACP session on Tab press.
+    assert!(
+        TAB_SOURCE.contains("AppView::AcpChatView"),
+        "startup.rs must check for existing AcpChatView"
+    );
+    assert!(
+        TAB_SOURCE.contains("handle_tab_key"),
+        "startup.rs must delegate Tab to AcpChatView.handle_tab_key"
+    );
+
+    assert!(
+        TAB_NEW_SOURCE.contains("AppView::AcpChatView"),
+        "startup_new_tab.rs must check for existing AcpChatView"
+    );
+    assert!(
+        TAB_NEW_SOURCE.contains("handle_tab_key"),
+        "startup_new_tab.rs must delegate Tab to AcpChatView.handle_tab_key"
+    );
+}
+
+#[test]
+fn acp_chat_view_consumes_tab_to_prevent_reentry() {
+    // AcpChatView.handle_tab_key must return true to consume the key.
+    assert!(
+        ACP_VIEW_SOURCE.contains("fn handle_tab_key"),
+        "AcpChatView must implement handle_tab_key"
+    );
+    // The function must return true to consume Tab.
+    let fn_start = ACP_VIEW_SOURCE
+        .find("fn handle_tab_key")
+        .expect("handle_tab_key must exist");
+    let fn_body = &ACP_VIEW_SOURCE[fn_start..fn_start + 300.min(ACP_VIEW_SOURCE.len() - fn_start)];
+    assert!(
+        fn_body.contains("true"),
+        "handle_tab_key must return true to consume Tab"
+    );
+}
+
+#[test]
+fn pty_path_still_exists_for_script_terminals() {
+    // The PTY/harness path must still exist for script-triggered terminals.
+    assert!(
+        TAB_AI_MODE_SOURCE.contains("fn open_tab_ai_harness_terminal_from_request"),
+        "PTY harness terminal function must still exist"
+    );
+    assert!(
+        TAB_AI_MODE_SOURCE.contains("AppView::QuickTerminalView"),
+        "PTY path must still set QuickTerminalView"
+    );
+}
+
+#[test]
+fn acp_thread_supports_staged_context_and_initial_input() {
+    // AcpThread must support staged context blocks and initial input for auto-submit.
+    assert!(
+        ACP_THREAD_SOURCE.contains("pending_context_blocks"),
+        "AcpThread must have staged context fields"
+    );
+    assert!(
+        ACP_THREAD_SOURCE.contains("stage_context"),
+        "AcpThread must expose a stage_context method"
+    );
+    assert!(
+        ACP_THREAD_SOURCE.contains("initial_input"),
+        "AcpThreadInit must accept initial_input for auto-submit"
+    );
+}
+
+#[test]
+fn render_impl_handles_acp_chat_view() {
+    assert!(
+        RENDER_IMPL_SOURCE.contains("AppView::AcpChatView"),
+        "render_impl must dispatch AcpChatView for rendering"
+    );
+}
+
+#[test]
+fn acp_view_renders_markdown_messages() {
+    assert!(
+        ACP_VIEW_SOURCE.contains("render_markdown_with_scope"),
+        "AcpChatView must use markdown rendering for messages"
+    );
+}
+
+#[test]
+fn acp_view_has_permission_overlay() {
+    assert!(
+        ACP_VIEW_SOURCE.contains("render_permission_overlay"),
+        "AcpChatView must render a permission approval overlay"
+    );
+    assert!(
+        ACP_VIEW_SOURCE.contains("approve_pending_permission"),
+        "AcpChatView overlay must call approve_pending_permission"
+    );
+}
+
+#[test]
+fn acp_view_has_empty_and_streaming_states() {
+    assert!(
+        ACP_VIEW_SOURCE.contains("render_empty_state"),
+        "AcpChatView must have an empty state"
+    );
+    assert!(
+        ACP_VIEW_SOURCE.contains("render_streaming_hint"),
+        "AcpChatView must have a streaming indicator"
+    );
+    assert!(
+        ACP_VIEW_SOURCE.contains("render_status_badge"),
+        "AcpChatView must have a status badge"
+    );
+}
+
+#[test]
+fn acp_mod_exports_required_types() {
+    // The ACP module must re-export the key types used by tab_ai_mode.
+    assert!(ACP_MOD_SOURCE.contains("pub(crate) use view::AcpChatView"));
+    assert!(ACP_MOD_SOURCE.contains("pub(crate) use thread::"));
+    assert!(ACP_MOD_SOURCE.contains("pub(crate) use permission_broker::"));
+    assert!(ACP_MOD_SOURCE.contains("pub(crate) use client::"));
+}

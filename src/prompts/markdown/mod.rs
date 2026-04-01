@@ -35,7 +35,7 @@ mod test_support;
 mod tests;
 mod types;
 
-pub use api::render_markdown;
+pub use api::{render_markdown, render_markdown_with_scope};
 use code_table::{build_code_block_element, build_table_element};
 use helpers::*;
 use inline_render::{render_hr, render_inline_spans};
