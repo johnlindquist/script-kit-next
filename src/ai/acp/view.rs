@@ -24,6 +24,27 @@ use super::{AcpApprovalOption, AcpApprovalPreview, AcpApprovalPreviewKind, AcpAp
 /// Click handler type for collapsible block toggle.
 type ToggleHandler = Box<dyn Fn(&gpui::ClickEvent, &mut Window, &mut App) + 'static>;
 
+/// Parse the `description` field from YAML frontmatter in a SKILL.md file.
+fn parse_skill_description(content: &str) -> Option<String> {
+    if !content.starts_with("---") {
+        return None;
+    }
+    let end = content[3..].find("---")?;
+    let frontmatter = &content[3..3 + end];
+    for line in frontmatter.lines() {
+        let trimmed = line.trim();
+        if let Some(rest) = trimmed.strip_prefix("description:") {
+            let desc = rest.trim().trim_matches('"').trim_matches('\'');
+            // Truncate long descriptions for the menu
+            if desc.len() > 80 {
+                return Some(format!("{}\u{2026}", &desc[..77]));
+            }
+            return Some(desc.to_string());
+        }
+    }
+    None
+}
+
 /// GPUI view entity wrapping an `AcpThread` for the Tab AI surface.
 pub(crate) struct AcpChatView {
     pub(crate) thread: Entity<AcpThread>,
@@ -41,8 +62,8 @@ pub(crate) struct AcpChatView {
     _blink_task: Task<()>,
     /// Slash command menu: selected index (None = menu hidden).
     slash_menu_index: Option<usize>,
-    /// Cached slash commands (defaults + skills discovered at creation).
-    cached_slash_commands: Vec<String>,
+    /// Cached slash commands (name, description) discovered at creation.
+    cached_slash_commands: Vec<(String, String)>,
 }
 
 impl AcpChatView {
@@ -99,38 +120,46 @@ impl AcpChatView {
     }
 
     /// Scan ~/.scriptkit/skills/ for skill directories, combine with
-    /// built-in Claude Code commands.
-    fn discover_slash_commands() -> Vec<String> {
-        let mut commands: Vec<String> = Self::DEFAULT_SLASH_COMMANDS
+    /// built-in Claude Code commands. Returns (name, description) tuples.
+    fn discover_slash_commands() -> Vec<(String, String)> {
+        let mut commands: Vec<(String, String)> = Self::DEFAULT_SLASH_COMMANDS
             .iter()
-            .map(|s| s.to_string())
+            .map(|s| (s.to_string(), String::new()))
             .collect();
 
-        // Scan skills directory for SKILL.md entries.
-        let skills_dir = crate::setup::get_kit_path().join("skills");
-        if let Ok(entries) = std::fs::read_dir(&skills_dir) {
-            for entry in entries.flatten() {
-                if entry.path().join("SKILL.md").exists() {
-                    if let Some(name) = entry.file_name().to_str() {
-                        if !commands.contains(&name.to_string()) {
-                            commands.push(name.to_string());
-                        }
-                    }
-                }
-            }
-        }
+        let mut seen: std::collections::HashSet<String> =
+            commands.iter().map(|(name, _)| name.clone()).collect();
 
-        // Also scan .claude/skills/ in the kit path.
-        let claude_skills_dir = crate::setup::get_kit_path().join(".claude").join("skills");
-        if let Ok(entries) = std::fs::read_dir(&claude_skills_dir) {
+        // Scan both skills directories for SKILL.md entries.
+        let dirs = [
+            crate::setup::get_kit_path().join("skills"),
+            crate::setup::get_kit_path().join(".claude").join("skills"),
+        ];
+
+        for dir in &dirs {
+            let Ok(entries) = std::fs::read_dir(dir) else {
+                continue;
+            };
             for entry in entries.flatten() {
-                if entry.path().join("SKILL.md").exists() {
-                    if let Some(name) = entry.file_name().to_str() {
-                        if !commands.contains(&name.to_string()) {
-                            commands.push(name.to_string());
-                        }
-                    }
+                let skill_md = entry.path().join("SKILL.md");
+                if !skill_md.exists() {
+                    continue;
                 }
+                let Some(name) = entry.file_name().to_str().map(str::to_string) else {
+                    continue;
+                };
+                if seen.contains(&name) {
+                    continue;
+                }
+
+                // Parse description from YAML frontmatter
+                let desc = std::fs::read_to_string(&skill_md)
+                    .ok()
+                    .and_then(|content| parse_skill_description(&content))
+                    .unwrap_or_default();
+
+                seen.insert(name.clone());
+                commands.push((name, desc));
             }
         }
 
@@ -951,7 +980,7 @@ impl AcpChatView {
     ];
 
     /// Return commands that match the current `/` prefix in the input.
-    fn filtered_slash_commands(&self, cx: &Context<Self>) -> Vec<String> {
+    fn filtered_slash_commands(&self, cx: &Context<Self>) -> Vec<(String, String)> {
         let text = self.thread.read(cx).input.text().to_string();
         if !text.starts_with('/') {
             return Vec::new();
@@ -960,10 +989,13 @@ impl AcpChatView {
 
         // Use agent-provided commands if available, otherwise cached defaults + skills.
         let agent_commands = self.thread.read(cx).available_commands().to_vec();
-        let commands: Vec<String> = if agent_commands.is_empty() {
+        let commands: Vec<(String, String)> = if agent_commands.is_empty() {
             self.cached_slash_commands.clone()
         } else {
             agent_commands
+                .into_iter()
+                .map(|name| (name, String::new()))
+                .collect()
         };
 
         if query.is_empty() {
@@ -972,7 +1004,7 @@ impl AcpChatView {
         let query_lower = query.to_lowercase();
         commands
             .into_iter()
-            .filter(|cmd| cmd.to_lowercase().contains(&query_lower))
+            .filter(|(name, _)| name.to_lowercase().contains(&query_lower))
             .collect()
     }
 
@@ -995,7 +1027,7 @@ impl AcpChatView {
 
     fn render_slash_menu(
         &self,
-        commands: &[String],
+        commands: &[(String, String)],
         selected_index: usize,
         cx: &mut Context<Self>,
     ) -> gpui::AnyElement {
@@ -1011,15 +1043,14 @@ impl AcpChatView {
             .border_1()
             .border_color(rgba((theme.colors.ui.border << 8) | 0x40))
             .py(px(4.0))
-            .children(commands.iter().enumerate().map(|(i, cmd)| {
+            .children(commands.iter().enumerate().map(|(i, (name, desc))| {
                 let is_selected = i == selected_index;
-                let cmd_text = format!("/{cmd} ");
+                let cmd_text = format!("/{name} ");
                 div()
                     .id(SharedString::from(format!("slash-cmd-{i}")))
                     .w_full()
                     .px(px(10.0))
                     .py(px(4.0))
-                    .text_sm()
                     .cursor_pointer()
                     .when(is_selected, |d| {
                         d.bg(rgba((theme.colors.accent.selected << 8) | 0x1C))
@@ -1033,7 +1064,22 @@ impl AcpChatView {
                         this.slash_menu_index = None;
                         cx.notify();
                     }))
-                    .child(format!("/{cmd}"))
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap(px(8.0))
+                            .child(div().text_sm().child(format!("/{name}")))
+                            .when(!desc.is_empty(), |d| {
+                                d.child(
+                                    div()
+                                        .text_xs()
+                                        .opacity(0.45)
+                                        .overflow_x_hidden()
+                                        .child(desc.clone()),
+                                )
+                            }),
+                    )
             }))
             .into_any_element()
     }
@@ -1085,8 +1131,8 @@ impl AcpChatView {
             if crate::ui_foundation::is_key_enter(key) {
                 let filtered = self.filtered_slash_commands(cx);
                 let idx = self.slash_menu_index.unwrap_or(0);
-                if let Some(cmd) = filtered.get(idx) {
-                    let cmd_text = format!("/{cmd} ");
+                if let Some((name, _)) = filtered.get(idx) {
+                    let cmd_text = format!("/{name} ");
                     self.thread.update(cx, |thread, cx| {
                         thread.input.set_text(cmd_text);
                         cx.notify();
