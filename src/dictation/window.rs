@@ -12,6 +12,8 @@ use crate::dictation::visualizer::bars_for_level;
 pub(crate) const OVERLAY_WIDTH_PX: f32 = 392.0;
 /// Compact pill height in pixels (matches vercel-voice 40px overlay).
 pub(crate) const OVERLAY_HEIGHT_PX: f32 = 40.0;
+/// Expanded height for the confirming phase (timer + headline + button row).
+const CONFIRMING_HEIGHT_PX: f32 = 96.0;
 /// Fully-rounded corner radius (half of height for pill shape).
 pub(crate) const OVERLAY_RADIUS_PX: f32 = 20.0;
 /// Horizontal padding inside the pill.
@@ -184,11 +186,22 @@ type OverlayAbortCallback = Box<dyn Fn(&mut App) + Send + Sync + 'static>;
 /// Global abort callback set by the dictation runtime.
 static OVERLAY_ABORT_CALLBACK: Mutex<Option<OverlayAbortCallback>> = Mutex::new(None);
 
-/// Register a callback to be invoked when the user confirms abort via
-/// double-Escape in the overlay.
+/// Register a callback to be invoked when the user confirms stop via
+/// Enter or the Stop button in the overlay.
 pub fn set_overlay_abort_callback(callback: impl Fn(&mut App) + Send + Sync + 'static) {
     *OVERLAY_ABORT_CALLBACK.lock() = Some(Box::new(callback));
 }
+
+// ---------------------------------------------------------------------------
+// Confirming-phase copy constants (single source of truth)
+// ---------------------------------------------------------------------------
+
+/// Button label for the Stop action in the confirming overlay.
+const CONFIRM_STOP_LABEL: &str = "Stop \u{21b5}";
+/// Button label for the Continue action in the confirming overlay.
+const CONFIRM_CONTINUE_LABEL: &str = "Continue \u{238b}";
+/// Hint text shown in the confirming overlay footer.
+const CONFIRM_HINT: &str = "\u{21b5} Stop \u{00b7} \u{238b} Continue";
 
 /// Interval between animation ticks for the transcribing dot pulse (ms).
 const TRANSCRIBING_TICK_MS: u64 = 50;
@@ -208,14 +221,12 @@ pub(crate) enum OverlayEscapeAction {
 
 /// Return phase-appropriate (headline, hint) copy for the dictation overlay.
 ///
-/// The headline is the primary status text (e.g. "Listening…", "Cancel dictation?").
-/// The hint is the footer/shortcut hint (e.g. "Esc Cancel", "↵ Cancel · Esc Resume").
+/// The headline is the primary status text (e.g. "Listening…", "Stop dictation?").
+/// The hint is the footer/shortcut hint (e.g. "Esc Cancel", "↵ Stop · ⎋ Continue").
 pub(crate) fn overlay_phase_copy(phase: &DictationSessionPhase) -> (&'static str, &'static str) {
     match phase {
         DictationSessionPhase::Recording => ("Listening\u{2026}", "Esc Cancel"),
-        DictationSessionPhase::Confirming => {
-            ("Stop dictation?", "\u{21b5} Stop \u{00b7} Esc Continue")
-        }
+        DictationSessionPhase::Confirming => ("Stop dictation?", CONFIRM_HINT),
         DictationSessionPhase::Transcribing => ("Transcribing\u{2026}", "Esc Close"),
         DictationSessionPhase::Delivering => ("Delivering\u{2026}", "Esc Close"),
         DictationSessionPhase::Finished => ("Done", "Esc Close"),
@@ -253,6 +264,55 @@ pub(crate) fn overlay_escape_action(
     }
 }
 
+/// Return the overlay height for a given session phase.
+fn overlay_height_for_phase(phase: &DictationSessionPhase) -> f32 {
+    match phase {
+        DictationSessionPhase::Confirming => CONFIRMING_HEIGHT_PX,
+        _ => OVERLAY_HEIGHT_PX,
+    }
+}
+
+/// Resize and reposition the overlay window to match the given phase height.
+///
+/// The pill stays bottom-anchored: when height grows, the top edge moves up.
+/// When height shrinks, the top edge moves down.
+#[cfg(target_os = "macos")]
+fn resize_overlay_for_phase(window: &mut Window, target_height: f32) {
+    if let Ok(wh) = raw_window_handle::HasWindowHandle::window_handle(window) {
+        if let raw_window_handle::RawWindowHandle::AppKit(appkit) = wh.as_raw() {
+            use cocoa::base::id;
+            use cocoa::foundation::NSRect;
+            use objc::{msg_send, sel, sel_impl};
+
+            let ns_view = appkit.ns_view.as_ptr() as id;
+            // SAFETY: ns_view is from the live overlay window on the main thread.
+            // We read the current frame, adjust origin.y to keep the bottom edge
+            // fixed, set the new height, and apply via setFrame:display:.
+            unsafe {
+                let ns_window: id = msg_send![ns_view, window];
+                if ns_window.is_null() {
+                    return;
+                }
+                let current_frame: NSRect = msg_send![ns_window, frame];
+                let old_height = current_frame.size.height;
+                let new_height = target_height as f64;
+                let delta = new_height - old_height;
+                let new_frame = NSRect::new(
+                    cocoa::foundation::NSPoint::new(
+                        current_frame.origin.x,
+                        current_frame.origin.y - delta,
+                    ),
+                    cocoa::foundation::NSSize::new(current_frame.size.width, new_height),
+                );
+                let () = msg_send![ns_window, setFrame: new_frame display: cocoa::base::YES];
+            }
+        }
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn resize_overlay_for_phase(_window: &mut Window, _target_height: f32) {}
+
 /// The GPUI entity that renders the compact dictation pill.
 pub struct DictationOverlay {
     state: DictationOverlayState,
@@ -283,9 +343,10 @@ impl DictationOverlay {
     }
 
     /// Dismiss the confirmation state and resume recording.
-    fn resume_recording(&mut self, cx: &mut Context<Self>) {
+    fn resume_recording(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.state.phase = DictationSessionPhase::Recording;
         crate::dictation::set_overlay_phase(DictationSessionPhase::Recording);
+        resize_overlay_for_phase(window, OVERLAY_HEIGHT_PX);
         cx.notify();
     }
 
@@ -300,11 +361,23 @@ impl DictationOverlay {
     }
 
     /// Replace the visual state snapshot (called from the dictation runtime).
-    pub fn set_state(&mut self, state: DictationOverlayState, cx: &mut Context<Self>) {
+    pub fn set_state(
+        &mut self,
+        state: DictationOverlayState,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let entering_transcribing = state.phase == DictationSessionPhase::Transcribing
             && self.state.phase != DictationSessionPhase::Transcribing;
         let leaving_transcribing = state.phase != DictationSessionPhase::Transcribing
             && self.state.phase == DictationSessionPhase::Transcribing;
+
+        // Resize the overlay when the phase changes height class.
+        let old_height = overlay_height_for_phase(&self.state.phase);
+        let new_height = overlay_height_for_phase(&state.phase);
+        if (new_height - old_height).abs() > f32::EPSILON {
+            resize_overlay_for_phase(window, new_height);
+        }
 
         // Smoothly animate bars during recording; snap for other phases.
         self.display_bars =
@@ -362,7 +435,7 @@ impl DictationOverlay {
     fn handle_key_down(
         &mut self,
         event: &KeyDownEvent,
-        _window: &mut Window,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let key = event.keystroke.key.as_str();
@@ -404,6 +477,7 @@ impl DictationOverlay {
                 );
                 self.state.phase = DictationSessionPhase::Confirming;
                 crate::dictation::set_overlay_phase(DictationSessionPhase::Confirming);
+                resize_overlay_for_phase(window, CONFIRMING_HEIGHT_PX);
                 cx.notify();
                 cx.stop_propagation();
             }
@@ -413,7 +487,7 @@ impl DictationOverlay {
                     elapsed_ms = elapsed.as_millis() as u64,
                     "Escape pressed in confirmation, resuming recording"
                 );
-                self.resume_recording(cx);
+                self.resume_recording(window, cx);
                 cx.stop_propagation();
             }
             OverlayEscapeAction::AbortSession => {
@@ -506,6 +580,8 @@ impl Render for DictationOverlay {
                 let (headline, _hint) = overlay_phase_copy(phase);
                 let stop_color = theme.colors.ui.error.with_opacity(OPACITY_ACTIVE);
                 let continue_color = theme.colors.ui.success.with_opacity(OPACITY_ACTIVE);
+                let stop_bg = theme.colors.ui.error.with_opacity(0.14);
+                let continue_bg = theme.colors.ui.success.with_opacity(0.08);
                 div()
                     .flex()
                     .flex_col()
@@ -538,9 +614,10 @@ impl Render for DictationOverlay {
                                 div()
                                     .px(px(10.))
                                     .py(px(4.))
+                                    .bg(stop_bg)
                                     .rounded(px(999.))
                                     .border_1()
-                                    .border_color(theme.colors.ui.error.with_opacity(0.35))
+                                    .border_color(theme.colors.ui.error.with_opacity(0.45))
                                     .text_size(px(STATUS_TEXT_SIZE_PX))
                                     .font_family(FONT_MONO)
                                     .text_color(stop_color)
@@ -552,12 +629,13 @@ impl Render for DictationOverlay {
                                             },
                                         ),
                                     )
-                                    .child("Stop \u{21b5}"),
+                                    .child(CONFIRM_STOP_LABEL),
                             )
                             .child(
                                 div()
                                     .px(px(10.))
                                     .py(px(4.))
+                                    .bg(continue_bg)
                                     .rounded(px(999.))
                                     .border_1()
                                     .border_color(theme.colors.ui.success.with_opacity(0.35))
@@ -567,12 +645,12 @@ impl Render for DictationOverlay {
                                     .on_mouse_down(
                                         MouseButton::Left,
                                         cx.listener(
-                                            |this, _event: &MouseDownEvent, _window, cx| {
-                                                this.resume_recording(cx);
+                                            |this, _event: &MouseDownEvent, window, cx| {
+                                                this.resume_recording(window, cx);
                                             },
                                         ),
                                     )
-                                    .child("Continue \u{238b}"),
+                                    .child(CONFIRM_CONTINUE_LABEL),
                             ),
                     )
             }
@@ -628,6 +706,13 @@ impl Render for DictationOverlay {
             _ => div(),
         };
 
+        // Phase-aware corner radius: full pill for recording, gentler for confirming.
+        let radius = if *phase == DictationSessionPhase::Confirming {
+            12.0
+        } else {
+            OVERLAY_RADIUS_PX
+        };
+
         // Inner pill surface — glassmorphism styling, padding, rounded corners.
         let surface = div()
             .flex()
@@ -640,7 +725,7 @@ impl Render for DictationOverlay {
             .px(px(OVERLAY_HORIZONTAL_PADDING_PX))
             .gap(px(OVERLAY_CONTENT_GAP_PX))
             .bg(surface_bg)
-            .rounded(px(OVERLAY_RADIUS_PX))
+            .rounded(px(radius))
             .border_1()
             .border_color(border_color)
             .child(inner);
@@ -969,12 +1054,13 @@ pub fn open_dictation_overlay(
         });
     }
 
-    // Only make the overlay key window when the main window is already
-    // visible.  When Script Kit is hidden, keying the overlay would pull
-    // the entire app forward — the dictation hotkey must never surface
-    // the main window.  orderFrontRegardless alone is enough to show the
-    // popup without activating the app.
-    let should_key_overlay = main_was_visible;
+    // Always make the overlay key window so it receives Escape/Enter key
+    // events in both visible-app and hidden-app dictation flows.  The
+    // overlay is a NonactivatingPanel (PopUp) and the app uses ACCESSORY
+    // activation policy, so makeKeyWindow does not surface the main window
+    // or activate the app.  When main is hidden, orderOut: is sent first
+    // (below) to prevent sibling-panel flash.
+    let should_key_overlay = true;
 
     #[cfg(target_os = "macos")]
     {
@@ -985,8 +1071,8 @@ pub fn open_dictation_overlay(
                     let ns_view = appkit.ns_view.as_ptr() as cocoa::base::id;
                     // SAFETY: ns_view is a valid NSView from a just-created GPUI window.
                     // orderFrontRegardless brings the window to front without activating the app.
-                    // makeKeyWindow is only sent when the main window is already visible,
-                    // to deliver Escape key events without pulling a hidden app forward.
+                    // makeKeyWindow is always sent so the overlay receives Escape/Enter key
+                    // events in both visible-app and hidden-app dictation flows.
                     unsafe {
                         let ns_window: cocoa::base::id = msg_send![ns_view, window];
 
@@ -1043,8 +1129,8 @@ pub fn update_dictation_overlay(state: DictationOverlayState, cx: &mut App) -> a
         }
     };
 
-    let _ = handle.update(cx, |view, _window, cx| {
-        view.set_state(state, cx);
+    let _ = handle.update(cx, |view, window, cx| {
+        view.set_state(state, window, cx);
     });
 
     Ok(())

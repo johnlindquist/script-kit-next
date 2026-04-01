@@ -3802,11 +3802,11 @@ fn open_dictation_overlay_does_not_bump_generation_itself() {
 }
 
 #[test]
-fn hidden_main_window_path_does_not_always_key_overlay() {
+fn hidden_app_dictation_overlay_always_keys_overlay() {
     let window_source = std::fs::read_to_string("src/dictation/window.rs").expect("read window.rs");
     assert!(
-        window_source.contains("let should_key_overlay = main_was_visible"),
-        "overlay keying must depend on whether the main window was already visible"
+        window_source.contains("let should_key_overlay = true"),
+        "overlay must always become key window so Escape/Enter are delivered in hidden-app mode"
     );
 }
 

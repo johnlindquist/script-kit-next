@@ -3772,63 +3772,10 @@ impl ScriptListApp {
 
                 match crate::dictation::toggle_dictation(dictation_target) {
                     Ok(crate::dictation::DictationToggleOutcome::Started) => {
-                        // Bump generation at logical session start — not at
-                        // window creation — so stale delayed closes from a
-                        // prior session see a mismatch even when the overlay
-                        // window handle is reused.
-                        let _ = crate::dictation::begin_overlay_session();
-                        crate::dictation::set_overlay_abort_callback(|cx| {
-                            if let Err(error) = crate::dictation::abort_dictation() {
-                                tracing::error!(
-                                    category = "DICTATION",
-                                    error = %error,
-                                    "Failed to abort dictation from overlay"
-                                );
-                            }
-                            let _ = crate::dictation::close_dictation_overlay(cx);
-                        });
-                        let _ = crate::dictation::open_dictation_overlay(cx);
-                        let _ = crate::dictation::update_dictation_overlay(
-                            crate::dictation::DictationOverlayState {
-                                phase: crate::dictation::DictationSessionPhase::Recording,
-                                ..Default::default()
-                            },
-                            cx,
-                        );
-                        self.spawn_dictation_overlay_pump(cx);
+                        self.start_dictation_overlay_session(cx);
                     }
                     Ok(crate::dictation::DictationToggleOutcome::Stopped(Some(capture))) => {
-                        let _ = crate::dictation::update_dictation_overlay(
-                            crate::dictation::DictationOverlayState {
-                                phase: crate::dictation::DictationSessionPhase::Transcribing,
-                                elapsed: capture.audio_duration,
-                                ..Default::default()
-                            },
-                            cx,
-                        );
-                        let audio_duration = capture.audio_duration;
-                        let chunks = capture.chunks;
-                        // Capture the target that was stored at session start.
-                        let saved_target = dictation_target;
-                        cx.spawn(async move |this, cx| {
-                            let transcript_result = cx
-                                .background_executor()
-                                .spawn(async move {
-                                    crate::dictation::transcribe_captured_audio(&chunks)
-                                })
-                                .await;
-
-                            let _ = this.update(cx, |this, cx| {
-                                Self::handle_dictation_transcript(
-                                    this,
-                                    transcript_result,
-                                    audio_duration,
-                                    saved_target,
-                                    cx,
-                                );
-                            });
-                        })
-                        .detach();
+                        self.begin_dictation_transcription(capture, dictation_target, cx);
                     }
                     Ok(crate::dictation::DictationToggleOutcome::Stopped(None)) => {
                         let _ = crate::dictation::close_dictation_overlay(cx);
@@ -3914,57 +3861,10 @@ impl ScriptListApp {
 
                 match crate::dictation::toggle_dictation(dictation_target) {
                     Ok(crate::dictation::DictationToggleOutcome::Started) => {
-                        let _ = crate::dictation::begin_overlay_session();
-                        crate::dictation::set_overlay_abort_callback(|cx| {
-                            if let Err(error) = crate::dictation::abort_dictation() {
-                                tracing::error!(
-                                    category = "DICTATION",
-                                    error = %error,
-                                    "Failed to abort dictation from overlay"
-                                );
-                            }
-                            let _ = crate::dictation::close_dictation_overlay(cx);
-                        });
-                        let _ = crate::dictation::open_dictation_overlay(cx);
-                        let _ = crate::dictation::update_dictation_overlay(
-                            crate::dictation::DictationOverlayState {
-                                phase: crate::dictation::DictationSessionPhase::Recording,
-                                ..Default::default()
-                            },
-                            cx,
-                        );
-                        self.spawn_dictation_overlay_pump(cx);
+                        self.start_dictation_overlay_session(cx);
                     }
                     Ok(crate::dictation::DictationToggleOutcome::Stopped(Some(capture))) => {
-                        let _ = crate::dictation::update_dictation_overlay(
-                            crate::dictation::DictationOverlayState {
-                                phase: crate::dictation::DictationSessionPhase::Transcribing,
-                                elapsed: capture.audio_duration,
-                                ..Default::default()
-                            },
-                            cx,
-                        );
-                        let audio_duration = capture.audio_duration;
-                        let chunks = capture.chunks;
-                        let saved_target = dictation_target;
-                        cx.spawn(async move |this, cx| {
-                            let transcript_result = cx
-                                .background_executor()
-                                .spawn(async move {
-                                    crate::dictation::transcribe_captured_audio(&chunks)
-                                })
-                                .await;
-                            let _ = this.update(cx, |this, cx| {
-                                Self::handle_dictation_transcript(
-                                    this,
-                                    transcript_result,
-                                    audio_duration,
-                                    saved_target,
-                                    cx,
-                                );
-                            });
-                        })
-                        .detach();
+                        self.begin_dictation_transcription(capture, dictation_target, cx);
                     }
                     Ok(crate::dictation::DictationToggleOutcome::Stopped(None)) => {
                         let _ = crate::dictation::close_dictation_overlay(cx);
@@ -4025,6 +3925,74 @@ impl ScriptListApp {
     // =========================================================================
     // Dictation helpers — overlay pump, transcript delivery, scheduled cleanup
     // =========================================================================
+
+    /// Open the overlay, register the abort callback, start the pump.
+    ///
+    /// Shared by both `BuiltInFeature::Dictation` and
+    /// `BuiltInFeature::DictationToAiHarness` so confirm/resume fixes
+    /// only need one change.
+    fn start_dictation_overlay_session(&mut self, cx: &mut Context<Self>) {
+        let _ = crate::dictation::begin_overlay_session();
+        crate::dictation::set_overlay_abort_callback(|cx| {
+            if let Err(error) = crate::dictation::abort_dictation() {
+                tracing::error!(
+                    category = "DICTATION",
+                    error = %error,
+                    "Failed to abort dictation from overlay"
+                );
+            }
+            let _ = crate::dictation::close_dictation_overlay(cx);
+        });
+        let _ = crate::dictation::open_dictation_overlay(cx);
+        let _ = crate::dictation::update_dictation_overlay(
+            crate::dictation::DictationOverlayState {
+                phase: crate::dictation::DictationSessionPhase::Recording,
+                ..Default::default()
+            },
+            cx,
+        );
+        self.spawn_dictation_overlay_pump(cx);
+    }
+
+    /// Transition a completed capture into the transcribing overlay state
+    /// and kick off async transcription.
+    ///
+    /// Shared by both dictation entry points so the handoff cannot drift.
+    fn begin_dictation_transcription(
+        &mut self,
+        capture: crate::dictation::CompletedDictationCapture,
+        target: crate::dictation::DictationTarget,
+        cx: &mut Context<Self>,
+    ) {
+        let _ = crate::dictation::update_dictation_overlay(
+            crate::dictation::DictationOverlayState {
+                phase: crate::dictation::DictationSessionPhase::Transcribing,
+                elapsed: capture.audio_duration,
+                ..Default::default()
+            },
+            cx,
+        );
+        let audio_duration = capture.audio_duration;
+        let chunks = capture.chunks;
+        cx.spawn(async move |this, cx| {
+            let transcript_result = cx
+                .background_executor()
+                .spawn(async move {
+                    crate::dictation::transcribe_captured_audio(&chunks)
+                })
+                .await;
+            let _ = this.update(cx, |this, cx| {
+                Self::handle_dictation_transcript(
+                    this,
+                    transcript_result,
+                    audio_duration,
+                    target,
+                    cx,
+                );
+            });
+        })
+        .detach();
+    }
 
     /// Periodically snapshot the live capture session and push state to the
     /// dictation overlay.  Runs every 16 ms (~60 fps) for smooth waveform

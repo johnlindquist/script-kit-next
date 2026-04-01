@@ -76,12 +76,13 @@ impl ScriptListApp {
         // Create file info from the result
         let file_info = selected_file.map(file_search::FileInfo::from_result);
 
-        // Determine placeholder text
-        let placeholder_text = file_info
-            .as_ref()
-            .map(|info| info.name.clone())
-            .or_else(|| dir_info.as_ref().map(|dir| dir.name.clone()))
-            .unwrap_or_else(|| "Actions".to_string());
+        // Determine placeholder text — show both scopes when available
+        let placeholder_text = match (file_info.as_ref(), dir_info.as_ref()) {
+            (Some(file), Some(dir)) => format!("{} · {}", file.name, dir.name),
+            (Some(file), None) => file.name.clone(),
+            (None, Some(dir)) => dir.name.clone(),
+            (None, None) => "Actions".to_string(),
+        };
 
         // Create the dialog entity
         let theme_arc = std::sync::Arc::clone(&self.theme);

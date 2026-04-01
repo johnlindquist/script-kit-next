@@ -271,7 +271,7 @@
  * VALID KEY CODES (KeyCode):
  * - Letters: "KeyA" through "KeyZ"
  * - Numbers: "Digit0" through "Digit9"
- * - Special: "Space", "Enter", "Semicolon"
+ * - Special: "Space", "Enter", "Semicolon", "Comma", "Period", "Slash"
  * - Function: "F1" through "F12"
  *
  * EXAMPLES:
@@ -312,13 +312,13 @@
  * FIELD: editorFontSize
  * TYPE: number (optional)
  * PURPOSE: Font size for the Monaco-style code editor in pixels
- * DEFAULT: 14
+ * DEFAULT: 16
  * VALID RANGE: 8-32 (recommended); any positive number works
  *
  * EXAMPLES:
  * - Smaller for more code:   12
- * - Default:                 14
- * - Larger for readability:  16
+ * - Default:                 16
+ * - Larger for readability:  18
  * - Accessibility:           18-24
  *
  * ───────────────────────────────────────────────────────────────────────────
@@ -512,7 +512,7 @@
  *   },
  *   editor: "zed",
  *   padding: { top: 8, left: 12, right: 12 },
- *   editorFontSize: 14,
+ *   editorFontSize: 16,
  *   terminalFontSize: 14,
  *   uiScale: 1.0,
  *   builtIns: {
@@ -628,7 +628,7 @@
  * | padding.top       | number         | 8                           | no       |
  * | padding.left      | number         | 12                          | no       |
  * | padding.right     | number         | 12                          | no       |
- * | editorFontSize    | number         | 14                          | no       |
+ * | editorFontSize    | number         | 16                          | no       |
  * | terminalFontSize  | number         | 14                          | no       |
  * | uiScale           | number         | 1.0                         | no       |
  * | builtIns          | BuiltInConfig  | {all: true}                 | no       |
@@ -655,7 +655,7 @@
  *
  * WHEN READING CONFIG:
  * 1. Check if field exists (may be undefined = use default)
- * 2. Use nullish coalescing for defaults: `config.editorFontSize ?? 14`
+ * 2. Use nullish coalescing for defaults: `config.editorFontSize ?? 16`
  *
  * VALIDATION:
  * - Modifiers must be from: "meta", "ctrl", "alt", "shift"
@@ -738,11 +738,11 @@ export type AppCommandId = `app/${string}`;
  * Format: `script/{script-name}`
  * 
  * The script name is the filename without the .ts extension.
- * Scripts are located in ~/.scriptkit/scripts/
- * 
- * @example "script/my-custom-script" → ~/.scriptkit/scripts/my-custom-script.ts
- * @example "script/daily-standup" → ~/.scriptkit/scripts/daily-standup.ts
- * @example "script/git-commit-helper" → ~/.scriptkit/scripts/git-commit-helper.ts
+ * Scripts are located in ~/.scriptkit/kit/main/scripts/
+ *
+ * @example "script/my-custom-script" → ~/.scriptkit/kit/main/scripts/my-custom-script.ts
+ * @example "script/daily-standup" → ~/.scriptkit/kit/main/scripts/daily-standup.ts
+ * @example "script/git-commit-helper" → ~/.scriptkit/kit/main/scripts/git-commit-helper.ts
  */
 export type ScriptCommandId = `script/${string}`;
 

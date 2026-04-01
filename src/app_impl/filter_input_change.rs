@@ -443,7 +443,7 @@ enum FileSearchStreamSource {
 
 impl ScriptListApp {
     /// Return the path of the currently selected file-search row, if any.
-    fn current_file_search_selected_path(&self) -> Option<String> {
+    pub(crate) fn current_file_search_selected_path(&self) -> Option<String> {
         let AppView::FileSearchView { selected_index, .. } = &self.current_view else {
             return None;
         };
@@ -460,7 +460,7 @@ impl ScriptListApp {
 
     /// After results change, restore selection to `preferred_path` if still
     /// visible, otherwise clamp to the nearest valid row.
-    fn restore_file_search_selection_after_results_change(
+    pub(crate) fn restore_file_search_selection_after_results_change(
         &mut self,
         preferred_path: Option<&str>,
     ) {

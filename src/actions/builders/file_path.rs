@@ -39,8 +39,29 @@ impl FileSearchDirectoryInfo {
     }
 }
 
+fn sort_title(base: &str, active: bool) -> String {
+    if active {
+        format!("{base} \u{2713}")
+    } else {
+        base.to_string()
+    }
+}
+
+fn sort_description(base: &str, active: bool) -> String {
+    if active {
+        format!("{base}. Current sort")
+    } else {
+        base.to_string()
+    }
+}
+
 /// Build view-level actions for the current browsed directory.
 pub fn get_file_search_directory_actions(dir_info: &FileSearchDirectoryInfo) -> Vec<Action> {
+    let name_asc_active = dir_info.sort_mode == FileSearchSortMode::NameAsc;
+    let name_desc_active = dir_info.sort_mode == FileSearchSortMode::NameDesc;
+    let modified_desc_active = dir_info.sort_mode == FileSearchSortMode::ModifiedDesc;
+    let modified_asc_active = dir_info.sort_mode == FileSearchSortMode::ModifiedAsc;
+
     let actions = vec![
         Action::new(
             "file:refresh_directory",
@@ -80,32 +101,32 @@ pub fn get_file_search_directory_actions(dir_info: &FileSearchDirectoryInfo) -> 
         .with_section("Directory"),
         Action::new(
             "file:sort_name_asc",
-            "Sort by Name (A\u{2192}Z)",
-            Some("Sorts alphabetically".to_string()),
+            sort_title("Sort by Name (A\u{2192}Z)", name_asc_active),
+            Some(sort_description("Sorts alphabetically", name_asc_active)),
             ActionCategory::ScriptContext,
         )
         .with_icon(IconName::ArrowUp)
         .with_section("Sort"),
         Action::new(
             "file:sort_name_desc",
-            "Sort by Name (Z\u{2192}A)",
-            Some("Sorts reverse alphabetically".to_string()),
+            sort_title("Sort by Name (Z\u{2192}A)", name_desc_active),
+            Some(sort_description("Sorts reverse alphabetically", name_desc_active)),
             ActionCategory::ScriptContext,
         )
         .with_icon(IconName::ArrowDown)
         .with_section("Sort"),
         Action::new(
             "file:sort_modified_desc",
-            "Sort by Modified (Newest)",
-            Some("Sorts by most recently modified".to_string()),
+            sort_title("Sort by Modified (Newest)", modified_desc_active),
+            Some(sort_description("Sorts by most recently modified", modified_desc_active)),
             ActionCategory::ScriptContext,
         )
         .with_icon(IconName::ArrowDown)
         .with_section("Sort"),
         Action::new(
             "file:sort_modified_asc",
-            "Sort by Modified (Oldest)",
-            Some("Sorts by least recently modified".to_string()),
+            sort_title("Sort by Modified (Oldest)", modified_asc_active),
+            Some(sort_description("Sorts by least recently modified", modified_asc_active)),
             ActionCategory::ScriptContext,
         )
         .with_icon(IconName::ArrowUp)

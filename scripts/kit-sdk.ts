@@ -1000,7 +1000,7 @@ export interface SuggestedConfig {
 
   /**
    * Command IDs to exclude from suggestions.
-   * @default []
+   * @default ["builtin-quit-script-kit"]
    */
   excludedCommands?: string[];
 }
@@ -1105,7 +1105,7 @@ export interface LayoutConfig {
  *   },
  *   editor: "code",
  *   padding: { top: 8, left: 12, right: 12 },
- *   editorFontSize: 14,
+ *   editorFontSize: 16,
  *   terminalFontSize: 14,
  *   uiScale: 1.0,
  *   builtIns: {
@@ -1169,10 +1169,10 @@ export interface Config {
   /**
    * Font size for the editor prompt in pixels.
    * Affects the Monaco-style code editor.
-   * 
-   * @default 14
+   *
+   * @default 16
    * @example 12 // Smaller for more code visibility
-   * @example 16 // Larger for better readability
+   * @example 16 // Default
    * @example 18 // Extra large
    */
   editorFontSize?: number;

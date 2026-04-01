@@ -271,7 +271,7 @@ import type { Config } from "@scriptkit/sdk";
 
 export default {
   hotkey: { key: "Space", modifiers: ["command"] },
-  editorFontSize: 14,
+  editorFontSize: 16,
   terminalFontSize: 14,
   builtIns: {
     clipboardHistory: true,

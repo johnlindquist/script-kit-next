@@ -636,9 +636,12 @@ impl ActionsDialog {
             ));
         }
 
-        let context_title = file_info
-            .map(|info| info.name.clone())
-            .or_else(|| dir_info.map(|dir| dir.name.clone()));
+        let context_title = match (file_info, dir_info) {
+            (Some(file), Some(dir)) => Some(format!("{} · in {}", file.name, dir.name)),
+            (Some(file), None) => Some(file.name.clone()),
+            (None, Some(dir)) => Some(dir.name.clone()),
+            (None, None) => None,
+        };
 
         logging::log(
             "ACTIONS",
