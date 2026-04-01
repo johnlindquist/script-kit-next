@@ -1070,25 +1070,17 @@ impl Render for AcpChatView {
                         ))
                     })
                     .when(!is_empty, |d| {
-                        d.px(px(8.0))
-                            .py(px(8.0))
-                            .gap_2()
-                            .flex()
-                            .flex_col()
-                            .children(messages.iter().map(|msg| {
+                        d.px(px(8.0)).py(px(8.0)).flex().flex_col().children(
+                            messages.iter().enumerate().map(|(i, msg)| {
                                 let msg_id = msg.id;
                                 let is_collapsible = matches!(
                                     msg.role,
                                     AcpThreadMessageRole::Thought | AcpThreadMessageRole::Tool
                                 );
-                                // Thinking blocks start collapsed; tool blocks start expanded.
-                                // collapsed_ids stores IDs that have been toggled from default.
                                 let is_collapsed =
                                     if matches!(msg.role, AcpThreadMessageRole::Thought) {
-                                        // Thinking: collapsed by default, toggle to expand
                                         !self.collapsed_ids.contains(&msg_id)
                                     } else {
-                                        // Tool: expanded by default, toggle to collapse
                                         is_collapsible && self.collapsed_ids.contains(&msg_id)
                                     };
 
@@ -1105,13 +1097,24 @@ impl Render for AcpChatView {
                                     None
                                 };
 
-                                div().w_full().pb(px(2.0)).child(Self::render_message(
-                                    msg,
-                                    &colors,
-                                    is_collapsed,
-                                    on_toggle,
-                                ))
-                            }))
+                                // Extra top margin when transitioning from user to non-user
+                                let prev_was_user = i > 0
+                                    && matches!(messages[i - 1].role, AcpThreadMessageRole::User);
+                                let is_response_start = prev_was_user
+                                    && !matches!(msg.role, AcpThreadMessageRole::User);
+
+                                div()
+                                    .w_full()
+                                    .pb(px(4.0))
+                                    .when(is_response_start, |d| d.mt(px(4.0)))
+                                    .child(Self::render_message(
+                                        msg,
+                                        &colors,
+                                        is_collapsed,
+                                        on_toggle,
+                                    ))
+                            }),
+                        )
                     }),
             )
             // ── Plan strip ────────────────────────────────────
@@ -1157,6 +1160,8 @@ impl Render for AcpChatView {
                             .py(px(6.0))
                             .rounded(px(8.0))
                             .bg(rgba((theme.colors.text.primary << 8) | 0x04))
+                            .border_1()
+                            .border_color(rgba((theme.colors.accent.selected << 8) | 0x28))
                             .text_sm()
                             .child(if input_text.is_empty() {
                                 div()
