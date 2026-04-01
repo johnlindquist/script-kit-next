@@ -1,4 +1,9 @@
-# Skill: Scriptlets (Extension Bundles)
+---
+name: scriptlets
+description: Create extension bundles (scriptlets) for text expansions, snippets, shell commands, and lightweight helpers in a single markdown file. Use when the user wants quick shortcuts or grouped utilities.
+---
+
+# Scriptlets (Extension Bundles)
 
 Use an extension bundle when the user wants text expansions, snippets, quick shell commands, or several lightweight helpers grouped in one markdown file.
 

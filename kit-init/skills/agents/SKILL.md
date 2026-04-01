@@ -1,4 +1,9 @@
-# Skill: Agents
+---
+name: agents
+description: Create mdflow-backed agent files for Script Kit. Use when the user wants to create AI agents, configure agent backends (Claude, Gemini, Codex), or manage agent metadata.
+---
+
+# Agents
 
 Create mdflow-backed agent files for Script Kit.
 

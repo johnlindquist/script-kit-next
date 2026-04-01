@@ -1,4 +1,9 @@
-# Skill: Script Authoring
+---
+name: script-authoring
+description: Create and manage TypeScript scripts for Script Kit. Use when the user wants to write a new script, edit an existing script, or understand Script Kit's SDK and metadata system.
+---
+
+# Script Authoring
 
 Create and manage TypeScript scripts for Script Kit.
 
