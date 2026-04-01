@@ -42,6 +42,15 @@ fn staged_context_prepended_on_first_submit_only() {
         1,
         "second turn should NOT re-include context"
     );
+    // Second turn should be plain text without USER REQUEST marker
+    if let ContentBlock::Text(ref t) = second_blocks[0] {
+        assert_eq!(
+            t.text, "another request",
+            "second turn should be plain user text"
+        );
+    } else {
+        panic!("expected second turn to be a Text block");
+    }
 }
 
 #[test]
