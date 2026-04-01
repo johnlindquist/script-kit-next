@@ -327,22 +327,81 @@ impl ScriptKitAcpClient {
         self.event_sinks.lock().insert(session_id.to_string(), tx);
     }
 
-    /// Auto-approve operations that target paths within `~/.scriptkit/`.
-    /// Returns the first "allow" option if the tool's raw_input references a
-    /// scriptkit path, or `None` to fall through to the approval UI.
-    fn auto_approve_scriptkit_path(
+    /// Auto-approve operations that are safe without user confirmation.
+    ///
+    /// Approved automatically:
+    /// - Any operation targeting paths within `~/.scriptkit/`
+    /// - Read-only file operations (reading files, listing directories)
+    /// - Read-only commands (ls, cat, head, tail, find, grep, wc, file, stat)
+    fn auto_approve_operation(
         &self,
         args: &RequestPermissionRequest,
     ) -> Option<agent_client_protocol::PermissionOptionId> {
-        let raw_input = args.tool_call.fields.raw_input.as_ref()?;
-        let input_str = raw_input.to_string();
+        let title = args
+            .tool_call
+            .fields
+            .title
+            .as_deref()
+            .unwrap_or("")
+            .to_lowercase();
+        let raw_input = args.tool_call.fields.raw_input.as_ref();
+        let input_str = raw_input.map(|v| v.to_string()).unwrap_or_default();
 
-        // Check if any value in the input looks like a ~/.scriptkit/ path
-        let scriptkit_dir = dirs::home_dir()
-            .map(|h| h.join(".scriptkit").to_string_lossy().to_string())
-            .unwrap_or_default();
+        let should_approve = 'check: {
+            // 1. Operations on ~/.scriptkit paths
+            let scriptkit_dir = dirs::home_dir()
+                .map(|h| h.join(".scriptkit").to_string_lossy().to_string())
+                .unwrap_or_default();
+            if !scriptkit_dir.is_empty() && input_str.contains(&scriptkit_dir) {
+                break 'check true;
+            }
 
-        if scriptkit_dir.is_empty() || !input_str.contains(&scriptkit_dir) {
+            // 2. Read-only file operations (title-based)
+            if title.starts_with("read")
+                || title.starts_with("view")
+                || title.starts_with("list")
+                || title.starts_with("search")
+                || title.starts_with("find")
+                || title.starts_with("cat ")
+                || title.contains("read file")
+                || title.contains("list dir")
+                || title.contains("list files")
+            {
+                break 'check true;
+            }
+
+            // 3. Read-only shell commands
+            if let Some(raw) = raw_input {
+                let cmd_str = raw.to_string();
+                let read_only_prefixes = [
+                    "\"ls ",
+                    "\"ls\"",
+                    "\"cat ",
+                    "\"head ",
+                    "\"tail ",
+                    "\"find ",
+                    "\"grep ",
+                    "\"rg ",
+                    "\"wc ",
+                    "\"file ",
+                    "\"stat ",
+                    "\"which ",
+                    "\"echo ",
+                    "\"pwd\"",
+                    "\"env\"",
+                    "\"printenv",
+                ];
+                for prefix in &read_only_prefixes {
+                    if cmd_str.contains(prefix) {
+                        break 'check true;
+                    }
+                }
+            }
+
+            false
+        };
+
+        if !should_approve {
             return None;
         }
 
@@ -395,12 +454,12 @@ impl Client for ScriptKitAcpClient {
     ) -> Result<RequestPermissionResponse> {
         let tool_id = args.tool_call.tool_call_id.0.as_ref();
 
-        // Auto-allow operations on paths within ~/.scriptkit
-        if let Some(auto_option) = self.auto_approve_scriptkit_path(&args) {
+        // Auto-allow safe operations (read-only, ~/.scriptkit paths)
+        if let Some(auto_option) = self.auto_approve_operation(&args) {
             tracing::info!(
                 tool_call_id = tool_id,
                 option = auto_option.0.as_ref(),
-                "acp_permission_auto_approved_scriptkit_path"
+                "acp_permission_auto_approved"
             );
             return Ok(RequestPermissionResponse::new(
                 RequestPermissionOutcome::Selected(SelectedPermissionOutcome::new(auto_option)),
