@@ -62,6 +62,8 @@ pub(crate) struct AcpChatView {
     _blink_task: Task<()>,
     /// Slash command menu: selected index (None = menu hidden).
     slash_menu_index: Option<usize>,
+    /// Whether the + attachment menu popup is open.
+    attach_menu_open: bool,
     /// Cached slash commands (name, description) discovered at creation.
     cached_slash_commands: Vec<(String, String)>,
 }
@@ -115,6 +117,7 @@ impl AcpChatView {
             cursor_visible: true,
             _blink_task: blink_task,
             slash_menu_index: None,
+            attach_menu_open: false,
             cached_slash_commands: Self::discover_slash_commands(),
         }
     }
@@ -813,6 +816,94 @@ impl AcpChatView {
 
     // ── Toolbar ───────────────────────────────────────────────────
 
+    fn render_attach_menu(&self, cx: &mut Context<Self>) -> gpui::AnyElement {
+        let theme = theme::get_cached_theme();
+
+        div()
+            .w_full()
+            .px(px(8.0))
+            .pb(px(4.0))
+            .child(
+                div()
+                    .w_full()
+                    .rounded(px(8.0))
+                    .bg(rgb(theme.colors.background.search_box))
+                    .border_1()
+                    .border_color(rgba((theme.colors.ui.border << 8) | 0x40))
+                    .py(px(4.0))
+                    .child(
+                        div()
+                            .id("attach-paste")
+                            .w_full()
+                            .px(px(10.0))
+                            .py(px(4.0))
+                            .cursor_pointer()
+                            .hover(|d| d.bg(rgba((theme.colors.text.primary << 8) | 0x0C)))
+                            .on_click(cx.listener(|this, _event, _window, cx| {
+                                if let Some(clipboard) = cx.read_from_clipboard() {
+                                    if let Some(text) = clipboard.text() {
+                                        if !text.is_empty() {
+                                            this.thread.update(cx, |thread, cx| {
+                                                thread.input.insert_str(&text);
+                                                cx.notify();
+                                            });
+                                            this.cursor_visible = true;
+                                        }
+                                    }
+                                }
+                                this.attach_menu_open = false;
+                                cx.notify();
+                            }))
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(8.0))
+                                    .child(div().text_sm().child("Paste Clipboard"))
+                                    .child(
+                                        div()
+                                            .text_xs()
+                                            .opacity(0.45)
+                                            .child("Insert clipboard text at cursor"),
+                                    ),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .id("attach-screenshot")
+                            .w_full()
+                            .px(px(10.0))
+                            .py(px(4.0))
+                            .cursor_pointer()
+                            .hover(|d| d.bg(rgba((theme.colors.text.primary << 8) | 0x0C)))
+                            .on_click(cx.listener(|this, _event, _window, cx| {
+                                // Insert a hint about the screenshot path
+                                this.thread.update(cx, |thread, cx| {
+                                    thread.input.insert_str("What's on my screen? ");
+                                    cx.notify();
+                                });
+                                this.attach_menu_open = false;
+                                this.cursor_visible = true;
+                                cx.notify();
+                            }))
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(8.0))
+                                    .child(div().text_sm().child("Ask About Screen"))
+                                    .child(
+                                        div()
+                                            .text_xs()
+                                            .opacity(0.45)
+                                            .child("Screenshot is in context"),
+                                    ),
+                            ),
+                    ),
+            )
+            .into_any_element()
+    }
+
     fn render_toolbar(
         &self,
         status: AcpThreadStatus,
@@ -855,18 +946,8 @@ impl AcpChatView {
                             .hover(|s| s.opacity(0.85))
                             .child("+")
                             .on_click(cx.listener(|this, _event, _window, cx| {
-                                if let Some(clipboard) = cx.read_from_clipboard() {
-                                    if let Some(text) = clipboard.text() {
-                                        if !text.is_empty() {
-                                            this.thread.update(cx, |thread, cx| {
-                                                thread.input.insert_str(&text);
-                                                cx.notify();
-                                            });
-                                            this.cursor_visible = true;
-                                            cx.notify();
-                                        }
-                                    }
-                                }
+                                this.attach_menu_open = !this.attach_menu_open;
+                                cx.notify();
                             })),
                     )
                     .when(context_loading, |d| {
@@ -1371,6 +1452,10 @@ impl Render for AcpChatView {
                         .pb(px(4.0))
                         .child(Self::render_plan_strip(&plan_entries)),
                 )
+            })
+            // ── Attach menu popup ──────────────────────────
+            .when(self.attach_menu_open, |d| {
+                d.child(self.render_attach_menu(cx))
             })
             // ── BOTTOM: Toolbar with cwd ─────────────────────
             .child(self.render_toolbar(
