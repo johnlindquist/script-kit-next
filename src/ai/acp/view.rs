@@ -41,6 +41,8 @@ pub(crate) struct AcpChatView {
     _blink_task: Task<()>,
     /// Slash command menu: selected index (None = menu hidden).
     slash_menu_index: Option<usize>,
+    /// Cached slash commands (defaults + skills discovered at creation).
+    cached_slash_commands: Vec<String>,
 }
 
 impl AcpChatView {
@@ -92,7 +94,47 @@ impl AcpChatView {
             cursor_visible: true,
             _blink_task: blink_task,
             slash_menu_index: None,
+            cached_slash_commands: Self::discover_slash_commands(),
         }
+    }
+
+    /// Scan ~/.scriptkit/skills/ for skill directories, combine with
+    /// built-in Claude Code commands.
+    fn discover_slash_commands() -> Vec<String> {
+        let mut commands: Vec<String> = Self::DEFAULT_SLASH_COMMANDS
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+
+        // Scan skills directory for SKILL.md entries.
+        let skills_dir = crate::setup::get_kit_path().join("skills");
+        if let Ok(entries) = std::fs::read_dir(&skills_dir) {
+            for entry in entries.flatten() {
+                if entry.path().join("SKILL.md").exists() {
+                    if let Some(name) = entry.file_name().to_str() {
+                        if !commands.contains(&name.to_string()) {
+                            commands.push(name.to_string());
+                        }
+                    }
+                }
+            }
+        }
+
+        // Also scan .claude/skills/ in the kit path.
+        let claude_skills_dir = crate::setup::get_kit_path().join(".claude").join("skills");
+        if let Ok(entries) = std::fs::read_dir(&claude_skills_dir) {
+            for entry in entries.flatten() {
+                if entry.path().join("SKILL.md").exists() {
+                    if let Some(name) = entry.file_name().to_str() {
+                        if !commands.contains(&name.to_string()) {
+                            commands.push(name.to_string());
+                        }
+                    }
+                }
+            }
+        }
+
+        commands
     }
 
     /// Consume Tab / Shift+Tab. When the permission overlay is open,
@@ -913,13 +955,10 @@ impl AcpChatView {
         }
         let query = &text[1..]; // strip the `/`
 
-        // Use agent-provided commands if available, otherwise defaults.
+        // Use agent-provided commands if available, otherwise cached defaults + skills.
         let agent_commands = self.thread.read(cx).available_commands().to_vec();
         let commands: Vec<String> = if agent_commands.is_empty() {
-            Self::DEFAULT_SLASH_COMMANDS
-                .iter()
-                .map(|s| s.to_string())
-                .collect()
+            self.cached_slash_commands.clone()
         } else {
             agent_commands
         };

@@ -522,8 +522,8 @@ impl ScriptListApp {
             }
         };
 
-        let cwd = std::env::current_dir()
-            .unwrap_or_else(|_| crate::setup::get_kit_path());
+        // Use ~/.scriptkit as cwd so Claude Code discovers CLAUDE.md and skills/.
+        let cwd = crate::setup::get_kit_path();
 
         let thread = cx.new(|cx| {
             crate::ai::acp::AcpThread::new(
