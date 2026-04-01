@@ -413,79 +413,6 @@ impl AcpChatView {
             .into_any_element()
     }
 
-    fn render_empty_state(
-        context_state: AcpContextBootstrapState,
-        queued_submit: bool,
-        context_note: Option<&str>,
-    ) -> gpui::AnyElement {
-        let theme = theme::get_cached_theme();
-
-        let (title, detail) = match (context_state, queued_submit) {
-            (AcpContextBootstrapState::Preparing, true) => (
-                "Request queued",
-                "Your first turn will send automatically as soon as context is attached.",
-            ),
-            (AcpContextBootstrapState::Preparing, false) => (
-                "Preparing context",
-                "Selection, clipboard, and window context are attaching before the first turn.",
-            ),
-            (AcpContextBootstrapState::Ready, _) => (
-                "Ask Claude Code anything",
-                "Your current Script Kit and desktop context are attached.",
-            ),
-            (AcpContextBootstrapState::Failed, _) => (
-                "Context partially attached",
-                "Some desktop context was unavailable, but you can keep going.",
-            ),
-        };
-
-        div()
-            .w_full()
-            .h_full()
-            .flex()
-            .flex_col()
-            .items_center()
-            .justify_center()
-            .px(px(24.0))
-            .child(
-                div()
-                    .text_base()
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .opacity(0.9)
-                    .child(title),
-            )
-            .child(div().pt(px(8.0)).text_sm().opacity(0.65).child(detail))
-            .when_some(context_note.map(str::to_string), |d, note| {
-                d.child(
-                    div()
-                        .pt(px(12.0))
-                        .px(px(10.0))
-                        .py(px(6.0))
-                        .rounded(px(999.0))
-                        .bg(rgba((theme.colors.accent.selected << 8) | 0x12))
-                        .text_xs()
-                        .opacity(0.76)
-                        .child(note),
-                )
-            })
-            .child(
-                div()
-                    .pt(px(14.0))
-                    .text_xs()
-                    .text_color(rgb(theme.colors.accent.selected))
-                    .opacity(0.8)
-                    .child("Claude Code over ACP"),
-            )
-            .child(
-                div()
-                    .pt(px(20.0))
-                    .text_xs()
-                    .opacity(0.35)
-                    .child("\u{2318}W to close"),
-            )
-            .into_any_element()
-    }
-
     fn render_permission_section(title: &'static str, text: String) -> gpui::AnyElement {
         div()
             .pt(px(8.0))
@@ -816,11 +743,13 @@ impl AcpChatView {
         mode_label: Option<&str>,
         display_name: &str,
         elapsed_secs: Option<u64>,
+        context_state: AcpContextBootstrapState,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let theme = theme::get_cached_theme();
         let is_streaming = matches!(status, AcpThreadStatus::Streaming);
         let can_send = matches!(status, AcpThreadStatus::Idle) && has_input_text;
+        let context_loading = matches!(context_state, AcpContextBootstrapState::Preparing);
 
         div()
             .w_full()
@@ -829,36 +758,48 @@ impl AcpChatView {
             .justify_between()
             .px(px(4.0))
             .py(px(2.0))
-            // ── Left: paste clipboard button ─────
+            // ── Left: paste button + context indicator ─
             .child(
-                div().flex().items_center().gap(px(4.0)).child(
-                    div()
-                        .id("acp-attach-btn")
-                        .cursor_pointer()
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .size(px(22.0))
-                        .rounded(px(6.0))
-                        .text_xs()
-                        .opacity(0.50)
-                        .hover(|s| s.opacity(0.85))
-                        .child("+")
-                        .on_click(cx.listener(|this, _event, _window, cx| {
-                            if let Some(clipboard) = cx.read_from_clipboard() {
-                                if let Some(text) = clipboard.text() {
-                                    if !text.is_empty() {
-                                        this.thread.update(cx, |thread, cx| {
-                                            thread.input.insert_str(&text);
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(6.0))
+                    .child(
+                        div()
+                            .id("acp-attach-btn")
+                            .cursor_pointer()
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .size(px(22.0))
+                            .rounded(px(6.0))
+                            .text_xs()
+                            .opacity(0.50)
+                            .hover(|s| s.opacity(0.85))
+                            .child("+")
+                            .on_click(cx.listener(|this, _event, _window, cx| {
+                                if let Some(clipboard) = cx.read_from_clipboard() {
+                                    if let Some(text) = clipboard.text() {
+                                        if !text.is_empty() {
+                                            this.thread.update(cx, |thread, cx| {
+                                                thread.input.insert_str(&text);
+                                                cx.notify();
+                                            });
+                                            this.cursor_visible = true;
                                             cx.notify();
-                                        });
-                                        this.cursor_visible = true;
-                                        cx.notify();
+                                        }
                                     }
                                 }
-                            }
-                        })),
-                ),
+                            })),
+                    )
+                    .when(context_loading, |d| {
+                        d.child(
+                            div()
+                                .text_xs()
+                                .opacity(0.40)
+                                .child("attaching context\u{2026}"),
+                        )
+                    }),
             )
             // ── Right: mode, model, send ─────────
             .child(
@@ -1041,8 +982,7 @@ impl Render for AcpChatView {
         let elapsed_secs = thread.stream_elapsed_secs();
         let available_commands = thread.available_commands().to_vec();
         let context_state = thread.context_bootstrap_state();
-        let queued_submit = thread.queued_submit_while_bootstrapping();
-        let context_note = thread.context_bootstrap_note().map(ToOwned::to_owned);
+        // queued_submit and context_note removed — no blocking empty state.
         let messages: Vec<AcpThreadMessage> = thread.messages.clone();
         let colors = Self::prompt_colors();
         let theme = theme::get_cached_theme();
@@ -1066,13 +1006,7 @@ impl Render for AcpChatView {
                     .overflow_y_scroll()
                     .track_scroll(&self.scroll_handle)
                     .min_h(gpui::px(0.))
-                    .when(is_empty, |d| {
-                        d.child(Self::render_empty_state(
-                            context_state,
-                            queued_submit,
-                            context_note.as_deref(),
-                        ))
-                    })
+                    // No blocking empty state — the input is always available.
                     .when(!is_empty, |d| {
                         d.px(px(8.0)).py(px(8.0)).flex().flex_col().children(
                             messages.iter().enumerate().map(|(i, msg)| {
@@ -1206,6 +1140,7 @@ impl Render for AcpChatView {
                         mode_label.as_deref(),
                         &display_name,
                         elapsed_secs,
+                        context_state,
                         cx,
                     )),
             )
