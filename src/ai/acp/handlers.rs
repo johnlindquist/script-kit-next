@@ -164,6 +164,7 @@ fn build_permission_preview(
             .map(|value| truncate_for_overlay(&summarize_json_value(value), 1200)),
     )
     .with_options(options)
+    .infer_kind()
 }
 
 // ── Approval seam ──────────────────────────────────────────────────────
@@ -599,6 +600,7 @@ impl Client for ScriptKitAcpClient {
             },
         ];
         let preview = AcpApprovalPreview::new("write_text_file", "client-fs-write")
+            .with_kind(super::permission_broker::AcpApprovalPreviewKind::Write)
             .with_subject(Some(path_display.clone()))
             .with_summary(Some(format!("Write {} bytes", args.content.len())))
             .with_input_preview(Some(truncate_for_overlay(&args.content, 1200)))

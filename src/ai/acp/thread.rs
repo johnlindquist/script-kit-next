@@ -20,6 +20,20 @@ use super::{
     AcpConnection, AcpEvent, AcpEventRx, AcpPromptTurnRequest,
 };
 
+/// Bootstrap state for deferred context capture.
+///
+/// Tracks whether the Tab AI context has been assembled and staged on the
+/// thread, so that the first user submit can be gated behind it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum AcpContextBootstrapState {
+    /// Context capture is still running in the background.
+    Preparing,
+    /// Context has been staged successfully.
+    Ready,
+    /// Context staging failed; partial or no context is available.
+    Failed,
+}
+
 /// Current status of the ACP thread.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum AcpThreadStatus {
@@ -133,6 +147,13 @@ pub(crate) struct AcpThread {
     /// Whether staged context has already been consumed.
     pending_context_consumed: bool,
 
+    /// Whether the deferred context capture has completed.
+    context_bootstrap_state: AcpContextBootstrapState,
+    /// Whether a submit was attempted while context was still `Preparing`.
+    queued_submit_while_bootstrapping: bool,
+    /// Human-readable status note for the bootstrap phase.
+    context_bootstrap_note: Option<SharedString>,
+
     // ── Structured session state (readable by the view) ──────────
     /// Current plan entries from the latest `PlanUpdated` event.
     active_plan_entries: Vec<String>,
@@ -176,6 +197,11 @@ impl AcpThread {
             pending_permission: None,
             pending_context_blocks: Vec::new(),
             pending_context_consumed: false,
+            context_bootstrap_state: AcpContextBootstrapState::Preparing,
+            queued_submit_while_bootstrapping: false,
+            context_bootstrap_note: Some(
+                "Attaching selection, window, and clipboard context\u{2026}".into(),
+            ),
             active_plan_entries: Vec::new(),
             active_mode_id: None,
             available_commands: Vec::new(),
@@ -191,7 +217,7 @@ impl AcpThread {
 
     /// Stage context blocks from a `TabAiContextBlob`.
     ///
-    /// These blocks will be prepended to the first user submit only.
+    /// Marks bootstrap as `Ready` and auto-submits any queued first turn.
     /// Calling this again before a submit replaces the staged blocks.
     pub(crate) fn stage_context(
         &mut self,
@@ -200,8 +226,50 @@ impl AcpThread {
     ) -> Result<(), String> {
         self.pending_context_blocks = build_tab_ai_acp_context_blocks(context)?;
         self.pending_context_consumed = false;
+        self.context_bootstrap_state = AcpContextBootstrapState::Ready;
+        self.context_bootstrap_note = Some("Context attached".into());
+
+        let should_auto_submit = self.queued_submit_while_bootstrapping
+            && !self.input.to_string().trim().is_empty()
+            && !matches!(
+                self.status,
+                AcpThreadStatus::Streaming | AcpThreadStatus::WaitingForPermission
+            );
+        self.queued_submit_while_bootstrapping = false;
+
+        if should_auto_submit {
+            return self.submit_input(cx);
+        }
+
         cx.notify();
         Ok(())
+    }
+
+    /// Mark the context bootstrap as failed with a human-readable note.
+    ///
+    /// If a submit was queued, it proceeds anyway (partial context is better
+    /// than dropping user input).
+    pub(crate) fn mark_context_bootstrap_failed(
+        &mut self,
+        note: impl Into<SharedString>,
+        cx: &mut Context<Self>,
+    ) {
+        self.context_bootstrap_state = AcpContextBootstrapState::Failed;
+        self.context_bootstrap_note = Some(note.into());
+
+        let should_auto_submit = self.queued_submit_while_bootstrapping
+            && !self.input.to_string().trim().is_empty()
+            && !matches!(
+                self.status,
+                AcpThreadStatus::Streaming | AcpThreadStatus::WaitingForPermission
+            );
+        self.queued_submit_while_bootstrapping = false;
+
+        if should_auto_submit {
+            let _ = self.submit_input(cx);
+        } else {
+            cx.notify();
+        }
     }
 
     /// Update the composer input text.
@@ -211,6 +279,10 @@ impl AcpThread {
     }
 
     /// Submit the current input as a new user turn.
+    ///
+    /// If context is still bootstrapping (`Preparing`), the submit is queued
+    /// and will fire automatically when `stage_context()` or
+    /// `mark_context_bootstrap_failed()` completes.
     ///
     /// Prepends staged context blocks on the first submit, then clears them.
     /// Starts streaming events from the ACP agent.
@@ -228,6 +300,18 @@ impl AcpThread {
             return Ok(());
         }
 
+        // Gate on bootstrap: queue instead of sending while context is still preparing.
+        if matches!(
+            self.context_bootstrap_state,
+            AcpContextBootstrapState::Preparing
+        ) {
+            self.queued_submit_while_bootstrapping = true;
+            self.context_bootstrap_note =
+                Some("Queued \u{00b7} sending when context is attached\u{2026}".into());
+            cx.notify();
+            return Ok(());
+        }
+
         let blocks = self.prepare_turn_blocks(trimmed);
 
         let msg_id = self.alloc_id();
@@ -237,6 +321,7 @@ impl AcpThread {
             trimmed.to_string(),
         ));
         self.input = SharedString::from("");
+        self.context_bootstrap_note = None;
         self.status = AcpThreadStatus::Streaming;
 
         let rx = self
@@ -651,6 +736,21 @@ impl AcpThread {
     pub(crate) fn active_tool_calls(&self) -> &[AcpToolCallState] {
         &self.active_tool_calls
     }
+
+    /// Current bootstrap state for deferred context capture.
+    pub(crate) fn context_bootstrap_state(&self) -> AcpContextBootstrapState {
+        self.context_bootstrap_state
+    }
+
+    /// Whether a submit is queued waiting for context bootstrap.
+    pub(crate) fn queued_submit_while_bootstrapping(&self) -> bool {
+        self.queued_submit_while_bootstrapping
+    }
+
+    /// Human-readable bootstrap status note, if any.
+    pub(crate) fn context_bootstrap_note(&self) -> Option<&str> {
+        self.context_bootstrap_note.as_ref().map(|s| s.as_ref())
+    }
 }
 
 /// Test-only helpers exposed to sibling modules in `src/ai/acp/`.
@@ -676,6 +776,9 @@ impl AcpThread {
             pending_permission: None,
             pending_context_blocks: context_blocks,
             pending_context_consumed: false,
+            context_bootstrap_state: AcpContextBootstrapState::Ready,
+            queued_submit_while_bootstrapping: false,
+            context_bootstrap_note: None,
             active_plan_entries: Vec::new(),
             active_mode_id: None,
             available_commands: Vec::new(),
@@ -768,6 +871,9 @@ mod tests {
             pending_permission: None,
             pending_context_blocks,
             pending_context_consumed,
+            context_bootstrap_state: AcpContextBootstrapState::Ready,
+            queued_submit_while_bootstrapping: false,
+            context_bootstrap_note: None,
             active_plan_entries: Vec::new(),
             active_mode_id: None,
             available_commands: Vec::new(),

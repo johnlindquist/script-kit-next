@@ -11,6 +11,32 @@ use std::sync::{
 
 use anyhow::Context;
 
+/// Semantic category for a tool call approval.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) enum AcpApprovalPreviewKind {
+    /// Tool reads data (e.g., read file, open directory).
+    Read,
+    /// Tool writes or modifies data (e.g., write file, save, edit).
+    Write,
+    /// Tool runs a command or subprocess.
+    Execute,
+    /// Fallback for uncategorized tool calls.
+    #[default]
+    Generic,
+}
+
+impl AcpApprovalPreviewKind {
+    /// Short label for the kind badge in the approval sheet.
+    pub(crate) fn badge_label(self) -> &'static str {
+        match self {
+            Self::Read => "Read only",
+            Self::Write => "Writes data",
+            Self::Execute => "Runs command",
+            Self::Generic => "Needs approval",
+        }
+    }
+}
+
 /// A single permission option presented to the user.
 #[derive(Debug, Clone)]
 pub(crate) struct AcpApprovalOption {
@@ -29,6 +55,16 @@ impl AcpApprovalOption {
     /// system message so they always match.
     pub(crate) fn summary_label(&self) -> String {
         format!("{} ({})", self.name, self.kind)
+    }
+
+    /// Whether this option represents a rejection/denial.
+    pub(crate) fn is_reject(&self) -> bool {
+        self.kind.starts_with("Reject")
+    }
+
+    /// Whether this option grants persistent (session-level) permission.
+    pub(crate) fn is_persistent_allow(&self) -> bool {
+        self.kind.contains("Always")
     }
 }
 
@@ -57,6 +93,8 @@ pub(crate) struct AcpApprovalPreview {
     pub output_preview: Option<String>,
     /// Human-readable labels for each option (e.g., "Allow (AllowOnce)").
     pub option_summary: Vec<String>,
+    /// Semantic category for the tool call.
+    pub kind: AcpApprovalPreviewKind,
 }
 
 impl AcpApprovalPreview {
@@ -73,6 +111,7 @@ impl AcpApprovalPreview {
             input_preview: None,
             output_preview: None,
             option_summary: Vec::new(),
+            kind: AcpApprovalPreviewKind::Generic,
         }
     }
 
@@ -103,6 +142,33 @@ impl AcpApprovalPreview {
     /// Set option summary labels from approval options via `summarize_approval_options`.
     pub(crate) fn with_options(mut self, options: &[AcpApprovalOption]) -> Self {
         self.option_summary = summarize_approval_options(options);
+        self
+    }
+
+    /// Set the semantic kind explicitly.
+    pub(crate) fn with_kind(mut self, kind: AcpApprovalPreviewKind) -> Self {
+        self.kind = kind;
+        self
+    }
+
+    /// Infer the semantic kind from the tool title.
+    pub(crate) fn infer_kind(mut self) -> Self {
+        let lowered = self.tool_title.to_ascii_lowercase();
+        self.kind = if lowered.contains("write")
+            || lowered.contains("save")
+            || lowered.contains("edit")
+        {
+            AcpApprovalPreviewKind::Write
+        } else if lowered.contains("terminal")
+            || lowered.contains("command")
+            || lowered.contains("exec")
+        {
+            AcpApprovalPreviewKind::Execute
+        } else if lowered.contains("read") || lowered.contains("open") {
+            AcpApprovalPreviewKind::Read
+        } else {
+            AcpApprovalPreviewKind::Generic
+        };
         self
     }
 }
