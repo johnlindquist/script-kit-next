@@ -49,6 +49,8 @@ pub(crate) struct AcpThreadMessage {
     pub id: u64,
     pub role: AcpThreadMessageRole,
     pub body: SharedString,
+    /// Optional tool call ID linking this message to an `AcpToolCallState`.
+    pub tool_call_id: Option<String>,
 }
 
 impl AcpThreadMessage {
@@ -57,8 +59,38 @@ impl AcpThreadMessage {
             id,
             role,
             body: body.into(),
+            tool_call_id: None,
         }
     }
+
+    fn with_tool_call_id(
+        id: u64,
+        role: AcpThreadMessageRole,
+        body: impl Into<SharedString>,
+        tool_call_id: String,
+    ) -> Self {
+        Self {
+            id,
+            role,
+            body: body.into(),
+            tool_call_id: Some(tool_call_id),
+        }
+    }
+}
+
+/// Tracked state for a single tool call, kept in sync across start/update events.
+#[derive(Debug, Clone)]
+pub(crate) struct AcpToolCallState {
+    /// ACP tool call identifier.
+    pub tool_call_id: String,
+    /// Display title (e.g. "Read file").
+    pub title: String,
+    /// Latest status text (e.g. "running", "completed").
+    pub status: String,
+    /// Latest body text (e.g. file contents, command output).
+    pub body: Option<String>,
+    /// ID of the corresponding `AcpThreadMessage` so the view can correlate.
+    pub message_id: u64,
 }
 
 /// Initialization parameters for creating an `AcpThread`.
@@ -98,6 +130,16 @@ pub(crate) struct AcpThread {
     /// Whether staged context has already been consumed.
     pending_context_consumed: bool,
 
+    // ── Structured session state (readable by the view) ──────────
+    /// Current plan entries from the latest `PlanUpdated` event.
+    active_plan_entries: Vec<String>,
+    /// Current agent mode from the latest `ModeChanged` event.
+    active_mode_id: Option<String>,
+    /// Current available commands from the latest `AvailableCommandsUpdated`.
+    available_commands: Vec<String>,
+    /// Tracked tool calls keyed by their ACP tool_call_id.
+    active_tool_calls: Vec<AcpToolCallState>,
+
     /// Handle to the active stream pump task.
     stream_task: Option<Task<()>>,
     /// Handle to the permission listener task.
@@ -129,6 +171,10 @@ impl AcpThread {
             pending_permission: None,
             pending_context_blocks: Vec::new(),
             pending_context_consumed: false,
+            active_plan_entries: Vec::new(),
+            active_mode_id: None,
+            available_commands: Vec::new(),
+            active_tool_calls: Vec::new(),
             stream_task: None,
             permission_task: None,
             next_message_id: 1,
@@ -163,6 +209,13 @@ impl AcpThread {
     /// Prepends staged context blocks on the first submit, then clears them.
     /// Starts streaming events from the ACP agent.
     pub(crate) fn submit_input(&mut self, cx: &mut Context<Self>) -> Result<(), String> {
+        if matches!(
+            self.status,
+            AcpThreadStatus::Streaming | AcpThreadStatus::WaitingForPermission
+        ) {
+            return Ok(());
+        }
+
         let input = self.input.to_string();
         let trimmed = input.trim();
         if trimmed.is_empty() {
@@ -212,7 +265,8 @@ impl AcpThread {
     // ── Private helpers ────────────────────────────────────────────
 
     /// Build the content blocks for a turn, consuming staged context on first use.
-    fn prepare_turn_blocks(&mut self, input: &str) -> Vec<ContentBlock> {
+    #[cfg_attr(test, allow(dead_code))]
+    pub(super) fn prepare_turn_blocks(&mut self, input: &str) -> Vec<ContentBlock> {
         let mut blocks = Vec::new();
 
         if !self.pending_context_consumed {
@@ -282,6 +336,11 @@ impl AcpThread {
     }
 
     /// Apply a single ACP event to thread state.
+    ///
+    /// Streaming text deltas coalesce into stable messages via `append_chunk`.
+    /// Plan, mode, and command updates are persisted in dedicated fields so the
+    /// view can render them as first-class UI strips without reparsing text.
+    /// Tool calls are tracked by ID and updated in-place.
     fn apply_event(&mut self, event: AcpEvent, cx: &mut Context<Self>) {
         match event {
             AcpEvent::UserMessageDelta(chunk) => {
@@ -296,40 +355,76 @@ impl AcpThread {
                 self.append_chunk(AcpThreadMessageRole::Thought, chunk);
                 self.status = AcpThreadStatus::Streaming;
             }
-            AcpEvent::ToolCallStarted { title, status, .. } => {
-                self.push_message(AcpThreadMessageRole::Tool, format!("{title}\n{status}"));
+            AcpEvent::ToolCallStarted {
+                tool_call_id,
+                title,
+                status,
+            } => {
+                let msg_id = self.alloc_id();
+                let body_text = format!("{title}\n{status}");
+                self.messages.push(AcpThreadMessage::with_tool_call_id(
+                    msg_id,
+                    AcpThreadMessageRole::Tool,
+                    body_text,
+                    tool_call_id.clone(),
+                ));
+                self.active_tool_calls.push(AcpToolCallState {
+                    tool_call_id,
+                    title,
+                    status,
+                    body: None,
+                    message_id: msg_id,
+                });
                 self.status = AcpThreadStatus::Streaming;
             }
-            AcpEvent::ToolCallUpdated { status, body, .. } => {
-                let text = match (status, body) {
-                    (Some(s), Some(b)) => format!("{s}\n{b}"),
-                    (Some(s), None) => s,
-                    (None, Some(b)) => b,
-                    (None, None) => String::new(),
-                };
-                if !text.is_empty() {
-                    self.push_message(AcpThreadMessageRole::Tool, text);
+            AcpEvent::ToolCallUpdated {
+                tool_call_id,
+                status,
+                body,
+            } => {
+                // Update the tracked tool call state and its message in-place.
+                if let Some(tc) = self
+                    .active_tool_calls
+                    .iter_mut()
+                    .find(|tc| tc.tool_call_id == tool_call_id)
+                {
+                    if let Some(s) = &status {
+                        tc.status = s.clone();
+                    }
+                    if body.is_some() {
+                        tc.body = body.clone();
+                    }
+                    // Rebuild the message body from the tracked state.
+                    let new_body = Self::format_tool_call_body(&tc.title, &tc.status, &tc.body);
+                    let mid = tc.message_id;
+                    if let Some(msg) = self.messages.iter_mut().find(|m| m.id == mid) {
+                        msg.body = new_body.into();
+                    }
+                } else {
+                    // Orphan update — create a standalone message.
+                    let text = match (status, body) {
+                        (Some(s), Some(b)) => format!("{s}\n{b}"),
+                        (Some(s), None) => s,
+                        (None, Some(b)) => b,
+                        (None, None) => String::new(),
+                    };
+                    if !text.is_empty() {
+                        self.push_message(AcpThreadMessageRole::Tool, text);
+                    }
                 }
                 self.status = AcpThreadStatus::Streaming;
             }
             AcpEvent::PlanUpdated { entries } => {
-                self.push_message(AcpThreadMessageRole::System, entries.join("\n"));
+                self.active_plan_entries = entries;
                 self.status = AcpThreadStatus::Streaming;
             }
             AcpEvent::AvailableCommandsUpdated { command_names } => {
-                self.push_message(
-                    AcpThreadMessageRole::System,
-                    format!("Commands: {}", command_names.join(", ")),
-                );
+                self.available_commands = command_names;
             }
             AcpEvent::ModeChanged { mode_id } => {
-                self.push_message(AcpThreadMessageRole::System, format!("Mode: {mode_id}"));
+                self.active_mode_id = Some(mode_id);
             }
-            AcpEvent::TurnFinished { stop_reason } => {
-                self.push_message(
-                    AcpThreadMessageRole::System,
-                    format!("Stop reason: {stop_reason}"),
-                );
+            AcpEvent::TurnFinished { .. } => {
                 self.status = AcpThreadStatus::Idle;
             }
             AcpEvent::Failed { error } => {
@@ -368,6 +463,162 @@ impl AcpThread {
         self.next_message_id += 1;
         id
     }
+
+    /// Format a tool call message body from tracked state.
+    fn format_tool_call_body(title: &str, status: &str, body: &Option<String>) -> String {
+        match body {
+            Some(b) => format!("{title}\n{status}\n{b}"),
+            None => format!("{title}\n{status}"),
+        }
+    }
+
+    // ── Public accessors for structured session state ──────────────
+
+    /// Current plan entries from the latest `PlanUpdated` event.
+    pub(crate) fn active_plan_entries(&self) -> &[String] {
+        &self.active_plan_entries
+    }
+
+    /// Current agent mode ID (e.g. "code", "architect").
+    pub(crate) fn active_mode_id(&self) -> Option<&str> {
+        self.active_mode_id.as_deref()
+    }
+
+    /// Current available commands from the agent.
+    pub(crate) fn available_commands(&self) -> &[String] {
+        &self.available_commands
+    }
+
+    /// Tracked tool calls, ordered by creation.
+    pub(crate) fn active_tool_calls(&self) -> &[AcpToolCallState] {
+        &self.active_tool_calls
+    }
+}
+
+/// Test-only helpers exposed to sibling modules in `src/ai/acp/`.
+#[cfg(test)]
+impl AcpThread {
+    /// Build a test thread without a real connection or GPUI context.
+    pub(super) fn test_new(
+        context_blocks: Vec<ContentBlock>,
+        initial_input: Option<String>,
+    ) -> Self {
+        let (_perm_tx, perm_rx) = async_channel::bounded(1);
+        let (conn_tx, _conn_rx) = async_channel::bounded::<super::AcpCommand>(1);
+        let dummy_connection = Arc::new(AcpConnection::from_sender(conn_tx));
+
+        Self {
+            connection: dummy_connection,
+            permission_rx: perm_rx,
+            ui_thread_id: "test-thread".to_string(),
+            cwd: PathBuf::from("/tmp/test"),
+            messages: Vec::new(),
+            input: initial_input.unwrap_or_default().into(),
+            status: AcpThreadStatus::Idle,
+            pending_permission: None,
+            pending_context_blocks: context_blocks,
+            pending_context_consumed: false,
+            active_plan_entries: Vec::new(),
+            active_mode_id: None,
+            available_commands: Vec::new(),
+            active_tool_calls: Vec::new(),
+            stream_task: None,
+            permission_task: None,
+            next_message_id: 1,
+        }
+    }
+
+    /// Apply an event without a GPUI context (for testing pure logic).
+    pub(super) fn apply_event_test(&mut self, event: super::AcpEvent) {
+        match event {
+            super::AcpEvent::UserMessageDelta(chunk) => {
+                self.append_chunk(AcpThreadMessageRole::System, chunk);
+                self.status = AcpThreadStatus::Streaming;
+            }
+            super::AcpEvent::AgentMessageDelta(chunk) => {
+                self.append_chunk(AcpThreadMessageRole::Assistant, chunk);
+                self.status = AcpThreadStatus::Streaming;
+            }
+            super::AcpEvent::AgentThoughtDelta(chunk) => {
+                self.append_chunk(AcpThreadMessageRole::Thought, chunk);
+                self.status = AcpThreadStatus::Streaming;
+            }
+            super::AcpEvent::ToolCallStarted {
+                tool_call_id,
+                title,
+                status,
+            } => {
+                let msg_id = self.alloc_id();
+                let body_text = format!("{title}\n{status}");
+                self.messages.push(AcpThreadMessage::with_tool_call_id(
+                    msg_id,
+                    AcpThreadMessageRole::Tool,
+                    body_text,
+                    tool_call_id.clone(),
+                ));
+                self.active_tool_calls.push(AcpToolCallState {
+                    tool_call_id,
+                    title,
+                    status,
+                    body: None,
+                    message_id: msg_id,
+                });
+                self.status = AcpThreadStatus::Streaming;
+            }
+            super::AcpEvent::ToolCallUpdated {
+                tool_call_id,
+                status,
+                body,
+            } => {
+                if let Some(tc) = self
+                    .active_tool_calls
+                    .iter_mut()
+                    .find(|tc| tc.tool_call_id == tool_call_id)
+                {
+                    if let Some(s) = &status {
+                        tc.status = s.clone();
+                    }
+                    if body.is_some() {
+                        tc.body = body.clone();
+                    }
+                    let new_body =
+                        Self::format_tool_call_body(&tc.title, &tc.status, &tc.body);
+                    let mid = tc.message_id;
+                    if let Some(msg) = self.messages.iter_mut().find(|m| m.id == mid) {
+                        msg.body = new_body.into();
+                    }
+                } else {
+                    let text = match (status, body) {
+                        (Some(s), Some(b)) => format!("{s}\n{b}"),
+                        (Some(s), None) => s,
+                        (None, Some(b)) => b,
+                        (None, None) => String::new(),
+                    };
+                    if !text.is_empty() {
+                        self.push_message(AcpThreadMessageRole::Tool, text);
+                    }
+                }
+                self.status = AcpThreadStatus::Streaming;
+            }
+            super::AcpEvent::PlanUpdated { entries } => {
+                self.active_plan_entries = entries;
+                self.status = AcpThreadStatus::Streaming;
+            }
+            super::AcpEvent::AvailableCommandsUpdated { command_names } => {
+                self.available_commands = command_names;
+            }
+            super::AcpEvent::ModeChanged { mode_id } => {
+                self.active_mode_id = Some(mode_id);
+            }
+            super::AcpEvent::TurnFinished { .. } => {
+                self.status = AcpThreadStatus::Idle;
+            }
+            super::AcpEvent::Failed { error } => {
+                self.push_message(AcpThreadMessageRole::Error, error);
+                self.status = AcpThreadStatus::Error;
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -397,6 +648,10 @@ mod tests {
             pending_permission: None,
             pending_context_blocks,
             pending_context_consumed,
+            active_plan_entries: Vec::new(),
+            active_mode_id: None,
+            available_commands: Vec::new(),
+            active_tool_calls: Vec::new(),
             stream_task: None,
             permission_task: None,
             next_message_id: 1,
@@ -506,5 +761,345 @@ mod tests {
 
         let blocks = thread.prepare_turn_blocks("hello");
         assert_eq!(blocks.len(), 1, "consumed context should not be prepended");
+    }
+
+    // ── Structured state tests ────────────────────────────────────
+
+    /// Helper that applies an event without a GPUI context (for pure logic tests).
+    /// Mirrors apply_event but skips cx.notify().
+    fn apply_event_test(thread: &mut AcpThread, event: AcpEvent) {
+        match event {
+            AcpEvent::UserMessageDelta(chunk) => {
+                thread.append_chunk(AcpThreadMessageRole::System, chunk);
+                thread.status = AcpThreadStatus::Streaming;
+            }
+            AcpEvent::AgentMessageDelta(chunk) => {
+                thread.append_chunk(AcpThreadMessageRole::Assistant, chunk);
+                thread.status = AcpThreadStatus::Streaming;
+            }
+            AcpEvent::AgentThoughtDelta(chunk) => {
+                thread.append_chunk(AcpThreadMessageRole::Thought, chunk);
+                thread.status = AcpThreadStatus::Streaming;
+            }
+            AcpEvent::ToolCallStarted {
+                tool_call_id,
+                title,
+                status,
+            } => {
+                let msg_id = thread.alloc_id();
+                let body_text = format!("{title}\n{status}");
+                thread.messages.push(AcpThreadMessage::with_tool_call_id(
+                    msg_id,
+                    AcpThreadMessageRole::Tool,
+                    body_text,
+                    tool_call_id.clone(),
+                ));
+                thread.active_tool_calls.push(AcpToolCallState {
+                    tool_call_id,
+                    title,
+                    status,
+                    body: None,
+                    message_id: msg_id,
+                });
+                thread.status = AcpThreadStatus::Streaming;
+            }
+            AcpEvent::ToolCallUpdated {
+                tool_call_id,
+                status,
+                body,
+            } => {
+                if let Some(tc) = thread
+                    .active_tool_calls
+                    .iter_mut()
+                    .find(|tc| tc.tool_call_id == tool_call_id)
+                {
+                    if let Some(s) = &status {
+                        tc.status = s.clone();
+                    }
+                    if body.is_some() {
+                        tc.body = body.clone();
+                    }
+                    let new_body =
+                        AcpThread::format_tool_call_body(&tc.title, &tc.status, &tc.body);
+                    let mid = tc.message_id;
+                    if let Some(msg) = thread.messages.iter_mut().find(|m| m.id == mid) {
+                        msg.body = new_body.into();
+                    }
+                } else {
+                    let text = match (status, body) {
+                        (Some(s), Some(b)) => format!("{s}\n{b}"),
+                        (Some(s), None) => s,
+                        (None, Some(b)) => b,
+                        (None, None) => String::new(),
+                    };
+                    if !text.is_empty() {
+                        thread.push_message(AcpThreadMessageRole::Tool, text);
+                    }
+                }
+                thread.status = AcpThreadStatus::Streaming;
+            }
+            AcpEvent::PlanUpdated { entries } => {
+                thread.active_plan_entries = entries;
+                thread.status = AcpThreadStatus::Streaming;
+            }
+            AcpEvent::AvailableCommandsUpdated { command_names } => {
+                thread.available_commands = command_names;
+            }
+            AcpEvent::ModeChanged { mode_id } => {
+                thread.active_mode_id = Some(mode_id);
+            }
+            AcpEvent::TurnFinished { .. } => {
+                thread.status = AcpThreadStatus::Idle;
+            }
+            AcpEvent::Failed { error } => {
+                thread.push_message(AcpThreadMessageRole::Error, error);
+                thread.status = AcpThreadStatus::Error;
+            }
+        }
+    }
+
+    #[test]
+    fn plan_updated_stores_in_dedicated_field() {
+        let mut thread = test_thread(Vec::new(), true);
+
+        apply_event_test(
+            &mut thread,
+            AcpEvent::PlanUpdated {
+                entries: vec!["Step 1".into(), "Step 2".into()],
+            },
+        );
+
+        assert_eq!(thread.active_plan_entries(), &["Step 1", "Step 2"]);
+        // Plan updates should not create messages — the view reads the field.
+        assert!(
+            thread.messages.is_empty(),
+            "plan updates should not produce messages"
+        );
+    }
+
+    #[test]
+    fn mode_changed_stores_in_dedicated_field() {
+        let mut thread = test_thread(Vec::new(), true);
+
+        apply_event_test(
+            &mut thread,
+            AcpEvent::ModeChanged {
+                mode_id: "architect".into(),
+            },
+        );
+
+        assert_eq!(thread.active_mode_id(), Some("architect"));
+        assert!(
+            thread.messages.is_empty(),
+            "mode changes should not produce messages"
+        );
+    }
+
+    #[test]
+    fn available_commands_stores_in_dedicated_field() {
+        let mut thread = test_thread(Vec::new(), true);
+
+        apply_event_test(
+            &mut thread,
+            AcpEvent::AvailableCommandsUpdated {
+                command_names: vec!["plan".into(), "compact".into()],
+            },
+        );
+
+        assert_eq!(thread.available_commands(), &["plan", "compact"]);
+        assert!(
+            thread.messages.is_empty(),
+            "command updates should not produce messages"
+        );
+    }
+
+    #[test]
+    fn tool_call_started_creates_tracked_state_and_message() {
+        let mut thread = test_thread(Vec::new(), true);
+
+        apply_event_test(
+            &mut thread,
+            AcpEvent::ToolCallStarted {
+                tool_call_id: "tc-1".into(),
+                title: "Read file".into(),
+                status: "running".into(),
+            },
+        );
+
+        assert_eq!(thread.active_tool_calls().len(), 1);
+        assert_eq!(thread.active_tool_calls()[0].tool_call_id, "tc-1");
+        assert_eq!(thread.active_tool_calls()[0].title, "Read file");
+        assert_eq!(thread.active_tool_calls()[0].status, "running");
+
+        assert_eq!(thread.messages.len(), 1);
+        assert_eq!(thread.messages[0].role, AcpThreadMessageRole::Tool);
+        assert_eq!(
+            thread.messages[0].tool_call_id.as_deref(),
+            Some("tc-1")
+        );
+    }
+
+    #[test]
+    fn tool_call_updated_modifies_existing_message_in_place() {
+        let mut thread = test_thread(Vec::new(), true);
+
+        apply_event_test(
+            &mut thread,
+            AcpEvent::ToolCallStarted {
+                tool_call_id: "tc-1".into(),
+                title: "Read file".into(),
+                status: "running".into(),
+            },
+        );
+
+        apply_event_test(
+            &mut thread,
+            AcpEvent::ToolCallUpdated {
+                tool_call_id: "tc-1".into(),
+                status: Some("completed".into()),
+                body: Some("file contents here".into()),
+            },
+        );
+
+        // Should still be 1 message, updated in-place.
+        assert_eq!(
+            thread.messages.len(),
+            1,
+            "tool update should modify existing message, not create a new one"
+        );
+
+        let msg = &thread.messages[0];
+        assert!(
+            msg.body.contains("completed"),
+            "message body should reflect updated status"
+        );
+        assert!(
+            msg.body.contains("file contents here"),
+            "message body should include updated body"
+        );
+
+        // Tracked state should also be updated.
+        let tc = &thread.active_tool_calls()[0];
+        assert_eq!(tc.status, "completed");
+        assert_eq!(tc.body.as_deref(), Some("file contents here"));
+    }
+
+    #[test]
+    fn orphan_tool_update_creates_standalone_message() {
+        let mut thread = test_thread(Vec::new(), true);
+
+        apply_event_test(
+            &mut thread,
+            AcpEvent::ToolCallUpdated {
+                tool_call_id: "unknown".into(),
+                status: Some("done".into()),
+                body: None,
+            },
+        );
+
+        assert_eq!(
+            thread.messages.len(),
+            1,
+            "orphan update should create a standalone message"
+        );
+        assert_eq!(thread.messages[0].body.as_ref(), "done");
+    }
+
+    #[test]
+    fn turn_finished_does_not_create_message() {
+        let mut thread = test_thread(Vec::new(), true);
+
+        apply_event_test(
+            &mut thread,
+            AcpEvent::TurnFinished {
+                stop_reason: "end_turn".into(),
+            },
+        );
+
+        assert!(
+            thread.messages.is_empty(),
+            "turn finished should not produce a message"
+        );
+        assert_eq!(thread.status, AcpThreadStatus::Idle);
+    }
+
+    #[test]
+    fn failed_event_creates_error_message() {
+        let mut thread = test_thread(Vec::new(), true);
+
+        apply_event_test(
+            &mut thread,
+            AcpEvent::Failed {
+                error: "connection lost".into(),
+            },
+        );
+
+        assert_eq!(thread.messages.len(), 1);
+        assert_eq!(thread.messages[0].role, AcpThreadMessageRole::Error);
+        assert_eq!(thread.messages[0].body.as_ref(), "connection lost");
+        assert_eq!(thread.status, AcpThreadStatus::Error);
+    }
+
+    #[test]
+    fn multiple_tool_calls_tracked_independently() {
+        let mut thread = test_thread(Vec::new(), true);
+
+        apply_event_test(
+            &mut thread,
+            AcpEvent::ToolCallStarted {
+                tool_call_id: "tc-1".into(),
+                title: "Read file".into(),
+                status: "running".into(),
+            },
+        );
+        apply_event_test(
+            &mut thread,
+            AcpEvent::ToolCallStarted {
+                tool_call_id: "tc-2".into(),
+                title: "Write file".into(),
+                status: "running".into(),
+            },
+        );
+
+        // Update only tc-1.
+        apply_event_test(
+            &mut thread,
+            AcpEvent::ToolCallUpdated {
+                tool_call_id: "tc-1".into(),
+                status: Some("completed".into()),
+                body: None,
+            },
+        );
+
+        assert_eq!(thread.active_tool_calls().len(), 2);
+        assert_eq!(thread.active_tool_calls()[0].status, "completed");
+        assert_eq!(thread.active_tool_calls()[1].status, "running");
+
+        // Two messages, one per tool call.
+        assert_eq!(thread.messages.len(), 2);
+    }
+
+    #[test]
+    fn plan_updated_replaces_previous_plan() {
+        let mut thread = test_thread(Vec::new(), true);
+
+        apply_event_test(
+            &mut thread,
+            AcpEvent::PlanUpdated {
+                entries: vec!["Step 1".into()],
+            },
+        );
+        apply_event_test(
+            &mut thread,
+            AcpEvent::PlanUpdated {
+                entries: vec!["Step A".into(), "Step B".into()],
+            },
+        );
+
+        assert_eq!(
+            thread.active_plan_entries(),
+            &["Step A", "Step B"],
+            "plan should be fully replaced, not appended"
+        );
     }
 }
