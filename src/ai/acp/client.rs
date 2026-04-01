@@ -220,10 +220,16 @@ async fn run_acp_event_loop(
         .await
         .context("ACP initialize failed")?;
 
+    let supports_embedded_context = init_response
+        .agent_capabilities
+        .prompt_capabilities
+        .embedded_context;
+
     tracing::info!(
         agent = %agent.id,
         protocol_version = ?init_response.protocol_version,
         load_session = init_response.agent_capabilities.load_session,
+        supports_embedded_context,
         "acp_initialized"
     );
 
