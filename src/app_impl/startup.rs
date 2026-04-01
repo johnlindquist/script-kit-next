@@ -799,6 +799,19 @@ impl ScriptListApp {
                                 return;
                             }
 
+                            // Consume Tab/Shift+Tab while the ACP chat is
+                            // open so the universal Tab AI fallback does not
+                            // spawn a second ACP session on top of this one.
+                            if let AppView::AcpChatView { entity, .. } = &this.current_view {
+                                let handled = entity.update(cx, |chat, cx| {
+                                    chat.handle_tab_key(has_shift, cx)
+                                });
+                                if handled {
+                                    cx.stop_propagation();
+                                    return;
+                                }
+                            }
+
                             // Forward Tab/Shift+Tab directly to the harness
                             // terminal PTY.  We must NOT call cx.propagate()
                             // here because GPUI's built-in focus-traversal

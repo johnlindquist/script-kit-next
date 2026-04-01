@@ -384,9 +384,7 @@ mod tests {
         // We create a dummy connection channel — tests that call prepare_turn_blocks
         // and append_chunk don't need a live connection.
         let (conn_tx, _conn_rx) = async_channel::bounded::<super::super::AcpCommand>(1);
-        let dummy_connection = Arc::new(AcpConnection {
-            tx: conn_tx,
-        });
+        let dummy_connection = Arc::new(AcpConnection::from_sender(conn_tx));
 
         AcpThread {
             connection: dummy_connection,
