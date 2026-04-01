@@ -18,8 +18,8 @@ use gpui::{Context, SharedString, Task};
 use crate::components::text_input::TextInputState;
 
 use super::{
-    build_tab_ai_acp_context_blocks, build_tab_ai_acp_guidance_blocks, AcpApprovalRequest,
-    AcpConnection, AcpEvent, AcpEventRx, AcpPromptTurnRequest,
+    build_tab_ai_acp_context_blocks, AcpApprovalRequest, AcpConnection, AcpEvent, AcpEventRx,
+    AcpPromptTurnRequest,
 };
 
 /// Bootstrap state for deferred context capture.
@@ -419,7 +419,9 @@ impl AcpThread {
         let has_context = !self.pending_context_consumed;
         if has_context {
             blocks.extend(self.pending_context_blocks.clone());
-            blocks.extend(build_tab_ai_acp_guidance_blocks(Some(input)));
+            // No automatic artifact authoring guidance — users should
+            // explicitly invoke /script-authoring when they want to
+            // create scripts. Default is exploration mode.
             self.pending_context_consumed = true;
         }
 
