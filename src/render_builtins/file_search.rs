@@ -52,6 +52,32 @@ impl FileSearchThumbnailLoadFailure {
     }
 }
 
+/// Shared helper for file-search native drag.  Initiates the macOS drag
+/// session and immediately clears GPUI's internal active-drag state so
+/// that keyboard dismissal (Escape) keeps working afterward.
+fn begin_file_search_native_drag(
+    drag_path: &str,
+    window: &mut gpui::Window,
+    cx: &mut gpui::App,
+) -> gpui::Entity<file_search::FileDragPayload> {
+    if let Err(error) = crate::platform::begin_native_file_drag(drag_path) {
+        tracing::warn!(
+            path = %drag_path,
+            error = %error,
+            "failed to start native file drag"
+        );
+    }
+    // GPUI started an internal drag because the row uses `.on_drag(...)`.
+    // Once AppKit owns the drag session, clear GPUI's active drag state so
+    // Escape can dismiss the view normally.
+    cx.stop_active_drag(window);
+    let name = std::path::Path::new(drag_path)
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_default();
+    cx.new(|_| file_search::FileDragPayload { name })
+}
+
 fn file_search_thumbnail_extension(path: &str) -> Option<String> {
     std::path::Path::new(path)
         .extension()
@@ -732,29 +758,7 @@ impl ScriptListApp {
                                     })
                                     .on_click(click_handler)
                                     .on_drag(drag_payload, move |_payload, _position, window, cx| {
-                                        // Initiate native macOS drag session so the file
-                                        // can be dropped into Finder or other apps.
-                                        if let Err(error) = crate::platform::begin_native_file_drag(
-                                            &drag_path_for_native,
-                                        ) {
-                                            tracing::warn!(
-                                                path = %drag_path_for_native,
-                                                error = %error,
-                                                "failed to start native file drag"
-                                            );
-                                        }
-                                        // GPUI started an internal drag because this row
-                                        // uses .on_drag(...).  Once we hand off to AppKit's
-                                        // native file drag session, clear GPUI's active
-                                        // drag state so keyboard dismissal (Escape) still
-                                        // works afterward.
-                                        cx.stop_active_drag(window);
-                                        cx.new(|_| file_search::FileDragPayload {
-                                            name: std::path::Path::new(&drag_path_for_native)
-                                                .file_name()
-                                                .map(|n| n.to_string_lossy().to_string())
-                                                .unwrap_or_default(),
-                                        })
+                                        begin_file_search_native_drag(&drag_path_for_native, window, cx)
                                     })
                                     .child(if show_thumbnail {
                                         let fallback_icon = fallback_icon.clone();
