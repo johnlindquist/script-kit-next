@@ -64,9 +64,9 @@ else
 
     # Type check - must pass
     echo -e "${YELLOW}[2/2] cargo check${NC}"
-    if ! cargo check 2>&1 | tee /tmp/cargo-check.out | tail -1 | grep -q "Finished"; then
+    if ! cargo check 2>/dev/null; then
         echo -e "${RED}❌ Check failed!${NC}"
-        cat /tmp/cargo-check.out
+        cargo check 2>&1
         exit 1
     fi
     echo -e "${GREEN}✓ check${NC}"
