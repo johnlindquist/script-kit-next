@@ -445,6 +445,18 @@ impl AcpChatView {
                                 })
                                 .when_some(preview.output_preview, |d, output| {
                                     d.child(Self::render_permission_section("Output", output))
+                                })
+                                .when(!preview.option_summary.is_empty(), |d| {
+                                    d.child(
+                                        div()
+                                            .pt(px(8.0))
+                                            .text_xs()
+                                            .opacity(0.52)
+                                            .child(format!(
+                                                "Available options: {}",
+                                                preview.option_summary.join(" \u{00b7} ")
+                                            )),
+                                    )
                                 }),
                         )
                     })
