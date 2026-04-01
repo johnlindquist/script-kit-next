@@ -1190,50 +1190,62 @@ impl Render for AcpChatView {
                     this.handle_key_down(event, cx);
                 }),
             )
-            // ── TOP: Input (matches main menu dimensions) ────
+            // ── TOP: Input (exact match with main menu mini layout) ────
+            // Uses same constants: HEADER_PADDING_X=12, HEADER_PADDING_Y=10,
+            // input_height=22 (CURSOR_HEIGHT_LG+2*CURSOR_MARGIN_Y), font_size_lg=16
             .child(
                 div()
                     .w_full()
                     .px(px(12.0))
-                    .py(px(8.0))
+                    .py(px(10.0))
                     .flex()
                     .flex_row()
                     .items_center()
-                    .h(px(22.0))
-                    .text_size(px(16.0))
-                    .child(if input_text.is_empty() {
+                    .child(
                         div()
+                            .flex_1()
                             .flex()
+                            .flex_row()
                             .items_center()
-                            .child(render_text_input_cursor_selection(TextInputRenderConfig {
-                                cursor: 0,
-                                selection: None,
-                                cursor_visible,
-                                cursor_color: theme.colors.accent.selected,
-                                text_color: theme.colors.text.primary,
-                                selection_color: theme.colors.accent.selected,
-                                selection_text_color: theme.colors.text.primary,
-                                ..TextInputRenderConfig::default_for_prompt("")
-                            }))
-                            .child(
+                            .h(px(22.0))
+                            .text_size(px(16.0))
+                            .text_color(if input_text.is_empty() {
+                                rgb(theme.colors.text.muted)
+                            } else {
+                                rgb(theme.colors.text.primary)
+                            })
+                            .child(if input_text.is_empty() {
                                 div()
-                                    .text_color(rgba((theme.colors.text.primary << 8) | 0x66))
-                                    .child("Ask Claude Code\u{2026}"),
-                            )
-                            .into_any_element()
-                    } else {
-                        render_text_input_cursor_selection(TextInputRenderConfig {
-                            cursor: input_cursor,
-                            selection: Some(input_selection),
-                            cursor_visible,
-                            cursor_color: theme.colors.accent.selected,
-                            text_color: theme.colors.text.primary,
-                            selection_color: theme.colors.accent.selected,
-                            selection_text_color: theme.colors.text.primary,
-                            ..TextInputRenderConfig::default_for_prompt(&input_text)
-                        })
-                        .into_any_element()
-                    }),
+                                    .flex()
+                                    .flex_row()
+                                    .items_center()
+                                    .child(div().w(px(2.0)).h(px(18.0)).when(cursor_visible, |d| {
+                                        d.bg(rgb(theme.colors.text.primary))
+                                    }))
+                                    .child(
+                                        div()
+                                            .ml(px(-2.0))
+                                            .text_color(rgb(theme.colors.text.muted))
+                                            .child("Ask Claude Code\u{2026}"),
+                                    )
+                                    .into_any_element()
+                            } else {
+                                render_text_input_cursor_selection(TextInputRenderConfig {
+                                    cursor: input_cursor,
+                                    selection: Some(input_selection),
+                                    cursor_visible,
+                                    cursor_color: theme.colors.accent.selected,
+                                    text_color: theme.colors.text.primary,
+                                    selection_color: theme.colors.accent.selected,
+                                    selection_text_color: theme.colors.text.primary,
+                                    cursor_height: 18.0,
+                                    cursor_width: 2.0,
+                                    container_height: Some(22.0),
+                                    ..TextInputRenderConfig::default_for_prompt(&input_text)
+                                })
+                                .into_any_element()
+                            }),
+                    ),
             )
             // ── Slash command menu (below input) ─────────────
             .when_some(self.slash_menu_index, |d, idx| {
