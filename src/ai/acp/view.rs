@@ -1192,6 +1192,19 @@ impl AcpChatView {
         let key = event.keystroke.key.as_str();
         let modifiers = &event.keystroke.modifiers;
 
+        // ── Attach menu dismiss on Escape ───────────────────────
+        if self.attach_menu_open && crate::ui_foundation::is_key_escape(key) {
+            self.attach_menu_open = false;
+            cx.notify();
+            cx.stop_propagation();
+            return;
+        }
+        // Close attach menu on any non-modifier key
+        if self.attach_menu_open {
+            self.attach_menu_open = false;
+            cx.notify();
+        }
+
         // ── Slash command menu intercept ─────────────────────────
         if self.slash_menu_index.is_some() {
             if crate::ui_foundation::is_key_up(key) {
