@@ -160,8 +160,7 @@ pub fn normalize_do_in_current_app_request(raw: Option<&str>) -> Option<&str> {
         if raw_lower.starts_with(&label_lower) {
             let rest = raw[label.len()..]
                 .trim_start_matches(|ch: char| {
-                    ch.is_ascii_whitespace()
-                        || matches!(ch, ':' | '-' | '\u{2014}' | '\u{2013}')
+                    ch.is_ascii_whitespace() || matches!(ch, ':' | '-' | '\u{2014}' | '\u{2013}')
                 })
                 .trim();
 
@@ -1525,21 +1524,15 @@ mod tests {
     #[test]
     fn normalize_do_in_current_app_request_strips_label_prefix() {
         assert_eq!(
-            normalize_do_in_current_app_request(Some(
-                "Do in Current App close duplicate tabs"
-            )),
+            normalize_do_in_current_app_request(Some("Do in Current App close duplicate tabs")),
             Some("close duplicate tabs")
         );
         assert_eq!(
-            normalize_do_in_current_app_request(Some(
-                "Current App Commands: close duplicate tabs"
-            )),
+            normalize_do_in_current_app_request(Some("Current App Commands: close duplicate tabs")),
             Some("close duplicate tabs")
         );
         assert_eq!(
-            normalize_do_in_current_app_request(Some(
-                "Current App Commands - open new window"
-            )),
+            normalize_do_in_current_app_request(Some("Current App Commands - open new window")),
             Some("open new window")
         );
         // Label prefix with only separator chars → None

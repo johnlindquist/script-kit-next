@@ -1469,8 +1469,33 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                 script_kit_gpui::mark_window_shown(); // Focus grace period
                                 platform::ensure_move_to_active_space();
 
-                                // Position window - try per-display saved position first, then fall back to eye-line
-                                let window_size = gpui::size(px(750.), initial_window_height());
+                                view.ensure_selection_at_first_item(ctx);
+
+                                // Compute dynamic window size matching the hotkey path.
+                                let current_bounds = platform::get_main_window_bounds();
+                                let current_window_width = current_bounds.map(|(_, _, width, _)| width as f32);
+                                let window_size = if matches!(view.current_view, AppView::ScriptList)
+                                    && view.main_window_mode == MainWindowMode::Mini
+                                {
+                                    let (grouped_items, _) = view.get_grouped_results_cached();
+                                    let sizing = crate::window_resize::mini_main_window_sizing_from_grouped_items(&grouped_items);
+                                    gpui::size(
+                                        px(crate::window_resize::width_for_view(ViewType::MiniMainWindow).unwrap_or(750.0)),
+                                        crate::window_resize::height_for_mini_main_window(sizing),
+                                    )
+                                } else if let Some((view_type, item_count)) = view.calculate_window_size_params() {
+                                    gpui::size(
+                                        px(crate::window_resize::width_for_view(view_type)
+                                            .or(current_window_width)
+                                            .unwrap_or(750.0)),
+                                        crate::window_resize::height_for_view(view_type, item_count),
+                                    )
+                                } else {
+                                    gpui::size(
+                                        px(current_window_width.unwrap_or(750.0)),
+                                        crate::window_resize::height_for_view(ViewType::ScriptList, 0),
+                                    )
+                                };
                                 let displays = platform::get_macos_displays();
                                 let bounds = if let Some((mouse_x, mouse_y)) = platform::get_global_mouse_position() {
                                     // Try to restore saved position for the mouse display

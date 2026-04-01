@@ -396,10 +396,7 @@ impl DictationOverlay {
         *OVERLAY_ABORT_CALLBACK.lock() = None;
         prepare_overlay_window_for_close(window);
         window.remove_window();
-        tracing::info!(
-            category = "DICTATION",
-            "Overlay closed from within entity"
-        );
+        tracing::info!(category = "DICTATION", "Overlay closed from within entity");
     }
 
     /// Replace the visual state snapshot (called from the dictation runtime).
@@ -668,11 +665,9 @@ impl Render for DictationOverlay {
                                     .text_color(stop_color)
                                     .on_mouse_down(
                                         MouseButton::Left,
-                                        cx.listener(
-                                            |this, _event: &MouseDownEvent, window, cx| {
-                                                this.abort_overlay_session(window, cx);
-                                            },
-                                        ),
+                                        cx.listener(|this, _event: &MouseDownEvent, window, cx| {
+                                            this.abort_overlay_session(window, cx);
+                                        }),
                                     )
                                     .child(CONFIRM_STOP_LABEL),
                             )
@@ -689,11 +684,9 @@ impl Render for DictationOverlay {
                                     .text_color(continue_color)
                                     .on_mouse_down(
                                         MouseButton::Left,
-                                        cx.listener(
-                                            |this, _event: &MouseDownEvent, window, cx| {
-                                                this.resume_recording(window, cx);
-                                            },
-                                        ),
+                                        cx.listener(|this, _event: &MouseDownEvent, window, cx| {
+                                            this.resume_recording(window, cx);
+                                        }),
                                     )
                                     .child(CONFIRM_CONTINUE_LABEL),
                             ),

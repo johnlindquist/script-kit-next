@@ -89,10 +89,7 @@ impl AcpRuntime {
         let (event_tx, event_rx) = async_channel::bounded(256);
 
         self.tx
-            .send_blocking(AcpCommand::StartTurn {
-                request,
-                event_tx,
-            })
+            .send_blocking(AcpCommand::StartTurn { request, event_tx })
             .context("ACP worker channel closed")?;
 
         Ok(event_rx)

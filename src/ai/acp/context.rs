@@ -92,8 +92,7 @@ mod tests {
     #[test]
     fn guidance_blocks_are_added_only_for_authoring_intents() {
         // Authoring intent → should include guidance
-        let authoring =
-            build_tab_ai_acp_guidance_blocks(Some("build a clipboard cleanup script"));
+        let authoring = build_tab_ai_acp_guidance_blocks(Some("build a clipboard cleanup script"));
         assert_eq!(
             authoring.len(),
             1,
@@ -101,8 +100,7 @@ mod tests {
         );
 
         // Non-authoring intent → no guidance
-        let non_authoring =
-            build_tab_ai_acp_guidance_blocks(Some("explain this selection"));
+        let non_authoring = build_tab_ai_acp_guidance_blocks(Some("explain this selection"));
         assert!(
             non_authoring.is_empty(),
             "non-authoring intent should produce no guidance blocks"
@@ -112,7 +110,10 @@ mod tests {
     #[test]
     fn guidance_blocks_empty_for_none_intent() {
         let blocks = build_tab_ai_acp_guidance_blocks(None);
-        assert!(blocks.is_empty(), "None intent should produce no guidance blocks");
+        assert!(
+            blocks.is_empty(),
+            "None intent should produce no guidance blocks"
+        );
     }
 
     #[test]
