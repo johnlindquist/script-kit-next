@@ -12,8 +12,10 @@ use gpui::{
 use crate::prompts::markdown::render_markdown_with_scope;
 use crate::theme::{self, PromptColors};
 
-use super::thread::{AcpThread, AcpThreadMessage, AcpThreadMessageRole, AcpThreadStatus};
-use super::AcpApprovalRequest;
+use super::thread::{
+    AcpContextBootstrapState, AcpThread, AcpThreadMessage, AcpThreadMessageRole, AcpThreadStatus,
+};
+use super::{AcpApprovalOption, AcpApprovalPreview, AcpApprovalPreviewKind, AcpApprovalRequest};
 
 /// GPUI view entity wrapping an `AcpThread` for the Tab AI surface.
 pub(crate) struct AcpChatView {
@@ -249,8 +251,31 @@ impl AcpChatView {
             .into_any_element()
     }
 
-    fn render_empty_state() -> gpui::AnyElement {
+    fn render_empty_state(
+        context_state: AcpContextBootstrapState,
+        queued_submit: bool,
+        context_note: Option<&str>,
+    ) -> gpui::AnyElement {
         let theme = theme::get_cached_theme();
+
+        let (title, detail) = match (context_state, queued_submit) {
+            (AcpContextBootstrapState::Preparing, true) => (
+                "Request queued",
+                "Your first turn will send automatically as soon as context is attached.",
+            ),
+            (AcpContextBootstrapState::Preparing, false) => (
+                "Preparing context",
+                "Selection, clipboard, and window context are attaching before the first turn.",
+            ),
+            (AcpContextBootstrapState::Ready, _) => (
+                "Ask Claude Code anything",
+                "Your current Script Kit and desktop context are attached.",
+            ),
+            (AcpContextBootstrapState::Failed, _) => (
+                "Context partially attached",
+                "Some desktop context was unavailable, but you can keep going.",
+            ),
+        };
 
         div()
             .w_full()
@@ -265,15 +290,28 @@ impl AcpChatView {
                     .text_base()
                     .font_weight(FontWeight::SEMIBOLD)
                     .opacity(0.9)
-                    .child("Tab AI is ready"),
+                    .child(title),
             )
             .child(
                 div()
                     .pt(px(8.0))
                     .text_sm()
                     .opacity(0.65)
-                    .child("Context is assembling in the background. Type a request and press Enter."),
+                    .child(detail),
             )
+            .when_some(context_note.map(str::to_string), |d, note| {
+                d.child(
+                    div()
+                        .pt(px(12.0))
+                        .px(px(10.0))
+                        .py(px(6.0))
+                        .rounded(px(999.0))
+                        .bg(rgba((theme.colors.accent.selected << 8) | 0x12))
+                        .text_xs()
+                        .opacity(0.76)
+                        .child(note),
+                )
+            })
             .child(
                 div()
                     .pt(px(14.0))
@@ -283,6 +321,27 @@ impl AcpChatView {
                     .child("Claude Code over ACP"),
             )
             .into_any_element()
+    }
+
+    fn footer_hint_text(
+        status: AcpThreadStatus,
+        context_state: AcpContextBootstrapState,
+        queued_submit: bool,
+        has_pending_permission: bool,
+    ) -> &'static str {
+        if has_pending_permission {
+            "Choose an option to continue"
+        } else if matches!(status, AcpThreadStatus::Streaming) {
+            "Claude Code is working\u{2026}"
+        } else if matches!(context_state, AcpContextBootstrapState::Preparing) && queued_submit {
+            "Queued \u{00b7} sending when context is attached\u{2026}"
+        } else if matches!(context_state, AcpContextBootstrapState::Preparing) {
+            "Attaching context\u{2026}"
+        } else if matches!(context_state, AcpContextBootstrapState::Failed) {
+            "Enter to send \u{00b7} context partial"
+        } else {
+            "Enter to send"
+        }
     }
 
     fn render_streaming_hint() -> gpui::AnyElement {
@@ -375,6 +434,151 @@ impl AcpChatView {
             .into_any_element()
     }
 
+    fn render_permission_header(preview: &AcpApprovalPreview) -> gpui::AnyElement {
+        let theme = theme::get_cached_theme();
+
+        let (badge_bg, badge_border) = match preview.kind {
+            AcpApprovalPreviewKind::Read => (
+                rgba((theme.colors.text.primary << 8) | 0x10),
+                rgba((theme.colors.ui.border << 8) | 0x30),
+            ),
+            AcpApprovalPreviewKind::Write => (
+                rgba((theme.colors.accent.selected << 8) | 0x16),
+                rgba((theme.colors.accent.selected << 8) | 0x38),
+            ),
+            AcpApprovalPreviewKind::Execute => (
+                rgba(0xF59E0B18),
+                rgba(0xF59E0B50),
+            ),
+            AcpApprovalPreviewKind::Generic => (
+                rgba((theme.colors.text.primary << 8) | 0x08),
+                rgba((theme.colors.ui.border << 8) | 0x24),
+            ),
+        };
+
+        div()
+            .pt(px(8.0))
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_2()
+                    .child(
+                        div()
+                            .px(px(8.0))
+                            .py(px(4.0))
+                            .rounded(px(999.0))
+                            .bg(badge_bg)
+                            .border_1()
+                            .border_color(badge_border)
+                            .text_xs()
+                            .opacity(0.8)
+                            .child(preview.kind.badge_label()),
+                    )
+                    .child(
+                        div()
+                            .text_sm()
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .child(preview.tool_title.clone()),
+                    ),
+            )
+            .when_some(preview.subject.clone(), |d, subject| {
+                d.child(
+                    div()
+                        .pt(px(6.0))
+                        .text_sm()
+                        .opacity(0.82)
+                        .child(subject),
+                )
+            })
+            .child(
+                div()
+                    .pt(px(2.0))
+                    .text_xs()
+                    .opacity(0.52)
+                    .child(format!("Tool call ID: {}", preview.tool_call_id)),
+            )
+            .into_any_element()
+    }
+
+    fn render_permission_option_row(
+        option: &AcpApprovalOption,
+        index: usize,
+        is_selected: bool,
+        cx: &mut Context<Self>,
+    ) -> gpui::AnyElement {
+        let theme = theme::get_cached_theme();
+        let option_id = option.option_id.clone();
+
+        let (bg, border, caption) = if option.is_reject() {
+            (
+                if is_selected { rgba(0xEF444424) } else { rgba(0xEF444412) },
+                rgba(0xEF444460),
+                "Cancel this request",
+            )
+        } else if option.is_persistent_allow() {
+            (
+                if is_selected {
+                    rgba((theme.colors.accent.selected << 8) | 0x22)
+                } else {
+                    rgba((theme.colors.accent.selected << 8) | 0x12)
+                },
+                rgba((theme.colors.accent.selected << 8) | 0x48),
+                "Remember this choice",
+            )
+        } else {
+            (
+                if is_selected {
+                    rgba((theme.colors.accent.selected << 8) | 0x1C)
+                } else {
+                    rgba((theme.colors.text.primary << 8) | 0x08)
+                },
+                if is_selected {
+                    rgba((theme.colors.accent.selected << 8) | 0x60)
+                } else {
+                    rgba((theme.colors.ui.border << 8) | 0x30)
+                },
+                "Allow once",
+            )
+        };
+
+        div()
+            .id(SharedString::from(format!("perm-opt-{index}")))
+            .mt(px(8.0))
+            .px(px(12.0))
+            .py(px(10.0))
+            .rounded(px(10.0))
+            .cursor_pointer()
+            .bg(bg)
+            .border_1()
+            .border_color(border)
+            .hover(|d| d.bg(rgba((theme.colors.text.primary << 8) | 0x12)))
+            .on_click(cx.listener(move |this, _event, _window, cx| {
+                this.approve_permission(Some(option_id.clone()), cx);
+            }))
+            .child(
+                div()
+                    .text_sm()
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .child(format!("{} \u{00b7} {}", index + 1, option.name)),
+            )
+            .child(
+                div()
+                    .pt(px(2.0))
+                    .text_xs()
+                    .opacity(0.58)
+                    .child(caption),
+            )
+            .child(
+                div()
+                    .pt(px(1.0))
+                    .text_xs()
+                    .opacity(0.44)
+                    .child(option.kind.clone()),
+            )
+            .into_any_element()
+    }
+
     fn render_permission_overlay(
         request: &AcpApprovalRequest,
         selected_index: usize,
@@ -412,53 +616,28 @@ impl AcpChatView {
                     )
                     // ── Structured preview sections ──────────────
                     .when_some(preview.clone(), |d, preview| {
-                        d.child(
-                            div()
-                                .pt(px(8.0))
-                                .child(
+                        d.child(Self::render_permission_header(&preview))
+                            .when_some(preview.summary, |d, summary| {
+                                d.child(Self::render_permission_section("Summary", summary))
+                            })
+                            .when_some(preview.input_preview, |d, input| {
+                                d.child(Self::render_permission_section("Input", input))
+                            })
+                            .when_some(preview.output_preview, |d, output| {
+                                d.child(Self::render_permission_section("Output", output))
+                            })
+                            .when(!preview.option_summary.is_empty(), |d| {
+                                d.child(
                                     div()
-                                        .text_sm()
-                                        .font_weight(FontWeight::SEMIBOLD)
-                                        .child(preview.tool_title),
-                                )
-                                .child(
-                                    div()
-                                        .pt(px(2.0))
+                                        .pt(px(8.0))
                                         .text_xs()
-                                        .opacity(0.62)
-                                        .child(format!("Tool call ID: {}", preview.tool_call_id)),
+                                        .opacity(0.52)
+                                        .child(format!(
+                                            "Available options: {}",
+                                            preview.option_summary.join(" \u{00b7} ")
+                                        )),
                                 )
-                                .when_some(preview.subject, |d, subject| {
-                                    d.child(
-                                        div()
-                                            .pt(px(2.0))
-                                            .text_xs()
-                                            .opacity(0.72)
-                                            .child(subject),
-                                    )
-                                })
-                                .when_some(preview.summary, |d, summary| {
-                                    d.child(Self::render_permission_section("Summary", summary))
-                                })
-                                .when_some(preview.input_preview, |d, input| {
-                                    d.child(Self::render_permission_section("Input", input))
-                                })
-                                .when_some(preview.output_preview, |d, output| {
-                                    d.child(Self::render_permission_section("Output", output))
-                                })
-                                .when(!preview.option_summary.is_empty(), |d| {
-                                    d.child(
-                                        div()
-                                            .pt(px(8.0))
-                                            .text_xs()
-                                            .opacity(0.52)
-                                            .child(format!(
-                                                "Available options: {}",
-                                                preview.option_summary.join(" \u{00b7} ")
-                                            )),
-                                    )
-                                }),
-                        )
+                            })
                     })
                     // ── Fallback to body when no preview ─────────
                     .when(preview.is_none(), |d| {
@@ -471,42 +650,9 @@ impl AcpChatView {
                                 .child(request.body.clone()),
                         )
                     })
-                    // ── Option list with keyboard highlight ──────
+                    // ── Option list with semantic rows ───────────
                     .children(request.options.iter().enumerate().map(|(i, option)| {
-                        let option_id = option.option_id.clone();
-                        let is_selected = i == selected_index;
-                        let label = format!(
-                            "{} \u{00b7} {} \u{00b7} {}",
-                            i + 1,
-                            option.name,
-                            option.kind,
-                        );
-
-                        div()
-                            .id(SharedString::from(format!("perm-opt-{i}")))
-                            .mt(px(8.0))
-                            .px(px(10.0))
-                            .py(px(9.0))
-                            .rounded(px(8.0))
-                            .cursor_pointer()
-                            .bg(if is_selected {
-                                rgba((theme.colors.accent.selected << 8) | 0x18)
-                            } else {
-                                rgba((theme.colors.text.primary << 8) | 0x06)
-                            })
-                            .border_1()
-                            .border_color(if is_selected {
-                                rgba((theme.colors.accent.selected << 8) | 0x55)
-                            } else {
-                                rgba((theme.colors.ui.border << 8) | 0x30)
-                            })
-                            .hover(|d| {
-                                d.bg(rgba((theme.colors.text.primary << 8) | 0x12))
-                            })
-                            .on_click(cx.listener(move |this, _event, _window, cx| {
-                                this.approve_permission(Some(option_id.clone()), cx);
-                            }))
-                            .child(label)
+                        Self::render_permission_option_row(option, i, i == selected_index, cx)
                     }))
                     // ── Keyboard hint strip ──────────────────────
                     .child(
@@ -693,6 +839,9 @@ impl Render for AcpChatView {
         let plan_entries = thread.active_plan_entries().to_vec();
         let active_mode = thread.active_mode_id().map(String::from);
         let available_commands = thread.available_commands().to_vec();
+        let context_state = thread.context_bootstrap_state();
+        let queued_submit = thread.queued_submit_while_bootstrapping();
+        let context_note = thread.context_bootstrap_note().map(ToOwned::to_owned);
         let messages: Vec<AcpThreadMessage> = thread.messages.clone();
         let colors = Self::prompt_colors();
 
@@ -712,7 +861,13 @@ impl Render for AcpChatView {
                     .flex_grow()
                     .overflow_y_scroll()
                     .min_h(gpui::px(0.))
-                    .when(is_empty, |d| d.child(Self::render_empty_state()))
+                    .when(is_empty, |d| {
+                        d.child(Self::render_empty_state(
+                            context_state,
+                            queued_submit,
+                            context_note.as_deref(),
+                        ))
+                    })
                     .when(!is_empty, |d| {
                         d.p_2()
                             .gap_2()
@@ -777,7 +932,12 @@ impl Render for AcpChatView {
                         div()
                             .text_xs()
                             .opacity(0.45)
-                            .child("Enter to send"),
+                            .child(Self::footer_hint_text(
+                                status,
+                                context_state,
+                                queued_submit,
+                                has_pending_permission,
+                            )),
                     )
                     .child(Self::render_status_badge(status, has_pending_permission))
                     .when_some(active_mode.clone(), |d, mode_id| {

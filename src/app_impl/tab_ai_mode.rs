@@ -651,6 +651,10 @@ impl ScriptListApp {
                                 event = "tab_ai_acp_stage_context_failed",
                                 error = %e,
                             );
+                            thread.mark_context_bootstrap_failed(
+                                "Some desktop context could not be attached. You can still send.",
+                                cx,
+                            );
                         }
 
                         // Auto-submit if effective intent was resolved
