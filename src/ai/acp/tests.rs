@@ -80,6 +80,7 @@ fn pending_permission_stored_and_clears_on_approve() {
         id: 1,
         title: "Write to file".into(),
         body: "Agent wants to write to /tmp/test.txt".into(),
+        preview: None,
         options: vec![
             AcpApprovalOption {
                 option_id: "allow-once".into(),
@@ -121,6 +122,7 @@ fn pending_permission_cancel_sends_none() {
         id: 2,
         title: "Terminal access".into(),
         body: "Agent wants to run a command".into(),
+        preview: None,
         options: vec![AcpApprovalOption {
             option_id: "allow".into(),
             name: "Allow".into(),
@@ -159,6 +161,7 @@ fn broker_full_roundtrip_with_three_options() {
         .request(super::permission_broker::AcpApprovalRequestInput {
             title: "Read file".into(),
             body: "src/main.rs".into(),
+            preview: None,
             options: vec![
                 AcpApprovalOption {
                     option_id: "allow-once".into(),
