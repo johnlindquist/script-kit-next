@@ -39,6 +39,8 @@ pub(crate) struct AcpChatView {
     cursor_visible: bool,
     /// Handle to the cursor blink task.
     _blink_task: Task<()>,
+    /// Slash command menu: selected index (None = menu hidden).
+    slash_menu_index: Option<usize>,
 }
 
 impl AcpChatView {
@@ -54,6 +56,9 @@ impl AcpChatView {
                 this.last_message_count = count;
                 this.scroll_handle.scroll_to_bottom();
             }
+
+            // Update slash command menu on any input change.
+            this.update_slash_menu(cx);
             cx.notify();
         })
         .detach();
@@ -86,6 +91,7 @@ impl AcpChatView {
             last_message_count: 0,
             cursor_visible: true,
             _blink_task: blink_task,
+            slash_menu_index: None,
         }
     }
 
@@ -890,6 +896,89 @@ impl AcpChatView {
         btn.child(icon_char).into_any_element()
     }
 
+    // ── Slash command menu ─────────────────────────────────────────
+
+    /// Known Claude Code slash commands (used when the agent doesn't send
+    /// an AvailableCommandsUpdate notification).
+    const DEFAULT_SLASH_COMMANDS: &'static [&'static str] = &[
+        "compact", "clear", "bug", "help", "init", "login", "logout", "status", "cost", "doctor",
+        "review", "memory",
+    ];
+
+    /// Return commands that match the current `/` prefix in the input.
+    fn filtered_slash_commands(&self, cx: &Context<Self>) -> Vec<String> {
+        let text = self.thread.read(cx).input.text().to_string();
+        if !text.starts_with('/') {
+            return Vec::new();
+        }
+        let query = &text[1..]; // strip the `/`
+
+        // Use agent-provided commands if available, otherwise defaults.
+        let agent_commands = self.thread.read(cx).available_commands().to_vec();
+        let commands: Vec<String> = if agent_commands.is_empty() {
+            Self::DEFAULT_SLASH_COMMANDS
+                .iter()
+                .map(|s| s.to_string())
+                .collect()
+        } else {
+            agent_commands
+        };
+
+        if query.is_empty() {
+            return commands;
+        }
+        let query_lower = query.to_lowercase();
+        commands
+            .into_iter()
+            .filter(|cmd| cmd.to_lowercase().contains(&query_lower))
+            .collect()
+    }
+
+    /// Update slash menu state after the input text changes.
+    fn update_slash_menu(&mut self, cx: &Context<Self>) {
+        let text = self.thread.read(cx).input.text().to_string();
+        if text.starts_with('/') && !text.contains(' ') {
+            // Show menu when typing /... (no space yet = still filtering)
+            let filtered = self.filtered_slash_commands(cx);
+            if !filtered.is_empty() {
+                let idx = self.slash_menu_index.unwrap_or(0);
+                self.slash_menu_index = Some(idx.min(filtered.len().saturating_sub(1)));
+            } else {
+                self.slash_menu_index = None;
+            }
+        } else {
+            self.slash_menu_index = None;
+        }
+    }
+
+    fn render_slash_menu(commands: &[String], selected_index: usize) -> gpui::AnyElement {
+        let theme = theme::get_cached_theme();
+
+        div()
+            .id("acp-slash-menu")
+            .w_full()
+            .max_h(px(200.0))
+            .overflow_y_scroll()
+            .rounded(px(8.0))
+            .bg(rgb(theme.colors.background.search_box))
+            .border_1()
+            .border_color(rgba((theme.colors.ui.border << 8) | 0x40))
+            .py(px(4.0))
+            .children(commands.iter().enumerate().map(|(i, cmd)| {
+                let is_selected = i == selected_index;
+                div()
+                    .w_full()
+                    .px(px(10.0))
+                    .py(px(4.0))
+                    .text_sm()
+                    .when(is_selected, |d| {
+                        d.bg(rgba((theme.colors.accent.selected << 8) | 0x1C))
+                    })
+                    .child(format!("/{cmd}"))
+            }))
+            .into_any_element()
+    }
+
     // ── Key handling ──────────────────────────────────────────────
 
     fn handle_key_down(&mut self, event: &gpui::KeyDownEvent, cx: &mut Context<Self>) {
@@ -917,6 +1006,48 @@ impl AcpChatView {
         let key = event.keystroke.key.as_str();
         let modifiers = &event.keystroke.modifiers;
 
+        // ── Slash command menu intercept ─────────────────────────
+        if self.slash_menu_index.is_some() {
+            if crate::ui_foundation::is_key_up(key) {
+                let idx = self.slash_menu_index.unwrap_or(0);
+                self.slash_menu_index = Some(idx.saturating_sub(1));
+                cx.notify();
+                cx.stop_propagation();
+                return;
+            }
+            if crate::ui_foundation::is_key_down(key) {
+                let idx = self.slash_menu_index.unwrap_or(0);
+                let filtered = self.filtered_slash_commands(cx);
+                self.slash_menu_index = Some((idx + 1).min(filtered.len().saturating_sub(1)));
+                cx.notify();
+                cx.stop_propagation();
+                return;
+            }
+            if crate::ui_foundation::is_key_enter(key) {
+                let filtered = self.filtered_slash_commands(cx);
+                let idx = self.slash_menu_index.unwrap_or(0);
+                if let Some(cmd) = filtered.get(idx) {
+                    let cmd_text = format!("/{cmd} ");
+                    self.thread.update(cx, |thread, cx| {
+                        thread.input.set_text(cmd_text);
+                        cx.notify();
+                    });
+                }
+                self.slash_menu_index = None;
+                cx.notify();
+                cx.stop_propagation();
+                return;
+            }
+            if crate::ui_foundation::is_key_escape(key) {
+                self.slash_menu_index = None;
+                cx.notify();
+                cx.stop_propagation();
+                return;
+            }
+            // Other keys fall through to normal input handling,
+            // which will update the filter text.
+        }
+
         // Shift+Enter inserts a newline.
         if crate::ui_foundation::is_key_enter(key) && modifiers.shift {
             self.thread.update(cx, |thread, cx| {
@@ -929,6 +1060,7 @@ impl AcpChatView {
 
         // Enter submits.
         if crate::ui_foundation::is_key_enter(key) && !modifiers.shift {
+            self.slash_menu_index = None;
             let _ = self.thread.update(cx, |thread, cx| thread.submit_input(cx));
             cx.stop_propagation();
             return;
@@ -953,6 +1085,7 @@ impl AcpChatView {
                 thread.input = input_snapshot;
                 cx.notify();
             });
+            self.update_slash_menu(cx);
             cx.stop_propagation();
         } else {
             cx.propagate();
@@ -1080,6 +1213,21 @@ impl Render for AcpChatView {
                     )
                 },
             )
+            // ── Slash command menu (above input) ─────────────
+            .when_some(self.slash_menu_index, |d, idx| {
+                let filtered = self.filtered_slash_commands(cx);
+                if filtered.is_empty() {
+                    d
+                } else {
+                    d.child(
+                        div()
+                            .w_full()
+                            .px(px(8.0))
+                            .pb(px(4.0))
+                            .child(Self::render_slash_menu(&filtered, idx)),
+                    )
+                }
+            })
             // ── Footer: input + toolbar ───────────────────────
             .child(
                 div()
