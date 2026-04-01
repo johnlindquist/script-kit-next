@@ -650,6 +650,9 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                         if has_cmd && key_lower == "w" {
                                             logging::log("STDIN", "SimulateKey: Cmd+W - close ACP chat");
                                             view.close_tab_ai_harness_terminal(ctx);
+                                        } else if has_cmd && key_lower == "k" {
+                                            logging::log("STDIN", "SimulateKey: Cmd+K - open actions in ACP chat");
+                                            view.toggle_actions(ctx, window);
                                         } else if key_lower == "enter" && !has_shift {
                                             logging::log("STDIN", "SimulateKey: Enter - submit ACP input");
                                             entity_clone.update(ctx, |chat, cx| {

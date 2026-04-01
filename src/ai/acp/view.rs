@@ -1161,6 +1161,12 @@ impl AcpChatView {
             cx.notify();
         }
 
+        // ── Cmd+K → propagate to parent for actions dialog ──────
+        if modifiers.platform && crate::ui_foundation::is_key_k(key) {
+            cx.propagate();
+            return;
+        }
+
         // ── Slash command menu intercept ─────────────────────────
         if self.slash_menu_index.is_some() {
             if crate::ui_foundation::is_key_up(key) {
