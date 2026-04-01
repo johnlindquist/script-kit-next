@@ -741,50 +741,6 @@ impl AcpChatView {
             .into_any_element()
     }
 
-    fn render_mode_badge(mode_id: &str) -> gpui::AnyElement {
-        let theme = theme::get_cached_theme();
-
-        div()
-            .px(px(8.0))
-            .py(px(3.0))
-            .rounded(px(999.0))
-            .bg(rgba((theme.colors.accent.selected << 8) | 0x14))
-            .border_1()
-            .border_color(rgba((theme.colors.accent.selected << 8) | 0x30))
-            .text_xs()
-            .opacity(0.78)
-            .child(format!("Mode: {mode_id}"))
-            .into_any_element()
-    }
-
-    fn render_commands_strip(commands: &[String]) -> gpui::AnyElement {
-        let theme = theme::get_cached_theme();
-
-        div()
-            .w_full()
-            .px(px(12.0))
-            .py(px(6.0))
-            .rounded(px(8.0))
-            .bg(rgba((theme.colors.text.primary << 8) | 0x06))
-            .border_1()
-            .border_color(rgba((theme.colors.ui.border << 8) | 0x20))
-            .child(
-                div()
-                    .text_xs()
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .opacity(0.62)
-                    .pb(px(3.0))
-                    .child("Commands"),
-            )
-            .child(
-                div()
-                    .text_xs()
-                    .opacity(0.58)
-                    .child(commands.join(" \u{00b7} ")),
-            )
-            .into_any_element()
-    }
-
     fn render_plan_strip(entries: &[String]) -> gpui::AnyElement {
         let theme = theme::get_cached_theme();
 
@@ -1312,9 +1268,7 @@ impl Render for AcpChatView {
         let mode_label = thread.active_mode_id().map(str::to_string);
         let display_name = thread.display_name().to_string();
         let elapsed_secs = thread.stream_elapsed_secs();
-        let available_commands = thread.available_commands().to_vec();
         let context_state = thread.context_bootstrap_state();
-        // queued_submit and context_note removed — no blocking empty state.
         let messages: Vec<AcpThreadMessage> = thread.messages.clone();
         let colors = Self::prompt_colors();
         let theme = theme::get_cached_theme();
