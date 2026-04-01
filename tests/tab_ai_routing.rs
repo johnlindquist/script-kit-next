@@ -447,7 +447,7 @@ fn harness_validation_checks_empty_command() {
     let err = script_kit_gpui::ai::validate_tab_ai_harness_config(&config)
         .expect_err("empty command must fail");
     assert!(
-        err.contains("harness.json"),
+        err.contains("config.ts"),
         "error must mention config file path for setup guidance: {err}"
     );
 }
@@ -465,7 +465,7 @@ fn harness_validation_checks_missing_cli() {
         "error must mention PATH: {err}"
     );
     assert!(
-        err.contains("harness.json"),
+        err.contains("config.ts"),
         "error must mention config file for setup guidance: {err}"
     );
 }
@@ -473,7 +473,7 @@ fn harness_validation_checks_missing_cli() {
 #[test]
 fn harness_startup_failure_toast_mentions_setup_guidance() {
     assert!(
-        TAB_AI_MODE_SOURCE.contains("harness.json"),
+        TAB_AI_MODE_SOURCE.contains("config.ts"),
         "harness startup failure toast must mention the config file for user guidance"
     );
 }

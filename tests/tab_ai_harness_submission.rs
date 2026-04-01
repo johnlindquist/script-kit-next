@@ -266,7 +266,7 @@ fn config_validation_rejects_empty_command() {
     };
     let err = validate_tab_ai_harness_config(&config).expect_err("empty command must fail");
     assert!(
-        err.contains("harness.json"),
+        err.contains("config.ts"),
         "must mention config file: {err}"
     );
 }

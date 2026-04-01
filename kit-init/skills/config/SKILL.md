@@ -10,7 +10,7 @@ Manage the files under `~/.scriptkit` that control launcher behavior, hotkeys, d
 | `~/.scriptkit/kit/config.ts` | Static app config: launcher hotkey, built-ins, command overrides, AI/logs/dictation hotkeys, Claude Code. | Auto-reloads |
 | `~/.scriptkit/kit/settings.json` | Runtime-persisted preferences: layout, theme preset, dictation microphone selection. | Read by runtime |
 | `~/.scriptkit/kit/theme.json` | Theme colors. | Auto-reloads |
-| `~/.scriptkit/harness.json` | Tab AI harness backend and startup behavior. | Read on next Tab AI invocation |
+| `~/.scriptkit/kit/config.ts` (`claudeCode`) | Tab AI harness backend and launch settings. | Auto-reloads |
 
 ## What Goes Where
 
@@ -244,20 +244,21 @@ claudeCode: {
 }
 ```
 
-## Harness Config
+## Tab AI Harness (via claudeCode config)
 
-`~/.scriptkit/harness.json`
+Tab AI launch settings live in the `claudeCode` block of `~/.scriptkit/kit/config.ts`:
 
-```json
-{
-  "schemaVersion": 1,
-  "backend": "claudeCode",
-  "command": "claude",
-  "warmOnStartup": true
+```typescript
+claudeCode: {
+  enabled: true,
+  path: "claude",                    // CLI binary (default: "claude" from PATH)
+  permissionMode: "plan",            // "default" | "plan" | "acceptEdits"
+  allowedTools: "Read,Edit,Bash(git:*)",
+  addDirs: ["/Users/you/projects"],
 }
 ```
 
-Supported backends: `claudeCode`, `codex`, `geminiCli`, `copilotCli`, `custom`.
+The `~/.scriptkit/harness.json` file is no longer used. All harness settings are in `config.ts`.
 
 ## Common Mistakes
 

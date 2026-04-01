@@ -293,9 +293,9 @@ Tab AI is a warm harness terminal rendered in `AppView::QuickTerminalView` via `
 **Runtime contract:**
 - Entry path: `open_tab_ai_chat()` → `begin_tab_ai_harness_entry()` → `open_tab_ai_harness_terminal_from_request()`
 - Harness session state: `TabAiHarnessSessionState`
-- Harness config: `~/.scriptkit/harness.json`
-- Supported backends: Claude Code, Codex, Gemini CLI, Copilot CLI, and custom commands
-- `warmOnStartup` defaults to `true`
+- Harness config: `claudeCode` block in `~/.scriptkit/kit/config.ts`
+- Context bundle: `~/.scriptkit/context/latest.md` (deterministic path)
+- Claude Code provider toggles still live under the `claudeCode` block in `~/.scriptkit/kit/config.ts`
 - Context assembly stays intact: `snapshot_tab_ai_ui()` + `capture_context_snapshot(CaptureContextOptions::tab_ai_submit())` + `build_tab_ai_context_from()`
 - The landed default Tab flow is PTY-backed text injection
 - `build_tab_ai_harness_submission()` emits a flat text-native context block plus optional artifact authoring guidance
@@ -336,9 +336,9 @@ Tab AI is a warm harness terminal rendered in `AppView::QuickTerminalView` via `
 These remain for non-primary flows and historical data. Do not describe them as the default Tab entry path.
 
 **Harness lifecycle:**
-- Default path — `warmOnStartup` defaults to `true`, so Script Kit silently prewarms the configured harness at app launch.
-- Cold-start fallback — if prewarm is disabled, config validation fails, or the PTY has exited, the next Tab entry cold-starts the harness and waits for readiness before injecting context.
-- Reuse — while the PTY stays alive, subsequent Tab presses reuse the same session.
+- Each Tab press writes `~/.scriptkit/context/latest.md`, enumerates `~/.scriptkit/skills/`, and spawns a fresh `claude` process with `--append-system-prompt` and the user intent as CLI args.
+- No warm/prewarm session — each invocation is a one-shot spawn rendered in QuickTerminalView.
+
 - Recovery — if the harness crashes or exits, the next Tab entry respawns it.
 
 **Legacy compatibility only:** `TabAiChat` and `open_tab_ai_full_view_chat()` still exist for non-primary flows. They are not the default Tab AI surface and should not be used to describe the pivot.

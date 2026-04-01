@@ -65,7 +65,7 @@ pub enum HarnessBackendKind {
 
 /// Persisted configuration for the Tab AI harness.
 ///
-/// Stored at `~/.scriptkit/harness.json`.
+/// Stored at `~/.scriptkit/kit/config.ts` under the `claudeCode` key.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct HarnessConfig {
@@ -179,7 +179,8 @@ pub fn tab_ai_harness_config_path() -> Result<std::path::PathBuf, String> {
         .map_err(|_| "tab_ai_harness_config_path: HOME is not set".to_string())?;
     Ok(std::path::Path::new(&home)
         .join(".scriptkit")
-        .join("harness.json"))
+        .join("kit")
+        .join("config.ts"))
 }
 
 /// Read (or default) the harness config from disk.
@@ -188,19 +189,41 @@ pub fn read_tab_ai_harness_config() -> Result<HarnessConfig, String> {
     if !path.exists() {
         return Ok(HarnessConfig::default());
     }
-    let json = std::fs::read_to_string(&path).map_err(|e| {
-        format!(
-            "tab_ai_harness_config_read_failed: path={} error={}",
-            path.display(),
-            e
-        )
-    })?;
-    serde_json::from_str(&json).map_err(|e| {
-        format!(
-            "tab_ai_harness_config_parse_failed: path={} error={}",
-            path.display(),
-            e
-        )
+    let config = crate::config::load_config();
+    let claude_code = config.claude_code.unwrap_or_default();
+
+    let mut args = Vec::new();
+    if !claude_code.permission_mode.trim().is_empty() {
+        args.push("--permission-mode".to_string());
+        args.push(claude_code.permission_mode);
+    }
+    if let Some(allowed_tools) = claude_code
+        .allowed_tools
+        .filter(|value| !value.trim().is_empty())
+    {
+        args.push("--allowedTools".to_string());
+        args.push(allowed_tools);
+    }
+    for add_dir in claude_code
+        .add_dirs
+        .into_iter()
+        .filter(|value| !value.trim().is_empty())
+    {
+        args.push("--add-dir".to_string());
+        args.push(add_dir);
+    }
+
+    Ok(HarnessConfig {
+        schema_version: TAB_AI_HARNESS_CONFIG_SCHEMA_VERSION,
+        backend: HarnessBackendKind::ClaudeCode,
+        command: claude_code.path.unwrap_or_else(|| "claude".to_string()),
+        args,
+        // `warmOnStartup` no longer lives in config.ts. Keep the runtime
+        // default disabled so migrated users do not get stale prewarm behavior
+        // from a deleted config surface.
+        warm_on_startup: false,
+        working_directory: Some(crate::setup::get_kit_path().to_string_lossy().into_owned()),
+        env: std::collections::BTreeMap::new(),
     })
 }
 
@@ -213,15 +236,15 @@ pub fn read_tab_ai_harness_config() -> Result<HarnessConfig, String> {
 pub fn validate_tab_ai_harness_config(config: &HarnessConfig) -> Result<(), String> {
     if config.command.trim().is_empty() {
         return Err(
-            "Harness command is empty. Set a command in ~/.scriptkit/harness.json \
-             or delete the file to use the default (claude)."
+            "Harness command is empty. Set claudeCode.path in ~/.scriptkit/kit/config.ts \
+             or leave it unset to use the default (claude)."
                 .to_string(),
         );
     }
     if which::which(&config.command).is_err() {
         return Err(format!(
-            "'{}' not found on PATH. Install the CLI or update the \
-             \"command\" field in ~/.scriptkit/harness.json.",
+            "'{}' not found on PATH. Install the CLI or update \
+             claudeCode.path in ~/.scriptkit/kit/config.ts.",
             config.command,
         ));
     }
@@ -1060,7 +1083,7 @@ mod tests {
         };
         let err = validate_tab_ai_harness_config(&config).unwrap_err();
         assert!(
-            err.contains("harness.json"),
+            err.contains("config.ts"),
             "must mention config file: {err}"
         );
     }
@@ -1087,7 +1110,7 @@ mod tests {
             "must mention PATH: {err}"
         );
         assert!(
-            err.contains("harness.json"),
+            err.contains("config.ts"),
             "must mention config file: {err}"
         );
     }
@@ -1354,8 +1377,8 @@ mod tests {
         for (label, text) in [("CLAUDE.md", CLAUDE_DOC), ("AGENTS.md", AGENTS_DOC)] {
             let section = extract_tab_ai_quick_terminal_section(text);
             assert!(
-                section.contains("silently prewarms the configured harness at app launch"),
-                "{label} must describe startup prewarm as the default path"
+                section.contains("one-shot spawn"),
+                "{label} must describe one-shot spawn lifecycle"
             );
             assert!(
                 section.contains("Await the user's next terminal input."),
@@ -1393,12 +1416,12 @@ mod tests {
                 "{label} must mention text-safe PTY capture"
             );
             assert!(
-                text.contains("~/.scriptkit/harness.json"),
-                "{label} must mention harness config path"
+                text.contains("claudeCode"),
+                "{label} must mention claudeCode config block"
             );
             assert!(
-                text.contains("warmOnStartup"),
-                "{label} must mention warmOnStartup"
+                text.contains("claudeCode"),
+                "{label} must mention claudeCode"
             );
             assert!(
                 text.contains("Cmd+W"),
@@ -1462,12 +1485,12 @@ mod tests {
             "ROOT_CLAUDE.md must reference text-safe PTY capture profile"
         );
         assert!(
-            ROOT_CLAUDE_DOC.contains("~/.scriptkit/harness.json"),
-            "ROOT_CLAUDE.md must mention harness config path"
+            ROOT_CLAUDE_DOC.contains("claudeCode"),
+            "ROOT_CLAUDE.md must mention claudeCode config block"
         );
         assert!(
-            ROOT_CLAUDE_DOC.contains("warmOnStartup"),
-            "ROOT_CLAUDE.md must mention warmOnStartup"
+            ROOT_CLAUDE_DOC.contains("claudeCode"),
+            "ROOT_CLAUDE.md must mention claudeCode"
         );
         assert!(
             !ROOT_CLAUDE_DOC.contains("`build_tab_ai_context()`"),
