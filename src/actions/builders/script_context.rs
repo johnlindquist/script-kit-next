@@ -450,6 +450,22 @@ pub fn get_acp_chat_actions() -> Vec<Action> {
         .with_icon(IconName::ArrowRight)
         .with_section("Chat"),
         Action::new(
+            "acp_scroll_to_top",
+            "Scroll to Top",
+            Some("Jump to the first message in the conversation".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_icon(IconName::ArrowUp)
+        .with_section("Navigate"),
+        Action::new(
+            "acp_scroll_to_bottom",
+            "Scroll to Latest",
+            Some("Jump to the most recent message".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_icon(IconName::ArrowDown)
+        .with_section("Navigate"),
+        Action::new(
             "acp_expand_all",
             "Expand All Blocks",
             Some("Show all thinking and tool output blocks".to_string()),
