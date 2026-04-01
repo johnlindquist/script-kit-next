@@ -685,7 +685,7 @@ export interface HotkeyConfig {
    * Common values:
    * - Letter keys: "KeyA" through "KeyZ"
    * - Number keys: "Digit0" through "Digit9"
-   * - Special keys: "Space", "Enter", "Semicolon"
+   * - Special keys: "Space", "Enter", "Semicolon", "Comma", "Period", "Slash"
    * - Function keys: "F1" through "F12"
    * 
    * @default "Semicolon" (the ; key)

@@ -121,11 +121,12 @@ export default {
 
   // Dictation has no default shortcut; set it explicitly if you want one.
   // dictationHotkey: { modifiers: ["meta", "shift"], key: "KeyD" },
-  // dictationHotkeyEnabled: true,
+  // dictationHotkeyEnabled: true, // only registers when dictationHotkey is set
 
   // The selected dictation microphone is persisted separately in:
   //   ~/.scriptkit/kit/settings.json
   //   { "dictation": { "selectedDeviceId": "usb-mic" } }
+  // Use the built-in "Select Microphone" action to update this value.
 
   // ===========================================================================
   // Command Configuration
