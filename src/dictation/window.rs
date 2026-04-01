@@ -644,11 +644,9 @@ impl Render for DictationOverlay {
                                     .text_color(continue_color)
                                     .on_mouse_down(
                                         MouseButton::Left,
-                                        cx.listener(
-                                            |this, _event: &MouseDownEvent, window, cx| {
-                                                this.resume_recording(window, cx);
-                                            },
-                                        ),
+                                        cx.listener(|this, _event: &MouseDownEvent, window, cx| {
+                                            this.resume_recording(window, cx);
+                                        }),
                                     )
                                     .child(CONFIRM_CONTINUE_LABEL),
                             ),

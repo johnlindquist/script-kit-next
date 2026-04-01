@@ -4090,10 +4090,7 @@ fn overlay_phase_copy_confirming_uses_stop_continue() {
 
     let (headline, hint) = overlay_phase_copy(&DictationSessionPhase::Confirming);
     assert_eq!(headline, "Stop dictation?");
-    assert!(
-        hint.contains("Stop"),
-        "confirming hint must mention Stop"
-    );
+    assert!(hint.contains("Stop"), "confirming hint must mention Stop");
     assert!(
         hint.contains("Continue"),
         "confirming hint must mention Continue"
@@ -4122,10 +4119,7 @@ fn overlay_escape_action_confirms_well_above_threshold() {
 
     // 30 seconds is well above the threshold → still transition to confirming.
     assert_eq!(
-        overlay_escape_action(
-            &DictationSessionPhase::Recording,
-            Duration::from_secs(30),
-        ),
+        overlay_escape_action(&DictationSessionPhase::Recording, Duration::from_secs(30),),
         OverlayEscapeAction::TransitionToConfirming
     );
 }
