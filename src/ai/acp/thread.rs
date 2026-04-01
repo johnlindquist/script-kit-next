@@ -999,26 +999,27 @@ mod tests {
     }
 
     #[test]
-    fn prepare_turn_blocks_includes_guidance_for_authoring_intents() {
+    fn prepare_turn_blocks_no_guidance_in_exploration_mode() {
         let mut thread = test_thread(vec![ContentBlock::Text(TextContent::new("context"))], false);
 
+        // Even authoring-like intents get no guidance — users invoke /script-authoring explicitly
         let blocks = thread.prepare_turn_blocks("build a clipboard cleanup script");
 
-        // context + guidance + input = 3 blocks
+        // context + input = 2 blocks (no guidance, exploration mode)
         assert_eq!(
             blocks.len(),
-            3,
-            "authoring intent should include context + guidance + input"
+            2,
+            "exploration mode: context + input only, no guidance"
         );
     }
 
     #[test]
-    fn prepare_turn_blocks_skips_guidance_for_non_authoring_intents() {
+    fn prepare_turn_blocks_no_guidance_for_any_intent() {
         let mut thread = test_thread(vec![ContentBlock::Text(TextContent::new("context"))], false);
 
         let blocks = thread.prepare_turn_blocks("explain this selection");
 
-        // context + input = 2 blocks (no guidance for non-authoring)
+        // context + input = 2 blocks
         assert_eq!(
             blocks.len(),
             2,
