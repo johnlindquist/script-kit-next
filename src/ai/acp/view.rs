@@ -25,6 +25,16 @@ impl AcpChatView {
         }
     }
 
+    /// Consume Tab / Shift+Tab so the global interceptors do not re-open a
+    /// fresh ACP chat while one is already active.
+    pub(crate) fn handle_tab_key(
+        &mut self,
+        _has_shift: bool,
+        _cx: &mut Context<Self>,
+    ) -> bool {
+        true
+    }
+
     pub(crate) fn set_input(&mut self, value: String, cx: &mut Context<Self>) {
         self.thread.update(cx, |thread, cx| thread.set_input(value, cx));
     }

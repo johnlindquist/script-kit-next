@@ -26,7 +26,7 @@ use super::types::AcpSessionBinding;
 /// Supports both the legacy `stream_prompt()` path (for `AiProvider`) and
 /// the new `start_turn()` path (for `AcpThread` / `AcpChatView`).
 pub(crate) struct AcpRuntime {
-    pub(crate) tx: async_channel::Sender<AcpCommand>,
+    tx: async_channel::Sender<AcpCommand>,
 }
 
 /// Type alias for clarity in the new ACP chat view path.
@@ -73,6 +73,12 @@ impl AcpRuntime {
             .context("Failed to spawn ACP worker thread")?;
 
         Ok(Self { tx })
+    }
+
+    /// Create an `AcpRuntime` from an existing command sender (test only).
+    #[cfg(test)]
+    pub(crate) fn from_sender(tx: async_channel::Sender<AcpCommand>) -> Self {
+        Self { tx }
     }
 
     /// Start a new event-driven turn and return a receiver for typed events.
@@ -478,7 +484,7 @@ mod tests {
         // is properly constructed. The actual turn would require a running
         // ACP agent, which we don't have in unit tests.
         let (tx, _rx) = async_channel::bounded::<AcpCommand>(1);
-        let runtime = AcpRuntime { tx };
+        let runtime = AcpRuntime::from_sender(tx);
 
         let request = AcpPromptTurnRequest {
             ui_thread_id: "test-thread".to_string(),

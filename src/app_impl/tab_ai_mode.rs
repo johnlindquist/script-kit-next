@@ -437,6 +437,22 @@ impl ScriptListApp {
     }
 
     /// Open the ACP chat view immediately, then spawn a task that waits
+    /// Compute the canonical submission intent for ACP launches, matching the
+    /// PTY path's normalization: prefer `quick_submit_plan.submission_intent()`
+    /// over raw `entry_intent`, trim whitespace, and drop empty strings.
+    fn tab_ai_effective_submission_intent(
+        request: &TabAiLaunchRequest,
+    ) -> Option<String> {
+        request
+            .quick_submit_plan
+            .as_ref()
+            .map(|plan| plan.submission_intent())
+            .or(request.entry_intent.as_deref())
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string())
+    }
+
     /// for the deferred capture result and stages context on the `AcpThread`.
     ///
     /// **Contract:** `AppView::AcpChatView` and `cx.notify()` happen
@@ -449,6 +465,10 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
     ) {
         let source_view = request.source_view.clone();
+
+        // Compute canonical effective intent once, matching PTY path's normalization.
+        let effective_intent = Self::tab_ai_effective_submission_intent(&request);
+        let auto_submit = effective_intent.is_some();
 
         // --- Permission broker + ACP connection ---
         let (broker, permission_rx) = crate::ai::acp::AcpPermissionBroker::new();
@@ -507,7 +527,7 @@ impl ScriptListApp {
                 crate::ai::acp::AcpThreadInit {
                     ui_thread_id: uuid::Uuid::new_v4().to_string(),
                     cwd,
-                    initial_input: request.entry_intent.clone(),
+                    initial_input: effective_intent.clone(),
                 },
                 cx,
             )
@@ -547,6 +567,7 @@ impl ScriptListApp {
         let app_weak = cx.entity().downgrade();
         let thread_weak = thread.downgrade();
         let capture_gen = request.capture_generation;
+        let effective_intent_for_capture = effective_intent.clone();
 
         cx.spawn(async move |_this, cx| {
             // Wait for deferred capture
@@ -587,7 +608,7 @@ impl ScriptListApp {
                     }
 
                     let resolved = this.build_tab_ai_context_from(
-                        request.entry_intent.clone().unwrap_or_default(),
+                        effective_intent_for_capture.clone().unwrap_or_default(),
                         request.source_view.clone(),
                         request.ui_snapshot.clone(),
                         artifacts.desktop,
@@ -628,8 +649,9 @@ impl ScriptListApp {
                             );
                         }
 
-                        // Auto-submit if entry_intent was provided (Shift+Tab path)
-                        if request.entry_intent.is_some() {
+                        // Auto-submit if effective intent was resolved
+                        // (Shift+Tab path or quick-submit plan)
+                        if auto_submit {
                             if let Err(e) = thread.submit_input(cx) {
                                 tracing::warn!(
                                     event = "tab_ai_acp_auto_submit_failed",
