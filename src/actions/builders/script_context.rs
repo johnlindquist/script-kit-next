@@ -474,6 +474,15 @@ pub fn get_acp_chat_actions() -> Vec<Action> {
         .with_icon(IconName::ArrowDown)
         .with_section("Navigate"),
         Action::new(
+            "acp_show_history",
+            "Conversation History",
+            Some("Browse past conversations".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_shortcut("\u{2318}P")
+        .with_icon(IconName::MagnifyingGlass)
+        .with_section("Navigate"),
+        Action::new(
             "acp_expand_all",
             "Expand All Blocks",
             Some("Show all thinking and tool output blocks".to_string()),
