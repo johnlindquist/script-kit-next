@@ -224,23 +224,18 @@ export default {
 
 ### Tab AI Harness Configuration
 
-Script Kit reads Tab AI harness settings from `~/.scriptkit/harness.json`.
+Tab AI launch settings live in the `claudeCode` block of `~/.scriptkit/kit/config.ts`:
 
-```json
-{
-  "schemaVersion": 1,
-  "backend": "claudeCode",
-  "command": "claude",
-  "args": [],
-  "warmOnStartup": true,
-  "workingDirectory": "~/.scriptkit/kit",
-  "env": {}
+```typescript
+claudeCode: {
+  enabled: true,
+  path: "claude",                    // CLI binary (default: "claude" from PATH)
+  permissionMode: "plan",            // "default" | "plan" | "acceptEdits"
+  allowedTools: "Read,Edit,Bash(git:*)",
 }
 ```
 
-Supported backends: `claudeCode`, `codex`, `geminiCli`, `copilotCli`, `custom`.
-
-`warmOnStartup` defaults to `true`, so the harness is prewarmed at app launch for instant Tab response. If the harness crashes or exits, the next Tab press respawns it automatically.
+Each Tab press writes context to `~/.scriptkit/context/latest.md`, enumerates skills from `~/.scriptkit/skills/`, and spawns a fresh `claude` process with the context and user intent as CLI arguments. If the harness crashes or exits, the next Tab press spawns a new one.
 
 ### Environment Variables (API Keys)
 
@@ -386,12 +381,10 @@ Tab AI is not the old inline chat surface anymore. The primary Tab AI experience
 **Runtime contract:**
 - Entry path: `open_tab_ai_chat()` → `open_tab_ai_chat_with_entry_intent()` → `open_tab_ai_harness_terminal()`
 - Harness session state: `TabAiHarnessSessionState`
-- Harness config: `~/.scriptkit/harness.json`
-- Supported backends: Claude Code, Codex, Gemini CLI, Copilot CLI, and custom commands
-- `warmOnStartup` defaults to `true`
+- Harness config: `claudeCode` block in `~/.scriptkit/kit/config.ts`
+- Context bundle: `~/.scriptkit/context/latest.md` (deterministic path)
 - Context assembly stays intact: `snapshot_tab_ai_ui()` + `capture_context_snapshot(CaptureContextOptions::tab_ai_submit())` + `build_tab_ai_context_from()`
-- The `kit://context` MCP resource system still exists, but the landed default Tab flow is PTY-backed text injection
-- `build_tab_ai_harness_submission()` emits `<scriptKitContext>` and optional `<scriptKitHints>`
+- `build_tab_ai_harness_submission()` emits a flat text-native context block plus optional artifact authoring guidance
 - `PasteOnly` stages context on a fresh line and does not auto-submit
 - `Submit` with a non-empty intent appends `User intent:` and submits immediately
 - `Submit` without a non-empty intent appends `Await the user's next terminal input.`

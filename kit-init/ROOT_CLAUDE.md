@@ -193,9 +193,9 @@ Tab AI is a warm harness terminal rendered in `AppView::QuickTerminalView` via `
 **Runtime contract:**
 - Entry path: `open_tab_ai_chat()` → `begin_tab_ai_harness_entry()` → `open_tab_ai_harness_terminal_from_request()`
 - Harness session state: `TabAiHarnessSessionState`
-- Harness config: `~/.scriptkit/harness.json`
-- Supported backends: Claude Code, Codex, Gemini CLI, Copilot CLI, and custom commands
-- `warmOnStartup` defaults to `true`
+- Harness config: `claudeCode` block in `~/.scriptkit/kit/config.ts`
+- Context bundle: `~/.scriptkit/context/latest.md` (deterministic path)
+
 - Context assembly stays intact: `snapshot_tab_ai_ui()` + `capture_context_snapshot(CaptureContextOptions::tab_ai_submit())` + `build_tab_ai_context_from()`
 - The landed default Tab flow is PTY-backed text injection
 - `build_tab_ai_harness_submission()` emits a flat text-native context block plus optional artifact authoring guidance
@@ -203,6 +203,16 @@ Tab AI is a warm harness terminal rendered in `AppView::QuickTerminalView` via `
 - `PasteOnly` stages context on a fresh line and does not auto-submit
 - `Submit` with a non-empty intent appends `User intent:` and submits immediately
 - `Submit` without a non-empty intent appends `Await the user's next terminal input.`
+
+**Capture profiles:**
+- Generic PTY backends use `CaptureContextOptions::tab_ai_submit()` (text-safe, no screenshots — base64 PNG in PTY stdin is fragile).
+- The richer `tab_ai()` profile with screenshots is reserved for a future Claude-specific SDK path.
+
+**Harness lifecycle:**
+- Each Tab press writes `~/.scriptkit/context/latest.md`, enumerates `~/.scriptkit/skills/`, and spawns a fresh `claude` process with `--append-system-prompt` and the user intent as CLI args.
+- No warm/prewarm session — each invocation is a one-shot spawn rendered in QuickTerminalView.
+
+- Recovery — if the harness crashes or exits, the next Tab entry respawns it.
 
 **Do not describe as current behavior:**
 - Do not describe the old inline chat entity or custom streaming UI as the primary Tab AI surface

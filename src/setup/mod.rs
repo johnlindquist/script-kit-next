@@ -426,6 +426,8 @@ pub fn ensure_kit_setup() -> SetupResult {
         kit_dir.join("examples").join("extensions"),
         kit_dir.join("examples").join("agents"),
         kit_dir.join("docs"),
+        // Context bundle directory for Tab AI argv-based launch
+        kit_dir.join("context"),
         // Root-level harness temp workspace used by kit://sdk-reference
         kit_dir.join("tmp").join("test-scripts"),
         kit_dir.join("tmp").join("test-scriptlets"),
@@ -2132,7 +2134,7 @@ mod tab_ai_agent_doc_contract_tests {
             "TabAiHarnessSubmissionMode",
             "PasteOnly",
             "Submit",
-            "~/.scriptkit/harness.json",
+            "claudeCode",
             "CaptureContextOptions::tab_ai_submit()",
             "Cmd+W",
             "Escape",

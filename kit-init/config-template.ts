@@ -272,13 +272,16 @@ export default {
   // },
 
   // ===========================================================================
-  // Claude Code CLI Provider
+  // Claude Code CLI Provider & Tab AI
   // ===========================================================================
+  // Controls both the AI Chat provider and the Tab AI harness launch settings.
+  // When Tab AI is invoked, Script Kit writes context to ~/.scriptkit/context/
+  // and spawns the claude CLI with --append-system-prompt and the user intent.
 
   // claudeCode: {
   //   enabled: true,
-  //   path: "/opt/homebrew/bin/claude",
-  //   permissionMode: "plan",            // "plan" | "dontAsk"
+  //   path: "/opt/homebrew/bin/claude",   // default: "claude" from PATH
+  //   permissionMode: "plan",             // "default" | "plan" | "acceptEdits"
   //   allowedTools: "Read,Edit,Bash(git:*)",
   //   addDirs: ["/Users/you/projects"],
   // },

@@ -328,9 +328,8 @@ Tab AI is a warm harness terminal rendered in `AppView::QuickTerminalView` via `
 **Runtime contract:**
 - Entry path: `open_tab_ai_chat()` → `begin_tab_ai_harness_entry()` → `open_tab_ai_harness_terminal_from_request()`
 - Harness session state: `TabAiHarnessSessionState`
-- Harness config: `~/.scriptkit/harness.json`
-- Supported backends: Claude Code, Codex, Gemini CLI, Copilot CLI, and custom commands
-- `warmOnStartup` defaults to `true`
+- Harness config: `claudeCode` block in `~/.scriptkit/kit/config.ts`
+- Context bundle: `~/.scriptkit/context/latest.md` (deterministic path)
 - Context assembly stays intact: `snapshot_tab_ai_ui()` + `capture_context_snapshot(CaptureContextOptions::tab_ai_submit())` + `build_tab_ai_context_from()`
 - The landed default Tab flow is PTY-backed text injection
 - `build_tab_ai_harness_submission()` emits a flat text-native context block plus optional artifact authoring guidance

@@ -473,7 +473,7 @@ impl ScriptListApp {
                     );
                     self.toast_manager.push(
                         crate::components::toast::Toast::error(
-                            format!("Failed to start harness: {error}. Install the configured CLI or update ~/.scriptkit/harness.json"),
+                            format!("Failed to start harness: {error}. Install the configured CLI or update claudeCode.path in ~/.scriptkit/kit/config.ts"),
                             &self.theme,
                         )
                         .duration_ms(Some(TOAST_ERROR_MS)),
