@@ -381,7 +381,11 @@ impl AcpThread {
         match selected_option_id
             .and_then(|id| request.options.iter().find(|opt| opt.option_id == id))
         {
-            Some(option) => format!("Permission granted \u{00b7} {} \u{00b7} {}", tool_title, option.summary_label()),
+            Some(option) => format!(
+                "Permission granted \u{00b7} {} \u{00b7} {}",
+                tool_title,
+                option.summary_label()
+            ),
             None => format!("Permission cancelled \u{00b7} {}", tool_title),
         }
     }
@@ -572,8 +576,7 @@ impl AcpThread {
             }
         }
         let id = self.alloc_id();
-        self.messages
-            .push(AcpThreadMessage::new(id, role, chunk));
+        self.messages.push(AcpThreadMessage::new(id, role, chunk));
         true
     }
 
@@ -887,10 +890,7 @@ mod tests {
 
     #[test]
     fn pending_context_is_only_consumed_once() {
-        let mut thread = test_thread(
-            vec![ContentBlock::Text(TextContent::new("context"))],
-            false,
-        );
+        let mut thread = test_thread(vec![ContentBlock::Text(TextContent::new("context"))], false);
 
         let first = thread.prepare_turn_blocks("hello");
         let second = thread.prepare_turn_blocks("again");
@@ -934,10 +934,7 @@ mod tests {
 
     #[test]
     fn prepare_turn_blocks_includes_guidance_for_authoring_intents() {
-        let mut thread = test_thread(
-            vec![ContentBlock::Text(TextContent::new("context"))],
-            false,
-        );
+        let mut thread = test_thread(vec![ContentBlock::Text(TextContent::new("context"))], false);
 
         let blocks = thread.prepare_turn_blocks("build a clipboard cleanup script");
 
@@ -951,10 +948,7 @@ mod tests {
 
     #[test]
     fn prepare_turn_blocks_skips_guidance_for_non_authoring_intents() {
-        let mut thread = test_thread(
-            vec![ContentBlock::Text(TextContent::new("context"))],
-            false,
-        );
+        let mut thread = test_thread(vec![ContentBlock::Text(TextContent::new("context"))], false);
 
         let blocks = thread.prepare_turn_blocks("explain this selection");
 
@@ -1073,10 +1067,7 @@ mod tests {
 
         assert_eq!(thread.messages.len(), 1);
         assert_eq!(thread.messages[0].role, AcpThreadMessageRole::Tool);
-        assert_eq!(
-            thread.messages[0].tool_call_id.as_deref(),
-            Some("tc-1")
-        );
+        assert_eq!(thread.messages[0].tool_call_id.as_deref(), Some("tc-1"));
     }
 
     #[test]

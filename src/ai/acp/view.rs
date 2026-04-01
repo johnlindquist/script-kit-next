@@ -37,11 +37,7 @@ impl AcpChatView {
     /// Consume Tab / Shift+Tab. When the permission overlay is open,
     /// cycle the highlighted option; otherwise just swallow the key so
     /// the global interceptors do not re-open a fresh ACP chat.
-    pub(crate) fn handle_tab_key(
-        &mut self,
-        has_shift: bool,
-        cx: &mut Context<Self>,
-    ) -> bool {
+    pub(crate) fn handle_tab_key(&mut self, has_shift: bool, cx: &mut Context<Self>) -> bool {
         let option_count = self
             .thread
             .read(cx)
@@ -141,7 +137,9 @@ impl AcpChatView {
         }
 
         if crate::ui_foundation::is_key_enter(key) {
-            if let Some(option) = request.options.get(self.normalized_permission_index(option_count))
+            if let Some(option) = request
+                .options
+                .get(self.normalized_permission_index(option_count))
             {
                 self.approve_permission(Some(option.option_id.clone()), cx);
             } else {
@@ -166,7 +164,8 @@ impl AcpChatView {
     }
 
     pub(crate) fn set_input(&mut self, value: String, cx: &mut Context<Self>) {
-        self.thread.update(cx, |thread, cx| thread.set_input(value, cx));
+        self.thread
+            .update(cx, |thread, cx| thread.set_input(value, cx));
     }
 
     // ── Rendering helpers ─────────────────────────────────────────
@@ -215,11 +214,7 @@ impl AcpChatView {
                 rgba((theme.colors.ui.border << 8) | 0x60),
                 0.62,
             ),
-            AcpThreadMessageRole::Error => (
-                rgba(0xEF444420),
-                rgba(0xEF444480),
-                0.86,
-            ),
+            AcpThreadMessageRole::Error => (rgba(0xEF444420), rgba(0xEF444480), 0.86),
         };
 
         let scope_id = format!("acp-msg-{}", msg.id);
@@ -240,14 +235,7 @@ impl AcpChatView {
                     .pb(px(6.0))
                     .child(Self::role_title(msg.role)),
             )
-            .child(
-                render_markdown_with_scope(
-                    &msg.body,
-                    colors,
-                    Some(&scope_id),
-                )
-                .w_full(),
-            )
+            .child(render_markdown_with_scope(&msg.body, colors, Some(&scope_id)).w_full())
             .into_any_element()
     }
 
@@ -292,13 +280,7 @@ impl AcpChatView {
                     .opacity(0.9)
                     .child(title),
             )
-            .child(
-                div()
-                    .pt(px(8.0))
-                    .text_sm()
-                    .opacity(0.65)
-                    .child(detail),
-            )
+            .child(div().pt(px(8.0)).text_sm().opacity(0.65).child(detail))
             .when_some(context_note.map(str::to_string), |d, note| {
                 d.child(
                     div()
@@ -377,10 +359,7 @@ impl AcpChatView {
                 "Permission required",
                 rgba((theme.colors.accent.selected << 8) | 0x18),
             ),
-            AcpThreadStatus::Idle => (
-                "Ready",
-                rgba((theme.colors.text.primary << 8) | 0x08),
-            ),
+            AcpThreadStatus::Idle => ("Ready", rgba((theme.colors.text.primary << 8) | 0x08)),
             AcpThreadStatus::Streaming => (
                 "Streaming",
                 rgba((theme.colors.accent.selected << 8) | 0x16),
@@ -389,10 +368,7 @@ impl AcpChatView {
                 "Permission required",
                 rgba((theme.colors.accent.selected << 8) | 0x18),
             ),
-            AcpThreadStatus::Error => (
-                "Error",
-                rgba(0xEF444420),
-            ),
+            AcpThreadStatus::Error => ("Error", rgba(0xEF444420)),
         };
 
         div()
@@ -406,10 +382,7 @@ impl AcpChatView {
             .into_any_element()
     }
 
-    fn render_permission_section(
-        title: &'static str,
-        text: String,
-    ) -> gpui::AnyElement {
+    fn render_permission_section(title: &'static str, text: String) -> gpui::AnyElement {
         div()
             .pt(px(8.0))
             .child(
@@ -446,10 +419,7 @@ impl AcpChatView {
                 rgba((theme.colors.accent.selected << 8) | 0x16),
                 rgba((theme.colors.accent.selected << 8) | 0x38),
             ),
-            AcpApprovalPreviewKind::Execute => (
-                rgba(0xF59E0B18),
-                rgba(0xF59E0B50),
-            ),
+            AcpApprovalPreviewKind::Execute => (rgba(0xF59E0B18), rgba(0xF59E0B50)),
             AcpApprovalPreviewKind::Generic => (
                 rgba((theme.colors.text.primary << 8) | 0x08),
                 rgba((theme.colors.ui.border << 8) | 0x24),
@@ -483,13 +453,7 @@ impl AcpChatView {
                     ),
             )
             .when_some(preview.subject.clone(), |d, subject| {
-                d.child(
-                    div()
-                        .pt(px(6.0))
-                        .text_sm()
-                        .opacity(0.82)
-                        .child(subject),
-                )
+                d.child(div().pt(px(6.0)).text_sm().opacity(0.82).child(subject))
             })
             .child(
                 div()
@@ -512,7 +476,11 @@ impl AcpChatView {
 
         let (bg, border, caption) = if option.is_reject() {
             (
-                if is_selected { rgba(0xEF444424) } else { rgba(0xEF444412) },
+                if is_selected {
+                    rgba(0xEF444424)
+                } else {
+                    rgba(0xEF444412)
+                },
                 rgba(0xEF444460),
                 "Cancel this request",
             )
@@ -562,13 +530,7 @@ impl AcpChatView {
                     .font_weight(FontWeight::SEMIBOLD)
                     .child(format!("{} \u{00b7} {}", index + 1, option.name)),
             )
-            .child(
-                div()
-                    .pt(px(2.0))
-                    .text_xs()
-                    .opacity(0.58)
-                    .child(caption),
-            )
+            .child(div().pt(px(2.0)).text_xs().opacity(0.58).child(caption))
             .child(
                 div()
                     .pt(px(1.0))
@@ -743,11 +705,7 @@ impl AcpChatView {
 
     // ── Key handling ──────────────────────────────────────────────
 
-    fn handle_key_down(
-        &mut self,
-        event: &gpui::KeyDownEvent,
-        cx: &mut Context<Self>,
-    ) {
+    fn handle_key_down(&mut self, event: &gpui::KeyDownEvent, cx: &mut Context<Self>) {
         // ── Permission overlay intercept ─────────────────────────
         let pending_permission = self.thread.read(cx).pending_permission.clone();
         if let Some(ref request) = pending_permission {
@@ -851,9 +809,11 @@ impl Render for AcpChatView {
             .flex_col()
             .relative()
             .track_focus(&self.focus_handle)
-            .on_key_down(cx.listener(|this, event: &gpui::KeyDownEvent, _window, cx| {
-                this.handle_key_down(event, cx);
-            }))
+            .on_key_down(
+                cx.listener(|this, event: &gpui::KeyDownEvent, _window, cx| {
+                    this.handle_key_down(event, cx);
+                }),
+            )
             // ── Message list ──────────────────────────────────
             .child(
                 div()
@@ -902,18 +862,15 @@ impl Render for AcpChatView {
                 )
             })
             // ── Streaming hint ────────────────────────────────
-            .when(
-                matches!(status, AcpThreadStatus::Streaming),
-                |d| {
-                    d.child(
-                        div()
-                            .w_full()
-                            .px(px(12.0))
-                            .pb(px(6.0))
-                            .child(Self::render_streaming_hint()),
-                    )
-                },
-            )
+            .when(matches!(status, AcpThreadStatus::Streaming), |d| {
+                d.child(
+                    div()
+                        .w_full()
+                        .px(px(12.0))
+                        .pb(px(6.0))
+                        .child(Self::render_streaming_hint()),
+                )
+            })
             // ── Footer: input + status ────────────────────────
             .child(
                 div()
@@ -922,23 +879,13 @@ impl Render for AcpChatView {
                     .flex()
                     .items_center()
                     .gap_2()
-                    .child(
-                        div()
-                            .flex_grow()
-                            .text_sm()
-                            .child(input_text),
-                    )
-                    .child(
-                        div()
-                            .text_xs()
-                            .opacity(0.45)
-                            .child(Self::footer_hint_text(
-                                status,
-                                context_state,
-                                queued_submit,
-                                has_pending_permission,
-                            )),
-                    )
+                    .child(div().flex_grow().text_sm().child(input_text))
+                    .child(div().text_xs().opacity(0.45).child(Self::footer_hint_text(
+                        status,
+                        context_state,
+                        queued_submit,
+                        has_pending_permission,
+                    )))
                     .child(Self::render_status_badge(status, has_pending_permission))
                     .when_some(active_mode.clone(), |d, mode_id| {
                         d.child(Self::render_mode_badge(&mode_id))
@@ -946,7 +893,11 @@ impl Render for AcpChatView {
             )
             // ── Permission overlay ────────────────────────────
             .when_some(pending_permission, |d, request| {
-                d.child(Self::render_permission_overlay(&request, self.permission_index, cx))
+                d.child(Self::render_permission_overlay(
+                    &request,
+                    self.permission_index,
+                    cx,
+                ))
             })
     }
 }

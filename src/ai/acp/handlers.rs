@@ -324,9 +324,7 @@ impl ScriptKitAcpClient {
 
     /// Bind an event sink for a specific ACP session.
     pub(crate) fn bind_event_sink(&self, session_id: &str, tx: AcpEventTx) {
-        self.event_sinks
-            .lock()
-            .insert(session_id.to_string(), tx);
+        self.event_sinks.lock().insert(session_id.to_string(), tx);
     }
 
     /// Remove the event sink for a specific ACP session.

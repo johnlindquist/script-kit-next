@@ -70,7 +70,10 @@ impl AcpApprovalOption {
 
 /// Build summary labels for a slice of approval options.
 pub(crate) fn summarize_approval_options(options: &[AcpApprovalOption]) -> Vec<String> {
-    options.iter().map(AcpApprovalOption::summary_label).collect()
+    options
+        .iter()
+        .map(AcpApprovalOption::summary_label)
+        .collect()
 }
 
 /// Structured preview data for an approval request.
@@ -99,10 +102,7 @@ pub(crate) struct AcpApprovalPreview {
 
 impl AcpApprovalPreview {
     /// Start building a preview with the required fields.
-    pub(crate) fn new(
-        tool_title: impl Into<String>,
-        tool_call_id: impl Into<String>,
-    ) -> Self {
+    pub(crate) fn new(tool_title: impl Into<String>, tool_call_id: impl Into<String>) -> Self {
         Self {
             tool_title: tool_title.into(),
             tool_call_id: tool_call_id.into(),
@@ -181,21 +181,19 @@ impl AcpApprovalPreview {
     /// Infer the semantic kind from the tool title.
     pub(crate) fn infer_kind(mut self) -> Self {
         let lowered = self.tool_title.to_ascii_lowercase();
-        self.kind = if lowered.contains("write")
-            || lowered.contains("save")
-            || lowered.contains("edit")
-        {
-            AcpApprovalPreviewKind::Write
-        } else if lowered.contains("terminal")
-            || lowered.contains("command")
-            || lowered.contains("exec")
-        {
-            AcpApprovalPreviewKind::Execute
-        } else if lowered.contains("read") || lowered.contains("open") {
-            AcpApprovalPreviewKind::Read
-        } else {
-            AcpApprovalPreviewKind::Generic
-        };
+        self.kind =
+            if lowered.contains("write") || lowered.contains("save") || lowered.contains("edit") {
+                AcpApprovalPreviewKind::Write
+            } else if lowered.contains("terminal")
+                || lowered.contains("command")
+                || lowered.contains("exec")
+            {
+                AcpApprovalPreviewKind::Execute
+            } else if lowered.contains("read") || lowered.contains("open") {
+                AcpApprovalPreviewKind::Read
+            } else {
+                AcpApprovalPreviewKind::Generic
+            };
         self
     }
 }
@@ -278,10 +276,7 @@ impl AcpPermissionBroker {
     ///
     /// Returns `Some(option_id)` if the user selected an option, or
     /// `None` if they cancelled.
-    pub(crate) fn request(
-        &self,
-        input: AcpApprovalRequestInput,
-    ) -> anyhow::Result<Option<String>> {
+    pub(crate) fn request(&self, input: AcpApprovalRequestInput) -> anyhow::Result<Option<String>> {
         let (reply_tx, reply_rx) = async_channel::bounded(1);
         let id = self.next_id.fetch_add(1, Ordering::SeqCst);
 
@@ -440,7 +435,9 @@ mod tests {
         ];
         let preview = AcpApprovalPreview::new("terminal/create", "client-terminal-create")
             .with_subject(Some("bun run dev".to_string()))
-            .with_summary(Some("Spawn a subprocess owned by the ACP client".to_string()))
+            .with_summary(Some(
+                "Spawn a subprocess owned by the ACP client".to_string(),
+            ))
             .with_input_preview(Some("{ \"command\": \"bun\" }".to_string()))
             .with_output_preview(Some("ok".to_string()))
             .with_options(&options);
@@ -530,12 +527,10 @@ mod tests {
                 kind: "RejectOnce".to_string(),
             },
         ];
-        let preview =
-            AcpApprovalPreview::new("terminal/create", "tc-1").with_options(&options);
+        let preview = AcpApprovalPreview::new("terminal/create", "tc-1").with_options(&options);
         let body = preview.fallback_body();
-        assert!(body.contains(
-            "Options: Allow (AllowOnce), Allow always (AllowAlways), Deny (RejectOnce)"
-        ));
+        assert!(body
+            .contains("Options: Allow (AllowOnce), Allow always (AllowAlways), Deny (RejectOnce)"));
     }
 
     #[test]

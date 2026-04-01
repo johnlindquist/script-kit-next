@@ -46,10 +46,7 @@ fn staged_context_prepended_on_first_submit_only() {
 
 #[test]
 fn initial_input_populates_composer_for_auto_submit() {
-    let thread = AcpThread::test_new(
-        vec![],
-        Some("build a clipboard manager".to_string()),
-    );
+    let thread = AcpThread::test_new(vec![], Some("build a clipboard manager".to_string()));
 
     assert_eq!(
         thread.input.as_ref(),
