@@ -694,10 +694,24 @@ app.run(move |cx: &mut App| {
                 let window_inner = window_for_hotkey;
 
                 if is_visible {
-                    logging::log("VISIBILITY", "Decision: HIDE");
-                    cx.update(move |cx: &mut gpui::App| {
-                        hide_main_window_helper(app_entity_inner, cx);
+                    // Don't hide when AcpChatView is active — the AI chat
+                    // should persist through hotkey toggles.
+                    let app_check = app_entity_inner.clone();
+                    let is_acp_chat = cx.update(|cx| {
+                        matches!(
+                            app_check.read(cx).current_view,
+                            AppView::AcpChatView { .. }
+                        )
                     });
+
+                    if is_acp_chat {
+                        logging::log("VISIBILITY", "Decision: KEEP (AcpChatView active)");
+                    } else {
+                        logging::log("VISIBILITY", "Decision: HIDE");
+                        cx.update(move |cx: &mut gpui::App| {
+                            hide_main_window_helper(app_entity_inner, cx);
+                        });
+                    }
                 } else {
                     logging::log("VISIBILITY", "Decision: SHOW");
                     cx.update(move |cx: &mut gpui::App| {
