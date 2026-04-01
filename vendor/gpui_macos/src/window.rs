@@ -653,6 +653,9 @@ impl MacWindow {
             } else {
                 style_mask = NSWindowStyleMask::NSTitledWindowMask
                     | NSWindowStyleMask::NSFullSizeContentViewWindowMask;
+                if is_resizable {
+                    style_mask |= NSWindowStyleMask::NSResizableWindowMask;
+                }
             }
 
             let native_window: id = match kind {
