@@ -4,11 +4,14 @@
 //! role-aware cards, empty/streaming/error states, and permission approval
 //! overlay. Wraps an `AcpThread` entity for the Tab AI surface.
 
+use std::collections::HashSet;
+
 use gpui::{
     div, prelude::*, px, rgb, rgba, App, Context, Entity, FocusHandle, Focusable, FontWeight,
-    IntoElement, ParentElement, Render, SharedString, Window,
+    IntoElement, ParentElement, Render, ScrollHandle, SharedString, Window,
 };
 
+use crate::components::text_input::{render_text_input_cursor_selection, TextInputRenderConfig};
 use crate::prompts::markdown::render_markdown_with_scope;
 use crate::theme::{self, PromptColors};
 
@@ -17,20 +20,42 @@ use super::thread::{
 };
 use super::{AcpApprovalOption, AcpApprovalPreview, AcpApprovalPreviewKind, AcpApprovalRequest};
 
+/// Click handler type for collapsible block toggle.
+type ToggleHandler = Box<dyn Fn(&gpui::ClickEvent, &mut Window, &mut App) + 'static>;
+
 /// GPUI view entity wrapping an `AcpThread` for the Tab AI surface.
 pub(crate) struct AcpChatView {
     pub(crate) thread: Entity<AcpThread>,
     focus_handle: FocusHandle,
+    scroll_handle: ScrollHandle,
     /// Index of the currently highlighted permission option in the overlay.
     permission_index: usize,
+    /// Message IDs that are currently collapsed (thinking/tool blocks).
+    collapsed_ids: HashSet<u64>,
+    /// Track message count for auto-scroll detection.
+    last_message_count: usize,
 }
 
 impl AcpChatView {
     pub(crate) fn new(thread: Entity<AcpThread>, cx: &mut Context<Self>) -> Self {
+        // Auto-scroll when thread state changes (new messages, streaming updates).
+        cx.observe(&thread, |this: &mut Self, thread, cx| {
+            let count = thread.read(cx).messages.len();
+            if count != this.last_message_count {
+                this.last_message_count = count;
+                this.scroll_handle.scroll_to_bottom();
+            }
+            cx.notify();
+        })
+        .detach();
+
         Self {
             thread,
             focus_handle: cx.focus_handle(),
+            scroll_handle: ScrollHandle::new(),
             permission_index: 0,
+            collapsed_ids: HashSet::new(),
+            last_message_count: 0,
         }
     }
 
@@ -174,67 +199,177 @@ impl AcpChatView {
         PromptColors::from_theme(&theme::get_cached_theme())
     }
 
-    fn role_title(role: AcpThreadMessageRole) -> SharedString {
-        match role {
-            AcpThreadMessageRole::User => "You".into(),
-            AcpThreadMessageRole::Assistant => "Claude Code".into(),
-            AcpThreadMessageRole::Thought => "Thinking".into(),
-            AcpThreadMessageRole::Tool => "Tool".into(),
-            AcpThreadMessageRole::System => "System".into(),
-            AcpThreadMessageRole::Error => "Error".into(),
+    /// Render a message. Thinking and Tool messages are collapsible.
+    fn render_message(
+        msg: &AcpThreadMessage,
+        colors: &PromptColors,
+        is_collapsed: bool,
+        on_toggle: Option<ToggleHandler>,
+    ) -> gpui::AnyElement {
+        let theme = theme::get_cached_theme();
+
+        match msg.role {
+            AcpThreadMessageRole::User => Self::render_user_message(msg, colors, &theme),
+            AcpThreadMessageRole::Assistant => Self::render_assistant_message(msg, colors, &theme),
+            AcpThreadMessageRole::Thought => {
+                Self::render_collapsible_block(msg, colors, &theme, is_collapsed, on_toggle, false)
+            }
+            AcpThreadMessageRole::Tool => {
+                Self::render_collapsible_block(msg, colors, &theme, is_collapsed, on_toggle, true)
+            }
+            AcpThreadMessageRole::Error => Self::render_error_message(msg, colors),
+            AcpThreadMessageRole::System => Self::render_system_message(msg, colors, &theme),
         }
     }
 
-    fn render_message_card(msg: &AcpThreadMessage, colors: &PromptColors) -> gpui::AnyElement {
-        let theme = theme::get_cached_theme();
-
-        let (surface, border, title_opacity) = match msg.role {
-            AcpThreadMessageRole::User => (
-                rgba((theme.colors.accent.selected << 8) | 0x16),
-                rgba((theme.colors.accent.selected << 8) | 0x44),
-                0.82,
-            ),
-            AcpThreadMessageRole::Assistant => (
-                rgba((theme.colors.background.search_box << 8) | 0xF2),
-                rgba((theme.colors.ui.border << 8) | 0x70),
-                0.72,
-            ),
-            AcpThreadMessageRole::Thought => (
-                rgba((theme.colors.text.primary << 8) | 0x08),
-                rgba((theme.colors.text.primary << 8) | 0x22),
-                0.62,
-            ),
-            AcpThreadMessageRole::Tool => (
-                rgba((theme.colors.accent.selected << 8) | 0x10),
-                rgba((theme.colors.accent.selected << 8) | 0x38),
-                0.72,
-            ),
-            AcpThreadMessageRole::System => (
-                rgba((theme.colors.text.primary << 8) | 0x08),
-                rgba((theme.colors.ui.border << 8) | 0x60),
-                0.62,
-            ),
-            AcpThreadMessageRole::Error => (rgba(0xEF444420), rgba(0xEF444480), 0.86),
-        };
-
+    fn render_user_message(
+        msg: &AcpThreadMessage,
+        colors: &PromptColors,
+        theme: &crate::theme::Theme,
+    ) -> gpui::AnyElement {
         let scope_id = format!("acp-msg-{}", msg.id);
 
         div()
             .w_full()
             .px(px(12.0))
-            .py(px(10.0))
-            .rounded(px(10.0))
-            .bg(surface)
-            .border_1()
-            .border_color(border)
+            .py(px(8.0))
+            .rounded(px(8.0))
+            .bg(rgba((theme.colors.text.primary << 8) | 0x06))
+            .child(render_markdown_with_scope(&msg.body, colors, Some(&scope_id)).w_full())
+            .into_any_element()
+    }
+
+    fn render_assistant_message(
+        msg: &AcpThreadMessage,
+        colors: &PromptColors,
+        _theme: &crate::theme::Theme,
+    ) -> gpui::AnyElement {
+        let scope_id = format!("acp-msg-{}", msg.id);
+
+        // Assistant messages: no card, no border — just markdown flowing
+        div()
+            .w_full()
+            .px(px(12.0))
+            .py(px(4.0))
+            .child(render_markdown_with_scope(&msg.body, colors, Some(&scope_id)).w_full())
+            .into_any_element()
+    }
+
+    /// Thinking and Tool blocks: collapsible with header + optional gradient fade.
+    fn render_collapsible_block(
+        msg: &AcpThreadMessage,
+        colors: &PromptColors,
+        theme: &crate::theme::Theme,
+        is_collapsed: bool,
+        on_toggle: Option<ToggleHandler>,
+        is_tool: bool,
+    ) -> gpui::AnyElement {
+        let label = if is_tool {
+            // Extract tool name from first line if present, else "Tool"
+            msg.body
+                .lines()
+                .next()
+                .and_then(|line| {
+                    let trimmed = line.trim();
+                    if trimmed.len() < 80 {
+                        Some(trimmed.to_string())
+                    } else {
+                        None
+                    }
+                })
+                .unwrap_or_else(|| "Tool".to_string())
+        } else {
+            "Thinking".to_string()
+        };
+
+        let chevron = if is_collapsed {
+            "\u{25B8}" // ▸
+        } else {
+            "\u{25BE}" // ▾
+        };
+
+        let header_opacity = if is_tool { 0.55 } else { 0.50 };
+        let left_border_color = if is_tool {
+            rgba((theme.colors.accent.selected << 8) | 0x30)
+        } else {
+            rgba((theme.colors.text.primary << 8) | 0x18)
+        };
+
+        let scope_id = format!("acp-msg-{}", msg.id);
+
+        let mut container = div()
+            .w_full()
+            .pl(px(12.0))
+            .pr(px(12.0))
+            .py(px(2.0))
+            .border_l_2()
+            .border_color(left_border_color);
+
+        // Header row (always visible) — clickable toggle
+        let header = div()
+            .id(SharedString::from(format!("acp-toggle-{}", msg.id)))
+            .flex()
+            .items_center()
+            .gap_1()
+            .cursor_pointer()
             .child(
                 div()
                     .text_xs()
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .opacity(title_opacity)
-                    .pb(px(6.0))
-                    .child(Self::role_title(msg.role)),
+                    .opacity(header_opacity)
+                    .child(chevron.to_string()),
             )
+            .child(div().text_xs().opacity(header_opacity).child(label));
+
+        let header = if let Some(toggle) = on_toggle {
+            header.on_click(toggle)
+        } else {
+            header
+        };
+
+        container = container.child(header);
+
+        // Body (collapsed = hidden, expanded = shown with max-height + gradient)
+        if !is_collapsed {
+            let body = div()
+                .pt(px(4.0))
+                .max_h(px(200.0))
+                .overflow_y_hidden()
+                .child(render_markdown_with_scope(&msg.body, colors, Some(&scope_id)).w_full());
+
+            container = container.child(body);
+        }
+
+        container.into_any_element()
+    }
+
+    fn render_error_message(msg: &AcpThreadMessage, colors: &PromptColors) -> gpui::AnyElement {
+        let scope_id = format!("acp-msg-{}", msg.id);
+
+        div()
+            .w_full()
+            .px(px(12.0))
+            .py(px(6.0))
+            .border_l_2()
+            .border_color(rgba(0xEF444480))
+            .child(div().text_xs().opacity(0.65).pb(px(2.0)).child("Error"))
+            .child(render_markdown_with_scope(&msg.body, colors, Some(&scope_id)).w_full())
+            .into_any_element()
+    }
+
+    fn render_system_message(
+        msg: &AcpThreadMessage,
+        colors: &PromptColors,
+        theme: &crate::theme::Theme,
+    ) -> gpui::AnyElement {
+        let scope_id = format!("acp-msg-{}", msg.id);
+
+        div()
+            .w_full()
+            .px(px(12.0))
+            .py(px(4.0))
+            .opacity(0.60)
+            .border_l_2()
+            .border_color(rgba((theme.colors.ui.border << 8) | 0x30))
             .child(render_markdown_with_scope(&msg.body, colors, Some(&scope_id)).w_full())
             .into_any_element()
     }
@@ -703,6 +838,117 @@ impl AcpChatView {
             .into_any_element()
     }
 
+    // ── Toolbar ───────────────────────────────────────────────────
+
+    fn render_toolbar(
+        &self,
+        status: AcpThreadStatus,
+        has_input_text: bool,
+        mode_label: Option<&str>,
+        display_name: &str,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let theme = theme::get_cached_theme();
+        let is_streaming = matches!(status, AcpThreadStatus::Streaming);
+        let can_send = matches!(status, AcpThreadStatus::Idle) && has_input_text;
+
+        div()
+            .w_full()
+            .flex()
+            .items_center()
+            .justify_between()
+            .px(px(4.0))
+            .py(px(2.0))
+            // ── Left: attachment button ──────────
+            .child(
+                div().flex().items_center().gap(px(4.0)).child(
+                    div()
+                        .id("acp-attach-btn")
+                        .cursor_pointer()
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .size(px(22.0))
+                        .rounded(px(6.0))
+                        .text_xs()
+                        .opacity(0.50)
+                        .hover(|s| s.opacity(0.85))
+                        .child("+"),
+                ),
+            )
+            // ── Right: mode, model, send ─────────
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(8.0))
+                    // Mode pill
+                    .when_some(mode_label.map(str::to_string), |d, mode| {
+                        d.child(div().text_xs().opacity(0.55).child(mode))
+                    })
+                    // Model pill
+                    .child(
+                        div()
+                            .text_xs()
+                            .opacity(0.55)
+                            .child(display_name.to_string()),
+                    )
+                    // Send / Stop button
+                    .child(self.render_send_button(status, can_send, is_streaming, &theme, cx)),
+            )
+    }
+
+    fn render_send_button(
+        &self,
+        _status: AcpThreadStatus,
+        can_send: bool,
+        is_streaming: bool,
+        theme: &crate::theme::Theme,
+        cx: &mut Context<Self>,
+    ) -> gpui::AnyElement {
+        let accent = theme.colors.accent.selected;
+        let text_primary = theme.colors.text.primary;
+
+        let (icon_char, bg, opacity) = if is_streaming {
+            // Red stop square
+            ("\u{25A0}", rgba(0xEF444460), 0.90_f32)
+        } else if can_send {
+            // Accent send arrow
+            ("\u{2191}", rgba((accent << 8) | 0x30), 0.90)
+        } else {
+            // Muted disabled arrow
+            ("\u{2191}", rgba((text_primary << 8) | 0x06), 0.30)
+        };
+
+        let mut btn = div()
+            .id("acp-send-btn")
+            .flex()
+            .items_center()
+            .justify_center()
+            .size(px(24.0))
+            .rounded(px(6.0))
+            .bg(bg)
+            .text_sm()
+            .opacity(opacity);
+
+        if can_send {
+            btn = btn
+                .cursor_pointer()
+                .on_click(cx.listener(|this, _event, _window, cx| {
+                    let _ = this.thread.update(cx, |thread, cx| thread.submit_input(cx));
+                }));
+        } else if is_streaming {
+            btn = btn
+                .cursor_pointer()
+                .on_click(cx.listener(|this, _event, _window, cx| {
+                    this.thread
+                        .update(cx, |thread, cx| thread.cancel_streaming(cx));
+                }));
+        }
+
+        btn.child(icon_char).into_any_element()
+    }
+
     // ── Key handling ──────────────────────────────────────────────
 
     fn handle_key_down(&mut self, event: &gpui::KeyDownEvent, cx: &mut Context<Self>) {
@@ -727,56 +973,46 @@ impl AcpChatView {
         let key = event.keystroke.key.as_str();
         let modifiers = &event.keystroke.modifiers;
 
-        if modifiers.platform || modifiers.control || modifiers.alt {
-            cx.propagate();
-            return;
-        }
-
         // Shift+Enter inserts a newline.
         if crate::ui_foundation::is_key_enter(key) && modifiers.shift {
             self.thread.update(cx, |thread, cx| {
-                let mut text = thread.input.to_string();
-                text.push('\n');
-                thread.set_input(text, cx);
+                thread.input.insert_char('\n');
+                cx.notify();
             });
             cx.stop_propagation();
             return;
         }
 
+        // Enter submits.
         if crate::ui_foundation::is_key_enter(key) && !modifiers.shift {
             let _ = self.thread.update(cx, |thread, cx| thread.submit_input(cx));
             cx.stop_propagation();
             return;
         }
 
-        if crate::ui_foundation::is_key_backspace(key) {
+        // Delegate all other keys to TextInputState::handle_key().
+        // handle_key requires T: Render, so we extract input, mutate it here,
+        // then write it back.
+        let key_char = event.keystroke.key_char.as_deref();
+        let mut input_snapshot = self.thread.read(cx).input.clone();
+        let handled = input_snapshot.handle_key(
+            key,
+            key_char,
+            modifiers.platform,
+            modifiers.alt,
+            modifiers.shift,
+            cx,
+        );
+
+        if handled {
             self.thread.update(cx, |thread, cx| {
-                let mut text = thread.input.to_string();
-                text.pop();
-                thread.set_input(text, cx);
+                thread.input = input_snapshot;
+                cx.notify();
             });
             cx.stop_propagation();
-            return;
+        } else {
+            cx.propagate();
         }
-
-        if crate::ui_foundation::is_key_delete(key) {
-            cx.stop_propagation();
-            return;
-        }
-
-        if let Some(ch) = event.keystroke.key_char.as_deref() {
-            if !ch.is_empty() {
-                self.thread.update(cx, |thread, cx| {
-                    let mut text = thread.input.to_string();
-                    text.push_str(ch);
-                    thread.set_input(text, cx);
-                });
-                cx.stop_propagation();
-                return;
-            }
-        }
-
-        cx.propagate();
     }
 }
 
@@ -791,17 +1027,20 @@ impl Render for AcpChatView {
         let thread = self.thread.read(cx);
         let status = thread.status;
         let is_empty = thread.messages.is_empty();
-        let input_text = thread.input.clone();
-        let has_pending_permission = thread.pending_permission.is_some();
+        let input_text = thread.input.text().to_string();
+        let input_cursor = thread.input.cursor();
+        let input_selection = thread.input.selection();
         let pending_permission = thread.pending_permission.clone();
         let plan_entries = thread.active_plan_entries().to_vec();
-        let active_mode = thread.active_mode_id().map(String::from);
+        let mode_label = thread.active_mode_id().map(str::to_string);
+        let display_name = thread.display_name().to_string();
         let available_commands = thread.available_commands().to_vec();
         let context_state = thread.context_bootstrap_state();
         let queued_submit = thread.queued_submit_while_bootstrapping();
         let context_note = thread.context_bootstrap_note().map(ToOwned::to_owned);
         let messages: Vec<AcpThreadMessage> = thread.messages.clone();
         let colors = Self::prompt_colors();
+        let theme = theme::get_cached_theme();
 
         div()
             .size_full()
@@ -820,6 +1059,7 @@ impl Render for AcpChatView {
                     .id("acp-message-list")
                     .flex_grow()
                     .overflow_y_scroll()
+                    .track_scroll(&self.scroll_handle)
                     .min_h(gpui::px(0.))
                     .when(is_empty, |d| {
                         d.child(Self::render_empty_state(
@@ -829,15 +1069,39 @@ impl Render for AcpChatView {
                         ))
                     })
                     .when(!is_empty, |d| {
-                        d.p_2()
-                            .gap_2()
+                        d.px(px(8.0))
+                            .py(px(8.0))
+                            .gap_1()
                             .flex()
                             .flex_col()
                             .children(messages.iter().map(|msg| {
-                                div()
-                                    .w_full()
-                                    .pb(px(4.0))
-                                    .child(Self::render_message_card(msg, &colors))
+                                let msg_id = msg.id;
+                                let is_collapsible = matches!(
+                                    msg.role,
+                                    AcpThreadMessageRole::Thought | AcpThreadMessageRole::Tool
+                                );
+                                let is_collapsed =
+                                    is_collapsible && self.collapsed_ids.contains(&msg_id);
+
+                                let on_toggle: Option<ToggleHandler> = if is_collapsible {
+                                    Some(Box::new(cx.listener(move |this, _event, _window, cx| {
+                                        if this.collapsed_ids.contains(&msg_id) {
+                                            this.collapsed_ids.remove(&msg_id);
+                                        } else {
+                                            this.collapsed_ids.insert(msg_id);
+                                        }
+                                        cx.notify();
+                                    })))
+                                } else {
+                                    None
+                                };
+
+                                div().w_full().pb(px(2.0)).child(Self::render_message(
+                                    msg,
+                                    &colors,
+                                    is_collapsed,
+                                    on_toggle,
+                                ))
                             }))
                     }),
             )
@@ -851,16 +1115,21 @@ impl Render for AcpChatView {
                         .child(Self::render_plan_strip(&plan_entries)),
                 )
             })
-            // ── Commands strip ───────────────────────────────
-            .when(!available_commands.is_empty(), |d| {
-                d.child(
-                    div()
-                        .w_full()
-                        .px(px(8.0))
-                        .pb(px(4.0))
-                        .child(Self::render_commands_strip(&available_commands)),
-                )
-            })
+            // ── Commands strip (only when idle + empty) ─────
+            .when(
+                !available_commands.is_empty()
+                    && is_empty
+                    && matches!(status, AcpThreadStatus::Idle),
+                |d| {
+                    d.child(
+                        div()
+                            .w_full()
+                            .px(px(8.0))
+                            .pb(px(4.0))
+                            .child(Self::render_commands_strip(&available_commands)),
+                    )
+                },
+            )
             // ── Streaming hint ────────────────────────────────
             .when(matches!(status, AcpThreadStatus::Streaming), |d| {
                 d.child(
@@ -871,25 +1140,65 @@ impl Render for AcpChatView {
                         .child(Self::render_streaming_hint()),
                 )
             })
-            // ── Footer: input + status ────────────────────────
+            // ── Footer: input + toolbar ───────────────────────
             .child(
                 div()
                     .w_full()
-                    .p_2()
+                    .px(px(8.0))
+                    .py(px(6.0))
                     .flex()
-                    .items_center()
-                    .gap_2()
-                    .child(div().flex_grow().text_sm().child(input_text))
-                    .child(div().text_xs().opacity(0.45).child(Self::footer_hint_text(
+                    .flex_col()
+                    .gap(px(4.0))
+                    // Input area
+                    .child(
+                        div()
+                            .w_full()
+                            .min_h(px(28.0))
+                            .px(px(8.0))
+                            .py(px(6.0))
+                            .rounded(px(8.0))
+                            .bg(rgba((theme.colors.text.primary << 8) | 0x04))
+                            .text_sm()
+                            .child(if input_text.is_empty() {
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .child(render_text_input_cursor_selection(
+                                        TextInputRenderConfig {
+                                            cursor: 0,
+                                            selection: None,
+                                            cursor_visible: true,
+                                            cursor_color: theme.colors.accent.selected,
+                                            text_color: theme.colors.text.primary,
+                                            selection_color: theme.colors.accent.selected,
+                                            selection_text_color: theme.colors.text.primary,
+                                            ..TextInputRenderConfig::default_for_prompt("")
+                                        },
+                                    ))
+                                    .child(div().opacity(0.40).child("Message Claude Code\u{2026}"))
+                                    .into_any_element()
+                            } else {
+                                render_text_input_cursor_selection(TextInputRenderConfig {
+                                    cursor: input_cursor,
+                                    selection: Some(input_selection),
+                                    cursor_visible: true,
+                                    cursor_color: theme.colors.accent.selected,
+                                    text_color: theme.colors.text.primary,
+                                    selection_color: theme.colors.accent.selected,
+                                    selection_text_color: theme.colors.text.primary,
+                                    ..TextInputRenderConfig::default_for_prompt(&input_text)
+                                })
+                                .into_any_element()
+                            }),
+                    )
+                    // Toolbar row
+                    .child(self.render_toolbar(
                         status,
-                        context_state,
-                        queued_submit,
-                        has_pending_permission,
-                    )))
-                    .child(Self::render_status_badge(status, has_pending_permission))
-                    .when_some(active_mode.clone(), |d, mode_id| {
-                        d.child(Self::render_mode_badge(&mode_id))
-                    }),
+                        !input_text.is_empty(),
+                        mode_label.as_deref(),
+                        &display_name,
+                        cx,
+                    )),
             )
             // ── Permission overlay ────────────────────────────
             .when_some(pending_permission, |d, request| {

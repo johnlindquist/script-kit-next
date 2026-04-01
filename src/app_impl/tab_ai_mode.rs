@@ -499,6 +499,7 @@ impl ScriptListApp {
             }
         };
 
+        let agent_display_name = agent.display_name().to_string();
         let connection = match crate::ai::acp::AcpConnection::spawn_with_approval(
             agent,
             Some(broker.approval_fn()),
@@ -532,6 +533,7 @@ impl ScriptListApp {
                     ui_thread_id: uuid::Uuid::new_v4().to_string(),
                     cwd,
                     initial_input: effective_intent.clone(),
+                    display_name: agent_display_name.into(),
                 },
                 cx,
             )

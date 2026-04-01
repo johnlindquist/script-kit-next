@@ -49,7 +49,7 @@ fn initial_input_populates_composer_for_auto_submit() {
     let thread = AcpThread::test_new(vec![], Some("build a clipboard manager".to_string()));
 
     assert_eq!(
-        thread.input.as_ref(),
+        thread.input.text(),
         "build a clipboard manager",
         "initial_input should populate the composer"
     );
@@ -59,7 +59,7 @@ fn initial_input_populates_composer_for_auto_submit() {
 fn empty_initial_input_leaves_composer_blank() {
     let thread = AcpThread::test_new(vec![], None);
     assert!(
-        thread.input.is_empty(),
+        thread.input.text().is_empty(),
         "no initial_input should leave composer empty"
     );
 }
