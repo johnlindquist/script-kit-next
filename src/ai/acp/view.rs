@@ -1219,6 +1219,12 @@ impl AcpChatView {
             return;
         }
 
+        // Escape: consume to prevent window dismiss. Only Cmd+W closes.
+        if crate::ui_foundation::is_key_escape(key) {
+            cx.stop_propagation();
+            return;
+        }
+
         // Enter submits.
         if crate::ui_foundation::is_key_enter(key) && !modifiers.shift {
             self.slash_menu_index = None;
