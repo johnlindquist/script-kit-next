@@ -93,6 +93,7 @@ pub(crate) fn claude_code_agent_config() -> anyhow::Result<AcpAgentConfig> {
     let claude_code = config.claude_code.unwrap_or_default();
 
     let mut args = Vec::new();
+    let configured_path = claude_code.path;
 
     if !claude_code.permission_mode.trim().is_empty() {
         args.push("--permission-mode".to_string());
@@ -116,13 +117,34 @@ pub(crate) fn claude_code_agent_config() -> anyhow::Result<AcpAgentConfig> {
         args.push(add_dir);
     }
 
+    // `claudeCode.path` historically points at the Claude CLI binary, not the
+    // ACP adapter. Preserve that contract by defaulting to the ACP wrapper and
+    // only using the configured path as the spawned command when it already
+    // looks like an ACP adapter executable.
+    let configured_path_looks_like_adapter = configured_path
+        .as_deref()
+        .map(|path| {
+            let lowered = path.to_ascii_lowercase();
+            lowered.contains("claude-agent-acp")
+                || lowered.contains("claude-code-acp")
+                || lowered.ends_with("-acp")
+        })
+        .unwrap_or(false);
+    let (command, mut acp_args) = if configured_path_looks_like_adapter {
+        (configured_path.unwrap_or_default(), Vec::new())
+    } else {
+        (
+            "npx".to_string(),
+            vec!["@agentclientprotocol/claude-agent-acp".to_string()],
+        )
+    };
+    acp_args.extend(args);
+
     Ok(AcpAgentConfig {
         id: "claude-code".to_string(),
         display_name: "Claude Code".to_string(),
-        command: claude_code
-            .path
-            .unwrap_or_else(|| "claude".to_string()),
-        args,
+        command,
+        args: acp_args,
         env: HashMap::new(),
         models: Vec::new(),
     })

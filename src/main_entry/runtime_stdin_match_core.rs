@@ -204,6 +204,9 @@
                                         view.pending_focus = Some(FocusTarget::MainFilter);
                                         view.update_window_size_deferred(window, ctx);
                                     }
+                                    "tab-ai" | "tabai" => {
+                                        view.open_tab_ai_chat(ctx);
+                                    }
                                     _ => {
                                         logging::log("ERROR", &format!("Unknown built-in: '{}'", name));
                                     }

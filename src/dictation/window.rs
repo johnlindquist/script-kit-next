@@ -12,8 +12,8 @@ use crate::dictation::visualizer::bars_for_level;
 pub(crate) const OVERLAY_WIDTH_PX: f32 = 392.0;
 /// Compact pill height in pixels (matches vercel-voice 40px overlay).
 pub(crate) const OVERLAY_HEIGHT_PX: f32 = 40.0;
-/// Expanded height for the confirming phase (timer + headline + button row).
-const CONFIRMING_HEIGHT_PX: f32 = 96.0;
+/// Confirming phase uses the same pill height — content swaps inline like
+/// vercel-voice (no vertical expansion that would push off-screen).
 /// Fully-rounded corner radius (half of height for pill shape).
 pub(crate) const OVERLAY_RADIUS_PX: f32 = 20.0;
 /// Horizontal padding inside the pill.
@@ -265,11 +265,11 @@ pub(crate) fn overlay_escape_action(
 }
 
 /// Return the overlay height for a given session phase.
-fn overlay_height_for_phase(phase: &DictationSessionPhase) -> f32 {
-    match phase {
-        DictationSessionPhase::Confirming => CONFIRMING_HEIGHT_PX,
-        _ => OVERLAY_HEIGHT_PX,
-    }
+///
+/// All phases use the same pill height — confirming swaps content inline
+/// rather than expanding vertically (which would push off the bottom edge).
+fn overlay_height_for_phase(_phase: &DictationSessionPhase) -> f32 {
+    OVERLAY_HEIGHT_PX
 }
 
 /// Resize and reposition the overlay window to match the given phase height.
@@ -342,6 +342,15 @@ impl DictationOverlay {
         }
     }
 
+    /// Enter the confirming state: update phase, notify.
+    ///
+    /// No resize needed — confirming swaps content inline at the same pill height.
+    fn enter_confirming(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        self.state.phase = DictationSessionPhase::Confirming;
+        crate::dictation::set_overlay_phase(DictationSessionPhase::Confirming);
+        cx.notify();
+    }
+
     /// Dismiss the confirmation state and resume recording.
     fn resume_recording(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.state.phase = DictationSessionPhase::Recording;
@@ -350,14 +359,47 @@ impl DictationOverlay {
         cx.notify();
     }
 
-    /// Abort the dictation session via the registered callback, or close the overlay.
-    fn abort_overlay_session(&mut self, cx: &mut Context<Self>) {
+    /// Abort the dictation session via the registered callback and close
+    /// the overlay window directly.
+    ///
+    /// This must NOT call `close_dictation_overlay()` because we are
+    /// already inside `&mut self` (via `handle_key_down` or a mouse
+    /// handler).  Calling `handle.update()` on the same entity would be a
+    /// reentrant borrow that silently fails, leaving the window alive but
+    /// the global slot empty — causing stacked overlay windows on the
+    /// next toggle.
+    fn abort_overlay_session(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let callback = OVERLAY_ABORT_CALLBACK.lock().take();
+        // Pre-clear the global slot so if the callback calls
+        // close_dictation_overlay, the handle is already gone and that
+        // call becomes a harmless no-op.
+        let slot = DICTATION_OVERLAY_WINDOW.get_or_init(|| Mutex::new(None));
+        slot.lock().take();
         if let Some(cb) = callback {
             cb(cx);
-        } else {
-            let _ = crate::dictation::close_dictation_overlay(cx);
         }
+        prepare_overlay_window_for_close(window);
+        window.remove_window();
+        tracing::info!(
+            category = "DICTATION",
+            "Overlay closed from within entity (abort)"
+        );
+    }
+
+    /// Close the overlay window directly from within the entity.
+    ///
+    /// Same reentrant-borrow avoidance as `abort_overlay_session`, but
+    /// without invoking the abort callback (used for non-recording phases).
+    fn close_overlay_from_within(&mut self, window: &mut Window) {
+        let slot = DICTATION_OVERLAY_WINDOW.get_or_init(|| Mutex::new(None));
+        slot.lock().take();
+        *OVERLAY_ABORT_CALLBACK.lock() = None;
+        prepare_overlay_window_for_close(window);
+        window.remove_window();
+        tracing::info!(
+            category = "DICTATION",
+            "Overlay closed from within entity"
+        );
     }
 
     /// Replace the visual state snapshot (called from the dictation runtime).
@@ -440,6 +482,13 @@ impl DictationOverlay {
     ) {
         let key = event.keystroke.key.as_str();
 
+        tracing::debug!(
+            category = "DICTATION",
+            key,
+            phase = ?self.state.phase,
+            "Overlay received key_down"
+        );
+
         // In Confirming state, only Enter and Escape have meaning.
         // All other keys are swallowed without changing state.
         if self.state.phase == DictationSessionPhase::Confirming {
@@ -448,7 +497,7 @@ impl DictationOverlay {
                     category = "DICTATION",
                     "Enter pressed during confirmation, aborting dictation session"
                 );
-                self.abort_overlay_session(cx);
+                self.abort_overlay_session(window, cx);
                 cx.stop_propagation();
                 return;
             }
@@ -475,10 +524,7 @@ impl DictationOverlay {
                     elapsed_ms = elapsed.as_millis() as u64,
                     "Escape pressed after threshold, showing confirmation"
                 );
-                self.state.phase = DictationSessionPhase::Confirming;
-                crate::dictation::set_overlay_phase(DictationSessionPhase::Confirming);
-                resize_overlay_for_phase(window, CONFIRMING_HEIGHT_PX);
-                cx.notify();
+                self.enter_confirming(window, cx);
                 cx.stop_propagation();
             }
             OverlayEscapeAction::ResumeRecording => {
@@ -496,7 +542,7 @@ impl DictationOverlay {
                     elapsed_ms = elapsed.as_millis() as u64,
                     "Escape pressed before threshold, aborting dictation session"
                 );
-                self.abort_overlay_session(cx);
+                self.abort_overlay_session(window, cx);
                 cx.stop_propagation();
             }
             OverlayEscapeAction::CloseOverlay => {
@@ -505,7 +551,7 @@ impl DictationOverlay {
                     phase = ?self.state.phase,
                     "Escape pressed, dismissing dictation overlay"
                 );
-                let _ = crate::dictation::close_dictation_overlay(cx);
+                self.close_overlay_from_within(window);
                 cx.stop_propagation();
             }
             OverlayEscapeAction::Propagate => {
@@ -576,35 +622,34 @@ impl Render for DictationOverlay {
                     .child(div().w(px(TIMER_SPACER_WIDTH_PX)))
             }
             DictationSessionPhase::Confirming => {
+                // Same 3-column horizontal layout as recording — content swaps
+                // inline at the same pill height (no vertical expansion).
+                //   left: timer  |  center: Stop · Continue buttons  |  right: spacer
                 let timer_text = format_elapsed(*elapsed);
-                let (headline, _hint) = overlay_phase_copy(phase);
                 let stop_color = theme.colors.ui.error.with_opacity(OPACITY_ACTIVE);
                 let continue_color = theme.colors.ui.success.with_opacity(OPACITY_ACTIVE);
                 let stop_bg = theme.colors.ui.error.with_opacity(0.14);
                 let continue_bg = theme.colors.ui.success.with_opacity(0.08);
+
                 div()
                     .flex()
-                    .flex_col()
+                    .flex_row()
                     .items_center()
-                    .justify_center()
-                    .gap(px(6.))
                     .w_full()
+                    // Left: timer (same position as recording)
                     .child(
-                        div()
-                            .text_size(px(STATUS_TEXT_SIZE_PX))
-                            .font_family(FONT_MONO)
-                            .text_color(timer_color)
-                            .child(timer_text),
+                        div().flex().flex_row().items_center().gap(px(8.)).child(
+                            div()
+                                .text_size(px(STATUS_TEXT_SIZE_PX))
+                                .font_family(FONT_MONO)
+                                .text_color(timer_color)
+                                .child(timer_text),
+                        ),
                     )
+                    // Center: Stop / Continue buttons (replaces waveform)
                     .child(
                         div()
-                            .text_size(px(STATUS_TEXT_SIZE_PX))
-                            .font_family(FONT_MONO)
-                            .text_color(text_color)
-                            .child(headline),
-                    )
-                    .child(
-                        div()
+                            .flex_1()
                             .flex()
                             .flex_row()
                             .items_center()
@@ -612,8 +657,8 @@ impl Render for DictationOverlay {
                             .gap(px(10.))
                             .child(
                                 div()
-                                    .px(px(10.))
-                                    .py(px(4.))
+                                    .px(px(8.))
+                                    .py(px(2.))
                                     .bg(stop_bg)
                                     .rounded(px(999.))
                                     .border_1()
@@ -624,8 +669,8 @@ impl Render for DictationOverlay {
                                     .on_mouse_down(
                                         MouseButton::Left,
                                         cx.listener(
-                                            |this, _event: &MouseDownEvent, _window, cx| {
-                                                this.abort_overlay_session(cx);
+                                            |this, _event: &MouseDownEvent, window, cx| {
+                                                this.abort_overlay_session(window, cx);
                                             },
                                         ),
                                     )
@@ -633,8 +678,8 @@ impl Render for DictationOverlay {
                             )
                             .child(
                                 div()
-                                    .px(px(10.))
-                                    .py(px(4.))
+                                    .px(px(8.))
+                                    .py(px(2.))
                                     .bg(continue_bg)
                                     .rounded(px(999.))
                                     .border_1()
@@ -644,13 +689,17 @@ impl Render for DictationOverlay {
                                     .text_color(continue_color)
                                     .on_mouse_down(
                                         MouseButton::Left,
-                                        cx.listener(|this, _event: &MouseDownEvent, window, cx| {
-                                            this.resume_recording(window, cx);
-                                        }),
+                                        cx.listener(
+                                            |this, _event: &MouseDownEvent, window, cx| {
+                                                this.resume_recording(window, cx);
+                                            },
+                                        ),
                                     )
                                     .child(CONFIRM_CONTINUE_LABEL),
                             ),
                     )
+                    // Right: spacer to balance the timer width
+                    .child(div().w(px(TIMER_SPACER_WIDTH_PX)))
             }
             DictationSessionPhase::Transcribing => {
                 // 3 green dots matching vercel-voice .transcribing-dots
@@ -704,12 +753,8 @@ impl Render for DictationOverlay {
             _ => div(),
         };
 
-        // Phase-aware corner radius: full pill for recording, gentler for confirming.
-        let radius = if *phase == DictationSessionPhase::Confirming {
-            12.0
-        } else {
-            OVERLAY_RADIUS_PX
-        };
+        // Same pill radius for all phases — confirming swaps content inline.
+        let radius = OVERLAY_RADIUS_PX;
 
         // Inner pill surface — glassmorphism styling, padding, rounded corners.
         let surface = div()

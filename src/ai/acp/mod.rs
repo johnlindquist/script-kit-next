@@ -31,8 +31,8 @@ pub(crate) use config::{claude_code_agent_config, AcpAgentConfig};
 pub(crate) use context::{build_tab_ai_acp_context_blocks, build_tab_ai_acp_guidance_blocks};
 pub(crate) use events::{AcpCommand, AcpEvent, AcpEventRx, AcpPromptTurnRequest};
 pub(crate) use permission_broker::{
-    AcpApprovalOption, AcpApprovalPreview, AcpApprovalPreviewKind, AcpApprovalRequest,
-    AcpApprovalRequestInput, AcpPermissionBroker,
+    approval_request_input, AcpApprovalOption, AcpApprovalPreview, AcpApprovalPreviewKind,
+    AcpApprovalRequest, AcpApprovalRequestInput, AcpPermissionBroker,
 };
 pub(crate) use provider::AcpProvider;
 pub(crate) use thread::{
