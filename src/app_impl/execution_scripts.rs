@@ -5,10 +5,7 @@ use std::path::{Path, PathBuf};
 const NO_MAIN_WINDOW_BUILTINS: &[&str] = &[
     "builtin-ai-chat",
     "builtin-open-ai",
-    "builtin-notes",
     "builtin-open-notes",
-    "builtin-new-note",
-    "builtin-search-notes",
     "builtin-quick-capture",
     "builtin-new-conversation",
     "builtin-dictation",

@@ -3335,7 +3335,7 @@ mod from_dialog_builtin_action_validation_tests_34 {
     }
     
     #[test]
-    fn chat_continue_in_chat_desc_mentions_ai_chat() {
+    fn chat_continue_in_chat_desc_mentions_ai_harness() {
         let info = ChatPromptInfo {
             current_model: None,
             available_models: vec![],
@@ -3349,7 +3349,7 @@ mod from_dialog_builtin_action_validation_tests_34 {
             .as_ref()
             .unwrap()
             .to_lowercase()
-            .contains("ai chat"));
+            .contains("ai harness"));
     }
     
     #[test]

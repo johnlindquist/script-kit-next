@@ -1981,7 +1981,7 @@ mod cleanup_contract_audits {
         );
         assert!(
             source.contains(&compact(
-                "self.open_tab_ai_chat_with_entry_intent(Some(trimmed), cx);"
+                "self.open_tab_ai_chat_with_entry_intent(Some(request), cx);"
             )),
             "GenerateScript should submit through the harness"
         );

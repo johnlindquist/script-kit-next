@@ -68,19 +68,37 @@ impl FrontmostMenuSnapshot {
 // Label normalization
 // ---------------------------------------------------------------------------
 
+/// Generic helper for built-in entries whose label may appear in the main filter.
+/// Returns `None` when the raw input is empty, whitespace-only, or matches the
+/// built-in label (case-insensitive). Otherwise returns the trimmed input.
+pub fn normalize_builtin_labeled_request<'a>(
+    raw: Option<&'a str>,
+    builtin_label: &str,
+) -> Option<&'a str> {
+    let raw = raw.map(str::trim).filter(|text| !text.is_empty())?;
+    if raw.eq_ignore_ascii_case(builtin_label) {
+        None
+    } else {
+        Some(raw)
+    }
+}
+
+/// The human-readable label used in the main command list.
+pub const GENERATE_SCRIPT_WITH_AI_LABEL: &str = "Generate Script with AI";
+
+/// Returns `None` when the raw input is empty, whitespace-only, or matches the
+/// built-in label (case-insensitive). Otherwise returns the trimmed input.
+pub fn normalize_generate_script_request(raw: Option<&str>) -> Option<&str> {
+    normalize_builtin_labeled_request(raw, GENERATE_SCRIPT_WITH_AI_LABEL)
+}
+
 /// The human-readable label used in the main command list.
 pub const GENERATE_SCRIPT_FROM_CURRENT_APP_LABEL: &str = "Generate Script from Current App";
 
 /// Returns `None` when the raw input is empty, whitespace-only, or matches the
 /// built-in label (case-insensitive). Otherwise returns the trimmed input.
 pub fn normalize_generate_script_from_current_app_request(raw: Option<&str>) -> Option<&str> {
-    let raw = raw.map(str::trim).filter(|text| !text.is_empty())?;
-
-    if raw.eq_ignore_ascii_case(GENERATE_SCRIPT_FROM_CURRENT_APP_LABEL) {
-        None
-    } else {
-        Some(raw)
-    }
+    normalize_builtin_labeled_request(raw, GENERATE_SCRIPT_FROM_CURRENT_APP_LABEL)
 }
 
 // ---------------------------------------------------------------------------
@@ -1371,6 +1389,56 @@ mod tests {
         );
         assert_eq!(
             normalize_generate_script_from_current_app_request(None),
+            None
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // normalize_generate_script_request (Generate Script with AI)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn normalize_generate_script_request_drops_builtin_label() {
+        assert_eq!(
+            normalize_generate_script_request(Some(GENERATE_SCRIPT_WITH_AI_LABEL)),
+            None
+        );
+        assert_eq!(
+            normalize_generate_script_request(Some("  generate script with ai  ")),
+            None
+        );
+        assert_eq!(
+            normalize_generate_script_request(Some("build a clipboard cleanup script")),
+            Some("build a clipboard cleanup script")
+        );
+        assert_eq!(normalize_generate_script_request(Some("   ")), None);
+        assert_eq!(normalize_generate_script_request(None), None);
+    }
+
+    // -----------------------------------------------------------------------
+    // normalize_builtin_labeled_request (generic helper)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn normalize_builtin_labeled_request_generic() {
+        assert_eq!(
+            normalize_builtin_labeled_request(Some("My Command"), "My Command"),
+            None
+        );
+        assert_eq!(
+            normalize_builtin_labeled_request(Some("  my command  "), "My Command"),
+            None
+        );
+        assert_eq!(
+            normalize_builtin_labeled_request(Some("real input"), "My Command"),
+            Some("real input")
+        );
+        assert_eq!(
+            normalize_builtin_labeled_request(Some(""), "My Command"),
+            None
+        );
+        assert_eq!(
+            normalize_builtin_labeled_request(None, "My Command"),
             None
         );
     }

@@ -16,7 +16,9 @@
 //!
 
 use crate::config::BuiltInConfig;
-use crate::menu_bar::current_app_commands::GENERATE_SCRIPT_FROM_CURRENT_APP_LABEL;
+use crate::menu_bar::current_app_commands::{
+    GENERATE_SCRIPT_FROM_CURRENT_APP_LABEL, GENERATE_SCRIPT_WITH_AI_LABEL,
+};
 use crate::menu_bar::MenuBarItem;
 use tracing::debug;
 // ============================================================================
@@ -137,6 +139,16 @@ pub enum AiCommandType {
     SearchAiPresets,
     /// Export AI chat presets to a user-chosen file
     ExportAiPresets,
+}
+
+impl AiCommandType {
+    /// Returns `true` for legacy AI enum variants that now simply open the harness.
+    pub fn is_legacy_harness_alias(self) -> bool {
+        matches!(
+            self,
+            Self::OpenAi | Self::MiniAi | Self::NewConversation | Self::ClearConversation
+        )
+    }
 }
 /// Script creation command types
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -491,26 +503,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         ));
         debug!("Added Favorites built-in entry");
 
-        // Notes is always available
-        entries.push(BuiltInEntry::new_with_icon(
-            "builtin-notes",
-            "Notes",
-            "Open quick notes and a scratchpad editor",
-            vec![
-                "notes",
-                "note",
-                "scratch",
-                "scratchpad",
-                "memo",
-                "markdown",
-                "write",
-                "text",
-            ],
-            BuiltInFeature::Notes,
-            "📝",
-        ));
-        debug!("Added Notes built-in entry");
-
+        // Notes is always available (Open Notes absorbs legacy "Notes" entry keywords)
         entries.push(BuiltInEntry::new_with_icon(
             "builtin-emoji-picker",
             "Emoji Picker",
@@ -873,28 +866,16 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             "builtin-open-notes",
             "Open Notes",
             "Open the Notes window",
-            vec!["open", "notes", "window", "note"],
+            vec![
+                "open", "notes", "window", "note", "new", "create", "search", "find",
+                "scratch", "scratchpad", "memo", "markdown", "write", "text",
+            ],
             BuiltInFeature::NotesCommand(NotesCommandType::OpenNotes),
             "📝",
         ));
 
-        entries.push(BuiltInEntry::new_with_icon(
-            "builtin-new-note",
-            "New Note",
-            "Create a new note",
-            vec!["new", "note", "create"],
-            BuiltInFeature::NotesCommand(NotesCommandType::NewNote),
-            "📝",
-        ));
-
-        entries.push(BuiltInEntry::new_with_icon(
-            "builtin-search-notes",
-            "Search Notes",
-            "Search through your notes",
-            vec!["search", "notes", "find"],
-            BuiltInFeature::NotesCommand(NotesCommandType::SearchNotes),
-            "🔍",
-        ));
+        // NewNote and SearchNotes intentionally collapse into OpenNotes until
+        // note creation / search have distinct execution paths.
 
         entries.push(BuiltInEntry::new_with_icon(
             "builtin-quick-capture",
@@ -914,7 +895,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
 
         entries.push(BuiltInEntry::new_with_icon(
             "builtin-generate-script-with-ai",
-            "Generate Script with AI",
+            GENERATE_SCRIPT_WITH_AI_LABEL,
             "Open the AI harness to generate a Script Kit script from your prompt text",
             vec![
                 "generate",
@@ -1990,7 +1971,7 @@ mod tests {
         assert!(entries.iter().any(|e| e.id == "builtin-clipboard-history"));
         assert!(entries.iter().any(|e| e.id == "builtin-paste-sequentially"));
         assert!(entries.iter().any(|e| e.id == "builtin-ai-chat"));
-        assert!(entries.iter().any(|e| e.id == "builtin-notes"));
+        assert!(entries.iter().any(|e| e.id == "builtin-open-notes"));
         assert!(entries.iter().any(|e| e.id == "builtin-design-gallery"));
 
         // Window switcher should NOT be present
@@ -2008,7 +1989,7 @@ mod tests {
         // App launcher no longer creates a built-in entry (apps appear in main search)
         // But AI Chat, Notes and Design Gallery are always enabled (plus new command entries)
         assert!(entries.iter().any(|e| e.id == "builtin-ai-chat"));
-        assert!(entries.iter().any(|e| e.id == "builtin-notes"));
+        assert!(entries.iter().any(|e| e.id == "builtin-open-notes"));
         assert!(entries.iter().any(|e| e.id == "builtin-design-gallery"));
 
         // Clipboard history should NOT be present
@@ -2026,7 +2007,7 @@ mod tests {
 
         // AI Chat, Notes, and Design Gallery are always enabled (plus new command entries)
         assert!(entries.iter().any(|e| e.id == "builtin-ai-chat"));
-        assert!(entries.iter().any(|e| e.id == "builtin-notes"));
+        assert!(entries.iter().any(|e| e.id == "builtin-open-notes"));
         assert!(entries.iter().any(|e| e.id == "builtin-design-gallery"));
 
         // Clipboard history and window switcher should NOT be present
@@ -2046,7 +2027,7 @@ mod tests {
         // Window switcher + AI Chat + Notes + Design Gallery (always enabled, plus new command entries)
         assert!(entries.iter().any(|e| e.id == "builtin-window-switcher"));
         assert!(entries.iter().any(|e| e.id == "builtin-ai-chat"));
-        assert!(entries.iter().any(|e| e.id == "builtin-notes"));
+        assert!(entries.iter().any(|e| e.id == "builtin-open-notes"));
         assert!(entries.iter().any(|e| e.id == "builtin-design-gallery"));
 
         // Verify window switcher has correct properties
@@ -2208,11 +2189,24 @@ mod tests {
         let config = BuiltInConfig::default();
         let entries = get_builtin_entries(&config);
 
-        // Check that notes command entries exist
+        // Open Notes absorbs New Note and Search Notes (same execution path).
         assert!(entries.iter().any(|e| e.id == "builtin-open-notes"));
-        assert!(entries.iter().any(|e| e.id == "builtin-new-note"));
-        assert!(entries.iter().any(|e| e.id == "builtin-search-notes"));
+        assert!(
+            !entries.iter().any(|e| e.id == "builtin-new-note"),
+            "builtin-new-note collapsed into builtin-open-notes"
+        );
+        assert!(
+            !entries.iter().any(|e| e.id == "builtin-search-notes"),
+            "builtin-search-notes collapsed into builtin-open-notes"
+        );
         assert!(entries.iter().any(|e| e.id == "builtin-quick-capture"));
+
+        // Verify Open Notes absorbed the keywords from the collapsed entries
+        let open_notes = entries.iter().find(|e| e.id == "builtin-open-notes").unwrap();
+        assert!(open_notes.keywords.contains(&"new".to_string()));
+        assert!(open_notes.keywords.contains(&"create".to_string()));
+        assert!(open_notes.keywords.contains(&"search".to_string()));
+        assert!(open_notes.keywords.contains(&"find".to_string()));
     }
     #[test]
     fn test_get_builtin_entries_includes_open_notes_and_generate_script() {
@@ -2494,11 +2488,11 @@ mod tests {
         let config = BuiltInConfig::default();
         let entries = get_builtin_entries(&config);
 
-        let notes = entries.iter().find(|e| e.id == "builtin-notes").unwrap();
-        assert_eq!(
-            notes.description,
-            "Open quick notes and a scratchpad editor"
-        );
+        let notes = entries
+            .iter()
+            .find(|e| e.id == "builtin-open-notes")
+            .unwrap();
+        assert_eq!(notes.description, "Open the Notes window");
 
         let quick_capture = entries
             .iter()
