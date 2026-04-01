@@ -151,6 +151,33 @@ impl AcpApprovalPreview {
         self
     }
 
+    /// Build a deterministic plain-text body from the structured preview.
+    ///
+    /// Lets callers summarize once, then reuse the same data for both
+    /// rich overlay rendering and any plain-text fallback surface.
+    /// Blank sections are omitted.
+    pub(crate) fn fallback_body(&self) -> String {
+        let mut parts = Vec::with_capacity(7);
+        parts.push(format!("Tool: {}", self.tool_title));
+        parts.push(format!("Tool call ID: {}", self.tool_call_id));
+        if let Some(subject) = self.subject.as_deref() {
+            parts.push(format!("Subject: {subject}"));
+        }
+        if let Some(summary) = self.summary.as_deref() {
+            parts.push(summary.to_string());
+        }
+        if let Some(input_preview) = self.input_preview.as_deref() {
+            parts.push(format!("Input:\n{input_preview}"));
+        }
+        if let Some(output_preview) = self.output_preview.as_deref() {
+            parts.push(format!("Output:\n{output_preview}"));
+        }
+        if !self.option_summary.is_empty() {
+            parts.push(format!("Options: {}", self.option_summary.join(", ")));
+        }
+        parts.join("\n\n")
+    }
+
     /// Infer the semantic kind from the tool title.
     pub(crate) fn infer_kind(mut self) -> Self {
         let lowered = self.tool_title.to_ascii_lowercase();
@@ -184,6 +211,22 @@ pub(crate) struct AcpApprovalRequestInput {
     pub preview: Option<AcpApprovalPreview>,
     /// Available permission options from the ACP agent.
     pub options: Vec<AcpApprovalOption>,
+}
+
+/// Build an approval request input from a structured preview without forcing
+/// each caller to separately rebuild a parallel plain-text body.
+pub(crate) fn approval_request_input(
+    title: impl Into<String>,
+    preview: AcpApprovalPreview,
+    options: Vec<AcpApprovalOption>,
+) -> AcpApprovalRequestInput {
+    let body = preview.fallback_body();
+    AcpApprovalRequestInput {
+        title: title.into(),
+        body,
+        preview: Some(preview),
+        options,
+    }
 }
 
 /// A fully-formed approval request ready for the UI.
@@ -418,6 +461,102 @@ mod tests {
             preview.option_summary,
             vec!["Allow (AllowOnce)", "Deny (RejectOnce)"],
         );
+    }
+
+    #[test]
+    fn fallback_body_populated_preview() {
+        let options = vec![
+            AcpApprovalOption {
+                option_id: "allow".to_string(),
+                name: "Allow".to_string(),
+                kind: "AllowOnce".to_string(),
+            },
+            AcpApprovalOption {
+                option_id: "deny".to_string(),
+                name: "Deny".to_string(),
+                kind: "RejectOnce".to_string(),
+            },
+        ];
+        let preview = AcpApprovalPreview::new("write_text_file", "client-fs-write")
+            .with_subject(Some("/tmp/demo.txt".to_string()))
+            .with_summary(Some("Write 24 bytes".to_string()))
+            .with_input_preview(Some("hello world content".to_string()))
+            .with_output_preview(Some("ok".to_string()))
+            .with_options(&options);
+
+        let body = preview.fallback_body();
+        assert!(body.contains("Tool: write_text_file"));
+        assert!(body.contains("Tool call ID: client-fs-write"));
+        assert!(body.contains("Subject: /tmp/demo.txt"));
+        assert!(body.contains("Write 24 bytes"));
+        assert!(body.contains("Input:\nhello world content"));
+        assert!(body.contains("Output:\nok"));
+        assert!(body.contains("Options: Allow (AllowOnce), Deny (RejectOnce)"));
+    }
+
+    #[test]
+    fn fallback_body_omits_blank_sections() {
+        let preview = AcpApprovalPreview::new("read_file", "id-123")
+            .with_subject(None)
+            .with_summary(None)
+            .with_input_preview(Some("  ".to_string())) // blank, filtered by builder
+            .with_output_preview(None);
+
+        let body = preview.fallback_body();
+        assert!(body.contains("Tool: read_file"));
+        assert!(body.contains("Tool call ID: id-123"));
+        assert!(!body.contains("Subject:"));
+        assert!(!body.contains("Input:"));
+        assert!(!body.contains("Output:"));
+        assert!(!body.contains("Options:"));
+    }
+
+    #[test]
+    fn fallback_body_option_summary_formatting() {
+        let options = vec![
+            AcpApprovalOption {
+                option_id: "a".to_string(),
+                name: "Allow".to_string(),
+                kind: "AllowOnce".to_string(),
+            },
+            AcpApprovalOption {
+                option_id: "b".to_string(),
+                name: "Allow always".to_string(),
+                kind: "AllowAlways".to_string(),
+            },
+            AcpApprovalOption {
+                option_id: "c".to_string(),
+                name: "Deny".to_string(),
+                kind: "RejectOnce".to_string(),
+            },
+        ];
+        let preview =
+            AcpApprovalPreview::new("terminal/create", "tc-1").with_options(&options);
+        let body = preview.fallback_body();
+        assert!(body.contains(
+            "Options: Allow (AllowOnce), Allow always (AllowAlways), Deny (RejectOnce)"
+        ));
+    }
+
+    #[test]
+    fn approval_request_input_uses_fallback_body() {
+        let options = vec![AcpApprovalOption {
+            option_id: "allow".to_string(),
+            name: "Allow".to_string(),
+            kind: "AllowOnce".to_string(),
+        }];
+        let preview = AcpApprovalPreview::new("write_text_file", "w-1")
+            .with_subject(Some("/tmp/out.txt".to_string()))
+            .with_summary(Some("Write 128 bytes".to_string()))
+            .with_options(&options);
+
+        let expected_body = preview.fallback_body();
+        let input = approval_request_input("ACP file write request", preview, options);
+
+        assert_eq!(input.title, "ACP file write request");
+        assert_eq!(input.body, expected_body);
+        assert!(input.preview.is_some());
+        assert_eq!(input.options.len(), 1);
     }
 
     #[test]
