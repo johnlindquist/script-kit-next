@@ -450,6 +450,7 @@ impl ScriptListApp {
     /// Return true when the current view has any available actions.
     fn has_actions(&mut self) -> bool {
         match &self.current_view {
+            AppView::AcpChatView { .. } => true,
             AppView::ClipboardHistoryView { .. } => {
                 let has = self.selected_clipboard_entry().is_some();
                 tracing::debug!(

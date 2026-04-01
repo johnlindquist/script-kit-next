@@ -422,6 +422,37 @@ pub fn get_global_actions() -> Vec<Action> {
     vec![]
 }
 
+/// Actions available in the ACP chat view (Cmd+K menu).
+pub fn get_acp_chat_actions() -> Vec<Action> {
+    vec![
+        Action::new(
+            "acp_copy_last_response",
+            "Copy Last Response",
+            Some("Copy the most recent assistant response to clipboard".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_icon(IconName::Copy)
+        .with_section("Chat"),
+        Action::new(
+            "acp_clear_conversation",
+            "Clear Conversation",
+            Some("Start a fresh conversation".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_icon(IconName::Trash)
+        .with_section("Chat"),
+        Action::new(
+            "acp_close",
+            "Close AI Chat",
+            Some("Close this chat and return to the main menu".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_shortcut("\u{2318}W")
+        .with_icon(IconName::Close)
+        .with_section("Chat"),
+    ]
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
