@@ -126,59 +126,44 @@ fn build_permission_preview(
     args: &RequestPermissionRequest,
     options: &[AcpApprovalOption],
 ) -> AcpApprovalPreview {
-    let tool_title = args
-        .tool_call
-        .fields
-        .title
-        .as_deref()
-        .unwrap_or("unknown tool")
-        .to_string();
-
-    let tool_call_id = args.tool_call.tool_call_id.0.as_ref().to_string();
-
-    let summary = args
-        .tool_call
-        .fields
-        .content
-        .as_ref()
-        .and_then(|content| summarize_tool_call_content(content))
-        .map(|text| truncate_for_overlay(&text, 400));
-
-    let input_preview = args
-        .tool_call
-        .fields
-        .raw_input
-        .as_ref()
-        .map(|value| truncate_for_overlay(&summarize_json_value(value), 1200));
-
-    let output_preview = args
-        .tool_call
-        .fields
-        .raw_output
-        .as_ref()
-        .map(|value| truncate_for_overlay(&summarize_json_value(value), 1200));
-
-    let subject = args
-        .tool_call
-        .fields
-        .raw_input
-        .as_ref()
-        .and_then(guess_subject);
-
-    let option_summary = options
-        .iter()
-        .map(|option| format!("{} ({})", option.name, option.kind))
-        .collect();
-
-    AcpApprovalPreview {
-        tool_title,
-        tool_call_id,
-        subject,
-        summary,
-        input_preview,
-        output_preview,
-        option_summary,
-    }
+    AcpApprovalPreview::new(
+        args.tool_call
+            .fields
+            .title
+            .as_deref()
+            .unwrap_or("unknown tool"),
+        args.tool_call.tool_call_id.0.as_ref(),
+    )
+    .with_subject(
+        args.tool_call
+            .fields
+            .raw_input
+            .as_ref()
+            .and_then(guess_subject),
+    )
+    .with_summary(
+        args.tool_call
+            .fields
+            .content
+            .as_ref()
+            .and_then(|content| summarize_tool_call_content(content))
+            .map(|text| truncate_for_overlay(&text, 400)),
+    )
+    .with_input_preview(
+        args.tool_call
+            .fields
+            .raw_input
+            .as_ref()
+            .map(|value| truncate_for_overlay(&summarize_json_value(value), 1200)),
+    )
+    .with_output_preview(
+        args.tool_call
+            .fields
+            .raw_output
+            .as_ref()
+            .map(|value| truncate_for_overlay(&summarize_json_value(value), 1200)),
+    )
+    .with_options(options)
 }
 
 // ── Approval seam ──────────────────────────────────────────────────────
@@ -613,22 +598,16 @@ impl Client for ScriptKitAcpClient {
                 kind: "RejectOnce".to_string(),
             },
         ];
+        let preview = AcpApprovalPreview::new("write_text_file", "client-fs-write")
+            .with_subject(Some(path_display.clone()))
+            .with_summary(Some(format!("Write {} bytes", args.content.len())))
+            .with_input_preview(Some(truncate_for_overlay(&args.content, 1200)))
+            .with_options(&write_options);
         let selected = self
             .choose_permission(AcpApprovalRequestInput {
                 title: "ACP file write request".to_string(),
                 body: format!("Write {} bytes to {}", args.content.len(), path_display),
-                preview: Some(AcpApprovalPreview {
-                    tool_title: "write_text_file".to_string(),
-                    tool_call_id: "client-fs-write".to_string(),
-                    subject: Some(path_display.clone()),
-                    summary: Some(format!("Write {} bytes", args.content.len())),
-                    input_preview: Some(truncate_for_overlay(&args.content, 1200)),
-                    output_preview: None,
-                    option_summary: write_options
-                        .iter()
-                        .map(|o| format!("{} ({})", o.name, o.kind))
-                        .collect(),
-                }),
+                preview: Some(preview),
                 options: write_options,
             })
             .map_err(|_| Error::internal_error())?;
@@ -674,24 +653,17 @@ impl Client for ScriptKitAcpClient {
                 kind: "RejectOnce".to_string(),
             },
         ];
+        let preview = AcpApprovalPreview::new("terminal/create", "client-terminal-create")
+            .with_subject(Some(cmd_display.clone()))
+            .with_summary(Some(
+                "Spawn a subprocess owned by the ACP client".to_string(),
+            ))
+            .with_options(&term_options);
         let selected = self
             .choose_permission(AcpApprovalRequestInput {
                 title: "ACP terminal request".to_string(),
                 body: format!("terminal/create: {cmd_display}"),
-                preview: Some(AcpApprovalPreview {
-                    tool_title: "terminal/create".to_string(),
-                    tool_call_id: "client-terminal-create".to_string(),
-                    subject: Some(cmd_display.clone()),
-                    summary: Some(
-                        "Spawn a subprocess owned by the ACP client".to_string(),
-                    ),
-                    input_preview: None,
-                    output_preview: None,
-                    option_summary: term_options
-                        .iter()
-                        .map(|o| format!("{} ({})", o.name, o.kind))
-                        .collect(),
-                }),
+                preview: Some(preview),
                 options: term_options,
             })
             .map_err(|_| Error::internal_error())?;

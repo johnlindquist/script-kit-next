@@ -296,7 +296,7 @@ impl AcpThread {
         match selected_option_id
             .and_then(|id| request.options.iter().find(|opt| opt.option_id == id))
         {
-            Some(option) => format!("Permission granted \u{00b7} {} \u{00b7} {}", tool_title, option.name),
+            Some(option) => format!("Permission granted \u{00b7} {} \u{00b7} {}", tool_title, option.summary_label()),
             None => format!("Permission cancelled \u{00b7} {}", tool_title),
         }
     }
