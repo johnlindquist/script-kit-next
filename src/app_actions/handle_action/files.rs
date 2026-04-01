@@ -238,6 +238,7 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
     ) -> DispatchOutcome {
         let trace_id = &dctx.trace_id;
+        let action_id = action_id.strip_prefix("file:").unwrap_or(action_id);
         match action_id {
             "reveal_in_finder" => {
                 tracing::info!(category = "UI", "reveal in Finder action");

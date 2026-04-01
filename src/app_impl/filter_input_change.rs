@@ -653,7 +653,16 @@ impl ScriptListApp {
             self.file_search_loading = false;
             self.file_search_frozen_filter = None;
 
-            if sort_on_done {
+            // Always reapply the session sort mode when the active query
+            // resolves to a directory, even if a caller passes
+            // `sort_on_done = false`.  This keeps the user's chosen sort
+            // order across directory navigations and refreshes.
+            let is_directory_query = matches!(
+                &self.current_view,
+                AppView::FileSearchView { query, .. }
+                    if crate::file_search::parse_directory_path(query).is_some()
+            );
+            if sort_on_done || is_directory_query {
                 self.apply_file_search_sort_mode();
                 self.recompute_file_search_display_indices();
                 self.restore_file_search_selection_after_results_change(
