@@ -1082,10 +1082,7 @@ mod tests {
             ..HarnessConfig::default()
         };
         let err = validate_tab_ai_harness_config(&config).unwrap_err();
-        assert!(
-            err.contains("config.ts"),
-            "must mention config file: {err}"
-        );
+        assert!(err.contains("config.ts"), "must mention config file: {err}");
     }
 
     #[test]
@@ -1109,10 +1106,7 @@ mod tests {
             err.contains("not found on PATH"),
             "must mention PATH: {err}"
         );
-        assert!(
-            err.contains("config.ts"),
-            "must mention config file: {err}"
-        );
+        assert!(err.contains("config.ts"), "must mention config file: {err}");
     }
 
     #[test]
