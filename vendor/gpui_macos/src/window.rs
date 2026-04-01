@@ -731,6 +731,8 @@ impl MacWindow {
             let native_view = NSView::initWithFrame_(native_view, NSView::bounds(content_view));
             assert!(!native_view.is_null());
 
+            let has_no_titlebar = titlebar.is_none();
+
             let mut window = Self(Arc::new(Mutex::new(MacWindowState {
                 handle,
                 foreground_executor,
@@ -809,6 +811,33 @@ impl MacWindow {
             if titlebar.is_none_or(|titlebar| titlebar.appears_transparent) {
                 native_window.setTitlebarAppearsTransparent_(YES);
                 native_window.setTitleVisibility_(NSWindowTitleVisibility::NSWindowTitleHidden);
+            }
+
+            // Hide traffic light buttons when there is no titlebar.
+            // NSResizableWindowMask causes them to reappear even with a
+            // transparent/hidden titlebar, so explicitly hide each button.
+            if has_no_titlebar {
+                let close: id = msg_send![
+                    native_window,
+                    standardWindowButton: NSWindowButton::NSWindowCloseButton
+                ];
+                if close != nil {
+                    let _: () = msg_send![close, setHidden: YES];
+                }
+                let miniaturize: id = msg_send![
+                    native_window,
+                    standardWindowButton: NSWindowButton::NSWindowMiniaturizeButton
+                ];
+                if miniaturize != nil {
+                    let _: () = msg_send![miniaturize, setHidden: YES];
+                }
+                let zoom: id = msg_send![
+                    native_window,
+                    standardWindowButton: NSWindowButton::NSWindowZoomButton
+                ];
+                if zoom != nil {
+                    let _: () = msg_send![zoom, setHidden: YES];
+                }
             }
 
             native_view.setAutoresizingMask_(NSViewWidthSizable | NSViewHeightSizable);
