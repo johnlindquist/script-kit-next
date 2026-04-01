@@ -45,8 +45,12 @@ impl AcpChatView {
     pub(crate) fn new(thread: Entity<AcpThread>, cx: &mut Context<Self>) -> Self {
         // Auto-scroll when thread state changes (new messages, streaming updates).
         cx.observe(&thread, |this: &mut Self, thread, cx| {
-            let count = thread.read(cx).messages.len();
-            if count != this.last_message_count {
+            let thread_ref = thread.read(cx);
+            let count = thread_ref.messages.len();
+            let is_streaming = matches!(thread_ref.status, AcpThreadStatus::Streaming);
+
+            // Scroll to bottom on new messages or while streaming (content growing).
+            if count != this.last_message_count || is_streaming {
                 this.last_message_count = count;
                 this.scroll_handle.scroll_to_bottom();
             }
