@@ -9903,7 +9903,7 @@ mod from_dialog_builtin_action_validation_tests_28 {
     }
     
     #[test]
-    fn cat28_15_chat_continue_in_chat_desc_mentions_chat() {
+    fn cat28_15_chat_continue_in_chat_desc_mentions_harness() {
         let info = ChatPromptInfo {
             current_model: None,
             available_models: vec![],
@@ -9917,7 +9917,7 @@ mod from_dialog_builtin_action_validation_tests_28 {
             .as_ref()
             .unwrap()
             .to_lowercase()
-            .contains("chat"));
+            .contains("harness"));
     }
     
     #[test]

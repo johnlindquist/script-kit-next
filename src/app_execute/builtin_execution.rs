@@ -202,15 +202,14 @@ fn ai_command_keeps_main_window_visible(cmd_type: &builtins::AiCommandType) -> b
     match cmd_type {
         builtins::AiCommandType::GenerateScript
         | builtins::AiCommandType::GenerateScriptFromCurrentApp
-        | builtins::AiCommandType::OpenAi
-        | builtins::AiCommandType::MiniAi
-        | builtins::AiCommandType::NewConversation
-        | builtins::AiCommandType::ClearConversation
         | builtins::AiCommandType::SendScreenToAi
         | builtins::AiCommandType::SendFocusedWindowToAi
         | builtins::AiCommandType::SendSelectedTextToAi
         | builtins::AiCommandType::SendBrowserTabToAi
         | builtins::AiCommandType::SendScreenAreaToAi => true,
+        // Legacy aliases (OpenAi, MiniAi, NewConversation, ClearConversation)
+        // also open the harness terminal inside the main window.
+        cmd if cmd.is_legacy_harness_alias() => true,
         // Preset commands (debug-only) retain their original behavior.
         _ => false,
     }
@@ -1996,28 +1995,33 @@ impl ScriptListApp {
                     // The harness captures context inline via its own snapshot.
                     // -------------------------------------------------------
                     AiCommandType::GenerateScript => {
-                        let query = query_override.unwrap_or(&self.filter_text).to_string();
-                        let trimmed = query.trim().to_string();
-                        if trimmed.is_empty() {
-                            self.open_tab_ai_chat(cx);
+                        let request =
+                            crate::menu_bar::current_app_commands::normalize_generate_script_request(
+                                Some(query_override.unwrap_or(&self.filter_text)),
+                            )
+                            .map(str::to_string);
+                        if let Some(request) = request {
+                            self.open_tab_ai_chat_with_entry_intent(Some(request), cx);
                         } else {
-                            self.open_tab_ai_chat_with_entry_intent(Some(trimmed), cx);
+                            self.open_tab_ai_chat(cx);
                         }
                         Self::builtin_success(dctx, "ai_generate_script_routed_to_harness")
                     }
 
                     AiCommandType::GenerateScriptFromCurrentApp => {
-                        let query = query_override.unwrap_or(&self.filter_text).trim();
-                        let intent = if query.is_empty() {
-                            "Generate a Script Kit script for the frontmost app \
-                             using the current menu, selection, and browser context."
-                                .to_string()
-                        } else {
+                        let request = crate::menu_bar::current_app_commands::normalize_generate_script_from_current_app_request(
+                            Some(query_override.unwrap_or(&self.filter_text)),
+                        );
+                        let intent = if let Some(request) = request {
                             format!(
                                 "Generate a Script Kit script for the frontmost app \
                                  using the current menu, selection, and browser context. \
-                                 User request: {query}"
+                                 User request: {request}"
                             )
+                        } else {
+                            "Generate a Script Kit script for the frontmost app \
+                             using the current menu, selection, and browser context."
+                                .to_string()
                         };
                         self.open_tab_ai_chat_with_entry_intent(Some(intent), cx);
                         Self::builtin_success(
@@ -2089,14 +2093,6 @@ impl ScriptListApp {
                             cx,
                         );
                         Self::builtin_success(dctx, "ai_send_browser_tab_routed_to_harness")
-                    }
-
-                    AiCommandType::OpenAi
-                    | AiCommandType::MiniAi
-                    | AiCommandType::NewConversation
-                    | AiCommandType::ClearConversation => {
-                        self.open_tab_ai_chat(cx);
-                        Self::builtin_success(dctx, format!("ai_{cmd_type:?}_routed_to_harness"))
                     }
 
                     AiCommandType::CreateAiPreset => {
@@ -2298,6 +2294,20 @@ impl ScriptListApp {
                         self.pending_focus = Some(FocusTarget::MainFilter);
                         cx.notify();
                         Self::builtin_success(dctx, "ai_search_presets")
+                    }
+
+                    // Legacy AI aliases — all route to the harness terminal.
+                    // Classification is centralized in `AiCommandType::is_legacy_harness_alias()`.
+                    cmd => {
+                        debug_assert!(
+                            cmd.is_legacy_harness_alias(),
+                            "unexpected AiCommandType variant {cmd:?} reached legacy alias arm"
+                        );
+                        self.open_tab_ai_chat(cx);
+                        Self::builtin_success(
+                            dctx,
+                            format!("ai_{cmd:?}_routed_to_harness"),
+                        )
                     }
                 }
             }

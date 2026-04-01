@@ -86,11 +86,13 @@ pub fn get_chat_context_actions(info: &ChatPromptInfo) -> Vec<Action> {
         actions.push(action);
     }
 
+    // Compatibility-only: these actions are retained for non-primary legacy
+    // chat flows. The default AI surface is the harness terminal (Tab).
     actions.push(
         Action::new(
             "chat:continue_in_chat",
             "Continue in AI Chat",
-            Some("Opens the mini AI chat window".to_string()),
+            Some("Opens the AI harness terminal (compatibility)".to_string()),
             ActionCategory::ScriptContext,
         )
         .with_shortcut("⌘↵")
@@ -101,7 +103,7 @@ pub fn get_chat_context_actions(info: &ChatPromptInfo) -> Vec<Action> {
         Action::new(
             "chat:expand_full_chat",
             "Expand to Full Chat",
-            Some("Opens the full AI chat window".to_string()),
+            Some("Opens the AI harness terminal (compatibility)".to_string()),
             ActionCategory::ScriptContext,
         )
         .with_icon(IconName::MessageCircle),
