@@ -10,7 +10,7 @@ import type { Config } from "@scriptkit/sdk";
  * HOW TO CUSTOMIZE:
  * 1. Uncomment the options you want to change
  * 2. Modify the values to your preference
- * 3. Save the file - changes take effect on next Script Kit restart
+ * 3. Save the file - Script Kit reloads config automatically
  *
  * DOCUMENTATION:
  * - Full schema with all options: See Config interface in kit-sdk.ts
@@ -122,11 +122,16 @@ export default {
   // Dictation has no default shortcut; set it explicitly if you want one.
   // dictationHotkey: { modifiers: ["meta", "shift"], key: "KeyD" },
   // dictationHotkeyEnabled: true, // only registers when dictationHotkey is set
-
+  //
   // The selected dictation microphone is persisted separately in:
   //   ~/.scriptkit/kit/settings.json
   //   { "dictation": { "selectedDeviceId": "usb-mic" } }
-  // Use the built-in "Select Microphone" action to update this value.
+  //
+  // Behavior:
+  // - No selectedDeviceId means use the macOS default microphone
+  // - Missing saved microphone falls back to the best available device
+  // - The app clears stale microphone preferences automatically
+  // - Use the built-in "Select Microphone" action to change it
 
   // ===========================================================================
   // Command Configuration
@@ -272,7 +277,8 @@ export default {
 
   // claudeCode: {
   //   enabled: true,
-  //   permissionMode: "plan",
+  //   path: "/opt/homebrew/bin/claude",
+  //   permissionMode: "plan",            // "plan" | "dontAsk"
   //   allowedTools: "Read,Edit,Bash(git:*)",
   //   addDirs: ["/Users/you/projects"],
   // },

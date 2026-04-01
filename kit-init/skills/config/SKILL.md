@@ -12,6 +12,46 @@ Manage the files under `~/.scriptkit` that control launcher behavior, hotkeys, d
 | `~/.scriptkit/kit/theme.json` | Theme colors. | Auto-reloads |
 | `~/.scriptkit/harness.json` | Tab AI harness backend and startup behavior. | Read on next Tab AI invocation |
 
+## What Goes Where
+
+| Setting | File | Key |
+| --- | --- | --- |
+| Launcher hotkey | `~/.scriptkit/kit/config.ts` | `hotkey` |
+| Notes / AI / Logs / Dictation shortcuts | `~/.scriptkit/kit/config.ts` | `notesHotkey`, `aiHotkey`, `logsHotkey`, `dictationHotkey` |
+| Dictation microphone | `~/.scriptkit/kit/settings.json` | `dictation.selectedDeviceId` |
+| Theme preset selection | `~/.scriptkit/kit/settings.json` | `theme.presetId` |
+| Theme colors | `~/.scriptkit/kit/theme.json` | `colors.*` |
+| Layout defaults | `~/.scriptkit/kit/config.ts` | `layout` |
+| Runtime-persisted layout | `~/.scriptkit/kit/settings.json` | `layout` |
+| Claude Code provider | `~/.scriptkit/kit/config.ts` | `claudeCode` |
+
+## UI, Editor, Built-ins, and Limits
+
+These all live in `~/.scriptkit/kit/config.ts`:
+
+```typescript
+editor: "code",
+padding: {
+  top: 8,
+  left: 12,
+  right: 12,
+},
+editorFontSize: 16,
+terminalFontSize: 14,
+uiScale: 1.0,
+builtIns: {
+  clipboardHistory: true,
+  appLauncher: true,
+  windowSwitcher: true,
+},
+clipboardHistoryMaxTextLength: 100000,
+processLimits: {
+  maxMemoryMb: 512,
+  maxRuntimeSeconds: 300,
+  healthCheckIntervalMs: 5000,
+},
+```
+
 ## Main Config File
 
 ```typescript
@@ -77,11 +117,19 @@ These all live in `~/.scriptkit/kit/config.ts`:
 - `dictationHotkey` — no default; set it explicitly if you want one
 - `dictationHotkeyEnabled` — defaults to `true`
 
-## Dictation Microphone Selection
+## Dictation
 
-The dictation **shortcut** is part of `config.ts`. The selected **microphone** is not part of `config.ts`.
+Two different files are involved:
+- Shortcut registration lives in `~/.scriptkit/kit/config.ts`
+- Microphone selection lives in `~/.scriptkit/kit/settings.json`
 
-Script Kit persists it in `~/.scriptkit/kit/settings.json`:
+```typescript
+dictationHotkey: {
+  modifiers: ["meta", "shift"],
+  key: "KeyD",
+},
+dictationHotkeyEnabled: true,
+```
 
 ```json
 {
@@ -92,10 +140,10 @@ Script Kit persists it in `~/.scriptkit/kit/settings.json`:
 ```
 
 Behavior:
-- `dictationHotkeyEnabled: true` does not create a shortcut by itself; set `dictationHotkey` to register one
-- No `selectedDeviceId` → use the macOS default microphone
+- `dictationHotkeyEnabled: true` does not create a shortcut by itself; set `dictationHotkey` too
+- No `selectedDeviceId` means use the macOS default microphone
 - Use the built-in **Select Microphone** action to persist a device
-- Saved microphone missing → fall back to the best available device and clear the stale preference
+- If the saved microphone is missing, Script Kit falls back to the best available device and clears the stale preference
 
 ## Command Overrides
 

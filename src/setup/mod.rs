@@ -439,6 +439,9 @@ pub fn ensure_kit_setup() -> SetupResult {
         ensure_dir(&dir, &mut warnings);
     }
 
+    // Migrate legacy kit/skills → root skills (idempotent)
+    migrate_legacy_skills_to_workspace_root(&kit_dir, &mut warnings);
+
     // App-managed: SDK (refresh if changed)
     let sdk_path = kit_dir.join("sdk").join("kit-sdk.ts");
     write_string_if_changed(&sdk_path, EMBEDDED_SDK, &mut warnings, "sdk/kit-sdk.ts");
@@ -939,6 +942,145 @@ fn ensure_dir(path: &Path, warnings: &mut Vec<String>) {
         debug!(path = %path.display(), "Created directory");
     }
 }
+/// Migrate files from legacy `~/.scriptkit/kit/skills/` into root `~/.scriptkit/skills/`.
+/// Existing root files are preserved; conflicts are skipped with a warning.
+/// Empty legacy directories are removed after migration.
+fn migrate_legacy_skills_to_workspace_root(kit_dir: &Path, warnings: &mut Vec<String>) {
+    let legacy_skills_dir = kit_dir.join("kit").join("skills");
+    let root_skills_dir = kit_dir.join("skills");
+
+    if !legacy_skills_dir.exists() || !legacy_skills_dir.is_dir() {
+        return;
+    }
+
+    if let Err(error) = fs::create_dir_all(&root_skills_dir) {
+        warnings.push(format!(
+            "Failed to create root skills directory {}: {}",
+            root_skills_dir.display(),
+            error
+        ));
+        return;
+    }
+
+    merge_move_directory_contents(&legacy_skills_dir, &root_skills_dir, warnings);
+    remove_dir_if_empty(&legacy_skills_dir, warnings);
+}
+
+/// Recursively merge-move `src_dir` contents into `dst_dir`.
+/// Files already present at the destination are skipped.
+/// Directories are merged recursively; empty source dirs are removed afterward.
+fn merge_move_directory_contents(src_dir: &Path, dst_dir: &Path, warnings: &mut Vec<String>) {
+    let entries = match fs::read_dir(src_dir) {
+        Ok(entries) => entries,
+        Err(error) => {
+            warnings.push(format!(
+                "Failed to read legacy skills directory {}: {}",
+                src_dir.display(),
+                error
+            ));
+            return;
+        }
+    };
+
+    for entry in entries {
+        let entry = match entry {
+            Ok(entry) => entry,
+            Err(error) => {
+                warnings.push(format!(
+                    "Failed to read legacy skills entry in {}: {}",
+                    src_dir.display(),
+                    error
+                ));
+                continue;
+            }
+        };
+
+        let src_path = entry.path();
+        let dst_path = dst_dir.join(entry.file_name());
+
+        if src_path.is_dir() {
+            if dst_path.exists() {
+                if !dst_path.is_dir() {
+                    warnings.push(format!(
+                        "Cannot merge legacy skills directory {} into non-directory {}",
+                        src_path.display(),
+                        dst_path.display()
+                    ));
+                    continue;
+                }
+                merge_move_directory_contents(&src_path, &dst_path, warnings);
+                remove_dir_if_empty(&src_path, warnings);
+                continue;
+            }
+
+            if let Err(error) = fs::rename(&src_path, &dst_path) {
+                warnings.push(format!(
+                    "Failed to move legacy skills directory {} -> {}: {}",
+                    src_path.display(),
+                    dst_path.display(),
+                    error
+                ));
+            } else {
+                info!(
+                    from = %src_path.display(),
+                    to = %dst_path.display(),
+                    "Moved legacy skills directory"
+                );
+            }
+            continue;
+        }
+
+        if dst_path.exists() {
+            debug!(
+                from = %src_path.display(),
+                to = %dst_path.display(),
+                "Skipping legacy skill file because destination already exists"
+            );
+            continue;
+        }
+
+        if let Err(error) = fs::rename(&src_path, &dst_path) {
+            warnings.push(format!(
+                "Failed to move legacy skills file {} -> {}: {}",
+                src_path.display(),
+                dst_path.display(),
+                error
+            ));
+        } else {
+            info!(
+                from = %src_path.display(),
+                to = %dst_path.display(),
+                "Moved legacy skill file"
+            );
+        }
+    }
+}
+
+/// Remove a directory only if it is empty.
+fn remove_dir_if_empty(path: &Path, warnings: &mut Vec<String>) {
+    let mut entries = match fs::read_dir(path) {
+        Ok(entries) => entries,
+        Err(error) => {
+            warnings.push(format!(
+                "Failed to inspect directory {} for cleanup: {}",
+                path.display(),
+                error
+            ));
+            return;
+        }
+    };
+
+    if entries.next().is_none() {
+        if let Err(error) = fs::remove_dir(path) {
+            warnings.push(format!(
+                "Failed to remove empty directory {}: {}",
+                path.display(),
+                error
+            ));
+        }
+    }
+}
+
 fn write_string_if_missing(path: &Path, contents: &str, warnings: &mut Vec<String>, label: &str) {
     if path.exists() {
         return;
