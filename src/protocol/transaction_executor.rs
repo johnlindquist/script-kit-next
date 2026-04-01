@@ -34,6 +34,9 @@ pub trait TransactionStateProvider {
     /// Select a choice by value, optionally submitting. Returns the matched
     /// value or `None` if no choice matched.
     fn select_by_value(&mut self, value: &str, submit: bool) -> Result<Option<String>>;
+    /// Select a choice by semantic ID, optionally submitting. Returns the
+    /// matched value or `None` if no element matched the semantic ID.
+    fn select_by_semantic_id(&mut self, semantic_id: &str, submit: bool) -> Result<Option<String>>;
 }
 
 // ── Condition matching ─────────────────────────────────────────────────────
@@ -148,6 +151,7 @@ fn command_name(command: &BatchCommand) -> &'static str {
         BatchCommand::SetInput { .. } => "setInput",
         BatchCommand::WaitFor { .. } => "waitFor",
         BatchCommand::SelectByValue { .. } => "selectByValue",
+        BatchCommand::SelectBySemanticId { .. } => "selectBySemanticId",
         BatchCommand::FilterAndSelect { .. } => "filterAndSelect",
         BatchCommand::TypeAndSubmit { .. } => "typeAndSubmit",
     }
@@ -462,6 +466,74 @@ pub fn execute_batch<P: TransactionStateProvider>(
                             suggestion: Some(
                                 "Verify the current choice is selectable and the \
                                  window is focused before selecting."
+                                    .to_string(),
+                            ),
+                        });
+                        None
+                    }
+                };
+
+                let elapsed_ms = cmd_started.elapsed().as_millis() as u64;
+                let after = provider.snapshot();
+                let success = error.is_none();
+
+                results.push(BatchResultEntry {
+                    index,
+                    success,
+                    command: command_name(command).to_string(),
+                    elapsed: Some(elapsed_ms),
+                    value: selected,
+                    error: error.clone(),
+                });
+                command_traces.push(TransactionCommandTrace {
+                    index,
+                    command: command_name(command).to_string(),
+                    started_at_ms: cmd_started_at,
+                    elapsed_ms,
+                    before,
+                    after,
+                    polls: Vec::new(),
+                    error,
+                });
+
+                if !success {
+                    failed_at = Some(index);
+                    if stop_on_error {
+                        break;
+                    }
+                }
+            }
+
+            BatchCommand::SelectBySemanticId {
+                semantic_id,
+                submit,
+            } => {
+                let cmd_started_at = now_epoch_ms();
+                let cmd_started = Instant::now();
+                let before = provider.snapshot();
+                let mut error = None;
+
+                let selected = match provider.select_by_semantic_id(semantic_id, *submit) {
+                    Ok(Some(v)) => Some(v),
+                    Ok(None) => {
+                        error = Some(TransactionError {
+                            code: TransactionErrorCode::SelectionNotFound,
+                            message: format!("selectBySemanticId could not find '{semantic_id}'"),
+                            suggestion: Some(
+                                "Run getElements to discover visible semantic IDs, \
+                                 or waitFor elementExists before selecting."
+                                    .to_string(),
+                            ),
+                        });
+                        None
+                    }
+                    Err(e) => {
+                        error = Some(TransactionError {
+                            code: TransactionErrorCode::ActionFailed,
+                            message: format!("selectBySemanticId failed: {e}"),
+                            suggestion: Some(
+                                "Verify the current view supports element selection \
+                                 and the window is focused."
                                     .to_string(),
                             ),
                         });

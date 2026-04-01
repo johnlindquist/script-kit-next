@@ -46,6 +46,37 @@ fn batch_command_select_by_value_defaults_submit_false() {
 }
 
 #[test]
+fn batch_command_select_by_semantic_id_round_trips() {
+    let cmd = BatchCommand::SelectBySemanticId {
+        semantic_id: "choice:0:apple".to_string(),
+        submit: true,
+    };
+    let json = serde_json::to_value(&cmd).expect("serialize selectBySemanticId");
+    assert_eq!(json["type"], "selectBySemanticId");
+    assert_eq!(json["semanticId"], "choice:0:apple");
+    assert_eq!(json["submit"], true);
+
+    let back: BatchCommand = serde_json::from_value(json).expect("deserialize selectBySemanticId");
+    assert_eq!(back, cmd);
+}
+
+#[test]
+fn batch_command_select_by_semantic_id_defaults_submit_false() {
+    let json = serde_json::json!({"type": "selectBySemanticId", "semanticId": "choice:2:banana"});
+    let cmd: BatchCommand = serde_json::from_value(json).expect("deserialize");
+    match cmd {
+        BatchCommand::SelectBySemanticId {
+            semantic_id,
+            submit,
+        } => {
+            assert_eq!(semantic_id, "choice:2:banana");
+            assert!(!submit, "submit should default to false");
+        }
+        other => panic!("Expected SelectBySemanticId, got: {:?}", other),
+    }
+}
+
+#[test]
 fn batch_command_filter_and_select_round_trips() {
     let cmd = BatchCommand::FilterAndSelect {
         filter: "app".to_string(),
