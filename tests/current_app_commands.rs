@@ -1,4 +1,4 @@
-//! Integration tests for the "Current App Commands" built-in.
+//! Integration tests for current-app command routing and built-ins.
 //!
 //! These tests verify registration, snapshot contract, and entry shaping
 //! without requiring a live frontmost app or Accessibility permission.
@@ -35,36 +35,28 @@ fn do_in_current_app_builtin_is_registered() {
         BuiltInFeature::UtilityCommand(UtilityCommandType::DoInCurrentApp)
     );
 
-    // Must appear before builtin-current-app-commands
     let do_pos = entries
         .iter()
         .position(|e| e.id == "builtin-do-in-current-app")
         .unwrap();
-    let cmd_pos = entries
+    let turn_pos = entries
         .iter()
-        .position(|e| e.id == "builtin-current-app-commands")
+        .position(|e| e.id == "builtin-turn-this-into-a-command")
         .unwrap();
     assert!(
-        do_pos < cmd_pos,
-        "builtin-do-in-current-app (pos {}) must appear before builtin-current-app-commands (pos {})",
-        do_pos, cmd_pos
+        do_pos < turn_pos,
+        "builtin-do-in-current-app should appear before builtin-turn-this-into-a-command"
     );
 }
 
 #[test]
-fn current_app_commands_builtin_is_registered() {
+fn current_app_commands_builtin_is_no_longer_registered() {
     let entries = builtins::get_builtin_entries(&BuiltInConfig::default());
-    let found = entries
-        .iter()
-        .find(|e| e.id == "builtin-current-app-commands");
     assert!(
-        found.is_some(),
-        "builtin-current-app-commands must be in the registry"
-    );
-    let entry = found.unwrap();
-    assert_eq!(
-        entry.feature,
-        BuiltInFeature::UtilityCommand(UtilityCommandType::CurrentAppCommands)
+        entries
+            .iter()
+            .all(|e| e.id != "builtin-current-app-commands"),
+        "builtin-current-app-commands should no longer be in the registry"
     );
 }
 
@@ -646,18 +638,9 @@ fn turn_this_into_a_command_builtin_is_registered() {
         .iter()
         .position(|e| e.id == "builtin-turn-this-into-a-command")
         .unwrap();
-    let cmd_pos = entries
-        .iter()
-        .position(|e| e.id == "builtin-current-app-commands")
-        .unwrap();
-
     assert!(
         do_pos < turn_pos,
         "Turn This Into a Command should follow Do in Current App"
-    );
-    assert!(
-        turn_pos < cmd_pos,
-        "Turn This Into a Command should appear before Current App Commands"
     );
 }
 

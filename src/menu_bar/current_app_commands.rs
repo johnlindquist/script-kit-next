@@ -125,19 +125,67 @@ pub struct DoInCurrentAppReceipt {
     pub action: &'static str,
 }
 
-/// Returns `None` when the raw input is empty, whitespace-only, or matches the
-/// built-in label (case-insensitive). Otherwise returns the trimmed input.
+/// Compatibility-only label kept so old phrases like
+/// "Current App Commands: Close Duplicate Tabs" still normalize through the
+/// primary current-app router after the visible command is removed.
+pub const CURRENT_APP_COMMANDS_COMPAT_LABEL: &str = "Current App Commands";
+
+/// Returns the effective user request for the primary current-app command.
+///
+/// Behavior:
+/// - empty / whitespace-only -> None
+/// - exact "Do in Current App" -> None
+/// - exact "Current App Commands" -> None
+/// - "Do in Current App <request>" -> Some("<request>")
+/// - "Current App Commands <request>" -> Some("<request>")
+/// - anything else -> Some(trimmed raw input)
 pub fn normalize_do_in_current_app_request(raw: Option<&str>) -> Option<&str> {
     tracing::info!(raw_input = ?raw, "do_in_current_app.normalize_request.entry");
     let raw = raw.map(str::trim).filter(|text| !text.is_empty())?;
 
-    if raw.eq_ignore_ascii_case(DO_IN_CURRENT_APP_LABEL) {
-        tracing::info!(raw = %raw, "do_in_current_app.normalize_request → None (matches label, treated as empty)");
-        None
-    } else {
-        tracing::info!(raw = %raw, "do_in_current_app.normalize_request → Some (real query)");
-        Some(raw)
+    let raw_lower = raw.to_ascii_lowercase();
+
+    for label in [DO_IN_CURRENT_APP_LABEL, CURRENT_APP_COMMANDS_COMPAT_LABEL] {
+        let label_lower = label.to_ascii_lowercase();
+
+        if raw_lower == label_lower {
+            tracing::info!(
+                raw = %raw,
+                label = %label,
+                "do_in_current_app.normalize_request → None (matches label, treated as empty)"
+            );
+            return None;
+        }
+
+        if raw_lower.starts_with(&label_lower) {
+            let rest = raw[label.len()..]
+                .trim_start_matches(|ch: char| {
+                    ch.is_ascii_whitespace()
+                        || matches!(ch, ':' | '-' | '\u{2014}' | '\u{2013}')
+                })
+                .trim();
+
+            if rest.is_empty() {
+                tracing::info!(
+                    raw = %raw,
+                    label = %label,
+                    "do_in_current_app.normalize_request → None (label prefix with empty query)"
+                );
+                return None;
+            }
+
+            tracing::info!(
+                raw = %raw,
+                label = %label,
+                rest = %rest,
+                "do_in_current_app.normalize_request → Some (stripped labeled query)"
+            );
+            return Some(rest);
+        }
     }
+
+    tracing::info!(raw = %raw, "do_in_current_app.normalize_request → Some (real query)");
+    Some(raw)
 }
 
 fn normalize_intent_match_text(text: &str) -> String {
@@ -1460,6 +1508,45 @@ mod tests {
         );
         assert_eq!(normalize_do_in_current_app_request(Some("   ")), None);
         assert_eq!(normalize_do_in_current_app_request(None), None);
+    }
+
+    #[test]
+    fn normalize_do_in_current_app_request_drops_compat_label() {
+        assert_eq!(
+            normalize_do_in_current_app_request(Some("Current App Commands")),
+            None
+        );
+        assert_eq!(
+            normalize_do_in_current_app_request(Some("current app commands")),
+            None
+        );
+    }
+
+    #[test]
+    fn normalize_do_in_current_app_request_strips_label_prefix() {
+        assert_eq!(
+            normalize_do_in_current_app_request(Some(
+                "Do in Current App close duplicate tabs"
+            )),
+            Some("close duplicate tabs")
+        );
+        assert_eq!(
+            normalize_do_in_current_app_request(Some(
+                "Current App Commands: close duplicate tabs"
+            )),
+            Some("close duplicate tabs")
+        );
+        assert_eq!(
+            normalize_do_in_current_app_request(Some(
+                "Current App Commands - open new window"
+            )),
+            Some("open new window")
+        );
+        // Label prefix with only separator chars → None
+        assert_eq!(
+            normalize_do_in_current_app_request(Some("Do in Current App:  ")),
+            None
+        );
     }
 
     // -----------------------------------------------------------------------

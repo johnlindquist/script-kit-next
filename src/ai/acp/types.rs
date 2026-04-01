@@ -1,7 +1,3 @@
-use std::path::PathBuf;
-
-use crate::ai::providers::{ProviderMessage, StreamCallback};
-
 /// Maps a Script Kit UI session to the ACP session ID returned by `session/new`.
 #[derive(Debug, Clone)]
 pub(crate) struct AcpSessionBinding {
@@ -11,25 +7,12 @@ pub(crate) struct AcpSessionBinding {
     pub agent_session_id: String,
 }
 
-/// Commands sent from the GPUI thread to the ACP worker thread via bounded channel.
-pub(crate) enum AcpCommand {
-    /// Send a prompt and stream chunks back through the callback.
-    StreamPrompt {
-        ui_session_id: String,
-        cwd: PathBuf,
-        messages: Vec<ProviderMessage>,
-        on_chunk: StreamCallback,
-        /// The worker sends a single `Result<()>` when the prompt completes or errors.
-        reply_tx: async_channel::Sender<anyhow::Result<()>>,
-    },
-}
-
 /// Convert `ProviderMessage` list into ACP `ContentBlock` list.
 ///
 /// Only emits text blocks in this cycle. Images/audio fail closed — they are
 /// logged and skipped rather than being silently passed through.
 pub(crate) fn build_prompt_blocks(
-    messages: &[ProviderMessage],
+    messages: &[crate::ai::providers::ProviderMessage],
 ) -> Vec<agent_client_protocol::ContentBlock> {
     let mut blocks = Vec::new();
     for msg in messages {
@@ -60,6 +43,7 @@ pub(crate) fn build_prompt_blocks(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ai::providers::ProviderMessage;
 
     #[test]
     fn build_prompt_blocks_text_only() {

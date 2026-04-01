@@ -21,18 +21,21 @@ use serde_json::value::RawValue;
 
 use crate::ai::providers::StreamCallback;
 
+use super::events::{AcpEvent, AcpEventTx};
+use super::permission_broker::{AcpApprovalOption, AcpApprovalRequestInput};
+
 // ── Approval seam ──────────────────────────────────────────────────────
 
 /// Callback type for permission/approval decisions.
 ///
-/// Parameters: `(title, body)`. Returns `Ok(true)` to approve, `Ok(false)`
-/// to deny. In production this shows a GPUI confirm dialog; in tests it can
-/// be a simple closure.
-pub(crate) type ApprovalFn = Arc<dyn Fn(&str, &str) -> anyhow::Result<bool> + Send + Sync>;
+/// Receives the full set of ACP permission options and returns
+/// `Ok(Some(option_id))` for the selected option, or `Ok(None)` to cancel.
+pub(crate) type ApprovalFn =
+    Arc<dyn Fn(AcpApprovalRequestInput) -> anyhow::Result<Option<String>> + Send + Sync>;
 
-/// Returns a default approval function that denies everything.
+/// Returns a default approval function that cancels everything.
 fn default_deny() -> ApprovalFn {
-    Arc::new(|_title, _body| Ok(false))
+    Arc::new(|_request| Ok(None))
 }
 
 // ── Terminal entry ─────────────────────────────────────────────────────
@@ -117,9 +120,13 @@ impl TerminalEntry {
 /// Lives on the dedicated Tokio worker thread and is **not Send** (the ACP
 /// crate's `Client` trait is `?Send`). Streaming chunks are forwarded to
 /// the GPUI thread through the `on_chunk` callback which IS `Send + Sync`.
+///
+/// Event sinks provide typed event streaming for the ACP chat view path.
 pub(crate) struct ScriptKitAcpClient {
-    /// Current streaming callback.
+    /// Current streaming callback (legacy AiProvider path).
     pub(crate) on_chunk: Arc<parking_lot::Mutex<Option<StreamCallback>>>,
+    /// Per-session event sinks for typed ACP event streaming.
+    pub(crate) event_sinks: Arc<parking_lot::Mutex<HashMap<String, AcpEventTx>>>,
     /// Injectable approval function for permission/write/terminal gates.
     approve: ApprovalFn,
     /// Registry of active terminal processes.
@@ -138,15 +145,38 @@ impl ScriptKitAcpClient {
     pub(crate) fn with_approval(approve: ApprovalFn) -> Self {
         Self {
             on_chunk: Arc::new(parking_lot::Mutex::new(None)),
+            event_sinks: Arc::new(parking_lot::Mutex::new(HashMap::new())),
             approve,
             terminals: std::cell::RefCell::new(HashMap::new()),
             next_terminal_id: std::cell::Cell::new(1),
         }
     }
 
-    /// Ask the approval seam for a decision.
-    fn approve_or_deny(&self, title: &str, body: &str) -> anyhow::Result<bool> {
-        (self.approve)(title, body)
+    /// Bind an event sink for a specific ACP session.
+    pub(crate) fn bind_event_sink(&self, session_id: &str, tx: AcpEventTx) {
+        self.event_sinks
+            .lock()
+            .insert(session_id.to_string(), tx);
+    }
+
+    /// Remove the event sink for a specific ACP session.
+    pub(crate) fn clear_event_sink(&self, session_id: &str) {
+        self.event_sinks.lock().remove(session_id);
+    }
+
+    /// Emit a typed event to the sink bound to the given session.
+    fn emit_event(&self, session_id: &agent_client_protocol::SessionId, event: AcpEvent) {
+        if let Some(tx) = self.event_sinks.lock().get(session_id.0.as_ref()).cloned() {
+            let _ = tx.send_blocking(event);
+        }
+    }
+
+    /// Route a permission request through the approval function.
+    fn choose_permission(
+        &self,
+        request: AcpApprovalRequestInput,
+    ) -> anyhow::Result<Option<String>> {
+        (self.approve)(request)
     }
 
     /// Generate a unique terminal ID.
@@ -173,50 +203,46 @@ impl Client for ScriptKitAcpClient {
             .unwrap_or("unknown tool");
         let tool_id = args.tool_call.tool_call_id.0.as_ref();
 
-        let body = format!(
-            "Tool: {tool_title}\nTool call ID: {tool_id}\nOptions: {}",
-            args.options
-                .iter()
-                .map(|o| o.name.as_str())
-                .collect::<Vec<_>>()
-                .join(", ")
-        );
+        let options: Vec<AcpApprovalOption> = args
+            .options
+            .iter()
+            .map(|option| AcpApprovalOption {
+                option_id: option.option_id.0.as_ref().to_string(),
+                name: option.name.to_string(),
+                kind: format!("{:?}", option.kind),
+            })
+            .collect();
 
-        let approved = self
-            .approve_or_deny("ACP permission request", &body)
+        let selected_id = self
+            .choose_permission(AcpApprovalRequestInput {
+                title: "ACP permission request".to_string(),
+                body: format!("Tool: {tool_title}\nTool call ID: {tool_id}"),
+                options,
+            })
             .map_err(|_| Error::internal_error())?;
 
-        if approved {
-            // Pick the first allow-style option, falling back to first option
-            let selected = args
-                .options
+        let selected = selected_id.and_then(|id| {
+            args.options
                 .iter()
-                .find(|o| {
-                    matches!(
-                        o.kind,
-                        PermissionOptionKind::AllowOnce | PermissionOptionKind::AllowAlways
-                    )
-                })
-                .or(args.options.first());
+                .find(|option| option.option_id.0.as_ref() == id)
+                .cloned()
+        });
 
-            match selected {
-                Some(opt) => Ok(RequestPermissionResponse::new(
-                    RequestPermissionOutcome::Selected(SelectedPermissionOutcome::new(
-                        opt.option_id.clone(),
-                    )),
+        match selected {
+            Some(option) => Ok(RequestPermissionResponse::new(
+                RequestPermissionOutcome::Selected(SelectedPermissionOutcome::new(
+                    option.option_id,
                 )),
-                None => Ok(RequestPermissionResponse::new(
+            )),
+            None => {
+                tracing::info!(
+                    tool_call_id = tool_id,
+                    "acp_permission_denied_by_approval_seam"
+                );
+                Ok(RequestPermissionResponse::new(
                     RequestPermissionOutcome::Cancelled,
-                )),
+                ))
             }
-        } else {
-            tracing::info!(
-                tool_call_id = tool_id,
-                "acp_permission_denied_by_approval_seam"
-            );
-            Ok(RequestPermissionResponse::new(
-                RequestPermissionOutcome::Cancelled,
-            ))
         }
     }
 
@@ -224,12 +250,26 @@ impl Client for ScriptKitAcpClient {
 
     async fn session_notification(&self, args: SessionNotification) -> Result<()> {
         match &args.update {
+            SessionUpdate::UserMessageChunk(chunk) => {
+                if let agent_client_protocol::ContentBlock::Text(text) = &chunk.content {
+                    self.emit_event(
+                        &args.session_id,
+                        AcpEvent::UserMessageDelta(text.text.clone()),
+                    );
+                }
+            }
             SessionUpdate::AgentMessageChunk(chunk) => {
                 if let agent_client_protocol::ContentBlock::Text(text) = &chunk.content {
+                    // Forward to legacy callback path
                     let guard = self.on_chunk.lock();
                     if let Some(cb) = guard.as_ref() {
                         let _continue = cb(text.text.clone());
                     }
+                    // Forward to typed event sink
+                    self.emit_event(
+                        &args.session_id,
+                        AcpEvent::AgentMessageDelta(text.text.clone()),
+                    );
                 }
             }
             SessionUpdate::AgentThoughtChunk(chunk) => {
@@ -238,6 +278,10 @@ impl Client for ScriptKitAcpClient {
                         session_id = %args.session_id.0,
                         thought_len = text.text.len(),
                         "acp_agent_thought"
+                    );
+                    self.emit_event(
+                        &args.session_id,
+                        AcpEvent::AgentThoughtDelta(text.text.clone()),
                     );
                 }
             }
@@ -249,12 +293,28 @@ impl Client for ScriptKitAcpClient {
                     status = ?tc.status,
                     "acp_tool_call"
                 );
+                self.emit_event(
+                    &args.session_id,
+                    AcpEvent::ToolCallStarted {
+                        tool_call_id: tc.tool_call_id.0.as_ref().to_string(),
+                        title: tc.title.to_string(),
+                        status: format!("{:?}", tc.status),
+                    },
+                );
             }
             SessionUpdate::ToolCallUpdate(tcu) => {
                 tracing::debug!(
                     session_id = %args.session_id.0,
                     tool_call_id = ?tcu.tool_call_id,
                     "acp_tool_call_update"
+                );
+                self.emit_event(
+                    &args.session_id,
+                    AcpEvent::ToolCallUpdated {
+                        tool_call_id: tcu.tool_call_id.0.as_ref().to_string(),
+                        status: Some(format!("{:?}", tcu)),
+                        body: None,
+                    },
                 );
             }
             SessionUpdate::Plan(plan) => {
@@ -263,6 +323,16 @@ impl Client for ScriptKitAcpClient {
                     entries = plan.entries.len(),
                     "acp_plan_received"
                 );
+                self.emit_event(
+                    &args.session_id,
+                    AcpEvent::PlanUpdated {
+                        entries: plan
+                            .entries
+                            .iter()
+                            .map(|entry| entry.content.clone())
+                            .collect(),
+                    },
+                );
             }
             SessionUpdate::CurrentModeUpdate(mode) => {
                 tracing::info!(
@@ -270,12 +340,28 @@ impl Client for ScriptKitAcpClient {
                     mode = %mode.current_mode_id.0,
                     "acp_mode_change"
                 );
+                self.emit_event(
+                    &args.session_id,
+                    AcpEvent::ModeChanged {
+                        mode_id: mode.current_mode_id.0.as_ref().to_string(),
+                    },
+                );
             }
             SessionUpdate::AvailableCommandsUpdate(cmds) => {
                 tracing::debug!(
                     session_id = %args.session_id.0,
                     count = cmds.available_commands.len(),
                     "acp_commands_update"
+                );
+                self.emit_event(
+                    &args.session_id,
+                    AcpEvent::AvailableCommandsUpdated {
+                        command_names: cmds
+                            .available_commands
+                            .iter()
+                            .map(|command| command.name.to_string())
+                            .collect(),
+                    },
                 );
             }
             _ => {
@@ -334,12 +420,25 @@ impl Client for ScriptKitAcpClient {
         let path_display = args.path.display().to_string();
         tracing::info!(path = %path_display, content_len = args.content.len(), "acp_write_text_file_request");
 
-        let approved = self
-            .approve_or_deny(
-                "ACP file write request",
-                &format!("Write {} bytes to {}", args.content.len(), path_display),
-            )
+        let selected = self
+            .choose_permission(AcpApprovalRequestInput {
+                title: "ACP file write request".to_string(),
+                body: format!("Write {} bytes to {}", args.content.len(), path_display),
+                options: vec![
+                    AcpApprovalOption {
+                        option_id: "allow".to_string(),
+                        name: "Allow".to_string(),
+                        kind: "AllowOnce".to_string(),
+                    },
+                    AcpApprovalOption {
+                        option_id: "deny".to_string(),
+                        name: "Deny".to_string(),
+                        kind: "RejectOnce".to_string(),
+                    },
+                ],
+            })
             .map_err(|_| Error::internal_error())?;
+        let approved = selected.is_some();
 
         if !approved {
             tracing::info!(path = %path_display, "acp_write_text_file_denied");
@@ -369,12 +468,25 @@ impl Client for ScriptKitAcpClient {
         let cmd_display = format!("{} {}", args.command, args.args.join(" "));
         tracing::info!(command = %cmd_display, "acp_create_terminal_request");
 
-        let approved = self
-            .approve_or_deny(
-                "ACP terminal request",
-                &format!("terminal/create: {cmd_display}"),
-            )
+        let selected = self
+            .choose_permission(AcpApprovalRequestInput {
+                title: "ACP terminal request".to_string(),
+                body: format!("terminal/create: {cmd_display}"),
+                options: vec![
+                    AcpApprovalOption {
+                        option_id: "allow".to_string(),
+                        name: "Allow".to_string(),
+                        kind: "AllowOnce".to_string(),
+                    },
+                    AcpApprovalOption {
+                        option_id: "deny".to_string(),
+                        name: "Deny".to_string(),
+                        kind: "RejectOnce".to_string(),
+                    },
+                ],
+            })
             .map_err(|_| Error::internal_error())?;
+        let approved = selected.is_some();
 
         if !approved {
             tracing::info!(command = %cmd_display, "acp_create_terminal_denied");
@@ -549,25 +661,42 @@ mod tests {
     // ── Approval seam tests ────────────────────────────────────────────
 
     #[test]
-    fn approval_hook_defaults_to_deny() {
+    fn approval_hook_defaults_to_cancel() {
         let client = ScriptKitAcpClient::new();
-        let allowed = client
-            .approve_or_deny("ACP permission request", "write /tmp/file.txt")
+        let result = client
+            .choose_permission(AcpApprovalRequestInput {
+                title: "ACP permission request".to_string(),
+                body: "write /tmp/file.txt".to_string(),
+                options: vec![AcpApprovalOption {
+                    option_id: "allow".to_string(),
+                    name: "Allow".to_string(),
+                    kind: "AllowOnce".to_string(),
+                }],
+            })
             .expect("approval hook should not error");
-        assert!(!allowed);
+        assert!(result.is_none());
     }
 
     #[test]
     fn approval_hook_can_be_overridden_for_verification() {
-        let client = ScriptKitAcpClient::with_approval(Arc::new(|title, body| {
-            assert_eq!(title, "ACP permission request");
-            assert!(body.contains("terminal/create"));
-            Ok(true)
+        let client = ScriptKitAcpClient::with_approval(Arc::new(|input| {
+            assert_eq!(input.title, "ACP permission request");
+            assert!(input.body.contains("terminal/create"));
+            // Return the first option ID
+            Ok(input.options.first().map(|o| o.option_id.clone()))
         }));
-        let allowed = client
-            .approve_or_deny("ACP permission request", "terminal/create: git status")
+        let result = client
+            .choose_permission(AcpApprovalRequestInput {
+                title: "ACP permission request".to_string(),
+                body: "terminal/create: git status".to_string(),
+                options: vec![AcpApprovalOption {
+                    option_id: "allow-once".to_string(),
+                    name: "Allow once".to_string(),
+                    kind: "AllowOnce".to_string(),
+                }],
+            })
             .expect("approval hook should not error");
-        assert!(allowed);
+        assert_eq!(result, Some("allow-once".to_string()));
     }
 
     #[test]
@@ -607,14 +736,21 @@ mod tests {
     }
 
     #[test]
-    fn request_permission_approved_selects_allow_option() {
+    fn request_permission_approved_selects_exact_option() {
         run_local(async {
             use agent_client_protocol::{
                 PermissionOption, PermissionOptionId, PermissionOptionKind, SessionId, ToolCallId,
                 ToolCallUpdate, ToolCallUpdateFields,
             };
 
-            let client = ScriptKitAcpClient::with_approval(Arc::new(|_, _| Ok(true)));
+            // Approval function that picks the "allow-once" option by ID
+            let client = ScriptKitAcpClient::with_approval(Arc::new(|input| {
+                Ok(input
+                    .options
+                    .iter()
+                    .find(|o| o.option_id == "allow-once")
+                    .map(|o| o.option_id.clone()))
+            }));
 
             let request = RequestPermissionRequest::new(
                 SessionId::new("sess-1"),
@@ -669,7 +805,9 @@ mod tests {
         run_local(async {
             use agent_client_protocol::SessionId;
 
-            let client = ScriptKitAcpClient::with_approval(Arc::new(|_, _| Ok(true)));
+            let client = ScriptKitAcpClient::with_approval(Arc::new(|input| {
+                Ok(input.options.first().map(|o| o.option_id.clone()))
+            }));
 
             let dir = std::env::temp_dir().join("acp-handler-test");
             let _ = std::fs::create_dir_all(&dir);
@@ -709,7 +847,9 @@ mod tests {
         run_local(async {
             use agent_client_protocol::SessionId;
 
-            let client = ScriptKitAcpClient::with_approval(Arc::new(|_, _| Ok(true)));
+            let client = ScriptKitAcpClient::with_approval(Arc::new(|input| {
+                Ok(input.options.first().map(|o| o.option_id.clone()))
+            }));
 
             // Create terminal running `echo hello`
             let request = CreateTerminalRequest::new(SessionId::new("sess-1"), "echo")
@@ -751,7 +891,9 @@ mod tests {
         run_local(async {
             use agent_client_protocol::SessionId;
 
-            let client = ScriptKitAcpClient::with_approval(Arc::new(|_, _| Ok(true)));
+            let client = ScriptKitAcpClient::with_approval(Arc::new(|input| {
+                Ok(input.options.first().map(|o| o.option_id.clone()))
+            }));
 
             // Create a long-running process
             let request = CreateTerminalRequest::new(SessionId::new("sess-1"), "sleep")
