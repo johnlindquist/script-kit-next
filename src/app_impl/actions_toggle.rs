@@ -253,6 +253,7 @@ impl ScriptListApp {
             // Open actions as a separate window with vibrancy blur
             self.begin_actions_popup_window_open(cx, window);
 
+            let is_acp_chat = matches!(self.current_view, AppView::AcpChatView { .. });
             let script_info = self.get_focused_script_info();
 
             // Get the full scriptlet with actions if focused item is a scriptlet
@@ -264,12 +265,27 @@ impl ScriptListApp {
             // Create the dialog entity
             let dialog = cx.new(|cx| {
                 let focus_handle = cx.focus_handle();
-                let mut dialog = ActionsDialog::with_script(
-                    focus_handle,
-                    std::sync::Arc::new(|_action_id| {}), // Callback handled via main app
-                    script_info.clone(),
-                    theme_arc,
-                );
+                let mut dialog = if is_acp_chat {
+                    // ACP chat view: use chat-specific actions
+                    ActionsDialog::from_actions_with_context(
+                        focus_handle,
+                        std::sync::Arc::new(|_action_id| {}),
+                        crate::actions::get_acp_chat_actions(),
+                        None,
+                        None,
+                        theme_arc,
+                        crate::designs::DesignVariant::Default,
+                        Some("AI Chat".to_string()),
+                        crate::actions::ActionsDialogConfig::default(),
+                    )
+                } else {
+                    ActionsDialog::with_script(
+                        focus_handle,
+                        std::sync::Arc::new(|_action_id| {}),
+                        script_info.clone(),
+                        theme_arc,
+                    )
+                };
 
                 // Mini mode: input at top, anchor top (collapses from bottom up)
                 if is_mini {

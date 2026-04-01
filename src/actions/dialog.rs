@@ -503,7 +503,7 @@ impl ActionsDialog {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn from_actions_with_context(
+    pub fn from_actions_with_context(
         focus_handle: FocusHandle,
         on_select: ActionCallback,
         actions: Vec<Action>,

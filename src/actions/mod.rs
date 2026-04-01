@@ -28,13 +28,14 @@ mod window;
 
 #[allow(unused_imports)] // used by binary target via include!() in main.rs
 pub(crate) use builders::resolve_file_search_secondary_action_id;
+#[allow(unused_imports)]
+pub(crate) use builders::{
+    get_acp_chat_actions, get_global_actions, get_script_context_actions,
+    get_scriptlet_context_actions_with_custom,
+};
 pub use builders::{
     get_ai_command_bar_actions, get_new_chat_actions, get_note_switcher_actions,
     get_notes_command_bar_actions,
-};
-#[allow(unused_imports)]
-pub(crate) use builders::{
-    get_global_actions, get_script_context_actions, get_scriptlet_context_actions_with_custom,
 };
 pub use builders::{
     to_deeplink_name, ChatModelInfo, ChatPromptInfo, ClipboardEntryInfo, FileSearchDirectoryInfo,
