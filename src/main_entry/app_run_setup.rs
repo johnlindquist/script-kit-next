@@ -2058,7 +2058,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                         } else if key_lower == "backspace" {
                                             entity_clone.update(ctx, |chat, cx| {
                                                 chat.thread.update(cx, |thread, cx| {
-                                                    let mut text = thread.input.to_string();
+                                                    let mut text = thread.input.text().to_string();
                                                     text.pop();
                                                     thread.set_input(text, cx);
                                                 });
@@ -2068,7 +2068,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                         } else if key_lower.len() == 1 {
                                             entity_clone.update(ctx, |chat, cx| {
                                                 chat.thread.update(cx, |thread, cx| {
-                                                    let mut text = thread.input.to_string();
+                                                    let mut text = thread.input.text().to_string();
                                                     text.push_str(&key_lower);
                                                     thread.set_input(text, cx);
                                                 });

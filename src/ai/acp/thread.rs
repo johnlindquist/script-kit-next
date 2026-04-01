@@ -15,6 +15,8 @@ use std::sync::Arc;
 use agent_client_protocol::{ContentBlock, TextContent};
 use gpui::{Context, SharedString, Task};
 
+use crate::components::text_input::TextInputState;
+
 use super::{
     build_tab_ai_acp_context_blocks, build_tab_ai_acp_guidance_blocks, AcpApprovalRequest,
     AcpConnection, AcpEvent, AcpEventRx, AcpPromptTurnRequest,
@@ -119,6 +121,8 @@ pub(crate) struct AcpThreadInit {
     pub cwd: PathBuf,
     /// Optional initial input text (populated by Shift+Tab quick-submit).
     pub initial_input: Option<String>,
+    /// Display name for the agent (shown in toolbar, e.g. "Claude Code").
+    pub display_name: SharedString,
 }
 
 /// GPUI entity that owns one ACP conversation thread.
@@ -132,11 +136,13 @@ pub(crate) struct AcpThread {
 
     ui_thread_id: String,
     cwd: PathBuf,
+    /// Display name for the agent (shown in toolbar).
+    display_name: SharedString,
 
     /// Thread message history (durable across turns).
     pub(crate) messages: Vec<AcpThreadMessage>,
-    /// Current composer input text.
-    pub(crate) input: SharedString,
+    /// Current composer input state (with cursor, selection, undo/redo).
+    pub(crate) input: TextInputState,
     /// Current thread status.
     pub(crate) status: AcpThreadStatus,
     /// Pending permission request awaiting user decision.
@@ -191,8 +197,12 @@ impl AcpThread {
             permission_rx,
             ui_thread_id: init.ui_thread_id,
             cwd: init.cwd,
+            display_name: init.display_name,
             messages: Vec::new(),
-            input: init.initial_input.unwrap_or_default().into(),
+            input: match init.initial_input {
+                Some(text) if !text.is_empty() => TextInputState::with_text(text),
+                _ => TextInputState::new(),
+            },
             status: AcpThreadStatus::Idle,
             pending_permission: None,
             pending_context_blocks: Vec::new(),
@@ -230,7 +240,7 @@ impl AcpThread {
         self.context_bootstrap_note = Some("Context attached".into());
 
         let should_auto_submit = self.queued_submit_while_bootstrapping
-            && !self.input.to_string().trim().is_empty()
+            && !self.input.text().trim().is_empty()
             && !matches!(
                 self.status,
                 AcpThreadStatus::Streaming | AcpThreadStatus::WaitingForPermission
@@ -258,7 +268,7 @@ impl AcpThread {
         self.context_bootstrap_note = Some(note.into());
 
         let should_auto_submit = self.queued_submit_while_bootstrapping
-            && !self.input.to_string().trim().is_empty()
+            && !self.input.text().trim().is_empty()
             && !matches!(
                 self.status,
                 AcpThreadStatus::Streaming | AcpThreadStatus::WaitingForPermission
@@ -272,9 +282,9 @@ impl AcpThread {
         }
     }
 
-    /// Update the composer input text.
-    pub(crate) fn set_input(&mut self, value: impl Into<SharedString>, cx: &mut Context<Self>) {
-        self.input = value.into();
+    /// Update the composer input text (replaces entire content, cursor at end).
+    pub(crate) fn set_input(&mut self, value: impl Into<String>, cx: &mut Context<Self>) {
+        self.input.set_text(value);
         cx.notify();
     }
 
@@ -294,7 +304,7 @@ impl AcpThread {
             return Ok(());
         }
 
-        let input = self.input.to_string();
+        let input = self.input.text().to_string();
         let trimmed = input.trim();
         if trimmed.is_empty() {
             return Ok(());
@@ -320,7 +330,7 @@ impl AcpThread {
             AcpThreadMessageRole::User,
             trimmed.to_string(),
         ));
-        self.input = SharedString::from("");
+        self.input.clear();
         self.context_bootstrap_note = None;
         self.status = AcpThreadStatus::Streaming;
 
@@ -735,6 +745,21 @@ impl AcpThread {
         &self.available_commands
     }
 
+    /// Display name for the agent (e.g. "Claude Code").
+    pub(crate) fn display_name(&self) -> &str {
+        &self.display_name
+    }
+
+    /// Cancel the active streaming turn. Drops the pump task and resets to Idle.
+    pub(crate) fn cancel_streaming(&mut self, cx: &mut Context<Self>) {
+        if !matches!(self.status, AcpThreadStatus::Streaming) {
+            return;
+        }
+        self.stream_task = None;
+        self.status = AcpThreadStatus::Idle;
+        cx.notify();
+    }
+
     /// Tracked tool calls, ordered by creation.
     pub(crate) fn active_tool_calls(&self) -> &[AcpToolCallState] {
         &self.active_tool_calls
@@ -773,8 +798,12 @@ impl AcpThread {
             permission_rx: perm_rx,
             ui_thread_id: "test-thread".to_string(),
             cwd: PathBuf::from("/tmp/test"),
+            display_name: "Test Agent".into(),
             messages: Vec::new(),
-            input: initial_input.unwrap_or_default().into(),
+            input: match initial_input {
+                Some(text) if !text.is_empty() => TextInputState::with_text(text),
+                _ => TextInputState::new(),
+            },
             status: AcpThreadStatus::Idle,
             pending_permission: None,
             pending_context_blocks: context_blocks,
@@ -868,8 +897,9 @@ mod tests {
             permission_rx: perm_rx,
             ui_thread_id: "test-thread".to_string(),
             cwd: PathBuf::from("."),
+            display_name: "Test Agent".into(),
             messages: Vec::new(),
-            input: SharedString::from(""),
+            input: TextInputState::new(),
             status: AcpThreadStatus::Idle,
             pending_permission: None,
             pending_context_blocks,
