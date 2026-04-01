@@ -8,6 +8,7 @@
 //! intent) populates `initial_input` and calls `submit_input()` after deferred
 //! capture resolves.
 
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -91,6 +92,8 @@ pub(crate) struct AcpToolCallState {
     pub body: Option<String>,
     /// ID of the corresponding `AcpThreadMessage` so the view can correlate.
     pub message_id: u64,
+    /// Index into `AcpThread::messages` for O(1) message lookup.
+    message_index: usize,
 }
 
 /// Initialization parameters for creating an `AcpThread`.
@@ -139,6 +142,8 @@ pub(crate) struct AcpThread {
     available_commands: Vec<String>,
     /// Tracked tool calls keyed by their ACP tool_call_id.
     active_tool_calls: Vec<AcpToolCallState>,
+    /// O(1) lookup from tool_call_id to index in `active_tool_calls`.
+    tool_call_lookup: HashMap<String, usize>,
 
     /// Handle to the active stream pump task.
     stream_task: Option<Task<()>>,
@@ -175,6 +180,7 @@ impl AcpThread {
             active_mode_id: None,
             available_commands: Vec::new(),
             active_tool_calls: Vec::new(),
+            tool_call_lookup: HashMap::new(),
             stream_task: None,
             permission_task: None,
             next_message_id: 1,
@@ -255,11 +261,15 @@ impl AcpThread {
         selected_option_id: Option<String>,
         cx: &mut Context<Self>,
     ) {
+        let mut changed = false;
         if let Some(request) = self.pending_permission.take() {
             let _ = request.reply_tx.send_blocking(selected_option_id);
+            changed = true;
         }
-        self.status = AcpThreadStatus::Idle;
-        cx.notify();
+        changed |= self.set_status(AcpThreadStatus::Idle);
+        if changed {
+            cx.notify();
+        }
     }
 
     // ── Private helpers ────────────────────────────────────────────
@@ -341,120 +351,233 @@ impl AcpThread {
     /// Plan, mode, and command updates are persisted in dedicated fields so the
     /// view can render them as first-class UI strips without reparsing text.
     /// Tool calls are tracked by ID and updated in-place.
+    ///
+    /// Only calls `cx.notify()` when state actually changes, avoiding redundant
+    /// repaints for duplicate plan, mode, command, or tool-call updates.
     fn apply_event(&mut self, event: AcpEvent, cx: &mut Context<Self>) {
+        let mut changed = false;
+
         match event {
             AcpEvent::UserMessageDelta(chunk) => {
-                self.append_chunk(AcpThreadMessageRole::System, chunk);
-                self.status = AcpThreadStatus::Streaming;
+                changed |= self.append_chunk(AcpThreadMessageRole::System, chunk);
+                changed |= self.set_status(AcpThreadStatus::Streaming);
             }
             AcpEvent::AgentMessageDelta(chunk) => {
-                self.append_chunk(AcpThreadMessageRole::Assistant, chunk);
-                self.status = AcpThreadStatus::Streaming;
+                changed |= self.append_chunk(AcpThreadMessageRole::Assistant, chunk);
+                changed |= self.set_status(AcpThreadStatus::Streaming);
             }
             AcpEvent::AgentThoughtDelta(chunk) => {
-                self.append_chunk(AcpThreadMessageRole::Thought, chunk);
-                self.status = AcpThreadStatus::Streaming;
+                changed |= self.append_chunk(AcpThreadMessageRole::Thought, chunk);
+                changed |= self.set_status(AcpThreadStatus::Streaming);
             }
             AcpEvent::ToolCallStarted {
                 tool_call_id,
                 title,
                 status,
             } => {
-                let msg_id = self.alloc_id();
-                let body_text = format!("{title}\n{status}");
-                self.messages.push(AcpThreadMessage::with_tool_call_id(
-                    msg_id,
-                    AcpThreadMessageRole::Tool,
-                    body_text,
-                    tool_call_id.clone(),
-                ));
-                self.active_tool_calls.push(AcpToolCallState {
-                    tool_call_id,
-                    title,
-                    status,
-                    body: None,
-                    message_id: msg_id,
-                });
-                self.status = AcpThreadStatus::Streaming;
+                changed |= self.upsert_tool_call_start(tool_call_id, title, status);
+                changed |= self.set_status(AcpThreadStatus::Streaming);
             }
             AcpEvent::ToolCallUpdated {
                 tool_call_id,
+                title,
                 status,
                 body,
             } => {
-                // Update the tracked tool call state and its message in-place.
-                if let Some(tc) = self
-                    .active_tool_calls
-                    .iter_mut()
-                    .find(|tc| tc.tool_call_id == tool_call_id)
-                {
-                    if let Some(s) = &status {
-                        tc.status = s.clone();
-                    }
-                    if body.is_some() {
-                        tc.body = body.clone();
-                    }
-                    // Rebuild the message body from the tracked state.
-                    let new_body = Self::format_tool_call_body(&tc.title, &tc.status, &tc.body);
-                    let mid = tc.message_id;
-                    if let Some(msg) = self.messages.iter_mut().find(|m| m.id == mid) {
-                        msg.body = new_body.into();
-                    }
-                } else {
-                    // Orphan update — create a standalone message.
-                    let text = match (status, body) {
-                        (Some(s), Some(b)) => format!("{s}\n{b}"),
-                        (Some(s), None) => s,
-                        (None, Some(b)) => b,
-                        (None, None) => String::new(),
-                    };
-                    if !text.is_empty() {
-                        self.push_message(AcpThreadMessageRole::Tool, text);
-                    }
-                }
-                self.status = AcpThreadStatus::Streaming;
+                changed |= self.apply_tool_call_update(tool_call_id, title, status, body);
+                changed |= self.set_status(AcpThreadStatus::Streaming);
             }
             AcpEvent::PlanUpdated { entries } => {
-                self.active_plan_entries = entries;
-                self.status = AcpThreadStatus::Streaming;
+                if self.active_plan_entries != entries {
+                    self.active_plan_entries = entries;
+                    changed = true;
+                }
+                changed |= self.set_status(AcpThreadStatus::Streaming);
             }
             AcpEvent::AvailableCommandsUpdated { command_names } => {
-                self.available_commands = command_names;
+                if self.available_commands != command_names {
+                    self.available_commands = command_names;
+                    changed = true;
+                }
             }
             AcpEvent::ModeChanged { mode_id } => {
-                self.active_mode_id = Some(mode_id);
+                if self.active_mode_id.as_deref() != Some(mode_id.as_str()) {
+                    self.active_mode_id = Some(mode_id);
+                    changed = true;
+                }
             }
             AcpEvent::TurnFinished { .. } => {
-                self.status = AcpThreadStatus::Idle;
+                changed |= self.set_status(AcpThreadStatus::Idle);
             }
             AcpEvent::Failed { error } => {
-                self.push_message(AcpThreadMessageRole::Error, error);
-                self.status = AcpThreadStatus::Error;
+                changed |= self.push_message(AcpThreadMessageRole::Error, error);
+                changed |= self.set_status(AcpThreadStatus::Error);
             }
         }
-        cx.notify();
+
+        if changed {
+            cx.notify();
+        }
     }
 
-    /// Push a new message with an auto-allocated ID.
-    fn push_message(&mut self, role: AcpThreadMessageRole, body: impl Into<SharedString>) {
+    /// Set the thread status, returning `true` if it actually changed.
+    fn set_status(&mut self, next: AcpThreadStatus) -> bool {
+        if self.status == next {
+            return false;
+        }
+        self.status = next;
+        true
+    }
+
+    /// Push a new message with an auto-allocated ID. Returns `true` always.
+    fn push_message(&mut self, role: AcpThreadMessageRole, body: impl Into<SharedString>) -> bool {
         let id = self.alloc_id();
         self.messages.push(AcpThreadMessage::new(id, role, body));
+        true
     }
 
     /// Append a text chunk to the last message if it has the same role,
     /// otherwise create a new message. This coalesces streaming deltas.
-    fn append_chunk(&mut self, role: AcpThreadMessageRole, chunk: String) {
+    /// Returns `true` if state changed (i.e. chunk was non-empty).
+    fn append_chunk(&mut self, role: AcpThreadMessageRole, chunk: String) -> bool {
+        if chunk.is_empty() {
+            return false;
+        }
         if let Some(last) = self.messages.last_mut() {
             if last.role == role {
                 let mut text = last.body.to_string();
                 text.push_str(&chunk);
                 last.body = text.into();
-                return;
+                return true;
             }
         }
         let id = self.alloc_id();
         self.messages
             .push(AcpThreadMessage::new(id, role, chunk));
+        true
+    }
+
+    /// Insert or update a tool call from a `ToolCallStarted` event.
+    /// Uses `tool_call_lookup` for O(1) access. Returns `true` if state changed.
+    fn upsert_tool_call_start(
+        &mut self,
+        tool_call_id: String,
+        title: String,
+        status: String,
+    ) -> bool {
+        if let Some(&slot) = self.tool_call_lookup.get(&tool_call_id) {
+            let existing = &mut self.active_tool_calls[slot];
+            let mut changed = false;
+            if existing.title != title {
+                existing.title = title;
+                changed = true;
+            }
+            if existing.status != status {
+                existing.status = status;
+                changed = true;
+            }
+            if changed {
+                let new_body =
+                    Self::format_tool_call_body(&existing.title, &existing.status, &existing.body);
+                if let Some(msg) = self.messages.get_mut(existing.message_index) {
+                    msg.body = new_body.into();
+                }
+            }
+            return changed;
+        }
+
+        let message_id = self.alloc_id();
+        let message_index = self.messages.len();
+        let message_body = format!("{title}\n{status}");
+        self.messages.push(AcpThreadMessage::with_tool_call_id(
+            message_id,
+            AcpThreadMessageRole::Tool,
+            message_body,
+            tool_call_id.clone(),
+        ));
+
+        let slot = self.active_tool_calls.len();
+        self.active_tool_calls.push(AcpToolCallState {
+            tool_call_id: tool_call_id.clone(),
+            title,
+            status,
+            body: None,
+            message_id,
+            message_index,
+        });
+        self.tool_call_lookup.insert(tool_call_id, slot);
+        true
+    }
+
+    /// Apply a `ToolCallUpdated` event, updating tracked state and message in-place.
+    /// Uses `tool_call_lookup` for O(1) access. Returns `true` if state changed.
+    fn apply_tool_call_update(
+        &mut self,
+        tool_call_id: String,
+        title: Option<String>,
+        status: Option<String>,
+        body: Option<String>,
+    ) -> bool {
+        if let Some(&slot) = self.tool_call_lookup.get(&tool_call_id) {
+            let tool_call = &mut self.active_tool_calls[slot];
+            let mut changed = false;
+
+            if let Some(title) = title {
+                if tool_call.title != title {
+                    tool_call.title = title;
+                    changed = true;
+                }
+            }
+            if let Some(status) = status {
+                if tool_call.status != status {
+                    tool_call.status = status;
+                    changed = true;
+                }
+            }
+            if let Some(body) = body {
+                if tool_call.body.as_deref() != Some(body.as_str()) {
+                    tool_call.body = Some(body);
+                    changed = true;
+                }
+            }
+
+            if changed {
+                let new_body = Self::format_tool_call_body(
+                    &tool_call.title,
+                    &tool_call.status,
+                    &tool_call.body,
+                );
+                if let Some(msg) = self.messages.get_mut(tool_call.message_index) {
+                    msg.body = new_body.into();
+                }
+            }
+            return changed;
+        }
+
+        // Orphan update — create a standalone tool call entry.
+        let title = title.unwrap_or_else(|| "Tool".to_string());
+        let status = status.unwrap_or_else(|| "running".to_string());
+        let message_id = self.alloc_id();
+        let message_index = self.messages.len();
+        let message_body = Self::format_tool_call_body(&title, &status, &body);
+        self.messages.push(AcpThreadMessage::with_tool_call_id(
+            message_id,
+            AcpThreadMessageRole::Tool,
+            message_body,
+            tool_call_id.clone(),
+        ));
+
+        let slot = self.active_tool_calls.len();
+        self.active_tool_calls.push(AcpToolCallState {
+            tool_call_id: tool_call_id.clone(),
+            title,
+            status,
+            body,
+            message_id,
+            message_index,
+        });
+        self.tool_call_lookup.insert(tool_call_id, slot);
+        true
     }
 
     /// Allocate a unique message ID.
@@ -522,6 +645,7 @@ impl AcpThread {
             active_mode_id: None,
             available_commands: Vec::new(),
             active_tool_calls: Vec::new(),
+            tool_call_lookup: HashMap::new(),
             stream_task: None,
             permission_task: None,
             next_message_id: 1,
@@ -529,80 +653,41 @@ impl AcpThread {
     }
 
     /// Apply an event without a GPUI context (for testing pure logic).
+    /// Reuses the same helper methods as `apply_event` but skips `cx.notify()`.
     pub(super) fn apply_event_test(&mut self, event: super::AcpEvent) {
         match event {
             super::AcpEvent::UserMessageDelta(chunk) => {
                 self.append_chunk(AcpThreadMessageRole::System, chunk);
-                self.status = AcpThreadStatus::Streaming;
+                self.set_status(AcpThreadStatus::Streaming);
             }
             super::AcpEvent::AgentMessageDelta(chunk) => {
                 self.append_chunk(AcpThreadMessageRole::Assistant, chunk);
-                self.status = AcpThreadStatus::Streaming;
+                self.set_status(AcpThreadStatus::Streaming);
             }
             super::AcpEvent::AgentThoughtDelta(chunk) => {
                 self.append_chunk(AcpThreadMessageRole::Thought, chunk);
-                self.status = AcpThreadStatus::Streaming;
+                self.set_status(AcpThreadStatus::Streaming);
             }
             super::AcpEvent::ToolCallStarted {
                 tool_call_id,
                 title,
                 status,
             } => {
-                let msg_id = self.alloc_id();
-                let body_text = format!("{title}\n{status}");
-                self.messages.push(AcpThreadMessage::with_tool_call_id(
-                    msg_id,
-                    AcpThreadMessageRole::Tool,
-                    body_text,
-                    tool_call_id.clone(),
-                ));
-                self.active_tool_calls.push(AcpToolCallState {
-                    tool_call_id,
-                    title,
-                    status,
-                    body: None,
-                    message_id: msg_id,
-                });
-                self.status = AcpThreadStatus::Streaming;
+                self.upsert_tool_call_start(tool_call_id, title, status);
+                self.set_status(AcpThreadStatus::Streaming);
             }
             super::AcpEvent::ToolCallUpdated {
                 tool_call_id,
+                title,
                 status,
                 body,
             } => {
-                if let Some(tc) = self
-                    .active_tool_calls
-                    .iter_mut()
-                    .find(|tc| tc.tool_call_id == tool_call_id)
-                {
-                    if let Some(s) = &status {
-                        tc.status = s.clone();
-                    }
-                    if body.is_some() {
-                        tc.body = body.clone();
-                    }
-                    let new_body =
-                        Self::format_tool_call_body(&tc.title, &tc.status, &tc.body);
-                    let mid = tc.message_id;
-                    if let Some(msg) = self.messages.iter_mut().find(|m| m.id == mid) {
-                        msg.body = new_body.into();
-                    }
-                } else {
-                    let text = match (status, body) {
-                        (Some(s), Some(b)) => format!("{s}\n{b}"),
-                        (Some(s), None) => s,
-                        (None, Some(b)) => b,
-                        (None, None) => String::new(),
-                    };
-                    if !text.is_empty() {
-                        self.push_message(AcpThreadMessageRole::Tool, text);
-                    }
-                }
-                self.status = AcpThreadStatus::Streaming;
+                self.apply_tool_call_update(tool_call_id, title, status, body);
+                self.set_status(AcpThreadStatus::Streaming);
             }
             super::AcpEvent::PlanUpdated { entries } => {
                 self.active_plan_entries = entries;
-                self.status = AcpThreadStatus::Streaming;
+                self.set_status(AcpThreadStatus::Streaming);
             }
             super::AcpEvent::AvailableCommandsUpdated { command_names } => {
                 self.available_commands = command_names;
@@ -611,11 +696,11 @@ impl AcpThread {
                 self.active_mode_id = Some(mode_id);
             }
             super::AcpEvent::TurnFinished { .. } => {
-                self.status = AcpThreadStatus::Idle;
+                self.set_status(AcpThreadStatus::Idle);
             }
             super::AcpEvent::Failed { error } => {
                 self.push_message(AcpThreadMessageRole::Error, error);
-                self.status = AcpThreadStatus::Error;
+                self.set_status(AcpThreadStatus::Error);
             }
         }
     }
@@ -652,6 +737,7 @@ mod tests {
             active_mode_id: None,
             available_commands: Vec::new(),
             active_tool_calls: Vec::new(),
+            tool_call_lookup: HashMap::new(),
             stream_task: None,
             permission_task: None,
             next_message_id: 1,
@@ -766,96 +852,9 @@ mod tests {
     // ── Structured state tests ────────────────────────────────────
 
     /// Helper that applies an event without a GPUI context (for pure logic tests).
-    /// Mirrors apply_event but skips cx.notify().
+    /// Delegates to the instance method `apply_event_test` on `AcpThread`.
     fn apply_event_test(thread: &mut AcpThread, event: AcpEvent) {
-        match event {
-            AcpEvent::UserMessageDelta(chunk) => {
-                thread.append_chunk(AcpThreadMessageRole::System, chunk);
-                thread.status = AcpThreadStatus::Streaming;
-            }
-            AcpEvent::AgentMessageDelta(chunk) => {
-                thread.append_chunk(AcpThreadMessageRole::Assistant, chunk);
-                thread.status = AcpThreadStatus::Streaming;
-            }
-            AcpEvent::AgentThoughtDelta(chunk) => {
-                thread.append_chunk(AcpThreadMessageRole::Thought, chunk);
-                thread.status = AcpThreadStatus::Streaming;
-            }
-            AcpEvent::ToolCallStarted {
-                tool_call_id,
-                title,
-                status,
-            } => {
-                let msg_id = thread.alloc_id();
-                let body_text = format!("{title}\n{status}");
-                thread.messages.push(AcpThreadMessage::with_tool_call_id(
-                    msg_id,
-                    AcpThreadMessageRole::Tool,
-                    body_text,
-                    tool_call_id.clone(),
-                ));
-                thread.active_tool_calls.push(AcpToolCallState {
-                    tool_call_id,
-                    title,
-                    status,
-                    body: None,
-                    message_id: msg_id,
-                });
-                thread.status = AcpThreadStatus::Streaming;
-            }
-            AcpEvent::ToolCallUpdated {
-                tool_call_id,
-                status,
-                body,
-            } => {
-                if let Some(tc) = thread
-                    .active_tool_calls
-                    .iter_mut()
-                    .find(|tc| tc.tool_call_id == tool_call_id)
-                {
-                    if let Some(s) = &status {
-                        tc.status = s.clone();
-                    }
-                    if body.is_some() {
-                        tc.body = body.clone();
-                    }
-                    let new_body =
-                        AcpThread::format_tool_call_body(&tc.title, &tc.status, &tc.body);
-                    let mid = tc.message_id;
-                    if let Some(msg) = thread.messages.iter_mut().find(|m| m.id == mid) {
-                        msg.body = new_body.into();
-                    }
-                } else {
-                    let text = match (status, body) {
-                        (Some(s), Some(b)) => format!("{s}\n{b}"),
-                        (Some(s), None) => s,
-                        (None, Some(b)) => b,
-                        (None, None) => String::new(),
-                    };
-                    if !text.is_empty() {
-                        thread.push_message(AcpThreadMessageRole::Tool, text);
-                    }
-                }
-                thread.status = AcpThreadStatus::Streaming;
-            }
-            AcpEvent::PlanUpdated { entries } => {
-                thread.active_plan_entries = entries;
-                thread.status = AcpThreadStatus::Streaming;
-            }
-            AcpEvent::AvailableCommandsUpdated { command_names } => {
-                thread.available_commands = command_names;
-            }
-            AcpEvent::ModeChanged { mode_id } => {
-                thread.active_mode_id = Some(mode_id);
-            }
-            AcpEvent::TurnFinished { .. } => {
-                thread.status = AcpThreadStatus::Idle;
-            }
-            AcpEvent::Failed { error } => {
-                thread.push_message(AcpThreadMessageRole::Error, error);
-                thread.status = AcpThreadStatus::Error;
-            }
-        }
+        thread.apply_event_test(event);
     }
 
     #[test]
@@ -956,6 +955,7 @@ mod tests {
             &mut thread,
             AcpEvent::ToolCallUpdated {
                 tool_call_id: "tc-1".into(),
+                title: None,
                 status: Some("completed".into()),
                 body: Some("file contents here".into()),
             },
@@ -992,6 +992,7 @@ mod tests {
             &mut thread,
             AcpEvent::ToolCallUpdated {
                 tool_call_id: "unknown".into(),
+                title: None,
                 status: Some("done".into()),
                 body: None,
             },
@@ -1002,7 +1003,8 @@ mod tests {
             1,
             "orphan update should create a standalone message"
         );
-        assert_eq!(thread.messages[0].body.as_ref(), "done");
+        // Orphan update now creates a full tool call entry with default title + provided status.
+        assert!(thread.messages[0].body.contains("done"));
     }
 
     #[test]
@@ -1066,6 +1068,7 @@ mod tests {
             &mut thread,
             AcpEvent::ToolCallUpdated {
                 tool_call_id: "tc-1".into(),
+                title: None,
                 status: Some("completed".into()),
                 body: None,
             },

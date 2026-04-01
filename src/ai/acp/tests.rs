@@ -253,6 +253,7 @@ fn tool_call_lifecycle_tracks_state_for_view() {
 
     thread.apply_event_test(AcpEvent::ToolCallUpdated {
         tool_call_id: "tc-abc".into(),
+        title: None,
         status: Some("completed".into()),
         body: Some("file contents...".into()),
     });

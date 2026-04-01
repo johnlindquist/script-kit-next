@@ -24,6 +24,78 @@ use crate::ai::providers::StreamCallback;
 use super::events::{AcpEvent, AcpEventTx};
 use super::permission_broker::{AcpApprovalOption, AcpApprovalRequestInput};
 
+// ── Tool call content summarization ───────────────────────────────────
+
+fn summarize_json_value(value: &serde_json::Value) -> String {
+    match value {
+        serde_json::Value::String(text) => text.clone(),
+        other => serde_json::to_string_pretty(other).unwrap_or_else(|_| other.to_string()),
+    }
+}
+
+fn summarize_tool_call_content(
+    content: &[agent_client_protocol::ToolCallContent],
+) -> Option<String> {
+    let mut parts = Vec::new();
+    for item in content {
+        match item {
+            agent_client_protocol::ToolCallContent::Content(content) => match &content.content {
+                agent_client_protocol::ContentBlock::Text(text) => {
+                    let text = text.text.trim();
+                    if !text.is_empty() {
+                        parts.push(text.to_string());
+                    }
+                }
+                other => parts.push(format!("{other:?}")),
+            },
+            agent_client_protocol::ToolCallContent::Diff(diff) => {
+                parts.push(format!("Diff: {}", diff.path.display()));
+            }
+            agent_client_protocol::ToolCallContent::Terminal(term) => {
+                parts.push(format!("Terminal: {}", term.terminal_id.0.as_ref()));
+            }
+            _ => {}
+        }
+    }
+    if parts.is_empty() {
+        None
+    } else {
+        Some(parts.join("\n\n"))
+    }
+}
+
+fn summarize_tool_call_update(
+    update: &agent_client_protocol::ToolCallUpdate,
+) -> (Option<String>, Option<String>, Option<String>) {
+    let mut body_parts = Vec::new();
+    if let Some(content) = update.fields.content.as_ref() {
+        if let Some(text) = summarize_tool_call_content(content) {
+            body_parts.push(text);
+        }
+    }
+    if let Some(raw_output) = update.fields.raw_output.as_ref() {
+        body_parts.push(summarize_json_value(raw_output));
+    }
+    if let Some(raw_input) = update.fields.raw_input.as_ref() {
+        body_parts.push(format!("Input:\n{}", summarize_json_value(raw_input)));
+    }
+
+    let body = if body_parts.is_empty() {
+        None
+    } else {
+        Some(body_parts.join("\n\n"))
+    };
+
+    let title = update.fields.title.clone();
+    let status = update
+        .fields
+        .status
+        .as_ref()
+        .map(|status| format!("{status:?}"));
+
+    (title, status, body)
+}
+
 // ── Approval seam ──────────────────────────────────────────────────────
 
 /// Callback type for permission/approval decisions.
@@ -308,12 +380,14 @@ impl Client for ScriptKitAcpClient {
                     tool_call_id = ?tcu.tool_call_id,
                     "acp_tool_call_update"
                 );
+                let (title, status, body) = summarize_tool_call_update(tcu);
                 self.emit_event(
                     &args.session_id,
                     AcpEvent::ToolCallUpdated {
                         tool_call_id: tcu.tool_call_id.0.as_ref().to_string(),
-                        status: Some(format!("{:?}", tcu)),
-                        body: None,
+                        title,
+                        status,
+                        body,
                     },
                 );
             }
