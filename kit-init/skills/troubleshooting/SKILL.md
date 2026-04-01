@@ -1,4 +1,9 @@
-# Skill: Troubleshooting
+---
+name: troubleshooting
+description: Diagnose and fix common Script Kit issues. Use when the user reports bugs, crashes, missing features, or unexpected behavior in Script Kit GPUI.
+---
+
+# Troubleshooting
 
 Diagnose and fix common Script Kit issues.
 
