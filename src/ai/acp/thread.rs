@@ -261,14 +261,15 @@ impl AcpThread {
         selected_option_id: Option<String>,
         cx: &mut Context<Self>,
     ) {
-        let had_request = if let Some(request) = self.pending_permission.take() {
-            let _ = request.reply_tx.send_blocking(selected_option_id);
-            true
-        } else {
-            false
-        };
+        let mut had_request = false;
+        let mut changed = false;
 
-        let mut changed = had_request;
+        if let Some(request) = self.pending_permission.take() {
+            let note = Self::permission_resolution_message(&request, selected_option_id.as_deref());
+            let _ = request.reply_tx.send_blocking(selected_option_id);
+            changed |= self.push_message(AcpThreadMessageRole::System, note);
+            had_request = true;
+        }
 
         // Stay in Streaming so submit_input() remains blocked until
         // TurnFinished or Failed arrives — prevents mid-turn double-submit.
@@ -278,6 +279,25 @@ impl AcpThread {
 
         if changed {
             cx.notify();
+        }
+    }
+
+    /// Build a human-readable audit message for a permission resolution.
+    fn permission_resolution_message(
+        request: &AcpApprovalRequest,
+        selected_option_id: Option<&str>,
+    ) -> String {
+        let tool_title = request
+            .preview
+            .as_ref()
+            .map(|p| p.tool_title.clone())
+            .unwrap_or_else(|| request.title.clone());
+
+        match selected_option_id
+            .and_then(|id| request.options.iter().find(|opt| opt.option_id == id))
+        {
+            Some(option) => format!("Permission granted \u{00b7} {} \u{00b7} {}", tool_title, option.name),
+            None => format!("Permission cancelled \u{00b7} {}", tool_title),
         }
     }
 

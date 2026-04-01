@@ -22,7 +22,7 @@ use serde_json::value::RawValue;
 use crate::ai::providers::StreamCallback;
 
 use super::events::{AcpEvent, AcpEventTx};
-use super::permission_broker::{AcpApprovalOption, AcpApprovalRequestInput};
+use super::permission_broker::{AcpApprovalOption, AcpApprovalPreview, AcpApprovalRequestInput};
 
 // ── Tool call content summarization ───────────────────────────────────
 
@@ -94,6 +94,91 @@ fn summarize_tool_call_update(
         .map(|status| format!("{status:?}"));
 
     (title, status, body)
+}
+
+// ── Preview construction helpers ──────────────────────────────────────
+
+fn truncate_for_overlay(text: &str, max_chars: usize) -> String {
+    if text.chars().count() <= max_chars {
+        return text.to_string();
+    }
+    let mut truncated: String = text.chars().take(max_chars).collect();
+    truncated.push_str("\n\u{2026}");
+    truncated
+}
+
+fn guess_subject(raw_input: &serde_json::Value) -> Option<String> {
+    let serde_json::Value::Object(map) = raw_input else {
+        return None;
+    };
+    for key in ["path", "file_path", "cwd", "target", "command"] {
+        if let Some(value) = map.get(key).and_then(|v| v.as_str()) {
+            let trimmed = value.trim();
+            if !trimmed.is_empty() {
+                return Some(trimmed.to_string());
+            }
+        }
+    }
+    None
+}
+
+fn build_permission_preview(
+    args: &RequestPermissionRequest,
+    options: &[AcpApprovalOption],
+) -> AcpApprovalPreview {
+    let tool_title = args
+        .tool_call
+        .fields
+        .title
+        .as_deref()
+        .unwrap_or("unknown tool")
+        .to_string();
+
+    let tool_call_id = args.tool_call.tool_call_id.0.as_ref().to_string();
+
+    let summary = args
+        .tool_call
+        .fields
+        .content
+        .as_ref()
+        .and_then(|content| summarize_tool_call_content(content))
+        .map(|text| truncate_for_overlay(&text, 400));
+
+    let input_preview = args
+        .tool_call
+        .fields
+        .raw_input
+        .as_ref()
+        .map(|value| truncate_for_overlay(&summarize_json_value(value), 1200));
+
+    let output_preview = args
+        .tool_call
+        .fields
+        .raw_output
+        .as_ref()
+        .map(|value| truncate_for_overlay(&summarize_json_value(value), 1200));
+
+    let subject = args
+        .tool_call
+        .fields
+        .raw_input
+        .as_ref()
+        .and_then(guess_subject);
+
+    let option_summary = options
+        .iter()
+        .map(|option| format!("{} ({})", option.name, option.kind))
+        .collect();
+
+    AcpApprovalPreview {
+        tool_title,
+        tool_call_id,
+        subject,
+        summary,
+        input_preview,
+        output_preview,
+        option_summary,
+    }
 }
 
 // ── Approval seam ──────────────────────────────────────────────────────
@@ -304,20 +389,13 @@ impl Client for ScriptKitAcpClient {
             body_parts.push(format!("Output:\n{}", summarize_json_value(raw_output)));
         }
 
-        let option_summary = options
-            .iter()
-            .map(|option| format!("{} ({})", option.name, option.kind))
-            .collect::<Vec<_>>()
-            .join(", ");
-
-        if !option_summary.is_empty() {
-            body_parts.push(format!("Options: {option_summary}"));
-        }
+        let preview = build_permission_preview(&args, &options);
 
         let selected_id = self
             .choose_permission(AcpApprovalRequestInput {
                 title: "ACP permission request".to_string(),
                 body: body_parts.join("\n\n"),
+                preview: Some(preview),
                 options,
             })
             .map_err(|_| Error::internal_error())?;
@@ -523,22 +601,35 @@ impl Client for ScriptKitAcpClient {
         let path_display = args.path.display().to_string();
         tracing::info!(path = %path_display, content_len = args.content.len(), "acp_write_text_file_request");
 
+        let write_options = vec![
+            AcpApprovalOption {
+                option_id: "allow".to_string(),
+                name: "Allow".to_string(),
+                kind: "AllowOnce".to_string(),
+            },
+            AcpApprovalOption {
+                option_id: "deny".to_string(),
+                name: "Deny".to_string(),
+                kind: "RejectOnce".to_string(),
+            },
+        ];
         let selected = self
             .choose_permission(AcpApprovalRequestInput {
                 title: "ACP file write request".to_string(),
                 body: format!("Write {} bytes to {}", args.content.len(), path_display),
-                options: vec![
-                    AcpApprovalOption {
-                        option_id: "allow".to_string(),
-                        name: "Allow".to_string(),
-                        kind: "AllowOnce".to_string(),
-                    },
-                    AcpApprovalOption {
-                        option_id: "deny".to_string(),
-                        name: "Deny".to_string(),
-                        kind: "RejectOnce".to_string(),
-                    },
-                ],
+                preview: Some(AcpApprovalPreview {
+                    tool_title: "write_text_file".to_string(),
+                    tool_call_id: "client-fs-write".to_string(),
+                    subject: Some(path_display.clone()),
+                    summary: Some(format!("Write {} bytes", args.content.len())),
+                    input_preview: Some(truncate_for_overlay(&args.content, 1200)),
+                    output_preview: None,
+                    option_summary: write_options
+                        .iter()
+                        .map(|o| format!("{} ({})", o.name, o.kind))
+                        .collect(),
+                }),
+                options: write_options,
             })
             .map_err(|_| Error::internal_error())?;
         let approved = selected.is_some();
@@ -571,22 +662,37 @@ impl Client for ScriptKitAcpClient {
         let cmd_display = format!("{} {}", args.command, args.args.join(" "));
         tracing::info!(command = %cmd_display, "acp_create_terminal_request");
 
+        let term_options = vec![
+            AcpApprovalOption {
+                option_id: "allow".to_string(),
+                name: "Allow".to_string(),
+                kind: "AllowOnce".to_string(),
+            },
+            AcpApprovalOption {
+                option_id: "deny".to_string(),
+                name: "Deny".to_string(),
+                kind: "RejectOnce".to_string(),
+            },
+        ];
         let selected = self
             .choose_permission(AcpApprovalRequestInput {
                 title: "ACP terminal request".to_string(),
                 body: format!("terminal/create: {cmd_display}"),
-                options: vec![
-                    AcpApprovalOption {
-                        option_id: "allow".to_string(),
-                        name: "Allow".to_string(),
-                        kind: "AllowOnce".to_string(),
-                    },
-                    AcpApprovalOption {
-                        option_id: "deny".to_string(),
-                        name: "Deny".to_string(),
-                        kind: "RejectOnce".to_string(),
-                    },
-                ],
+                preview: Some(AcpApprovalPreview {
+                    tool_title: "terminal/create".to_string(),
+                    tool_call_id: "client-terminal-create".to_string(),
+                    subject: Some(cmd_display.clone()),
+                    summary: Some(
+                        "Spawn a subprocess owned by the ACP client".to_string(),
+                    ),
+                    input_preview: None,
+                    output_preview: None,
+                    option_summary: term_options
+                        .iter()
+                        .map(|o| format!("{} ({})", o.name, o.kind))
+                        .collect(),
+                }),
+                options: term_options,
             })
             .map_err(|_| Error::internal_error())?;
         let approved = selected.is_some();
@@ -770,6 +876,7 @@ mod tests {
             .choose_permission(AcpApprovalRequestInput {
                 title: "ACP permission request".to_string(),
                 body: "write /tmp/file.txt".to_string(),
+                preview: None,
                 options: vec![AcpApprovalOption {
                     option_id: "allow".to_string(),
                     name: "Allow".to_string(),
@@ -792,6 +899,7 @@ mod tests {
             .choose_permission(AcpApprovalRequestInput {
                 title: "ACP permission request".to_string(),
                 body: "terminal/create: git status".to_string(),
+                preview: None,
                 options: vec![AcpApprovalOption {
                     option_id: "allow-once".to_string(),
                     name: "Allow once".to_string(),

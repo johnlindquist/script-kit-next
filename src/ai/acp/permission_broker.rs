@@ -22,6 +22,28 @@ pub(crate) struct AcpApprovalOption {
     pub kind: String,
 }
 
+/// Structured preview data for an approval request.
+///
+/// Carries enough information for the UI to render a rich tool-call
+/// preview instead of parsing a plain-text body blob.
+#[derive(Debug, Clone, Default)]
+pub(crate) struct AcpApprovalPreview {
+    /// Human-readable tool name (e.g., "Write file", "terminal/create").
+    pub tool_title: String,
+    /// ACP tool call ID for traceability.
+    pub tool_call_id: String,
+    /// Primary subject of the tool call (e.g., a file path or command).
+    pub subject: Option<String>,
+    /// Short summary of what the tool call does.
+    pub summary: Option<String>,
+    /// Truncated preview of the tool call input payload.
+    pub input_preview: Option<String>,
+    /// Truncated preview of the tool call output payload.
+    pub output_preview: Option<String>,
+    /// Human-readable labels for each option (e.g., "Allow (AllowOnce)").
+    pub option_summary: Vec<String>,
+}
+
 /// Input for constructing an approval request (before assigning an ID).
 #[derive(Debug, Clone)]
 pub(crate) struct AcpApprovalRequestInput {
@@ -29,6 +51,8 @@ pub(crate) struct AcpApprovalRequestInput {
     pub title: String,
     /// Body text describing the action requiring approval.
     pub body: String,
+    /// Structured preview for rich UI rendering. `None` falls back to body text.
+    pub preview: Option<AcpApprovalPreview>,
     /// Available permission options from the ACP agent.
     pub options: Vec<AcpApprovalOption>,
 }
@@ -42,6 +66,8 @@ pub(crate) struct AcpApprovalRequest {
     pub title: String,
     /// Body text describing the action requiring approval.
     pub body: String,
+    /// Structured preview for rich UI rendering. `None` falls back to body text.
+    pub preview: Option<AcpApprovalPreview>,
     /// Available permission options from the ACP agent.
     pub options: Vec<AcpApprovalOption>,
     /// Channel to send the user's selected option ID (or `None` for cancel).
@@ -92,6 +118,7 @@ impl AcpPermissionBroker {
                 id,
                 title: input.title,
                 body: input.body,
+                preview: input.preview,
                 options: input.options,
                 reply_tx,
             })
@@ -146,6 +173,7 @@ mod tests {
             .request(AcpApprovalRequestInput {
                 title: "Test".to_string(),
                 body: "Test body".to_string(),
+                preview: None,
                 options: vec![
                     AcpApprovalOption {
                         option_id: "allow-once".to_string(),
@@ -181,6 +209,7 @@ mod tests {
             .request(AcpApprovalRequestInput {
                 title: "Test".to_string(),
                 body: "Cancel test".to_string(),
+                preview: None,
                 options: vec![AcpApprovalOption {
                     option_id: "allow".to_string(),
                     name: "Allow".to_string(),

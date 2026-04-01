@@ -19,6 +19,8 @@ use super::AcpApprovalRequest;
 pub(crate) struct AcpChatView {
     pub(crate) thread: Entity<AcpThread>,
     focus_handle: FocusHandle,
+    /// Index of the currently highlighted permission option in the overlay.
+    permission_index: usize,
 }
 
 impl AcpChatView {
@@ -26,18 +28,139 @@ impl AcpChatView {
         Self {
             thread,
             focus_handle: cx.focus_handle(),
+            permission_index: 0,
         }
     }
 
-    /// Consume Tab / Shift+Tab so the global interceptors do not re-open a
-    /// fresh ACP chat while one is already active.
+    /// Consume Tab / Shift+Tab. When the permission overlay is open,
+    /// cycle the highlighted option; otherwise just swallow the key so
+    /// the global interceptors do not re-open a fresh ACP chat.
     pub(crate) fn handle_tab_key(
         &mut self,
-        _has_shift: bool,
+        has_shift: bool,
         cx: &mut Context<Self>,
     ) -> bool {
+        let option_count = self
+            .thread
+            .read(cx)
+            .pending_permission
+            .as_ref()
+            .map(|r| r.options.len())
+            .unwrap_or(0);
+
+        if option_count > 0 {
+            self.permission_index =
+                Self::step_permission_index(self.permission_index, option_count, has_shift);
+            cx.notify();
+            return true;
+        }
+
         cx.notify();
         true
+    }
+
+    fn approve_permission(&mut self, option_id: Option<String>, cx: &mut Context<Self>) {
+        self.permission_index = 0;
+        self.thread.update(cx, |thread, cx| {
+            thread.approve_pending_permission(option_id, cx);
+        });
+    }
+
+    fn normalized_permission_index(&self, option_count: usize) -> usize {
+        if option_count == 0 {
+            0
+        } else {
+            self.permission_index.min(option_count - 1)
+        }
+    }
+
+    fn step_permission_index(current: usize, option_count: usize, reverse: bool) -> usize {
+        if option_count == 0 {
+            return 0;
+        }
+
+        if reverse {
+            if current == 0 {
+                option_count - 1
+            } else {
+                current - 1
+            }
+        } else {
+            (current + 1) % option_count
+        }
+    }
+
+    /// Handle key events when the permission overlay is displayed.
+    /// Returns `true` if the key was consumed.
+    fn handle_permission_key_down(
+        &mut self,
+        event: &gpui::KeyDownEvent,
+        request: &AcpApprovalRequest,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let key = event.keystroke.key.as_str();
+        let option_count = request.options.len();
+        self.permission_index = self.normalized_permission_index(option_count);
+
+        if crate::ui_foundation::is_key_up(key) {
+            self.permission_index =
+                Self::step_permission_index(self.permission_index, option_count, true);
+            cx.notify();
+            return true;
+        }
+
+        if crate::ui_foundation::is_key_down(key) {
+            self.permission_index =
+                Self::step_permission_index(self.permission_index, option_count, false);
+            cx.notify();
+            return true;
+        }
+
+        // J/K navigation (vim-style, unmodified only)
+        match key {
+            "j" | "J" => {
+                self.permission_index =
+                    Self::step_permission_index(self.permission_index, option_count, false);
+                cx.notify();
+                return true;
+            }
+            "k" | "K" => {
+                self.permission_index =
+                    Self::step_permission_index(self.permission_index, option_count, true);
+                cx.notify();
+                return true;
+            }
+            _ => {}
+        }
+
+        if crate::ui_foundation::is_key_escape(key) {
+            self.approve_permission(None, cx);
+            return true;
+        }
+
+        if crate::ui_foundation::is_key_enter(key) {
+            if let Some(option) = request.options.get(self.normalized_permission_index(option_count))
+            {
+                self.approve_permission(Some(option.option_id.clone()), cx);
+            } else {
+                self.approve_permission(None, cx);
+            }
+            return true;
+        }
+
+        // 1-9 instant pick
+        if let Ok(digit) = key.parse::<usize>() {
+            if digit >= 1 {
+                let idx = digit - 1;
+                if let Some(option) = request.options.get(idx) {
+                    self.permission_index = idx;
+                    self.approve_permission(Some(option.option_id.clone()), cx);
+                    return true;
+                }
+            }
+        }
+
+        false
     }
 
     pub(crate) fn set_input(&mut self, value: String, cx: &mut Context<Self>) {
@@ -224,15 +347,42 @@ impl AcpChatView {
             .into_any_element()
     }
 
+    fn render_permission_section(
+        title: &'static str,
+        text: String,
+    ) -> gpui::AnyElement {
+        div()
+            .pt(px(8.0))
+            .child(
+                div()
+                    .text_xs()
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .opacity(0.64)
+                    .child(title),
+            )
+            .child(
+                div()
+                    .mt(px(4.0))
+                    .max_h(px(140.0))
+                    .overflow_y_hidden()
+                    .rounded(px(8.0))
+                    .bg(rgba(0x00000018))
+                    .px(px(10.0))
+                    .py(px(8.0))
+                    .text_xs()
+                    .child(text),
+            )
+            .into_any_element()
+    }
+
     fn render_permission_overlay(
         request: &AcpApprovalRequest,
+        selected_index: usize,
         cx: &mut Context<Self>,
     ) -> gpui::AnyElement {
         let theme = theme::get_cached_theme();
-
-        let title = request.title.clone();
-        let body = request.body.clone();
-        let options = request.options.clone();
+        let preview = request.preview.clone();
+        let selected_index = selected_index.min(request.options.len().saturating_sub(1));
 
         div()
             .absolute()
@@ -246,7 +396,7 @@ impl AcpChatView {
             .justify_center()
             .child(
                 div()
-                    .w(px(520.0))
+                    .w(px(640.0))
                     .max_w_full()
                     .mx_4()
                     .p_4()
@@ -258,19 +408,67 @@ impl AcpChatView {
                         div()
                             .text_base()
                             .font_weight(FontWeight::SEMIBOLD)
-                            .child(title),
+                            .child(request.title.clone()),
                     )
-                    .child(
-                        div()
-                            .pt(px(8.0))
-                            .pb(px(12.0))
-                            .text_sm()
-                            .opacity(0.76)
-                            .child(body),
-                    )
-                    .children(options.into_iter().enumerate().map(|(i, option)| {
+                    // ── Structured preview sections ──────────────
+                    .when_some(preview.clone(), |d, preview| {
+                        d.child(
+                            div()
+                                .pt(px(8.0))
+                                .child(
+                                    div()
+                                        .text_sm()
+                                        .font_weight(FontWeight::SEMIBOLD)
+                                        .child(preview.tool_title),
+                                )
+                                .child(
+                                    div()
+                                        .pt(px(2.0))
+                                        .text_xs()
+                                        .opacity(0.62)
+                                        .child(format!("Tool call ID: {}", preview.tool_call_id)),
+                                )
+                                .when_some(preview.subject, |d, subject| {
+                                    d.child(
+                                        div()
+                                            .pt(px(2.0))
+                                            .text_xs()
+                                            .opacity(0.72)
+                                            .child(subject),
+                                    )
+                                })
+                                .when_some(preview.summary, |d, summary| {
+                                    d.child(Self::render_permission_section("Summary", summary))
+                                })
+                                .when_some(preview.input_preview, |d, input| {
+                                    d.child(Self::render_permission_section("Input", input))
+                                })
+                                .when_some(preview.output_preview, |d, output| {
+                                    d.child(Self::render_permission_section("Output", output))
+                                }),
+                        )
+                    })
+                    // ── Fallback to body when no preview ─────────
+                    .when(preview.is_none(), |d| {
+                        d.child(
+                            div()
+                                .pt(px(8.0))
+                                .pb(px(12.0))
+                                .text_sm()
+                                .opacity(0.76)
+                                .child(request.body.clone()),
+                        )
+                    })
+                    // ── Option list with keyboard highlight ──────
+                    .children(request.options.iter().enumerate().map(|(i, option)| {
                         let option_id = option.option_id.clone();
-                        let label = format!("{} \u{00b7} {}", option.name, option.kind);
+                        let is_selected = i == selected_index;
+                        let label = format!(
+                            "{} \u{00b7} {} \u{00b7} {}",
+                            i + 1,
+                            option.name,
+                            option.kind,
+                        );
 
                         div()
                             .id(SharedString::from(format!("perm-opt-{i}")))
@@ -279,33 +477,34 @@ impl AcpChatView {
                             .py(px(9.0))
                             .rounded(px(8.0))
                             .cursor_pointer()
-                            .bg(rgba((theme.colors.text.primary << 8) | 0x06))
+                            .bg(if is_selected {
+                                rgba((theme.colors.accent.selected << 8) | 0x18)
+                            } else {
+                                rgba((theme.colors.text.primary << 8) | 0x06)
+                            })
+                            .border_1()
+                            .border_color(if is_selected {
+                                rgba((theme.colors.accent.selected << 8) | 0x55)
+                            } else {
+                                rgba((theme.colors.ui.border << 8) | 0x30)
+                            })
                             .hover(|d| {
                                 d.bg(rgba((theme.colors.text.primary << 8) | 0x12))
                             })
                             .on_click(cx.listener(move |this, _event, _window, cx| {
-                                this.thread.update(cx, |thread, cx| {
-                                    thread.approve_pending_permission(
-                                        Some(option_id.clone()),
-                                        cx,
-                                    );
-                                });
+                                this.approve_permission(Some(option_id.clone()), cx);
                             }))
                             .child(label)
                     }))
+                    // ── Keyboard hint strip ──────────────────────
                     .child(
                         div()
-                            .id("perm-cancel")
-                            .mt(px(12.0))
-                            .text_sm()
-                            .opacity(0.62)
-                            .cursor_pointer()
-                            .on_click(cx.listener(|this, _event, _window, cx| {
-                                this.thread.update(cx, |thread, cx| {
-                                    thread.approve_pending_permission(None, cx);
-                                });
-                            }))
-                            .child("Cancel"),
+                            .pt(px(12.0))
+                            .text_xs()
+                            .opacity(0.56)
+                            .child(
+                                "Tab/\u{21e7}Tab or \u{2191}\u{2193} or J/K to move \u{00b7} 1\u{2013}9 to choose \u{00b7} Enter to confirm \u{00b7} Esc to cancel",
+                            ),
                     ),
             )
             .into_any_element()
@@ -347,6 +546,24 @@ impl AcpChatView {
         event: &gpui::KeyDownEvent,
         cx: &mut Context<Self>,
     ) {
+        // ── Permission overlay intercept ─────────────────────────
+        let pending_permission = self.thread.read(cx).pending_permission.clone();
+        if let Some(ref request) = pending_permission {
+            if self.handle_permission_key_down(event, request, cx) {
+                cx.stop_propagation();
+                return;
+            }
+            // Block composer typing behind the modal, but still allow
+            // platform/control/alt shortcuts to propagate.
+            if !event.keystroke.modifiers.platform
+                && !event.keystroke.modifiers.control
+                && !event.keystroke.modifiers.alt
+            {
+                cx.stop_propagation();
+                return;
+            }
+        }
+
         let key = event.keystroke.key.as_str();
         let modifiers = &event.keystroke.modifiers;
 
@@ -498,7 +715,7 @@ impl Render for AcpChatView {
             )
             // ── Permission overlay ────────────────────────────
             .when_some(pending_permission, |d, request| {
-                d.child(Self::render_permission_overlay(&request, cx))
+                d.child(Self::render_permission_overlay(&request, self.permission_index, cx))
             })
     }
 }
