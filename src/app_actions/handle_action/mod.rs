@@ -615,6 +615,22 @@ impl ScriptListApp {
                     DispatchOutcome::not_handled()
                 }
             }
+            "acp_scroll_to_top" => {
+                let entity = entity.clone();
+                entity.update(cx, |chat, cx| {
+                    chat.scroll_handle.set_offset(gpui::point(gpui::px(0.), gpui::px(0.)));
+                    cx.notify();
+                });
+                DispatchOutcome::success()
+            }
+            "acp_scroll_to_bottom" => {
+                let entity = entity.clone();
+                entity.update(cx, |chat, cx| {
+                    chat.scroll_handle.scroll_to_bottom();
+                    cx.notify();
+                });
+                DispatchOutcome::success()
+            }
             "acp_expand_all" => {
                 let entity = entity.clone();
                 entity.update(cx, |chat, cx| {

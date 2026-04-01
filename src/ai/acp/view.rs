@@ -49,7 +49,7 @@ fn parse_skill_description(content: &str) -> Option<String> {
 pub(crate) struct AcpChatView {
     pub(crate) thread: Entity<AcpThread>,
     focus_handle: FocusHandle,
-    scroll_handle: ScrollHandle,
+    pub(crate) scroll_handle: ScrollHandle,
     /// Index of the currently highlighted permission option in the overlay.
     permission_index: usize,
     /// Message IDs that are currently collapsed (thinking/tool blocks).
