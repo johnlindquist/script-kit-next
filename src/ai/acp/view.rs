@@ -314,6 +314,7 @@ impl AcpChatView {
             "\u{25BE}" // ▾
         };
 
+        let line_count = msg.body.lines().count();
         let header_opacity = if is_tool { 0.55 } else { 0.50 };
         let left_border_color = if is_tool {
             rgba((theme.colors.accent.selected << 8) | 0x30)
@@ -344,7 +345,15 @@ impl AcpChatView {
                     .opacity(header_opacity)
                     .child(chevron.to_string()),
             )
-            .child(div().text_xs().opacity(header_opacity).child(label));
+            .child(div().text_xs().opacity(header_opacity).child(label))
+            .when(is_collapsed && line_count > 1, |d| {
+                d.child(
+                    div()
+                        .text_xs()
+                        .opacity(0.35)
+                        .child(format!("{line_count} lines")),
+                )
+            });
 
         let header = if let Some(toggle) = on_toggle {
             header.on_click(toggle)
@@ -462,6 +471,13 @@ impl AcpChatView {
                     .text_color(rgb(theme.colors.accent.selected))
                     .opacity(0.8)
                     .child("Claude Code over ACP"),
+            )
+            .child(
+                div()
+                    .pt(px(20.0))
+                    .text_xs()
+                    .opacity(0.35)
+                    .child("\u{2318}W to close"),
             )
             .into_any_element()
     }
@@ -809,7 +825,7 @@ impl AcpChatView {
             .justify_between()
             .px(px(4.0))
             .py(px(2.0))
-            // ── Left: attachment button ──────────
+            // ── Left: paste clipboard button ─────
             .child(
                 div().flex().items_center().gap(px(4.0)).child(
                     div()
@@ -823,7 +839,21 @@ impl AcpChatView {
                         .text_xs()
                         .opacity(0.50)
                         .hover(|s| s.opacity(0.85))
-                        .child("+"),
+                        .child("+")
+                        .on_click(cx.listener(|this, _event, _window, cx| {
+                            if let Some(clipboard) = cx.read_from_clipboard() {
+                                if let Some(text) = clipboard.text() {
+                                    if !text.is_empty() {
+                                        this.thread.update(cx, |thread, cx| {
+                                            thread.input.insert_str(&text);
+                                            cx.notify();
+                                        });
+                                        this.cursor_visible = true;
+                                        cx.notify();
+                                    }
+                                }
+                            }
+                        })),
                 ),
             )
             // ── Right: mode, model, send ─────────
@@ -1051,8 +1081,16 @@ impl Render for AcpChatView {
                                     msg.role,
                                     AcpThreadMessageRole::Thought | AcpThreadMessageRole::Tool
                                 );
+                                // Thinking blocks start collapsed; tool blocks start expanded.
+                                // collapsed_ids stores IDs that have been toggled from default.
                                 let is_collapsed =
-                                    is_collapsible && self.collapsed_ids.contains(&msg_id);
+                                    if matches!(msg.role, AcpThreadMessageRole::Thought) {
+                                        // Thinking: collapsed by default, toggle to expand
+                                        !self.collapsed_ids.contains(&msg_id)
+                                    } else {
+                                        // Tool: expanded by default, toggle to collapse
+                                        is_collapsible && self.collapsed_ids.contains(&msg_id)
+                                    };
 
                                 let on_toggle: Option<ToggleHandler> = if is_collapsible {
                                     Some(Box::new(cx.listener(move |this, _event, _window, cx| {
