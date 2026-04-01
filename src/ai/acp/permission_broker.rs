@@ -22,6 +22,21 @@ pub(crate) struct AcpApprovalOption {
     pub kind: String,
 }
 
+impl AcpApprovalOption {
+    /// Canonical display label: `"Name (Kind)"`.
+    ///
+    /// Used in both the approval modal option list and the post-approval
+    /// system message so they always match.
+    pub(crate) fn summary_label(&self) -> String {
+        format!("{} ({})", self.name, self.kind)
+    }
+}
+
+/// Build summary labels for a slice of approval options.
+pub(crate) fn summarize_approval_options(options: &[AcpApprovalOption]) -> Vec<String> {
+    options.iter().map(AcpApprovalOption::summary_label).collect()
+}
+
 /// Structured preview data for an approval request.
 ///
 /// Carries enough information for the UI to render a rich tool-call
@@ -42,6 +57,54 @@ pub(crate) struct AcpApprovalPreview {
     pub output_preview: Option<String>,
     /// Human-readable labels for each option (e.g., "Allow (AllowOnce)").
     pub option_summary: Vec<String>,
+}
+
+impl AcpApprovalPreview {
+    /// Start building a preview with the required fields.
+    pub(crate) fn new(
+        tool_title: impl Into<String>,
+        tool_call_id: impl Into<String>,
+    ) -> Self {
+        Self {
+            tool_title: tool_title.into(),
+            tool_call_id: tool_call_id.into(),
+            subject: None,
+            summary: None,
+            input_preview: None,
+            output_preview: None,
+            option_summary: Vec::new(),
+        }
+    }
+
+    /// Set the primary subject (e.g., file path or command). Blank values are ignored.
+    pub(crate) fn with_subject(mut self, subject: Option<String>) -> Self {
+        self.subject = subject.filter(|v| !v.trim().is_empty());
+        self
+    }
+
+    /// Set a short summary of the tool call action. Blank values are ignored.
+    pub(crate) fn with_summary(mut self, summary: Option<String>) -> Self {
+        self.summary = summary.filter(|v| !v.trim().is_empty());
+        self
+    }
+
+    /// Set a truncated preview of the tool call input payload. Blank values are ignored.
+    pub(crate) fn with_input_preview(mut self, input_preview: Option<String>) -> Self {
+        self.input_preview = input_preview.filter(|v| !v.trim().is_empty());
+        self
+    }
+
+    /// Set a truncated preview of the tool call output payload. Blank values are ignored.
+    pub(crate) fn with_output_preview(mut self, output_preview: Option<String>) -> Self {
+        self.output_preview = output_preview.filter(|v| !v.trim().is_empty());
+        self
+    }
+
+    /// Set option summary labels from approval options via `summarize_approval_options`.
+    pub(crate) fn with_options(mut self, options: &[AcpApprovalOption]) -> Self {
+        self.option_summary = summarize_approval_options(options);
+        self
+    }
 }
 
 /// Input for constructing an approval request (before assigning an ID).
@@ -220,5 +283,86 @@ mod tests {
 
         assert_eq!(result, None);
         handle.join().expect("responder thread should finish");
+    }
+
+    #[test]
+    fn summary_label_formats_name_and_kind() {
+        let option = AcpApprovalOption {
+            option_id: "allow".to_string(),
+            name: "Allow".to_string(),
+            kind: "AllowOnce".to_string(),
+        };
+        assert_eq!(option.summary_label(), "Allow (AllowOnce)");
+    }
+
+    #[test]
+    fn summarize_approval_options_maps_all() {
+        let options = vec![
+            AcpApprovalOption {
+                option_id: "allow".to_string(),
+                name: "Allow".to_string(),
+                kind: "AllowOnce".to_string(),
+            },
+            AcpApprovalOption {
+                option_id: "deny".to_string(),
+                name: "Deny".to_string(),
+                kind: "RejectOnce".to_string(),
+            },
+        ];
+        assert_eq!(
+            summarize_approval_options(&options),
+            vec!["Allow (AllowOnce)", "Deny (RejectOnce)"],
+        );
+    }
+
+    #[test]
+    fn preview_builder_sets_all_fields() {
+        let options = vec![
+            AcpApprovalOption {
+                option_id: "allow".to_string(),
+                name: "Allow".to_string(),
+                kind: "AllowOnce".to_string(),
+            },
+            AcpApprovalOption {
+                option_id: "deny".to_string(),
+                name: "Deny".to_string(),
+                kind: "RejectOnce".to_string(),
+            },
+        ];
+        let preview = AcpApprovalPreview::new("terminal/create", "client-terminal-create")
+            .with_subject(Some("bun run dev".to_string()))
+            .with_summary(Some("Spawn a subprocess owned by the ACP client".to_string()))
+            .with_input_preview(Some("{ \"command\": \"bun\" }".to_string()))
+            .with_output_preview(Some("ok".to_string()))
+            .with_options(&options);
+
+        assert_eq!(preview.tool_title, "terminal/create");
+        assert_eq!(preview.tool_call_id, "client-terminal-create");
+        assert_eq!(preview.subject.as_deref(), Some("bun run dev"));
+        assert_eq!(
+            preview.summary.as_deref(),
+            Some("Spawn a subprocess owned by the ACP client"),
+        );
+        assert_eq!(
+            preview.input_preview.as_deref(),
+            Some("{ \"command\": \"bun\" }"),
+        );
+        assert_eq!(preview.output_preview.as_deref(), Some("ok"));
+        assert_eq!(
+            preview.option_summary,
+            vec!["Allow (AllowOnce)", "Deny (RejectOnce)"],
+        );
+    }
+
+    #[test]
+    fn preview_builder_filters_blank_strings() {
+        let preview = AcpApprovalPreview::new("test", "id")
+            .with_subject(Some("  ".to_string()))
+            .with_summary(Some(String::new()))
+            .with_input_preview(None);
+
+        assert!(preview.subject.is_none());
+        assert!(preview.summary.is_none());
+        assert!(preview.input_preview.is_none());
     }
 }

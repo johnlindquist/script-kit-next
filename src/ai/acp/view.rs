@@ -522,6 +522,50 @@ impl AcpChatView {
             .into_any_element()
     }
 
+    fn render_mode_badge(mode_id: &str) -> gpui::AnyElement {
+        let theme = theme::get_cached_theme();
+
+        div()
+            .px(px(8.0))
+            .py(px(3.0))
+            .rounded(px(999.0))
+            .bg(rgba((theme.colors.accent.selected << 8) | 0x14))
+            .border_1()
+            .border_color(rgba((theme.colors.accent.selected << 8) | 0x30))
+            .text_xs()
+            .opacity(0.78)
+            .child(format!("Mode: {mode_id}"))
+            .into_any_element()
+    }
+
+    fn render_commands_strip(commands: &[String]) -> gpui::AnyElement {
+        let theme = theme::get_cached_theme();
+
+        div()
+            .w_full()
+            .px(px(12.0))
+            .py(px(6.0))
+            .rounded(px(8.0))
+            .bg(rgba((theme.colors.text.primary << 8) | 0x06))
+            .border_1()
+            .border_color(rgba((theme.colors.ui.border << 8) | 0x20))
+            .child(
+                div()
+                    .text_xs()
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .opacity(0.62)
+                    .pb(px(3.0))
+                    .child("Commands"),
+            )
+            .child(
+                div()
+                    .text_xs()
+                    .opacity(0.58)
+                    .child(commands.join(" \u{00b7} ")),
+            )
+            .into_any_element()
+    }
+
     fn render_plan_strip(entries: &[String]) -> gpui::AnyElement {
         let theme = theme::get_cached_theme();
 
@@ -647,6 +691,8 @@ impl Render for AcpChatView {
         let has_pending_permission = thread.pending_permission.is_some();
         let pending_permission = thread.pending_permission.clone();
         let plan_entries = thread.active_plan_entries().to_vec();
+        let active_mode = thread.active_mode_id().map(String::from);
+        let available_commands = thread.available_commands().to_vec();
         let messages: Vec<AcpThreadMessage> = thread.messages.clone();
         let colors = Self::prompt_colors();
 
@@ -690,6 +736,16 @@ impl Render for AcpChatView {
                         .child(Self::render_plan_strip(&plan_entries)),
                 )
             })
+            // ── Commands strip ───────────────────────────────
+            .when(!available_commands.is_empty(), |d| {
+                d.child(
+                    div()
+                        .w_full()
+                        .px(px(8.0))
+                        .pb(px(4.0))
+                        .child(Self::render_commands_strip(&available_commands)),
+                )
+            })
             // ── Streaming hint ────────────────────────────────
             .when(
                 matches!(status, AcpThreadStatus::Streaming),
@@ -723,7 +779,10 @@ impl Render for AcpChatView {
                             .opacity(0.45)
                             .child("Enter to send"),
                     )
-                    .child(Self::render_status_badge(status, has_pending_permission)),
+                    .child(Self::render_status_badge(status, has_pending_permission))
+                    .when_some(active_mode.clone(), |d, mode_id| {
+                        d.child(Self::render_mode_badge(&mode_id))
+                    }),
             )
             // ── Permission overlay ────────────────────────────
             .when_some(pending_permission, |d, request| {
