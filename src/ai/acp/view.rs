@@ -53,7 +53,7 @@ pub(crate) struct AcpChatView {
     /// Index of the currently highlighted permission option in the overlay.
     permission_index: usize,
     /// Message IDs that are currently collapsed (thinking/tool blocks).
-    collapsed_ids: HashSet<u64>,
+    pub(crate) collapsed_ids: HashSet<u64>,
     /// Track message count for auto-scroll detection.
     last_message_count: usize,
     /// Cursor blink state.

@@ -450,6 +450,22 @@ pub fn get_acp_chat_actions() -> Vec<Action> {
         .with_icon(IconName::ArrowRight)
         .with_section("Chat"),
         Action::new(
+            "acp_expand_all",
+            "Expand All Blocks",
+            Some("Show all thinking and tool output blocks".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_icon(IconName::ChevronDown)
+        .with_section("View"),
+        Action::new(
+            "acp_collapse_all",
+            "Collapse All Blocks",
+            Some("Hide all thinking and tool output blocks".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_icon(IconName::ChevronRight)
+        .with_section("View"),
+        Action::new(
             "acp_close",
             "Close AI Chat",
             Some("Close this chat and return to the main menu".to_string()),
