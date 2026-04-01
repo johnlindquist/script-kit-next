@@ -83,6 +83,51 @@ impl AcpAgentConfig {
     }
 }
 
+/// Build an `AcpAgentConfig` for Claude Code from the user's Script Kit config.
+///
+/// Reads `claudeCode` settings (path, permissionMode, allowedTools, addDirs)
+/// and maps them to ACP agent CLI arguments. Does not touch the PTY terminal
+/// path — this is only used by the ACP event-driven surface.
+pub(crate) fn claude_code_agent_config() -> anyhow::Result<AcpAgentConfig> {
+    let config = crate::config::load_config();
+    let claude_code = config.claude_code.unwrap_or_default();
+
+    let mut args = Vec::new();
+
+    if !claude_code.permission_mode.trim().is_empty() {
+        args.push("--permission-mode".to_string());
+        args.push(claude_code.permission_mode);
+    }
+
+    if let Some(allowed_tools) = claude_code
+        .allowed_tools
+        .filter(|value| !value.trim().is_empty())
+    {
+        args.push("--allowedTools".to_string());
+        args.push(allowed_tools);
+    }
+
+    for add_dir in claude_code
+        .add_dirs
+        .into_iter()
+        .filter(|value| !value.trim().is_empty())
+    {
+        args.push("--add-dir".to_string());
+        args.push(add_dir);
+    }
+
+    Ok(AcpAgentConfig {
+        id: "claude-code".to_string(),
+        display_name: "Claude Code".to_string(),
+        command: claude_code
+            .path
+            .unwrap_or_else(|| "claude".to_string()),
+        args,
+        env: HashMap::new(),
+        models: Vec::new(),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

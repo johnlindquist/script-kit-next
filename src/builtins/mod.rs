@@ -1365,20 +1365,25 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         entries.push(BuiltInEntry::new_with_icon(
             "builtin-do-in-current-app",
             crate::menu_bar::current_app_commands::DO_IN_CURRENT_APP_LABEL,
-            "Type things like 'new private window' or 'close duplicate tabs'; Script Kit runs a matching menu command or generates a script when no direct command exists",
+            "Browse, search, and run menu bar commands from the frontmost app; if no direct command exists, Script Kit generates a script",
             vec![
                 "do",
                 "current",
                 "app",
+                "browse",
+                "show",
+                "search",
+                "command",
+                "commands",
                 "run",
                 "action",
                 "menu",
-                "command",
+                "menubar",
+                "frontmost",
                 "execute",
                 "automation",
                 "automate",
                 "intent",
-                "frontmost",
                 "script",
                 "shortcut",
                 // Overlap with GenerateScript / GenerateScriptFromCurrentApp so
@@ -1416,24 +1421,6 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             ],
             BuiltInFeature::UtilityCommand(UtilityCommandType::TurnThisIntoCommand),
             "🧩",
-        ));
-
-        entries.push(BuiltInEntry::new_with_icon(
-            "builtin-current-app-commands",
-            "Current App Commands",
-            "Search and run menu bar commands from the frontmost app",
-            vec![
-                "current",
-                "app",
-                "commands",
-                "menu",
-                "menubar",
-                "frontmost",
-                "actions",
-                "shortcut",
-            ],
-            BuiltInFeature::UtilityCommand(UtilityCommandType::CurrentAppCommands),
-            "☰",
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
@@ -2652,24 +2639,35 @@ mod tests {
     }
 
     // =====================================================================
-    // Current App Commands tests
+    // Current App Commands collapsed into Do in Current App
     // =====================================================================
 
     #[test]
-    fn current_app_commands_builtin_is_registered() {
+    fn current_app_commands_builtin_is_no_longer_registered() {
         let entries = get_builtin_entries(&BuiltInConfig::default());
         let found = entries
             .iter()
             .find(|e| e.id == "builtin-current-app-commands");
         assert!(
-            found.is_some(),
-            "builtin-current-app-commands must be registered"
+            found.is_none(),
+            "builtin-current-app-commands should no longer be registered (collapsed into Do in Current App)"
         );
-        let entry = found.expect("just asserted");
-        assert_eq!(entry.name, "Current App Commands");
-        assert_eq!(
-            entry.feature,
-            BuiltInFeature::UtilityCommand(UtilityCommandType::CurrentAppCommands)
+    }
+
+    #[test]
+    fn do_in_current_app_has_commands_keywords() {
+        let entries = get_builtin_entries(&BuiltInConfig::default());
+        let entry = entries
+            .iter()
+            .find(|e| e.id == "builtin-do-in-current-app")
+            .expect("builtin-do-in-current-app must be registered");
+        assert!(
+            entry.keywords.contains(&"commands".to_string()),
+            "Do in Current App should include 'commands' keyword from collapsed entry"
+        );
+        assert!(
+            entry.keywords.contains(&"menubar".to_string()),
+            "Do in Current App should include 'menubar' keyword from collapsed entry"
         );
     }
 

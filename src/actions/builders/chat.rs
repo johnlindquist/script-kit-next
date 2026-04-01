@@ -99,16 +99,6 @@ pub fn get_chat_context_actions(info: &ChatPromptInfo) -> Vec<Action> {
         .with_icon(IconName::MessageCircle),
     );
 
-    actions.push(
-        Action::new(
-            "chat:expand_full_chat",
-            "Expand to Full Chat",
-            Some("Opens the AI harness terminal (compatibility)".to_string()),
-            ActionCategory::ScriptContext,
-        )
-        .with_icon(IconName::MessageCircle),
-    );
-
     if info.has_response {
         actions.push(
             Action::new(

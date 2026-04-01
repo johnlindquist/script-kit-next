@@ -2035,8 +2035,8 @@ mod from_dialog_builtin_action_validation_tests_2 {
         let actions = get_chat_context_actions(&info);
         assert_eq!(
             actions.len(),
-            3,
-            "Empty chat should have continue_in_chat, expand_full_chat, and capture_screen_area"
+            2,
+            "Empty chat should have continue_in_chat and capture_screen_area"
         );
         assert_eq!(actions[0].id, "chat:continue_in_chat");
     }
@@ -7063,7 +7063,7 @@ mod from_dialog_builtin_action_validation_tests_4 {
         assert!(ids.contains(&"chat:continue_in_chat"));
         assert!(!ids.contains(&"chat:copy_response"));
         assert!(!ids.contains(&"chat:clear_conversation"));
-        assert_eq!(actions.len(), 3);
+        assert_eq!(actions.len(), 2);
     }
 
     #[test]
@@ -9340,8 +9340,8 @@ mod from_dialog_builtin_action_validation_tests_5 {
                 has_response: false,
             };
             let actions = get_chat_context_actions(&info);
-            // continue + expand + capture (no models, no copy, no clear)
-            assert_eq!(actions.len(), 3);
+            // continue + capture (no models, no copy, no clear)
+            assert_eq!(actions.len(), 2);
             assert_eq!(actions[0].id, "chat:continue_in_chat");
         }
 
@@ -9365,8 +9365,8 @@ mod from_dialog_builtin_action_validation_tests_5 {
                 has_response: true,
             };
             let actions = get_chat_context_actions(&info);
-            // 2 models + continue + expand + copy_response + clear + capture = 7
-            assert_eq!(actions.len(), 7);
+            // 2 models + continue + copy_response + clear + capture = 6
+            assert_eq!(actions.len(), 6);
         }
     
         #[test]
@@ -10539,8 +10539,8 @@ mod from_dialog_builtin_action_validation_tests_6 {
                 has_response: false,
             };
             let actions = get_chat_context_actions(&info);
-            // 20 models + continue + expand + capture = 23
-            assert_eq!(actions.len(), 23);
+            // 20 models + continue + capture = 22
+            assert_eq!(actions.len(), 22);
             for action in actions.iter().take(20) {
                 assert!(
                     action.id.starts_with("chat:select_model_"),
@@ -10614,7 +10614,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
                 has_response: false,
             };
             let actions = get_chat_context_actions(&info);
-            assert_eq!(actions.len(), 3);
+            assert_eq!(actions.len(), 2);
             assert_eq!(actions[0].id, "chat:continue_in_chat");
         }
 
@@ -10635,7 +10635,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
             assert!(ids.contains(&"chat:continue_in_chat"));
             assert!(ids.contains(&"chat:copy_response"));
             assert!(ids.contains(&"chat:clear_conversation"));
-            assert_eq!(actions.len(), 6); // 1 model + continue + expand + copy + clear + capture
+            assert_eq!(actions.len(), 5); // 1 model + continue + copy + clear + capture
         }
     
         #[test]
@@ -20349,7 +20349,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
                 has_response: false,
             };
             let actions = get_chat_context_actions(&info);
-            assert_eq!(actions.len(), 3);
+            assert_eq!(actions.len(), 2);
             assert_eq!(actions[0].id, "chat:continue_in_chat");
         }
 

@@ -457,7 +457,7 @@ mod from_dialog_builtin_action_validation_tests_32 {
             has_response: false,
         };
         let actions = get_chat_context_actions(&info);
-        assert_eq!(actions.len(), 4, "1 model + continue + expand + capture = 4");
+        assert_eq!(actions.len(), 3, "1 model + continue + capture = 3");
     }
     
     // --- merged from part_02.rs ---
@@ -475,7 +475,7 @@ mod from_dialog_builtin_action_validation_tests_32 {
             has_response: true,
         };
         let actions = get_chat_context_actions(&info);
-        assert_eq!(actions.len(), 6, "1 model + continue + expand + copy + clear + capture = 6");
+        assert_eq!(actions.len(), 5, "1 model + continue + copy + clear + capture = 5");
     }
     
     #[test]
@@ -533,7 +533,7 @@ mod from_dialog_builtin_action_validation_tests_32 {
             has_response: false,
         };
         let actions = get_chat_context_actions(&info);
-        assert_eq!(actions.len(), 3);
+        assert_eq!(actions.len(), 2);
         assert_eq!(actions[0].id, "chat:continue_in_chat");
     }
 
@@ -3240,8 +3240,8 @@ mod from_dialog_builtin_action_validation_tests_34 {
             has_response: false,
         };
         let actions = get_chat_context_actions(&info);
-        // 1 model + continue + expand + capture = 4
-        assert_eq!(actions.len(), 4);
+        // 1 model + continue + capture = 3
+        assert_eq!(actions.len(), 3);
         assert!(!actions.iter().any(|a| a.id == "chat:copy_response"));
         assert!(!actions.iter().any(|a| a.id == "chat:clear_conversation"));
     }
@@ -3295,8 +3295,8 @@ mod from_dialog_builtin_action_validation_tests_34 {
         let actions = get_chat_context_actions(&info);
         assert!(actions.iter().any(|a| a.id == "chat:copy_response"));
         assert!(actions.iter().any(|a| a.id == "chat:clear_conversation"));
-        // 1 model + continue + expand + copy + clear + capture = 6
-        assert_eq!(actions.len(), 6);
+        // 1 model + continue + copy + clear + capture = 5
+        assert_eq!(actions.len(), 5);
     }
 
     // =====================================================================
@@ -7748,7 +7748,7 @@ mod from_dialog_builtin_action_validation_tests_38 {
                 has_response: false,
             };
             let actions = get_chat_context_actions(&info);
-            assert_eq!(actions.len(), 3);
+            assert_eq!(actions.len(), 2);
         }
 
         #[test]
@@ -13211,8 +13211,8 @@ mod from_dialog_builtin_action_validation_tests_41 {
                 has_response: true,
             };
             let actions = get_chat_context_actions(&info);
-            // 1 model + continue + expand + copy_response + clear + capture = 6
-            assert_eq!(actions.len(), 6);
+            // 1 model + continue + copy_response + clear + capture = 5
+            assert_eq!(actions.len(), 5);
         }
 
         #[test]
@@ -13224,8 +13224,8 @@ mod from_dialog_builtin_action_validation_tests_41 {
                 has_response: false,
             };
             let actions = get_chat_context_actions(&info);
-            // continue + expand + capture
-            assert_eq!(actions.len(), 3);
+            // continue + capture
+            assert_eq!(actions.len(), 2);
             assert_eq!(actions[0].id, "chat:continue_in_chat");
         }
 
@@ -14423,7 +14423,7 @@ mod from_dialog_builtin_action_validation_tests_44 {
             has_response: false,
         };
         let actions = get_chat_context_actions(&info);
-        assert_eq!(actions.len(), 3);
+        assert_eq!(actions.len(), 2);
     }
 
     #[test]
@@ -14447,7 +14447,7 @@ mod from_dialog_builtin_action_validation_tests_44 {
             has_response: false,
         };
         let actions = get_chat_context_actions(&info);
-        assert_eq!(actions.len(), 4);
+        assert_eq!(actions.len(), 3);
     }
 
     #[test]
@@ -14459,7 +14459,7 @@ mod from_dialog_builtin_action_validation_tests_44 {
             has_response: true,
         };
         let actions = get_chat_context_actions(&info);
-        assert_eq!(actions.len(), 4);
+        assert_eq!(actions.len(), 3);
     }
 
     // =========== 23. Chat context: model IDs use select_model_{model.id} ===========
@@ -15932,7 +15932,7 @@ mod from_dialog_builtin_action_validation_tests_45 {
             has_response: true,
         };
         let actions = get_chat_context_actions(&info);
-        assert_eq!(actions.len(), 7);
+        assert_eq!(actions.len(), 6);
     }
 
     #[test]

@@ -2211,8 +2211,8 @@ mod from_dialog_builtin_action_validation_tests_22 {
             has_response: false,
         };
         let actions = get_chat_context_actions(&info);
-        // continue_in_chat + expand_full_chat + capture_screen_area
-        assert_eq!(actions.len(), 3);
+        // continue_in_chat + capture_screen_area
+        assert_eq!(actions.len(), 2);
         assert_eq!(actions[0].id, "chat:continue_in_chat");
     }
 
@@ -2236,8 +2236,8 @@ mod from_dialog_builtin_action_validation_tests_22 {
             has_response: true,
         };
         let actions = get_chat_context_actions(&info);
-        // 2 models + continue + expand + copy_response + clear_conversation + capture = 7
-        assert_eq!(actions.len(), 7);
+        // 2 models + continue + copy_response + clear_conversation + capture = 6
+        assert_eq!(actions.len(), 6);
     }
 
     #[test]
@@ -4909,8 +4909,8 @@ mod from_dialog_builtin_action_validation_tests_24 {
             has_response: false,
         };
         let actions = get_chat_context_actions(&info);
-        // continue_in_chat + expand_full_chat + capture_screen_area
-        assert_eq!(actions.len(), 3);
+        // continue_in_chat + capture_screen_area
+        assert_eq!(actions.len(), 2);
         assert_eq!(actions[0].id, "chat:continue_in_chat");
     }
 
@@ -4923,7 +4923,7 @@ mod from_dialog_builtin_action_validation_tests_24 {
             has_response: true,
         };
         let actions = get_chat_context_actions(&info);
-        assert_eq!(actions.len(), 4);
+        assert_eq!(actions.len(), 3);
         assert!(actions.iter().any(|a| a.id == "chat:copy_response"));
         assert!(!actions.iter().any(|a| a.id == "chat:clear_conversation"));
     }
@@ -4937,7 +4937,7 @@ mod from_dialog_builtin_action_validation_tests_24 {
             has_response: false,
         };
         let actions = get_chat_context_actions(&info);
-        assert_eq!(actions.len(), 4);
+        assert_eq!(actions.len(), 3);
         assert!(!actions.iter().any(|a| a.id == "chat:copy_response"));
         assert!(actions.iter().any(|a| a.id == "chat:clear_conversation"));
     }
@@ -4951,7 +4951,7 @@ mod from_dialog_builtin_action_validation_tests_24 {
             has_response: true,
         };
         let actions = get_chat_context_actions(&info);
-        assert_eq!(actions.len(), 5);
+        assert_eq!(actions.len(), 4);
         assert!(actions.iter().any(|a| a.id == "chat:copy_response"));
         assert!(actions.iter().any(|a| a.id == "chat:clear_conversation"));
     }
@@ -8024,7 +8024,7 @@ mod from_dialog_builtin_action_validation_tests_27 {
             has_response: false,
         };
         let actions = get_chat_context_actions(&info);
-        assert_eq!(actions.len(), 3);
+        assert_eq!(actions.len(), 2);
         assert_eq!(actions[0].id, "chat:continue_in_chat");
     }
 
@@ -8041,10 +8041,10 @@ mod from_dialog_builtin_action_validation_tests_27 {
             has_response: true,
         };
         let actions = get_chat_context_actions(&info);
-        // 1 model + continue + expand + copy_response + clear + capture = 6
-        assert_eq!(actions.len(), 6);
+        // 1 model + continue + copy_response + clear + capture = 5
+        assert_eq!(actions.len(), 5);
     }
-    
+
     #[test]
     fn cat27_06_chat_three_models_no_flags() {
         let info = ChatPromptInfo {
@@ -8070,8 +8070,8 @@ mod from_dialog_builtin_action_validation_tests_27 {
             has_response: false,
         };
         let actions = get_chat_context_actions(&info);
-        // 3 models + continue + expand + capture = 6
-        assert_eq!(actions.len(), 6);
+        // 3 models + continue + capture = 5
+        assert_eq!(actions.len(), 5);
     }
     
     #[test]
@@ -8083,8 +8083,8 @@ mod from_dialog_builtin_action_validation_tests_27 {
             has_response: true,
         };
         let actions = get_chat_context_actions(&info);
-        // continue + expand + copy_response + capture = 4
-        assert_eq!(actions.len(), 4);
+        // continue + copy_response + capture = 3
+        assert_eq!(actions.len(), 3);
         let ids: Vec<&str> = actions.iter().map(|a| a.id.as_str()).collect();
         assert!(ids.contains(&"chat:copy_response"));
         assert!(!ids.contains(&"chat:clear_conversation"));
