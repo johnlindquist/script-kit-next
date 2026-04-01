@@ -90,6 +90,12 @@ pub enum BatchCommand {
         #[serde(default)]
         submit: bool,
     },
+    SelectBySemanticId {
+        #[serde(rename = "semanticId")]
+        semantic_id: String,
+        #[serde(default)]
+        submit: bool,
+    },
     FilterAndSelect {
         filter: String,
         #[serde(rename = "selectFirst", default)]

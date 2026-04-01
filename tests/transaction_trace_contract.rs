@@ -72,6 +72,31 @@ impl TransactionStateProvider for FakeProvider {
 
         Ok(Some(value.to_string()))
     }
+
+    fn select_by_semantic_id(&mut self, semantic_id: &str, submit: bool) -> Result<Option<String>> {
+        if !self
+            .snapshot
+            .visible_semantic_ids
+            .iter()
+            .any(|id| id == semantic_id)
+        {
+            return Ok(None);
+        }
+
+        let value = semantic_id
+            .split(':')
+            .last()
+            .unwrap_or(semantic_id)
+            .to_string();
+
+        self.snapshot.selected_value = Some(value.clone());
+        self.snapshot.focused_semantic_id = Some(semantic_id.to_string());
+        if submit {
+            self.snapshot.input_value = Some(value.clone());
+        }
+
+        Ok(Some(value))
+    }
 }
 
 // ── waitFor tests ──────────────────────────────────────────────────────────
@@ -445,4 +470,79 @@ fn trace_log_returns_none_for_missing_request_id() {
     let result =
         read_latest_transaction_trace(Some(&path), Some("txn-missing")).expect("should not error");
     assert!(result.is_none());
+}
+
+// ── selectBySemanticId tests ──────────────────────────────────────────────
+
+#[test]
+fn batch_select_by_semantic_id_success() {
+    let mut provider = FakeProvider::default();
+
+    let commands = vec![
+        BatchCommand::SetInput {
+            text: "apple".to_string(),
+        },
+        BatchCommand::WaitFor {
+            condition: WaitCondition::Named(WaitNamedCondition::ChoicesRendered),
+            timeout: Some(50),
+            poll_interval: Some(10),
+        },
+        BatchCommand::SelectBySemanticId {
+            semantic_id: "choice:0:apple".to_string(),
+            submit: true,
+        },
+    ];
+
+    let result = execute_batch(
+        &mut provider,
+        "txn-sem-ok".to_string(),
+        &commands,
+        None,
+        TransactionTraceMode::Off,
+    )
+    .expect("batch should complete");
+
+    assert!(result.success, "all commands should succeed");
+    assert_eq!(result.results.len(), 3);
+    assert_eq!(result.results[2].command, "selectBySemanticId");
+    assert!(result.results[2].success);
+    assert_eq!(
+        result.results[2].value.as_deref(),
+        Some("apple"),
+        "selectBySemanticId should return extracted value"
+    );
+    assert!(result.failed_at.is_none());
+}
+
+#[test]
+fn batch_select_by_semantic_id_not_found() {
+    let mut provider = FakeProvider::default();
+
+    let commands = vec![
+        BatchCommand::SetInput {
+            text: "apple".to_string(),
+        },
+        BatchCommand::SelectBySemanticId {
+            semantic_id: "choice:0:grape".to_string(),
+            submit: false,
+        },
+    ];
+
+    let result = execute_batch(
+        &mut provider,
+        "txn-sem-miss".to_string(),
+        &commands,
+        None,
+        TransactionTraceMode::Off,
+    )
+    .expect("batch should complete");
+
+    assert!(!result.success);
+    assert_eq!(result.failed_at, Some(1));
+    let error = result.results[1].error.as_ref().expect("error");
+    assert_eq!(error.code, TransactionErrorCode::SelectionNotFound);
+    assert!(
+        error.message.contains("choice:0:grape"),
+        "error should mention the missing semantic ID"
+    );
 }

@@ -61,6 +61,12 @@ Send commands via fd 3. Common commands:
 # Set filter text
 echo '{"type":"setFilter","text":"search term"}' >&3
 
+# Discover visible elements (returns semantic IDs)
+echo '{"type":"getElements","requestId":"e1"}' >&3
+
+# Select element by semantic ID (from getElements response)
+echo '{"type":"batch","requestId":"b1","commands":[{"type":"selectBySemanticId","semanticId":"choice:0:apple","submit":true}]}' >&3
+
 # Trigger a built-in view
 echo '{"type":"triggerBuiltin","name":"clipboard"}' >&3
 echo '{"type":"triggerBuiltin","name":"tab-ai"}' >&3

@@ -1818,6 +1818,50 @@ impl ScriptListApp {
                                     }
                                 }
                             }
+                            protocol::BatchCommand::SelectBySemanticId { semantic_id, submit } => {
+                                let submit = *submit;
+                                let semantic_id = semantic_id.clone();
+                                match this.update(cx, |this, cx| {
+                                    this.select_choice_by_semantic_id(&semantic_id, submit, cx)
+                                }) {
+                                    Ok(Ok(v)) => {
+                                        tracing::info!(category = "BATCH", request_id = %rid, index = index, command = "selectBySemanticId", value = %v, "batch.step.ok");
+                                        results.push(protocol::BatchResultEntry {
+                                            index,
+                                            success: true,
+                                            command: "selectBySemanticId".to_string(),
+                                            elapsed: Some(cmd_start.elapsed().as_millis() as u64),
+                                            value: Some(v),
+                                            error: None,
+                                        });
+                                    }
+                                    Ok(Err(e)) => {
+                                        tracing::info!(category = "BATCH", request_id = %rid, index = index, command = "selectBySemanticId", error = %e, "batch.step.error");
+                                        results.push(protocol::BatchResultEntry {
+                                            index,
+                                            success: false,
+                                            command: "selectBySemanticId".to_string(),
+                                            elapsed: Some(cmd_start.elapsed().as_millis() as u64),
+                                            value: None,
+                                            error: Some(protocol::TransactionError::selection_not_found(format!("{e}"))),
+                                        });
+                                        failed = true;
+                                        if opts.stop_on_error { break; }
+                                    }
+                                    Err(e) => {
+                                        results.push(protocol::BatchResultEntry {
+                                            index,
+                                            success: false,
+                                            command: "selectBySemanticId".to_string(),
+                                            elapsed: Some(cmd_start.elapsed().as_millis() as u64),
+                                            value: None,
+                                            error: Some(protocol::TransactionError::action_failed(format!("{e}"))),
+                                        });
+                                        failed = true;
+                                        if opts.stop_on_error { break; }
+                                    }
+                                }
+                            }
                             protocol::BatchCommand::FilterAndSelect { filter, select_first, submit } => {
                                 let filter = filter.clone();
                                 let select_first = *select_first;
@@ -3161,6 +3205,41 @@ impl ScriptListApp {
         Ok(selected)
     }
 
+    /// Select a choice by semantic ID, optionally submitting.
+    fn select_choice_by_semantic_id(
+        &mut self,
+        semantic_id: &str,
+        submit: bool,
+        cx: &mut Context<Self>,
+    ) -> anyhow::Result<String> {
+        let choices = match &self.current_view {
+            AppView::ArgPrompt { choices, .. }
+            | AppView::MiniPrompt { choices, .. }
+            | AppView::MicroPrompt { choices, .. } => choices.clone(),
+            _ => anyhow::bail!("selectBySemanticId only supports choice-backed prompts"),
+        };
+
+        let filtered = self.get_filtered_arg_choices(&choices);
+        let Some(index) = filtered
+            .iter()
+            .enumerate()
+            .position(|(i, choice)| choice.generate_id(i) == semantic_id)
+        else {
+            anyhow::bail!("No visible choice matched semantic ID '{semantic_id}'");
+        };
+
+        self.arg_selected_index = index;
+        cx.notify();
+
+        let selected = filtered[index].value.clone();
+
+        if submit {
+            self.submit_current_value(cx);
+        }
+
+        Ok(selected)
+    }
+
     /// Select the first choice in the filtered list.
     fn select_first_choice(
         &mut self,
@@ -3227,6 +3306,7 @@ fn batch_command_name(cmd: &protocol::BatchCommand) -> String {
         protocol::BatchCommand::SetInput { .. } => "setInput".to_string(),
         protocol::BatchCommand::WaitFor { .. } => "waitFor".to_string(),
         protocol::BatchCommand::SelectByValue { .. } => "selectByValue".to_string(),
+        protocol::BatchCommand::SelectBySemanticId { .. } => "selectBySemanticId".to_string(),
         protocol::BatchCommand::FilterAndSelect { .. } => "filterAndSelect".to_string(),
         protocol::BatchCommand::TypeAndSubmit { .. } => "typeAndSubmit".to_string(),
     }

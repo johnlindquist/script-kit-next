@@ -117,6 +117,23 @@ Named patterns agents select based on what they changed.
 
 ---
 
+### Recipe: verify-dynamic-element-selection
+
+**When:** Changes to element introspection, batch commands, or semantic ID generation.
+
+**Steps:**
+1. Build, launch, show
+2. Send `getElements` request: `{"type":"getElements","requestId":"e1"}`
+3. Read logs for `elementsResult` — verify semantic IDs returned (e.g., `choice:0:...`, `input:filter`)
+4. Use a returned semantic ID in a batch: `{"type":"batch","requestId":"b1","commands":[{"type":"selectBySemanticId","semanticId":"<id-from-step-3>","submit":false}]}`
+5. Read logs for `batchResult` — verify `success: true` and `value` field populated
+6. Capture screenshot → verify the element is now selected/focused
+
+**Pass:** getElements returns semantic IDs, selectBySemanticId resolves and selects the correct element.
+**Fail:** Empty elements list (check collect_elements.rs), selectBySemanticId returns SelectionNotFound (check semantic ID format matches).
+
+---
+
 ### Recipe: verify-regression
 
 **When:** Any change — run as a smoke test.
