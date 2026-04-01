@@ -442,6 +442,14 @@ pub fn get_acp_chat_actions() -> Vec<Action> {
         .with_icon(IconName::Trash)
         .with_section("Chat"),
         Action::new(
+            "acp_paste_to_frontmost",
+            "Paste Response to App",
+            Some("Paste the last response into the frontmost application".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_icon(IconName::ArrowRight)
+        .with_section("Chat"),
+        Action::new(
             "acp_close",
             "Close AI Chat",
             Some("Close this chat and return to the main menu".to_string()),
