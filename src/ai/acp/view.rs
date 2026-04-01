@@ -847,6 +847,9 @@ impl AcpChatView {
                                 .opacity(0.40)
                                 .child("attaching context\u{2026}"),
                         )
+                    })
+                    .when(!context_loading, |d| {
+                        d.child(div().text_xs().opacity(0.35).child("~/.scriptkit"))
                     }),
             )
             // ── Right: mode, model, send ─────────
@@ -1187,7 +1190,66 @@ impl Render for AcpChatView {
                     this.handle_key_down(event, cx);
                 }),
             )
-            // ── Message list ──────────────────────────────────
+            // ── TOP: Input (matches main menu dimensions) ────
+            .child(
+                div()
+                    .w_full()
+                    .px(px(12.0))
+                    .py(px(8.0))
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .h(px(22.0))
+                    .text_size(px(16.0))
+                    .child(if input_text.is_empty() {
+                        div()
+                            .flex()
+                            .items_center()
+                            .child(render_text_input_cursor_selection(TextInputRenderConfig {
+                                cursor: 0,
+                                selection: None,
+                                cursor_visible,
+                                cursor_color: theme.colors.accent.selected,
+                                text_color: theme.colors.text.primary,
+                                selection_color: theme.colors.accent.selected,
+                                selection_text_color: theme.colors.text.primary,
+                                ..TextInputRenderConfig::default_for_prompt("")
+                            }))
+                            .child(
+                                div()
+                                    .text_color(rgba((theme.colors.text.primary << 8) | 0x66))
+                                    .child("Ask Claude Code\u{2026}"),
+                            )
+                            .into_any_element()
+                    } else {
+                        render_text_input_cursor_selection(TextInputRenderConfig {
+                            cursor: input_cursor,
+                            selection: Some(input_selection),
+                            cursor_visible,
+                            cursor_color: theme.colors.accent.selected,
+                            text_color: theme.colors.text.primary,
+                            selection_color: theme.colors.accent.selected,
+                            selection_text_color: theme.colors.text.primary,
+                            ..TextInputRenderConfig::default_for_prompt(&input_text)
+                        })
+                        .into_any_element()
+                    }),
+            )
+            // ── Slash command menu (below input) ─────────────
+            .when_some(self.slash_menu_index, |d, idx| {
+                let filtered = self.filtered_slash_commands(cx);
+                if filtered.is_empty() {
+                    d
+                } else {
+                    d.child(
+                        div()
+                            .w_full()
+                            .px(px(8.0))
+                            .child(self.render_slash_menu(&filtered, idx, cx)),
+                    )
+                }
+            })
+            // ── Message list (middle, scrollable) ────────────
             .child(
                 div()
                     .id("acp-message-list")
@@ -1195,7 +1257,6 @@ impl Render for AcpChatView {
                     .overflow_y_scroll()
                     .track_scroll(&self.scroll_handle)
                     .min_h(gpui::px(0.))
-                    // No blocking empty state — the input is always available.
                     .when(!is_empty, |d| {
                         d.px(px(8.0)).py(px(8.0)).flex().flex_col().children(
                             messages.iter().enumerate().map(|(i, msg)| {
@@ -1224,7 +1285,6 @@ impl Render for AcpChatView {
                                     None
                                 };
 
-                                // Extra top margin when transitioning from user to non-user
                                 let prev_was_user = i > 0
                                     && matches!(messages[i - 1].role, AcpThreadMessageRole::User);
                                 let is_response_start = prev_was_user
@@ -1254,100 +1314,16 @@ impl Render for AcpChatView {
                         .child(Self::render_plan_strip(&plan_entries)),
                 )
             })
-            // ── Commands strip (only when idle + empty) ─────
-            .when(
-                !available_commands.is_empty()
-                    && is_empty
-                    && matches!(status, AcpThreadStatus::Idle),
-                |d| {
-                    d.child(
-                        div()
-                            .w_full()
-                            .px(px(8.0))
-                            .pb(px(4.0))
-                            .child(Self::render_commands_strip(&available_commands)),
-                    )
-                },
-            )
-            // ── Slash command menu (above input) ─────────────
-            .when_some(self.slash_menu_index, |d, idx| {
-                let filtered = self.filtered_slash_commands(cx);
-                if filtered.is_empty() {
-                    d
-                } else {
-                    d.child(
-                        div()
-                            .w_full()
-                            .px(px(8.0))
-                            .pb(px(4.0))
-                            .child(self.render_slash_menu(&filtered, idx, cx)),
-                    )
-                }
-            })
-            // ── Footer: input + toolbar ───────────────────────
-            .child(
-                div()
-                    .w_full()
-                    .px(px(8.0))
-                    .py(px(6.0))
-                    .flex()
-                    .flex_col()
-                    .gap(px(4.0))
-                    // Input area
-                    .child(
-                        div()
-                            .w_full()
-                            .min_h(px(28.0))
-                            .px(px(8.0))
-                            .py(px(6.0))
-                            .rounded(px(8.0))
-                            .bg(rgba((theme.colors.text.primary << 8) | 0x04))
-                            .border_1()
-                            .border_color(rgba((theme.colors.accent.selected << 8) | 0x28))
-                            .text_sm()
-                            .child(if input_text.is_empty() {
-                                div()
-                                    .flex()
-                                    .items_center()
-                                    .child(render_text_input_cursor_selection(
-                                        TextInputRenderConfig {
-                                            cursor: 0,
-                                            selection: None,
-                                            cursor_visible,
-                                            cursor_color: theme.colors.accent.selected,
-                                            text_color: theme.colors.text.primary,
-                                            selection_color: theme.colors.accent.selected,
-                                            selection_text_color: theme.colors.text.primary,
-                                            ..TextInputRenderConfig::default_for_prompt("")
-                                        },
-                                    ))
-                                    .child(div().opacity(0.40).child("Message Claude Code\u{2026}"))
-                                    .into_any_element()
-                            } else {
-                                render_text_input_cursor_selection(TextInputRenderConfig {
-                                    cursor: input_cursor,
-                                    selection: Some(input_selection),
-                                    cursor_visible,
-                                    cursor_color: theme.colors.accent.selected,
-                                    text_color: theme.colors.text.primary,
-                                    selection_color: theme.colors.accent.selected,
-                                    selection_text_color: theme.colors.text.primary,
-                                    ..TextInputRenderConfig::default_for_prompt(&input_text)
-                                })
-                                .into_any_element()
-                            }),
-                    )
-                    // Toolbar row
-                    .child(self.render_toolbar(
-                        status,
-                        !input_text.is_empty(),
-                        mode_label.as_deref(),
-                        &display_name,
-                        elapsed_secs,
-                        context_state,
-                        cx,
-                    )),
-            )
+            // ── BOTTOM: Toolbar with cwd ─────────────────────
+            .child(self.render_toolbar(
+                status,
+                !input_text.is_empty(),
+                mode_label.as_deref(),
+                &display_name,
+                elapsed_secs,
+                context_state,
+                cx,
+            ))
             // ── Permission overlay ────────────────────────────
             .when_some(pending_permission, |d, request| {
                 d.child(Self::render_permission_overlay(
