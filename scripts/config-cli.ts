@@ -19,6 +19,10 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
 
+// NOTE: This CLI only manages ~/.scriptkit/kit/config.ts.
+// Runtime preferences such as dictation.selectedDeviceId live in
+// ~/.scriptkit/kit/settings.json.
+
 // =============================================================================
 // Types (matching kit-sdk.ts and src/config.rs)
 // =============================================================================
@@ -86,10 +90,12 @@ interface CommandConfig {
   confirmationRequired?: boolean;
 }
 
+type ClaudeCodePermissionMode = "plan" | "dontAsk";
+
 interface ClaudeCodeConfig {
   enabled?: boolean;
   path?: string;
-  permissionMode?: string;
+  permissionMode?: ClaudeCodePermissionMode;
   allowedTools?: string;
   addDirs?: string[];
 }
@@ -170,6 +176,13 @@ const DEFAULTS: Config & Record<string, unknown> = {
   layout: {
     standardHeight: 500,
     maxHeight: 700
+  },
+  claudeCode: {
+    enabled: false,
+    path: undefined,
+    permissionMode: "plan",
+    allowedTools: undefined,
+    addDirs: []
   }
 };
 
@@ -333,7 +346,7 @@ const CONFIG_SCHEMA: ConfigOption[] = [
     key: "dictationHotkeyEnabled",
     type: "boolean",
     default: true,
-    description: "Whether the dictation hotkey is registered"
+    description: "Whether the dictation hotkey is registered (only when dictationHotkey is set)"
   },
   // --- Suggested ---
   {
@@ -424,10 +437,37 @@ const CONFIG_SCHEMA: ConfigOption[] = [
     description: "Per-command shortcuts and visibility overrides"
   },
   {
-    key: "claudeCode",
-    type: "ClaudeCodeConfig",
+    key: "claudeCode.enabled",
+    type: "boolean",
+    default: false,
+    description: "Enable the Claude Code CLI provider"
+  },
+  {
+    key: "claudeCode.path",
+    type: "string | undefined",
     default: undefined,
-    description: "Claude Code CLI provider configuration"
+    description: "Custom path to the claude executable"
+  },
+  {
+    key: "claudeCode.permissionMode",
+    type: '"plan" | "dontAsk"',
+    default: "plan",
+    description: 'Claude Code tool permission mode ("plan" asks first, "dontAsk" auto-runs tools)',
+    example: '"plan"'
+  },
+  {
+    key: "claudeCode.allowedTools",
+    type: "string | undefined",
+    default: undefined,
+    description: "Comma-separated list of allowed Claude Code tools",
+    example: '"Read,Edit,Bash(git:*)"'
+  },
+  {
+    key: "claudeCode.addDirs",
+    type: "string[]",
+    default: [],
+    description: "Additional directories passed to Claude Code with --add-dir",
+    example: '["/Users/you/projects"]'
   }
 ];
 

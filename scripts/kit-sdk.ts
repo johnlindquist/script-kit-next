@@ -927,7 +927,7 @@ export interface ClaudeCodeConfig {
    * @example "plan" // Safe: Claude asks before running commands
    * @example "dontAsk" // Dangerous: Claude runs tools without asking
    */
-  permissionMode?: string;
+  permissionMode?: ClaudeCodePermissionMode;
 
   /**
    * Comma-separated list of allowed tools.
@@ -1074,6 +1074,61 @@ export interface LayoutConfig {
    * @default 700
    */
   maxHeight?: number;
+}
+
+export type ClaudeCodePermissionMode = "plan" | "dontAsk";
+
+/**
+ * Theme preset selection persisted in `~/.scriptkit/kit/settings.json`.
+ */
+export interface ThemeSelectionPreferences {
+  /**
+   * Optional preset identifier, for example `"catppuccin-mocha"`.
+   */
+  presetId?: string;
+}
+
+/**
+ * Dictation runtime preferences persisted in `~/.scriptkit/kit/settings.json`.
+ */
+export interface DictationPreferences {
+  /**
+   * Persisted microphone device ID.
+   * Omit this field to use the macOS default microphone.
+   *
+   * @example "usb-mic"
+   */
+  selectedDeviceId?: string;
+}
+
+/**
+ * Runtime-persisted preferences stored in `~/.scriptkit/kit/settings.json`.
+ * These are separate from `Config` and are usually written by the app.
+ *
+ * @example
+ * ```typescript
+ * const prefs: ScriptKitUserPreferences = {
+ *   theme: { presetId: "catppuccin-mocha" },
+ *   dictation: { selectedDeviceId: "usb-mic" },
+ * };
+ * ```
+ */
+export interface ScriptKitUserPreferences {
+  /**
+   * Runtime-persisted launcher sizing.
+   * Uses the same shape as `Config.layout`.
+   */
+  layout?: LayoutConfig;
+
+  /**
+   * Selected theme preset.
+   */
+  theme?: ThemeSelectionPreferences;
+
+  /**
+   * Dictation microphone preference.
+   */
+  dictation?: DictationPreferences;
 }
 
 /**
@@ -1270,13 +1325,16 @@ export interface Config {
   /**
    * Hotkey for toggling dictation.
    * No default shortcut is registered; set this explicitly if you want one.
+   * The selected microphone is stored separately in
+   * `~/.scriptkit/kit/settings.json` as `dictation.selectedDeviceId`.
    *
    * @default undefined
    */
   dictationHotkey?: HotkeyConfig;
 
   /**
-   * Whether the dictation hotkey should be registered.
+   * Whether dictation hotkey registration is enabled.
+   * This does not create a shortcut by itself; set `dictationHotkey` too.
    *
    * @default true
    */

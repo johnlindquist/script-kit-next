@@ -110,7 +110,10 @@ pub fn get_file_search_directory_actions(dir_info: &FileSearchDirectoryInfo) -> 
         Action::new(
             "file:sort_name_desc",
             sort_title("Sort by Name (Z\u{2192}A)", name_desc_active),
-            Some(sort_description("Sorts reverse alphabetically", name_desc_active)),
+            Some(sort_description(
+                "Sorts reverse alphabetically",
+                name_desc_active,
+            )),
             ActionCategory::ScriptContext,
         )
         .with_icon(IconName::ArrowDown)
@@ -118,7 +121,10 @@ pub fn get_file_search_directory_actions(dir_info: &FileSearchDirectoryInfo) -> 
         Action::new(
             "file:sort_modified_desc",
             sort_title("Sort by Modified (Newest)", modified_desc_active),
-            Some(sort_description("Sorts by most recently modified", modified_desc_active)),
+            Some(sort_description(
+                "Sorts by most recently modified",
+                modified_desc_active,
+            )),
             ActionCategory::ScriptContext,
         )
         .with_icon(IconName::ArrowDown)
@@ -126,7 +132,10 @@ pub fn get_file_search_directory_actions(dir_info: &FileSearchDirectoryInfo) -> 
         Action::new(
             "file:sort_modified_asc",
             sort_title("Sort by Modified (Oldest)", modified_asc_active),
-            Some(sort_description("Sorts by least recently modified", modified_asc_active)),
+            Some(sort_description(
+                "Sorts by least recently modified",
+                modified_asc_active,
+            )),
             ActionCategory::ScriptContext,
         )
         .with_icon(IconName::ArrowUp)
