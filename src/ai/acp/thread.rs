@@ -172,6 +172,9 @@ pub(crate) struct AcpThread {
     /// O(1) lookup from tool_call_id to index in `active_tool_calls`.
     tool_call_lookup: HashMap<String, usize>,
 
+    /// When the current streaming turn started (for elapsed time display).
+    stream_started_at: Option<std::time::Instant>,
+
     /// Handle to the active stream pump task.
     stream_task: Option<Task<()>>,
     /// Handle to the permission listener task.
@@ -217,6 +220,7 @@ impl AcpThread {
             available_commands: Vec::new(),
             active_tool_calls: Vec::new(),
             tool_call_lookup: HashMap::new(),
+            stream_started_at: None,
             stream_task: None,
             permission_task: None,
             next_message_id: 1,
@@ -332,6 +336,7 @@ impl AcpThread {
         ));
         self.input.clear();
         self.context_bootstrap_note = None;
+        self.stream_started_at = Some(std::time::Instant::now());
         self.status = AcpThreadStatus::Streaming;
 
         let rx = self
@@ -559,6 +564,14 @@ impl AcpThread {
         if self.status == next {
             return false;
         }
+        // Track streaming start time.
+        if matches!(next, AcpThreadStatus::Streaming)
+            && !matches!(self.status, AcpThreadStatus::Streaming)
+        {
+            self.stream_started_at = Some(std::time::Instant::now());
+        } else if !matches!(next, AcpThreadStatus::Streaming) {
+            self.stream_started_at = None;
+        }
         self.status = next;
         true
     }
@@ -750,12 +763,18 @@ impl AcpThread {
         &self.display_name
     }
 
+    /// Elapsed seconds since streaming started, or `None` if not streaming.
+    pub(crate) fn stream_elapsed_secs(&self) -> Option<u64> {
+        self.stream_started_at.map(|t| t.elapsed().as_secs())
+    }
+
     /// Cancel the active streaming turn. Drops the pump task and resets to Idle.
     pub(crate) fn cancel_streaming(&mut self, cx: &mut Context<Self>) {
         if !matches!(self.status, AcpThreadStatus::Streaming) {
             return;
         }
         self.stream_task = None;
+        self.stream_started_at = None;
         self.status = AcpThreadStatus::Idle;
         cx.notify();
     }
@@ -816,6 +835,7 @@ impl AcpThread {
             available_commands: Vec::new(),
             active_tool_calls: Vec::new(),
             tool_call_lookup: HashMap::new(),
+            stream_started_at: None,
             stream_task: None,
             permission_task: None,
             next_message_id: 1,
@@ -912,6 +932,7 @@ mod tests {
             available_commands: Vec::new(),
             active_tool_calls: Vec::new(),
             tool_call_lookup: HashMap::new(),
+            stream_started_at: None,
             stream_task: None,
             permission_task: None,
             next_message_id: 1,

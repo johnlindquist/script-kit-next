@@ -795,6 +795,7 @@ impl AcpChatView {
         has_input_text: bool,
         mode_label: Option<&str>,
         display_name: &str,
+        elapsed_secs: Option<u64>,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let theme = theme::get_cached_theme();
@@ -843,6 +844,10 @@ impl AcpChatView {
                                 .child(mode)
                                 .child("\u{25BE}"),
                         )
+                    })
+                    // Elapsed time (shown after 2s of streaming)
+                    .when_some(elapsed_secs.filter(|&s| s >= 2), |d, secs| {
+                        d.child(div().text_xs().opacity(0.45).child(format!("{secs}s")))
                     })
                     // Model pill (label + chevron)
                     .child(
@@ -999,6 +1004,7 @@ impl Render for AcpChatView {
         let plan_entries = thread.active_plan_entries().to_vec();
         let mode_label = thread.active_mode_id().map(str::to_string);
         let display_name = thread.display_name().to_string();
+        let elapsed_secs = thread.stream_elapsed_secs();
         let available_commands = thread.available_commands().to_vec();
         let context_state = thread.context_bootstrap_state();
         let queued_submit = thread.queued_submit_while_bootstrapping();
@@ -1152,6 +1158,7 @@ impl Render for AcpChatView {
                         !input_text.is_empty(),
                         mode_label.as_deref(),
                         &display_name,
+                        elapsed_secs,
                         cx,
                     )),
             )
