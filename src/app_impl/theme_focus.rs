@@ -335,8 +335,12 @@ impl ScriptListApp {
                 }
             }
             FocusTarget::ChatPrompt => {
-                if let AppView::ChatPrompt { entity, .. } = &self.current_view {
-                    let fh = entity.read(cx).focus_handle(cx);
+                let entity = match &self.current_view {
+                    AppView::ChatPrompt { entity, .. } => Some(entity.read(cx).focus_handle(cx)),
+                    AppView::AcpChatView { entity } => Some(entity.read(cx).focus_handle(cx)),
+                    _ => None,
+                };
+                if let Some(fh) = entity {
                     window.focus(&fh, cx);
                     self.focused_input = FocusedInput::None;
                 }

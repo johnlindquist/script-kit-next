@@ -47,6 +47,7 @@ impl ScriptListApp {
             AppView::CreateAiPresetView { .. } => "createAiPreset",
             AppView::SettingsView { .. } => "settings",
             AppView::FavoritesBrowseView { .. } => "favoritesBrowse",
+            AppView::AcpChatView { .. } => "acpChat",
         };
 
         let mut components = Vec::new();

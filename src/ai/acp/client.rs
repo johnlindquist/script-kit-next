@@ -26,7 +26,7 @@ use super::types::AcpSessionBinding;
 /// Supports both the legacy `stream_prompt()` path (for `AiProvider`) and
 /// the new `start_turn()` path (for `AcpThread` / `AcpChatView`).
 pub(crate) struct AcpRuntime {
-    tx: async_channel::Sender<AcpCommand>,
+    pub(crate) tx: async_channel::Sender<AcpCommand>,
 }
 
 /// Type alias for clarity in the new ACP chat view path.

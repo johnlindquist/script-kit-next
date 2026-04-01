@@ -354,7 +354,7 @@ impl ScriptListApp {
         };
 
         let capture_rx = self.spawn_tab_ai_pre_switch_capture(&request);
-        self.open_tab_ai_harness_terminal_from_request(request, capture_rx, cx);
+        self.open_tab_ai_acp_view_from_request(request, capture_rx, cx);
     }
 
     /// Start background capture immediately on a dedicated OS thread.
@@ -434,6 +434,214 @@ impl ScriptListApp {
         });
 
         rx
+    }
+
+    /// Open the ACP chat view immediately, then spawn a task that waits
+    /// for the deferred capture result and stages context on the `AcpThread`.
+    ///
+    /// **Contract:** `AppView::AcpChatView` and `cx.notify()` happen
+    /// *before* any deferred-capture await. The user sees the chat surface
+    /// within one frame.
+    fn open_tab_ai_acp_view_from_request(
+        &mut self,
+        request: TabAiLaunchRequest,
+        capture_rx: TabAiDeferredCaptureRx,
+        cx: &mut Context<Self>,
+    ) {
+        let source_view = request.source_view.clone();
+
+        // --- Permission broker + ACP connection ---
+        let (broker, permission_rx) = crate::ai::acp::AcpPermissionBroker::new();
+
+        let agent = match crate::ai::acp::claude_code_agent_config() {
+            Ok(agent) => agent,
+            Err(error) => {
+                tracing::error!(
+                    event = "tab_ai_acp_config_failed",
+                    error = %error,
+                );
+                self.toast_manager.push(
+                    crate::components::toast::Toast::error(
+                        format!(
+                            "Failed to load Claude Code ACP config: {error}. \
+                             Check claudeCode settings in ~/.scriptkit/kit/config.ts"
+                        ),
+                        &self.theme,
+                    )
+                    .duration_ms(Some(TOAST_ERROR_MS)),
+                );
+                cx.notify();
+                return;
+            }
+        };
+
+        let connection = match crate::ai::acp::AcpConnection::spawn_with_approval(
+            agent,
+            Some(broker.approval_fn()),
+        ) {
+            Ok(conn) => std::sync::Arc::new(conn),
+            Err(error) => {
+                tracing::error!(
+                    event = "tab_ai_acp_spawn_failed",
+                    error = %error,
+                );
+                self.toast_manager.push(
+                    crate::components::toast::Toast::error(
+                        format!("Failed to start ACP connection: {error}"),
+                        &self.theme,
+                    )
+                    .duration_ms(Some(TOAST_ERROR_MS)),
+                );
+                cx.notify();
+                return;
+            }
+        };
+
+        let cwd = std::env::current_dir()
+            .unwrap_or_else(|_| crate::setup::get_kit_path());
+
+        let thread = cx.new(|cx| {
+            crate::ai::acp::AcpThread::new(
+                connection,
+                permission_rx,
+                crate::ai::acp::AcpThreadInit {
+                    ui_thread_id: uuid::Uuid::new_v4().to_string(),
+                    cwd,
+                    initial_input: request.entry_intent.clone(),
+                },
+                cx,
+            )
+        });
+
+        let view_entity = cx.new(|cx| crate::ai::acp::AcpChatView::new(thread.clone(), cx));
+
+        // Save originating surface for close/restore
+        self.tab_ai_harness_return_view = Some(source_view.clone());
+        self.tab_ai_harness_return_focus_target = Some(self.tab_ai_return_focus_target());
+
+        // Seed apply-back route synchronously (desktop snapshot not yet available)
+        let early_source_type =
+            detect_tab_ai_source_type_early(&request.source_view, &request.ui_snapshot);
+        if let Some(ref source_type) = early_source_type {
+            let apply_back_hint = build_tab_ai_apply_back_hint(Some(source_type));
+            self.tab_ai_harness_apply_back_route = apply_back_hint.map(|hint| {
+                crate::ai::TabAiApplyBackRoute {
+                    source_type: source_type.clone(),
+                    hint,
+                    focused_target: None,
+                }
+            });
+        }
+
+        // --- View switch FIRST: user sees the ACP chat surface immediately ---
+        self.current_view = AppView::AcpChatView {
+            entity: view_entity,
+        };
+        self.focused_input = FocusedInput::None;
+        self.show_actions_popup = false;
+        self.actions_dialog = None;
+        self.pending_focus = Some(FocusTarget::ChatPrompt);
+        cx.notify();
+
+        // --- Spawn deferred context injection task ---
+        let app_weak = cx.entity().downgrade();
+        let thread_weak = thread.downgrade();
+        let capture_gen = request.capture_generation;
+
+        cx.spawn(async move |_this, cx| {
+            // Wait for deferred capture
+            let capture_result = match capture_rx.recv().await {
+                Ok(result) => result,
+                Err(_) => Err("deferred capture channel closed".to_string()),
+            };
+
+            let artifacts = match capture_result {
+                Ok(a) => a,
+                Err(e) => {
+                    tracing::warn!(
+                        event = "tab_ai_acp_deferred_capture_failed",
+                        error = %e,
+                    );
+                    TabAiDeferredCaptureArtifacts::default()
+                }
+            };
+
+            // Apply the captured context
+            let _ = cx.update(|cx| {
+                let Some(app) = app_weak.upgrade() else {
+                    return;
+                };
+                let Some(thread_entity) = thread_weak.upgrade() else {
+                    return;
+                };
+
+                app.update(cx, |this, cx| {
+                    // Stale generation check
+                    if this.tab_ai_harness_capture_generation != capture_gen {
+                        tracing::debug!(
+                            event = "tab_ai_acp_deferred_capture_stale",
+                            expected = capture_gen,
+                            current = this.tab_ai_harness_capture_generation,
+                        );
+                        return;
+                    }
+
+                    let resolved = this.build_tab_ai_context_from(
+                        request.entry_intent.clone().unwrap_or_default(),
+                        request.source_view.clone(),
+                        request.ui_snapshot.clone(),
+                        artifacts.desktop,
+                        request.invocation_receipt.clone(),
+                        cx,
+                    );
+
+                    let source_type = detect_tab_ai_source_type(
+                        &request.source_view,
+                        &resolved.context.desktop,
+                        resolved.context.focused_target.as_ref(),
+                    );
+                    let apply_back_hint =
+                        build_tab_ai_apply_back_hint(source_type.as_ref());
+
+                    // Persist the apply-back route
+                    this.tab_ai_harness_apply_back_route = source_type
+                        .clone()
+                        .zip(apply_back_hint.clone())
+                        .map(|(source_type, hint)| crate::ai::TabAiApplyBackRoute {
+                            source_type,
+                            hint,
+                            focused_target: resolved.context.focused_target.clone(),
+                        });
+
+                    let context = resolved.context.with_deferred_capture_fields(
+                        source_type,
+                        artifacts.screenshot_path,
+                        apply_back_hint,
+                    );
+
+                    // Stage context on the AcpThread
+                    let _ = thread_entity.update(cx, |thread, cx| {
+                        if let Err(e) = thread.stage_context(&context, cx) {
+                            tracing::warn!(
+                                event = "tab_ai_acp_stage_context_failed",
+                                error = %e,
+                            );
+                        }
+
+                        // Auto-submit if entry_intent was provided (Shift+Tab path)
+                        if request.entry_intent.is_some() {
+                            if let Err(e) = thread.submit_input(cx) {
+                                tracing::warn!(
+                                    event = "tab_ai_acp_auto_submit_failed",
+                                    error = %e,
+                                );
+                            }
+                        }
+                    });
+                });
+            });
+        })
+        .detach();
     }
 
     /// Open the harness terminal immediately, then spawn a task that waits
@@ -953,7 +1161,10 @@ impl ScriptListApp {
     /// - Schedules a deferred `warm_tab_ai_harness_after_close()` prewarm so
     ///   the next Tab press still gets an instant harness.
     pub(crate) fn close_tab_ai_harness_terminal(&mut self, cx: &mut Context<Self>) {
-        if !matches!(self.current_view, AppView::QuickTerminalView { .. }) {
+        if !matches!(
+            self.current_view,
+            AppView::QuickTerminalView { .. } | AppView::AcpChatView { .. }
+        ) {
             return;
         }
 
@@ -1144,7 +1355,9 @@ impl ScriptListApp {
                 FocusTarget::TermPrompt
             }
 
-            AppView::ChatPrompt { .. } => FocusTarget::ChatPrompt,
+            AppView::ChatPrompt { .. } | AppView::AcpChatView { .. } => {
+                FocusTarget::ChatPrompt
+            }
             AppView::NamingPrompt { .. } => FocusTarget::NamingPrompt,
 
             #[cfg(feature = "storybook")]
@@ -2087,6 +2300,7 @@ impl ScriptListApp {
             AppView::SettingsView { .. } => "Settings".to_string(),
             AppView::FavoritesBrowseView { .. } => "FavoritesBrowse".to_string(),
             AppView::CurrentAppCommandsView { .. } => "CurrentAppCommands".to_string(),
+            AppView::AcpChatView { .. } => "AcpChatView".to_string(),
         }
     }
 
@@ -2191,6 +2405,7 @@ impl ScriptListApp {
             | AppView::FormPrompt { .. }
             | AppView::TermPrompt { .. }
             | AppView::QuickTerminalView { .. }
+            | AppView::AcpChatView { .. }
             | AppView::DropPrompt { .. }
             | AppView::WebcamView { .. }
             | AppView::CreationFeedback { .. }

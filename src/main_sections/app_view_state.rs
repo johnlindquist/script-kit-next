@@ -217,6 +217,13 @@ enum AppView {
         filter: String,
         selected_index: usize,
     },
+    /// Showing the ACP-backed Tab AI chat surface.
+    ///
+    /// Replaces `QuickTerminalView` for the Tab AI entry path.
+    /// Script-triggered terminals continue to use `QuickTerminalView`.
+    AcpChatView {
+        entity: Entity<crate::ai::acp::view::AcpChatView>,
+    },
 }
 
 /// Wrapper to hold a script session that can be shared across async boundaries

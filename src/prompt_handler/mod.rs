@@ -1416,6 +1416,16 @@ impl ScriptListApp {
                         *selected_index as i32,
                         None,
                     ),
+                    AppView::AcpChatView { .. } => (
+                        "acpChat".to_string(),
+                        None,
+                        None,
+                        String::new(),
+                        0,
+                        0,
+                        -1,
+                        None,
+                    ),
                 };
 
                 // Focus state: we use focused_input as a proxy since we don't have Window access here.

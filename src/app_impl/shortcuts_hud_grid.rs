@@ -78,6 +78,7 @@ impl ScriptListApp {
                 | AppView::EditorPrompt { .. }
                 | AppView::ScratchPadView { .. }
                 | AppView::QuickTerminalView { .. }
+                | AppView::AcpChatView { .. }
                 | AppView::EnvPrompt { .. }
                 | AppView::WebcamView { .. }
                 | AppView::NamingPrompt { .. }
