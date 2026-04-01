@@ -5,10 +5,11 @@
 //! overlay. Wraps an `AcpThread` entity for the Tab AI surface.
 
 use std::collections::HashSet;
+use std::time::Duration;
 
 use gpui::{
     div, prelude::*, px, rgb, rgba, App, Context, Entity, FocusHandle, Focusable, FontWeight,
-    IntoElement, ParentElement, Render, ScrollHandle, SharedString, Window,
+    IntoElement, ParentElement, Render, ScrollHandle, SharedString, Task, Window,
 };
 
 use crate::components::text_input::{render_text_input_cursor_selection, TextInputRenderConfig};
@@ -34,6 +35,10 @@ pub(crate) struct AcpChatView {
     collapsed_ids: HashSet<u64>,
     /// Track message count for auto-scroll detection.
     last_message_count: usize,
+    /// Cursor blink state.
+    cursor_visible: bool,
+    /// Handle to the cursor blink task.
+    _blink_task: Task<()>,
 }
 
 impl AcpChatView {
@@ -49,6 +54,25 @@ impl AcpChatView {
         })
         .detach();
 
+        // Cursor blink loop (530ms interval, same as ChatPrompt).
+        let blink_task = cx.spawn(async move |this, cx| loop {
+            cx.background_executor()
+                .timer(Duration::from_millis(530))
+                .await;
+            if !crate::is_main_window_visible() {
+                continue;
+            }
+            let result = cx.update(|cx| {
+                this.update(cx, |view, cx| {
+                    view.cursor_visible = !view.cursor_visible;
+                    cx.notify();
+                })
+            });
+            if result.is_err() {
+                break;
+            }
+        });
+
         Self {
             thread,
             focus_handle: cx.focus_handle(),
@@ -56,6 +80,8 @@ impl AcpChatView {
             permission_index: 0,
             collapsed_ids: HashSet::new(),
             last_message_count: 0,
+            cursor_visible: true,
+            _blink_task: blink_task,
         }
     }
 
@@ -437,83 +463,6 @@ impl AcpChatView {
                     .opacity(0.8)
                     .child("Claude Code over ACP"),
             )
-            .into_any_element()
-    }
-
-    fn footer_hint_text(
-        status: AcpThreadStatus,
-        context_state: AcpContextBootstrapState,
-        queued_submit: bool,
-        has_pending_permission: bool,
-    ) -> &'static str {
-        if has_pending_permission {
-            "Choose an option to continue"
-        } else if matches!(status, AcpThreadStatus::Streaming) {
-            "Claude Code is working\u{2026}"
-        } else if matches!(context_state, AcpContextBootstrapState::Preparing) && queued_submit {
-            "Queued \u{00b7} sending when context is attached\u{2026}"
-        } else if matches!(context_state, AcpContextBootstrapState::Preparing) {
-            "Attaching context\u{2026}"
-        } else if matches!(context_state, AcpContextBootstrapState::Failed) {
-            "Enter to send \u{00b7} context partial"
-        } else {
-            "Enter to send"
-        }
-    }
-
-    fn render_streaming_hint() -> gpui::AnyElement {
-        let theme = theme::get_cached_theme();
-
-        div()
-            .flex()
-            .items_center()
-            .gap_2()
-            .child(
-                div()
-                    .size(px(6.0))
-                    .rounded_full()
-                    .bg(rgb(theme.colors.accent.selected)),
-            )
-            .child(
-                div()
-                    .text_xs()
-                    .opacity(0.7)
-                    .child("Streaming response\u{2026}"),
-            )
-            .into_any_element()
-    }
-
-    fn render_status_badge(
-        status: AcpThreadStatus,
-        has_pending_permission: bool,
-    ) -> gpui::AnyElement {
-        let theme = theme::get_cached_theme();
-
-        let (label, bg) = match status {
-            AcpThreadStatus::Idle if has_pending_permission => (
-                "Permission required",
-                rgba((theme.colors.accent.selected << 8) | 0x18),
-            ),
-            AcpThreadStatus::Idle => ("Ready", rgba((theme.colors.text.primary << 8) | 0x08)),
-            AcpThreadStatus::Streaming => (
-                "Streaming",
-                rgba((theme.colors.accent.selected << 8) | 0x16),
-            ),
-            AcpThreadStatus::WaitingForPermission => (
-                "Permission required",
-                rgba((theme.colors.accent.selected << 8) | 0x18),
-            ),
-            AcpThreadStatus::Error => ("Error", rgba(0xEF444420)),
-        };
-
-        div()
-            .px(px(8.0))
-            .py(px(4.0))
-            .rounded(px(999.0))
-            .bg(bg)
-            .text_xs()
-            .opacity(0.8)
-            .child(label)
             .into_any_element()
     }
 
@@ -952,6 +901,9 @@ impl AcpChatView {
     // ── Key handling ──────────────────────────────────────────────
 
     fn handle_key_down(&mut self, event: &gpui::KeyDownEvent, cx: &mut Context<Self>) {
+        // Reset cursor blink on any key press.
+        self.cursor_visible = true;
+
         // ── Permission overlay intercept ─────────────────────────
         let pending_permission = self.thread.read(cx).pending_permission.clone();
         if let Some(ref request) = pending_permission {
@@ -1030,6 +982,7 @@ impl Render for AcpChatView {
         let input_text = thread.input.text().to_string();
         let input_cursor = thread.input.cursor();
         let input_selection = thread.input.selection();
+        let cursor_visible = self.cursor_visible;
         let pending_permission = thread.pending_permission.clone();
         let plan_entries = thread.active_plan_entries().to_vec();
         let mode_label = thread.active_mode_id().map(str::to_string);
@@ -1130,16 +1083,6 @@ impl Render for AcpChatView {
                     )
                 },
             )
-            // ── Streaming hint ────────────────────────────────
-            .when(matches!(status, AcpThreadStatus::Streaming), |d| {
-                d.child(
-                    div()
-                        .w_full()
-                        .px(px(12.0))
-                        .pb(px(6.0))
-                        .child(Self::render_streaming_hint()),
-                )
-            })
             // ── Footer: input + toolbar ───────────────────────
             .child(
                 div()
@@ -1167,7 +1110,7 @@ impl Render for AcpChatView {
                                         TextInputRenderConfig {
                                             cursor: 0,
                                             selection: None,
-                                            cursor_visible: true,
+                                            cursor_visible,
                                             cursor_color: theme.colors.accent.selected,
                                             text_color: theme.colors.text.primary,
                                             selection_color: theme.colors.accent.selected,
@@ -1181,7 +1124,7 @@ impl Render for AcpChatView {
                                 render_text_input_cursor_selection(TextInputRenderConfig {
                                     cursor: input_cursor,
                                     selection: Some(input_selection),
-                                    cursor_visible: true,
+                                    cursor_visible,
                                     cursor_color: theme.colors.accent.selected,
                                     text_color: theme.colors.text.primary,
                                     selection_color: theme.colors.accent.selected,
