@@ -44,6 +44,7 @@ pub(crate) enum AcpEvent {
     /// An existing tool call has been updated.
     ToolCallUpdated {
         tool_call_id: String,
+        title: Option<String>,
         status: Option<String>,
         body: Option<String>,
     },
