@@ -1383,12 +1383,10 @@ impl Render for AcpChatView {
                                     msg.role,
                                     AcpThreadMessageRole::Thought | AcpThreadMessageRole::Tool
                                 );
+                                // Both Thinking and Tool blocks start collapsed.
+                                // collapsed_ids stores IDs that have been toggled (expanded).
                                 let is_collapsed =
-                                    if matches!(msg.role, AcpThreadMessageRole::Thought) {
-                                        !self.collapsed_ids.contains(&msg_id)
-                                    } else {
-                                        is_collapsible && self.collapsed_ids.contains(&msg_id)
-                                    };
+                                    is_collapsible && !self.collapsed_ids.contains(&msg_id);
 
                                 let on_toggle: Option<ToggleHandler> = if is_collapsible {
                                     Some(Box::new(cx.listener(move |this, _event, _window, cx| {
