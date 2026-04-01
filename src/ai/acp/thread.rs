@@ -408,17 +408,30 @@ impl AcpThread {
     // ── Private helpers ────────────────────────────────────────────
 
     /// Build the content blocks for a turn, consuming staged context on first use.
+    ///
+    /// When context is present, the user's text is wrapped with a clear
+    /// `--- USER REQUEST ---` marker so the agent distinguishes ambient context
+    /// from the actual user intent.
     #[cfg_attr(test, allow(dead_code))]
     pub(super) fn prepare_turn_blocks(&mut self, input: &str) -> Vec<ContentBlock> {
         let mut blocks = Vec::new();
 
-        if !self.pending_context_consumed {
+        let has_context = !self.pending_context_consumed;
+        if has_context {
             blocks.extend(self.pending_context_blocks.clone());
             blocks.extend(build_tab_ai_acp_guidance_blocks(Some(input)));
             self.pending_context_consumed = true;
         }
 
-        blocks.push(ContentBlock::Text(TextContent::new(input)));
+        if has_context {
+            // Wrap user text with a clear marker so the agent knows
+            // everything above is ambient context and this is the request.
+            blocks.push(ContentBlock::Text(TextContent::new(format!(
+                "--- USER REQUEST ---\n{input}"
+            ))));
+        } else {
+            blocks.push(ContentBlock::Text(TextContent::new(input)));
+        }
         blocks
     }
 
