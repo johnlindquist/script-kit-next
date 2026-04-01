@@ -14,16 +14,22 @@
 
 pub(crate) mod client;
 pub(crate) mod config;
+pub(crate) mod context;
 pub(crate) mod events;
 pub(crate) mod handlers;
 pub(crate) mod permission_broker;
 pub(crate) mod provider;
+pub(crate) mod thread;
 pub(crate) mod types;
+pub(crate) mod view;
 
 pub(crate) use client::{AcpConnection, AcpRuntime};
 pub(crate) use config::{claude_code_agent_config, AcpAgentConfig};
+pub(crate) use context::{build_tab_ai_acp_context_blocks, build_tab_ai_acp_guidance_blocks};
 pub(crate) use events::{AcpCommand, AcpEvent, AcpEventRx, AcpPromptTurnRequest};
 pub(crate) use permission_broker::{
     AcpApprovalOption, AcpApprovalRequest, AcpApprovalRequestInput, AcpPermissionBroker,
 };
 pub(crate) use provider::AcpProvider;
+pub(crate) use thread::{AcpThread, AcpThreadInit, AcpThreadMessage, AcpThreadStatus};
+pub(crate) use view::AcpChatView;

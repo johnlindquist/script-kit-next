@@ -381,6 +381,7 @@ impl Render for ScriptListApp {
             } => self
                 .render_favorites_browse(filter, selected_index, cx)
                 .into_any_element(),
+            AppView::AcpChatView { entity } => entity.into_any_element(),
         };
 
         // Wrap content in a container that can have the debug grid overlay

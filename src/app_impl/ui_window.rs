@@ -248,6 +248,7 @@ impl ScriptListApp {
             }
             AppView::SettingsView { .. } => Some((ViewType::ScriptList, 0)),
             AppView::FavoritesBrowseView { .. } => Some((ViewType::ScriptList, 0)),
+            AppView::AcpChatView { .. } => Some((ViewType::DivPrompt, 0)),
         }
     }
 
@@ -372,6 +373,10 @@ impl ScriptListApp {
             }
             AppView::FormPrompt { entity, .. } => {
                 entity.update(cx, |prompt, cx| prompt.set_input(text, cx));
+                true
+            }
+            AppView::AcpChatView { entity } => {
+                entity.update(cx, |view, cx| view.set_input(text, cx));
                 true
             }
             AppView::FileSearchView {

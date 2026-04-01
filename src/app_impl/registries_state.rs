@@ -177,6 +177,7 @@ impl ScriptListApp {
             AppView::CreateAiPresetView { .. } => "CreateAiPresetView",
             AppView::SettingsView { .. } => "SettingsView",
             AppView::FavoritesBrowseView { .. } => "FavoritesBrowseView",
+            AppView::AcpChatView { .. } => "AcpChatView",
         };
 
         let old_focused_input = self.focused_input;
