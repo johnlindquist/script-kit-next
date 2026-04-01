@@ -31,7 +31,7 @@ type KeyCode =
   | "KeyV" | "KeyW" | "KeyX" | "KeyY" | "KeyZ"
   | "Digit0" | "Digit1" | "Digit2" | "Digit3" | "Digit4"
   | "Digit5" | "Digit6" | "Digit7" | "Digit8" | "Digit9"
-  | "Space" | "Enter" | "Semicolon"
+  | "Space" | "Enter" | "Semicolon" | "Comma" | "Period" | "Slash"
   | "F1" | "F2" | "F3" | "F4" | "F5" | "F6"
   | "F7" | "F8" | "F9" | "F10" | "F11" | "F12";
 
@@ -135,7 +135,7 @@ const DEFAULTS: Config & Record<string, unknown> = {
     left: 12,
     right: 12
   },
-  editorFontSize: 14,
+  editorFontSize: 16,
   terminalFontSize: 14,
   uiScale: 1.0,
   builtIns: {
@@ -197,7 +197,7 @@ const CONFIG_SCHEMA: ConfigOption[] = [
     key: "hotkey.key",
     type: "KeyCode",
     default: "Semicolon",
-    description: "Main key for global hotkey (KeyA-KeyZ, Digit0-Digit9, Space, Enter, Semicolon, F1-F12)",
+    description: "Main key for global hotkey (KeyA-KeyZ, Digit0-Digit9, Space, Enter, Semicolon, Comma, Period, Slash, F1-F12)",
     example: "KeyK"
   },
   {
@@ -235,7 +235,7 @@ const CONFIG_SCHEMA: ConfigOption[] = [
   {
     key: "editorFontSize",
     type: "number",
-    default: 14,
+    default: 16,
     description: "Font size for editor prompt in pixels"
   },
   {

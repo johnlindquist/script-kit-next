@@ -775,6 +775,7 @@ impl ScriptListApp {
             }
             // ── Current-directory actions ────────────────────────────────
             "sort_name_asc" | "sort_name_desc" | "sort_modified_desc" | "sort_modified_asc" => {
+                let preferred_selected_path = self.current_file_search_selected_path();
                 let mode = match action_id {
                     "sort_name_asc" => crate::actions::FileSearchSortMode::NameAsc,
                     "sort_name_desc" => crate::actions::FileSearchSortMode::NameDesc,
@@ -785,6 +786,14 @@ impl ScriptListApp {
                 self.file_search_sort_mode = mode;
                 self.apply_file_search_sort_mode();
                 self.recompute_file_search_display_indices();
+                self.restore_file_search_selection_after_results_change(
+                    preferred_selected_path.as_deref(),
+                );
+                // Scroll the preserved selection back into view after resort.
+                if let AppView::FileSearchView { selected_index, .. } = &self.current_view {
+                    self.file_search_scroll_handle
+                        .scroll_to_item(*selected_index, gpui::ScrollStrategy::Nearest);
+                }
                 let label = match mode {
                     crate::actions::FileSearchSortMode::NameAsc => "Sorted by Name (A\u{2192}Z)",
                     crate::actions::FileSearchSortMode::NameDesc => "Sorted by Name (Z\u{2192}A)",
@@ -792,6 +801,7 @@ impl ScriptListApp {
                     crate::actions::FileSearchSortMode::ModifiedAsc => "Sorted by Modified (Oldest)",
                 };
                 self.show_hud(label.to_string(), Some(HUD_SHORT_MS), cx);
+                self.restore_file_search_input_focus(cx);
                 cx.notify();
                 DispatchOutcome::success()
             }
@@ -810,7 +820,16 @@ impl ScriptListApp {
                 } else {
                     (format!("{dir}/"), FileSearchPresentation::Mini)
                 };
-                self.restart_file_search_stream_for_query(query, presentation, None, false, cx);
+                let frozen_filter = crate::file_search::parse_directory_path(&query)
+                    .map(|parsed| parsed.filter)
+                    .unwrap_or(None);
+                self.restart_file_search_stream_for_query(
+                    query,
+                    presentation,
+                    Some(frozen_filter),
+                    true,
+                    cx,
+                );
                 self.show_hud("Refreshed Directory".to_string(), Some(HUD_SHORT_MS), cx);
                 self.restore_file_search_input_focus(cx);
                 DispatchOutcome::success()

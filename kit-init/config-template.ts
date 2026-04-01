@@ -58,7 +58,7 @@ export default {
   // Customize the appearance of Script Kit's interface.
 
   // Font size for the Monaco-style code editor (in pixels)
-  // editorFontSize: 14,
+  // editorFontSize: 16,
 
   // Font size for the integrated terminal (in pixels)
   // terminalFontSize: 14,
