@@ -990,7 +990,12 @@ impl AcpChatView {
         }
     }
 
-    fn render_slash_menu(commands: &[String], selected_index: usize) -> gpui::AnyElement {
+    fn render_slash_menu(
+        &self,
+        commands: &[String],
+        selected_index: usize,
+        cx: &mut Context<Self>,
+    ) -> gpui::AnyElement {
         let theme = theme::get_cached_theme();
 
         div()
@@ -1005,14 +1010,26 @@ impl AcpChatView {
             .py(px(4.0))
             .children(commands.iter().enumerate().map(|(i, cmd)| {
                 let is_selected = i == selected_index;
+                let cmd_text = format!("/{cmd} ");
                 div()
+                    .id(SharedString::from(format!("slash-cmd-{i}")))
                     .w_full()
                     .px(px(10.0))
                     .py(px(4.0))
                     .text_sm()
+                    .cursor_pointer()
                     .when(is_selected, |d| {
                         d.bg(rgba((theme.colors.accent.selected << 8) | 0x1C))
                     })
+                    .hover(|d| d.bg(rgba((theme.colors.text.primary << 8) | 0x0C)))
+                    .on_click(cx.listener(move |this, _event, _window, cx| {
+                        this.thread.update(cx, |thread, cx| {
+                            thread.input.set_text(cmd_text.clone());
+                            cx.notify();
+                        });
+                        this.slash_menu_index = None;
+                        cx.notify();
+                    }))
                     .child(format!("/{cmd}"))
             }))
             .into_any_element()
@@ -1263,7 +1280,7 @@ impl Render for AcpChatView {
                             .w_full()
                             .px(px(8.0))
                             .pb(px(4.0))
-                            .child(Self::render_slash_menu(&filtered, idx)),
+                            .child(self.render_slash_menu(&filtered, idx, cx)),
                     )
                 }
             })
