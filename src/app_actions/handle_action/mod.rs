@@ -615,6 +615,39 @@ impl ScriptListApp {
                     DispatchOutcome::not_handled()
                 }
             }
+            "acp_expand_all" => {
+                let entity = entity.clone();
+                entity.update(cx, |chat, cx| {
+                    // Add all collapsible message IDs to collapsed_ids (which means expanded)
+                    let ids: Vec<u64> = chat
+                        .thread
+                        .read(cx)
+                        .messages
+                        .iter()
+                        .filter(|m| {
+                            matches!(
+                                m.role,
+                                crate::ai::acp::thread::AcpThreadMessageRole::Thought
+                                    | crate::ai::acp::thread::AcpThreadMessageRole::Tool
+                            )
+                        })
+                        .map(|m| m.id)
+                        .collect();
+                    for id in ids {
+                        chat.collapsed_ids.insert(id);
+                    }
+                    cx.notify();
+                });
+                DispatchOutcome::success()
+            }
+            "acp_collapse_all" => {
+                let entity = entity.clone();
+                entity.update(cx, |chat, cx| {
+                    chat.collapsed_ids.clear();
+                    cx.notify();
+                });
+                DispatchOutcome::success()
+            }
             "acp_close" => {
                 self.close_tab_ai_harness_terminal(cx);
                 DispatchOutcome::success()
