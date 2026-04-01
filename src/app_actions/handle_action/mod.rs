@@ -548,6 +548,51 @@ impl ScriptListApp {
     }
 
     /// Handle action selection from the actions dialog
+    fn handle_acp_chat_action(
+        &mut self,
+        action_id: &str,
+        cx: &mut Context<Self>,
+    ) -> DispatchOutcome {
+        let AppView::AcpChatView { ref entity } = self.current_view else {
+            return DispatchOutcome::not_handled();
+        };
+
+        match action_id {
+            "acp_copy_last_response" => {
+                let entity = entity.clone();
+                let last_response = entity.read(cx).thread.read(cx).messages.iter().rev().find(
+                    |msg| {
+                        matches!(
+                            msg.role,
+                            crate::ai::acp::thread::AcpThreadMessageRole::Assistant
+                        )
+                    },
+                ).map(|msg| msg.body.to_string());
+
+                if let Some(text) = last_response {
+                    cx.write_to_clipboard(gpui::ClipboardItem::new_string(text));
+                    let mut outcome = DispatchOutcome::success();
+                    outcome.user_message =
+                        Some("Copied last response to clipboard".to_string());
+                    outcome
+                } else {
+                    DispatchOutcome::not_handled()
+                }
+            }
+            "acp_clear_conversation" => {
+                // Close and reopen the ACP chat for a fresh session
+                self.close_tab_ai_harness_terminal(cx);
+                self.open_tab_ai_chat(cx);
+                DispatchOutcome::success()
+            }
+            "acp_close" => {
+                self.close_tab_ai_harness_terminal(cx);
+                DispatchOutcome::success()
+            }
+            _ => DispatchOutcome::not_handled(),
+        }
+    }
+
     fn handle_action(&mut self, action_id: String, window: &mut Window, cx: &mut Context<Self>) {
         let start = std::time::Instant::now();
 
@@ -607,8 +652,13 @@ impl ScriptListApp {
                         if o.was_handled() {
                             ("scriptlet", o)
                         } else {
-                            // SDK actions as final fallback — thread trace_id from dctx
-                            ("sdk_fallback", self.trigger_sdk_action_with_trace(&action_id_stripped, &dctx.trace_id))
+                            let o = self.handle_acp_chat_action(&action_id_stripped, cx);
+                            if o.was_handled() {
+                                ("acp_chat", o)
+                            } else {
+                                // SDK actions as final fallback — thread trace_id from dctx
+                                ("sdk_fallback", self.trigger_sdk_action_with_trace(&action_id_stripped, &dctx.trace_id))
+                            }
                         }
                     }
                 }
