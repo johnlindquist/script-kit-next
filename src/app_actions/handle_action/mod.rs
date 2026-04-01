@@ -585,6 +585,36 @@ impl ScriptListApp {
                 self.open_tab_ai_chat(cx);
                 DispatchOutcome::success()
             }
+            "acp_paste_to_frontmost" => {
+                let last_response = entity.read(cx).thread.read(cx).messages.iter().rev().find(
+                    |msg| {
+                        matches!(
+                            msg.role,
+                            crate::ai::acp::thread::AcpThreadMessageRole::Assistant
+                        )
+                    },
+                ).map(|msg| msg.body.to_string());
+
+                if let Some(text) = last_response {
+                    // Hide the window so the frontmost app regains focus
+                    crate::platform::defer_hide_main_window(cx);
+                    // Spawn a background thread to paste after a short delay
+                    let text_for_paste = text.clone();
+                    std::thread::spawn(move || {
+                        // Small delay to let the frontmost app regain focus
+                        std::thread::sleep(std::time::Duration::from_millis(200));
+                        let injector = crate::text_injector::TextInjector::new();
+                        if let Err(e) = injector.paste_text(&text_for_paste) {
+                            tracing::warn!(%e, "acp_paste_to_frontmost_failed");
+                        }
+                    });
+                    let mut outcome = DispatchOutcome::success();
+                    outcome.user_message = Some("Pasting to frontmost app\u{2026}".to_string());
+                    outcome
+                } else {
+                    DispatchOutcome::not_handled()
+                }
+            }
             "acp_close" => {
                 self.close_tab_ai_harness_terminal(cx);
                 DispatchOutcome::success()
