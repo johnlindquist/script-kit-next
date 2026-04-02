@@ -1390,6 +1390,17 @@ impl AcpChatView {
             return;
         }
 
+        // ── Cmd+. → cancel streaming (standard macOS cancel) ──────
+        if modifiers.platform && key == "." {
+            let is_streaming = matches!(self.thread.read(cx).status, AcpThreadStatus::Streaming);
+            if is_streaming {
+                self.thread
+                    .update(cx, |thread, cx| thread.cancel_streaming(cx));
+            }
+            cx.stop_propagation();
+            return;
+        }
+
         // ── Cmd+Shift+C → copy last response to clipboard ──────
         if modifiers.platform && modifiers.shift && key.eq_ignore_ascii_case("c") {
             let last = self
