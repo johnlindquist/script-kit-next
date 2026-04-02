@@ -1537,10 +1537,26 @@ impl ScriptListApp {
                                         return;
                                     }
                                 }
+                                AppView::AcpChatView { .. } => {
+                                    logging::log("KEY", "Interceptor: Cmd+K -> toggle_actions (AcpChatView)");
+                                    this.toggle_actions(cx, window);
+                                    cx.stop_propagation();
+                                    return;
+                                }
                                 _ => {
                                     // Other views don't support Cmd+K actions
                                 }
                             }
+                        }
+
+                        // Handle Cmd+W for AcpChatView (restores previous view, not full window close)
+                        if has_cmd && key.eq_ignore_ascii_case("w") && !has_shift
+                            && matches!(this.current_view, AppView::AcpChatView { .. })
+                        {
+                            logging::log("KEY", "Interceptor: Cmd+W -> close ACP chat");
+                            this.close_tab_ai_harness_terminal(cx);
+                            cx.stop_propagation();
+                            return;
                         }
 
                         // Handle Cmd+Shift+K for add_shortcut in ScriptList
@@ -1639,6 +1655,7 @@ impl ScriptListApp {
                                 AppView::TermPrompt { .. } => Some(ActionsDialogHost::TermPrompt),
                                 AppView::FormPrompt { .. } => Some(ActionsDialogHost::FormPrompt),
                                 AppView::WebcamView { .. } => Some(ActionsDialogHost::WebcamPrompt),
+                                AppView::AcpChatView { .. } => Some(ActionsDialogHost::AcpChat),
                                 _ => None,
                             };
 

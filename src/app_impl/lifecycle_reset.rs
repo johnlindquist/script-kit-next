@@ -161,11 +161,12 @@ impl ScriptListApp {
         // Check if Notes or AI windows are open BEFORE hiding
         let notes_open = notes::is_notes_window_open();
         let ai_open = ai::is_ai_window_open();
+        let acp_chat_open = ai::acp::chat_window::is_chat_window_open();
         logging::log(
             "VISIBILITY",
             &format!(
-                "Secondary windows: notes_open={}, ai_open={}",
-                notes_open, ai_open
+                "Secondary windows: notes_open={}, ai_open={}, acp_chat_open={}",
+                notes_open, ai_open, acp_chat_open
             ),
         );
 
@@ -174,7 +175,7 @@ impl ScriptListApp {
         // defer_hide_main_window() to hide only the main window.
         // Must be deferred: orderOut: triggers window_did_change_key_status
         // synchronously, which re-enters GPUI's App RefCell and panics.
-        if notes_open || ai_open {
+        if notes_open || ai_open || acp_chat_open {
             logging::log(
                 "VISIBILITY",
                 "Using defer_hide_main_window() - secondary windows are open",

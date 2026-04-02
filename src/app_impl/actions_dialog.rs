@@ -258,6 +258,7 @@ impl ScriptListApp {
             ActionsDialogHost::DivPrompt => FocusRequest::div_prompt(),
             ActionsDialogHost::TermPrompt => FocusRequest::term_prompt(),
             ActionsDialogHost::WebcamPrompt => FocusRequest::div_prompt(),
+            ActionsDialogHost::AcpChat => FocusRequest::chat_prompt(),
             ActionsDialogHost::MainList
             | ActionsDialogHost::FileSearch
             | ActionsDialogHost::ClipboardHistory

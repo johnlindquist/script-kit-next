@@ -318,6 +318,8 @@ enum ActionsDialogHost {
     AppLauncher,
     /// Actions in webcam prompt (restore focus to None - webcam has no input)
     WebcamPrompt,
+    /// Actions in ACP chat (restore focus to ACP chat input)
+    AcpChat,
 }
 
 /// Input mode for list navigation - tracks whether user is using keyboard or mouse.
