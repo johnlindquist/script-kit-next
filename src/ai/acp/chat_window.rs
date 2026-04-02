@@ -388,8 +388,7 @@ pub fn toggle_detached_actions(cx: &mut App) {
                     action = %action_id,
                 );
                 cx.update(|cx| {
-                    let handled =
-                        dispatch_detached_action_checked(&entity_weak, &action_id, cx);
+                    let handled = dispatch_detached_action_checked(&entity_weak, &action_id, cx);
                     // Re-focus the detached chat after action dispatch
                     // (unless the action closed the window)
                     if handled && action_id != "acp_close" {
