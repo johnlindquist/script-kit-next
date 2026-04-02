@@ -912,6 +912,7 @@ impl AcpChatView {
         mode_label: Option<&str>,
         display_name: &str,
         elapsed_secs: Option<u64>,
+        streaming_words: Option<usize>,
         message_count: usize,
         context_state: AcpContextBootstrapState,
         cx: &mut Context<Self>,
@@ -992,9 +993,12 @@ impl AcpChatView {
                                 .child(format!("{message_count} msgs")),
                         )
                     })
-                    // Elapsed time (shown after 2s of streaming)
+                    // Streaming indicator (elapsed time + word count)
                     .when_some(elapsed_secs.filter(|&s| s >= 2), |d, secs| {
-                        d.child(div().text_xs().opacity(0.45).child(format!("{secs}s")))
+                        d.child(div().text_xs().opacity(0.45).child(match streaming_words {
+                            Some(words) if words > 5 => format!("{secs}s \u{00b7} {words}w"),
+                            _ => format!("{secs}s"),
+                        }))
                     })
                     // Model pill (label + chevron)
                     .child(
@@ -1466,6 +1470,17 @@ impl Render for AcpChatView {
         let elapsed_secs = thread.stream_elapsed_secs();
         let context_state = thread.context_bootstrap_state();
         let messages: Vec<AcpThreadMessage> = thread.messages.clone();
+        // Streaming word count: count words in last assistant message when streaming
+        let streaming_words = if matches!(status, AcpThreadStatus::Streaming) {
+            messages
+                .iter()
+                .rev()
+                .find(|m| matches!(m.role, AcpThreadMessageRole::Assistant))
+                .map(|m| m.body.split_whitespace().count())
+                .filter(|&c| c > 0)
+        } else {
+            None
+        };
         let colors = Self::prompt_colors();
         let theme = theme::get_cached_theme();
 
@@ -1734,6 +1749,7 @@ impl Render for AcpChatView {
                 mode_label.as_deref(),
                 &display_name,
                 elapsed_secs,
+                streaming_words,
                 messages.len(),
                 context_state,
                 cx,
