@@ -1332,7 +1332,11 @@ impl Render for AcpChatView {
                                         div()
                                             .ml(px(-2.0))
                                             .text_color(rgb(theme.colors.text.muted))
-                                            .child("Ask Claude Code\u{2026}"),
+                                            .child(if is_empty {
+                                                "Ask Claude Code\u{2026}"
+                                            } else {
+                                                "Follow up\u{2026}"
+                                            }),
                                     )
                                     .into_any_element()
                             } else {
