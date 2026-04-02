@@ -81,6 +81,8 @@ pub(crate) struct AcpChatView {
     pub(crate) history_menu: Option<(usize, String, Vec<super::history::AcpHistoryEntry>)>,
     /// Whether the + attachment menu popup is open.
     attach_menu_open: bool,
+    /// Max messages to render (for performance). "Show earlier" loads more.
+    render_message_limit: usize,
     /// Cached slash commands (name, description) discovered at creation.
     cached_slash_commands: Vec<(String, String)>,
 }
@@ -136,6 +138,7 @@ impl AcpChatView {
             slash_menu_index: None,
             history_menu: None,
             attach_menu_open: false,
+            render_message_limit: 50,
             cached_slash_commands: Self::discover_slash_commands(),
         }
     }
@@ -1688,8 +1691,39 @@ impl Render for AcpChatView {
                         )
                     })
                     .when(!is_empty, |d| {
-                        d.px(px(8.0)).py(px(8.0)).flex().flex_col().children(
-                            messages.iter().enumerate().map(|(i, msg)| {
+                        // Performance: only render last N messages to keep
+                        // the render fast. Show a "Show earlier" button
+                        // if there are more messages.
+                        let render_limit = self.render_message_limit;
+                        let total = messages.len();
+                        let skip = total.saturating_sub(render_limit);
+                        let visible_messages = &messages[skip..];
+
+                        d.px(px(8.0))
+                            .py(px(8.0))
+                            .flex()
+                            .flex_col()
+                            .when(skip > 0, |d| {
+                                d.child(
+                                    div()
+                                        .id("acp-show-earlier")
+                                        .w_full()
+                                        .py(px(6.0))
+                                        .cursor_pointer()
+                                        .flex()
+                                        .justify_center()
+                                        .text_xs()
+                                        .opacity(0.45)
+                                        .hover(|d| d.opacity(0.75))
+                                        .on_click(cx.listener(|this, _event, _window, cx| {
+                                            this.render_message_limit += 50;
+                                            cx.notify();
+                                        }))
+                                        .child(format!("\u{25B2} Show {skip} earlier messages")),
+                                )
+                            })
+                            .children(visible_messages.iter().enumerate().map(|(vi, msg)| {
+                                let i = skip + vi;
                                 let msg_id = msg.id;
                                 let is_collapsible = matches!(
                                     msg.role,
@@ -1737,8 +1771,7 @@ impl Render for AcpChatView {
                                         is_collapsed,
                                         on_toggle,
                                     ))
-                            }),
-                        )
+                            }))
                     }),
             )
             // ── Plan strip ────────────────────────────────────
