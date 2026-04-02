@@ -334,14 +334,33 @@ pub fn toggle_detached_actions(cx: &mut App) {
         dialog
     });
 
-    if let Err(e) =
-        actions::open_actions_window(cx, bounds, display_id, dialog, WindowPosition::TopRight)
-    {
-        tracing::warn!(%e, "detached_actions_open_failed");
-        return;
-    }
+    dialog.update(cx, |dialog, _cx| {
+        dialog.set_on_close(std::sync::Arc::new(|cx| {
+            activate_chat_window(cx);
+            tracing::info!(event = "detached_actions_closed_restore_chat_focus");
+        }));
+    });
 
-    tracing::info!(event = "detached_actions_opened", actions_len,);
+    let actions_handle = match actions::open_actions_window(
+        cx,
+        bounds,
+        display_id,
+        dialog,
+        WindowPosition::TopRight,
+    ) {
+        Ok(handle) => handle,
+        Err(e) => {
+            tracing::warn!(%e, "detached_actions_open_failed");
+            return;
+        }
+    };
+
+    let _ = actions_handle.update(cx, |_root, window, _cx| {
+        window.activate_window();
+    });
+
+    tracing::info!(event = "detached_actions_opened", actions_len);
+    tracing::info!(event = "detached_actions_window_activated", actions_len);
 
     // Spawn a one-shot task that receives the selected action_id from the
     // channel, dispatches it to the AcpChatView entity, and re-focuses the chat.

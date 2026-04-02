@@ -653,15 +653,30 @@ impl ScriptListApp {
         // Defer harness termination to after first paint so the user sees the
         // chat surface before the synchronous teardown blocks the main thread.
         if had_harness_session {
-            let stage_started_at = std::time::Instant::now();
-            self.terminate_tab_ai_harness_session(cx);
-            tracing::info!(
-                target: "script_kit::tab_ai",
-                event = "acp_open_stage",
-                stage = "terminate_tab_ai_harness_session_deferred",
-                stage_ms = stage_started_at.elapsed().as_millis() as u64,
-                total_ms = open_started_at.elapsed().as_millis() as u64,
-            );
+            let app_weak_for_teardown = cx.entity().downgrade();
+            let open_started_at_for_teardown = open_started_at;
+            cx.spawn(async move |_this, cx| {
+                cx.background_executor()
+                    .timer(std::time::Duration::from_millis(16))
+                    .await;
+                let _ = cx.update(|cx| {
+                    let Some(app) = app_weak_for_teardown.upgrade() else {
+                        return;
+                    };
+                    app.update(cx, |this, cx| {
+                        let stage_started_at = std::time::Instant::now();
+                        this.terminate_tab_ai_harness_session(cx);
+                        tracing::info!(
+                            target: "script_kit::tab_ai",
+                            event = "acp_open_stage",
+                            stage = "terminate_tab_ai_harness_session_post_paint",
+                            stage_ms = stage_started_at.elapsed().as_millis() as u64,
+                            total_ms = open_started_at_for_teardown.elapsed().as_millis() as u64,
+                        );
+                    });
+                });
+            })
+            .detach();
         }
 
         // --- Spawn deferred context injection task ---

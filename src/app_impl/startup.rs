@@ -906,6 +906,7 @@ impl ScriptListApp {
                 // windows receive their own navigation key events.
                 if crate::notes::is_notes_window(window)
                     || crate::ai::is_ai_window(window)
+                    || crate::ai::acp::chat_window::is_chat_window(window)
                     || crate::actions::is_actions_window(window)
                 {
                     return;
@@ -1365,6 +1366,7 @@ impl ScriptListApp {
                 // Skip processing if this keystroke is from a secondary window
                 if crate::notes::is_notes_window(window)
                     || crate::ai::is_ai_window(window)
+                    || crate::ai::acp::chat_window::is_chat_window(window)
                     || crate::actions::is_actions_window(window)
                 {
                     return;
@@ -1433,6 +1435,7 @@ impl ScriptListApp {
                 // We only want to handle keystrokes for the main window.
                 if crate::notes::is_notes_window(window)
                     || crate::ai::is_ai_window(window)
+                    || crate::ai::acp::chat_window::is_chat_window(window)
                     || crate::actions::is_actions_window(window)
                 {
                     return; // Let the secondary window handle its own keystrokes
