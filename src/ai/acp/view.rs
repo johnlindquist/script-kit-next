@@ -586,13 +586,6 @@ impl AcpChatView {
             .when_some(preview.subject.clone(), |d, subject| {
                 d.child(div().pt(px(6.0)).text_sm().opacity(0.82).child(subject))
             })
-            .child(
-                div()
-                    .pt(px(2.0))
-                    .text_xs()
-                    .opacity(0.52)
-                    .child(format!("Tool call ID: {}", preview.tool_call_id)),
-            )
             .into_any_element()
     }
 
@@ -643,32 +636,40 @@ impl AcpChatView {
 
         div()
             .id(SharedString::from(format!("perm-opt-{index}")))
-            .mt(px(8.0))
+            .mt(px(6.0))
             .px(px(12.0))
-            .py(px(10.0))
-            .rounded(px(10.0))
+            .py(px(8.0))
+            .rounded(px(8.0))
             .cursor_pointer()
             .bg(bg)
-            .border_1()
-            .border_color(border)
-            .hover(|d| d.bg(rgba((theme.colors.text.primary << 8) | 0x12)))
+            .when(is_selected, |d| {
+                d.border_l_2().border_color(if option.is_reject() {
+                    rgba(0xEF4444AA)
+                } else {
+                    rgb(theme.colors.accent.selected)
+                })
+            })
+            .when(!is_selected, |d| {
+                d.border_l_2().border_color(gpui::transparent_black())
+            })
+            .hover(|d| d.bg(rgba((theme.colors.text.primary << 8) | 0x0C)))
             .on_click(cx.listener(move |this, _event, _window, cx| {
                 this.approve_permission(Some(option_id.clone()), cx);
             }))
             .child(
                 div()
-                    .text_sm()
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .child(format!("{} \u{00b7} {}", index + 1, option.name)),
+                    .flex()
+                    .items_center()
+                    .gap(px(6.0))
+                    .child(
+                        div()
+                            .text_sm()
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .child(format!("{}", index + 1)),
+                    )
+                    .child(div().text_sm().child(option.name.clone())),
             )
-            .child(div().pt(px(2.0)).text_xs().opacity(0.58).child(caption))
-            .child(
-                div()
-                    .pt(px(1.0))
-                    .text_xs()
-                    .opacity(0.44)
-                    .child(option.kind.clone()),
-            )
+            .child(div().pt(px(2.0)).text_xs().opacity(0.45).child(caption))
             .into_any_element()
     }
 
@@ -754,7 +755,7 @@ impl AcpChatView {
                             .text_xs()
                             .opacity(0.56)
                             .child(
-                                "Tab/\u{21e7}Tab or \u{2191}\u{2193} or J/K to move \u{00b7} 1\u{2013}9 to choose \u{00b7} Enter to confirm \u{00b7} Esc to cancel",
+                                "\u{2191}\u{2193} navigate \u{00b7} 1\u{2013}9 pick \u{00b7} Enter confirm \u{00b7} Esc cancel",
                             ),
                     ),
             )
