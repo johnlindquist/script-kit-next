@@ -83,6 +83,8 @@ pub(crate) struct AcpChatView {
     attach_menu_open: bool,
     /// Max messages to render (for performance). "Show earlier" loads more.
     render_message_limit: usize,
+    /// Cmd+F search: (query, highlighted_message_ids). None = search hidden.
+    search_state: Option<String>,
     /// Cached slash commands (name, description) discovered at creation.
     cached_slash_commands: Vec<(String, String)>,
 }
@@ -139,6 +141,7 @@ impl AcpChatView {
             history_menu: None,
             attach_menu_open: false,
             render_message_limit: 50,
+            search_state: None,
             cached_slash_commands: Self::discover_slash_commands(),
         }
     }
@@ -1250,6 +1253,42 @@ impl AcpChatView {
             cx.notify();
         }
 
+        // ── Cmd+F → toggle search ────────────────────────────
+        if modifiers.platform && key.eq_ignore_ascii_case("f") {
+            if self.search_state.is_some() {
+                self.search_state = None;
+            } else {
+                self.search_state = Some(String::new());
+            }
+            cx.notify();
+            cx.stop_propagation();
+            return;
+        }
+
+        // ── Search intercept (when search bar is open) ──────
+        if let Some(ref mut query) = self.search_state {
+            if crate::ui_foundation::is_key_escape(key) {
+                self.search_state = None;
+                cx.notify();
+                cx.stop_propagation();
+                return;
+            }
+            if crate::ui_foundation::is_key_backspace(key) {
+                query.pop();
+                cx.notify();
+                cx.stop_propagation();
+                return;
+            }
+            if let Some(ch) = event.keystroke.key_char.as_deref() {
+                if !ch.is_empty() && !modifiers.platform && !modifiers.control {
+                    query.push_str(ch);
+                    cx.notify();
+                    cx.stop_propagation();
+                    return;
+                }
+            }
+        }
+
         // ── Cmd+K → propagate to parent for actions dialog ──────
         if modifiers.platform && crate::ui_foundation::is_key_k(key) {
             cx.propagate();
@@ -1572,6 +1611,51 @@ impl Render for AcpChatView {
                             }),
                     ),
             )
+            // ── Search bar (Cmd+F) ─────────────────────────
+            .when_some(self.search_state.clone(), |d, query| {
+                let match_count = if query.is_empty() {
+                    0
+                } else {
+                    let q = query.to_lowercase();
+                    messages.iter().filter(|m| m.body.to_lowercase().contains(&q)).count()
+                };
+                d.child(
+                    div()
+                        .w_full()
+                        .px(px(12.0))
+                        .py(px(4.0))
+                        .flex()
+                        .items_center()
+                        .gap(px(8.0))
+                        .child(
+                            div()
+                                .text_xs()
+                                .opacity(0.50)
+                                .child("\u{1F50D}"),
+                        )
+                        .child(
+                            div()
+                                .flex_grow()
+                                .text_sm()
+                                .child(if query.is_empty() {
+                                    "Search conversation\u{2026}".to_string()
+                                } else {
+                                    query.clone()
+                                }),
+                        )
+                        .when(!query.is_empty(), |d| {
+                            d.child(
+                                div()
+                                    .text_xs()
+                                    .opacity(0.45)
+                                    .child(format!("{match_count} match{}", if match_count == 1 { "" } else { "es" })),
+                            )
+                        })
+                        .child(
+                            div().text_xs().opacity(0.30).child("Esc to close"),
+                        ),
+                )
+            })
             // ── Slash command menu (below input) ─────────────
             .when_some(self.slash_menu_index, |d, idx| {
                 let filtered = self.filtered_slash_commands(cx);
@@ -1773,6 +1857,14 @@ impl Render for AcpChatView {
                                     && matches!(msg.role, AcpThreadMessageRole::User)
                                     && !matches!(messages[i - 1].role, AcpThreadMessageRole::User);
 
+                                // Search highlight
+                                let is_search_match = self
+                                    .search_state
+                                    .as_ref()
+                                    .filter(|q| !q.is_empty())
+                                    .map(|q| msg.body.to_lowercase().contains(&q.to_lowercase()))
+                                    .unwrap_or(false);
+
                                 div()
                                     .w_full()
                                     .pb(px(4.0))
@@ -1781,6 +1873,10 @@ impl Render for AcpChatView {
                                         d.mt(px(8.0)).pt(px(8.0)).border_t_1().border_color(rgba(
                                             (theme.colors.ui.border << 8) | 0x18,
                                         ))
+                                    })
+                                    .when(is_search_match, |d| {
+                                        d.bg(rgba((theme.colors.accent.selected << 8) | 0x10))
+                                            .rounded(px(4.0))
                                     })
                                     .child(Self::render_message(
                                         msg,
