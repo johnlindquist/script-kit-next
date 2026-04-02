@@ -144,6 +144,7 @@ impl Render for ScriptListApp {
                 && !script_kit_gpui::is_within_focus_grace_period()
                 && !actions::is_actions_window_open()
                 && !confirm::is_confirm_window_open()
+                && !ai::acp::chat_window::is_chat_window_open()
                 && self.tab_ai_save_offer_state.is_none()
             {
                 logging::log(

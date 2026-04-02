@@ -298,11 +298,12 @@ fn hide_main_window_helper(app_entity: Entity<ScriptListApp>, cx: &mut App) {
     // 3. Check secondary windows BEFORE the update closure
     let notes_open = notes::is_notes_window_open();
     let ai_open = ai::is_ai_window_open();
+    let acp_chat_open = ai::acp::chat_window::is_chat_window_open();
     logging::log(
         "VISIBILITY",
         &format!(
-            "Secondary windows: notes_open={}, ai_open={}",
-            notes_open, ai_open
+            "Secondary windows: notes_open={}, ai_open={}, acp_chat_open={}",
+            notes_open, ai_open, acp_chat_open
         ),
     );
 
@@ -316,7 +317,7 @@ fn hide_main_window_helper(app_entity: Entity<ScriptListApp>, cx: &mut App) {
     });
 
     // 5. Hide appropriately based on secondary windows
-    if notes_open || ai_open {
+    if notes_open || ai_open || acp_chat_open {
         logging::log(
             "VISIBILITY",
             "Using defer_hide_main_window() - secondary windows are open",

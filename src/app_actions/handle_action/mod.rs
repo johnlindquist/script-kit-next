@@ -601,6 +601,7 @@ impl ScriptListApp {
     fn handle_acp_chat_action(
         &mut self,
         action_id: &str,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> DispatchOutcome {
         let AppView::AcpChatView { ref entity } = self.current_view else {
@@ -1078,13 +1079,22 @@ impl ScriptListApp {
             }
             "acp_detach_window" => {
                 let thread = entity.read(cx).thread.clone();
+                let inherit_bounds = Some(window.bounds());
+                tracing::info!(
+                    event = "actions_detach_acp_requested",
+                    has_inherited_bounds = true,
+                );
                 if let Err(e) =
-                    crate::ai::acp::chat_window::open_chat_window_with_thread(thread, cx)
+                    crate::ai::acp::chat_window::open_chat_window_with_thread(
+                        thread,
+                        inherit_bounds,
+                        cx,
+                    )
                 {
                     tracing::warn!(%e, "acp_detach_window_failed");
                     DispatchOutcome::success()
                 } else {
-                    self.close_tab_ai_harness_terminal(cx);
+                    self.close_acp_chat_to_script_list(cx);
                     let mut o = DispatchOutcome::success();
                     o.user_message = Some("Chat detached to window".to_string());
                     o
@@ -1164,7 +1174,7 @@ impl ScriptListApp {
                         if o.was_handled() {
                             ("scriptlet", o)
                         } else {
-                            let o = self.handle_acp_chat_action(&action_id_stripped, cx);
+                            let o = self.handle_acp_chat_action(&action_id_stripped, window, cx);
                             if o.was_handled() {
                                 ("acp_chat", o)
                             } else {

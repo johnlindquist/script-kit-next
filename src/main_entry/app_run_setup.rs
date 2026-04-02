@@ -705,7 +705,32 @@ app.run(move |cx: &mut App| {
                     });
 
                     if is_acp_chat {
-                        logging::log("VISIBILITY", "Decision: KEEP (AcpChatView active)");
+                        // Detach ACP chat to its own window, keep main panel showing ScriptList
+                        logging::log("VISIBILITY", "Decision: DETACH ACP chat + SHOW main");
+                        let app_for_detach = app_entity_inner.clone();
+                        cx.update(move |cx: &mut gpui::App| {
+                            let inherit_bounds = window_inner
+                                .update(cx, |_root, window, _cx| window.bounds())
+                                .ok();
+                            tracing::info!(
+                                event = "hotkey_detach_acp_requested",
+                                has_inherited_bounds = inherit_bounds.is_some(),
+                            );
+                            app_for_detach.update(cx, |view, cx| {
+                                if let AppView::AcpChatView { ref entity } = view.current_view {
+                                    let thread = entity.read(cx).thread.clone();
+                                    if let Err(e) = crate::ai::acp::chat_window::open_chat_window_with_thread(thread, inherit_bounds, cx) {
+                                        tracing::warn!(%e, "hotkey_detach_acp_failed");
+                                    }
+                                }
+                                // Force main panel to ScriptList regardless of origin
+                                view.close_acp_chat_to_script_list(cx);
+                                tracing::info!(
+                                    event = "hotkey_detach_acp_completed",
+                                    restored_view = "ScriptList",
+                                );
+                            });
+                        });
                     } else {
                         logging::log("VISIBILITY", "Decision: HIDE");
                         cx.update(move |cx: &mut gpui::App| {

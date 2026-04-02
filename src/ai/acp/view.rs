@@ -87,6 +87,8 @@ pub(crate) struct AcpChatView {
     pub(crate) search_state: Option<(String, usize)>,
     /// Cached slash commands (name, description) discovered at creation.
     cached_slash_commands: Vec<(String, String)>,
+    /// Handle to the deferred slash command discovery task.
+    _slash_discovery_task: Task<()>,
 }
 
 impl AcpChatView {
@@ -147,6 +149,22 @@ impl AcpChatView {
             }
         });
 
+        // Defer slash command discovery (filesystem I/O) to after the first
+        // render frame so the view switch is not blocked by skill enumeration.
+        let slash_task = cx.spawn(async move |this, cx| {
+            // Yield to let the initial render happen first.
+            cx.background_executor()
+                .timer(Duration::from_millis(1))
+                .await;
+            let commands = Self::discover_slash_commands();
+            let _ = cx.update(|cx| {
+                this.update(cx, |view, cx| {
+                    view.cached_slash_commands = commands;
+                    cx.notify();
+                })
+            });
+        });
+
         Self {
             thread,
             focus_handle: cx.focus_handle(),
@@ -160,7 +178,8 @@ impl AcpChatView {
             history_menu: None,
             attach_menu_open: false,
             search_state: None,
-            cached_slash_commands: Self::discover_slash_commands(),
+            cached_slash_commands: Vec::new(),
+            _slash_discovery_task: slash_task,
         }
     }
 
@@ -933,153 +952,52 @@ impl AcpChatView {
     fn render_toolbar(
         &self,
         status: AcpThreadStatus,
-        has_input_text: bool,
-        mode_label: Option<&str>,
+        _has_input_text: bool,
+        _mode_label: Option<&str>,
         display_name: &str,
         elapsed_secs: Option<u64>,
         streaming_words: Option<usize>,
-        message_count: usize,
-        context_state: AcpContextBootstrapState,
+        _message_count: usize,
+        _context_state: AcpContextBootstrapState,
         usage_cost: Option<f64>,
-        usage_tokens: Option<(u64, u64)>,
-        cx: &mut Context<Self>,
+        _usage_tokens: Option<(u64, u64)>,
+        _cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let theme = theme::get_cached_theme();
         let is_streaming = matches!(status, AcpThreadStatus::Streaming);
-        let can_send = matches!(status, AcpThreadStatus::Idle) && has_input_text;
-        let context_loading = matches!(context_state, AcpContextBootstrapState::Preparing);
+
+        // Hint strip opacity: match main menu's OPACITY_TEXT_MUTED (0.65)
+        let hint_text_hex = theme.colors.text.primary;
+        let hint_opacity_byte = (crate::theme::opacity::OPACITY_TEXT_MUTED * 255.0)
+            .round() as u32;
+        let hint_text_rgba = (hint_text_hex << 8) | hint_opacity_byte;
 
         div()
             .w_full()
+            .h(px(crate::window_resize::mini_layout::HINT_STRIP_HEIGHT))
+            .px(px(crate::window_resize::mini_layout::HINT_STRIP_PADDING_X))
+            .py(px(crate::window_resize::mini_layout::HINT_STRIP_PADDING_Y))
             .flex()
+            .flex_row()
             .items_center()
             .justify_between()
-            .px(px(4.0))
-            .py(px(2.0))
-            // ── Left: paste button + context indicator ─
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap(px(6.0))
-                    .child(
-                        div()
-                            .id("acp-attach-btn")
-                            .cursor_pointer()
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .size(px(22.0))
-                            .rounded(px(6.0))
-                            .text_xs()
-                            .opacity(0.50)
-                            .hover(|s| s.opacity(0.85))
-                            .child("+")
-                            .on_click(cx.listener(|this, _event, _window, cx| {
-                                this.attach_menu_open = !this.attach_menu_open;
-                                cx.notify();
-                            })),
-                    )
-                    .when(context_loading, |d| {
-                        d.child(
-                            div()
-                                .text_xs()
-                                .opacity(0.40)
-                                .child("attaching context\u{2026}"),
-                        )
-                    })
-                    .when(!context_loading, |d| {
-                        d.child(div().text_xs().opacity(0.30).child("~/.scriptkit"))
-                    }),
-            )
-            // ── Right: mode, model, send ─────────
+            // Subtle top border to separate hint strip from content
+            .border_t(px(1.0))
+            .border_color(rgba((theme.colors.text.primary << 8) | 0x10))
+            // ── Left: model indicator + streaming info ─────
             .child(
                 div()
                     .flex()
                     .items_center()
                     .gap(px(8.0))
-                    // Mode pill (label + chevron)
-                    .when_some(mode_label.map(str::to_string), |d, mode| {
-                        d.child(
-                            div()
-                                .flex()
-                                .items_center()
-                                .gap(px(2.0))
-                                .text_xs()
-                                .opacity(0.55)
-                                .child(mode)
-                                .child("\u{25BE}"),
-                        )
-                    })
-                    // Message count (when > 0)
-                    .when(message_count > 0, |d| {
-                        d.child(
-                            div()
-                                .text_xs()
-                                .opacity(0.35)
-                                .child(format!("{message_count} msgs")),
-                        )
-                    })
-                    // Streaming indicator (elapsed time + word count)
-                    .when_some(elapsed_secs.filter(|&s| s >= 2), |d, secs| {
-                        d.child(div().text_xs().opacity(0.45).child(match streaming_words {
-                            Some(words) if words > 5 => format!("{secs}s \u{00b7} {words}w"),
-                            _ => format!("{secs}s"),
-                        }))
-                    })
-                    // Token usage bar (shown when context window data available)
-                    .when_some(usage_tokens, |d, (used, size)| {
-                        let pct = if size > 0 {
-                            (used as f64 / size as f64).min(1.0)
-                        } else {
-                            0.0
-                        };
-                        let bar_color = if pct > 0.85 {
-                            rgba(0xEF444480) // red when nearly full
-                        } else if pct > 0.65 {
-                            rgba(0xFBBF2480) // gold warning
-                        } else {
-                            rgba((theme.colors.text.primary << 8) | 0x20)
-                        };
-                        d.child(
-                            div()
-                                .flex()
-                                .items_center()
-                                .gap(px(3.0))
-                                .child(
-                                    div()
-                                        .w(px(32.0))
-                                        .h(px(3.0))
-                                        .rounded(px(1.5))
-                                        .bg(rgba((theme.colors.text.primary << 8) | 0x08))
-                                        .child(
-                                            div()
-                                                .h_full()
-                                                .w(px(32.0 * pct as f32))
-                                                .rounded(px(1.5))
-                                                .bg(bar_color),
-                                        ),
-                                )
-                                .child(
-                                    div()
-                                        .text_xs()
-                                        .opacity(0.30)
-                                        .child(format!("{}%", (pct * 100.0) as u32)),
-                                ),
-                        )
-                    })
-                    // Cost indicator (shown when usage data available)
-                    .when_some(usage_cost.filter(|&c| c > 0.0), |d, cost| {
-                        d.child(div().text_xs().opacity(0.35).child(format!("${cost:.2}")))
-                    })
-                    // Model indicator (status dot + label, no chevron — model switching not available)
+                    // Model indicator (status dot + label)
                     .child(
                         div()
                             .flex()
                             .items_center()
                             .gap(px(4.0))
                             .text_xs()
-                            .opacity(0.45)
+                            .text_color(rgba(hint_text_rgba))
                             .child(div().size(px(5.0)).rounded_full().bg(if is_streaming {
                                 rgb(theme.colors.accent.selected)
                             } else {
@@ -1087,8 +1005,31 @@ impl AcpChatView {
                             }))
                             .child(display_name.to_string()),
                     )
-                    // Send / Stop button
-                    .child(self.render_send_button(can_send, is_streaming, &theme, cx)),
+                    // Streaming indicator (elapsed time + word count)
+                    .when_some(elapsed_secs.filter(|&s| s >= 2), |d, secs| {
+                        d.child(div().text_xs().text_color(rgba(hint_text_rgba)).child(
+                            match streaming_words {
+                                Some(words) if words > 5 => format!("{secs}s \u{00b7} {words}w"),
+                                _ => format!("{secs}s"),
+                            },
+                        ))
+                    })
+                    // Cost indicator
+                    .when_some(usage_cost.filter(|&c| c > 0.0), |d, cost| {
+                        d.child(
+                            div()
+                                .text_xs()
+                                .text_color(rgba(hint_text_rgba))
+                                .child(format!("${cost:.2}")),
+                        )
+                    }),
+            )
+            // ── Right: hint strip (matches main menu format) ─────
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(rgba(hint_text_rgba))
+                    .child("\u{21A9} Send   \u{2318}K Actions   \u{2318}W Close"),
             )
     }
 
@@ -1384,9 +1325,16 @@ impl AcpChatView {
             }
         }
 
-        // ── Cmd+K → propagate to parent for actions dialog ──────
+        // ── Cmd+K → open actions dialog ──────
         if modifiers.platform && crate::ui_foundation::is_key_k(key) {
-            cx.propagate();
+            if crate::ai::acp::chat_window::is_chat_window_open() {
+                // Detached window: open actions popup directly
+                crate::ai::acp::chat_window::toggle_detached_actions(cx);
+                cx.stop_propagation();
+            } else {
+                // Main panel: propagate to parent interceptor
+                cx.propagate();
+            }
             return;
         }
 
@@ -1710,7 +1658,26 @@ impl Render for AcpChatView {
             .relative()
             .track_focus(&self.focus_handle)
             .on_key_down(
-                cx.listener(|this, event: &gpui::KeyDownEvent, _window, cx| {
+                cx.listener(|this, event: &gpui::KeyDownEvent, window, cx| {
+                    let key = event.keystroke.key.as_str();
+                    let modifiers = &event.keystroke.modifiers;
+
+                    // Cmd+W in detached window: close the window directly.
+                    // In the main panel, Cmd+W is handled by the interceptor.
+                    if modifiers.platform && key.eq_ignore_ascii_case("w")
+                        && crate::ai::acp::chat_window::is_chat_window_open()
+                    {
+                        let wb = window.window_bounds();
+                        crate::window_state::save_window_from_gpui(
+                            crate::window_state::WindowRole::AcpChat,
+                            wb,
+                        );
+                        crate::ai::acp::chat_window::clear_chat_window_handle();
+                        window.remove_window();
+                        cx.stop_propagation();
+                        return;
+                    }
+
                     this.handle_key_down(event, cx);
                 }),
             )

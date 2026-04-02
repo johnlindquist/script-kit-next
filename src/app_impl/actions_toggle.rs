@@ -314,6 +314,9 @@ impl ScriptListApp {
                     dialog.set_focused_scriptlet(script_info.clone(), Some(scriptlet.clone()));
                 }
 
+                // Skip track_focus so the parent window keeps keyboard routing
+                // (matches command_bar.rs pattern)
+                dialog.set_skip_track_focus(true);
                 dialog
             });
 
