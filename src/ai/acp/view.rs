@@ -1321,10 +1321,18 @@ impl AcpChatView {
                 let selected = filtered.get(*idx).cloned().cloned();
                 self.history_menu = None;
                 if let Some(entry) = selected {
-                    self.thread.update(cx, |thread, cx| {
-                        thread.input.set_text(entry.first_message.clone());
-                        cx.notify();
-                    });
+                    // Try to load full conversation; fall back to inserting first message
+                    if let Some(conv) = super::history::load_conversation(&entry.session_id) {
+                        self.thread.update(cx, |thread, cx| {
+                            thread.load_saved_messages(&conv.messages, cx);
+                        });
+                        self.collapsed_ids.clear();
+                    } else {
+                        self.thread.update(cx, |thread, cx| {
+                            thread.input.set_text(entry.first_message.clone());
+                            cx.notify();
+                        });
+                    }
                 }
                 cx.notify();
                 cx.stop_propagation();
