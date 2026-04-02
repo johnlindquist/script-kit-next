@@ -476,6 +476,14 @@ pub fn get_acp_chat_actions() -> Vec<Action> {
         .with_icon(IconName::FileCode)
         .with_section("Chat"),
         Action::new(
+            "acp_copy_all_code",
+            "Copy All Code Blocks",
+            Some("Copy all code blocks from the conversation to clipboard".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_icon(IconName::Code)
+        .with_section("Chat"),
+        Action::new(
             "acp_retry_last",
             "Retry Last Message",
             Some("Resend the last user message".to_string()),

@@ -655,6 +655,53 @@ impl ScriptListApp {
                     DispatchOutcome::not_handled()
                 }
             }
+            "acp_copy_all_code" => {
+                let entity = entity.clone();
+                let messages = &entity.read(cx).thread.read(cx).messages;
+                let mut all_code = String::new();
+                for msg in messages {
+                    if matches!(
+                        msg.role,
+                        crate::ai::acp::thread::AcpThreadMessageRole::Assistant
+                    ) {
+                        // Extract all code blocks from this message
+                        let mut in_block = false;
+                        let mut current = String::new();
+                        for line in msg.body.lines() {
+                            if line.trim_start().starts_with("```") {
+                                if in_block {
+                                    if !current.is_empty() {
+                                        if !all_code.is_empty() {
+                                            all_code.push_str("\n\n");
+                                        }
+                                        all_code.push_str(&current);
+                                    }
+                                    current.clear();
+                                    in_block = false;
+                                } else {
+                                    in_block = true;
+                                    current.clear();
+                                }
+                            } else if in_block {
+                                if !current.is_empty() {
+                                    current.push('\n');
+                                }
+                                current.push_str(line);
+                            }
+                        }
+                    }
+                }
+                if all_code.is_empty() {
+                    let mut o = DispatchOutcome::success();
+                    o.user_message = Some("No code blocks found".to_string());
+                    o
+                } else {
+                    cx.write_to_clipboard(gpui::ClipboardItem::new_string(all_code));
+                    let mut o = DispatchOutcome::success();
+                    o.user_message = Some("All code blocks copied".to_string());
+                    o
+                }
+            }
             "acp_retry_last" => {
                 let entity = entity.clone();
                 let last_user_msg = entity
