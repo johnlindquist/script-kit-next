@@ -772,6 +772,8 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                 ai::simulate_ai_key(ctx, &key, modifiers);
                             }
                             ExternalCommand::CaptureWindow { title, path } => {
+                                // Extend grace period to prevent auto-hide during capture.
+                                script_kit_gpui::mark_window_shown();
                                 logging::log("STDIN", &format!("Capturing window with title '{}' to '{}'", title, path));
                                 match validate_capture_window_output_path(&path) {
                                     Ok(validated_path) => {
