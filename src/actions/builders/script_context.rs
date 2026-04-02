@@ -533,6 +533,14 @@ pub fn get_acp_chat_actions() -> Vec<Action> {
         .with_icon(IconName::ChevronRight)
         .with_section("View"),
         Action::new(
+            "acp_clear_history",
+            "Clear History",
+            Some("Delete all saved conversation history".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_icon(IconName::Trash)
+        .with_section("Navigate"),
+        Action::new(
             "acp_detach_window",
             "Detach to Window",
             Some("Open AI chat in a separate floating window".to_string()),
