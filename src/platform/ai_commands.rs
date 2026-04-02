@@ -322,7 +322,7 @@ mod windows_browser_url {
     //
     // Follows the codebase convention of raw extern blocks
     // (see selected_text.rs, windows_system_actions.rs, window_control_stub.rs).
-    #[allow(non_snake_case, non_camel_case_types)]
+    #[allow(non_snake_case, non_camel_case_types, clippy::upper_case_acronyms)]
     mod ffi {
         use std::os::raw::c_int;
 
@@ -765,7 +765,7 @@ mod windows_browser_url {
             // The exact size depends on architecture. On x64 it's 40.
             // On x86 it would be 28. Just ensure it's reasonable.
             assert!(
-                size >= 28 && size <= 48,
+                (28..=48).contains(&size),
                 "INPUT struct size {size} is outside expected range [28, 48]"
             );
         }
@@ -775,7 +775,7 @@ mod windows_browser_url {
             // KEYBDINPUT: u16 + u16 + u32 + u32 + usize = 4 + 4 + 8 + 8(pad) = 24 on x64
             let size = std::mem::size_of::<ffi::KEYBDINPUT>();
             assert!(
-                size >= 16 && size <= 32,
+                (16..=32).contains(&size),
                 "KEYBDINPUT struct size {size} is outside expected range"
             );
         }
@@ -856,7 +856,9 @@ mod windows_browser_url {
 
         #[test]
         fn test_known_browsers_list_is_not_empty() {
-            assert!(!KNOWN_BROWSERS.is_empty());
+            // Use direct length check to avoid clippy::const_is_empty (is_empty on const)
+            // and clippy::len_zero (len() > 0)
+            assert_ne!(KNOWN_BROWSERS.len(), 0);
         }
 
         #[test]
@@ -913,10 +915,14 @@ mod windows_browser_url {
             let result = get_browser_url_impl();
             if let Err(e) = result {
                 let msg = e.to_string();
-                // The error should mention that the foreground app is not a browser
+                // The error should be descriptive — either "not a supported browser",
+                // "Supported", or "does not contain a URL" (when a browser is focused
+                // but the title lacks a parseable URL).
                 assert!(
-                    msg.contains("not a supported browser") || msg.contains("Supported"),
-                    "Error should mention supported browsers, got: {msg}"
+                    msg.contains("not a supported browser")
+                        || msg.contains("Supported")
+                        || msg.contains("does not contain a URL"),
+                    "Error should mention supported browsers or URL parsing issue, got: {msg}"
                 );
             }
         }

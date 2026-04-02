@@ -81,7 +81,7 @@ pub fn defer_hide_main_window(cx: &mut gpui::App) {
         // hide the main window since we don't have a raw HWND wired up yet.
         #[cfg(not(target_os = "macos"))]
         {
-            let _ = cx.update(|cx| {
+            cx.update(|cx| {
                 cx.hide();
             });
         }
@@ -159,7 +159,7 @@ pub fn win32_capture_main_hwnd_from_gpui(cx: &mut gpui::App) {
             if let Ok(wh) = window.window_handle() {
                 match wh.as_raw() {
                     raw_window_handle::RawWindowHandle::Win32(h) => {
-                        let hwnd = h.hwnd.get() as isize;
+                        let hwnd = h.hwnd.get();
                         let atom = WIN32_MAIN_HWND.get_or_init(|| {
                             std::sync::atomic::AtomicIsize::new(0)
                         });
@@ -186,6 +186,30 @@ pub fn win32_capture_main_hwnd_from_gpui(cx: &mut gpui::App) {
     }
 }
 
+/// Store the HWND from a Window reference directly.
+/// Use this when you already have `&mut Window` (e.g. in stdin handler)
+/// and don't need to go through `update_window`.
+#[cfg(target_os = "windows")]
+pub fn win32_capture_main_hwnd_from_window(window: &mut gpui::Window) {
+    use raw_window_handle::HasWindowHandle;
+
+    if let Ok(wh) = window.window_handle() {
+        if let raw_window_handle::RawWindowHandle::Win32(h) = wh.as_raw() {
+            let hwnd = h.hwnd.get();
+            let atom = WIN32_MAIN_HWND.get_or_init(|| {
+                std::sync::atomic::AtomicIsize::new(0)
+            });
+            let prev = atom.swap(hwnd, std::sync::atomic::Ordering::Relaxed);
+            if prev == 0 {
+                logging::log(
+                    "VISIBILITY",
+                    &format!("Windows: captured GPUI main HWND {:#x} (from window ref)", hwnd),
+                );
+            }
+        }
+    }
+}
+
 /// Get the stored main HWND (returns 0 if not captured yet).
 #[cfg(target_os = "windows")]
 fn win32_get_main_hwnd() -> isize {
@@ -194,6 +218,8 @@ fn win32_get_main_hwnd() -> isize {
         .map(|a| a.load(std::sync::atomic::Ordering::Relaxed))
         .unwrap_or(0)
 }
+
+
 
 /// Show the main application window and bring it to the foreground.
 #[cfg(target_os = "windows")]

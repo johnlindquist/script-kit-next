@@ -1243,7 +1243,8 @@ pub fn notify_actions_window(cx: &mut App) {
 
 // --- merged from part_03.rs ---
 
-const _ACTIONS_WINDOW_RESIZE_ANIMATE: bool = false;
+#[cfg(target_os = "macos")]
+const ACTIONS_WINDOW_RESIZE_ANIMATE: bool = false;
 
 /// Resize the actions window directly using the window reference
 /// Use this from defer callbacks where we already have access to the window
@@ -1551,7 +1552,7 @@ pub fn resize_actions_window(cx: &mut App, dialog_entity: &Entity<ActionsDialog>
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, target_os = "macos"))]
 mod resize_instant_tests {
     use super::ACTIONS_WINDOW_RESIZE_ANIMATE;
 

@@ -249,7 +249,7 @@ mod windows_tests {
 
         'outer: for dir in dirs {
             if let Ok(apps) = scan_windows_directory_recursive(dir) {
-                for app in apps {
+                if let Some(app) = apps.into_iter().next() {
                     found_lnk = Some(app.path);
                     break 'outer;
                 }

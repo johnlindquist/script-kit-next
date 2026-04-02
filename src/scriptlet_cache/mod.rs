@@ -699,6 +699,17 @@ mod tests {
     fn test_mtime(secs: u64) -> SystemTime {
         SystemTime::UNIX_EPOCH + Duration::from_secs(secs)
     }
+
+    /// Returns a platform-appropriate absolute path for tests.
+    /// On Unix `/path/to/file.md` is absolute; on Windows we need `C:\path\to\file.md`.
+    fn test_abs_path(unix_path: &str) -> PathBuf {
+        if cfg!(windows) {
+            PathBuf::from(format!("C:{}", unix_path.replace('/', "\\")))
+        } else {
+            PathBuf::from(unix_path)
+        }
+    }
+
     // -------------------------------------------------------------------------
     // Cache tests
     // -------------------------------------------------------------------------
@@ -707,7 +718,7 @@ mod tests {
     fn test_cache_add_and_retrieve() {
         let mut cache = ScriptletCache::new();
         let mtime = test_mtime(1000);
-        let path = PathBuf::from("/path/to/file.md");
+        let path = test_abs_path("/path/to/file.md");
 
         let scriptlets = vec![
             CachedScriptlet::new(
@@ -748,7 +759,7 @@ mod tests {
     #[test]
     fn test_cache_staleness_detection() {
         let mut cache = ScriptletCache::new();
-        let path = PathBuf::from("/path/to/file.md");
+        let path = test_abs_path("/path/to/file.md");
         let mtime_old = test_mtime(1000);
         let mtime_new = test_mtime(2000);
 
@@ -767,7 +778,7 @@ mod tests {
     #[test]
     fn test_cache_remove_file() {
         let mut cache = ScriptletCache::new();
-        let path = PathBuf::from("/path/to/file.md");
+        let path = test_abs_path("/path/to/file.md");
         let mtime = test_mtime(1000);
 
         let scriptlets = vec![CachedScriptlet::new(
@@ -796,7 +807,7 @@ mod tests {
     #[test]
     fn test_cache_update_existing() {
         let mut cache = ScriptletCache::new();
-        let path = PathBuf::from("/path/to/file.md");
+        let path = test_abs_path("/path/to/file.md");
         let mtime1 = test_mtime(1000);
         let mtime2 = test_mtime(2000);
 
@@ -841,9 +852,9 @@ mod tests {
         let mut cache = ScriptletCache::new();
         let mtime = test_mtime(1000);
 
-        cache.update_file("/path/a.md", mtime, vec![]);
-        cache.update_file("/path/b.md", mtime, vec![]);
-        cache.update_file("/path/c.md", mtime, vec![]);
+        cache.update_file(test_abs_path("/path/a.md"), mtime, vec![]);
+        cache.update_file(test_abs_path("/path/b.md"), mtime, vec![]);
+        cache.update_file(test_abs_path("/path/c.md"), mtime, vec![]);
 
         assert_eq!(cache.len(), 3);
 
@@ -857,8 +868,8 @@ mod tests {
         let mut cache = ScriptletCache::new();
         let mtime = test_mtime(1000);
 
-        cache.update_file("/path/a.md", mtime, vec![]);
-        cache.update_file("/path/b.md", mtime, vec![]);
+        cache.update_file(test_abs_path("/path/a.md"), mtime, vec![]);
+        cache.update_file(test_abs_path("/path/b.md"), mtime, vec![]);
 
         let paths: Vec<_> = cache.file_paths().collect();
         assert_eq!(paths.len(), 2);
@@ -1334,12 +1345,17 @@ mod tests {
         let path = super::get_log_file_path();
         // Should end with the expected filename
         assert!(path.ends_with("script-kit-gpui.jsonl"));
-        // Should contain .scriptkit/logs in the path (or /tmp as fallback)
-        let path_str = path.to_string_lossy();
+        // Should be in .scriptkit/logs or the system temp dir as fallback
+        let in_scriptkit_logs = path.ends_with(
+            std::path::Path::new(".scriptkit")
+                .join("logs")
+                .join("script-kit-gpui.jsonl"),
+        );
+        let in_temp = path.starts_with(std::env::temp_dir());
         assert!(
-            path_str.contains(".scriptkit/logs") || path_str.contains("/tmp"),
-            "Path should be in .scriptkit/logs or /tmp, got: {}",
-            path_str
+            in_scriptkit_logs || in_temp,
+            "Path should be in .scriptkit/logs or temp dir, got: {}",
+            path.display()
         );
     }
     #[test]
@@ -1484,7 +1500,7 @@ mod tests {
     #[test]
     fn test_cache_staleness_with_fingerprint() {
         let mut cache = ScriptletCache::new();
-        let path = PathBuf::from("/path/to/file.md");
+        let path = test_abs_path("/path/to/file.md");
         let fp_old = FileFingerprint {
             mtime: test_mtime(1000),
             size: 1024,
@@ -1518,7 +1534,7 @@ mod tests {
     #[test]
     fn test_upsert_file_returns_diff_for_new_file() {
         let mut cache = ScriptletCache::new();
-        let path = PathBuf::from("/path/to/file.md");
+        let path = test_abs_path("/path/to/file.md");
         let fp = FileFingerprint {
             mtime: test_mtime(1000),
             size: 1024,
@@ -1546,7 +1562,7 @@ mod tests {
     #[test]
     fn test_upsert_file_returns_diff_for_existing_file() {
         let mut cache = ScriptletCache::new();
-        let path = PathBuf::from("/path/to/file.md");
+        let path = test_abs_path("/path/to/file.md");
         let fp1 = FileFingerprint {
             mtime: test_mtime(1000),
             size: 1024,
@@ -1614,7 +1630,7 @@ mod tests {
     #[test]
     fn test_remove_file_returns_removed_scriptlets() {
         let mut cache = ScriptletCache::new();
-        let path = PathBuf::from("/path/to/file.md");
+        let path = test_abs_path("/path/to/file.md");
         let fp = FileFingerprint {
             mtime: test_mtime(1000),
             size: 1024,
@@ -1644,7 +1660,7 @@ mod tests {
     #[test]
     fn test_get_scriptlets_ref_returns_slice() {
         let mut cache = ScriptletCache::new();
-        let path = PathBuf::from("/path/to/file.md");
+        let path = test_abs_path("/path/to/file.md");
         let fp = FileFingerprint {
             mtime: test_mtime(1000),
             size: 1024,
@@ -1667,7 +1683,7 @@ mod tests {
     #[test]
     fn test_get_scriptlets_ref_returns_none_for_missing() {
         let cache = ScriptletCache::new();
-        let path = PathBuf::from("/nonexistent.md");
+        let path = test_abs_path("/nonexistent.md");
 
         let slice = cache.get_scriptlets_ref(&path);
         assert!(slice.is_none());

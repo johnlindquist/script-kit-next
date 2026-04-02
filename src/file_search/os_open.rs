@@ -257,11 +257,12 @@ pub fn show_info(path: &str) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{escape_windows_cmd_open_target, terminal_working_directory};
+    use super::escape_windows_cmd_open_target;
 
+    #[cfg(target_os = "macos")]
     #[test]
     fn test_terminal_working_directory_returns_parent_for_file_paths() {
-        let resolved = terminal_working_directory("/tmp/a/b/file.txt", false);
+        let resolved = super::terminal_working_directory("/tmp/a/b/file.txt", false);
         assert_eq!(resolved, "/tmp/a/b");
     }
 

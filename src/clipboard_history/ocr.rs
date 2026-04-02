@@ -498,8 +498,11 @@ mod tests {
     fn test_resolve_blob_path_appends_png_when_content_is_blob_reference() {
         let path = resolve_blob_path("blob:testhash").expect("expected blob path resolution");
         assert!(
-            path.to_string_lossy()
-                .ends_with("clipboard/blobs/testhash.png"),
+            path.ends_with(
+                std::path::Path::new("clipboard")
+                    .join("blobs")
+                    .join("testhash.png")
+            ),
             "unexpected path: {}",
             path.display()
         );

@@ -17,6 +17,7 @@
 
 /// Mirror of the private `KEYBDINPUT` struct used in `windows_browser_url::ffi`.
 #[repr(C)]
+#[allow(clippy::upper_case_acronyms)]
 struct KEYBDINPUT {
     wvk: u16,
     wscan: u16,
@@ -34,6 +35,7 @@ struct INPUT_UNION {
 
 /// Mirror of the private `INPUT` struct.
 #[repr(C)]
+#[allow(clippy::upper_case_acronyms)]
 struct INPUT {
     r#type: u32,
     u: INPUT_UNION,

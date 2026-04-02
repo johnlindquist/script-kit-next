@@ -544,24 +544,8 @@ mod tests {
         assert!(result.is_ok(), "Logo SVG should render: {:?}", result);
     }
 
-    #[test]
-    fn test_render_svg_to_rgba_menu_icons_render() {
-        // Test all menu icon SVGs render successfully
-        let icons = [
-            ("ICON_HOME", ICON_HOME),
-            ("ICON_EDIT", ICON_EDIT),
-            ("ICON_MESSAGE", ICON_MESSAGE),
-            ("ICON_GITHUB", ICON_GITHUB),
-            ("ICON_BOOK", ICON_BOOK),
-            ("ICON_DISCORD", ICON_DISCORD),
-            ("ICON_AT_SIGN", ICON_AT_SIGN),
-            ("ICON_SETTINGS", ICON_SETTINGS),
-            ("ICON_LOG_OUT", ICON_LOG_OUT),
-        ];
-
-        for (name, svg) in icons {
-            let result = render_svg_to_rgba(svg, MENU_ICON_SIZE, MENU_ICON_SIZE);
-            assert!(result.is_ok(), "{} should render: {:?}", name, result);
-        }
-    }
+    // NOTE: test_render_svg_to_rgba_menu_icons_render removed - it referenced
+    // ICON_HOME, ICON_EDIT, etc. and MENU_ICON_SIZE constants that were never
+    // defined. The tray menu uses NativeIcon (system icons), not custom SVGs.
+    // Re-add this test if custom SVG menu icons are introduced.
 }

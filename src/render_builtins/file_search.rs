@@ -460,6 +460,7 @@ impl ScriptListApp {
                                 if let Some(file) = get_selected_file() {
                                     this.toggle_file_search_actions(&file, window, cx);
                                 }
+                                #[allow(clippy::needless_return)]
                                 return;
                             }
                             // Handle Cmd+Y (Quick Look) - macOS only

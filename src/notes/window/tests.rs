@@ -123,9 +123,9 @@ fn test_platform_arrow_shortcuts_only_run_note_navigation_when_editor_not_focuse
 
 #[test]
 fn test_show_selected_note_missing_feedback_notifies_after_feedback_state_update() {
-    const NOTES_ACTIONS_SOURCE: &str = include_str!("notes_actions.rs");
+    let notes_actions_source = include_str!("notes_actions.rs").replace("\r\n", "\n");
     assert!(
-        NOTES_ACTIONS_SOURCE.contains(
+        notes_actions_source.contains(
             "self.show_action_feedback(Self::SELECTED_NOTE_NOT_FOUND_FEEDBACK, true);\n        cx.notify();"
         ),
         "Missing-note feedback should notify after updating action feedback state"
@@ -150,9 +150,9 @@ fn test_duplicate_selected_note_sets_feedback_before_select_note() {
 
 #[test]
 fn test_copy_as_markdown_notifies_after_feedback_state_update() {
-    const CLIPBOARD_OPS_SOURCE: &str = include_str!("clipboard_ops.rs");
+    let clipboard_ops_source = include_str!("clipboard_ops.rs").replace("\r\n", "\n");
     assert!(
-        CLIPBOARD_OPS_SOURCE
+        clipboard_ops_source
             .contains("self.show_action_feedback(\"Copied\", false);\n        cx.notify();"),
         "Copy-as-markdown should notify after updating action feedback state"
     );
@@ -189,14 +189,14 @@ fn test_notes_keyboard_handles_named_bracket_keys_when_platform_navigation_short
 
 #[test]
 fn test_notes_keyboard_stops_propagation_when_escape_closes_actions_panel() {
-    const KEYBOARD_SOURCE: &str = include_str!("keyboard.rs");
+    let keyboard_source = include_str!("keyboard.rs").replace("\r\n", "\n");
     let escape_branch =
-        "if is_key_escape(key) || (modifiers.platform && key.eq_ignore_ascii_case(\"k\")) {";
-    let branch_start = KEYBOARD_SOURCE
+        "if is_key_escape(key)\n                || (is_platform_modifier(modifiers) && key.eq_ignore_ascii_case(\"k\"))\n            {";
+    let branch_start = keyboard_source
         .find(escape_branch)
         .expect("Expected actions panel escape branch in keyboard.rs");
     let branch_slice =
-        &KEYBOARD_SOURCE[branch_start..(branch_start + 256).min(KEYBOARD_SOURCE.len())];
+        &keyboard_source[branch_start..(branch_start + 300).min(keyboard_source.len())];
 
     let close_idx = branch_slice
         .find("self.close_actions_panel(window, cx);")
@@ -216,9 +216,9 @@ fn test_notes_keyboard_stops_propagation_when_escape_closes_actions_panel() {
 
 #[test]
 fn test_notes_keyboard_stops_propagation_at_start_of_global_escape_chain() {
-    const KEYBOARD_SOURCE: &str = include_str!("keyboard.rs");
+    let keyboard_source = include_str!("keyboard.rs").replace("\r\n", "\n");
     assert!(
-        KEYBOARD_SOURCE.contains("if is_key_escape(key) {\n            cx.stop_propagation();"),
+        keyboard_source.contains("if is_key_escape(key) {\n            cx.stop_propagation();"),
         "Global escape chain should stop propagation before handling escape branches"
     );
 }

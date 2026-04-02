@@ -5,7 +5,6 @@
 // Tests for execute_shell_scriptlet() function and SHELL_TOOLS constant.
 // These tests verify shell tool execution, error handling, and platform guards.
 
-use super::execute_shell_scriptlet;
 use crate::scriptlets::SHELL_TOOLS;
 
 /// Verify SHELL_TOOLS constant contains all expected shells
@@ -409,4 +408,3 @@ fn test_execute_shell_scriptlet_powershell_on_unix() {
         );
     }
 }
-

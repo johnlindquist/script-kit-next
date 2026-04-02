@@ -246,6 +246,13 @@ fn first_symlink_component(path: &Path) -> std::io::Result<Option<PathBuf>> {
     for component in path.components() {
         current.push(component.as_os_str());
 
+        // Skip Prefix (e.g. `C:` or `\\?\C:`) and RootDir (`\`) components --
+        // they are never symlinks and calling symlink_metadata on a bare
+        // prefix like `\\?\C:` returns ERROR_INVALID_FUNCTION on Windows.
+        if matches!(component, Component::Prefix(_) | Component::RootDir) {
+            continue;
+        }
+
         match std::fs::symlink_metadata(&current) {
             Ok(metadata) => {
                 if metadata.file_type().is_symlink() {
@@ -564,6 +571,7 @@ pub struct ExternalCommandEnvelope {
 /// structured assertions on app state without relying on log scraping.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
+#[allow(clippy::enum_variant_names)]
 pub enum QueryResponse {
     /// Response to `GetState` ΓÇö snapshot of current prompt state.
     StateResult {

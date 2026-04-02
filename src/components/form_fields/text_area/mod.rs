@@ -525,8 +525,6 @@ impl FormTextArea {
 mod tests {
     use super::{move_cursor_vertical_preserve_column, VerticalCursorDirection};
 
-    const TEXT_AREA_SOURCE: &str = include_str!("mod.rs");
-
     #[test]
     fn test_move_cursor_vertical_preserve_column_clamps_column_when_target_line_is_shorter() {
         let text = "first line\ntiny\nlonger third";
@@ -557,9 +555,10 @@ mod tests {
 
     #[test]
     fn test_key_handlers_use_enter_helper_for_return_variant() {
+        let text_area_source = include_str!("mod.rs").replace("\r\n", "\n");
         let enter_handler_snippet =
             "if !cmd && is_key_enter(key) {\n            self.insert_text_at_cursor(\"\\n\");";
-        let enter_helper_usages = TEXT_AREA_SOURCE.matches(enter_handler_snippet).count();
+        let enter_helper_usages = text_area_source.matches(enter_handler_snippet).count();
         assert_eq!(
             enter_helper_usages, 2,
             "both text area key handlers should use is_key_enter so Return inserts a newline"

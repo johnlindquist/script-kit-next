@@ -14,7 +14,7 @@ pub fn escape_applescript_string(input: &str) -> String {
         .replace('\t', "\\t")
 }
 
-#[cfg(test)]
+#[cfg(all(test, target_os = "macos"))]
 mod tests {
     use super::escape_applescript_string;
 

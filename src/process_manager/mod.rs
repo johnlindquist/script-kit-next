@@ -318,7 +318,46 @@ impl ProcessManager {
             }
         }
 
-        #[cfg(not(unix))]
+        #[cfg(windows)]
+        {
+            // On Windows, open the process and terminate it.
+            const PROCESS_TERMINATE: u32 = 0x0001;
+
+            extern "system" {
+                fn OpenProcess(
+                    dwDesiredAccess: u32,
+                    bInheritHandle: i32,
+                    dwProcessId: u32,
+                ) -> *mut std::ffi::c_void;
+                fn TerminateProcess(hProcess: *mut std::ffi::c_void, uExitCode: u32) -> i32;
+                fn CloseHandle(hObject: *mut std::ffi::c_void) -> i32;
+            }
+
+            // SAFETY: OpenProcess with PROCESS_TERMINATE access right.
+            // The PID is validated as a tracked process before calling.
+            let handle = unsafe { OpenProcess(PROCESS_TERMINATE, 0, pid) };
+            if handle.is_null() {
+                let err = std::io::Error::last_os_error();
+                if err.raw_os_error() == Some(87) {
+                    // ERROR_INVALID_PARAMETER: process already exited
+                    debug!(pid, "process already exited");
+                } else {
+                    warn!(pid, %err, "failed to open process for termination");
+                }
+            } else {
+                // SAFETY: TerminateProcess with exit code 1, then close handle.
+                let ret = unsafe { TerminateProcess(handle, 1) };
+                unsafe { CloseHandle(handle) };
+                if ret != 0 {
+                    info!(pid, "killed process");
+                } else {
+                    let err = std::io::Error::last_os_error();
+                    warn!(pid, %err, "failed to terminate process");
+                }
+            }
+        }
+
+        #[cfg(not(any(unix, windows)))]
         {
             warn!(pid, "process_manager.kill_process.unsupported_platform");
         }
@@ -392,7 +431,54 @@ impl ProcessManager {
             }
         }
 
-        #[cfg(not(unix))]
+        #[cfg(windows)]
+        {
+            // On Windows, terminate the process. No graceful SIGTERM equivalent;
+            // TerminateProcess is immediate.
+            const PROCESS_TERMINATE: u32 = 0x0001;
+
+            extern "system" {
+                fn OpenProcess(
+                    dwDesiredAccess: u32,
+                    bInheritHandle: i32,
+                    dwProcessId: u32,
+                ) -> *mut std::ffi::c_void;
+                fn TerminateProcess(hProcess: *mut std::ffi::c_void, uExitCode: u32) -> i32;
+                fn CloseHandle(hObject: *mut std::ffi::c_void) -> i32;
+            }
+
+            // SAFETY: OpenProcess with PROCESS_TERMINATE access right.
+            let handle = unsafe { OpenProcess(PROCESS_TERMINATE, 0, pid) };
+            if handle.is_null() {
+                let err = std::io::Error::last_os_error();
+                if err.raw_os_error() == Some(87) {
+                    info!(pid, "process_manager.terminate_process.already_exited");
+                    self.unregister_process(pid);
+                    Ok(())
+                } else {
+                    warn!(pid, %err, "process_manager.terminate_process.failed");
+                    Err(format!(
+                        "Failed to open PID {} for termination: {}",
+                        pid, err
+                    ))
+                }
+            } else {
+                // SAFETY: TerminateProcess with exit code 1, then close handle.
+                let ret = unsafe { TerminateProcess(handle, 1) };
+                unsafe { CloseHandle(handle) };
+                if ret != 0 {
+                    info!(pid, "process_manager.terminate_process.terminated");
+                    self.unregister_process(pid);
+                    Ok(())
+                } else {
+                    let err = std::io::Error::last_os_error();
+                    warn!(pid, %err, "process_manager.terminate_process.failed");
+                    Err(format!("Failed to terminate PID {}: {}", pid, err))
+                }
+            }
+        }
+
+        #[cfg(not(any(unix, windows)))]
         {
             let _ = pid;
             Err("Process termination not supported on this platform".to_string())

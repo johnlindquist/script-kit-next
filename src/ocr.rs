@@ -394,6 +394,7 @@ unsafe fn nsstring_to_string(ns_string: id) -> String {
 mod tests {
     use super::*;
 
+    #[cfg(target_os = "macos")]
     #[test]
     fn test_extract_text_invalid_size() {
         // Test with mismatched data size
@@ -405,6 +406,7 @@ mod tests {
             .contains("Invalid RGBA data size"));
     }
 
+    #[cfg(target_os = "macos")]
     #[test]
     fn test_extract_text_zero_dimensions() {
         let result = extract_text_from_rgba(0, 100, &[]);

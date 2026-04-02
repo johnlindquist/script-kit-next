@@ -897,7 +897,17 @@ mod tests {
         let expected_path = kit_dir.join("db").join(expected_filename);
 
         assert!(expected_path.to_string_lossy().contains(expected_filename));
-        assert!(expected_path.to_string_lossy().contains(".scriptkit/db"));
+        // Use Path::ends_with for cross-platform separator handling
+        assert!(
+            expected_path.ends_with(
+                std::path::Path::new(".scriptkit")
+                    .join("db")
+                    .join(expected_filename)
+            ),
+            "path should end with .scriptkit/db/{}: got {}",
+            expected_filename,
+            expected_path.display()
+        );
     }
 
     #[test]

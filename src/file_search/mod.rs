@@ -238,7 +238,7 @@ pub use os_open::{
     move_to_trash, open_file, open_in_terminal, open_with, quick_look, reveal_in_finder, show_info,
 };
 
-#[cfg(test)]
+#[cfg(all(test, target_os = "macos"))]
 pub(crate) use os_open::terminal_working_directory;
 /// Get detailed metadata for a specific file
 ///
@@ -795,6 +795,7 @@ mod tests {
         }
     }
     #[test]
+    #[cfg(unix)]
     fn test_expand_path_absolute() {
         // Absolute paths should pass through unchanged
         assert_eq!(expand_path("/usr/local"), Some("/usr/local".to_string()));
@@ -802,6 +803,18 @@ mod tests {
         assert_eq!(
             expand_path("/System/Library"),
             Some("/System/Library".to_string())
+        );
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn test_expand_path_absolute() {
+        // Absolute paths should pass through unchanged
+        assert_eq!(expand_path("C:\\Users"), Some("C:\\Users".to_string()));
+        assert_eq!(expand_path("C:\\"), Some("C:\\".to_string()));
+        assert_eq!(
+            expand_path("D:\\Projects\\test"),
+            Some("D:\\Projects\\test".to_string())
         );
     }
     #[test]
@@ -1246,16 +1259,19 @@ mod tests {
         assert_eq!(parent_dir_display("/foo/bar"), Some("/foo/".to_string()));
         assert_eq!(parent_dir_display("~/foo"), Some("~/".to_string()));
     }
+    #[cfg(target_os = "macos")]
     #[test]
     fn test_terminal_working_directory_uses_directory_path_when_is_dir() {
         let resolved = terminal_working_directory("/tmp/projects", true);
         assert_eq!(resolved, "/tmp/projects");
     }
+    #[cfg(target_os = "macos")]
     #[test]
     fn test_terminal_working_directory_uses_parent_for_file_paths() {
         let resolved = terminal_working_directory("/tmp/projects/readme.md", false);
         assert_eq!(resolved, "/tmp/projects");
     }
+    #[cfg(target_os = "macos")]
     #[test]
     fn test_terminal_working_directory_falls_back_to_current_dir_without_parent() {
         let resolved = terminal_working_directory("readme.md", false);

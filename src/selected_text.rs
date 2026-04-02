@@ -819,6 +819,7 @@ mod windows_unit_tests {
         // Re-declare the FFI types here so we can inspect their size without
         // exposing the inner `ffi` module outside the function.
         #[repr(C)]
+        #[allow(clippy::upper_case_acronyms)]
         struct KEYBDINPUT {
             _wvk: u16,
             _wscan: u16,
@@ -832,6 +833,7 @@ mod windows_unit_tests {
             _pad: [u8; 8],
         }
         #[repr(C)]
+        #[allow(clippy::upper_case_acronyms)]
         struct INPUT {
             _type: u32,
             _u: INPUT_UNION,

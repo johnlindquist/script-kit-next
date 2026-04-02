@@ -1,3 +1,4 @@
+#![cfg(target_os = "macos")]
 //! Integration tests for the "Current App Commands" built-in.
 //!
 //! These tests verify registration, snapshot contract, and entry shaping

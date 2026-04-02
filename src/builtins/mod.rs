@@ -2739,6 +2739,7 @@ mod tests {
         assert_ne!(frecency_key, format!("builtin:{}", entry.name));
     }
 
+    #[cfg(target_os = "macos")]
     #[test]
     fn menu_bar_items_to_entries_representative_path() {
         use crate::menu_bar::{KeyboardShortcut, MenuBarItem, ModifierFlags};
@@ -2822,6 +2823,7 @@ mod tests {
         assert_eq!(new_window.id, "menubar-com.apple.Safari-file-new-window");
     }
 
+    #[cfg(target_os = "macos")]
     #[test]
     fn menu_bar_items_to_entries_no_shortcut() {
         use crate::menu_bar::MenuBarItem;
@@ -2858,6 +2860,7 @@ mod tests {
         assert_eq!(entries[0].description, "Finder");
     }
 
+    #[cfg(target_os = "macos")]
     #[test]
     fn menu_bar_items_to_entries_empty_items() {
         let entries: Vec<BuiltInEntry> =
@@ -2949,6 +2952,7 @@ mod tests {
         assert_eq!(filtered.len(), 1);
         assert_eq!(filtered[0].1.name, "File → New Tab");
     }
+    #[cfg(target_os = "macos")]
     #[test]
     fn test_generate_script_from_current_app_builtin_is_registered() {
         let entries = get_builtin_entries(&BuiltInConfig::default());

@@ -137,6 +137,7 @@ fn context_part_resolution_unreadable_file_path_returns_metadata_fallback() {
             .expect("set permissions");
     }
 
+    #[allow(unused_variables)]
     let part = AiContextPart::FilePath {
         path: file_path.to_string_lossy().to_string(),
         label: "secret.bin".to_string(),

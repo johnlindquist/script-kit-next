@@ -2581,7 +2581,7 @@ impl ScriptListApp {
                     UtilityCommandType::TraceCurrentAppIntent => {
                         #[cfg(not(target_os = "macos"))]
                         {
-                            return Self::builtin_success(dctx, "This feature requires macOS");
+                            Self::builtin_success(dctx, "This feature requires macOS")
                         }
                         #[cfg(target_os = "macos")]
                         {
@@ -2684,7 +2684,7 @@ impl ScriptListApp {
                     UtilityCommandType::VerifyCurrentAppRecipe => {
                         #[cfg(not(target_os = "macos"))]
                         {
-                            return Self::builtin_success(dctx, "This feature requires macOS");
+                            Self::builtin_success(dctx, "This feature requires macOS")
                         }
                         #[cfg(target_os = "macos")]
                         {
@@ -2793,7 +2793,7 @@ impl ScriptListApp {
                     UtilityCommandType::ReplayCurrentAppRecipe => {
                         #[cfg(not(target_os = "macos"))]
                         {
-                            return Self::builtin_success(dctx, "This feature requires macOS");
+                            Self::builtin_success(dctx, "This feature requires macOS")
                         }
                         #[cfg(target_os = "macos")]
                         {
@@ -2985,7 +2985,7 @@ impl ScriptListApp {
                     UtilityCommandType::TurnThisIntoCommand => {
                         #[cfg(not(target_os = "macos"))]
                         {
-                            return Self::builtin_success(dctx, "This feature requires macOS");
+                            Self::builtin_success(dctx, "This feature requires macOS")
                         }
                         #[cfg(target_os = "macos")]
                         {
@@ -3116,7 +3116,7 @@ impl ScriptListApp {
                     UtilityCommandType::DoInCurrentApp => {
                         #[cfg(not(target_os = "macos"))]
                         {
-                            return Self::builtin_success(dctx, "This feature requires macOS");
+                            Self::builtin_success(dctx, "This feature requires macOS")
                         }
                         #[cfg(target_os = "macos")]
                         {
@@ -3373,7 +3373,7 @@ impl ScriptListApp {
                     UtilityCommandType::CurrentAppCommands => {
                         #[cfg(not(target_os = "macos"))]
                         {
-                            return Self::builtin_success(dctx, "This feature requires macOS");
+                            Self::builtin_success(dctx, "This feature requires macOS")
                         }
                         #[cfg(target_os = "macos")]
                         {

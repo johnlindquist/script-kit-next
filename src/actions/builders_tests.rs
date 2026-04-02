@@ -65,7 +65,7 @@ fn file_context_file_primary_action_is_open_file() {
         is_dir: false,
     };
     let actions = get_file_context_actions(&file);
-    let ids = action_ids(&actions);
+    let _ids = action_ids(&actions);
 
     assert_eq!(
         actions[0].id, "file:open_file",

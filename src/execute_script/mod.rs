@@ -2224,6 +2224,7 @@ mod execute_script_session_tests {
         assert_eq!(truncated, expected);
     }
 
+    #[cfg(target_os = "macos")]
     #[test]
     fn test_execute_script_build_macos_beep_command_spec_uses_tink_sound() {
         let spec = execute_script_build_beep_command_spec();
@@ -2235,6 +2236,7 @@ mod execute_script_session_tests {
         );
     }
 
+    #[cfg(target_os = "macos")]
     #[test]
     fn test_execute_script_build_notify_command_spec_escapes_applescript_literals() {
         let spec = execute_script_build_notify_command_spec(
@@ -2254,6 +2256,7 @@ mod execute_script_session_tests {
         );
     }
 
+    #[cfg(target_os = "macos")]
     #[test]
     fn test_execute_script_build_notify_command_spec_defaults_missing_fields() {
         let title_only_spec =
@@ -2279,6 +2282,7 @@ mod execute_script_session_tests {
         );
     }
 
+    #[cfg(target_os = "macos")]
     #[test]
     fn test_execute_script_build_say_command_spec_includes_voice_when_present() {
         let spec = execute_script_build_say_command_spec(

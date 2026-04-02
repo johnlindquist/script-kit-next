@@ -730,32 +730,32 @@ impl AiApp {
 mod tests {
     use super::is_mini_history_shortcut;
 
+    /// Returns Modifiers that represent the platform modifier key.
+    /// On macOS this is `platform: true` (Cmd key).
+    /// On Windows/Linux this is `control: true` (Ctrl key).
+    fn platform_modifiers() -> gpui::Modifiers {
+        gpui::Modifiers {
+            #[cfg(target_os = "macos")]
+            platform: true,
+            #[cfg(not(target_os = "macos"))]
+            control: true,
+            ..Default::default()
+        }
+    }
+
     #[test]
     fn test_mini_history_shortcut_requires_cmd_j_only() {
-        let enabled = is_mini_history_shortcut(
-            "j",
-            &gpui::Modifiers {
-                platform: true,
-                ..Default::default()
-            },
-        );
+        let enabled = is_mini_history_shortcut("j", &platform_modifiers());
         assert!(enabled, "Cmd+J should toggle mini history");
 
-        let wrong_key = is_mini_history_shortcut(
-            "k",
-            &gpui::Modifiers {
-                platform: true,
-                ..Default::default()
-            },
-        );
+        let wrong_key = is_mini_history_shortcut("k", &platform_modifiers());
         assert!(!wrong_key, "Cmd+K must not match the mini history shortcut");
 
         let extra_shift = is_mini_history_shortcut(
             "j",
             &gpui::Modifiers {
-                platform: true,
                 shift: true,
-                ..Default::default()
+                ..platform_modifiers()
             },
         );
         assert!(

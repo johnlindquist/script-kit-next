@@ -1406,6 +1406,10 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                 // We show the window, then immediately run the script.
                                 // The core logic matches show_main_window_helper().
 
+                                // On Windows, capture the HWND before showing so screenshot capture works.
+                                #[cfg(target_os = "windows")]
+                                platform::win32_capture_main_hwnd_from_window(window);
+
                                 script_kit_gpui::set_main_window_visible(true);
                                 script_kit_gpui::mark_window_shown(); // Focus grace period
                                 platform::ensure_move_to_active_space();
@@ -1447,6 +1451,10 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                 // Unlike the hotkey handler, we don't need NEEDS_RESET handling
                                 // because this is an explicit show (not a toggle).
                                 // The core logic matches show_main_window_helper().
+
+                                // On Windows, capture the HWND before showing so screenshot capture works.
+                                #[cfg(target_os = "windows")]
+                                platform::win32_capture_main_hwnd_from_window(window);
 
                                 script_kit_gpui::set_main_window_visible(true);
                                 script_kit_gpui::mark_window_shown(); // Focus grace period

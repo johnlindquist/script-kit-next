@@ -1173,7 +1173,11 @@ pub(crate) fn start_hotkey_listener(config: config::Config) {
             return;
         }
 
-        let mut manager_guard = match MAIN_MANAGER.get().unwrap().lock() {
+        let Some(main_manager) = MAIN_MANAGER.get() else {
+            logging::log("HOTKEY", "Manager not found after set (unexpected)");
+            return;
+        };
+        let mut manager_guard = match main_manager.lock() {
             Ok(g) => g,
             Err(e) => {
                 logging::log("HOTKEY", &format!("Failed to lock manager: {}", e));
@@ -1338,6 +1342,7 @@ pub(crate) fn start_hotkey_listener(config: config::Config) {
             #[cfg(target_os = "windows")]
             {
                 #[repr(C)]
+                #[allow(clippy::upper_case_acronyms)]
                 struct MSG {
                     hwnd: *mut std::ffi::c_void,
                     message: u32,

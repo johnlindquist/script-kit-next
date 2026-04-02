@@ -1775,6 +1775,7 @@ await div("Ready");
         assert_eq!(receipt, PathBuf::from("/tmp/my-script.scriptkit.json"));
     }
 
+    #[cfg(target_os = "macos")]
     #[test]
     fn generated_script_receipt_includes_current_app_recipe() {
         use base64::Engine as _;

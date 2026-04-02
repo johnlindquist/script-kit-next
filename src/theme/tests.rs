@@ -245,9 +245,13 @@ fn test_validate_theme_json_errors_when_numeric_color_exceeds_u32_range() {
 }
 
 fn assert_snapshot_matches_golden(name: &str, actual: &str, expected: &str) {
+    // Normalize CRLF -> LF so golden files checked out with Windows line endings
+    // still match serde_json output (which always produces LF).
+    let actual_normalized = actual.trim_end().replace("\r\n", "\n");
+    let expected_normalized = expected.trim_end().replace("\r\n", "\n");
     assert_eq!(
-        actual,
-        expected.trim_end(),
+        actual_normalized,
+        expected_normalized,
         "snapshot mismatch for {name}. If this is intentional, update tests/theme/snapshots/{name}.json",
     );
 }

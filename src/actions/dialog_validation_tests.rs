@@ -449,7 +449,10 @@ fn test_score_action_combined_bonuses() {
     );
 
     let score = ActionsDialog::score_action(&action, "copy");
-    assert_eq!(score, 100, "Current scoring returns prefix score for this query");
+    assert_eq!(
+        score, 100,
+        "Current scoring returns prefix score for this query"
+    );
 }
 
 #[test]
@@ -682,7 +685,10 @@ fn test_clipboard_destructive_actions_always_last() {
     let actions = get_clipboard_history_context_actions(&entry);
     let ids: Vec<&str> = actions.iter().map(|a| a.id.as_str()).collect();
 
-    let delete_idx = ids.iter().position(|&id| id == "clip:clipboard_delete").unwrap();
+    let delete_idx = ids
+        .iter()
+        .position(|&id| id == "clip:clipboard_delete")
+        .unwrap();
     let delete_multi_idx = ids
         .iter()
         .position(|&id| id == "clip:clipboard_delete_multiple")
@@ -1481,6 +1487,7 @@ fn test_new_chat_models_has_settings_icon() {
 // File context edge cases
 // =========================================================================
 
+#[cfg(target_os = "macos")]
 #[test]
 fn test_file_context_file_vs_dir_action_count() {
     let file = FileInfo {
@@ -1496,15 +1503,11 @@ fn test_file_context_file_vs_dir_action_count() {
         is_dir: true,
     };
 
+    // File should have Quick Look, dir should not (macOS)
     let file_actions = get_file_context_actions(&file);
     let dir_actions = get_file_context_actions(&dir);
-
-    // File should have Quick Look, dir should not (macOS)
-    #[cfg(target_os = "macos")]
-    {
-        assert_eq!(file_actions.len(), 8);
-        assert_eq!(dir_actions.len(), 6);
-    }
+    assert_eq!(file_actions.len(), 8);
+    assert_eq!(dir_actions.len(), 6);
 }
 
 #[test]

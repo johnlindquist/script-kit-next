@@ -146,12 +146,11 @@ pub fn copy_blob_with_file_url(blob_content: &str) -> Result<()> {
     copy_image_with_file_url(&png_bytes, &file_path)
 }
 
-#[cfg(test)]
+#[cfg(all(test, target_os = "macos"))]
 mod tests {
     use super::*;
 
     #[test]
-    #[cfg(target_os = "macos")]
     #[ignore = "requires NSPasteboard access, unavailable in CI"]
     fn test_copy_image_with_file_url_requires_valid_png() {
         use std::io::Write;

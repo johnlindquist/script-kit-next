@@ -1,5 +1,8 @@
+#[cfg(unix)]
 use super::super::runner::spawn_script;
+#[cfg(unix)]
 use crate::protocol::{serialize_message, Message};
+#[cfg(unix)]
 use std::io::Write;
 
 #[cfg(unix)]

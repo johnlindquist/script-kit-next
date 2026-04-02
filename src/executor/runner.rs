@@ -14,7 +14,7 @@ use std::io::BufReader;
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 use std::time::Instant;
-use tracing::{debug, error, info, instrument};
+use tracing::{debug, error, info, instrument, warn};
 
 #[cfg(unix)]
 use std::os::unix::process::CommandExt;
@@ -731,16 +731,47 @@ pub fn spawn_script(cmd: &str, args: &[&str], script_path: &str) -> Result<Scrip
     command
         .args(args)
         .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped()); // Capture stderr for error handling
+        .stdout(Stdio::piped());
 
     // On Unix, spawn in a new process group so we can kill all children
     // process_group(0) means the child's PID becomes the PGID
     #[cfg(unix)]
     {
+        command.stderr(Stdio::piped()); // Piped stderr works fine on Unix
         command.process_group(0);
         info!(category = "EXEC", "Using process group for child process");
     }
+
+    // On Windows, bun crashes with STATUS_STACK_BUFFER_OVERRUN (0xC0000409)
+    // when stderr is a pipe handle from CreateProcess. Redirect stderr to a
+    // temp file instead and tail it from a reader thread.
+    #[cfg(windows)]
+    let _stderr_file_path: Option<std::path::PathBuf> = None;
+    #[cfg(windows)]
+    let _stderr_file_path = {
+        let stderr_path =
+            std::env::temp_dir().join(format!("script-kit-stderr-{}.log", std::process::id()));
+        match std::fs::File::create(&stderr_path) {
+            Ok(f) => {
+                command.stderr(f);
+                info!(
+                    category = "EXEC",
+                    path = %stderr_path.display(),
+                    "Using file-based stderr capture (Windows pipe workaround)"
+                );
+                Some(stderr_path)
+            }
+            Err(e) => {
+                warn!(
+                    category = "EXEC",
+                    error = %e,
+                    "Failed to create stderr file, falling back to null"
+                );
+                command.stderr(Stdio::null());
+                None
+            }
+        }
+    };
 
     let mut child = command.spawn().map_err(|e| {
         error!(error = %e, executable = %executable, "Process spawn failed");
@@ -764,10 +795,21 @@ pub fn spawn_script(cmd: &str, args: &[&str], script_path: &str) -> Result<Scrip
         .ok_or_else(|| "Failed to open script stdout".to_string())?;
 
     // Start a background stderr drain so child writes cannot block on a full pipe.
+    #[cfg(unix)]
     let stderr = child
         .stderr
         .take()
         .map(|stderr| spawn_stderr_reader(stderr, script_path.to_string()));
+    #[cfg(windows)]
+    let stderr = _stderr_file_path.and_then(|path| {
+        // Open the stderr temp file for reading and tail it in a background thread
+        std::fs::File::open(&path)
+            .map(|f| spawn_stderr_reader(f, script_path.to_string()))
+            .map_err(
+                |e| warn!(category = "EXEC", error = %e, "Failed to open stderr file for reading"),
+            )
+            .ok()
+    });
     info!(
         category = "EXEC",
         stderr_capture_started = stderr.is_some(),

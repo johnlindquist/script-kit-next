@@ -69,7 +69,7 @@ fn file_context_file_primary_action_is_open_file() {
         is_dir: false,
     };
     let actions = get_file_context_actions(&file);
-    let ids = action_ids(&actions);
+    let _ids = action_ids(&actions);
 
     assert_eq!(
         actions[0].id, "file:open_file",
@@ -137,8 +137,14 @@ fn file_context_macos_specific_actions() {
 
     #[cfg(target_os = "macos")]
     {
-        assert!(ids.contains(&"file:open_with"), "macOS should have Open With...");
-        assert!(ids.contains(&"file:show_info"), "macOS should have Show Info");
+        assert!(
+            ids.contains(&"file:open_with"),
+            "macOS should have Open With..."
+        );
+        assert!(
+            ids.contains(&"file:show_info"),
+            "macOS should have Show Info"
+        );
     }
 
     #[cfg(not(target_os = "macos"))]
@@ -164,8 +170,7 @@ fn file_context_finder_labels_use_reveal_consistently() {
     };
     let actions = get_file_context_actions(&file);
 
-    let reveal =
-        find_action(&actions, "file:reveal_in_finder").expect("missing reveal_in_finder");
+    let reveal = find_action(&actions, "file:reveal_in_finder").expect("missing reveal_in_finder");
     assert_eq!(reveal.title, "Reveal in Finder");
 
     #[cfg(target_os = "macos")]
@@ -402,7 +407,6 @@ fn clipboard_unpinned_entry_shows_pin() {
         "Unpinned entry should NOT show Unpin"
     );
 }
-
 
 // --- merged from part_02.rs ---
 // ============================================================
@@ -653,7 +657,11 @@ fn ai_command_bar_actions_have_sections() {
     }
 
     // Verify correct section assignments
-    let response_ids = ["chat:copy_response", "chat:copy_chat", "chat:copy_last_code"];
+    let response_ids = [
+        "chat:copy_response",
+        "chat:copy_chat",
+        "chat:copy_last_code",
+    ];
     for id in &response_ids {
         let a = find_action(&actions, id).unwrap();
         assert_eq!(
@@ -1084,7 +1092,6 @@ fn note_switcher_all_notes_have_section() {
         );
     }
 }
-
 
 // --- merged from part_04.rs ---
 // ============================================================

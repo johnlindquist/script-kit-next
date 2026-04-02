@@ -90,7 +90,8 @@ mod tests {
     #[test]
     fn test_mini_mode_branch_hides_ask_ai_and_skips_preview_footer() {
         let content = fs::read_to_string("src/render_script_list/mod.rs")
-            .expect("Failed to read src/render_script_list/mod.rs");
+            .expect("Failed to read src/render_script_list/mod.rs")
+            .replace("\r\n", "\n");
 
         assert!(
             content.contains("let is_mini = self.main_window_mode == MainWindowMode::Mini;"),
@@ -102,8 +103,8 @@ mod tests {
         );
         assert!(
             content.contains("if is_mini {")
-                && content.contains("// Mini mode: single column, no preview, no footer")
-                && content.contains(".child(\"↵ Run  ·  ⌘K Actions  ·  Tab AI\")")
+                && content.contains("// Mini mode: single column, toggle between list and info panel")
+                && content.contains(".child(\"↵ Run  ·  ⌘I Info  ·  ⌘K Actions  ·  Tab AI\")")
                 && content.contains("mode = \"mini\""),
             "mini mode branch should render the single-column layout, compact hint strip, and mini perf log"
         );

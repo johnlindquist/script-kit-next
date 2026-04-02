@@ -325,7 +325,10 @@ fn clipboard_image_pinned_has_expected_action_set() {
     assert!(!ids.contains(&"clip:clipboard_pin")); // should NOT have pin
 
     // Paste title should include app name
-    let paste = actions.iter().find(|a| a.id == "clip:clipboard_paste").unwrap();
+    let paste = actions
+        .iter()
+        .find(|a| a.id == "clip:clipboard_paste")
+        .unwrap();
     assert_eq!(paste.title, "Paste to Preview");
 }
 
@@ -428,7 +431,10 @@ fn open_directory_title_includes_dirname() {
         is_dir: true,
     };
     let actions = get_file_context_actions(&info);
-    let open = actions.iter().find(|a| a.id == "file:open_directory").unwrap();
+    let open = actions
+        .iter()
+        .find(|a| a.id == "file:open_directory")
+        .unwrap();
     assert_eq!(open.title, "Open \"My Folder\"");
 }
 
@@ -444,7 +450,10 @@ fn path_context_select_file_title_includes_name() {
 fn path_context_open_dir_title_includes_name() {
     let info = PathInfo::new("Documents", "/home/user/Documents", true);
     let actions = get_path_context_actions(&info);
-    let open = actions.iter().find(|a| a.id == "file:open_directory").unwrap();
+    let open = actions
+        .iter()
+        .find(|a| a.id == "file:open_directory")
+        .unwrap();
     assert_eq!(open.title, "Open \"Documents\"");
 }
 
@@ -1275,8 +1284,8 @@ fn action_with_icon_and_section_chain() {
 fn script_action_count_without_shortcut_or_alias() {
     let script = ScriptInfo::new("test", "/path/test.ts");
     let actions = get_script_context_actions(&script);
-    // + toggle_favorite + delete_script = 11
-    assert_eq!(actions.len(), 11);
+    // + toggle_info + toggle_favorite + delete_script = 12
+    assert_eq!(actions.len(), 12);
 }
 
 #[test]
@@ -1288,25 +1297,25 @@ fn script_action_count_with_shortcut_and_alias() {
         Some("ts".into()),
     );
     let actions = get_script_context_actions(&script);
-    // run + update_shortcut + remove_shortcut + update_alias + remove_alias
-    // + edit + view_logs + reveal + copy_path + copy_content + copy_deeplink + toggle_favorite + delete_script = 13
-    assert_eq!(actions.len(), 13);
+    // run + toggle_info + update_shortcut + remove_shortcut + update_alias + remove_alias
+    // + edit + view_logs + reveal + copy_path + copy_content + copy_deeplink + toggle_favorite + delete_script = 14
+    assert_eq!(actions.len(), 14);
 }
 
 #[test]
 fn builtin_action_count() {
     let builtin = ScriptInfo::builtin("Test Builtin");
     let actions = get_script_context_actions(&builtin);
-    // run + add_shortcut + add_alias + copy_deeplink = 4
-    assert_eq!(actions.len(), 4);
+    // run + toggle_info + add_shortcut + add_alias + copy_deeplink = 5
+    assert_eq!(actions.len(), 5);
 }
 
 #[test]
 fn scriptlet_action_count_without_shortcut_or_alias() {
     let scriptlet = ScriptInfo::scriptlet("Test", "/path/test.md", None, None);
     let actions = get_script_context_actions(&scriptlet);
-    // + toggle_favorite = 9
-    assert_eq!(actions.len(), 9);
+    // + toggle_info + toggle_favorite = 10
+    assert_eq!(actions.len(), 10);
 }
 
 #[test]

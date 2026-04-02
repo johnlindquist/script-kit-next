@@ -1,24 +1,53 @@
 use super::*;
 
+/// Returns Modifiers that represent the platform modifier key.
+/// On macOS this is `platform: true` (Cmd key).
+/// On Windows/Linux this is `control: true` (Ctrl key).
+fn platform_modifiers() -> gpui::Modifiers {
+    gpui::Modifiers {
+        #[cfg(target_os = "macos")]
+        platform: true,
+        #[cfg(not(target_os = "macos"))]
+        control: true,
+        ..Default::default()
+    }
+}
+
+/// Returns Modifiers with platform modifier + shift.
+fn platform_shift_modifiers() -> gpui::Modifiers {
+    gpui::Modifiers {
+        #[cfg(target_os = "macos")]
+        platform: true,
+        #[cfg(not(target_os = "macos"))]
+        control: true,
+        shift: true,
+        ..Default::default()
+    }
+}
+
+/// Returns Modifiers with platform modifier + alt.
+fn platform_alt_modifiers() -> gpui::Modifiers {
+    gpui::Modifiers {
+        #[cfg(target_os = "macos")]
+        platform: true,
+        #[cfg(not(target_os = "macos"))]
+        control: true,
+        alt: true,
+        ..Default::default()
+    }
+}
+
 #[test]
 fn test_context_inspector_shortcut_requires_cmd_alt_i_only() {
     let enabled = crate::ai::window::render_keydown::is_context_inspector_shortcut(
         "i",
-        &gpui::Modifiers {
-            platform: true,
-            alt: true,
-            ..Default::default()
-        },
+        &platform_alt_modifiers(),
     );
     assert!(enabled, "Cmd+Alt+I should toggle the context inspector");
 
     let wrong_key = crate::ai::window::render_keydown::is_context_inspector_shortcut(
         "k",
-        &gpui::Modifiers {
-            platform: true,
-            alt: true,
-            ..Default::default()
-        },
+        &platform_alt_modifiers(),
     );
     assert!(
         !wrong_key,
@@ -27,10 +56,7 @@ fn test_context_inspector_shortcut_requires_cmd_alt_i_only() {
 
     let missing_alt = crate::ai::window::render_keydown::is_context_inspector_shortcut(
         "i",
-        &gpui::Modifiers {
-            platform: true,
-            ..Default::default()
-        },
+        &platform_modifiers(),
     );
     assert!(
         !missing_alt,
@@ -40,10 +66,8 @@ fn test_context_inspector_shortcut_requires_cmd_alt_i_only() {
     let extra_shift = crate::ai::window::render_keydown::is_context_inspector_shortcut(
         "i",
         &gpui::Modifiers {
-            platform: true,
-            alt: true,
             shift: true,
-            ..Default::default()
+            ..platform_alt_modifiers()
         },
     );
     assert!(
@@ -2101,11 +2125,7 @@ fn composer_receipt_labels_match_canonical_spec() {
 fn test_context_palette_shortcut_requires_cmd_shift_a() {
     let correct = crate::ai::window::render_keydown::is_context_palette_shortcut(
         "a",
-        &gpui::Modifiers {
-            platform: true,
-            shift: true,
-            ..Default::default()
-        },
+        &platform_shift_modifiers(),
     );
     assert!(
         correct,
@@ -2114,30 +2134,19 @@ fn test_context_palette_shortcut_requires_cmd_shift_a() {
 
     let wrong_key = crate::ai::window::render_keydown::is_context_palette_shortcut(
         "b",
-        &gpui::Modifiers {
-            platform: true,
-            shift: true,
-            ..Default::default()
-        },
+        &platform_shift_modifiers(),
     );
     assert!(!wrong_key, "Cmd+Shift+B must not match");
 
-    let missing_shift = crate::ai::window::render_keydown::is_context_palette_shortcut(
-        "a",
-        &gpui::Modifiers {
-            platform: true,
-            ..Default::default()
-        },
-    );
+    let missing_shift =
+        crate::ai::window::render_keydown::is_context_palette_shortcut("a", &platform_modifiers());
     assert!(!missing_shift, "Cmd+A without Shift must not match");
 
     let extra_alt = crate::ai::window::render_keydown::is_context_palette_shortcut(
         "a",
         &gpui::Modifiers {
-            platform: true,
-            shift: true,
             alt: true,
-            ..Default::default()
+            ..platform_shift_modifiers()
         },
     );
     assert!(!extra_alt, "Cmd+Shift+Alt+A must not match");
@@ -2679,10 +2688,10 @@ fn test_simulated_key_supports_mode_toggle_shortcut() {
 /// idempotently, so search is always focused even when a popup is open.
 #[test]
 fn test_mini_cmd_shift_f_uses_show_helper_in_source() {
-    let source = include_str!("render_keydown.rs");
+    let source = include_str!("render_keydown.rs").replace("\r\n", "\n");
     // Cmd+Shift+F is now an early preempt handler before modal guards
     let preempt_pos = source
-        .find("modifiers.platform && modifiers.shift && key == \"f\"")
+        .find("is_platform_modifier(modifiers) && modifiers.shift && key == \"f\"")
         .expect("Cmd+Shift+F preempt handler must exist in render_keydown.rs");
     let command_bar_guard = source
         .find("if self.command_bar.is_open()")
@@ -2911,9 +2920,9 @@ fn test_cmd_n_emits_canonical_ai_ui_event() {
 /// Cmd+Shift+F in the real key handler must emit the canonical `ai_ui_event` marker.
 #[test]
 fn test_cmd_shift_f_emits_canonical_ai_ui_event() {
-    let source = include_str!("render_keydown.rs");
+    let source = include_str!("render_keydown.rs").replace("\r\n", "\n");
     let preempt_pos = source
-        .find("modifiers.platform && modifiers.shift && key == \"f\"")
+        .find("is_platform_modifier(modifiers) && modifiers.shift && key == \"f\"")
         .expect("Cmd+Shift+F preempt handler must exist in render_keydown.rs");
     let command_bar_guard = source
         .find("if self.command_bar.is_open()")
@@ -3125,9 +3134,7 @@ fn test_mini_composer_hint_dismissal_is_wired_into_both_successful_send_paths() 
         .expect("submit_message must clear the composer after a successful send");
     let submit_after = &submit_source[submit_clear..];
     assert!(
-        submit_after.contains(
-            "self.dismiss_mini_composer_hint_if_needed(\"submit_message\", cx);"
-        ),
+        submit_after.contains("self.dismiss_mini_composer_hint_if_needed(\"submit_message\", cx);"),
         "submit_message must dismiss the mini composer hint after a successful send"
     );
 
@@ -3137,9 +3144,8 @@ fn test_mini_composer_hint_dismissal_is_wired_into_both_successful_send_paths() 
         .expect("handle_start_chat must clear the composer after creating a chat");
     let chat_after = &chat_source[chat_clear..];
     assert!(
-        chat_after.contains(
-            "self.dismiss_mini_composer_hint_if_needed(\"handle_start_chat\", cx);"
-        ),
+        chat_after
+            .contains("self.dismiss_mini_composer_hint_if_needed(\"handle_start_chat\", cx);"),
         "handle_start_chat must dismiss the mini composer hint for the SDK/start-chat path too"
     );
 }

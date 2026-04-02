@@ -278,8 +278,8 @@ pub fn expand_path(path: &str) -> Option<String> {
         return parent.join(suffix).to_str().map(|s| s.to_string());
     }
 
-    // Already an absolute path
-    if trimmed.starts_with('/') {
+    // Already an absolute path (Unix `/...`, Windows `C:\...`, UNC `\\...`)
+    if std::path::Path::new(trimmed).is_absolute() {
         return Some(trimmed.to_string());
     }
 

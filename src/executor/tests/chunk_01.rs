@@ -1,7 +1,6 @@
 use super::*;
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::process::Command;
 
 #[test]
 fn test_is_typescript() {
@@ -242,4 +241,3 @@ fn test_unix_process_group_functions() {
         "Non-existent process should not be alive"
     );
 }
-
