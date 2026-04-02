@@ -738,16 +738,20 @@ impl ScriptListApp {
                     crate::ai::acp::chat_window::open_chat_window_with_thread(thread, cx)
                 {
                     tracing::warn!(%e, "acp_detach_window_failed");
+                    DispatchOutcome::success()
                 } else {
                     self.close_tab_ai_harness_terminal(cx);
+                    let mut o = DispatchOutcome::success();
+                    o.user_message = Some("Chat detached to window".to_string());
+                    o
                 }
-                DispatchOutcome::success()
             }
             "acp_reattach_panel" => {
-                // Close the detached window (if open) and open in main panel
                 crate::ai::acp::chat_window::close_chat_window(cx);
                 self.open_tab_ai_chat(cx);
-                DispatchOutcome::success()
+                let mut o = DispatchOutcome::success();
+                o.user_message = Some("Chat re-attached to panel".to_string());
+                o
             }
             "acp_close" => {
                 self.close_tab_ai_harness_terminal(cx);
