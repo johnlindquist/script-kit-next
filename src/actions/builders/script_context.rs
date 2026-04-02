@@ -492,6 +492,14 @@ pub fn get_acp_chat_actions() -> Vec<Action> {
         .with_icon(IconName::ArrowRight)
         .with_section("Chat"),
         Action::new(
+            "acp_run_last_code",
+            "Run Last Code Block",
+            Some("Save and run the last code block as a Script Kit script".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_icon(IconName::BoltFilled)
+        .with_section("Chat"),
+        Action::new(
             "acp_open_in_editor",
             "Open in Editor",
             Some("Open ~/.scriptkit in the configured editor".to_string()),

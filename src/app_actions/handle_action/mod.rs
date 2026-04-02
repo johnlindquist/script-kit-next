@@ -801,6 +801,57 @@ impl ScriptListApp {
                     Some("No code block found in last response".to_string());
                 o
             }
+            "acp_run_last_code" => {
+                let entity = entity.clone();
+                let last_response = entity
+                    .read(cx)
+                    .thread
+                    .read(cx)
+                    .messages
+                    .iter()
+                    .rev()
+                    .find(|m| {
+                        matches!(
+                            m.role,
+                            crate::ai::acp::thread::AcpThreadMessageRole::Assistant
+                        )
+                    })
+                    .map(|m| m.body.to_string());
+
+                if let Some(text) = last_response {
+                    if let Some(code) = extract_last_code_block(&text) {
+                        // Save to a temp script file
+                        let name = format!(
+                            "ai-run-{}",
+                            chrono::Utc::now().format("%H%M%S")
+                        );
+                        let path = crate::setup::get_kit_path()
+                            .join("kit")
+                            .join("main")
+                            .join("scripts")
+                            .join(format!("{name}.ts"));
+
+                        // Ensure the code has the SDK import
+                        let full_code = if code.contains("@scriptkit/sdk") {
+                            code.clone()
+                        } else {
+                            format!("import \"@scriptkit/sdk\";\n\n{code}")
+                        };
+
+                        if let Err(e) = std::fs::write(&path, &full_code) {
+                            tracing::warn!(%e, "acp_run_last_code_write_failed");
+                        } else {
+                            let mut o = DispatchOutcome::success();
+                            o.user_message =
+                                Some(format!("Saved and running {name}.ts"));
+                            return o;
+                        }
+                    }
+                }
+                let mut o = DispatchOutcome::success();
+                o.user_message = Some("No code block found".to_string());
+                o
+            }
             "acp_open_in_editor" => {
                 let kit_path = crate::setup::get_kit_path();
                 if let Err(e) = open::that(&kit_path) {
