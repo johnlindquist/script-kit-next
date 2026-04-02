@@ -1094,7 +1094,7 @@ impl ScriptListApp {
                     tracing::warn!(%e, "acp_detach_window_failed");
                     DispatchOutcome::success()
                 } else {
-                    self.close_acp_chat_to_script_list(cx);
+                    self.close_acp_chat_to_script_list(false, cx);
                     let mut o = DispatchOutcome::success();
                     o.user_message = Some("Chat detached to window".to_string());
                     o
