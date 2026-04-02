@@ -1008,6 +1008,11 @@ impl AcpChatView {
                             .gap(px(2.0))
                             .text_xs()
                             .opacity(0.55)
+                            .child(div().size(px(5.0)).rounded_full().bg(if is_streaming {
+                                rgb(theme.colors.accent.selected)
+                            } else {
+                                rgba((theme.colors.text.primary << 8) | 0x40)
+                            }))
                             .child(display_name.to_string())
                             .child("\u{25BE}"),
                     )
