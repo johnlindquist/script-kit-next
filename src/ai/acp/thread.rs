@@ -828,6 +828,16 @@ impl AcpThread {
         self.stream_started_at.map(|t| t.elapsed().as_secs())
     }
 
+    /// Add a system message to the thread (visible in the chat, not sent to the agent).
+    pub(crate) fn push_system_message(
+        &mut self,
+        body: impl Into<SharedString>,
+        cx: &mut Context<Self>,
+    ) {
+        self.push_message(AcpThreadMessageRole::System, body);
+        cx.notify();
+    }
+
     /// Cancel the active streaming turn. Drops the pump task and resets to Idle.
     /// Clear all messages for a fresh conversation within the same session.
     pub(crate) fn clear_messages(&mut self, cx: &mut Context<Self>) {
