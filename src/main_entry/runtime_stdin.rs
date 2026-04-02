@@ -661,7 +661,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                                 } else {
                                                     let entries = crate::ai::acp::history::load_history();
                                                     if !entries.is_empty() {
-                                                        chat.history_menu = Some((0, entries));
+                                                        chat.history_menu = Some((0, String::new(), entries));
                                                     }
                                                 }
                                                 cx.notify();

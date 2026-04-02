@@ -77,8 +77,8 @@ pub(crate) struct AcpChatView {
     _blink_task: Task<()>,
     /// Slash command menu: selected index (None = menu hidden).
     slash_menu_index: Option<usize>,
-    /// History picker: selected index (None = picker hidden).
-    pub(crate) history_menu: Option<(usize, Vec<super::history::AcpHistoryEntry>)>,
+    /// History picker: (selected_index, filter_text, all_entries). None = hidden.
+    pub(crate) history_menu: Option<(usize, String, Vec<super::history::AcpHistoryEntry>)>,
     /// Whether the + attachment menu popup is open.
     attach_menu_open: bool,
     /// Cached slash commands (name, description) discovered at creation.
@@ -1258,7 +1258,7 @@ impl AcpChatView {
             } else {
                 let entries = super::history::load_history();
                 if !entries.is_empty() {
-                    self.history_menu = Some((0, entries));
+                    self.history_menu = Some((0, String::new(), entries));
                 }
             }
             cx.notify();
@@ -1267,8 +1267,19 @@ impl AcpChatView {
         }
 
         // ── History picker intercept ─────────────────────────────
-        if let Some((ref mut idx, ref entries)) = self.history_menu {
-            let count = entries.len();
+        if let Some((ref mut idx, ref mut filter, ref entries)) = self.history_menu {
+            // Filter entries by search text
+            let filtered: Vec<_> = if filter.is_empty() {
+                entries.iter().collect()
+            } else {
+                let q = filter.to_lowercase();
+                entries
+                    .iter()
+                    .filter(|e| e.first_message.to_lowercase().contains(&q))
+                    .collect()
+            };
+            let count = filtered.len();
+
             if crate::ui_foundation::is_key_up(key) {
                 *idx = idx.saturating_sub(1);
                 cx.notify();
@@ -1282,11 +1293,9 @@ impl AcpChatView {
                 return;
             }
             if crate::ui_foundation::is_key_enter(key) {
-                // Load the selected conversation's first message as context
-                let selected = entries.get(*idx).cloned();
+                let selected = filtered.get(*idx).cloned().cloned();
                 self.history_menu = None;
                 if let Some(entry) = selected {
-                    // Insert the first message as prompt text
                     self.thread.update(cx, |thread, cx| {
                         thread.input.set_text(entry.first_message.clone());
                         cx.notify();
@@ -1301,6 +1310,23 @@ impl AcpChatView {
                 cx.notify();
                 cx.stop_propagation();
                 return;
+            }
+            if crate::ui_foundation::is_key_backspace(key) {
+                filter.pop();
+                *idx = 0;
+                cx.notify();
+                cx.stop_propagation();
+                return;
+            }
+            // Typed characters filter the list
+            if let Some(ch) = event.keystroke.key_char.as_deref() {
+                if !ch.is_empty() && !modifiers.platform && !modifiers.control {
+                    filter.push_str(ch);
+                    *idx = 0;
+                    cx.notify();
+                    cx.stop_propagation();
+                    return;
+                }
             }
         }
 
@@ -1512,9 +1538,19 @@ impl Render for AcpChatView {
             .when_some(
                 self.history_menu
                     .as_ref()
-                    .map(|(idx, entries)| (*idx, entries.clone())),
-                |d, (idx, entries)| {
+                    .map(|(idx, filter, entries)| (*idx, filter.clone(), entries.clone())),
+                |d, (idx, filter, all_entries)| {
                     let theme = theme::get_cached_theme();
+                    // Apply filter
+                    let entries: Vec<_> = if filter.is_empty() {
+                        all_entries
+                    } else {
+                        let q = filter.to_lowercase();
+                        all_entries
+                            .into_iter()
+                            .filter(|e| e.first_message.to_lowercase().contains(&q))
+                            .collect()
+                    };
                     d.child(
                         div().w_full().px(px(8.0)).child(
                             div()
@@ -1533,7 +1569,11 @@ impl Render for AcpChatView {
                                         .py(px(4.0))
                                         .text_xs()
                                         .opacity(0.45)
-                                        .child("Recent Conversations (\u{2318}P)"),
+                                        .child(if filter.is_empty() {
+                                            "Recent Conversations (\u{2318}P)".to_string()
+                                        } else {
+                                            format!("Search: {filter}")
+                                        }),
                                 )
                                 .children(entries.iter().enumerate().map(|(i, entry)| {
                                     let is_selected = i == idx;
