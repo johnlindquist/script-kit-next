@@ -468,6 +468,14 @@ pub fn get_acp_chat_actions() -> Vec<Action> {
         .with_icon(IconName::FileCode)
         .with_section("Chat"),
         Action::new(
+            "acp_save_as_script",
+            "Save Response as Script",
+            Some("Save the last code block from the response as a Script Kit script".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_icon(IconName::FileCode)
+        .with_section("Chat"),
+        Action::new(
             "acp_scroll_to_top",
             "Scroll to Top",
             Some("Jump to the first message in the conversation".to_string()),
