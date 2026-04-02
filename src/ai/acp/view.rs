@@ -1689,11 +1689,20 @@ impl Render for AcpChatView {
                                     && matches!(messages[i - 1].role, AcpThreadMessageRole::User);
                                 let is_response_start = prev_was_user
                                     && !matches!(msg.role, AcpThreadMessageRole::User);
+                                // New user turn after assistant response
+                                let is_new_turn = i > 0
+                                    && matches!(msg.role, AcpThreadMessageRole::User)
+                                    && !matches!(messages[i - 1].role, AcpThreadMessageRole::User);
 
                                 div()
                                     .w_full()
                                     .pb(px(4.0))
                                     .when(is_response_start, |d| d.mt(px(4.0)))
+                                    .when(is_new_turn, |d| {
+                                        d.mt(px(8.0)).pt(px(8.0)).border_t_1().border_color(rgba(
+                                            (theme.colors.ui.border << 8) | 0x18,
+                                        ))
+                                    })
                                     .child(Self::render_message(
                                         msg,
                                         &colors,
