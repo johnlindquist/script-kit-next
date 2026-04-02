@@ -517,6 +517,14 @@ pub fn get_acp_chat_actions() -> Vec<Action> {
         .with_icon(IconName::ArrowUp)
         .with_section("Window"),
         Action::new(
+            "acp_reattach_panel",
+            "Re-attach to Panel",
+            Some("Move conversation back to the main Script Kit panel".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_icon(IconName::ArrowDown)
+        .with_section("Window"),
+        Action::new(
             "acp_close",
             "Close AI Chat",
             Some("Close this chat and return to the main menu".to_string()),

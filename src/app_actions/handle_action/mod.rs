@@ -733,17 +733,20 @@ impl ScriptListApp {
                 DispatchOutcome::success()
             }
             "acp_detach_window" => {
-                // Extract the thread entity from the current AcpChatView
                 let thread = entity.read(cx).thread.clone();
-                // Open a new window with the same thread (shares conversation state)
                 if let Err(e) =
                     crate::ai::acp::chat_window::open_chat_window_with_thread(thread, cx)
                 {
                     tracing::warn!(%e, "acp_detach_window_failed");
                 } else {
-                    // Close the main panel's ACP chat view
                     self.close_tab_ai_harness_terminal(cx);
                 }
+                DispatchOutcome::success()
+            }
+            "acp_reattach_panel" => {
+                // Close the detached window (if open) and open in main panel
+                crate::ai::acp::chat_window::close_chat_window(cx);
+                self.open_tab_ai_chat(cx);
                 DispatchOutcome::success()
             }
             "acp_close" => {
