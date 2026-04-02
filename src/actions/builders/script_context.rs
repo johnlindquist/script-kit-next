@@ -162,7 +162,7 @@ pub fn get_script_context_actions(script: &ScriptInfo) -> Vec<Action> {
         );
     }
 
-    if (script.is_script || script.is_scriptlet || script.is_agent)
+    if (script.is_script || script.is_scriptlet || script.is_agent || script.is_app)
         && !script.path.trim().is_empty()
     {
         let (title, description) =
@@ -176,6 +176,117 @@ pub fn get_script_context_actions(script: &ScriptInfo) -> Vec<Action> {
             )
             .with_icon(IconName::Star)
             .with_section("Edit"),
+        );
+    }
+
+    if script.is_app {
+        // Finder actions
+        actions.push(
+            Action::new(
+                "reveal_in_finder",
+                "Show in Finder",
+                Some("Reveal application in Finder".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⌘⇧F")
+            .with_icon(IconName::FolderOpen)
+            .with_section("Finder"),
+        );
+
+        actions.push(
+            Action::new(
+                "show_info_in_finder",
+                "Show Info in Finder",
+                Some("Open Finder info window for this application".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_icon(IconName::File)
+            .with_section("Finder"),
+        );
+
+        actions.push(
+            Action::new(
+                "show_package_contents",
+                "Show Package Contents",
+                Some("Open the application bundle Contents folder".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_icon(IconName::FolderOpen)
+            .with_section("Finder"),
+        );
+
+        // Copy actions
+        actions.push(
+            Action::new(
+                "copy_name",
+                "Copy Name",
+                Some("Copy application name to clipboard".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⌘.")
+            .with_icon(IconName::Copy)
+            .with_section("Copy"),
+        );
+
+        actions.push(
+            Action::new(
+                "copy_path",
+                "Copy Path",
+                Some("Copy application path to clipboard".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⇧⌘.")
+            .with_icon(IconName::Copy)
+            .with_section("Copy"),
+        );
+
+        if script.bundle_id.is_some() {
+            actions.push(
+                Action::new(
+                    "copy_bundle_id",
+                    "Copy Bundle Identifier",
+                    Some("Copy bundle identifier to clipboard".to_string()),
+                    ActionCategory::ScriptContext,
+                )
+                .with_shortcut("⇧⌘C")
+                .with_icon(IconName::Copy)
+                .with_section("Copy"),
+            );
+        }
+
+        // Process actions
+        actions.push(
+            Action::new(
+                "quit_app",
+                "Quit Application",
+                Some("Gracefully quit this application".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⇧Q")
+            .with_icon(IconName::Close)
+            .with_section("Process"),
+        );
+
+        actions.push(
+            Action::new(
+                "restart_app",
+                "Restart Application",
+                Some("Quit and relaunch this application".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_icon(IconName::Refresh)
+            .with_section("Process"),
+        );
+
+        destructive_actions.push(
+            Action::new(
+                "force_quit_app",
+                "Force Quit Application",
+                Some("Force quit this application immediately".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_icon(IconName::Close)
+            .with_section("Destructive"),
         );
     }
 
@@ -794,6 +905,90 @@ mod tests {
             info_action.icon.is_some(),
             "toggle_info must have an icon for visual consistency"
         );
+    }
+
+    #[test]
+    fn test_get_script_context_actions_includes_app_actions_when_is_app() {
+        let script = ScriptInfo::app(
+            "Google Chrome",
+            "/Applications/Google Chrome.app",
+            Some("com.google.Chrome".to_string()),
+            None,
+            None,
+        );
+        let actions = get_script_context_actions(&script);
+
+        // App-specific actions
+        assert!(has_action(&actions, "reveal_in_finder"));
+        assert!(has_action(&actions, "show_info_in_finder"));
+        assert!(has_action(&actions, "show_package_contents"));
+        assert!(has_action(&actions, "copy_name"));
+        assert!(has_action(&actions, "copy_path"));
+        assert!(has_action(&actions, "copy_bundle_id"));
+        assert!(has_action(&actions, "quit_app"));
+        assert!(has_action(&actions, "force_quit_app"));
+        assert!(has_action(&actions, "restart_app"));
+
+        // Common actions still present
+        assert!(has_action(&actions, "run_script"));
+        assert!(has_action(&actions, "toggle_info"));
+        assert!(has_action(&actions, "copy_deeplink"));
+    }
+
+    #[test]
+    fn test_get_script_context_actions_omits_copy_bundle_id_when_none() {
+        let script = ScriptInfo::app("MyApp", "/Applications/MyApp.app", None, None, None);
+        let actions = get_script_context_actions(&script);
+
+        assert!(!has_action(&actions, "copy_bundle_id"));
+        // Other app actions still present
+        assert!(has_action(&actions, "reveal_in_finder"));
+        assert!(has_action(&actions, "quit_app"));
+    }
+
+    #[test]
+    fn test_get_script_context_actions_app_does_not_include_script_only_actions() {
+        let script = ScriptInfo::app(
+            "Safari",
+            "/Applications/Safari.app",
+            Some("com.apple.Safari".to_string()),
+            None,
+            None,
+        );
+        let actions = get_script_context_actions(&script);
+
+        assert!(!has_action(&actions, "edit_script"));
+        assert!(!has_action(&actions, "view_logs"));
+        assert!(!has_action(&actions, "copy_content"));
+        assert!(!has_action(&actions, "delete_script"));
+        assert!(!has_action(&actions, "edit_scriptlet"));
+    }
+
+    #[test]
+    fn test_get_script_context_actions_includes_favorites_for_apps() {
+        let script = ScriptInfo::app(
+            "Safari",
+            "/Applications/Safari.app",
+            Some("com.apple.Safari".to_string()),
+            None,
+            None,
+        );
+        let actions = get_script_context_actions(&script);
+
+        assert!(has_action(&actions, "toggle_favorite"));
+    }
+
+    #[test]
+    fn test_get_script_context_actions_app_actions_all_have_icons() {
+        let script = ScriptInfo::app(
+            "Chrome",
+            "/Applications/Google Chrome.app",
+            Some("com.google.Chrome".to_string()),
+            None,
+            None,
+        );
+        let actions = get_script_context_actions(&script);
+        assert_all_actions_have_icons("app", &actions);
     }
 
     #[test]

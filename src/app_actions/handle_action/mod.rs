@@ -1178,16 +1178,21 @@ impl ScriptListApp {
                     if o.was_handled() {
                         ("file", o)
                     } else {
-                        let o = self.handle_scriptlet_action(&action_id_stripped, &dctx, cx);
+                        let o = self.handle_app_action(&action_id_stripped, &dctx, cx);
                         if o.was_handled() {
-                            ("scriptlet", o)
+                            ("app", o)
                         } else {
-                            let o = self.handle_acp_chat_action(&action_id_stripped, window, cx);
+                            let o = self.handle_scriptlet_action(&action_id_stripped, &dctx, cx);
                             if o.was_handled() {
-                                ("acp_chat", o)
+                                ("scriptlet", o)
                             } else {
-                                // SDK actions as final fallback — thread trace_id from dctx
-                                ("sdk_fallback", self.trigger_sdk_action_with_trace(&action_id_stripped, &dctx.trace_id))
+                                let o = self.handle_acp_chat_action(&action_id_stripped, window, cx);
+                                if o.was_handled() {
+                                    ("acp_chat", o)
+                                } else {
+                                    // SDK actions as final fallback — thread trace_id from dctx
+                                    ("sdk_fallback", self.trigger_sdk_action_with_trace(&action_id_stripped, &dctx.trace_id))
+                                }
                             }
                         }
                     }
@@ -1226,4 +1231,5 @@ include!("clipboard.rs");
 include!("scripts.rs");
 include!("shortcuts.rs");
 include!("files.rs");
+include!("apps.rs");
 include!("scriptlets.rs");

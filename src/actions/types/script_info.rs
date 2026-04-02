@@ -83,6 +83,12 @@ pub struct ScriptInfo {
     /// Whether this is an agent file (.claude.md or similar)
     /// Agents have their own actions (Edit Agent, Copy Content, etc.)
     pub is_agent: bool,
+    /// Whether this is a macOS application (.app bundle)
+    /// Apps have their own actions (Show in Finder, Quit, Copy Bundle ID, etc.)
+    pub is_app: bool,
+    /// Bundle identifier for macOS apps (e.g., "com.apple.Safari")
+    /// Used by app-specific actions like Copy Bundle Identifier
+    pub bundle_id: Option<String>,
 }
 
 impl Default for ScriptInfo {
@@ -98,6 +104,8 @@ impl Default for ScriptInfo {
             is_suggested: false,
             frecency_path: None,
             is_agent: false,
+            is_app: false,
+            bundle_id: None,
         }
     }
 }
@@ -133,9 +141,11 @@ impl ScriptInfo {
         is_script: bool,
         is_scriptlet: bool,
         is_agent: bool,
+        is_app: bool,
         action_verb: impl Into<String>,
         shortcut: Option<String>,
         alias: Option<String>,
+        bundle_id: Option<String>,
     ) -> Self {
         Self {
             name: name.into(),
@@ -143,9 +153,11 @@ impl ScriptInfo {
             is_script,
             is_scriptlet,
             is_agent,
+            is_app,
             action_verb: Self::normalized_action_verb(action_verb),
             shortcut: Self::normalized_optional_text(shortcut),
             alias: Self::normalized_optional_text(alias),
+            bundle_id: Self::normalized_optional_text(bundle_id),
             ..Self::default()
         }
     }
@@ -158,7 +170,9 @@ impl ScriptInfo {
             true,
             false,
             false,
+            false,
             Self::DEFAULT_ACTION_VERB,
+            None,
             None,
             None,
         )
@@ -177,8 +191,10 @@ impl ScriptInfo {
             true,
             false,
             false,
+            false,
             Self::DEFAULT_ACTION_VERB,
             shortcut,
+            None,
             None,
         )
     }
@@ -197,9 +213,11 @@ impl ScriptInfo {
             false,
             true,
             false,
+            false,
             Self::DEFAULT_ACTION_VERB,
             shortcut,
             alias,
+            None,
         )
     }
 
@@ -217,9 +235,11 @@ impl ScriptInfo {
             true,
             false,
             false,
+            false,
             Self::DEFAULT_ACTION_VERB,
             shortcut,
             alias,
+            None,
         )
     }
 
@@ -233,7 +253,9 @@ impl ScriptInfo {
             false,
             false,
             false,
+            false,
             Self::DEFAULT_ACTION_VERB,
+            None,
             None,
             None,
         )
@@ -252,7 +274,9 @@ impl ScriptInfo {
             is_script,
             false,
             false,
+            false,
             Self::DEFAULT_ACTION_VERB,
+            None,
             None,
             None,
         )
@@ -273,9 +297,34 @@ impl ScriptInfo {
             false,
             false,
             true,
+            false,
             Self::DEFAULT_ACTION_VERB,
             shortcut,
             alias,
+            None,
+        )
+    }
+
+    /// Create a ScriptInfo for a macOS application (.app bundle)
+    /// Apps have Finder, process, and copy actions
+    pub fn app(
+        name: impl Into<String>,
+        path: impl Into<String>,
+        bundle_id: Option<String>,
+        shortcut: Option<String>,
+        alias: Option<String>,
+    ) -> Self {
+        Self::build(
+            name,
+            path,
+            false,
+            false,
+            false,
+            true,
+            "Launch",
+            shortcut,
+            alias,
+            bundle_id,
         )
     }
 
@@ -286,7 +335,7 @@ impl ScriptInfo {
         is_script: bool,
         action_verb: impl Into<String>,
     ) -> Self {
-        Self::build(name, path, is_script, false, false, action_verb, None, None)
+        Self::build(name, path, is_script, false, false, false, action_verb, None, None, None)
     }
 
     /// Create a ScriptInfo with all options including custom action verb and shortcut
@@ -304,8 +353,10 @@ impl ScriptInfo {
             is_script,
             false,
             false,
+            false,
             action_verb,
             shortcut,
+            None,
             None,
         )
     }
@@ -326,9 +377,11 @@ impl ScriptInfo {
             is_script,
             false,
             false,
+            false,
             action_verb,
             shortcut,
             alias,
+            None,
         )
     }
 
@@ -389,5 +442,41 @@ mod script_info_completeness_tests {
         assert_eq!(info.name, "script");
         assert_eq!(info.path, "/path/script.ts");
         assert!(info.is_script);
+    }
+
+    #[test]
+    fn test_script_info_app_sets_expected_flags_when_constructed() {
+        let info = ScriptInfo::app(
+            "Google Chrome",
+            "/Applications/Google Chrome.app",
+            Some("com.google.Chrome".to_string()),
+            Some("cmd+shift+g".to_string()),
+            Some("chrome".to_string()),
+        );
+
+        assert_eq!(info.name, "Google Chrome");
+        assert_eq!(info.path, "/Applications/Google Chrome.app");
+        assert!(!info.is_script);
+        assert!(!info.is_scriptlet);
+        assert!(!info.is_agent);
+        assert!(info.is_app);
+        assert_eq!(info.action_verb, "Launch");
+        assert_eq!(info.bundle_id.as_deref(), Some("com.google.Chrome"));
+        assert_eq!(info.shortcut.as_deref(), Some("cmd+shift+g"));
+        assert_eq!(info.alias.as_deref(), Some("chrome"));
+    }
+
+    #[test]
+    fn test_script_info_app_handles_none_bundle_id() {
+        let info = ScriptInfo::app(
+            "MyApp",
+            "/Applications/MyApp.app",
+            None,
+            None,
+            None,
+        );
+
+        assert!(info.is_app);
+        assert!(info.bundle_id.is_none());
     }
 }

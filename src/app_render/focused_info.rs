@@ -943,7 +943,7 @@ impl ScriptListApp {
                     }
                     scripts::SearchResult::App(m) => {
                         // Apps use their path as identifier
-                        // is_script=false: apps aren't editable scripts
+                        // is_app=true: enables app-specific actions (Finder, Process, Copy)
                         // Look up shortcut and alias from overrides for dynamic action menu
                         // Uses cached versions to avoid file I/O on every render
                         let command_id = if let Some(ref bundle_id) = m.app.bundle_id {
@@ -956,11 +956,10 @@ impl ScriptListApp {
                         let shortcut = shortcut_overrides.get(&command_id).map(|s| s.to_string());
                         let alias = alias_overrides.get(&command_id).cloned();
                         Some(
-                            ScriptInfo::with_all(
+                            ScriptInfo::app(
                                 &m.app.name,
                                 m.app.path.to_string_lossy().to_string(),
-                                false,
-                                "Launch",
+                                m.app.bundle_id.clone(),
                                 shortcut,
                                 alias,
                             )
