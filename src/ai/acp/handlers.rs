@@ -642,6 +642,24 @@ impl Client for ScriptKitAcpClient {
                     },
                 );
             }
+            SessionUpdate::UsageUpdate(usage) => {
+                let cost_usd = usage.cost.as_ref().map(|c| c.amount);
+                tracing::debug!(
+                    session_id = %args.session_id.0,
+                    used = usage.used,
+                    size = usage.size,
+                    cost_usd = ?cost_usd,
+                    "acp_usage_update"
+                );
+                self.emit_event(
+                    &args.session_id,
+                    AcpEvent::UsageUpdated {
+                        used_tokens: usage.used,
+                        context_size: usage.size,
+                        cost_usd,
+                    },
+                );
+            }
             _ => {
                 tracing::trace!(
                     session_id = %args.session_id.0,

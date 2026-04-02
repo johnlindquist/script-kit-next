@@ -54,6 +54,12 @@ pub(crate) enum AcpEvent {
     AvailableCommandsUpdated { command_names: Vec<String> },
     /// The agent's mode has changed.
     ModeChanged { mode_id: String },
+    /// Session usage metrics updated.
+    UsageUpdated {
+        used_tokens: u64,
+        context_size: u64,
+        cost_usd: Option<f64>,
+    },
     /// The turn completed normally.
     TurnFinished { stop_reason: String },
     /// The turn failed with an error.
