@@ -477,6 +477,10 @@ impl Render for ActionsWindow {
                     // Get selected action and execute via callback
                     let action_id = this.dialog.read(cx).get_selected_action_id();
                     if let Some(action_id) = action_id {
+                        tracing::info!(
+                            event = "actions_window_execute_selected",
+                            action = %action_id,
+                        );
                         // Execute the action's callback
                         let callback = this.dialog.read(cx).on_select.clone();
                         callback(action_id.clone());

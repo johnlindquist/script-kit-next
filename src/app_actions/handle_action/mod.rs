@@ -1079,7 +1079,10 @@ impl ScriptListApp {
             }
             "acp_detach_window" => {
                 let thread = entity.read(cx).thread.clone();
-                let inherit_bounds = Some(window.bounds());
+                let inherit_bounds = match window.window_bounds() {
+                    gpui::WindowBounds::Windowed(bounds) => Some(bounds),
+                    _ => Some(window.bounds()),
+                };
                 tracing::info!(
                     event = "actions_detach_acp_requested",
                     has_inherited_bounds = true,
@@ -1094,9 +1097,12 @@ impl ScriptListApp {
                     tracing::warn!(%e, "acp_detach_window_failed");
                     DispatchOutcome::success()
                 } else {
+                    // Activation is handled inside open_chat_window_with_thread.
                     self.close_acp_chat_to_script_list(false, cx);
-                    crate::ai::acp::chat_window::activate_chat_window(cx);
-                    tracing::info!(event = "actions_detach_acp_focus_restored_to_chat");
+                    tracing::info!(
+                        event = "actions_detach_acp_completed",
+                        detached_window_activated = true,
+                    );
                     let mut o = DispatchOutcome::success();
                     o.user_message = Some("Chat detached to window".to_string());
                     o

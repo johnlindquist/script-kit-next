@@ -710,8 +710,14 @@ app.run(move |cx: &mut App| {
                         let app_for_detach = app_entity_inner.clone();
                         cx.update(move |cx: &mut gpui::App| {
                             let inherit_bounds = window_inner
-                                .update(cx, |_root, window, _cx| window.bounds())
-                                .ok();
+                                .update(cx, |_root, window, _cx| {
+                                    match window.window_bounds() {
+                                        gpui::WindowBounds::Windowed(bounds) => Some(bounds),
+                                        _ => Some(window.bounds()),
+                                    }
+                                })
+                                .ok()
+                                .flatten();
                             tracing::info!(
                                 event = "hotkey_detach_acp_requested",
                                 has_inherited_bounds = inherit_bounds.is_some(),
@@ -732,14 +738,14 @@ app.run(move |cx: &mut App| {
                                     Ok(()) => {
                                         // Keep the main panel visible on ScriptList, but do not
                                         // reclaim keyboard focus from the newly detached chat window.
+                                        // Activation is handled inside open_chat_window_with_thread.
                                         view.close_acp_chat_to_script_list(false, cx);
-                                        crate::ai::acp::chat_window::activate_chat_window(cx);
                                         tracing::info!(
                                             event = "hotkey_detach_acp_completed",
                                             restored_view = "ScriptList",
                                             focus_main_filter = false,
+                                            detached_window_activated = true,
                                         );
-                                        tracing::info!(event = "hotkey_detach_acp_focus_restored_to_chat");
                                     }
                                     Err(e) => {
                                         tracing::warn!(%e, "hotkey_detach_acp_failed");
