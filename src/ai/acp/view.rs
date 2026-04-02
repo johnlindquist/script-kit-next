@@ -1479,6 +1479,20 @@ impl Render for AcpChatView {
                     .overflow_y_scroll()
                     .track_scroll(&self.scroll_handle)
                     .min_h(gpui::px(0.))
+                    .when(is_empty, |d| {
+                        d.flex().flex_col().items_center().justify_center().child(
+                            div()
+                                .flex()
+                                .flex_col()
+                                .gap(px(6.0))
+                                .opacity(0.30)
+                                .text_xs()
+                                .child("Type / for commands")
+                                .child("⌘K for actions")
+                                .child("⌘N new conversation")
+                                .child("⌘W to close"),
+                        )
+                    })
                     .when(!is_empty, |d| {
                         d.px(px(8.0)).py(px(8.0)).flex().flex_col().children(
                             messages.iter().enumerate().map(|(i, msg)| {
