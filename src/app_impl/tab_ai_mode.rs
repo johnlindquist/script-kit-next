@@ -95,6 +95,18 @@ impl ScriptListApp {
         if self.tab_ai_save_offer_state.is_some() {
             return;
         }
+
+        // If a detached chat window exists, bring it to front instead
+        // of opening a new panel chat.
+        if crate::ai::acp::chat_window::is_chat_window_open() {
+            if let Err(e) = crate::ai::acp::chat_window::open_chat_window(cx) {
+                tracing::debug!(%e, "failed to focus detached chat window");
+            } else {
+                tracing::info!("tab_ai_focused_detached_window");
+                return;
+            }
+        }
+
         self.begin_tab_ai_harness_entry(entry_intent, None, capture_kind, cx);
     }
 
