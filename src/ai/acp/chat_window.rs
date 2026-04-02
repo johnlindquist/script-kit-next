@@ -5,7 +5,12 @@
 
 use std::sync::{Mutex, OnceLock};
 
-use gpui::{px, AnyWindowHandle, App, AppContext as _, WindowBounds, WindowKind, WindowOptions};
+use gpui::{
+    px, AnyWindowHandle, App, AppContext as _, Entity, WindowBounds, WindowKind, WindowOptions,
+};
+
+use super::thread::AcpThread;
+use super::view::AcpChatView;
 
 /// Global handle to the detached AI chat window.
 static CHAT_WINDOW: OnceLock<Mutex<Option<AnyWindowHandle>>> = OnceLock::new();
@@ -17,22 +22,8 @@ pub fn is_chat_window_open() -> bool {
     guard.is_some()
 }
 
-/// Open (or focus) the detached AI chat window.
-pub fn open_chat_window(cx: &mut App) -> anyhow::Result<()> {
-    // If already open, just focus it
-    let existing = {
-        let slot = CHAT_WINDOW.get_or_init(|| Mutex::new(None));
-        slot.lock().ok().and_then(|g| *g)
-    };
-
-    if let Some(handle) = existing {
-        let _ = handle.update(cx, |_root, window, _cx| {
-            window.activate_window();
-        });
-        return Ok(());
-    }
-
-    // Restore saved window bounds, or use defaults
+/// Build standard window options for the detached chat window.
+fn chat_window_options() -> WindowOptions {
     let window_bounds =
         crate::window_state::load_window_bounds(crate::window_state::WindowRole::AcpChat)
             .map(|persisted| persisted.to_gpui())
@@ -49,7 +40,7 @@ pub fn open_chat_window(cx: &mut App) -> anyhow::Result<()> {
                 })
             });
 
-    let window_options = WindowOptions {
+    WindowOptions {
         window_bounds: Some(window_bounds),
         titlebar: Some(gpui::TitlebarOptions {
             title: Some("AI Chat".into()),
@@ -64,16 +55,26 @@ pub fn open_chat_window(cx: &mut App) -> anyhow::Result<()> {
         show: true,
         kind: WindowKind::PopUp,
         ..Default::default()
+    }
+}
+
+/// Open (or focus) the detached AI chat window with a placeholder.
+pub fn open_chat_window(cx: &mut App) -> anyhow::Result<()> {
+    // If already open, just focus it
+    let existing = {
+        let slot = CHAT_WINDOW.get_or_init(|| Mutex::new(None));
+        slot.lock().ok().and_then(|g| *g)
     };
 
-    let handle = cx.open_window(window_options, |window, cx| {
-        let theme = crate::theme::get_cached_theme();
-        let view = cx.new(|_cx| ChatWindowPlaceholder);
+    if let Some(handle) = existing {
+        let _ = handle.update(cx, |_root, window, _cx| {
+            window.activate_window();
+        });
+        return Ok(());
+    }
 
-        // Set background color
-        window.set_background_appearance(gpui::WindowBackgroundAppearance::Blurred);
-
-        view
+    let handle = cx.open_window(chat_window_options(), |_window, cx| {
+        cx.new(|_cx| ChatWindowPlaceholder)
     })?;
 
     // Store the handle
@@ -85,6 +86,29 @@ pub fn open_chat_window(cx: &mut App) -> anyhow::Result<()> {
     }
 
     tracing::info!("acp_chat_window_opened");
+    Ok(())
+}
+
+/// Open the detached AI chat window with an existing AcpThread entity.
+/// This is used when "Detach to Window" transfers a live conversation.
+pub fn open_chat_window_with_thread(thread: Entity<AcpThread>, cx: &mut App) -> anyhow::Result<()> {
+    // Close existing if any
+    if is_chat_window_open() {
+        close_chat_window(cx);
+    }
+
+    let handle = cx.open_window(chat_window_options(), |_window, cx| {
+        cx.new(|cx| AcpChatView::new(thread, cx))
+    })?;
+
+    {
+        let slot = CHAT_WINDOW.get_or_init(|| Mutex::new(None));
+        if let Ok(mut g) = slot.lock() {
+            *g = Some(handle.into());
+        }
+    }
+
+    tracing::info!("acp_chat_window_opened_with_thread");
     Ok(())
 }
 
