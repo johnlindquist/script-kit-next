@@ -957,7 +957,10 @@ impl ScriptListApp {
             "acp_scroll_to_top" => {
                 let entity = entity.clone();
                 entity.update(cx, |chat, cx| {
-                    chat.scroll_handle.set_offset(gpui::point(gpui::px(0.), gpui::px(0.)));
+                    chat.list_state.scroll_to(gpui::ListOffset {
+                        item_ix: 0,
+                        offset_in_item: gpui::px(0.),
+                    });
                     cx.notify();
                 });
                 DispatchOutcome::success()
@@ -965,7 +968,7 @@ impl ScriptListApp {
             "acp_scroll_to_bottom" => {
                 let entity = entity.clone();
                 entity.update(cx, |chat, cx| {
-                    chat.scroll_handle.scroll_to_bottom();
+                    chat.list_state.scroll_to_end();
                     cx.notify();
                 });
                 DispatchOutcome::success()

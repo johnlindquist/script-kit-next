@@ -8,8 +8,9 @@ use std::collections::HashSet;
 use std::time::Duration;
 
 use gpui::{
-    div, prelude::*, px, rgb, rgba, App, Context, Entity, FocusHandle, Focusable, FontWeight,
-    IntoElement, ParentElement, Render, ScrollHandle, SharedString, Task, Window,
+    div, list, prelude::*, px, rgb, rgba, App, Context, Entity, FocusHandle, Focusable, FontWeight,
+    IntoElement, ListAlignment, ListOffset, ListState, ParentElement, Render, SharedString, Task,
+    WeakEntity, Window,
 };
 
 use crate::components::text_input::{render_text_input_cursor_selection, TextInputRenderConfig};
@@ -64,12 +65,13 @@ fn parse_skill_description(content: &str) -> Option<String> {
 pub(crate) struct AcpChatView {
     pub(crate) thread: Entity<AcpThread>,
     focus_handle: FocusHandle,
-    pub(crate) scroll_handle: ScrollHandle,
+    /// Virtualized variable-height message list state.
+    pub(crate) list_state: ListState,
     /// Index of the currently highlighted permission option in the overlay.
     permission_index: usize,
     /// Message IDs that are currently collapsed (thinking/tool blocks).
     pub(crate) collapsed_ids: HashSet<u64>,
-    /// Track message count for auto-scroll detection.
+    /// Track message count for list splice updates.
     last_message_count: usize,
     /// Cursor blink state.
     cursor_visible: bool,
@@ -81,8 +83,6 @@ pub(crate) struct AcpChatView {
     pub(crate) history_menu: Option<(usize, String, Vec<super::history::AcpHistoryEntry>)>,
     /// Whether the + attachment menu popup is open.
     attach_menu_open: bool,
-    /// Max messages to render (for performance). "Show earlier" loads more.
-    render_message_limit: usize,
     /// Cmd+F search: (query, current_match_index). None = search hidden.
     pub(crate) search_state: Option<(String, usize)>,
     /// Cached slash commands (name, description) discovered at creation.
@@ -91,16 +91,33 @@ pub(crate) struct AcpChatView {
 
 impl AcpChatView {
     pub(crate) fn new(thread: Entity<AcpThread>, cx: &mut Context<Self>) -> Self {
+        // Virtualized list: bottom-aligned (chat), 200px overdraw for smooth scroll.
+        let list_state = ListState::new(0, ListAlignment::Bottom, px(200.0));
+        list_state.set_follow_tail(true);
+
         // Auto-scroll when thread state changes (new messages, streaming updates).
         cx.observe(&thread, |this: &mut Self, thread, cx| {
             let thread_ref = thread.read(cx);
             let count = thread_ref.messages.len();
             let is_streaming = matches!(thread_ref.status, AcpThreadStatus::Streaming);
 
-            // Scroll to bottom on new messages or while streaming (content growing).
-            if count != this.last_message_count || is_streaming {
+            // Splice new messages into the list state.
+            if count != this.last_message_count {
+                let old_count = this.last_message_count;
                 this.last_message_count = count;
-                this.scroll_handle.scroll_to_bottom();
+                if count > old_count {
+                    // New messages appended.
+                    this.list_state
+                        .splice(old_count..old_count, count - old_count);
+                } else {
+                    // Messages cleared (new conversation) or trimmed.
+                    this.list_state.reset(count);
+                }
+            }
+
+            // Re-engage follow-tail when streaming starts so content stays at bottom.
+            if is_streaming {
+                this.list_state.set_follow_tail(true);
             }
 
             // Update slash command menu on any input change.
@@ -131,7 +148,7 @@ impl AcpChatView {
         Self {
             thread,
             focus_handle: cx.focus_handle(),
-            scroll_handle: ScrollHandle::new(),
+            list_state,
             permission_index: 0,
             collapsed_ids: HashSet::new(),
             last_message_count: 0,
@@ -140,7 +157,6 @@ impl AcpChatView {
             slash_menu_index: None,
             history_menu: None,
             attach_menu_open: false,
-            render_message_limit: 50,
             search_state: None,
             cached_slash_commands: Self::discover_slash_commands(),
         }
@@ -1788,16 +1804,17 @@ impl Render for AcpChatView {
                     )
                 },
             )
-            // ── Message list (middle, scrollable) ────────────
-            .child(
-                div()
-                    .id("acp-message-list")
-                    .flex_grow()
-                    .overflow_y_scroll()
-                    .track_scroll(&self.scroll_handle)
-                    .min_h(gpui::px(0.))
-                    .when(is_empty, |d| {
-                        d.flex().flex_col().items_center().justify_center().child(
+            // ── Message list (middle, virtualized) ────────────
+            .when(is_empty, |d| {
+                d.child(
+                    div()
+                        .flex_grow()
+                        .min_h(px(0.))
+                        .flex()
+                        .flex_col()
+                        .items_center()
+                        .justify_center()
+                        .child(
                             div()
                                 .flex()
                                 .flex_col()
@@ -1808,136 +1825,113 @@ impl Render for AcpChatView {
                                 .child("⌘K for actions")
                                 .child("⌘N new conversation")
                                 .child("⌘W to close"),
-                        )
-                    })
-                    .when(!is_empty, |d| {
-                        // Performance: only render last N messages to keep
-                        // the render fast. Show a "Show earlier" button
-                        // if there are more messages.
-                        let render_limit = self.render_message_limit;
-                        let total = messages.len();
-                        let skip = total.saturating_sub(render_limit);
-                        let visible_messages = &messages[skip..];
+                        ),
+                )
+            })
+            .when(!is_empty, |d| {
+                // Capture state for the list render callback.
+                let messages_snapshot = messages.clone();
+                let collapsed_ids = self.collapsed_ids.clone();
+                let search_state = self.search_state.clone();
+                let weak_view: WeakEntity<AcpChatView> = cx.entity().downgrade();
+                let colors_snap = colors;
+                let theme_snap = theme::get_cached_theme();
 
-                        d.px(px(8.0))
-                            .py(px(8.0))
-                            .flex()
-                            .flex_col()
-                            .when(skip > 0, |d| {
-                                d.child(
-                                    div()
-                                        .id("acp-show-earlier")
-                                        .w_full()
-                                        .py(px(6.0))
-                                        .cursor_pointer()
-                                        .flex()
-                                        .justify_center()
-                                        .text_xs()
-                                        .opacity(0.45)
-                                        .hover(|d| d.opacity(0.75))
-                                        .on_click(cx.listener(|this, _event, _window, cx| {
-                                            this.render_message_limit += 50;
-                                            cx.notify();
-                                        }))
-                                        .child(format!("\u{25B2} Show {skip} earlier messages")),
-                                )
-                            })
-                            .children(visible_messages.iter().enumerate().map(|(vi, msg)| {
-                                let i = skip + vi;
-                                let msg_id = msg.id;
-                                let is_collapsible = matches!(
-                                    msg.role,
-                                    AcpThreadMessageRole::Thought | AcpThreadMessageRole::Tool
-                                );
-                                // Both Thinking and Tool blocks start collapsed.
-                                // collapsed_ids stores IDs that have been toggled (expanded).
-                                let is_collapsed =
-                                    is_collapsible && !self.collapsed_ids.contains(&msg_id);
+                d.child(
+                    list(self.list_state.clone(), move |ix, _window, _cx| {
+                        let msg = &messages_snapshot[ix];
+                        let msg_id = msg.id;
+                        let is_collapsible = matches!(
+                            msg.role,
+                            AcpThreadMessageRole::Thought | AcpThreadMessageRole::Tool
+                        );
+                        let is_collapsed =
+                            is_collapsible && !collapsed_ids.contains(&msg_id);
 
-                                let on_toggle: Option<ToggleHandler> = if is_collapsible {
-                                    Some(Box::new(cx.listener(move |this, _event, _window, cx| {
-                                        if this.collapsed_ids.contains(&msg_id) {
-                                            this.collapsed_ids.remove(&msg_id);
+                        let on_toggle: Option<ToggleHandler> = if is_collapsible {
+                            let weak = weak_view.clone();
+                            Some(Box::new(move |_event: &gpui::ClickEvent, _window: &mut Window, cx: &mut App| {
+                                if let Some(entity) = weak.upgrade() {
+                                    entity.update(cx, |view, cx| {
+                                        if view.collapsed_ids.contains(&msg_id) {
+                                            view.collapsed_ids.remove(&msg_id);
                                         } else {
-                                            this.collapsed_ids.insert(msg_id);
+                                            view.collapsed_ids.insert(msg_id);
                                         }
                                         cx.notify();
-                                    })))
-                                } else {
-                                    None
-                                };
-
-                                let prev_was_user = i > 0
-                                    && matches!(messages[i - 1].role, AcpThreadMessageRole::User);
-                                let is_response_start = prev_was_user
-                                    && !matches!(msg.role, AcpThreadMessageRole::User);
-                                // New user turn after assistant response
-                                let is_new_turn = i > 0
-                                    && matches!(msg.role, AcpThreadMessageRole::User)
-                                    && !matches!(messages[i - 1].role, AcpThreadMessageRole::User);
-
-                                // Search highlight
-                                let (is_search_match, is_current_match) =
-                                    if let Some((ref q, current_idx)) = self.search_state {
-                                        if !q.is_empty()
-                                            && msg
-                                                .body
-                                                .to_lowercase()
-                                                .contains(&q.to_lowercase())
-                                        {
-                                            // Count which match number this is
-                                            let ql = q.to_lowercase();
-                                            let match_num = messages[..=i]
-                                                .iter()
-                                                .filter(|m| {
-                                                    m.body.to_lowercase().contains(&ql)
-                                                })
-                                                .count()
-                                                - 1;
-                                            let total = messages
-                                                .iter()
-                                                .filter(|m| {
-                                                    m.body.to_lowercase().contains(&ql)
-                                                })
-                                                .count();
-                                            let target =
-                                                if total > 0 { current_idx % total } else { 0 };
-                                            (true, match_num == target)
-                                        } else {
-                                            (false, false)
-                                        }
-                                    } else {
-                                        (false, false)
-                                    };
-
-                                div()
-                                    .w_full()
-                                    .pb(px(4.0))
-                                    .when(is_response_start, |d| d.mt(px(4.0)))
-                                    .when(is_new_turn, |d| {
-                                        d.mt(px(8.0)).pt(px(8.0)).border_t_1().border_color(rgba(
-                                            (theme.colors.ui.border << 8) | 0x18,
-                                        ))
-                                    })
-                                    .when(is_search_match && !is_current_match, |d| {
-                                        d.bg(rgba((theme.colors.accent.selected << 8) | 0x08))
-                                            .rounded(px(4.0))
-                                    })
-                                    .when(is_current_match, |d| {
-                                        d.bg(rgba((theme.colors.accent.selected << 8) | 0x18))
-                                            .rounded(px(4.0))
-                                            .border_l_2()
-                                            .border_color(rgb(theme.colors.accent.selected))
-                                    })
-                                    .child(Self::render_message(
-                                        msg,
-                                        &colors,
-                                        is_collapsed,
-                                        on_toggle,
-                                    ))
+                                    });
+                                }
                             }))
-                    }),
-            )
+                        } else {
+                            None
+                        };
+
+                        let prev_was_user = ix > 0
+                            && matches!(messages_snapshot[ix - 1].role, AcpThreadMessageRole::User);
+                        let is_response_start = prev_was_user
+                            && !matches!(msg.role, AcpThreadMessageRole::User);
+                        let is_new_turn = ix > 0
+                            && matches!(msg.role, AcpThreadMessageRole::User)
+                            && !matches!(messages_snapshot[ix - 1].role, AcpThreadMessageRole::User);
+
+                        // Search highlight
+                        let (is_search_match, is_current_match) =
+                            if let Some((ref q, current_idx)) = search_state {
+                                if !q.is_empty()
+                                    && msg.body.to_lowercase().contains(&q.to_lowercase())
+                                {
+                                    let ql = q.to_lowercase();
+                                    let match_num = messages_snapshot[..=ix]
+                                        .iter()
+                                        .filter(|m| m.body.to_lowercase().contains(&ql))
+                                        .count()
+                                        - 1;
+                                    let total = messages_snapshot
+                                        .iter()
+                                        .filter(|m| m.body.to_lowercase().contains(&ql))
+                                        .count();
+                                    let target =
+                                        if total > 0 { current_idx % total } else { 0 };
+                                    (true, match_num == target)
+                                } else {
+                                    (false, false)
+                                }
+                            } else {
+                                (false, false)
+                            };
+
+                        div()
+                            .w_full()
+                            .px(px(8.0))
+                            .pb(px(4.0))
+                            .when(is_response_start, |d| d.mt(px(4.0)))
+                            .when(is_new_turn, |d| {
+                                d.mt(px(8.0)).pt(px(8.0)).border_t_1().border_color(rgba(
+                                    (theme_snap.colors.ui.border << 8) | 0x18,
+                                ))
+                            })
+                            .when(is_search_match && !is_current_match, |d| {
+                                d.bg(rgba((theme_snap.colors.accent.selected << 8) | 0x08))
+                                    .rounded(px(4.0))
+                            })
+                            .when(is_current_match, |d| {
+                                d.bg(rgba((theme_snap.colors.accent.selected << 8) | 0x18))
+                                    .rounded(px(4.0))
+                                    .border_l_2()
+                                    .border_color(rgb(theme_snap.colors.accent.selected))
+                            })
+                            .child(Self::render_message(
+                                msg,
+                                &colors_snap,
+                                is_collapsed,
+                                on_toggle,
+                            ))
+                            .into_any()
+                    })
+                    .flex_1()
+                    .with_sizing_behavior(gpui::ListSizingBehavior::Auto),
+                )
+            })
             // ── Plan strip ────────────────────────────────────
             .when(!plan_entries.is_empty(), |d| {
                 d.child(
