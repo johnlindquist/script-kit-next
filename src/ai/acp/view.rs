@@ -105,13 +105,15 @@ impl AcpChatView {
             if count != this.last_message_count {
                 let old_count = this.last_message_count;
                 this.last_message_count = count;
-                if count > old_count {
-                    // New messages appended.
+                let delta = count.saturating_sub(old_count);
+                if count > old_count && delta <= 3 {
+                    // Small append (typical streaming: 1-2 new messages at a time).
                     this.list_state
                         .splice(old_count..old_count, count - old_count);
                 } else {
-                    // Messages cleared (new conversation) or trimmed.
+                    // Full replacement (conversation load, clear, or large batch).
                     this.list_state.reset(count);
+                    this.list_state.set_follow_tail(true);
                 }
             }
 
