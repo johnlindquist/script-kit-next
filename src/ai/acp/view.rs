@@ -1699,7 +1699,10 @@ impl Render for AcpChatView {
                             .flex_row()
                             .items_center()
                             .h(px(22.0))
-                            .text_size(px(16.0))
+                            // Empirical: px(17) here renders identically to px(16) in
+                            // the main menu input.  The 1px offset is a GPUI layout quirk —
+                            // both paths target the same visual size (design_typography.font_size_lg).
+                            .text_size(px(17.0))
                             .text_color(if input_text.is_empty() {
                                 rgb(theme.colors.text.muted)
                             } else {
