@@ -134,6 +134,118 @@ pub fn show_main_window_without_activation() {
     );
 }
 
+/// Show the main window WITHOUT activating the app and WITHOUT making it key.
+///
+/// This makes the window visible but does not steal keyboard focus from whatever
+/// surface currently has it.  Use this when another surface (e.g., Notes or
+/// Detached AI Chat) should remain the key window.
+///
+/// # macOS Behavior
+///
+/// Uses `orderFrontRegardless` only — no `makeKeyWindow` call.
+///
+/// # Other Platforms
+///
+/// No-op on non-macOS platforms.
+#[cfg(target_os = "macos")]
+pub fn show_main_window_background() {
+    if require_main_thread("show_main_window_background") {
+        return;
+    }
+    // SAFETY: Main thread verified. Window from WindowManager is valid.
+    // orderFrontRegardless is a standard NSWindow method.
+    unsafe {
+        let window = match window_manager::get_main_window() {
+            Some(w) => w,
+            None => {
+                logging::log(
+                    "PANEL",
+                    "show_main_window_background: Main window not registered",
+                );
+                return;
+            }
+        };
+
+        // orderFrontRegardless brings the window to front without activating the app.
+        // Crucially, we do NOT call makeKeyWindow so keyboard focus stays with
+        // whatever surface currently owns it.
+        let _: () = msg_send![window, orderFrontRegardless];
+
+        logging::log(
+            "PANEL",
+            "Main window shown in background (orderFrontRegardless only, no makeKeyWindow)",
+        );
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn show_main_window_background() {
+    logging::log(
+        "PANEL",
+        "show_main_window_background: Not implemented on this platform",
+    );
+}
+
+/// Conceal the main window — hide it visually WITHOUT resetting AppView or canceling prompts.
+///
+/// Unlike `hide_main_window` (used by `defer_hide_main_window`), this only issues `orderOut:`
+/// to remove the window from the screen. It preserves all internal state so the window can
+/// be revealed later with its content intact. Use this for temporary flows like dictation
+/// where the main window needs to get out of the way briefly.
+///
+/// # Reentrancy Danger
+///
+/// Same as `hide_main_window` — `orderOut:` triggers `window_did_change_key_status`.
+/// **Always use [`defer_conceal_main_window`] from inside GPUI callbacks.**
+///
+/// # macOS Behavior
+///
+/// Uses NSWindow `orderOut:` to remove the window from the screen.
+///
+/// # Other Platforms
+///
+/// No-op on non-macOS platforms.
+#[cfg(target_os = "macos")]
+pub fn conceal_main_window() {
+    if require_main_thread("conceal_main_window") {
+        return;
+    }
+    // SAFETY: Main thread verified. Window from WindowManager is valid.
+    // orderOut: is a standard NSWindow method; nil sender is valid.
+    unsafe {
+        let window = match window_manager::get_main_window() {
+            Some(w) => w,
+            None => {
+                logging::log(
+                    "PANEL",
+                    "conceal_main_window: Main window not registered, nothing to conceal",
+                );
+                return;
+            }
+        };
+
+        let _: () = msg_send![window, orderOut:nil];
+
+        logging::log("PANEL", "Main window concealed via orderOut: (state preserved)");
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn conceal_main_window() {
+    // No-op on non-macOS platforms
+}
+
+/// Conceal the main window, deferring the ObjC call to the next event-loop tick.
+///
+/// This is the safe way to conceal the main window from inside any GPUI callback.
+/// Unlike `defer_hide_main_window`, this preserves all internal state (AppView, prompt, etc.).
+pub fn defer_conceal_main_window(cx: &mut gpui::App) {
+    cx.spawn(async move |_cx: &mut gpui::AsyncApp| {
+        conceal_main_window();
+    })
+    .detach();
+}
+
 /// Activate the main window and bring it to front.
 ///
 /// This makes the main window the key window and activates the application.

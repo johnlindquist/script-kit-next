@@ -44,6 +44,9 @@ mod prompt_ai;
 mod naming_dialog;
 #[path = "tab_ai_mode.rs"]
 mod tab_ai_mode;
+#[allow(dead_code)]
+#[path = "window_orchestrator_bridge.rs"]
+mod window_orchestrator_bridge;
 #[cfg(test)]
 #[path = "tests.rs"]
 mod app_impl_state_sync_tests;

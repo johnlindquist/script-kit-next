@@ -98,6 +98,7 @@ mod warning_banner;
 mod watcher;
 mod window_manager;
 mod window_ops;
+mod window_orchestrator;
 mod window_resize;
 mod window_state;
 #[cfg(test)]

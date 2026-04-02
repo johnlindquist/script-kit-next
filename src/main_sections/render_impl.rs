@@ -145,6 +145,8 @@ impl Render for ScriptListApp {
                 && !actions::is_actions_window_open()
                 && !confirm::is_confirm_window_open()
                 && !ai::acp::chat_window::is_chat_window_open()
+                && !crate::dictation::is_dictation_overlay_open()
+                && !crate::dictation::is_dictation_recording()
                 && self.tab_ai_save_offer_state.is_none()
             {
                 logging::log(

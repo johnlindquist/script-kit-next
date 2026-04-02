@@ -3782,6 +3782,17 @@ impl ScriptListApp {
 
                 match crate::dictation::toggle_dictation(dictation_target) {
                     Ok(crate::dictation::DictationToggleOutcome::Started) => {
+                        // Track window state through orchestrator.
+                        let orch_target =
+                            crate::window_orchestrator::executor::to_orchestrator_target(
+                                &dictation_target,
+                            );
+                        self.dispatch_window_event(
+                            crate::window_orchestrator::WindowEvent::StartDictation {
+                                target: orch_target,
+                            },
+                            cx,
+                        );
                         self.start_dictation_overlay_session(cx);
                     }
                     Ok(crate::dictation::DictationToggleOutcome::Stopped(Some(capture))) => {
@@ -3789,6 +3800,10 @@ impl ScriptListApp {
                     }
                     Ok(crate::dictation::DictationToggleOutcome::Stopped(None)) => {
                         let _ = crate::dictation::close_dictation_overlay(cx);
+                        self.dispatch_window_event(
+                            crate::window_orchestrator::WindowEvent::AbortDictation,
+                            cx,
+                        );
                     }
                     Err(error) => {
                         tracing::error!(
@@ -3808,6 +3823,10 @@ impl ScriptListApp {
                         self.schedule_dictation_overlay_close(
                             cx,
                             std::time::Duration::from_millis(800),
+                        );
+                        self.dispatch_window_event(
+                            crate::window_orchestrator::WindowEvent::AbortDictation,
+                            cx,
                         );
                     }
                 }
@@ -3871,13 +3890,38 @@ impl ScriptListApp {
 
                 match crate::dictation::toggle_dictation(dictation_target) {
                     Ok(crate::dictation::DictationToggleOutcome::Started) => {
+                        // Hide the main window SYNCHRONOUSLY before opening
+                        // the overlay.  The orchestrator dispatch is deferred
+                        // (cx.spawn), so relying on it for ConcealMain causes
+                        // a race: the overlay opens while the main window is
+                        // still visible, and macOS pushes the overlay behind
+                        // other apps.
+                        platform::conceal_main_window();
+
                         self.start_dictation_overlay_session(cx);
+
+                        // Update orchestrator state for bookkeeping (commands
+                        // are mostly no-ops since we already concealed + opened).
+                        let orch_target =
+                            crate::window_orchestrator::executor::to_orchestrator_target(
+                                &dictation_target,
+                            );
+                        self.dispatch_window_event(
+                            crate::window_orchestrator::WindowEvent::StartDictation {
+                                target: orch_target,
+                            },
+                            cx,
+                        );
                     }
                     Ok(crate::dictation::DictationToggleOutcome::Stopped(Some(capture))) => {
                         self.begin_dictation_transcription(capture, dictation_target, cx);
                     }
                     Ok(crate::dictation::DictationToggleOutcome::Stopped(None)) => {
                         let _ = crate::dictation::close_dictation_overlay(cx);
+                        self.dispatch_window_event(
+                            crate::window_orchestrator::WindowEvent::AbortDictation,
+                            cx,
+                        );
                     }
                     Err(error) => {
                         tracing::error!(
@@ -3897,6 +3941,10 @@ impl ScriptListApp {
                         self.schedule_dictation_overlay_close(
                             cx,
                             std::time::Duration::from_millis(800),
+                        );
+                        self.dispatch_window_event(
+                            crate::window_orchestrator::WindowEvent::AbortDictation,
+                            cx,
                         );
                     }
                 }
@@ -4083,6 +4131,13 @@ impl ScriptListApp {
                             crate::ai::TabAiQuickSubmitSource::Dictation,
                             cx,
                         );
+                        // Let the orchestrator handle main window reveal and
+                        // focus restore. The FinishDictation event emits
+                        // RevealMain based on the state captured at start time.
+                        self.dispatch_window_event(
+                            crate::window_orchestrator::WindowEvent::FinishDictation,
+                            cx,
+                        );
                         true
                     }
                     crate::dictation::DictationTarget::ExternalApp => false,
@@ -4130,6 +4185,16 @@ impl ScriptListApp {
                         cx,
                         std::time::Duration::from_secs(300),
                     );
+                    // Notify orchestrator that dictation is complete.
+                    // TabAiHarness dispatches this earlier (before overlay
+                    // scheduling) to trigger immediate RevealMain; other
+                    // targets dispatch here for state bookkeeping.
+                    if !matches!(target, crate::dictation::DictationTarget::TabAiHarness) {
+                        self.dispatch_window_event(
+                            crate::window_orchestrator::WindowEvent::FinishDictation,
+                            cx,
+                        );
+                    }
                 } else {
                     // Guard: verify that a tracked external app target exists
                     // before attempting to paste to the frontmost app.
@@ -4151,6 +4216,10 @@ impl ScriptListApp {
                         self.schedule_dictation_transcriber_cleanup(
                             cx,
                             std::time::Duration::from_secs(300),
+                        );
+                        self.dispatch_window_event(
+                            crate::window_orchestrator::WindowEvent::AbortDictation,
+                            cx,
                         );
                         return;
                     }
@@ -4174,6 +4243,10 @@ impl ScriptListApp {
                         self.schedule_dictation_transcriber_cleanup(
                             cx,
                             std::time::Duration::from_secs(300),
+                        );
+                        self.dispatch_window_event(
+                            crate::window_orchestrator::WindowEvent::AbortDictation,
+                            cx,
                         );
                         return;
                     };
@@ -4313,6 +4386,10 @@ impl ScriptListApp {
                     cx,
                     std::time::Duration::from_secs(300),
                 );
+                self.dispatch_window_event(
+                    crate::window_orchestrator::WindowEvent::FinishDictation,
+                    cx,
+                );
             }
             Err(error) => {
                 let error_text = error.to_string();
@@ -4326,11 +4403,9 @@ impl ScriptListApp {
 
                 if error_text.contains("Parakeet model not downloaded") {
                     let _ = crate::dictation::close_dictation_overlay(cx);
+                    self.dispatch_window_event(crate::window_orchestrator::WindowEvent::AbortDictation, cx);
                     self.open_dictation_model_prompt(cx);
-                    self.schedule_dictation_transcriber_cleanup(
-                        cx,
-                        std::time::Duration::from_secs(300),
-                    );
+                    self.schedule_dictation_transcriber_cleanup(cx, std::time::Duration::from_secs(300));
                     return;
                 } else {
                     self.show_error_toast(
@@ -4354,6 +4429,10 @@ impl ScriptListApp {
                 self.schedule_dictation_transcriber_cleanup(
                     cx,
                     std::time::Duration::from_secs(300),
+                );
+                self.dispatch_window_event(
+                    crate::window_orchestrator::WindowEvent::AbortDictation,
+                    cx,
                 );
             }
         }
@@ -5007,6 +5086,27 @@ impl ScriptListApp {
             }
             cx.update(|cx| {
                 let _ = crate::dictation::close_dictation_overlay(cx);
+            });
+        })
+        .detach();
+    }
+
+    /// Bring the main window back after a delay.
+    ///
+    /// Used by the dictation-to-AI path: the main window is concealed so
+    /// the overlay is visible, and once the overlay closes we reveal the
+    /// main window with the newly-opened ACP chat view.  The delay must
+    /// be slightly longer than `schedule_dictation_overlay_close` so the
+    /// overlay is gone before the main window reappears.
+    fn schedule_deferred_main_window_reveal(
+        &mut self,
+        cx: &mut Context<Self>,
+        delay: std::time::Duration,
+    ) {
+        cx.spawn(async move |_this, cx| {
+            cx.background_executor().timer(delay).await;
+            cx.update(|_cx| {
+                platform::show_main_window_without_activation();
             });
         })
         .detach();
