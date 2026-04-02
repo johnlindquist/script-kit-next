@@ -389,22 +389,21 @@ impl AcpChatView {
         on_toggle: Option<ToggleHandler>,
         is_tool: bool,
     ) -> gpui::AnyElement {
-        let label = if is_tool {
-            // Extract tool name from first line if present, else "Tool"
-            msg.body
-                .lines()
+        let (label, status_hint) = if is_tool {
+            // Tool body format: "{title}\n{status}\n{content}"
+            let mut lines = msg.body.lines();
+            let title = lines
                 .next()
-                .and_then(|line| {
-                    let trimmed = line.trim();
-                    if trimmed.len() < 80 {
-                        Some(trimmed.to_string())
-                    } else {
-                        None
-                    }
-                })
-                .unwrap_or_else(|| "Tool".to_string())
+                .map(|l| l.trim().to_string())
+                .filter(|s| !s.is_empty() && s.len() < 80)
+                .unwrap_or_else(|| "Tool".to_string());
+            let status = lines
+                .next()
+                .map(|l| l.trim().to_string())
+                .filter(|s| !s.is_empty() && s.len() < 40);
+            (title, status)
         } else {
-            "Thinking".to_string()
+            ("Thinking".to_string(), None)
         };
 
         let chevron = if is_collapsed {
@@ -445,14 +444,20 @@ impl AcpChatView {
                     .child(chevron.to_string()),
             )
             .child(div().text_xs().opacity(header_opacity).child(label))
-            .when(is_collapsed && line_count > 1, |d| {
-                d.child(
-                    div()
-                        .text_xs()
-                        .opacity(0.35)
-                        .child(format!("{line_count} lines")),
-                )
-            });
+            .when_some(status_hint.clone(), |d, status| {
+                d.child(div().text_xs().opacity(0.35).child(status))
+            })
+            .when(
+                is_collapsed && line_count > 1 && status_hint.is_none(),
+                |d| {
+                    d.child(
+                        div()
+                            .text_xs()
+                            .opacity(0.35)
+                            .child(format!("{line_count} lines")),
+                    )
+                },
+            );
 
         let header = if let Some(toggle) = on_toggle {
             header.on_click(toggle)
