@@ -480,7 +480,7 @@ pub fn get_acp_chat_actions() -> Vec<Action> {
         Action::new(
             "acp_run_last_code",
             "Run Last Code Block",
-            Some("Save and run as a Script Kit script".to_string()),
+            Some("Execute the last code block and show output".to_string()),
             ActionCategory::ScriptContext,
         )
         .with_icon(IconName::BoltFilled)

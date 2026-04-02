@@ -988,7 +988,9 @@ impl AcpChatView {
                         )
                     })
                     .when(!context_loading, |d| {
-                        d.child(div().text_xs().opacity(0.35).child("~/.scriptkit"))
+                        d.child(div().text_xs().opacity(0.35).child(
+                            "\u{21A9} Send \u{00b7} \u{2318}K Actions \u{00b7} \u{2318}W Close",
+                        ))
                     }),
             )
             // ── Right: mode, model, send ─────────
@@ -1365,8 +1367,8 @@ impl AcpChatView {
             return;
         }
 
-        // ── Cmd+N → new conversation (clear messages, keep session) ──
-        if modifiers.platform && key.eq_ignore_ascii_case("n") {
+        // ── Cmd+N / Cmd+L → new conversation (clear messages, keep session) ──
+        if modifiers.platform && (key.eq_ignore_ascii_case("n") || key.eq_ignore_ascii_case("l")) {
             self.thread.update(cx, |thread, cx| {
                 thread.clear_messages(cx);
             });
