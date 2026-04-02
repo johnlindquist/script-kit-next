@@ -639,11 +639,21 @@ export type KeyCode =
   // Number keys (top row)
   | "Digit0" | "Digit1" | "Digit2" | "Digit3" | "Digit4"
   | "Digit5" | "Digit6" | "Digit7" | "Digit8" | "Digit9"
-  // Special keys
-  | "Space" | "Enter" | "Semicolon" | "Comma" | "Period" | "Slash"
-  // Function keys (if supported)
+  // Navigation keys
+  | "Space" | "Enter" | "Tab" | "Escape" | "Backspace" | "Delete"
+  | "ArrowUp" | "ArrowDown" | "ArrowLeft" | "ArrowRight"
+  | "Home" | "End" | "PageUp" | "PageDown" | "Insert"
+  // Punctuation keys
+  | "Semicolon" | "Quote" | "Comma" | "Period" | "Slash"
+  | "Backslash" | "BracketLeft" | "BracketRight"
+  | "Minus" | "Equal" | "Backquote"
+  // Function keys
   | "F1" | "F2" | "F3" | "F4" | "F5" | "F6"
-  | "F7" | "F8" | "F9" | "F10" | "F11" | "F12";
+  | "F7" | "F8" | "F9" | "F10" | "F11" | "F12"
+  | "F13" | "F14" | "F15" | "F16" | "F17" | "F18"
+  | "F19" | "F20" | "F21" | "F22" | "F23" | "F24"
+  // Lock/system keys
+  | "CapsLock" | "NumLock" | "ScrollLock" | "PrintScreen" | "Pause";
 
 /**
  * Hotkey configuration for global keyboard shortcuts.
