@@ -116,6 +116,13 @@ pub(crate) fn load_history() -> Vec<AcpHistoryEntry> {
     entries
 }
 
+/// Load a full conversation by session ID.
+pub(crate) fn load_conversation(session_id: &str) -> Option<SavedConversation> {
+    let path = conversations_dir().join(format!("{session_id}.json"));
+    let content = std::fs::read_to_string(&path).ok()?;
+    serde_json::from_str(&content).ok()
+}
+
 /// Remove oldest conversation files beyond the keep limit.
 fn cleanup_old_conversations(keep: usize) {
     let dir = conversations_dir();

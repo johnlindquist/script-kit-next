@@ -830,6 +830,31 @@ impl AcpThread {
         cx.notify();
     }
 
+    /// Load saved messages from a conversation history file.
+    /// Replaces current messages with the saved ones (read-only view).
+    pub(crate) fn load_saved_messages(
+        &mut self,
+        saved: &[super::history::SavedMessage],
+        cx: &mut Context<Self>,
+    ) {
+        self.messages.clear();
+        for msg in saved {
+            let role = match msg.role.as_str() {
+                "User" => AcpThreadMessageRole::User,
+                "Assistant" => AcpThreadMessageRole::Assistant,
+                "Thought" => AcpThreadMessageRole::Thought,
+                "Tool" => AcpThreadMessageRole::Tool,
+                "System" => AcpThreadMessageRole::System,
+                "Error" => AcpThreadMessageRole::Error,
+                _ => AcpThreadMessageRole::System,
+            };
+            let id = self.alloc_id();
+            self.messages
+                .push(AcpThreadMessage::new(id, role, msg.body.clone()));
+        }
+        cx.notify();
+    }
+
     /// Tracked tool calls, ordered by creation.
     pub(crate) fn active_tool_calls(&self) -> &[AcpToolCallState] {
         &self.active_tool_calls
