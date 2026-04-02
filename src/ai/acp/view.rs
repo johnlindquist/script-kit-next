@@ -1856,6 +1856,8 @@ impl Render for AcpChatView {
                 let weak_view: WeakEntity<AcpChatView> = cx.entity().downgrade();
                 let colors_snap = colors;
                 let theme_snap = theme::get_cached_theme();
+                let is_streaming = matches!(status, AcpThreadStatus::Streaming);
+                let cursor_vis = self.cursor_visible;
 
                 d.child(
                     list(self.list_state.clone(), move |ix, _window, _cx| {
@@ -1946,6 +1948,21 @@ impl Render for AcpChatView {
                                 is_collapsed,
                                 on_toggle,
                             ))
+                            // Streaming cursor: pulsing block at end of last assistant message
+                            .when(
+                                is_streaming
+                                    && ix == messages_snapshot.len() - 1
+                                    && matches!(msg.role, AcpThreadMessageRole::Assistant),
+                                |d| {
+                                    d.child(
+                                        div()
+                                            .px(px(12.0))
+                                            .text_sm()
+                                            .opacity(if cursor_vis { 0.60 } else { 0.15 })
+                                            .child("\u{2588}"),
+                                    )
+                                },
+                            )
                             .into_any()
                     })
                     .flex_1()
