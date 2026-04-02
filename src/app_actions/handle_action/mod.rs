@@ -1,28 +1,50 @@
 use crate::action_helpers::{ActionOutcomeStatus, DispatchContext, DispatchOutcome};
 
-/// Extract the last fenced code block (```...```) from markdown text.
+/// A code block extracted from markdown with optional language hint.
+struct CodeBlock {
+    code: String,
+    language: Option<String>,
+}
+
+/// Extract the last fenced code block (```lang\n...\n```) from markdown text.
 fn extract_last_code_block(text: &str) -> Option<String> {
-    let mut last_block = None;
+    extract_last_code_block_with_lang(text).map(|b| b.code)
+}
+
+/// Extract the last fenced code block with language hint.
+fn extract_last_code_block_with_lang(text: &str) -> Option<CodeBlock> {
+    let mut last_block: Option<CodeBlock> = None;
     let mut in_block = false;
-    let mut current_block = String::new();
+    let mut current_code = String::new();
+    let mut current_lang: Option<String> = None;
 
     for line in text.lines() {
-        if line.trim_start().starts_with("```") {
+        let trimmed = line.trim_start();
+        if trimmed.starts_with("```") {
             if in_block {
-                // End of block
-                last_block = Some(current_block.clone());
-                current_block.clear();
+                last_block = Some(CodeBlock {
+                    code: current_code.clone(),
+                    language: current_lang.clone(),
+                });
+                current_code.clear();
+                current_lang = None;
                 in_block = false;
             } else {
-                // Start of block (skip the ``` line with optional language)
                 in_block = true;
-                current_block.clear();
+                current_code.clear();
+                // Parse language from ```typescript or ```ts etc.
+                let lang = trimmed[3..].trim();
+                current_lang = if lang.is_empty() {
+                    None
+                } else {
+                    Some(lang.to_string())
+                };
             }
         } else if in_block {
-            if !current_block.is_empty() {
-                current_block.push('\n');
+            if !current_code.is_empty() {
+                current_code.push('\n');
             }
-            current_block.push_str(line);
+            current_code.push_str(line);
         }
     }
     last_block
@@ -751,9 +773,17 @@ impl ScriptListApp {
                     .map(|m| m.body.to_string());
 
                 if let Some(text) = last_response {
-                    // Extract last code block (```...```)
-                    let code = extract_last_code_block(&text);
-                    if let Some(code) = code {
+                    let block = extract_last_code_block_with_lang(&text);
+                    if let Some(block) = block {
+                        let code = block.code;
+                        let ext = match block.language.as_deref() {
+                            Some("typescript" | "ts") => "ts",
+                            Some("javascript" | "js") => "js",
+                            Some("python" | "py") => "py",
+                            Some("rust" | "rs") => "rs",
+                            Some("bash" | "sh" | "zsh") => "sh",
+                            _ => "ts", // Default to TypeScript for Script Kit
+                        };
                         // Generate a script name from the first line
                         let name = code
                             .lines()
@@ -784,14 +814,14 @@ impl ScriptListApp {
                             .join("kit")
                             .join("main")
                             .join("scripts")
-                            .join(format!("{name}.ts"));
+                            .join(format!("{name}.{ext}"));
 
                         if let Err(e) = std::fs::write(&path, &code) {
                             tracing::warn!(%e, "acp_save_as_script_failed");
                         } else {
                             let mut o = DispatchOutcome::success();
                             o.user_message =
-                                Some(format!("Saved as {name}.ts"));
+                                Some(format!("Saved as {name}.{ext}"));
                             return o;
                         }
                     }
