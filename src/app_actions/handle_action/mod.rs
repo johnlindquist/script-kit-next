@@ -723,6 +723,13 @@ impl ScriptListApp {
                     Some("No code block found in last response".to_string());
                 o
             }
+            "acp_open_in_editor" => {
+                let kit_path = crate::setup::get_kit_path();
+                if let Err(e) = open::that(&kit_path) {
+                    tracing::warn!(%e, "acp_open_in_editor_failed");
+                }
+                DispatchOutcome::success()
+            }
             "acp_export_markdown" => {
                 let entity = entity.clone();
                 let messages = &entity.read(cx).thread.read(cx).messages;
