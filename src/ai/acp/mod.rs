@@ -12,6 +12,7 @@
 //! - `handlers` — Client-side handler implementing the ACP `Client` trait.
 //! - `client` — ACP runtime: subprocess lifecycle, initialize, session/prompt loop.
 
+pub(crate) mod chat_window;
 pub(crate) mod client;
 pub(crate) mod config;
 pub(crate) mod context;

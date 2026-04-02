@@ -732,6 +732,12 @@ impl ScriptListApp {
                 });
                 DispatchOutcome::success()
             }
+            "acp_detach_window" => {
+                if let Err(e) = crate::ai::acp::chat_window::open_chat_window(cx) {
+                    tracing::warn!(%e, "acp_detach_window_failed");
+                }
+                DispatchOutcome::success()
+            }
             "acp_close" => {
                 self.close_tab_ai_harness_terminal(cx);
                 DispatchOutcome::success()
