@@ -940,6 +940,7 @@ impl AcpChatView {
         streaming_words: Option<usize>,
         message_count: usize,
         context_state: AcpContextBootstrapState,
+        usage_cost: Option<f64>,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let theme = theme::get_cached_theme();
@@ -1024,6 +1025,10 @@ impl AcpChatView {
                             Some(words) if words > 5 => format!("{secs}s \u{00b7} {words}w"),
                             _ => format!("{secs}s"),
                         }))
+                    })
+                    // Cost indicator (shown when usage data available)
+                    .when_some(usage_cost.filter(|&c| c > 0.0), |d, cost| {
+                        d.child(div().text_xs().opacity(0.35).child(format!("${cost:.2}")))
                     })
                     // Model indicator (status dot + label, no chevron — model switching not available)
                     .child(
@@ -1584,6 +1589,7 @@ impl Render for AcpChatView {
         } else {
             None
         };
+        let usage_cost = thread.usage_cost_usd;
         let colors = Self::prompt_colors();
         let theme = theme::get_cached_theme();
 
@@ -2003,6 +2009,7 @@ impl Render for AcpChatView {
                 streaming_words,
                 messages.len(),
                 context_state,
+                usage_cost,
                 cx,
             ))
             // ── Permission overlay ────────────────────────────

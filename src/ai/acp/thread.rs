@@ -172,6 +172,11 @@ pub(crate) struct AcpThread {
     /// O(1) lookup from tool_call_id to index in `active_tool_calls`.
     tool_call_lookup: HashMap<String, usize>,
 
+    /// Session usage: tokens used / context window size.
+    pub(crate) usage_tokens: Option<(u64, u64)>,
+    /// Session cost in USD (cumulative).
+    pub(crate) usage_cost_usd: Option<f64>,
+
     /// When the current streaming turn started (for elapsed time display).
     stream_started_at: Option<std::time::Instant>,
 
@@ -220,6 +225,8 @@ impl AcpThread {
             available_commands: Vec::new(),
             active_tool_calls: Vec::new(),
             tool_call_lookup: HashMap::new(),
+            usage_tokens: None,
+            usage_cost_usd: None,
             stream_started_at: None,
             stream_task: None,
             permission_task: None,
@@ -553,6 +560,17 @@ impl AcpThread {
                     self.active_mode_id = Some(mode_id);
                     changed = true;
                 }
+            }
+            AcpEvent::UsageUpdated {
+                used_tokens,
+                context_size,
+                cost_usd,
+            } => {
+                self.usage_tokens = Some((used_tokens, context_size));
+                if let Some(cost) = cost_usd {
+                    self.usage_cost_usd = Some(cost);
+                }
+                changed = true;
             }
             AcpEvent::TurnFinished { .. } => {
                 if self.pending_permission.take().is_some() {
@@ -911,6 +929,8 @@ impl AcpThread {
             available_commands: Vec::new(),
             active_tool_calls: Vec::new(),
             tool_call_lookup: HashMap::new(),
+            usage_tokens: None,
+            usage_cost_usd: None,
             stream_started_at: None,
             stream_task: None,
             permission_task: None,
@@ -961,6 +981,16 @@ impl AcpThread {
             super::AcpEvent::ModeChanged { mode_id } => {
                 self.active_mode_id = Some(mode_id);
             }
+            super::AcpEvent::UsageUpdated {
+                used_tokens,
+                context_size,
+                cost_usd,
+            } => {
+                self.usage_tokens = Some((used_tokens, context_size));
+                if let Some(cost) = cost_usd {
+                    self.usage_cost_usd = Some(cost);
+                }
+            }
             super::AcpEvent::TurnFinished { .. } => {
                 self.set_status(AcpThreadStatus::Idle);
             }
@@ -1008,6 +1038,8 @@ mod tests {
             available_commands: Vec::new(),
             active_tool_calls: Vec::new(),
             tool_call_lookup: HashMap::new(),
+            usage_tokens: None,
+            usage_cost_usd: None,
             stream_started_at: None,
             stream_task: None,
             permission_task: None,
