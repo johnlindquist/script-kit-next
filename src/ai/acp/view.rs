@@ -1432,6 +1432,31 @@ impl AcpChatView {
             return;
         }
 
+        // ── Cmd+/ → toggle slash command menu ──────────────────
+        if modifiers.platform && key == "/" {
+            if self.slash_menu_index.is_some() {
+                // Close menu and clear the "/" prefix
+                self.slash_menu_index = None;
+                self.thread.update(cx, |thread, cx| {
+                    let text = thread.input.text().to_string();
+                    if text.starts_with('/') {
+                        thread.input.set_text(String::new());
+                    }
+                    cx.notify();
+                });
+            } else {
+                // Open menu by inserting "/" into input
+                self.thread.update(cx, |thread, cx| {
+                    thread.input.set_text("/".to_string());
+                    cx.notify();
+                });
+                self.update_slash_menu(cx);
+            }
+            cx.notify();
+            cx.stop_propagation();
+            return;
+        }
+
         // ── Cmd+Shift+C → copy last response to clipboard ──────
         if modifiers.platform && modifiers.shift && key.eq_ignore_ascii_case("c") {
             let last = self
