@@ -194,12 +194,16 @@ pub fn open_chat_window_with_thread(
         }
     }
 
+    // Activate the detached window so it gets keyboard focus immediately.
+    activate_chat_window(cx);
+
     // Configure vibrancy to match main window appearance
     configure_acp_chat_vibrancy(cx);
 
     tracing::info!(
         event = "acp_chat_window_opened_with_thread",
         has_inherited_bounds,
+        activated = true,
     );
     Ok(())
 }
@@ -384,21 +388,41 @@ pub fn toggle_detached_actions(cx: &mut App) {
                     action = %action_id,
                 );
                 cx.update(|cx| {
-                    dispatch_detached_action(&entity_weak, &action_id, cx);
+                    let handled =
+                        dispatch_detached_action_checked(&entity_weak, &action_id, cx);
                     // Re-focus the detached chat after action dispatch
                     // (unless the action closed the window)
-                    if action_id != "acp_close" {
+                    if handled && action_id != "acp_close" {
                         activate_chat_window(cx);
                     }
                     tracing::info!(
                         event = "detached_action_dispatch_completed",
                         action = %action_id,
+                        handled,
                     );
                 });
             }
         })
         .detach();
     }
+}
+
+/// Checked wrapper around `dispatch_detached_action` that logs when the
+/// view entity has already been deallocated and avoids a silent no-op.
+fn dispatch_detached_action_checked(
+    entity_weak: &WeakEntity<AcpChatView>,
+    action_id: &str,
+    cx: &mut App,
+) -> bool {
+    if entity_weak.upgrade().is_none() {
+        tracing::warn!(
+            event = "detached_action_dispatch_dropped_no_view",
+            action = %action_id,
+        );
+        return false;
+    }
+    dispatch_detached_action(entity_weak, action_id, cx);
+    true
 }
 
 /// Dispatch an action to the detached AcpChatView entity.

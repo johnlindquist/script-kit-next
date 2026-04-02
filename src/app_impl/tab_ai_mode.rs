@@ -56,6 +56,9 @@ const TAB_AI_CLIPBOARD_HISTORY_LIMIT: usize = 8;
 const TAB_AI_CLIPBOARD_TEXT_LIMIT: usize = 1000;
 
 impl ScriptListApp {
+    /// Give the ACP chat one frame to paint before deferred context staging runs.
+    const ACP_CONTEXT_FIRST_PAINT_DELAY_MS: u64 = 16;
+
     /// Open the Tab AI surface (zero-intent).
     ///
     /// Routes to the harness terminal (`QuickTerminalView`), which connects
@@ -701,12 +704,35 @@ impl ScriptListApp {
         let capture_gen = request.capture_generation;
         let effective_intent_for_capture = effective_intent.clone();
 
+        let first_paint_delay_ms = Self::ACP_CONTEXT_FIRST_PAINT_DELAY_MS;
+        let first_paint_delay = std::time::Duration::from_millis(first_paint_delay_ms);
+
         cx.spawn(async move |_this, cx| {
+            // Let the ACP chat render once before any heavy context staging runs.
+            cx.background_executor()
+                .timer(first_paint_delay)
+                .await;
+            tracing::info!(
+                target: "script_kit::tab_ai",
+                event = "acp_context_stage",
+                stage = "first_paint_gate_released",
+                stage_ms = first_paint_delay_ms,
+                total_ms = open_started_at.elapsed().as_millis() as u64,
+            );
+
             // Wait for deferred capture
+            let capture_wait_started_at = std::time::Instant::now();
             let capture_result = match capture_rx.recv().await {
                 Ok(result) => result,
                 Err(_) => Err("deferred capture channel closed".to_string()),
             };
+            tracing::info!(
+                target: "script_kit::tab_ai",
+                event = "acp_context_stage",
+                stage = "capture_rx_recv",
+                stage_ms = capture_wait_started_at.elapsed().as_millis() as u64,
+                total_ms = open_started_at.elapsed().as_millis() as u64,
+            );
 
             let artifacts = match capture_result {
                 Ok(a) => a,
