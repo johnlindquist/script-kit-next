@@ -1167,6 +1167,23 @@ impl AcpChatView {
             return;
         }
 
+        // ── Cmd+Shift+C → copy last response to clipboard ──────
+        if modifiers.platform && modifiers.shift && key.eq_ignore_ascii_case("c") {
+            let last = self
+                .thread
+                .read(cx)
+                .messages
+                .iter()
+                .rev()
+                .find(|m| matches!(m.role, super::thread::AcpThreadMessageRole::Assistant))
+                .map(|m| m.body.to_string());
+            if let Some(text) = last {
+                cx.write_to_clipboard(gpui::ClipboardItem::new_string(text));
+            }
+            cx.stop_propagation();
+            return;
+        }
+
         // ── Cmd+N → new conversation (clear messages, keep session) ──
         if modifiers.platform && key.eq_ignore_ascii_case("n") {
             self.thread.update(cx, |thread, cx| {

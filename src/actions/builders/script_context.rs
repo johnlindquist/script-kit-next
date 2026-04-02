@@ -431,6 +431,7 @@ pub fn get_acp_chat_actions() -> Vec<Action> {
             Some("Copy the most recent assistant response to clipboard".to_string()),
             ActionCategory::ScriptContext,
         )
+        .with_shortcut("\u{21e7}\u{2318}C")
         .with_icon(IconName::Copy)
         .with_section("Chat"),
         Action::new(
