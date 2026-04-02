@@ -14,10 +14,17 @@
                 // intercept_keystrokes is GLOBAL and fires for ALL windows in the app.
                 // We only want to handle keystrokes for the main window.
                 // The actions popup manages its own Escape/Enter/arrows in ActionsWindow::render().
+                let is_detached_acp = crate::ai::acp::chat_window::is_chat_window(window);
                 if crate::notes::is_notes_window(window)
                     || crate::ai::is_ai_window(window)
                     || crate::actions::is_actions_window(window)
+                    || is_detached_acp
                 {
+                    if is_detached_acp {
+                        tracing::debug!(
+                            event = "main_actions_interceptor_skipped_detached_acp_window",
+                        );
+                    }
                     return; // Let the secondary window handle its own keystrokes
                 }
 

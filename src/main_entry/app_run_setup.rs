@@ -717,18 +717,36 @@ app.run(move |cx: &mut App| {
                                 has_inherited_bounds = inherit_bounds.is_some(),
                             );
                             app_for_detach.update(cx, |view, cx| {
-                                if let AppView::AcpChatView { ref entity } = view.current_view {
+                                let detach_result = if let AppView::AcpChatView { ref entity } = view.current_view {
                                     let thread = entity.read(cx).thread.clone();
-                                    if let Err(e) = crate::ai::acp::chat_window::open_chat_window_with_thread(thread, inherit_bounds, cx) {
+                                    crate::ai::acp::chat_window::open_chat_window_with_thread(
+                                        thread,
+                                        inherit_bounds,
+                                        cx,
+                                    )
+                                } else {
+                                    Ok(())
+                                };
+
+                                match detach_result {
+                                    Ok(()) => {
+                                        // Keep the main panel visible on ScriptList, but do not
+                                        // reclaim keyboard focus from the newly detached chat window.
+                                        view.close_acp_chat_to_script_list(false, cx);
+                                        tracing::info!(
+                                            event = "hotkey_detach_acp_completed",
+                                            restored_view = "ScriptList",
+                                            focus_main_filter = false,
+                                        );
+                                    }
+                                    Err(e) => {
                                         tracing::warn!(%e, "hotkey_detach_acp_failed");
+                                        tracing::info!(
+                                            event = "hotkey_detach_acp_aborted",
+                                            kept_view = "AcpChatView",
+                                        );
                                     }
                                 }
-                                // Force main panel to ScriptList regardless of origin
-                                view.close_acp_chat_to_script_list(cx);
-                                tracing::info!(
-                                    event = "hotkey_detach_acp_completed",
-                                    restored_view = "ScriptList",
-                                );
                             });
                         });
                     } else {

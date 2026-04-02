@@ -495,16 +495,7 @@ impl ScriptListApp {
     ) {
         let open_started_at = std::time::Instant::now();
         let source_view = request.source_view.clone();
-
-        // ACP replaces the Tab AI PTY surface. Drop any stale prewarm session so
-        // the new Tab path does not drag the old harness lifecycle around.
-        self.terminate_tab_ai_harness_session(cx);
-
-        tracing::info!(
-            target: "script_kit::tab_ai",
-            event = "acp_open_after_terminate_harness",
-            elapsed_ms = open_started_at.elapsed().as_millis() as u64,
-        );
+        let had_harness_session = self.tab_ai_harness.is_some();
 
         // Compute canonical effective intent once, matching PTY path's normalization.
         let effective_intent = Self::tab_ai_effective_submission_intent(&request);
@@ -515,17 +506,21 @@ impl ScriptListApp {
             event = "acp_open_begin",
             auto_submit,
             has_entry_intent = request.entry_intent.is_some(),
+            had_harness_session,
         );
 
         // --- Permission broker + ACP connection ---
+        let stage_started_at = std::time::Instant::now();
         let (broker, permission_rx) = crate::ai::acp::AcpPermissionBroker::new();
-
         tracing::info!(
             target: "script_kit::tab_ai",
-            event = "acp_open_after_permission_broker",
-            elapsed_ms = open_started_at.elapsed().as_millis() as u64,
+            event = "acp_open_stage",
+            stage = "permission_broker_new",
+            stage_ms = stage_started_at.elapsed().as_millis() as u64,
+            total_ms = open_started_at.elapsed().as_millis() as u64,
         );
 
+        let stage_started_at = std::time::Instant::now();
         let agent = match crate::ai::acp::claude_code_agent_config() {
             Ok(agent) => agent,
             Err(error) => {
@@ -547,14 +542,16 @@ impl ScriptListApp {
                 return;
             }
         };
-
         tracing::info!(
             target: "script_kit::tab_ai",
-            event = "acp_open_after_agent_config",
-            elapsed_ms = open_started_at.elapsed().as_millis() as u64,
+            event = "acp_open_stage",
+            stage = "claude_code_agent_config",
+            stage_ms = stage_started_at.elapsed().as_millis() as u64,
+            total_ms = open_started_at.elapsed().as_millis() as u64,
         );
 
         let agent_display_name = agent.display_name().to_string();
+        let stage_started_at = std::time::Instant::now();
         let connection = match crate::ai::acp::AcpConnection::spawn_with_approval(
             agent,
             Some(broker.approval_fn()),
@@ -576,16 +573,18 @@ impl ScriptListApp {
                 return;
             }
         };
-
         tracing::info!(
             target: "script_kit::tab_ai",
-            event = "acp_open_after_connection_spawn",
-            elapsed_ms = open_started_at.elapsed().as_millis() as u64,
+            event = "acp_open_stage",
+            stage = "acp_connection_spawn_with_approval",
+            stage_ms = stage_started_at.elapsed().as_millis() as u64,
+            total_ms = open_started_at.elapsed().as_millis() as u64,
         );
 
         // Use ~/.scriptkit as cwd so Claude Code discovers CLAUDE.md and skills/.
         let cwd = crate::setup::get_kit_path();
 
+        let stage_started_at = std::time::Instant::now();
         let thread = cx.new(|cx| {
             crate::ai::acp::AcpThread::new(
                 connection,
@@ -599,19 +598,22 @@ impl ScriptListApp {
                 cx,
             )
         });
-
         tracing::info!(
             target: "script_kit::tab_ai",
-            event = "acp_open_after_thread_created",
-            elapsed_ms = open_started_at.elapsed().as_millis() as u64,
+            event = "acp_open_stage",
+            stage = "acp_thread_new",
+            stage_ms = stage_started_at.elapsed().as_millis() as u64,
+            total_ms = open_started_at.elapsed().as_millis() as u64,
         );
 
+        let stage_started_at = std::time::Instant::now();
         let view_entity = cx.new(|cx| crate::ai::acp::AcpChatView::new(thread.clone(), cx));
-
         tracing::info!(
             target: "script_kit::tab_ai",
-            event = "acp_open_after_view_created",
-            elapsed_ms = open_started_at.elapsed().as_millis() as u64,
+            event = "acp_open_stage",
+            stage = "acp_chat_view_new",
+            stage_ms = stage_started_at.elapsed().as_millis() as u64,
+            total_ms = open_started_at.elapsed().as_millis() as u64,
         );
 
         // Save originating surface for close/restore
@@ -647,6 +649,20 @@ impl ScriptListApp {
             event = "acp_open_view_switched",
             elapsed_ms = open_started_at.elapsed().as_millis() as u64,
         );
+
+        // Defer harness termination to after first paint so the user sees the
+        // chat surface before the synchronous teardown blocks the main thread.
+        if had_harness_session {
+            let stage_started_at = std::time::Instant::now();
+            self.terminate_tab_ai_harness_session(cx);
+            tracing::info!(
+                target: "script_kit::tab_ai",
+                event = "acp_open_stage",
+                stage = "terminate_tab_ai_harness_session_deferred",
+                stage_ms = stage_started_at.elapsed().as_millis() as u64,
+                total_ms = open_started_at.elapsed().as_millis() as u64,
+            );
+        }
 
         // --- Spawn deferred context injection task ---
         let app_weak = cx.entity().downgrade();
@@ -692,6 +708,7 @@ impl ScriptListApp {
                         return;
                     }
 
+                    let context_stage_started_at = std::time::Instant::now();
                     let resolved = this.build_tab_ai_context_from(
                         effective_intent_for_capture.clone().unwrap_or_default(),
                         request.source_view.clone(),
@@ -699,6 +716,13 @@ impl ScriptListApp {
                         artifacts.desktop,
                         request.invocation_receipt.clone(),
                         cx,
+                    );
+                    tracing::info!(
+                        target: "script_kit::tab_ai",
+                        event = "acp_context_stage",
+                        stage = "build_tab_ai_context_from",
+                        stage_ms = context_stage_started_at.elapsed().as_millis() as u64,
+                        total_ms = open_started_at.elapsed().as_millis() as u64,
                     );
 
                     let source_type = detect_tab_ai_source_type(
@@ -726,6 +750,7 @@ impl ScriptListApp {
                     );
 
                     // Stage context on the AcpThread
+                    let stage_context_started_at = std::time::Instant::now();
                     let _ = thread_entity.update(cx, |thread, cx| {
                         if let Err(e) = thread.stage_context(&context, cx) {
                             tracing::warn!(
@@ -749,6 +774,13 @@ impl ScriptListApp {
                             }
                         }
                     });
+                    tracing::info!(
+                        target: "script_kit::tab_ai",
+                        event = "acp_context_stage",
+                        stage = "thread_stage_context",
+                        stage_ms = stage_context_started_at.elapsed().as_millis() as u64,
+                        total_ms = open_started_at.elapsed().as_millis() as u64,
+                    );
                 });
             });
         })
@@ -1349,7 +1381,15 @@ impl ScriptListApp {
     /// to the launcher, regardless of which view opened the ACP chat.
     /// This avoids the correctness bug where `close_tab_ai_harness_terminal`
     /// would restore an unrelated originating view (e.g. ClipboardHistory).
-    pub(crate) fn close_acp_chat_to_script_list(&mut self, cx: &mut Context<Self>) {
+    ///
+    /// When `focus_main_filter` is `false`, the main panel switches to
+    /// ScriptList but does not reclaim keyboard focus — this keeps the
+    /// newly-detached chat window as the active key target.
+    pub(crate) fn close_acp_chat_to_script_list(
+        &mut self,
+        focus_main_filter: bool,
+        cx: &mut Context<Self>,
+    ) {
         if !matches!(self.current_view, AppView::AcpChatView { .. }) {
             return;
         }
@@ -1365,12 +1405,21 @@ impl ScriptListApp {
         self.tab_ai_harness_return_focus_target = None;
 
         self.current_view = AppView::ScriptList;
-        self.pending_focus = Some(FocusTarget::MainFilter);
-        self.focused_input = FocusedInput::MainFilter;
+        self.pending_focus = if focus_main_filter {
+            Some(FocusTarget::MainFilter)
+        } else {
+            None
+        };
+        self.focused_input = if focus_main_filter {
+            FocusedInput::MainFilter
+        } else {
+            FocusedInput::None
+        };
 
         tracing::info!(
             event = "acp_chat_restored_to_script_list",
             capture_generation = self.tab_ai_harness_capture_generation,
+            focus_main_filter,
         );
         cx.notify();
     }

@@ -30,6 +30,16 @@ pub fn is_chat_window_open() -> bool {
     guard.as_ref().is_some()
 }
 
+/// Check if the given window is the detached ACP chat window.
+pub fn is_chat_window(window: &gpui::Window) -> bool {
+    let slot = CHAT_WINDOW.get_or_init(|| Mutex::new(None));
+    let guard = slot.lock().unwrap_or_else(|e| e.into_inner());
+    guard
+        .as_ref()
+        .map(|state| window.window_handle() == state.handle)
+        .unwrap_or(false)
+}
+
 /// Clear the global chat window handle (called when the view closes itself).
 pub fn clear_chat_window_handle() {
     let slot = CHAT_WINDOW.get_or_init(|| Mutex::new(None));
@@ -172,10 +182,7 @@ pub fn open_chat_window_with_thread(
     })?;
 
     // Extract the captured weak entity.
-    let view_weak = view_entity_slot
-        .lock()
-        .ok()
-        .and_then(|mut g| g.take());
+    let view_weak = view_entity_slot.lock().ok().and_then(|mut g| g.take());
 
     {
         let slot = CHAT_WINDOW.get_or_init(|| Mutex::new(None));
@@ -218,17 +225,52 @@ pub fn close_chat_window(cx: &mut App) {
     }
 }
 
+/// Actions that are supported in the detached window context.
+///
+/// Actions not in this list (e.g. `acp_detach_window`, `acp_paste_to_frontmost`,
+/// code-execution actions) are filtered out because they either don't make sense
+/// when already detached or require main-panel context that isn't available.
+const DETACHED_SUPPORTED_ACTIONS: &[&str] = &[
+    "acp_copy_last_response",
+    "acp_retry_last",
+    "acp_export_markdown",
+    "acp_show_history",
+    "acp_scroll_to_top",
+    "acp_scroll_to_bottom",
+    "acp_expand_all",
+    "acp_collapse_all",
+    "acp_new_conversation",
+    "acp_clear_history",
+    "acp_close",
+];
+
+/// Activate (bring to front) the detached chat window.
+fn activate_chat_window(cx: &mut App) {
+    let handle = {
+        let slot = CHAT_WINDOW.get_or_init(|| Mutex::new(None));
+        slot.lock().ok().and_then(|g| g.as_ref().map(|s| s.handle))
+    };
+    if let Some(handle) = handle {
+        let _ = handle.update(cx, |_root, window, _cx| {
+            window.activate_window();
+        });
+        tracing::info!(event = "acp_chat_window_activated");
+    }
+}
+
 /// Toggle the actions popup from the detached ACP chat window.
 ///
-/// Creates a dialog with ACP chat actions and opens it as a popup window
-/// positioned relative to the detached chat window. Selecting an action
-/// dispatches it to the live `AcpChatView` entity in the detached window.
+/// Creates a dialog with the subset of ACP chat actions that work in the
+/// detached context, positioned relative to the detached chat window.
+/// After selection, the detached chat re-gains focus.
 pub fn toggle_detached_actions(cx: &mut App) {
     use crate::actions::{self, ActionsDialog, ActionsDialogConfig, WindowPosition};
 
-    // If actions are already open, close them (toggle behavior)
+    // If actions are already open, close them and re-focus the chat (toggle behavior)
     if actions::is_actions_window_open() {
         actions::close_actions_window(cx);
+        activate_chat_window(cx);
+        tracing::info!(event = "detached_actions_closed");
         return;
     }
 
@@ -243,6 +285,11 @@ pub fn toggle_detached_actions(cx: &mut App) {
             None => return,
         }
     };
+
+    if view_weak.is_none() {
+        tracing::warn!(event = "detached_actions_no_view_entity");
+        return;
+    }
 
     // Get window bounds and display from the detached chat window
     let window_info = handle.update(cx, |_root, window, cx| {
@@ -264,13 +311,18 @@ pub fn toggle_detached_actions(cx: &mut App) {
             let _ = action_tx.try_send(action_id);
         });
 
-    // Create the dialog entity with ACP chat actions
+    // Filter actions to only those supported in the detached context
+    let mut detached_actions = actions::get_acp_chat_actions();
+    detached_actions.retain(|action| DETACHED_SUPPORTED_ACTIONS.contains(&action.id.as_str()));
+    let actions_len = detached_actions.len();
+
+    // Create the dialog entity with the filtered actions
     let dialog = cx.new(|cx| {
         let focus_handle = cx.focus_handle();
         let mut dialog = ActionsDialog::from_actions_with_context(
             focus_handle,
             callback,
-            actions::get_acp_chat_actions(),
+            detached_actions,
             None,
             None,
             theme_arc,
@@ -282,19 +334,17 @@ pub fn toggle_detached_actions(cx: &mut App) {
         dialog
     });
 
-    if let Err(e) = actions::open_actions_window(
-        cx,
-        bounds,
-        display_id,
-        dialog,
-        WindowPosition::TopRight,
-    ) {
+    if let Err(e) =
+        actions::open_actions_window(cx, bounds, display_id, dialog, WindowPosition::TopRight)
+    {
         tracing::warn!(%e, "detached_actions_open_failed");
         return;
     }
 
+    tracing::info!(event = "detached_actions_opened", actions_len,);
+
     // Spawn a one-shot task that receives the selected action_id from the
-    // channel and dispatches it to the AcpChatView entity.
+    // channel, dispatches it to the AcpChatView entity, and re-focuses the chat.
     if let Some(entity_weak) = view_weak {
         cx.spawn(async move |cx: &mut gpui::AsyncApp| {
             if let Ok(action_id) = action_rx.recv().await {
@@ -307,6 +357,15 @@ pub fn toggle_detached_actions(cx: &mut App) {
                 );
                 cx.update(|cx| {
                     dispatch_detached_action(&entity_weak, &action_id, cx);
+                    // Re-focus the detached chat after action dispatch
+                    // (unless the action closed the window)
+                    if action_id != "acp_close" {
+                        activate_chat_window(cx);
+                    }
+                    tracing::info!(
+                        event = "detached_action_dispatch_completed",
+                        action = %action_id,
+                    );
                 });
             }
         })
@@ -318,21 +377,16 @@ pub fn toggle_detached_actions(cx: &mut App) {
 ///
 /// Handles the subset of ACP chat actions that make sense in the detached
 /// window context (copy, scroll, expand/collapse, close, reattach, etc.).
-fn dispatch_detached_action(
-    entity_weak: &WeakEntity<AcpChatView>,
-    action_id: &str,
-    cx: &mut App,
-) {
+fn dispatch_detached_action(entity_weak: &WeakEntity<AcpChatView>, action_id: &str, cx: &mut App) {
     match action_id {
         "acp_copy_last_response" => {
             if let Some(entity) = entity_weak.upgrade() {
                 let messages = &entity.read(cx).thread.read(cx).messages;
-                if let Some(last_assistant) = messages.iter().rev().find(|m| {
-                    matches!(
-                        m.role,
-                        super::thread::AcpThreadMessageRole::Assistant
-                    )
-                }) {
+                if let Some(last_assistant) = messages
+                    .iter()
+                    .rev()
+                    .find(|m| matches!(m.role, super::thread::AcpThreadMessageRole::Assistant))
+                {
                     cx.write_to_clipboard(gpui::ClipboardItem::new_string(
                         last_assistant.body.to_string(),
                     ));
@@ -358,6 +412,64 @@ fn dispatch_detached_action(
                 cx.write_to_clipboard(gpui::ClipboardItem::new_string(md));
                 tracing::info!(event = "detached_action_export_markdown");
             }
+        }
+        "acp_retry_last" => {
+            if let Some(entity) = entity_weak.upgrade() {
+                let last_user_msg = entity
+                    .read(cx)
+                    .thread
+                    .read(cx)
+                    .messages
+                    .iter()
+                    .rev()
+                    .find(|m| matches!(m.role, super::thread::AcpThreadMessageRole::User))
+                    .map(|m| m.body.to_string());
+                if let Some(text) = last_user_msg {
+                    entity.update(cx, |_chat, cx| {
+                        _chat.thread.update(cx, |thread, cx| {
+                            thread.set_input(text, cx);
+                            let _ = thread.submit_input(cx);
+                        });
+                    });
+                    tracing::info!(event = "detached_action_retry_last");
+                }
+            }
+        }
+        "acp_new_conversation" => {
+            if let Some(entity) = entity_weak.upgrade() {
+                entity.update(cx, |chat, cx| {
+                    chat.thread.update(cx, |thread, cx| {
+                        thread.clear_messages(cx);
+                    });
+                    chat.collapsed_ids.clear();
+                    cx.notify();
+                });
+                tracing::info!(event = "detached_action_new_conversation");
+            }
+        }
+        "acp_show_history" => {
+            let entries = crate::ai::acp::history::load_history();
+            let mut text = String::from("# Recent AI Conversations\n\n");
+            for (i, entry) in entries.iter().take(20).enumerate() {
+                let date = entry
+                    .timestamp
+                    .split('T')
+                    .next()
+                    .unwrap_or(&entry.timestamp);
+                text.push_str(&format!(
+                    "{}. **{}** \u{2014} {} messages, {}\n",
+                    i + 1,
+                    entry.first_message,
+                    entry.message_count,
+                    date,
+                ));
+            }
+            text.push_str("\n_Conversations saved in ~/.scriptkit/acp-conversations/_");
+            cx.write_to_clipboard(gpui::ClipboardItem::new_string(text));
+            tracing::info!(
+                event = "detached_action_show_history",
+                copied_count = entries.len().min(20),
+            );
         }
         "acp_clear_history" => {
             let kit = crate::setup::get_kit_path();

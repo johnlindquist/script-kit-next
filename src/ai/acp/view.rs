@@ -968,8 +968,7 @@ impl AcpChatView {
 
         // Hint strip opacity: match main menu's OPACITY_TEXT_MUTED (0.65)
         let hint_text_hex = theme.colors.text.primary;
-        let hint_opacity_byte = (crate::theme::opacity::OPACITY_TEXT_MUTED * 255.0)
-            .round() as u32;
+        let hint_opacity_byte = (crate::theme::opacity::OPACITY_TEXT_MUTED * 255.0).round() as u32;
         let hint_text_rgba = (hint_text_hex << 8) | hint_opacity_byte;
 
         div()
@@ -1329,6 +1328,7 @@ impl AcpChatView {
         if modifiers.platform && crate::ui_foundation::is_key_k(key) {
             if crate::ai::acp::chat_window::is_chat_window_open() {
                 // Detached window: open actions popup directly
+                tracing::info!(event = "detached_actions_shortcut_pressed");
                 crate::ai::acp::chat_window::toggle_detached_actions(cx);
                 cx.stop_propagation();
             } else {
