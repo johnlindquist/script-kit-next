@@ -38,6 +38,7 @@ fn conversations_dir() -> std::path::PathBuf {
 }
 
 /// Append a history entry to the JSONL index file.
+/// Compacts the file when it exceeds 200 lines.
 pub(crate) fn save_history_entry(entry: &AcpHistoryEntry) {
     let path = history_path();
     let Ok(json) = serde_json::to_string(entry) else {
@@ -54,6 +55,21 @@ pub(crate) fn save_history_entry(entry: &AcpHistoryEntry) {
         return;
     };
     let _ = writeln!(file, "{json}");
+
+    // Compact when file grows too large (>200 lines)
+    if let Ok(content) = std::fs::read_to_string(&path) {
+        let line_count = content.lines().count();
+        if line_count > 200 {
+            let compacted = load_history();
+            if let Ok(mut f) = std::fs::File::create(&path) {
+                for e in compacted.iter().rev() {
+                    if let Ok(j) = serde_json::to_string(e) {
+                        let _ = writeln!(f, "{j}");
+                    }
+                }
+            }
+        }
+    }
 }
 
 /// Save full conversation messages to a session-specific JSON file.
@@ -92,12 +108,10 @@ pub(crate) fn load_history() -> Vec<AcpHistoryEntry> {
         .filter_map(|line| serde_json::from_str(line).ok())
         .collect();
 
-    // Deduplicate by session_id (keep latest)
+    // Most recent first, then deduplicate (keeps latest per session_id)
+    entries.reverse();
     let mut seen = std::collections::HashSet::new();
     entries.retain(|e| seen.insert(e.session_id.clone()));
-
-    // Most recent first
-    entries.reverse();
     entries.truncate(100);
     entries
 }
