@@ -73,7 +73,19 @@ pub fn open_chat_window(cx: &mut App) -> anyhow::Result<()> {
         return Ok(());
     }
 
-    let handle = cx.open_window(chat_window_options(), |_window, cx| {
+    let handle = cx.open_window(chat_window_options(), |window, cx| {
+        window.on_window_should_close(cx, |window, _cx| {
+            let wb = window.window_bounds();
+            crate::window_state::save_window_from_gpui(
+                crate::window_state::WindowRole::AcpChat,
+                wb,
+            );
+            let slot = CHAT_WINDOW.get_or_init(|| Mutex::new(None));
+            if let Ok(mut g) = slot.lock() {
+                *g = None;
+            }
+            true
+        });
         cx.new(|_cx| ChatWindowPlaceholder)
     })?;
 
@@ -97,7 +109,22 @@ pub fn open_chat_window_with_thread(thread: Entity<AcpThread>, cx: &mut App) -> 
         close_chat_window(cx);
     }
 
-    let handle = cx.open_window(chat_window_options(), |_window, cx| {
+    let handle = cx.open_window(chat_window_options(), |window, cx| {
+        // Save bounds and clear handle when window closes
+        window.on_window_should_close(cx, |window, _cx| {
+            let wb = window.window_bounds();
+            crate::window_state::save_window_from_gpui(
+                crate::window_state::WindowRole::AcpChat,
+                wb,
+            );
+            // Clear the global handle
+            let slot = CHAT_WINDOW.get_or_init(|| Mutex::new(None));
+            if let Ok(mut g) = slot.lock() {
+                *g = None;
+            }
+            true // allow close
+        });
+
         cx.new(|cx| AcpChatView::new(thread, cx))
     })?;
 
