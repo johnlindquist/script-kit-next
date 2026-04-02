@@ -659,7 +659,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                                 if chat.search_state.is_some() {
                                                     chat.search_state = None;
                                                 } else {
-                                                    chat.search_state = Some(String::new());
+                                                    chat.search_state = Some((String::new(), 0));
                                                 }
                                                 cx.notify();
                                             });
