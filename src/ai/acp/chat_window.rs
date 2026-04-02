@@ -32,19 +32,25 @@ pub fn open_chat_window(cx: &mut App) -> anyhow::Result<()> {
         return Ok(());
     }
 
-    let bounds = gpui::Bounds {
-        origin: gpui::Point {
-            x: px(100.0),
-            y: px(100.0),
-        },
-        size: gpui::Size {
-            width: px(520.0),
-            height: px(600.0),
-        },
-    };
+    // Restore saved window bounds, or use defaults
+    let window_bounds =
+        crate::window_state::load_window_bounds(crate::window_state::WindowRole::AcpChat)
+            .map(|persisted| persisted.to_gpui())
+            .unwrap_or_else(|| {
+                WindowBounds::Windowed(gpui::Bounds {
+                    origin: gpui::Point {
+                        x: px(100.0),
+                        y: px(100.0),
+                    },
+                    size: gpui::Size {
+                        width: px(520.0),
+                        height: px(600.0),
+                    },
+                })
+            });
 
     let window_options = WindowOptions {
-        window_bounds: Some(WindowBounds::Windowed(bounds)),
+        window_bounds: Some(window_bounds),
         titlebar: Some(gpui::TitlebarOptions {
             title: Some("AI Chat".into()),
             appears_transparent: true,
@@ -92,6 +98,12 @@ pub fn close_chat_window(cx: &mut App) {
 
     if let Some(handle) = existing {
         let _ = handle.update(cx, |_root, window, _cx| {
+            // Save window bounds before closing
+            let wb = window.window_bounds();
+            crate::window_state::save_window_from_gpui(
+                crate::window_state::WindowRole::AcpChat,
+                wb,
+            );
             window.remove_window();
         });
     }
