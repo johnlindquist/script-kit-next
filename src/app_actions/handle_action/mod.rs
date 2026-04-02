@@ -1,5 +1,33 @@
 use crate::action_helpers::{ActionOutcomeStatus, DispatchContext, DispatchOutcome};
 
+/// Extract the last fenced code block (```...```) from markdown text.
+fn extract_last_code_block(text: &str) -> Option<String> {
+    let mut last_block = None;
+    let mut in_block = false;
+    let mut current_block = String::new();
+
+    for line in text.lines() {
+        if line.trim_start().starts_with("```") {
+            if in_block {
+                // End of block
+                last_block = Some(current_block.clone());
+                current_block.clear();
+                in_block = false;
+            } else {
+                // Start of block (skip the ``` line with optional language)
+                in_block = true;
+                current_block.clear();
+            }
+        } else if in_block {
+            if !current_block.is_empty() {
+                current_block.push('\n');
+            }
+            current_block.push_str(line);
+        }
+    }
+    last_block
+}
+
 // Action dispatch facade.
 //
 // This module splits the monolithic action handler into semantic submodules:
@@ -626,6 +654,74 @@ impl ScriptListApp {
                 } else {
                     DispatchOutcome::not_handled()
                 }
+            }
+            "acp_save_as_script" => {
+                let entity = entity.clone();
+                let last_response = entity
+                    .read(cx)
+                    .thread
+                    .read(cx)
+                    .messages
+                    .iter()
+                    .rev()
+                    .find(|m| {
+                        matches!(
+                            m.role,
+                            crate::ai::acp::thread::AcpThreadMessageRole::Assistant
+                        )
+                    })
+                    .map(|m| m.body.to_string());
+
+                if let Some(text) = last_response {
+                    // Extract last code block (```...```)
+                    let code = extract_last_code_block(&text);
+                    if let Some(code) = code {
+                        // Generate a script name from the first line
+                        let name = code
+                            .lines()
+                            .find(|l| !l.trim().is_empty())
+                            .and_then(|l| {
+                                let trimmed = l.trim().trim_start_matches("//").trim();
+                                if trimmed.len() > 3 && trimmed.len() < 50 {
+                                    Some(
+                                        trimmed
+                                            .to_lowercase()
+                                            .replace(' ', "-")
+                                            .chars()
+                                            .filter(|c| c.is_alphanumeric() || *c == '-')
+                                            .collect::<String>(),
+                                    )
+                                } else {
+                                    None
+                                }
+                            })
+                            .unwrap_or_else(|| {
+                                format!(
+                                    "ai-script-{}",
+                                    chrono::Utc::now().format("%H%M%S")
+                                )
+                            });
+
+                        let path = crate::setup::get_kit_path()
+                            .join("kit")
+                            .join("main")
+                            .join("scripts")
+                            .join(format!("{name}.ts"));
+
+                        if let Err(e) = std::fs::write(&path, &code) {
+                            tracing::warn!(%e, "acp_save_as_script_failed");
+                        } else {
+                            let mut o = DispatchOutcome::success();
+                            o.user_message =
+                                Some(format!("Saved as {name}.ts"));
+                            return o;
+                        }
+                    }
+                }
+                let mut o = DispatchOutcome::success();
+                o.user_message =
+                    Some("No code block found in last response".to_string());
+                o
             }
             "acp_export_markdown" => {
                 let entity = entity.clone();
