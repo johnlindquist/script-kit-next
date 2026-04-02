@@ -423,6 +423,7 @@ pub fn get_global_actions() -> Vec<Action> {
 }
 
 /// Actions available in the ACP chat view (Cmd+K menu).
+#[allow(dead_code)]
 pub fn get_acp_chat_actions() -> Vec<Action> {
     vec![
         // ── Response ─────────────────────────────────────────

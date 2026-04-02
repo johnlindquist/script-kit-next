@@ -83,8 +83,8 @@ pub(crate) struct AcpChatView {
     attach_menu_open: bool,
     /// Max messages to render (for performance). "Show earlier" loads more.
     render_message_limit: usize,
-    /// Cmd+F search query. None = search hidden.
-    pub(crate) search_state: Option<String>,
+    /// Cmd+F search: (query, current_match_index). None = search hidden.
+    pub(crate) search_state: Option<(String, usize)>,
     /// Cached slash commands (name, description) discovered at creation.
     cached_slash_commands: Vec<(String, String)>,
 }
@@ -628,7 +628,7 @@ impl AcpChatView {
         let theme = theme::get_cached_theme();
         let option_id = option.option_id.clone();
 
-        let (bg, border, caption) = if option.is_reject() {
+        let (bg, _border, caption) = if option.is_reject() {
             (
                 if is_selected {
                     rgba(0xEF444424)
@@ -911,6 +911,7 @@ impl AcpChatView {
             .into_any_element()
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn render_toolbar(
         &self,
         status: AcpThreadStatus,
@@ -1258,7 +1259,7 @@ impl AcpChatView {
             if self.search_state.is_some() {
                 self.search_state = None;
             } else {
-                self.search_state = Some(String::new());
+                self.search_state = Some((String::new(), 0));
             }
             cx.notify();
             cx.stop_propagation();
@@ -1266,15 +1267,23 @@ impl AcpChatView {
         }
 
         // ── Search intercept (when search bar is open) ──────
-        if let Some(ref mut query) = self.search_state {
+        if let Some((ref mut query, ref mut match_idx)) = self.search_state {
             if crate::ui_foundation::is_key_escape(key) {
                 self.search_state = None;
                 cx.notify();
                 cx.stop_propagation();
                 return;
             }
+            if crate::ui_foundation::is_key_enter(key) {
+                // Jump to next match
+                *match_idx = match_idx.wrapping_add(1);
+                cx.notify();
+                cx.stop_propagation();
+                return;
+            }
             if crate::ui_foundation::is_key_backspace(key) {
                 query.pop();
+                *match_idx = 0;
                 cx.notify();
                 cx.stop_propagation();
                 return;
@@ -1282,6 +1291,7 @@ impl AcpChatView {
             if let Some(ch) = event.keystroke.key_char.as_deref() {
                 if !ch.is_empty() && !modifiers.platform && !modifiers.control {
                     query.push_str(ch);
+                    *match_idx = 0;
                     cx.notify();
                     cx.stop_propagation();
                     return;
@@ -1612,12 +1622,17 @@ impl Render for AcpChatView {
                     ),
             )
             // ── Search bar (Cmd+F) ─────────────────────────
-            .when_some(self.search_state.clone(), |d, query| {
+            .when_some(self.search_state.clone(), |d, (query, current_idx)| {
                 let match_count = if query.is_empty() {
                     0
                 } else {
                     let q = query.to_lowercase();
                     messages.iter().filter(|m| m.body.to_lowercase().contains(&q)).count()
+                };
+                let display_idx = if match_count > 0 {
+                    (current_idx % match_count) + 1
+                } else {
+                    0
                 };
                 d.child(
                     div()
@@ -1648,7 +1663,11 @@ impl Render for AcpChatView {
                                 div()
                                     .text_xs()
                                     .opacity(0.45)
-                                    .child(format!("{match_count} match{}", if match_count == 1 { "" } else { "es" })),
+                                    .child(if match_count > 0 {
+                                        format!("{display_idx}/{match_count}")
+                                    } else {
+                                        "0 matches".to_string()
+                                    }),
                             )
                         })
                         .child(
@@ -1858,12 +1877,38 @@ impl Render for AcpChatView {
                                     && !matches!(messages[i - 1].role, AcpThreadMessageRole::User);
 
                                 // Search highlight
-                                let is_search_match = self
-                                    .search_state
-                                    .as_ref()
-                                    .filter(|q| !q.is_empty())
-                                    .map(|q| msg.body.to_lowercase().contains(&q.to_lowercase()))
-                                    .unwrap_or(false);
+                                let (is_search_match, is_current_match) =
+                                    if let Some((ref q, current_idx)) = self.search_state {
+                                        if !q.is_empty()
+                                            && msg
+                                                .body
+                                                .to_lowercase()
+                                                .contains(&q.to_lowercase())
+                                        {
+                                            // Count which match number this is
+                                            let ql = q.to_lowercase();
+                                            let match_num = messages[..=i]
+                                                .iter()
+                                                .filter(|m| {
+                                                    m.body.to_lowercase().contains(&ql)
+                                                })
+                                                .count()
+                                                - 1;
+                                            let total = messages
+                                                .iter()
+                                                .filter(|m| {
+                                                    m.body.to_lowercase().contains(&ql)
+                                                })
+                                                .count();
+                                            let target =
+                                                if total > 0 { current_idx % total } else { 0 };
+                                            (true, match_num == target)
+                                        } else {
+                                            (false, false)
+                                        }
+                                    } else {
+                                        (false, false)
+                                    };
 
                                 div()
                                     .w_full()
@@ -1874,9 +1919,15 @@ impl Render for AcpChatView {
                                             (theme.colors.ui.border << 8) | 0x18,
                                         ))
                                     })
-                                    .when(is_search_match, |d| {
-                                        d.bg(rgba((theme.colors.accent.selected << 8) | 0x10))
+                                    .when(is_search_match && !is_current_match, |d| {
+                                        d.bg(rgba((theme.colors.accent.selected << 8) | 0x08))
                                             .rounded(px(4.0))
+                                    })
+                                    .when(is_current_match, |d| {
+                                        d.bg(rgba((theme.colors.accent.selected << 8) | 0x18))
+                                            .rounded(px(4.0))
+                                            .border_l_2()
+                                            .border_color(rgb(theme.colors.accent.selected))
                                     })
                                     .child(Self::render_message(
                                         msg,
