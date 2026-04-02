@@ -1401,6 +1401,37 @@ impl AcpChatView {
             return;
         }
 
+        // ── Cmd+Up/Down → jump between user turns ──────────────
+        if modifiers.platform && crate::ui_foundation::is_key_up(key) {
+            let messages = &self.thread.read(cx).messages;
+            let current_top = self.list_state.logical_scroll_top().item_ix;
+            // Find the user message before the current scroll position
+            if let Some(target) = messages[..current_top.saturating_sub(1)]
+                .iter()
+                .rposition(|m| matches!(m.role, AcpThreadMessageRole::User))
+            {
+                self.list_state.scroll_to_reveal_item(target);
+                cx.notify();
+            }
+            cx.stop_propagation();
+            return;
+        }
+        if modifiers.platform && crate::ui_foundation::is_key_down(key) {
+            let messages = &self.thread.read(cx).messages;
+            let current_top = self.list_state.logical_scroll_top().item_ix;
+            // Find the user message after the current scroll position
+            let search_start = (current_top + 1).min(messages.len());
+            if let Some(offset) = messages[search_start..]
+                .iter()
+                .position(|m| matches!(m.role, AcpThreadMessageRole::User))
+            {
+                self.list_state.scroll_to_reveal_item(search_start + offset);
+                cx.notify();
+            }
+            cx.stop_propagation();
+            return;
+        }
+
         // ── Cmd+Shift+C → copy last response to clipboard ──────
         if modifiers.platform && modifiers.shift && key.eq_ignore_ascii_case("c") {
             let last = self
