@@ -989,9 +989,7 @@ impl AcpChatView {
                         )
                     })
                     .when(!context_loading, |d| {
-                        d.child(div().text_xs().opacity(0.35).child(
-                            "\u{21A9} Send \u{00b7} \u{2318}K Actions \u{00b7} \u{2318}W Close",
-                        ))
+                        d.child(div().text_xs().opacity(0.30).child("~/.scriptkit"))
                     }),
             )
             // ── Right: mode, model, send ─────────
