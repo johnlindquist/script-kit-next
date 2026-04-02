@@ -77,6 +77,8 @@ pub(crate) struct AcpChatView {
     _blink_task: Task<()>,
     /// Slash command menu: selected index (None = menu hidden).
     slash_menu_index: Option<usize>,
+    /// History picker: selected index (None = picker hidden).
+    pub(crate) history_menu: Option<(usize, Vec<super::history::AcpHistoryEntry>)>,
     /// Whether the + attachment menu popup is open.
     attach_menu_open: bool,
     /// Cached slash commands (name, description) discovered at creation.
@@ -132,6 +134,7 @@ impl AcpChatView {
             cursor_visible: true,
             _blink_task: blink_task,
             slash_menu_index: None,
+            history_menu: None,
             attach_menu_open: false,
             cached_slash_commands: Self::discover_slash_commands(),
         }
@@ -1248,29 +1251,57 @@ impl AcpChatView {
             return;
         }
 
-        // ── Cmd+P → show conversation history ──────────────────
+        // ── Cmd+P → toggle conversation history picker ──────────
         if modifiers.platform && key.eq_ignore_ascii_case("p") {
-            let entries = crate::ai::acp::history::load_history();
-            if !entries.is_empty() {
-                let mut text = String::from("# Recent AI Conversations\n\n");
-                for (i, entry) in entries.iter().take(20).enumerate() {
-                    let date = entry
-                        .timestamp
-                        .split('T')
-                        .next()
-                        .unwrap_or(&entry.timestamp);
-                    text.push_str(&format!(
-                        "{}. **{}** — {} msgs, {}\n",
-                        i + 1,
-                        entry.first_message,
-                        entry.message_count,
-                        date,
-                    ));
+            if self.history_menu.is_some() {
+                self.history_menu = None;
+            } else {
+                let entries = super::history::load_history();
+                if !entries.is_empty() {
+                    self.history_menu = Some((0, entries));
                 }
-                cx.write_to_clipboard(gpui::ClipboardItem::new_string(text));
             }
+            cx.notify();
             cx.stop_propagation();
             return;
+        }
+
+        // ── History picker intercept ─────────────────────────────
+        if let Some((ref mut idx, ref entries)) = self.history_menu {
+            let count = entries.len();
+            if crate::ui_foundation::is_key_up(key) {
+                *idx = idx.saturating_sub(1);
+                cx.notify();
+                cx.stop_propagation();
+                return;
+            }
+            if crate::ui_foundation::is_key_down(key) {
+                *idx = (*idx + 1).min(count.saturating_sub(1));
+                cx.notify();
+                cx.stop_propagation();
+                return;
+            }
+            if crate::ui_foundation::is_key_enter(key) {
+                // Load the selected conversation's first message as context
+                let selected = entries.get(*idx).cloned();
+                self.history_menu = None;
+                if let Some(entry) = selected {
+                    // Insert the first message as prompt text
+                    self.thread.update(cx, |thread, cx| {
+                        thread.input.set_text(entry.first_message.clone());
+                        cx.notify();
+                    });
+                }
+                cx.notify();
+                cx.stop_propagation();
+                return;
+            }
+            if crate::ui_foundation::is_key_escape(key) {
+                self.history_menu = None;
+                cx.notify();
+                cx.stop_propagation();
+                return;
+            }
         }
 
         // ── Slash command menu intercept ─────────────────────────
@@ -1477,6 +1508,74 @@ impl Render for AcpChatView {
                     )
                 }
             })
+            // ── History picker (below input, replaces message list) ──
+            .when_some(
+                self.history_menu
+                    .as_ref()
+                    .map(|(idx, entries)| (*idx, entries.clone())),
+                |d, (idx, entries)| {
+                    let theme = theme::get_cached_theme();
+                    d.child(
+                        div().w_full().px(px(8.0)).child(
+                            div()
+                                .id("acp-history-picker")
+                                .w_full()
+                                .max_h(px(300.0))
+                                .overflow_y_scroll()
+                                .rounded(px(8.0))
+                                .bg(rgb(theme.colors.background.search_box))
+                                .border_1()
+                                .border_color(rgba((theme.colors.ui.border << 8) | 0x40))
+                                .py(px(4.0))
+                                .child(
+                                    div()
+                                        .px(px(10.0))
+                                        .py(px(4.0))
+                                        .text_xs()
+                                        .opacity(0.45)
+                                        .child("Recent Conversations (\u{2318}P)"),
+                                )
+                                .children(entries.iter().enumerate().map(|(i, entry)| {
+                                    let is_selected = i == idx;
+                                    let date = entry
+                                        .timestamp
+                                        .split('T')
+                                        .next()
+                                        .unwrap_or(&entry.timestamp);
+                                    div()
+                                        .w_full()
+                                        .px(px(10.0))
+                                        .py(px(5.0))
+                                        .when(is_selected, |d| {
+                                            d.bg(rgba((theme.colors.accent.selected << 8) | 0x14))
+                                                .border_l_2()
+                                                .border_color(rgb(theme.colors.accent.selected))
+                                        })
+                                        .when(!is_selected, |d| {
+                                            d.border_l_2().border_color(gpui::transparent_black())
+                                        })
+                                        .child(
+                                            div()
+                                                .flex()
+                                                .flex_col()
+                                                .gap(px(1.0))
+                                                .child(
+                                                    div()
+                                                        .text_sm()
+                                                        .child(entry.first_message.clone()),
+                                                )
+                                                .child(div().text_xs().opacity(0.40).child(
+                                                    format!(
+                                                        "{} messages \u{00b7} {}",
+                                                        entry.message_count, date
+                                                    ),
+                                                )),
+                                        )
+                                })),
+                        ),
+                    )
+                },
+            )
             // ── Message list (middle, scrollable) ────────────
             .child(
                 div()

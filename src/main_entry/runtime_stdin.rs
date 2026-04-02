@@ -653,6 +653,28 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                         } else if has_cmd && key_lower == "k" {
                                             logging::log("STDIN", "SimulateKey: Cmd+K - open actions in ACP chat");
                                             view.toggle_actions(ctx, window);
+                                        } else if has_cmd && key_lower == "p" {
+                                            logging::log("STDIN", "SimulateKey: Cmd+P - toggle history in ACP chat");
+                                            entity_clone.update(ctx, |chat, cx| {
+                                                if chat.history_menu.is_some() {
+                                                    chat.history_menu = None;
+                                                } else {
+                                                    let entries = crate::ai::acp::history::load_history();
+                                                    if !entries.is_empty() {
+                                                        chat.history_menu = Some((0, entries));
+                                                    }
+                                                }
+                                                cx.notify();
+                                            });
+                                        } else if has_cmd && key_lower == "n" {
+                                            logging::log("STDIN", "SimulateKey: Cmd+N - new conversation in ACP chat");
+                                            entity_clone.update(ctx, |chat, cx| {
+                                                chat.thread.update(cx, |thread, cx| {
+                                                    thread.clear_messages(cx);
+                                                });
+                                                chat.collapsed_ids.clear();
+                                                cx.notify();
+                                            });
                                         } else if key_lower == "enter" && !has_shift {
                                             logging::log("STDIN", "SimulateKey: Enter - submit ACP input");
                                             entity_clone.update(ctx, |chat, cx| {
