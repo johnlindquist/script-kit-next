@@ -490,11 +490,32 @@ impl AcpChatView {
         div()
             .w_full()
             .px(px(12.0))
-            .py(px(6.0))
+            .py(px(8.0))
+            .rounded(px(8.0))
+            .bg(rgba(0xEF444410))
             .border_l_2()
             .border_color(rgba(0xEF444480))
-            .child(div().text_xs().opacity(0.65).pb(px(2.0)).child("Error"))
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(6.0))
+                    .pb(px(4.0))
+                    .child(div().text_xs().opacity(0.75).child("\u{26A0}"))
+                    .child(
+                        div()
+                            .text_xs()
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .opacity(0.75)
+                            .child("Error"),
+                    ),
+            )
             .child(render_markdown_with_scope(&msg.body, colors, Some(&scope_id)).w_full())
+            .child(
+                div().pt(px(4.0)).text_xs().opacity(0.40).child(
+                    "Try sending your message again or use \u{2318}N for a new conversation",
+                ),
+            )
             .into_any_element()
     }
 
