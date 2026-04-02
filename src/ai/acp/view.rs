@@ -1023,21 +1023,20 @@ impl AcpChatView {
                             _ => format!("{secs}s"),
                         }))
                     })
-                    // Model pill (label + chevron)
+                    // Model indicator (status dot + label, no chevron — model switching not available)
                     .child(
                         div()
                             .flex()
                             .items_center()
-                            .gap(px(2.0))
+                            .gap(px(4.0))
                             .text_xs()
-                            .opacity(0.55)
+                            .opacity(0.45)
                             .child(div().size(px(5.0)).rounded_full().bg(if is_streaming {
                                 rgb(theme.colors.accent.selected)
                             } else {
                                 rgba((theme.colors.text.primary << 8) | 0x40)
                             }))
-                            .child(display_name.to_string())
-                            .child("\u{25BE}"),
+                            .child(display_name.to_string()),
                     )
                     // Send / Stop button
                     .child(self.render_send_button(can_send, is_streaming, &theme, cx)),
