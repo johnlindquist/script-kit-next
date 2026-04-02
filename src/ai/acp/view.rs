@@ -9,8 +9,8 @@ use std::time::Duration;
 
 use gpui::{
     div, list, prelude::*, px, rgb, rgba, App, Context, Entity, FocusHandle, Focusable, FontWeight,
-    IntoElement, ListAlignment, ListOffset, ListState, ParentElement, Render, SharedString, Task,
-    WeakEntity, Window,
+    IntoElement, ListAlignment, ListState, ParentElement, Render, SharedString, Task, WeakEntity,
+    Window,
 };
 
 use crate::components::text_input::{render_text_input_cursor_selection, TextInputRenderConfig};
