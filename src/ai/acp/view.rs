@@ -1708,8 +1708,16 @@ impl Render for AcpChatView {
                                     }),
                             )
                         })
+                        .when(match_count > 1, |d| {
+                            d.child(
+                                div()
+                                    .text_xs()
+                                    .opacity(0.30)
+                                    .child("\u{21A9} next \u{00b7} \u{21E7}\u{21A9} prev"),
+                            )
+                        })
                         .child(
-                            div().text_xs().opacity(0.30).child("Esc to close"),
+                            div().text_xs().opacity(0.25).child("esc \u{00d7}"),
                         ),
                 )
             })
@@ -1843,10 +1851,10 @@ impl Render for AcpChatView {
                                 .gap(px(6.0))
                                 .opacity(0.30)
                                 .text_xs()
-                                .child("Type / for commands")
-                                .child("⌘K for actions")
-                                .child("⌘N new conversation")
-                                .child("⌘W to close"),
+                                .child("Type / for skills")
+                                .child("\u{21E7}\u{21A9} for newlines")
+                                .child("\u{2318}P history \u{00b7} \u{2318}K actions")
+                                .child("\u{2318}N new \u{00b7} \u{2318}W close"),
                         ),
                 )
             })
