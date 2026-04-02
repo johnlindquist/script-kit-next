@@ -1290,8 +1290,7 @@ impl AcpChatView {
                 return;
             }
             if crate::ui_foundation::is_key_enter(key) {
-                // Jump to next match and scroll to reveal it.
-                *match_idx = match_idx.wrapping_add(1);
+                // Enter = next match, Shift+Enter = previous match.
                 if !query.is_empty() {
                     let ql = query.to_lowercase();
                     let messages = &self.thread.read(cx).messages;
@@ -1302,8 +1301,16 @@ impl AcpChatView {
                         .map(|(i, _)| i)
                         .collect();
                     if !match_indices.is_empty() {
-                        let target = *match_idx % match_indices.len();
-                        self.list_state.scroll_to_reveal_item(match_indices[target]);
+                        let total = match_indices.len();
+                        if modifiers.shift {
+                            // Previous match (wrap backward).
+                            *match_idx = (*match_idx + total - 1) % total;
+                        } else {
+                            // Next match (wrap forward).
+                            *match_idx = (*match_idx + 1) % total;
+                        }
+                        self.list_state
+                            .scroll_to_reveal_item(match_indices[*match_idx]);
                     }
                 }
                 cx.notify();
