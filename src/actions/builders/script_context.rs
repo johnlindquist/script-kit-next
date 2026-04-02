@@ -425,64 +425,24 @@ pub fn get_global_actions() -> Vec<Action> {
 /// Actions available in the ACP chat view (Cmd+K menu).
 pub fn get_acp_chat_actions() -> Vec<Action> {
     vec![
+        // ── Response ─────────────────────────────────────────
         Action::new(
             "acp_copy_last_response",
             "Copy Last Response",
-            Some("Copy the most recent assistant response to clipboard".to_string()),
+            Some("Copy the most recent assistant response".to_string()),
             ActionCategory::ScriptContext,
         )
         .with_shortcut("\u{21e7}\u{2318}C")
         .with_icon(IconName::Copy)
-        .with_section("Chat"),
-        Action::new(
-            "acp_clear_conversation",
-            "Clear Conversation",
-            Some("Start a fresh conversation".to_string()),
-            ActionCategory::ScriptContext,
-        )
-        .with_icon(IconName::Trash)
-        .with_section("Chat"),
-        Action::new(
-            "acp_new_conversation",
-            "New Conversation",
-            Some("Keep context, clear messages and start fresh".to_string()),
-            ActionCategory::ScriptContext,
-        )
-        .with_shortcut("\u{2318}N")
-        .with_icon(IconName::Plus)
-        .with_section("Chat"),
+        .with_section("Response"),
         Action::new(
             "acp_paste_to_frontmost",
             "Paste Response to App",
-            Some("Paste the last response into the frontmost application".to_string()),
+            Some("Paste into the frontmost application".to_string()),
             ActionCategory::ScriptContext,
         )
         .with_icon(IconName::ArrowRight)
-        .with_section("Chat"),
-        Action::new(
-            "acp_export_markdown",
-            "Export as Markdown",
-            Some("Copy the full conversation as formatted markdown".to_string()),
-            ActionCategory::ScriptContext,
-        )
-        .with_icon(IconName::FileCode)
-        .with_section("Chat"),
-        Action::new(
-            "acp_save_as_script",
-            "Save Response as Script",
-            Some("Save the last code block from the response as a Script Kit script".to_string()),
-            ActionCategory::ScriptContext,
-        )
-        .with_icon(IconName::FileCode)
-        .with_section("Chat"),
-        Action::new(
-            "acp_copy_all_code",
-            "Copy All Code Blocks",
-            Some("Copy all code blocks from the conversation to clipboard".to_string()),
-            ActionCategory::ScriptContext,
-        )
-        .with_icon(IconName::Code)
-        .with_section("Chat"),
+        .with_section("Response"),
         Action::new(
             "acp_retry_last",
             "Retry Last Message",
@@ -490,27 +450,53 @@ pub fn get_acp_chat_actions() -> Vec<Action> {
             ActionCategory::ScriptContext,
         )
         .with_icon(IconName::ArrowRight)
-        .with_section("Chat"),
+        .with_section("Response"),
         Action::new(
-            "acp_run_last_code",
-            "Run Last Code Block",
-            Some("Save and run the last code block as a Script Kit script".to_string()),
+            "acp_export_markdown",
+            "Export as Markdown",
+            Some("Copy the full conversation as markdown".to_string()),
             ActionCategory::ScriptContext,
         )
-        .with_icon(IconName::BoltFilled)
-        .with_section("Chat"),
+        .with_icon(IconName::FileCode)
+        .with_section("Response"),
+        // ── Code ─────────────────────────────────────────────
         Action::new(
-            "acp_open_in_editor",
-            "Open in Editor",
-            Some("Open ~/.scriptkit in the configured editor".to_string()),
+            "acp_copy_all_code",
+            "Copy All Code Blocks",
+            Some("Copy all code blocks to clipboard".to_string()),
             ActionCategory::ScriptContext,
         )
         .with_icon(IconName::Code)
-        .with_section("Chat"),
+        .with_section("Code"),
+        Action::new(
+            "acp_save_as_script",
+            "Save as Script",
+            Some("Save last code block as a Script Kit script".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_icon(IconName::FileCode)
+        .with_section("Code"),
+        Action::new(
+            "acp_run_last_code",
+            "Run Last Code Block",
+            Some("Save and run as a Script Kit script".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_icon(IconName::BoltFilled)
+        .with_section("Code"),
+        Action::new(
+            "acp_open_in_editor",
+            "Open in Editor",
+            Some("Open ~/.scriptkit in editor".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_icon(IconName::Code)
+        .with_section("Code"),
+        // ── Navigate ─────────────────────────────────────────
         Action::new(
             "acp_scroll_to_top",
             "Scroll to Top",
-            Some("Jump to the first message in the conversation".to_string()),
+            None,
             ActionCategory::ScriptContext,
         )
         .with_icon(IconName::ArrowUp)
@@ -518,7 +504,7 @@ pub fn get_acp_chat_actions() -> Vec<Action> {
         Action::new(
             "acp_scroll_to_bottom",
             "Scroll to Latest",
-            Some("Jump to the most recent message".to_string()),
+            None,
             ActionCategory::ScriptContext,
         )
         .with_icon(IconName::ArrowDown)
@@ -532,10 +518,11 @@ pub fn get_acp_chat_actions() -> Vec<Action> {
         .with_shortcut("\u{2318}P")
         .with_icon(IconName::MagnifyingGlass)
         .with_section("Navigate"),
+        // ── View ─────────────────────────────────────────────
         Action::new(
             "acp_expand_all",
             "Expand All Blocks",
-            Some("Show all thinking and tool output blocks".to_string()),
+            None,
             ActionCategory::ScriptContext,
         )
         .with_icon(IconName::ChevronDown)
@@ -543,23 +530,42 @@ pub fn get_acp_chat_actions() -> Vec<Action> {
         Action::new(
             "acp_collapse_all",
             "Collapse All Blocks",
-            Some("Hide all thinking and tool output blocks".to_string()),
+            None,
             ActionCategory::ScriptContext,
         )
         .with_icon(IconName::ChevronRight)
         .with_section("View"),
+        // ── Session ──────────────────────────────────────────
         Action::new(
-            "acp_clear_history",
-            "Clear History",
-            Some("Delete all saved conversation history".to_string()),
+            "acp_new_conversation",
+            "New Conversation",
+            Some("Clear messages, keep session".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_shortcut("\u{2318}N")
+        .with_icon(IconName::Plus)
+        .with_section("Session"),
+        Action::new(
+            "acp_clear_conversation",
+            "Clear & Restart",
+            Some("Close and reopen a fresh session".to_string()),
             ActionCategory::ScriptContext,
         )
         .with_icon(IconName::Trash)
-        .with_section("Navigate"),
+        .with_section("Session"),
+        Action::new(
+            "acp_clear_history",
+            "Clear History",
+            Some("Delete all saved conversations".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_icon(IconName::Trash)
+        .with_section("Session"),
+        // ── Window ───────────────────────────────────────────
         Action::new(
             "acp_detach_window",
             "Detach to Window",
-            Some("Open AI chat in a separate floating window".to_string()),
+            Some("Open in a separate floating window".to_string()),
             ActionCategory::ScriptContext,
         )
         .with_icon(IconName::ArrowUp)
@@ -567,7 +573,7 @@ pub fn get_acp_chat_actions() -> Vec<Action> {
         Action::new(
             "acp_reattach_panel",
             "Re-attach to Panel",
-            Some("Move conversation back to the main Script Kit panel".to_string()),
+            Some("Move back to the main panel".to_string()),
             ActionCategory::ScriptContext,
         )
         .with_icon(IconName::ArrowDown)
@@ -575,12 +581,12 @@ pub fn get_acp_chat_actions() -> Vec<Action> {
         Action::new(
             "acp_close",
             "Close AI Chat",
-            Some("Close this chat and return to the main menu".to_string()),
+            None,
             ActionCategory::ScriptContext,
         )
         .with_shortcut("\u{2318}W")
         .with_icon(IconName::Close)
-        .with_section("Chat"),
+        .with_section("Window"),
     ]
 }
 
