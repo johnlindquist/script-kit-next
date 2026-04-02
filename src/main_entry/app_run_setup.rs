@@ -733,11 +733,13 @@ app.run(move |cx: &mut App| {
                                         // Keep the main panel visible on ScriptList, but do not
                                         // reclaim keyboard focus from the newly detached chat window.
                                         view.close_acp_chat_to_script_list(false, cx);
+                                        crate::ai::acp::chat_window::activate_chat_window(cx);
                                         tracing::info!(
                                             event = "hotkey_detach_acp_completed",
                                             restored_view = "ScriptList",
                                             focus_main_filter = false,
                                         );
+                                        tracing::info!(event = "hotkey_detach_acp_focus_restored_to_chat");
                                     }
                                     Err(e) => {
                                         tracing::warn!(%e, "hotkey_detach_acp_failed");
