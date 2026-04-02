@@ -508,6 +508,14 @@ pub fn get_acp_chat_actions() -> Vec<Action> {
         .with_icon(IconName::ChevronRight)
         .with_section("View"),
         Action::new(
+            "acp_detach_window",
+            "Detach to Window",
+            Some("Open AI chat in a separate floating window".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_icon(IconName::ArrowUp)
+        .with_section("Window"),
+        Action::new(
             "acp_close",
             "Close AI Chat",
             Some("Close this chat and return to the main menu".to_string()),
