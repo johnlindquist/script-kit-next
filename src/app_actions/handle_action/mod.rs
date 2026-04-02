@@ -817,6 +817,15 @@ impl ScriptListApp {
                     outcome
                 }
             }
+            "acp_clear_history" => {
+                // Delete history index and conversations directory
+                let kit = crate::setup::get_kit_path();
+                let _ = std::fs::remove_file(kit.join("acp-history.jsonl"));
+                let _ = std::fs::remove_dir_all(kit.join("acp-conversations"));
+                let mut o = DispatchOutcome::success();
+                o.user_message = Some("Conversation history cleared".to_string());
+                o
+            }
             "acp_scroll_to_top" => {
                 let entity = entity.clone();
                 entity.update(cx, |chat, cx| {
