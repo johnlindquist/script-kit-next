@@ -1178,6 +1178,31 @@ impl AcpChatView {
             return;
         }
 
+        // ── Cmd+P → show conversation history ──────────────────
+        if modifiers.platform && key.eq_ignore_ascii_case("p") {
+            let entries = crate::ai::acp::history::load_history();
+            if !entries.is_empty() {
+                let mut text = String::from("# Recent AI Conversations\n\n");
+                for (i, entry) in entries.iter().take(20).enumerate() {
+                    let date = entry
+                        .timestamp
+                        .split('T')
+                        .next()
+                        .unwrap_or(&entry.timestamp);
+                    text.push_str(&format!(
+                        "{}. **{}** — {} msgs, {}\n",
+                        i + 1,
+                        entry.first_message,
+                        entry.message_count,
+                        date,
+                    ));
+                }
+                cx.write_to_clipboard(gpui::ClipboardItem::new_string(text));
+            }
+            cx.stop_propagation();
+            return;
+        }
+
         // ── Slash command menu intercept ─────────────────────────
         if self.slash_menu_index.is_some() {
             if crate::ui_foundation::is_key_up(key) {

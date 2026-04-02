@@ -655,18 +655,25 @@ impl ScriptListApp {
                     outcome.user_message = Some("No conversation history yet".to_string());
                     outcome
                 } else {
-                    // Format as a text list and copy to clipboard for now
-                    // TODO: show as a picker when Cmd+P UI is implemented
-                    let mut text = String::from("Recent AI Conversations:\n\n");
+                    // Format as markdown and copy to clipboard
+                    let mut text = String::from("# Recent AI Conversations\n\n");
                     for (i, entry) in entries.iter().take(20).enumerate() {
+                        let date = entry
+                            .timestamp
+                            .split('T')
+                            .next()
+                            .unwrap_or(&entry.timestamp);
                         text.push_str(&format!(
-                            "{}. {} ({} messages) — {}\n",
+                            "{}. **{}** — {} messages, {}\n",
                             i + 1,
                             entry.first_message,
                             entry.message_count,
-                            entry.timestamp.split('T').next().unwrap_or(&entry.timestamp),
+                            date,
                         ));
                     }
+                    text.push_str(&format!(
+                        "\n_Conversations saved in ~/.scriptkit/acp-conversations/_"
+                    ));
                     cx.write_to_clipboard(gpui::ClipboardItem::new_string(text));
                     let mut outcome = DispatchOutcome::success();
                     outcome.user_message = Some(format!(
