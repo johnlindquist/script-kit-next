@@ -343,6 +343,8 @@ struct ScriptListApp {
     /// Cache key for preflight receipt (filter_text + selected_index + view).
     /// Cleared by `invalidate_main_window_preflight()`.
     main_window_preflight_cache_key: String,
+    /// Window orchestrator — pure state machine for window visibility and focus.
+    window_orchestrator: crate::window_orchestrator::OrchestratorState,
 }
 
 /// Result of alias matching - either a Script or Scriptlet

@@ -58,6 +58,7 @@ pub mod utils;
 pub mod warning_banner;
 pub mod window_manager;
 pub mod window_ops;
+pub mod window_orchestrator;
 pub mod window_resize;
 pub mod window_state;
 pub mod windows;

@@ -544,6 +544,7 @@ impl ScriptListApp {
             cached_provider_registry: None,
             cached_main_window_preflight: None,
             main_window_preflight_cache_key: String::from("\0_UNINITIALIZED_\0"),
+            window_orchestrator: crate::window_orchestrator::OrchestratorState::default(),
         };
 
         // Build initial alias/shortcut registries (conflicts logged, not shown via HUD on startup)

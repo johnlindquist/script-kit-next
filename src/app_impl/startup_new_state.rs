@@ -214,6 +214,8 @@
             mouse_cursor_hidden: false,
             // Cached provider registry - built in background, None until ready
             cached_provider_registry: None,
+            // Window orchestrator - pure state machine for visibility and focus
+            window_orchestrator: crate::window_orchestrator::OrchestratorState::default(),
         };
 
         // Build initial alias/shortcut registries (conflicts logged, not shown via HUD on startup)
