@@ -24,6 +24,21 @@ use super::{AcpApprovalOption, AcpApprovalPreview, AcpApprovalPreviewKind, AcpAp
 /// Click handler type for collapsible block toggle.
 type ToggleHandler = Box<dyn Fn(&gpui::ClickEvent, &mut Window, &mut App) + 'static>;
 
+/// Simple fuzzy match: all characters in `query` appear in `target` in order.
+fn fuzzy_match(query: &str, target: &str) -> bool {
+    let mut target_chars = target.chars();
+    for qc in query.chars() {
+        loop {
+            match target_chars.next() {
+                Some(tc) if tc == qc => break,
+                Some(_) => continue,
+                None => return false,
+            }
+        }
+    }
+    true
+}
+
 /// Parse the `description` field from YAML frontmatter in a SKILL.md file.
 fn parse_skill_description(content: &str) -> Option<String> {
     if !content.starts_with("---") {
@@ -1039,10 +1054,27 @@ impl AcpChatView {
             return commands;
         }
         let query_lower = query.to_lowercase();
-        commands
+
+        // Score and filter: exact prefix > contains > fuzzy character match
+        let mut scored: Vec<(i32, (String, String))> = commands
             .into_iter()
-            .filter(|(name, _)| name.to_lowercase().contains(&query_lower))
-            .collect()
+            .filter_map(|(name, desc)| {
+                let name_lower = name.to_lowercase();
+                let score = if name_lower.starts_with(&query_lower) {
+                    100 // Prefix match (best)
+                } else if name_lower.contains(&query_lower) {
+                    50 // Substring match
+                } else if fuzzy_match(&query_lower, &name_lower) {
+                    10 // Fuzzy match (characters in order)
+                } else {
+                    return None;
+                };
+                Some((score, (name, desc)))
+            })
+            .collect();
+
+        scored.sort_by(|a, b| b.0.cmp(&a.0));
+        scored.into_iter().map(|(_, cmd)| cmd).collect()
     }
 
     /// Update slash menu state after the input text changes.
@@ -1087,12 +1119,17 @@ impl AcpChatView {
                     .id(SharedString::from(format!("slash-cmd-{i}")))
                     .w_full()
                     .px(px(10.0))
-                    .py(px(4.0))
+                    .py(px(5.0))
                     .cursor_pointer()
                     .when(is_selected, |d| {
-                        d.bg(rgba((theme.colors.accent.selected << 8) | 0x1C))
+                        d.bg(rgba((theme.colors.accent.selected << 8) | 0x14))
+                            .border_l_2()
+                            .border_color(rgb(theme.colors.accent.selected))
                     })
-                    .hover(|d| d.bg(rgba((theme.colors.text.primary << 8) | 0x0C)))
+                    .when(!is_selected, |d| {
+                        d.border_l_2().border_color(gpui::transparent_black())
+                    })
+                    .hover(|d| d.bg(rgba((theme.colors.text.primary << 8) | 0x08)))
                     .on_click(cx.listener(move |this, _event, _window, cx| {
                         this.thread.update(cx, |thread, cx| {
                             thread.input.set_text(cmd_text.clone());
@@ -1104,14 +1141,14 @@ impl AcpChatView {
                     .child(
                         div()
                             .flex()
-                            .items_center()
-                            .gap(px(8.0))
+                            .flex_col()
+                            .gap(px(1.0))
                             .child(div().text_sm().child(format!("/{name}")))
                             .when(!desc.is_empty(), |d| {
                                 d.child(
                                     div()
                                         .text_xs()
-                                        .opacity(0.45)
+                                        .opacity(0.40)
                                         .overflow_x_hidden()
                                         .child(desc.clone()),
                                 )
