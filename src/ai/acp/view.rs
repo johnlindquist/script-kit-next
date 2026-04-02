@@ -83,8 +83,8 @@ pub(crate) struct AcpChatView {
     attach_menu_open: bool,
     /// Max messages to render (for performance). "Show earlier" loads more.
     render_message_limit: usize,
-    /// Cmd+F search: (query, highlighted_message_ids). None = search hidden.
-    search_state: Option<String>,
+    /// Cmd+F search query. None = search hidden.
+    pub(crate) search_state: Option<String>,
     /// Cached slash commands (name, description) discovered at creation.
     cached_slash_commands: Vec<(String, String)>,
 }
