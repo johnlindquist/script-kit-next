@@ -655,6 +655,37 @@ impl ScriptListApp {
                     DispatchOutcome::not_handled()
                 }
             }
+            "acp_retry_last" => {
+                let entity = entity.clone();
+                let last_user_msg = entity
+                    .read(cx)
+                    .thread
+                    .read(cx)
+                    .messages
+                    .iter()
+                    .rev()
+                    .find(|m| {
+                        matches!(
+                            m.role,
+                            crate::ai::acp::thread::AcpThreadMessageRole::User
+                        )
+                    })
+                    .map(|m| m.body.to_string());
+
+                if let Some(text) = last_user_msg {
+                    entity.update(cx, |chat, cx| {
+                        chat.thread.update(cx, |thread, cx| {
+                            thread.set_input(text, cx);
+                            let _ = thread.submit_input(cx);
+                        });
+                    });
+                    DispatchOutcome::success()
+                } else {
+                    let mut o = DispatchOutcome::success();
+                    o.user_message = Some("No previous message to retry".to_string());
+                    o
+                }
+            }
             "acp_save_as_script" => {
                 let entity = entity.clone();
                 let last_response = entity
