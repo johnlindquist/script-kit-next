@@ -849,33 +849,103 @@ impl ScriptListApp {
                     .map(|m| m.body.to_string());
 
                 if let Some(text) = last_response {
-                    if let Some(code) = extract_last_code_block(&text) {
-                        // Save to a temp script file
-                        let name = format!(
-                            "ai-run-{}",
-                            chrono::Utc::now().format("%H%M%S")
-                        );
-                        let path = crate::setup::get_kit_path()
-                            .join("kit")
-                            .join("main")
-                            .join("scripts")
-                            .join(format!("{name}.ts"));
+                    if let Some(block) = extract_last_code_block_with_lang(&text) {
+                        let lang = block
+                            .language
+                            .as_deref()
+                            .unwrap_or("typescript")
+                            .to_lowercase();
 
-                        // Ensure the code has the SDK import
-                        let full_code = if code.contains("@scriptkit/sdk") {
-                            code.clone()
-                        } else {
-                            format!("import \"@scriptkit/sdk\";\n\n{code}")
+                        // Write to temp file
+                        let ext = match lang.as_str() {
+                            "typescript" | "ts" => "ts",
+                            "javascript" | "js" => "js",
+                            "python" | "py" => "py",
+                            "bash" | "sh" | "zsh" | "shell" => "sh",
+                            _ => "ts",
                         };
+                        let name = format!("ai-run-{}.{ext}", chrono::Utc::now().format("%H%M%S"));
+                        let tmp_dir = std::env::temp_dir().join("scriptkit-runs");
+                        let _ = std::fs::create_dir_all(&tmp_dir);
+                        let path = tmp_dir.join(&name);
 
-                        if let Err(e) = std::fs::write(&path, &full_code) {
+                        if let Err(e) = std::fs::write(&path, &block.code) {
                             tracing::warn!(%e, "acp_run_last_code_write_failed");
-                        } else {
                             let mut o = DispatchOutcome::success();
-                            o.user_message =
-                                Some(format!("Saved and running {name}.ts"));
+                            o.user_message = Some(format!("Failed to write temp file: {e}"));
                             return o;
                         }
+
+                        // Pick the runner
+                        let path_str = path.to_string_lossy().to_string();
+                        let (cmd, args): (&str, Vec<String>) = match ext {
+                            "ts" => ("bun", vec!["run".into(), path_str.clone()]),
+                            "js" => ("node", vec![path_str.clone()]),
+                            "py" => ("python3", vec![path_str.clone()]),
+                            "sh" => ("bash", vec![path_str.clone()]),
+                            _ => ("bun", vec!["run".into(), path_str.clone()]),
+                        };
+                        let cmd = cmd.to_string();
+
+                        // Show "running..." message immediately
+                        let thread = entity.read(cx).thread.clone();
+                        thread.update(cx, |t, cx| {
+                            t.push_system_message(
+                                format!("Running `{name}`..."),
+                                cx,
+                            );
+                        });
+
+                        // Spawn async execution to avoid blocking the UI
+                        let thread_for_result = thread.clone();
+                        let path_clone = path.clone();
+                        cx.spawn(async move |_this, cx| {
+                            let result = cx
+                                .background_executor()
+                                .spawn(async move {
+                                    std::process::Command::new(&cmd)
+                                        .args(&args)
+                                        .current_dir(std::env::temp_dir())
+                                        .output()
+                                })
+                                .await;
+
+                            // Clean up temp file
+                            let _ = std::fs::remove_file(&path_clone);
+
+                            let message = match result {
+                                Ok(output) => {
+                                    let stdout =
+                                        String::from_utf8_lossy(&output.stdout).trim().to_string();
+                                    let stderr =
+                                        String::from_utf8_lossy(&output.stderr).trim().to_string();
+                                    if output.status.success() {
+                                        if stdout.is_empty() {
+                                            "Finished (no output)".to_string()
+                                        } else {
+                                            format!("```\n{stdout}\n```")
+                                        }
+                                    } else {
+                                        let out = if stderr.is_empty() {
+                                            stdout
+                                        } else {
+                                            stderr
+                                        };
+                                        format!("Error (exit {}):\n```\n{out}\n```", output.status)
+                                    }
+                                }
+                                Err(e) => format!("Failed to run: {e}"),
+                            };
+
+                            let _ = cx.update(|cx| {
+                                thread_for_result.update(cx, |t, cx| {
+                                    t.push_system_message(message, cx);
+                                });
+                            });
+                        })
+                        .detach();
+
+                        return DispatchOutcome::success();
                     }
                 }
                 let mut o = DispatchOutcome::success();
