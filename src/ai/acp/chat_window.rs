@@ -230,6 +230,11 @@ pub fn close_chat_window(cx: &mut App) {
 /// Actions not in this list (e.g. `acp_detach_window`, `acp_paste_to_frontmost`,
 /// code-execution actions) are filtered out because they either don't make sense
 /// when already detached or require main-panel context that isn't available.
+///
+/// Note: `acp_reattach_panel` has a dispatcher arm in `dispatch_detached_action`
+/// but is intentionally excluded here because it only closes the detached window
+/// without transferring the live thread back to the main panel. Exposing it
+/// would mislead users into thinking the conversation reattaches.
 const DETACHED_SUPPORTED_ACTIONS: &[&str] = &[
     "acp_copy_last_response",
     "acp_retry_last",
@@ -245,7 +250,7 @@ const DETACHED_SUPPORTED_ACTIONS: &[&str] = &[
 ];
 
 /// Activate (bring to front) the detached chat window.
-fn activate_chat_window(cx: &mut App) {
+pub(crate) fn activate_chat_window(cx: &mut App) {
     let handle = {
         let slot = CHAT_WINDOW.get_or_init(|| Mutex::new(None));
         slot.lock().ok().and_then(|g| g.as_ref().map(|s| s.handle))
@@ -308,6 +313,10 @@ pub fn toggle_detached_actions(cx: &mut App) {
 
     let callback: std::sync::Arc<dyn Fn(String) + Send + Sync> =
         std::sync::Arc::new(move |action_id: String| {
+            tracing::info!(
+                event = "detached_action_selected_from_popup",
+                action = %action_id,
+            );
             let _ = action_tx.try_send(action_id);
         });
 

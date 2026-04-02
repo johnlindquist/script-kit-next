@@ -348,7 +348,23 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
     ) {
         let source_view = self.current_view.clone();
-        let (ui_snapshot, invocation_receipt) = self.snapshot_tab_ai_ui(cx);
+        let snapshot_started_at = std::time::Instant::now();
+        let (ui_snapshot, invocation_receipt) =
+            if matches!(source_view, AppView::ScriptList) {
+                self.snapshot_tab_ai_ui_fast_for_script_list()
+            } else {
+                self.snapshot_tab_ai_ui(cx)
+            };
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "acp_open_stage",
+            stage = "snapshot_tab_ai_ui",
+            stage_ms = snapshot_started_at.elapsed().as_millis() as u64,
+            source_view = match &source_view {
+                AppView::ScriptList => "ScriptList",
+                _ => "Other",
+            },
+        );
         let entry_intent = entry_intent
             .map(|value| value.trim().to_string())
             .filter(|value| !value.is_empty());
@@ -2422,6 +2438,64 @@ impl ScriptListApp {
 
         self.open_tab_ai_chat_with_entry_intent(Some(intent), cx);
         true
+    }
+
+    /// Fast-path UI snapshot for `AppView::ScriptList`.
+    ///
+    /// Skips the expensive `collect_visible_elements()` tree walk because the
+    /// downstream target resolution in `resolve_tab_ai_surface_targets_for_view`
+    /// already uses `cached_grouped_items` / `cached_grouped_flat_results`.
+    fn snapshot_tab_ai_ui_fast_for_script_list(
+        &self,
+    ) -> (crate::ai::TabAiUiSnapshot, crate::ai::TabAiInvocationReceipt) {
+        let prompt_type = "ScriptList".to_string();
+        let input_text = if self.filter_text.is_empty() {
+            None
+        } else {
+            Some(self.filter_text.clone())
+        };
+
+        let focused_semantic_id = self
+            .cached_grouped_items
+            .get(self.selected_index)
+            .and_then(|item| match item {
+                GroupedListItem::Item(result_idx) => self
+                    .cached_grouped_flat_results
+                    .get(*result_idx)
+                    .map(|result| {
+                        Self::tab_ai_target_from_search_result(self.selected_index, result)
+                            .semantic_id
+                    }),
+                _ => None,
+            });
+        let selected_semantic_id = focused_semantic_id.clone();
+
+        let snapshot = crate::ai::TabAiUiSnapshot {
+            prompt_type: prompt_type.clone(),
+            input_text: input_text.clone(),
+            focused_semantic_id: focused_semantic_id.clone(),
+            selected_semantic_id: selected_semantic_id.clone(),
+            visible_elements: Vec::new(),
+        };
+
+        let receipt = crate::ai::TabAiInvocationReceipt::from_snapshot(
+            &prompt_type,
+            &input_text,
+            &focused_semantic_id,
+            &selected_semantic_id,
+            0,
+            &[],
+        );
+
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "tab_ai_snapshot_fast_script_list",
+            has_input_text = snapshot.input_text.is_some(),
+            has_focus_target = snapshot.focused_semantic_id.is_some(),
+            selected_index = self.selected_index,
+        );
+
+        (snapshot, receipt)
     }
 
     /// Capture a snapshot of the current UI state for context assembly.

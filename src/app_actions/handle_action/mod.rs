@@ -1095,6 +1095,8 @@ impl ScriptListApp {
                     DispatchOutcome::success()
                 } else {
                     self.close_acp_chat_to_script_list(false, cx);
+                    crate::ai::acp::chat_window::activate_chat_window(cx);
+                    tracing::info!(event = "actions_detach_acp_focus_restored_to_chat");
                     let mut o = DispatchOutcome::success();
                     o.user_message = Some("Chat detached to window".to_string());
                     o
