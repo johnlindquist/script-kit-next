@@ -941,6 +941,7 @@ impl AcpChatView {
         message_count: usize,
         context_state: AcpContextBootstrapState,
         usage_cost: Option<f64>,
+        usage_tokens: Option<(u64, u64)>,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let theme = theme::get_cached_theme();
@@ -1027,6 +1028,47 @@ impl AcpChatView {
                             Some(words) if words > 5 => format!("{secs}s \u{00b7} {words}w"),
                             _ => format!("{secs}s"),
                         }))
+                    })
+                    // Token usage bar (shown when context window data available)
+                    .when_some(usage_tokens, |d, (used, size)| {
+                        let pct = if size > 0 {
+                            (used as f64 / size as f64).min(1.0)
+                        } else {
+                            0.0
+                        };
+                        let bar_color = if pct > 0.85 {
+                            rgba(0xEF444480) // red when nearly full
+                        } else if pct > 0.65 {
+                            rgba(0xFBBF2480) // gold warning
+                        } else {
+                            rgba((theme.colors.text.primary << 8) | 0x20)
+                        };
+                        d.child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap(px(3.0))
+                                .child(
+                                    div()
+                                        .w(px(32.0))
+                                        .h(px(3.0))
+                                        .rounded(px(1.5))
+                                        .bg(rgba((theme.colors.text.primary << 8) | 0x08))
+                                        .child(
+                                            div()
+                                                .h_full()
+                                                .w(px(32.0 * pct as f32))
+                                                .rounded(px(1.5))
+                                                .bg(bar_color),
+                                        ),
+                                )
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .opacity(0.30)
+                                        .child(format!("{}%", (pct * 100.0) as u32)),
+                                ),
+                        )
                     })
                     // Cost indicator (shown when usage data available)
                     .when_some(usage_cost.filter(|&c| c > 0.0), |d, cost| {
@@ -1592,6 +1634,7 @@ impl Render for AcpChatView {
             None
         };
         let usage_cost = thread.usage_cost_usd;
+        let usage_tokens = thread.usage_tokens;
         let colors = Self::prompt_colors();
         let theme = theme::get_cached_theme();
 
@@ -2012,6 +2055,7 @@ impl Render for AcpChatView {
                 messages.len(),
                 context_state,
                 usage_cost,
+                usage_tokens,
                 cx,
             ))
             // ── Permission overlay ────────────────────────────
