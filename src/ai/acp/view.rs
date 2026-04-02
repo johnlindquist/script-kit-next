@@ -1664,48 +1664,22 @@ impl Render for AcpChatView {
                                                 )),
                                         )
                                 }))
-                                // Preview of selected conversation
-                                .when_some(
-                                    entries.get(idx).and_then(|e| {
-                                        super::history::load_conversation(&e.session_id)
-                                    }),
-                                    |d, conv| {
-                                        let preview_lines: Vec<String> = conv
-                                            .messages
-                                            .iter()
-                                            .take(4)
-                                            .map(|m| {
-                                                let prefix = match m.role.as_str() {
-                                                    "User" => "\u{25B6} ",
-                                                    "Assistant" => "\u{25C0} ",
-                                                    _ => "  ",
-                                                };
-                                                let text: String =
-                                                    m.body.chars().take(60).collect();
-                                                format!("{prefix}{text}")
-                                            })
-                                            .collect();
-                                        d.child(
-                                            div()
-                                                .w_full()
-                                                .px(px(10.0))
-                                                .pt(px(6.0))
-                                                .border_t_1()
-                                                .border_color(rgba(
-                                                    (theme.colors.ui.border << 8) | 0x20,
-                                                ))
-                                                .flex()
-                                                .flex_col()
-                                                .gap(px(2.0))
-                                                .children(preview_lines.into_iter().map(|line| {
-                                                    div()
-                                                        .text_xs()
-                                                        .opacity(0.40)
-                                                        .overflow_x_hidden()
-                                                        .child(line)
-                                                })),
-                                        )
-                                    },
+                                // Keyboard hint at bottom
+                                .child(
+                                    div()
+                                        .w_full()
+                                        .px(px(10.0))
+                                        .pt(px(6.0))
+                                        .pb(px(4.0))
+                                        .border_t_1()
+                                        .border_color(rgba(
+                                            (theme.colors.ui.border << 8) | 0x15,
+                                        ))
+                                        .text_xs()
+                                        .opacity(0.35)
+                                        .child(
+                                            "\u{2191}\u{2193} navigate \u{00b7} Enter load \u{00b7} Esc close \u{00b7} type to search",
+                                        ),
                                 ),
                         ),
                     )
