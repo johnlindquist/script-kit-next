@@ -476,6 +476,14 @@ pub fn get_acp_chat_actions() -> Vec<Action> {
         .with_icon(IconName::FileCode)
         .with_section("Chat"),
         Action::new(
+            "acp_open_in_editor",
+            "Open in Editor",
+            Some("Open ~/.scriptkit in the configured editor".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_icon(IconName::Code)
+        .with_section("Chat"),
+        Action::new(
             "acp_scroll_to_top",
             "Scroll to Top",
             Some("Jump to the first message in the conversation".to_string()),
