@@ -579,6 +579,18 @@ impl ScriptListApp {
                     DispatchOutcome::not_handled()
                 }
             }
+            "acp_new_conversation" => {
+                // Clear messages but keep the session alive
+                let entity = entity.clone();
+                entity.update(cx, |chat, cx| {
+                    chat.thread.update(cx, |thread, cx| {
+                        thread.clear_messages(cx);
+                    });
+                    chat.collapsed_ids.clear();
+                    cx.notify();
+                });
+                DispatchOutcome::success()
+            }
             "acp_clear_conversation" => {
                 // Close and reopen the ACP chat for a fresh session
                 self.close_tab_ai_harness_terminal(cx);

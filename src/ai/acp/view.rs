@@ -1167,6 +1167,17 @@ impl AcpChatView {
             return;
         }
 
+        // ── Cmd+N → new conversation (clear messages, keep session) ──
+        if modifiers.platform && key.eq_ignore_ascii_case("n") {
+            self.thread.update(cx, |thread, cx| {
+                thread.clear_messages(cx);
+            });
+            self.collapsed_ids.clear();
+            cx.notify();
+            cx.stop_propagation();
+            return;
+        }
+
         // ── Slash command menu intercept ─────────────────────────
         if self.slash_menu_index.is_some() {
             if crate::ui_foundation::is_key_up(key) {

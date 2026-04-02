@@ -811,6 +811,15 @@ impl AcpThread {
     }
 
     /// Cancel the active streaming turn. Drops the pump task and resets to Idle.
+    /// Clear all messages for a fresh conversation within the same session.
+    pub(crate) fn clear_messages(&mut self, cx: &mut Context<Self>) {
+        self.messages.clear();
+        self.active_plan_entries.clear();
+        self.active_tool_calls.clear();
+        self.tool_call_lookup.clear();
+        cx.notify();
+    }
+
     pub(crate) fn cancel_streaming(&mut self, cx: &mut Context<Self>) {
         if !matches!(self.status, AcpThreadStatus::Streaming) {
             return;
