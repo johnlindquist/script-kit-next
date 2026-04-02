@@ -882,6 +882,7 @@ impl AcpChatView {
         mode_label: Option<&str>,
         display_name: &str,
         elapsed_secs: Option<u64>,
+        message_count: usize,
         context_state: AcpContextBootstrapState,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
@@ -950,6 +951,15 @@ impl AcpChatView {
                                 .opacity(0.55)
                                 .child(mode)
                                 .child("\u{25BE}"),
+                        )
+                    })
+                    // Message count (when > 0)
+                    .when(message_count > 0, |d| {
+                        d.child(
+                            div()
+                                .text_xs()
+                                .opacity(0.35)
+                                .child(format!("{message_count} msgs")),
                         )
                     })
                     // Elapsed time (shown after 2s of streaming)
@@ -1535,6 +1545,7 @@ impl Render for AcpChatView {
                 mode_label.as_deref(),
                 &display_name,
                 elapsed_secs,
+                messages.len(),
                 context_state,
                 cx,
             ))
