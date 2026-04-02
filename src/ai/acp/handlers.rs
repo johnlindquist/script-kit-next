@@ -370,10 +370,11 @@ impl ScriptKitAcpClient {
                 break 'check true;
             }
 
-            // 3. Read-only shell commands
+            // 3. Safe shell commands (read-only + common safe operations)
             if let Some(raw) = raw_input {
                 let cmd_str = raw.to_string();
-                let read_only_prefixes = [
+                let safe_prefixes = [
+                    // Read-only commands
                     "\"ls ",
                     "\"ls\"",
                     "\"cat ",
@@ -390,8 +391,24 @@ impl ScriptKitAcpClient {
                     "\"pwd\"",
                     "\"env\"",
                     "\"printenv",
+                    // Safe creation commands
+                    "\"mkdir ",
+                    "\"touch ",
+                    "\"date\"",
+                    "\"uname",
+                    // Development tools (safe in context)
+                    "\"node ",
+                    "\"bun ",
+                    "\"npx ",
+                    "\"npm ",
+                    // Git read-only
+                    "\"git status",
+                    "\"git log",
+                    "\"git diff",
+                    "\"git branch",
+                    "\"git show",
                 ];
-                for prefix in &read_only_prefixes {
+                for prefix in &safe_prefixes {
                     if cmd_str.contains(prefix) {
                         break 'check true;
                     }
