@@ -36,6 +36,12 @@ pub enum EmbeddedIcon {
     // Media
     PlayFilled,
     PlayOutlined,
+    // Keyboard glyphs (from Zed)
+    Return,
+    Tab,
+    Command,
+    Shift,
+    Escape,
 }
 
 impl EmbeddedIcon {
@@ -67,6 +73,11 @@ impl EmbeddedIcon {
             Self::Sidebar,
             Self::PlayFilled,
             Self::PlayOutlined,
+            Self::Return,
+            Self::Tab,
+            Self::Command,
+            Self::Shift,
+            Self::Escape,
         ]
     }
 
@@ -99,6 +110,11 @@ impl EmbeddedIcon {
             "sidebar" | "panel" => Some(Self::Sidebar),
             "playfilled" | "play" => Some(Self::PlayFilled),
             "playoutlined" => Some(Self::PlayOutlined),
+            "return" | "enter" => Some(Self::Return),
+            "tab" => Some(Self::Tab),
+            "command" | "cmd" => Some(Self::Command),
+            "shift" => Some(Self::Shift),
+            "escape" | "esc" => Some(Self::Escape),
             _ => None,
         }
     }
@@ -131,6 +147,11 @@ impl EmbeddedIcon {
             Self::Sidebar => "icons/sidebar.svg",
             Self::PlayFilled => "icons/play_filled.svg",
             Self::PlayOutlined => "icons/play_outlined.svg",
+            Self::Return => "icons/return.svg",
+            Self::Tab => "icons/tab.svg",
+            Self::Command => "icons/command.svg",
+            Self::Shift => "icons/shift.svg",
+            Self::Escape => "icons/escape.svg",
         }
     }
 }
