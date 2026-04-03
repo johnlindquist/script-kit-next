@@ -391,7 +391,7 @@ impl ScriptListApp {
     /// Route a plain Tab press from the current non-AI source surface into ACP.
     ///
     /// Returns `true` when the Tab press was consumed and ACP launch began.
-    fn try_route_plain_tab_to_acp_context_capture(
+    pub(crate) fn try_route_plain_tab_to_acp_context_capture(
         &mut self,
         cx: &mut Context<Self>,
     ) -> bool {
