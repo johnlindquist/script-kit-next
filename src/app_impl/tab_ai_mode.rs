@@ -337,6 +337,44 @@ impl ScriptListApp {
         .detach();
     }
 
+    /// Build a focused-target `AiContextPart` from the current view's
+    /// resolved focus, if any. Returns `None` when the active surface has
+    /// no resolvable focused item (e.g. empty list, generic prompt).
+    fn build_tab_ai_focused_part_for_view(
+        &self,
+        source_view: &AppView,
+        ui_snapshot: &crate::ai::TabAiUiSnapshot,
+    ) -> Option<crate::ai::message_parts::AiContextPart> {
+        let (focused_target, _visible_targets) =
+            self.resolve_tab_ai_surface_targets_for_view(source_view, ui_snapshot);
+        focused_target.map(|target| {
+            let label = match target.kind.as_str() {
+                "file" => format!("File: {}", target.label),
+                "directory" => format!("Folder: {}", target.label),
+                "clipboard_entry" => format!("Clipboard: {}", target.label),
+                "script" | "scriptlet" | "builtin" => format!("Command: {}", target.label),
+                "window" => format!("Window: {}", target.label),
+                "app" => format!("App: {}", target.label),
+                "process" => format!("Process: {}", target.label),
+                _ => target.label.clone(),
+            };
+            crate::ai::message_parts::AiContextPart::FocusedTarget { target, label }
+        })
+    }
+
+    /// Returns `true` when the Tab press should route to the Ask Anything
+    /// fallback (ambient desktop context) instead of the focused-target chip
+    /// path. This happens when no focused item is resolvable from the active
+    /// surface.
+    fn should_use_tab_ai_ask_anything_fallback(
+        &self,
+        source_view: &AppView,
+        ui_snapshot: &crate::ai::TabAiUiSnapshot,
+    ) -> bool {
+        self.build_tab_ai_focused_part_for_view(source_view, ui_snapshot)
+            .is_none()
+    }
+
     /// Deferred-capture entry point: build a launch request from pre-switch
     /// state, start background capture, then immediately open the harness.
     ///
@@ -401,8 +439,48 @@ impl ScriptListApp {
             capture_generation: self.tab_ai_harness_capture_generation,
         };
 
-        let capture_rx = self.spawn_tab_ai_pre_switch_capture(&request);
-        self.open_tab_ai_acp_view_from_request(request, capture_rx, cx);
+        // Resolve whether we have a focused target or need the Ask Anything
+        // fallback *before* spawning background capture.
+        let use_ask_anything_fallback = self.should_use_tab_ai_ask_anything_fallback(
+            &request.source_view,
+            &request.ui_snapshot,
+        );
+        let focused_part = if !use_ask_anything_fallback {
+            self.build_tab_ai_focused_part_for_view(
+                &request.source_view,
+                &request.ui_snapshot,
+            )
+        } else {
+            None
+        };
+
+        // Only run expensive ambient capture for the Ask Anything fallback path.
+        // Focused-target Tab flows skip desktop snapshots and screenshots.
+        let capture_rx = if use_ask_anything_fallback {
+            tracing::info!(
+                target: "script_kit::tab_ai",
+                event = "tab_ai_ask_anything_fallback",
+                source_view = match &request.source_view {
+                    AppView::ScriptList => "ScriptList",
+                    _ => "Other",
+                },
+            );
+            self.spawn_tab_ai_pre_switch_capture(&request)
+        } else {
+            tracing::info!(
+                target: "script_kit::tab_ai",
+                event = "tab_ai_focus_chip_staged",
+                source_view = match &request.source_view {
+                    AppView::ScriptList => "ScriptList",
+                    _ => "Other",
+                },
+            );
+            // No ambient capture needed — return a dummy closed channel.
+            let (_tx, rx) = async_channel::bounded::<Result<TabAiDeferredCaptureArtifacts, String>>(1);
+            rx
+        };
+
+        self.open_tab_ai_acp_view_from_request_impl(request, capture_rx, focused_part, use_ask_anything_fallback, cx);
     }
 
     /// Start background capture immediately on a dedicated OS thread.
@@ -501,15 +579,22 @@ impl ScriptListApp {
             .map(|s| s.to_string())
     }
 
-    /// for the deferred capture result and stages context on the `AcpThread`.
+    /// Open the ACP chat view and stage context.
+    ///
+    /// When `focused_part` is `Some`, stages it as a visible chip on the
+    /// composer. When `use_ask_anything_fallback` is `true`, the deferred
+    /// capture result is consumed as ambient context. Otherwise, deferred
+    /// capture is skipped and only the focused chip is staged.
     ///
     /// **Contract:** `AppView::AcpChatView` and `cx.notify()` happen
     /// *before* any deferred-capture await. The user sees the chat surface
     /// within one frame.
-    fn open_tab_ai_acp_view_from_request(
+    fn open_tab_ai_acp_view_from_request_impl(
         &mut self,
         request: TabAiLaunchRequest,
         capture_rx: TabAiDeferredCaptureRx,
+        focused_part: Option<crate::ai::message_parts::AiContextPart>,
+        use_ask_anything_fallback: bool,
         cx: &mut Context<Self>,
     ) {
         let open_started_at = std::time::Instant::now();
@@ -608,11 +693,28 @@ impl ScriptListApp {
             crate::ai::acp::AcpThread::new(
                 connection,
                 permission_rx,
-                crate::ai::acp::AcpThreadInit {
-                    ui_thread_id: uuid::Uuid::new_v4().to_string(),
-                    cwd,
-                    initial_input: effective_intent.clone(),
-                    display_name: agent_display_name.into(),
+                {
+                    let agent_config = crate::ai::acp::claude_code_agent_config()
+                        .unwrap_or_else(|_| crate::ai::acp::AcpAgentConfig {
+                            id: "claude-code".into(),
+                            display_name: "Claude Code".into(),
+                            command: "npx".into(),
+                            args: vec![],
+                            env: std::collections::HashMap::new(),
+                            models: vec![],
+                        });
+                    let default_model_id = agent_config
+                        .models
+                        .first()
+                        .map(|m| m.id.clone());
+                    crate::ai::acp::AcpThreadInit {
+                        ui_thread_id: uuid::Uuid::new_v4().to_string(),
+                        cwd,
+                        initial_input: effective_intent.clone(),
+                        display_name: agent_display_name.into(),
+                        available_models: agent_config.models,
+                        selected_model_id: default_model_id,
+                    }
                 },
                 cx,
             )
@@ -669,6 +771,40 @@ impl ScriptListApp {
             elapsed_ms = open_started_at.elapsed().as_millis() as u64,
         );
 
+        // --- Stage focused-target chip or Ask Anything fallback context ---
+        if let Some(part) = focused_part.clone() {
+            let _ = thread.update(cx, |thread, cx| {
+                thread.add_context_part(part, cx);
+            });
+            tracing::info!(
+                target: "script_kit::tab_ai",
+                event = "acp_focused_chip_staged_on_thread",
+                source_view = match &source_view {
+                    AppView::ScriptList => "ScriptList",
+                    _ => "Other",
+                },
+            );
+        } else if use_ask_anything_fallback {
+            // Stage a minimal desktop context resource as the Ask Anything chip.
+            let _ = thread.update(cx, |thread, cx| {
+                thread.add_context_part(
+                    crate::ai::message_parts::AiContextPart::ResourceUri {
+                        uri: "kit://context?profile=minimal".to_string(),
+                        label: "Ask Anything".to_string(),
+                    },
+                    cx,
+                );
+            });
+            tracing::info!(
+                target: "script_kit::tab_ai",
+                event = "acp_ask_anything_chip_staged_on_thread",
+                source_view = match &source_view {
+                    AppView::ScriptList => "ScriptList",
+                    _ => "Other",
+                },
+            );
+        }
+
         // Defer harness termination to after first paint so the user sees the
         // chat surface before the synchronous teardown blocks the main thread.
         if had_harness_session {
@@ -698,7 +834,25 @@ impl ScriptListApp {
             .detach();
         }
 
-        // --- Spawn deferred context injection task ---
+        // --- Focused-target path: mark bootstrap ready immediately ---
+        // No deferred capture needed; the chip is already staged.
+        if !use_ask_anything_fallback {
+            let _ = thread.update(cx, |thread, cx| {
+                thread.mark_context_bootstrap_ready(cx);
+                // Auto-submit if effective intent was resolved (Shift+Tab path)
+                if auto_submit {
+                    if let Err(e) = thread.submit_input(cx) {
+                        tracing::warn!(
+                            event = "tab_ai_acp_focused_auto_submit_failed",
+                            error = %e,
+                        );
+                    }
+                }
+            });
+            return;
+        }
+
+        // --- Ask Anything fallback: spawn deferred context injection task ---
         let app_weak = cx.entity().downgrade();
         let thread_weak = thread.downgrade();
         let capture_gen = request.capture_generation;

@@ -321,6 +321,82 @@ pub fn quick_capture(cx: &mut App) -> Result<()> {
     Ok(())
 }
 
+/// Save content as a new note, opening the Notes window if needed.
+///
+/// Creates a note pre-filled with the given content and selects it in the
+/// Notes window. If the window is already open, adds the note there;
+/// otherwise opens the window first.
+///
+/// Used by "Save as Note" from the AI chat.
+pub fn save_note_with_content(cx: &mut App, content: String) -> Result<()> {
+    use crate::logging;
+
+    let existing_handle = {
+        let slot = NOTES_WINDOW.get_or_init(|| std::sync::Mutex::new(None));
+        slot.lock().ok().and_then(|g| *g)
+    };
+
+    let existing_app = {
+        let slot = NOTES_APP_ENTITY.get_or_init(|| std::sync::Mutex::new(None));
+        slot.lock().ok().and_then(|g| g.clone())
+    };
+
+    // If window exists, create note in the existing window
+    if let (Some(handle), Some(notes_app)) = (existing_handle, existing_app.clone()) {
+        let result = handle.update(cx, |_root, window, cx| {
+            notes_app.update(cx, |app, cx| app.create_note_with_content(content.clone(), window, cx))
+        });
+
+        if let Ok(Ok(())) = result {
+            logging::log(
+                "PANEL",
+                "save_note_with_content: created in existing window",
+            );
+            return Ok(());
+        }
+
+        if let Ok(Err(error)) = result {
+            return Err(error);
+        }
+    }
+
+    // Window doesn't exist — open it, then create the note
+    open_notes_window(cx)?;
+
+    let handle = {
+        let slot = NOTES_WINDOW.get_or_init(|| std::sync::Mutex::new(None));
+        slot.lock().ok().and_then(|g| *g)
+    };
+
+    let notes_app = {
+        let slot = NOTES_APP_ENTITY.get_or_init(|| std::sync::Mutex::new(None));
+        slot.lock().ok().and_then(|g| g.clone())
+    };
+
+    if let (Some(handle), Some(notes_app)) = (handle, notes_app) {
+        let result = handle.update(cx, |_root, window, cx| {
+            notes_app.update(cx, |app, cx| app.create_note_with_content(content, window, cx))
+        });
+
+        if let Ok(Ok(())) = result {
+            logging::log("PANEL", "save_note_with_content: created in new window");
+            return Ok(());
+        }
+
+        if let Ok(Err(error)) = result {
+            return Err(error);
+        }
+
+        return Err(anyhow::anyhow!(
+            "Notes window opened but note creation could not be completed"
+        ));
+    }
+
+    Err(anyhow::anyhow!(
+        "Notes window is unavailable for creating a note"
+    ))
+}
+
 /// Inject dictated text into the notes editor at the current cursor position.
 ///
 /// If the notes window is open, inserts the text at the cursor. Otherwise

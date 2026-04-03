@@ -394,9 +394,9 @@ pub(super) const SHORTCUTS_PANEL_MAX_H_FULL: Pixels = px(520.);
 // -- Animation constants --
 pub(super) const ANIM_CYCLE_MS: u64 = 1200;
 
-// -- Streaming cursor opacity range: base + amplitude * sin(t) --
-pub(super) const CURSOR_OPACITY_BASE: f32 = 0.7;
-pub(super) const CURSOR_OPACITY_AMP: f32 = 0.3;
+// -- Streaming spinner (braille-dot cycle, Zed-style) --
+pub(super) const SPINNER_FRAMES: &[&str] = &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+pub(super) const SPINNER_CYCLE_MS: u64 = 1000;
 
 // -- Dot separator --
 pub(super) const DOT_SIZE: Pixels = px(3.);

@@ -4560,10 +4560,10 @@ mod tab_ai_source_type_tests {
     #[test]
     fn deferred_capture_is_started_before_harness_open_call() {
         let spawn_idx = TAB_AI_MODE_SRC
-            .find("let capture_rx = self.spawn_tab_ai_pre_switch_capture(&request);")
+            .find("self.spawn_tab_ai_pre_switch_capture(&request)")
             .expect("capture spawn");
         let open_idx = TAB_AI_MODE_SRC
-            .find("self.open_tab_ai_acp_view_from_request(request, capture_rx, cx);")
+            .find("self.open_tab_ai_acp_view_from_request_impl(")
             .expect("harness open");
         assert!(
             spawn_idx < open_idx,

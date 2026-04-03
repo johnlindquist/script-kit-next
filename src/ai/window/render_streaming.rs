@@ -44,14 +44,6 @@ impl AiApp {
         let colors = theme::PromptColors::from_theme(&crate::theme::get_cached_theme());
         let is_mini = self.window_mode.is_mini();
         let mini_style = mini_ai_chat_style();
-        // No background for assistant streaming content (transparent, matching message style)
-        let show_streaming_cursor = ai_should_render_streaming_cursor(
-            self.is_streaming,
-            self.streaming_chat_id,
-            self.selected_chat_id,
-            &self.streaming_content,
-        );
-
         let elapsed_label: SharedString = self
             .streaming_started_at
             .map(|started| {
@@ -155,39 +147,13 @@ impl AiApp {
                 })
                 .into_any_element()
         } else {
-            // Render markdown separately from cursor to avoid invalidating
-            // the markdown cache on every frame during streaming.
-            // Keep cursor absolutely positioned so it does not create an extra line.
+            // Render markdown content only — no inline cursor or spinner.
+            // The streaming indicator lives in the footer toolbar as a pulsing dot.
             div()
-                .relative()
                 .w_full()
                 .min_w_0()
                 .overflow_x_hidden()
                 .child(render_markdown(&self.streaming_content, &colors))
-                .when(show_streaming_cursor, |d| {
-                    let accent = cx.theme().accent;
-                    let pulse_duration = Duration::from_millis(ANIM_CYCLE_MS);
-                    d.child(
-                        div()
-                            .absolute()
-                            .right(S2)
-                            .bottom(S2)
-                            .text_sm()
-                            .text_color(accent)
-                            .child("▌")
-                            .with_animation(
-                                "streaming-cursor-pulse",
-                                Animation::new(pulse_duration).repeat(),
-                                move |el, delta| {
-                                    // Sine wave: delta 0..1 maps to 0..2π
-                                    let sine = (delta * std::f32::consts::PI * 2.0).sin();
-                                    // Map sine (-1..1) to opacity (0.4..1.0)
-                                    let opacity = CURSOR_OPACITY_BASE + CURSOR_OPACITY_AMP * sine;
-                                    el.text_color(accent.opacity(opacity))
-                                },
-                            ),
-                    )
-                })
                 .into_any_element()
         };
 

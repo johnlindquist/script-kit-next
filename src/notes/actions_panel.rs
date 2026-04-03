@@ -83,6 +83,8 @@ pub enum NotesAction {
     PermanentlyDeleteNote,
     /// Enable auto-sizing (window grows/shrinks with content)
     EnableAutoSizing,
+    /// Send the current note content to AI chat
+    SendToAi,
     /// Panel was cancelled (Escape pressed)
     Cancel,
 }
@@ -124,6 +126,7 @@ impl NotesAction {
             NotesAction::RestoreNote => "Restore Note",
             NotesAction::PermanentlyDeleteNote => "Delete Permanently",
             NotesAction::EnableAutoSizing => "Enable Auto-Sizing",
+            NotesAction::SendToAi => "Send to AI",
             NotesAction::Cancel => "Cancel",
         }
     }
@@ -146,6 +149,7 @@ impl NotesAction {
             NotesAction::RestoreNote => "Z",
             NotesAction::PermanentlyDeleteNote => "",
             NotesAction::EnableAutoSizing => "A",
+            NotesAction::SendToAi => "A",
             NotesAction::Cancel => "Esc",
         }
     }
@@ -185,6 +189,10 @@ impl NotesAction {
             NotesAction::RestoreNote => &CMD_Z,
             NotesAction::PermanentlyDeleteNote => &EMPTY,
             NotesAction::EnableAutoSizing => &CMD_A,
+            NotesAction::SendToAi => {
+                const SHIFT_CMD_A: [&str; 3] = ["⇧", "⌘", "A"];
+                &SHIFT_CMD_A
+            }
             NotesAction::Cancel => &ESC,
         }
     }
@@ -216,6 +224,7 @@ impl NotesAction {
             NotesAction::RestoreNote => IconName::Refresh,
             NotesAction::PermanentlyDeleteNote => IconName::Trash,
             NotesAction::EnableAutoSizing => IconName::ArrowRight,
+            NotesAction::SendToAi => IconName::BoltFilled,
             NotesAction::Cancel => IconName::Close,
         }
     }
@@ -238,6 +247,7 @@ impl NotesAction {
             NotesAction::RestoreNote => "restore_note",
             NotesAction::PermanentlyDeleteNote => "permanently_delete_note",
             NotesAction::EnableAutoSizing => "enable_auto_sizing",
+            NotesAction::SendToAi => "send_to_ai",
             NotesAction::Cancel => "cancel",
         }
     }
@@ -269,6 +279,7 @@ impl NotesActionSection {
             NotesAction::DeleteNote
             | NotesAction::RestoreNote
             | NotesAction::PermanentlyDeleteNote => NotesActionSection::Actions,
+            NotesAction::SendToAi => NotesActionSection::Actions,
             NotesAction::EnableAutoSizing | NotesAction::Cancel => NotesActionSection::Utility,
         }
     }

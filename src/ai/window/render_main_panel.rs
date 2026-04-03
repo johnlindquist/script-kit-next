@@ -303,9 +303,7 @@ impl AiApp {
                                     .size(MINI_BTN_SIZE)
                                     .rounded_full()
                                     .text_color(
-                                        cx.theme()
-                                            .muted_foreground
-                                            .opacity(OPACITY_DISABLED),
+                                        cx.theme().muted_foreground.opacity(OPACITY_DISABLED),
                                     )
                                     .child(
                                         svg()
@@ -317,6 +315,10 @@ impl AiApp {
                     )
                     // Shortcut hint strip — visible until first successful send
                     .when(!self.mini_composer_hint_dismissed, |d| {
+                        let hint_color = cx
+                            .theme()
+                            .muted_foreground
+                            .opacity(mini_style.composer_hint_opacity);
                         d.child(
                             div()
                                 .id("ai-mini-composer-hints")
@@ -325,15 +327,10 @@ impl AiApp {
                                 .justify_center()
                                 .w_full()
                                 .pt(S1)
-                                .text_xs()
-                                .text_color(
-                                    cx.theme()
-                                        .muted_foreground
-                                        .opacity(mini_style.composer_hint_opacity),
-                                )
-                                .child(
-                                    "\u{21b5} Send \u{00b7} \u{2318}\u{21e7}\u{21b5} Send + Context \u{00b7} Esc Dismiss",
-                                ),
+                                .child(crate::components::render_hint_icons_hsla(
+                                    &["↵ Send", "⌘⇧↵ Send + Context", "Esc Dismiss"],
+                                    hint_color,
+                                )),
                         )
                     }),
             )

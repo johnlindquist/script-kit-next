@@ -1,7 +1,7 @@
 use crate::ai::message_parts::AiContextPart;
 use std::path::Path;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub(crate) struct ParsedContextMentions {
     pub(crate) cleaned_content: String,
     pub(crate) parts: Vec<AiContextPart>,

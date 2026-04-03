@@ -5,11 +5,11 @@ use gpui::{
     SharedString, Styled, Window,
 };
 
-use crate::ui_foundation::HexColorExt;
 use crate::ui::chrome::{
     alpha_from_opacity, HINT_STRIP_HEIGHT, HINT_STRIP_PADDING_X, HINT_STRIP_PADDING_Y,
     HINT_TEXT_OPACITY,
 };
+use crate::ui_foundation::HexColorExt;
 
 const HINT_STRIP_CONTENT_GAP: f32 = 8.0;
 
@@ -104,11 +104,7 @@ enum KeyHintPart {
 }
 
 fn is_boundary_or_end(rest: &str) -> bool {
-    rest.is_empty()
-        || rest
-            .chars()
-            .next()
-            .is_some_and(char::is_whitespace)
+    rest.is_empty() || rest.chars().next().is_some_and(char::is_whitespace)
 }
 
 /// Parse a hint string and extract a leading keyboard glyph if present.

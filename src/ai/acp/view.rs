@@ -85,6 +85,8 @@ pub(crate) struct AcpChatView {
     pub(crate) history_menu: Option<(usize, String, Vec<super::history::AcpHistoryEntry>)>,
     /// Whether the + attachment menu popup is open.
     attach_menu_open: bool,
+    /// Whether the model selector dropdown is open.
+    model_selector_open: bool,
     /// Cmd+F search: (query, current_match_index). None = search hidden.
     pub(crate) search_state: Option<(String, usize)>,
     /// Cached slash commands (name, description) discovered at creation.
@@ -179,6 +181,7 @@ impl AcpChatView {
             slash_menu_index: None,
             history_menu: None,
             attach_menu_open: false,
+            model_selector_open: false,
             search_state: None,
             cached_slash_commands: Vec::new(),
             _slash_discovery_task: slash_task,
@@ -370,6 +373,75 @@ impl AcpChatView {
 
     fn prompt_colors() -> PromptColors {
         PromptColors::from_theme(&theme::get_cached_theme())
+    }
+
+    /// Render pending context part chips above the composer input.
+    ///
+    /// Each chip shows a label and a close button. Clicking the close button
+    /// removes that part from the thread's `pending_context_parts`.
+    fn render_pending_context_chips(&self, cx: &mut Context<Self>) -> gpui::AnyElement {
+        let parts = self.thread.read(cx).pending_context_parts().to_vec();
+        if parts.is_empty() {
+            return div().id("acp-pending-context-chips-empty").into_any_element();
+        }
+
+        let theme = theme::get_cached_theme();
+        let accent = theme.colors.accent.selected;
+        let muted_text = theme.colors.text.muted;
+
+        let chips: Vec<_> = parts
+            .iter()
+            .enumerate()
+            .map(|(idx, part)| {
+                let label: SharedString = part.label().to_string().into();
+
+                div()
+                    .id(SharedString::from(format!("acp-ctx-part-{idx}")))
+                    .flex()
+                    .items_center()
+                    .gap(px(4.0))
+                    .px(px(6.0))
+                    .py(px(2.0))
+                    .rounded(px(4.0))
+                    .bg(rgba((accent << 8) | 0x18))
+                    .border_1()
+                    .border_color(rgba((accent << 8) | 0x30))
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(rgb(accent))
+                            .overflow_hidden()
+                            .text_ellipsis()
+                            .max_w(px(200.0))
+                            .child(label),
+                    )
+                    .child(
+                        div()
+                            .id(SharedString::from(format!("acp-ctx-remove-{idx}")))
+                            .cursor_pointer()
+                            .text_xs()
+                            .text_color(rgb(muted_text))
+                            .hover(|el| el.text_color(rgb(theme.colors.text.primary)))
+                            .on_click(cx.listener(move |this, _, _window, cx| {
+                                this.thread.update(cx, |thread, cx| {
+                                    thread.remove_context_part(idx, cx);
+                                });
+                            }))
+                            .child("\u{00d7}"),
+                    )
+            })
+            .collect();
+
+        div()
+            .id("acp-pending-context-chips")
+            .flex()
+            .flex_row()
+            .flex_wrap()
+            .gap(px(4.0))
+            .px(px(12.0))
+            .pb(px(4.0))
+            .children(chips)
+            .into_any_element()
     }
 
     /// Render a message. Thinking and Tool messages are collapsible.
@@ -950,6 +1022,72 @@ impl AcpChatView {
             .into_any_element()
     }
 
+    fn render_model_selector(&self, cx: &mut Context<Self>) -> gpui::AnyElement {
+        let theme = theme::get_cached_theme();
+        let thread = self.thread.read(cx);
+        let models = thread.available_models().to_vec();
+        let selected_id = thread.selected_model_id().map(|s| s.to_string());
+
+        div()
+            .absolute()
+            .bottom(px(
+                crate::window_resize::mini_layout::HINT_STRIP_HEIGHT + 4.0
+            ))
+            .left(px(8.0))
+            .w(px(200.0))
+            .rounded(px(8.0))
+            .bg(rgb(theme.colors.background.main))
+            .border_1()
+            .border_color(rgba((theme.colors.ui.border << 8) | 0x40))
+            .py(px(4.0))
+            .shadow_md()
+            .children(models.into_iter().enumerate().map(|(idx, model)| {
+                let model_id = model.id.clone();
+                let display = model
+                    .display_name
+                    .clone()
+                    .unwrap_or_else(|| model.id.clone());
+                let is_selected = selected_id.as_deref() == Some(model_id.as_str());
+                let accent = theme.colors.accent.selected;
+                let text_primary = theme.colors.text.primary;
+
+                div()
+                    .id(SharedString::from(format!("model-{idx}")))
+                    .w_full()
+                    .px(px(10.0))
+                    .py(px(5.0))
+                    .cursor_pointer()
+                    .rounded(px(4.0))
+                    .mx(px(4.0))
+                    .hover(|d| d.bg(rgba((text_primary << 8) | 0x0C)))
+                    .when(is_selected, |d| d.bg(rgba((accent << 8) | 0x10)))
+                    .on_click(cx.listener(move |this, _event, _window, cx| {
+                        this.thread.update(cx, |thread, cx| {
+                            thread.select_model(&model_id, cx);
+                        });
+                        this.model_selector_open = false;
+                        cx.notify();
+                    }))
+                    .child(
+                        div()
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .justify_between()
+                            .child(
+                                div()
+                                    .text_sm()
+                                    .when(is_selected, |d| d.text_color(rgb(accent)))
+                                    .child(display),
+                            )
+                            .when(is_selected, |d| {
+                                d.child(div().text_xs().text_color(rgb(accent)).child("\u{2713}"))
+                            }),
+                    )
+            }))
+            .into_any_element()
+    }
+
     fn render_toolbar(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = theme::get_cached_theme();
         let is_streaming = matches!(self.thread.read(cx).status, AcpThreadStatus::Streaming);
@@ -971,7 +1109,7 @@ impl AcpChatView {
             // Subtle top border to separate hint strip from content
             .border_t(px(1.0))
             .border_color(rgba((theme.colors.text.primary << 8) | 0x10))
-            // ── Left: streaming status dot ─────
+            // ── Left: streaming dot + model selector ─────
             .child(
                 div()
                     .flex()
@@ -1001,15 +1139,43 @@ impl AcpChatView {
                                     },
                                 ),
                         )
+                    })
+                    // Model selector button
+                    .child({
+                        let model_display =
+                            self.thread.read(cx).selected_model_display().to_string();
+                        let is_open = self.model_selector_open;
+                        let chevron = if is_open { "\u{25B4}" } else { "\u{25BE}" }; // ▴ / ▾
+                        div()
+                            .id("acp-model-btn")
+                            .flex()
+                            .items_center()
+                            .gap(px(4.0))
+                            .cursor_pointer()
+                            .text_xs()
+                            .text_color(if is_open {
+                                rgb(theme.colors.accent.selected)
+                            } else {
+                                rgba(hint_text_rgba)
+                            })
+                            .hover(|d| d.text_color(rgb(theme.colors.text.primary)))
+                            .on_click(cx.listener(|this, _event, _window, cx| {
+                                this.model_selector_open = !this.model_selector_open;
+                                // Close other menus
+                                this.attach_menu_open = false;
+                                this.slash_menu_index = None;
+                                this.history_menu = None;
+                                cx.notify();
+                            }))
+                            .child(model_display)
+                            .child(chevron)
                     }),
             )
             // ── Right: hint strip (matches main menu format) ─────
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(rgba(hint_text_rgba))
-                    .child("\u{21A9} Send   \u{2318}K Actions   \u{2318}W Close"),
-            )
+            .child(crate::components::render_hint_icons(
+                &["↩ Send", "⌘K Actions", "⌘W Close"],
+                hint_text_rgba,
+            ))
     }
 
     fn render_send_button(
@@ -1134,6 +1300,9 @@ impl AcpChatView {
         }
     }
 
+    /// Maximum number of slash commands visible without scrolling.
+    const SLASH_MENU_MAX_VISIBLE: usize = 8;
+
     fn render_slash_menu(
         &self,
         commands: &[(String, String)],
@@ -1141,39 +1310,43 @@ impl AcpChatView {
         cx: &mut Context<Self>,
     ) -> gpui::AnyElement {
         let theme = theme::get_cached_theme();
+        // Cap visible items — show at most SLASH_MENU_MAX_VISIBLE.
+        let visible = commands
+            .iter()
+            .take(Self::SLASH_MENU_MAX_VISIBLE)
+            .enumerate();
 
         div()
             .id("acp-slash-menu")
             .w_full()
-            .max_h(px(200.0))
-            .overflow_y_scroll()
-            .rounded(px(8.0))
-            .bg(rgb(theme.colors.background.search_box))
-            .border_1()
-            .border_color(rgba((theme.colors.ui.border << 8) | 0x40))
-            .py(px(4.0))
-            .children(commands.iter().enumerate().map(|(i, (name, desc))| {
+            // Whisper chrome: ghost-opacity bg, hairline top border only
+            .bg(rgba((theme.colors.background.search_box << 8) | 0x0A))
+            .border_t_1()
+            .border_color(rgba((theme.colors.ui.border << 8) | 0x18))
+            .py(px(2.0))
+            .children(visible.map(|(i, (name, desc))| {
                 let is_selected = i == selected_index;
                 let cmd_text = format!("/{name} ");
                 div()
                     .id(SharedString::from(format!("slash-cmd-{i}")))
                     .w_full()
                     .px(px(10.0))
-                    .py(px(5.0))
+                    .py(px(3.0))
                     .cursor_pointer()
                     .when(is_selected, |d| {
-                        d.bg(rgba((theme.colors.accent.selected << 8) | 0x14))
+                        d.bg(rgba((theme.colors.accent.selected << 8) | 0x10))
                             .border_l_2()
                             .border_color(rgb(theme.colors.accent.selected))
                     })
                     .when(!is_selected, |d| {
                         d.border_l_2().border_color(gpui::transparent_black())
                     })
-                    .hover(|d| d.bg(rgba((theme.colors.text.primary << 8) | 0x08)))
+                    .hover(|d| d.bg(rgba((theme.colors.text.primary << 8) | 0x06)))
                     .on_click(cx.listener(move |this, _event, _window, cx| {
+                        // Click inserts the command text and submits immediately.
                         this.thread.update(cx, |thread, cx| {
                             thread.input.set_text(cmd_text.clone());
-                            cx.notify();
+                            let _ = thread.submit_input(cx);
                         });
                         this.slash_menu_index = None;
                         cx.notify();
@@ -1181,15 +1354,26 @@ impl AcpChatView {
                     .child(
                         div()
                             .flex()
-                            .flex_col()
-                            .gap(px(1.0))
-                            .child(div().text_sm().child(format!("/{name}")))
+                            .flex_row()
+                            .items_center()
+                            .gap(px(6.0))
+                            .child(
+                                div()
+                                    .text_sm()
+                                    .text_color(if is_selected {
+                                        rgb(theme.colors.text.primary)
+                                    } else {
+                                        rgba((theme.colors.text.primary << 8) | 0xB0)
+                                    })
+                                    .child(format!("/{name}")),
+                            )
                             .when(!desc.is_empty(), |d| {
                                 d.child(
                                     div()
                                         .text_xs()
-                                        .opacity(0.40)
+                                        .opacity(0.35)
                                         .overflow_x_hidden()
+                                        .text_ellipsis()
                                         .child(desc.clone()),
                                 )
                             }),
@@ -1224,6 +1408,19 @@ impl AcpChatView {
 
         let key = event.keystroke.key.as_str();
         let modifiers = &event.keystroke.modifiers;
+
+        // ── Model selector dismiss on Escape ───────────────────
+        if self.model_selector_open && crate::ui_foundation::is_key_escape(key) {
+            self.model_selector_open = false;
+            cx.notify();
+            cx.stop_propagation();
+            return;
+        }
+        // Close model selector on any non-modifier key
+        if self.model_selector_open {
+            self.model_selector_open = false;
+            cx.notify();
+        }
 
         // ── Attach menu dismiss on Escape ───────────────────────
         if self.attach_menu_open && crate::ui_foundation::is_key_escape(key) {
@@ -1518,6 +1715,23 @@ impl AcpChatView {
                 return;
             }
             if crate::ui_foundation::is_key_enter(key) {
+                // Enter: insert the selected slash command and submit it.
+                let filtered = self.filtered_slash_commands(cx);
+                let idx = self.slash_menu_index.unwrap_or(0);
+                if let Some((name, _)) = filtered.get(idx) {
+                    let cmd_text = format!("/{name} ");
+                    self.thread.update(cx, |thread, cx| {
+                        thread.input.set_text(cmd_text);
+                        let _ = thread.submit_input(cx);
+                    });
+                }
+                self.slash_menu_index = None;
+                cx.notify();
+                cx.stop_propagation();
+                return;
+            }
+            if crate::ui_foundation::is_key_tab(key) {
+                // Tab: accept the selected command (insert text) without submitting.
                 let filtered = self.filtered_slash_commands(cx);
                 let idx = self.slash_menu_index.unwrap_or(0);
                 if let Some((name, _)) = filtered.get(idx) {
@@ -1709,6 +1923,8 @@ impl Render for AcpChatView {
                             }),
                     ),
             )
+            // ── Context chips (focused target / Ask Anything) ────
+            .child(self.render_pending_context_chips(cx))
             // ── Search bar (Cmd+F) ─────────────────────────
             .when_some(self.search_state.clone(), |d, (query, current_idx)| {
                 let match_count = if query.is_empty() {
@@ -2032,6 +2248,10 @@ impl Render for AcpChatView {
             // ── Attach menu popup ──────────────────────────
             .when(self.attach_menu_open, |d| {
                 d.child(self.render_attach_menu(cx))
+            })
+            // ── Model selector popup ──────────────────────────
+            .when(self.model_selector_open, |d| {
+                d.child(self.render_model_selector(cx))
             })
             // ── BOTTOM: Hint strip ─────────────────────
             .child(self.render_toolbar(cx))

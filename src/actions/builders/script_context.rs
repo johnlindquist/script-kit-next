@@ -571,6 +571,15 @@ pub fn get_acp_chat_actions() -> Vec<Action> {
         )
         .with_icon(IconName::FileCode)
         .with_section("Response"),
+        Action::new(
+            "acp_save_as_note",
+            "Save as Note",
+            Some("Save the conversation to Notes".to_string()),
+            ActionCategory::ScriptContext,
+        )
+        .with_shortcut("\u{21e7}\u{2318}S")
+        .with_icon(IconName::File)
+        .with_section("Response"),
         // ── Code ─────────────────────────────────────────────
         Action::new(
             "acp_copy_all_code",

@@ -499,6 +499,107 @@ fn e2e_submit_no_parts_no_message_is_ready_empty() {
     assert!(receipt.final_user_content.is_empty());
 }
 
+// ==========================================================================
+// FocusedTarget resolution tests
+// ==========================================================================
+
+/// A FocusedTarget part resolves into a deterministic `<context source="focusedTarget">` block.
+#[test]
+fn focused_target_part_resolves_to_prompt_block() {
+    let part = AiContextPart::FocusedTarget {
+        label: "File: tab_ai_mode.rs".to_string(),
+        target: script_kit_gpui::ai::TabAiTargetContext {
+            source: "FileSearch".to_string(),
+            kind: "file".to_string(),
+            semantic_id: "choice:0:tab_ai_mode.rs".to_string(),
+            label: "tab_ai_mode.rs".to_string(),
+            metadata: Some(serde_json::json!({
+                "path": "/tmp/tab_ai_mode.rs"
+            })),
+        },
+    };
+
+    let receipt = resolve_context_parts_with_receipt(&[part], &[], &[]);
+
+    assert_eq!(receipt.attempted, 1);
+    assert_eq!(receipt.resolved, 1);
+    assert!(!receipt.has_failures());
+    assert!(receipt.prompt_prefix.contains("focusedTarget"));
+    assert!(receipt.prompt_prefix.contains("tab_ai_mode.rs"));
+    assert!(receipt.prompt_prefix.contains("/tmp/tab_ai_mode.rs"));
+    assert!(receipt.prompt_prefix.contains("itemSource=\"FileSearch\""));
+    assert!(receipt.prompt_prefix.contains("itemKind=\"file\""));
+}
+
+/// FocusedTarget without metadata still resolves with empty metadata block.
+#[test]
+fn focused_target_part_resolves_without_metadata() {
+    let part = AiContextPart::FocusedTarget {
+        label: "Command: hello".to_string(),
+        target: script_kit_gpui::ai::TabAiTargetContext {
+            source: "ScriptList".to_string(),
+            kind: "script".to_string(),
+            semantic_id: "choice:0:hello".to_string(),
+            label: "hello".to_string(),
+            metadata: None,
+        },
+    };
+
+    let receipt = resolve_context_parts_with_receipt(&[part], &[], &[]);
+
+    assert_eq!(receipt.resolved, 1);
+    assert!(receipt.prompt_prefix.contains("focusedTarget"));
+    assert!(receipt.prompt_prefix.contains("{}"));
+}
+
+/// FocusedTarget works alongside FilePath parts through prepare_user_message_with_receipt.
+#[test]
+fn e2e_submit_focused_target_with_file_path() {
+    let dir = tempfile::tempdir().expect("create temp dir");
+    let file = dir.path().join("helper.rs");
+    std::fs::write(&file, "fn helper() {}").expect("write");
+
+    let parts = vec![
+        AiContextPart::FocusedTarget {
+            label: "File: main.rs".to_string(),
+            target: script_kit_gpui::ai::TabAiTargetContext {
+                source: "FileSearch".to_string(),
+                kind: "file".to_string(),
+                semantic_id: "choice:0:main.rs".to_string(),
+                label: "main.rs".to_string(),
+                metadata: None,
+            },
+        },
+        AiContextPart::FilePath {
+            path: file.to_string_lossy().to_string(),
+            label: "helper.rs".to_string(),
+        },
+    ];
+
+    let receipt = prepare_user_message_with_receipt("explain", &parts, &[], &[]);
+
+    assert_eq!(receipt.decision, PreparedMessageDecision::Ready);
+    assert_eq!(receipt.context.attempted, 2);
+    assert_eq!(receipt.context.resolved, 2);
+    assert!(receipt.final_user_content.contains("focusedTarget"));
+    assert!(receipt.final_user_content.contains("fn helper() {}"));
+    assert!(receipt.final_user_content.ends_with("explain"));
+
+    // FocusedTarget block should come first (order preservation)
+    let focused_pos = receipt
+        .final_user_content
+        .find("focusedTarget")
+        .expect("focused target block present");
+    let file_pos = receipt
+        .final_user_content
+        .find("fn helper() {}")
+        .expect("file block present");
+    assert!(
+        focused_pos < file_pos,
+        "focused target should come before file attachment"
+    );
+}
+
 /// Full success with multiple context sources: final_user_content preserves
 /// block order and all blocks are present.
 #[test]
@@ -561,3 +662,4 @@ fn e2e_submit_full_success_preserves_all_blocks_in_order() {
         "first file should come before second file"
     );
 }
+

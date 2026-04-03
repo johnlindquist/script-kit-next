@@ -54,6 +54,32 @@ pub struct AcpModelEntry {
 
 const DEFAULT_CONTEXT_WINDOW: u32 = 128_000;
 
+/// Default Claude Code models available via the ACP adapter.
+fn default_claude_code_models() -> Vec<AcpModelEntry> {
+    vec![
+        AcpModelEntry {
+            id: "claude-sonnet-4-6".into(),
+            display_name: Some("Sonnet 4.6".into()),
+            context_window: Some(200_000),
+        },
+        AcpModelEntry {
+            id: "claude-sonnet-4-5".into(),
+            display_name: Some("Sonnet 4.5".into()),
+            context_window: Some(200_000),
+        },
+        AcpModelEntry {
+            id: "claude-opus-4-6".into(),
+            display_name: Some("Opus 4.6".into()),
+            context_window: Some(200_000),
+        },
+        AcpModelEntry {
+            id: "claude-haiku-4-5".into(),
+            display_name: Some("Haiku 4.5".into()),
+            context_window: Some(200_000),
+        },
+    ]
+}
+
 impl AcpAgentConfig {
     /// Provider ID used for `AiProvider::provider_id()`.
     pub(crate) fn provider_id(&self) -> &str {
@@ -146,7 +172,7 @@ pub(crate) fn claude_code_agent_config() -> anyhow::Result<AcpAgentConfig> {
         command,
         args: acp_args,
         env: HashMap::new(),
-        models: Vec::new(),
+        models: default_claude_code_models(),
     })
 }
 

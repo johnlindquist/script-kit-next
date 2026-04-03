@@ -339,7 +339,7 @@ mod from_dialog_builtin_action_validation_tests {
     
     #[test]
     fn notes_command_bar_section_labels_are_known() {
-        let known = ["Notes", "Edit", "Copy", "Export", "Settings"];
+        let known = ["Notes", "Edit", "Copy", "Export", "AI", "Settings"];
         let info = NotesInfo {
             has_selection: true,
             is_trash_view: false,
@@ -3814,7 +3814,7 @@ mod from_dialog_builtin_action_validation_tests_3 {
     }
     
     // =========================================================================
-    // 6. Notes command bar section ordering: Notes > Edit > Copy > Export > Settings
+    // 6. Notes command bar section ordering: Notes > Edit > Copy > Export > AI > Settings
     // =========================================================================
     
     #[test]
@@ -3828,7 +3828,7 @@ mod from_dialog_builtin_action_validation_tests_3 {
         let sections = sections_in_order(&actions);
         assert_eq!(
             sections,
-            vec!["Notes", "Edit", "Copy", "Export", "Settings"],
+            vec!["Notes", "Edit", "Copy", "Export", "AI", "Settings"],
             "Notes command bar sections should be in correct order"
         );
     }
@@ -9710,10 +9710,10 @@ mod from_dialog_builtin_action_validation_tests_5 {
             };
             let actions = get_notes_command_bar_actions(&info);
             // new_note, duplicate, delete, browse, find, format, copy_note_as,
-            // copy_deeplink, create_quicklink, export, enable_auto_sizing = 11
-            assert_eq!(actions.len(), 11);
+            // copy_deeplink, create_quicklink, export, send_to_ai, enable_auto_sizing = 12
+            assert_eq!(actions.len(), 12);
         }
-    
+
         #[test]
         fn notes_minimal_action_count() {
             let info = NotesInfo {
@@ -14180,10 +14180,10 @@ mod from_dialog_builtin_action_validation_tests_7 {
             };
             let actions = get_notes_command_bar_actions(&info);
             // new_note + duplicate + delete + browse_notes + find + format + copy_note_as + copy_deeplink
-            // + create_quicklink + export + enable_auto_sizing = 11
+            // + create_quicklink + export + send_to_ai + enable_auto_sizing = 12
             assert_eq!(
                 actions.len(),
-                11,
+                12,
                 "Full feature: {:?}",
                 action_ids(&actions)
             );

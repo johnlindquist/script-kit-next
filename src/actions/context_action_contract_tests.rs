@@ -275,6 +275,7 @@ fn context_action_contract_json_summary() {
         let uri = expected_dispatch(suffix).map(|part| match part {
             AiContextPart::ResourceUri { uri, .. } => uri,
             AiContextPart::FilePath { path, .. } => path,
+            AiContextPart::FocusedTarget { target, .. } => target.semantic_id,
         });
 
         // Verify builder still has this action
