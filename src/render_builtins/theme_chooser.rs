@@ -4,8 +4,6 @@ const ALPHA_BADGE_BORDER: u32 = 0x40;
 const ALPHA_FOOTER_BORDER: u32 = 0x30;
 const ALPHA_TOGGLE_BG: u32 = 0x80;
 const MAX_ALPHA: u32 = 0xFF;
-const SELECTION_HOVER_GAP: u32 = 16;
-const HOVER_SELECTION_GAP: u32 = 8;
 const MIN_HOVER_ALPHA: f32 = 18.0;
 const THEME_LIST_PAGE_SIZE: usize = 5;
 const OPACITY_MATCH_TOLERANCE: f32 = 0.05;
@@ -113,34 +111,6 @@ impl ScriptListApp {
             .unwrap_or(0)
     }
 
-    /// Keep selected/active alpha visually stronger than hover alpha.
-    fn resolve_interactive_alphas(selected_alpha: u32, hover_alpha: u32) -> (u32, u32) {
-        let mut selected = selected_alpha.min(MAX_ALPHA);
-        let mut hover = hover_alpha.min(MAX_ALPHA);
-
-        if selected <= hover {
-            selected = (hover + SELECTION_HOVER_GAP).min(MAX_ALPHA);
-        }
-
-        if hover >= selected {
-            hover = selected.saturating_sub(HOVER_SELECTION_GAP);
-        }
-
-        (selected, hover)
-    }
-
-    fn interactive_state_backgrounds(
-        base_color: u32,
-        selected_alpha: u32,
-        hover_alpha: u32,
-    ) -> (gpui::Rgba, gpui::Rgba) {
-        let (selected_alpha, hover_alpha) =
-            Self::resolve_interactive_alphas(selected_alpha, hover_alpha);
-        (
-            rgba((base_color << 8) | selected_alpha),
-            rgba((base_color << 8) | hover_alpha),
-        )
-    }
 
     fn theme_chooser_row_layout(spacing: &designs::DesignSpacing) -> ThemeChooserRowLayout {
         let vertical_padding = spacing.item_padding_y.clamp(
@@ -211,8 +181,9 @@ impl ScriptListApp {
             .as_ref()
             .map(|t| theme::presets::find_current_preset_index(t))
             .unwrap_or(0);
-        let (theme_row_selected_bg, theme_row_hover_bg) =
-            Self::interactive_state_backgrounds(selection_bg, selected_alpha, hover_alpha);
+        // Use raw opacity values (matching main menu's ListItem behavior)
+        let theme_row_selected_bg = rgba((selection_bg << 8) | selected_alpha);
+        let theme_row_hover_bg = rgba((selection_bg << 8) | hover_alpha);
 
         // Filter presets by name or description
         let filtered_indices = Self::theme_chooser_filtered_indices(filter);
@@ -648,13 +619,14 @@ impl ScriptListApp {
                             .items_center()
                             .gap(px(row_layout.content_gap))
                             .cursor_pointer()
+                            .border_l(px(3.0))
                             .when(is_selected, |d| {
                                 d.bg(theme_row_selected_bg)
-                                    .border_l_2()
                                     .border_color(rgb(accent_color))
                             })
                             .when(!is_selected, |d| {
-                                d.hover(move |s| s.bg(theme_row_hover_bg))
+                                d.border_color(gpui::transparent_black())
+                                    .hover(move |s| s.bg(theme_row_hover_bg))
                             })
                             .on_click(click_handler)
                             .child(indicator)
@@ -1579,19 +1551,6 @@ mod theme_chooser_filter_tests {
 
         let filtered = ScriptListApp::theme_chooser_filtered_indices("DRAC");
         assert!(filtered.contains(&dracula_index));
-    }
-
-    #[test]
-    fn test_resolve_interactive_alphas_makes_selected_more_prominent_when_equal() {
-        let (selected, hover) = ScriptListApp::resolve_interactive_alphas(32, 32);
-        assert!(selected > hover);
-    }
-
-    #[test]
-    fn test_resolve_interactive_alphas_preserves_distinct_values() {
-        let (selected, hover) = ScriptListApp::resolve_interactive_alphas(80, 32);
-        assert_eq!(selected, 80);
-        assert_eq!(hover, 32);
     }
 
     #[test]

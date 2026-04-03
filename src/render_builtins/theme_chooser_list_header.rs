@@ -176,10 +176,14 @@
                             .items_center()
                             .gap(px(8.0))
                             .cursor_pointer()
+                            .border_l(px(3.0))
                             .when(is_selected, |d| {
-                                d.bg(sel_bg).border_l_2().border_color(rgb(accent_color))
+                                d.bg(sel_bg).border_color(rgb(accent_color))
                             })
-                            .when(!is_selected, |d| d.hover(move |s| s.bg(hover_bg)))
+                            .when(!is_selected, |d| {
+                                d.border_color(gpui::transparent_black())
+                                    .hover(move |s| s.bg(hover_bg))
+                            })
                             .on_click(click_handler)
                             .child(indicator)
                             .child(color_bar)
