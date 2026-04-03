@@ -342,6 +342,8 @@ impl ScriptListApp {
         match kind {
             "file" => "File",
             "directory" => "Folder",
+            "search_query" => "Search",
+            "input" => "Input",
             "clipboard_entry" => "Clipboard",
             "script" | "scriptlet" | "builtin" => "Command",
             "window" => "Window",
@@ -386,6 +388,28 @@ impl ScriptListApp {
         (focused_target, visible_targets)
     }
 
+    /// Route a plain Tab press from the current non-AI source surface into ACP.
+    ///
+    /// Returns `true` when the Tab press was consumed and ACP launch began.
+    fn try_route_plain_tab_to_acp_context_capture(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if self.show_actions_popup || self.tab_ai_save_offer_state.is_some() {
+            return false;
+        }
+
+        let source_view = self.app_view_name();
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "tab_ai_plain_tab_routed_to_acp",
+            source_view = %source_view,
+        );
+
+        self.open_tab_ai_chat(cx);
+        true
+    }
+
     /// Build a focused-target `AiContextPart` from the current view's
     /// resolved focus, if any. Returns `None` when the active surface has
     /// no resolvable focused item (e.g. empty list, generic prompt).
@@ -407,7 +431,7 @@ impl ScriptListApp {
                 event = "tab_ai_focused_chip_label_built",
                 item_source = %target.source,
                 item_kind = %target.kind,
-                chip_label = %label,
+                label_chars = label.chars().count(),
             );
             crate::ai::message_parts::AiContextPart::FocusedTarget { target, label }
         })
@@ -2158,6 +2182,55 @@ impl ScriptListApp {
         }
     }
 
+    /// Convert a search query into a `TabAiTargetContext`.
+    fn tab_ai_target_from_search_query(
+        source: &str,
+        query: &str,
+        metadata: serde_json::Value,
+    ) -> crate::ai::TabAiTargetContext {
+        let trimmed = query.trim();
+        let label = crate::ai::truncate_tab_ai_text(trimmed, 96);
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "tab_ai_search_query_target_resolved",
+            item_source = %source,
+            label_chars = label.chars().count(),
+        );
+        crate::ai::TabAiTargetContext {
+            source: source.to_string(),
+            kind: "search_query".to_string(),
+            semantic_id: crate::protocol::generate_semantic_id("query", 0, trimmed),
+            label,
+            metadata: Some(metadata),
+        }
+    }
+
+    /// Convert raw input text into a lightweight `TabAiTargetContext`.
+    fn tab_ai_target_from_input_text(
+        source: &str,
+        input_text: &str,
+    ) -> crate::ai::TabAiTargetContext {
+        let trimmed = input_text.trim();
+        let label = crate::ai::truncate_tab_ai_text(trimmed, 96);
+        let preview = crate::ai::truncate_tab_ai_text(trimmed, 400);
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "tab_ai_input_target_resolved",
+            item_source = %source,
+            label_chars = label.chars().count(),
+        );
+        crate::ai::TabAiTargetContext {
+            source: source.to_string(),
+            kind: "input".to_string(),
+            semantic_id: crate::protocol::generate_semantic_id("input", 0, trimmed),
+            label,
+            metadata: Some(serde_json::json!({
+                "inputPreview": preview,
+                "inputLength": trimmed.chars().count(),
+            })),
+        }
+    }
+
     /// Source-view-aware target resolution: resolves targets against an explicit view
     /// instead of `self.current_view`. Used at submit time when `current_view`
     /// has already switched to the harness terminal.
@@ -2256,6 +2329,18 @@ impl ScriptListApp {
                             entry,
                             &surface_metadata,
                         )
+                    })
+                    .or_else(|| {
+                        let trimmed = query.trim();
+                        if trimmed.is_empty() {
+                            None
+                        } else {
+                            Some(Self::tab_ai_target_from_search_query(
+                                "FileSearch",
+                                trimmed,
+                                serde_json::Value::Object(surface_metadata.clone()),
+                            ))
+                        }
                     });
                 let visible_targets = self
                     .visible_file_search_results(TAB_AI_VISIBLE_TARGET_LIMIT)
@@ -2443,6 +2528,21 @@ impl ScriptListApp {
                             self.selected_index,
                             result,
                         )
+                    })
+                    .or_else(|| {
+                        let trimmed = self.filter_text.trim();
+                        if trimmed.is_empty() {
+                            None
+                        } else {
+                            Some(Self::tab_ai_target_from_search_query(
+                                "ScriptList",
+                                trimmed,
+                                serde_json::json!({
+                                    "query": trimmed,
+                                    "visibleResultCount": self.cached_grouped_flat_results.len(),
+                                }),
+                            ))
+                        }
                     });
 
                 let visible_targets: Vec<crate::ai::TabAiTargetContext> = self
@@ -2490,6 +2590,18 @@ impl ScriptListApp {
                                             element,
                                         )
                                     })
+                            })
+                    })
+                    .or_else(|| {
+                        ui.input_text
+                            .as_deref()
+                            .map(str::trim)
+                            .filter(|text| !text.is_empty())
+                            .map(|text| {
+                                Self::tab_ai_target_from_input_text(
+                                    &ui.prompt_type,
+                                    text,
+                                )
                             })
                     });
 

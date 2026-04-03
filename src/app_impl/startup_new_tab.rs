@@ -28,19 +28,16 @@
                 {
                     if let Some(app) = app_entity.upgrade() {
                         app.update(cx, |this, cx| {
-                            // Handle Tab/Shift+Tab in FileSearchView for directory/file navigation
-                            // CRITICAL: ALWAYS consume Tab/Shift+Tab to prevent focus traversal
+                            // File search: plain Tab captures focused context into ACP,
+                            // Shift+Tab still navigates up one directory level.
                             if matches!(this.current_view, AppView::FileSearchView { .. }) {
-                                // Always consume Tab in file search so GPUI focus traversal never wins.
                                 cx.stop_propagation();
 
-                                // While the actions popup is open, do nothing here.
                                 if this.show_actions_popup {
                                     return;
                                 }
 
                                 if has_shift {
-                                    // Shift+Tab: Go up one directory level
                                     let current_query = match &this.current_view {
                                         AppView::FileSearchView { query, .. } => query.clone(),
                                         _ => String::new(),
@@ -50,7 +47,6 @@
                                         crate::file_search::parse_directory_path(&current_query)
                                     {
                                         if parsed.filter.is_some() {
-                                            // Has filter fragment — strip it back to the parent dir
                                             Some(parsed.directory)
                                         } else {
                                             crate::file_search::parent_dir_display(&parsed.directory)
@@ -82,56 +78,26 @@
                                             ),
                                         );
                                     }
-                                } else if let Some((display_index, file)) =
-                                    this.selected_file_search_result_owned()
-                                {
-                                    if let AppView::FileSearchView {
-                                        selected_index, ..
-                                    } = &mut this.current_view
-                                    {
-                                        *selected_index = display_index;
-                                    }
-
-                                    let shortened = crate::file_search::shorten_path(&file.path);
-                                    let new_path =
-                                        if file.file_type == crate::file_search::FileType::Directory
-                                        {
-                                            format!("{}/", shortened.trim_end_matches('/'))
-                                        } else {
-                                            shortened
-                                        };
-
-                                    let log_message =
-                                        if file.file_type == crate::file_search::FileType::Directory
-                                        {
-                                            format!("Tab: Entering directory: {}", new_path)
-                                        } else {
-                                            format!("Tab: Autocompleting file path: {}", new_path)
-                                        };
-                                    crate::logging::log("KEY", &log_message);
-
-                                    this.gpui_input_state.update(cx, |state, cx| {
-                                        state.set_value(new_path.clone(), window, cx);
-                                        let len = new_path.len();
-                                        state.set_selection(len, len, window, cx);
-                                    });
-                                    cx.notify();
                                 } else {
-                                    crate::logging::log(
-                                        "KEY",
-                                        "Tab: No selection to autocomplete, no-op",
-                                    );
+                                    let _ = this.try_route_plain_tab_to_acp_context_capture(cx);
                                 }
                                 return;
                             }
 
-                            // Handle Tab/Shift+Tab in ChatPrompt setup mode
-                            // Must intercept here to prevent GPUI focus traversal from consuming Tab
-                            if let AppView::ChatPrompt { entity, .. } = &this.current_view {
-                                let handled = entity.update(cx, |chat, cx| {
-                                    chat.handle_setup_key("tab", has_shift, cx)
-                                });
-                                if handled {
+                            // ChatPrompt: plain Tab opens ACP with focused/input context,
+                            // Shift+Tab keeps local setup back-tab behavior.
+                            if matches!(this.current_view, AppView::ChatPrompt { .. }) {
+                                if has_shift {
+                                    if let AppView::ChatPrompt { entity, .. } = &this.current_view {
+                                        let handled = entity.update(cx, |chat, cx| {
+                                            chat.handle_setup_key("tab", true, cx)
+                                        });
+                                        if handled {
+                                            cx.stop_propagation();
+                                            return;
+                                        }
+                                    }
+                                } else if this.try_route_plain_tab_to_acp_context_capture(cx) {
                                     cx.stop_propagation();
                                     return;
                                 }
@@ -215,11 +181,10 @@
                                 return;
                             }
 
-                            // Universal Tab AI: open the harness terminal surface
-                            // from any non-special surface (not FileSearch, not ChatPrompt setup)
-                            if !has_shift && !this.show_actions_popup {
-                                this.open_tab_ai_chat(cx);
+                            // Universal Tab AI: route any remaining non-AI surface into ACP
+                            if !has_shift && this.try_route_plain_tab_to_acp_context_capture(cx) {
                                 cx.stop_propagation();
+                                return;
                             }
                         });
                     }

@@ -3883,3 +3883,222 @@ fn acp_thread_resolves_context_parts_on_submit() {
         "AcpThread must use resolve_context_parts_with_receipt for typed parts",
     );
 }
+
+// =========================================================================
+// Query text and input text as first-class focused targets
+// =========================================================================
+
+#[test]
+fn file_search_query_resolves_search_query_target_when_no_row_selected() {
+    // When FileSearchView has a non-empty query but no selected row,
+    // resolve_tab_ai_surface_targets_for_view must produce a search_query target.
+    let resolve_fn_start = TAB_AI_MODE_SOURCE
+        .find("fn resolve_tab_ai_surface_targets_for_view(")
+        .expect("resolve_tab_ai_surface_targets_for_view must exist");
+    let resolve_fn_body = &TAB_AI_MODE_SOURCE[resolve_fn_start..];
+
+    // Find the FileSearchView arm
+    let fs_arm_pos = resolve_fn_body
+        .find("AppView::FileSearchView")
+        .expect("FileSearchView arm must exist in target resolver");
+    let fs_arm_body = &resolve_fn_body[fs_arm_pos..];
+
+    assert!(
+        fs_arm_body.contains("tab_ai_target_from_search_query"),
+        "FileSearchView must fall back to tab_ai_target_from_search_query when no row is selected",
+    );
+    assert!(
+        fs_arm_body.contains(r#""FileSearch""#),
+        "FileSearchView search_query target must use source 'FileSearch'",
+    );
+}
+
+#[test]
+fn script_list_filter_resolves_search_query_target_when_no_row_selected() {
+    let resolve_fn_start = TAB_AI_MODE_SOURCE
+        .find("fn resolve_tab_ai_surface_targets_for_view(")
+        .expect("resolve_tab_ai_surface_targets_for_view must exist");
+    let resolve_fn_body = &TAB_AI_MODE_SOURCE[resolve_fn_start..];
+
+    let sl_arm_pos = resolve_fn_body
+        .find("AppView::ScriptList =>")
+        .expect("ScriptList arm must exist in target resolver");
+    let sl_arm_body = &resolve_fn_body[sl_arm_pos..];
+
+    assert!(
+        sl_arm_body.contains("tab_ai_target_from_search_query"),
+        "ScriptList must fall back to tab_ai_target_from_search_query when no row is selected",
+    );
+    assert!(
+        sl_arm_body.contains(r#""ScriptList""#),
+        "ScriptList search_query target must use source 'ScriptList'",
+    );
+    assert!(
+        sl_arm_body.contains("visibleResultCount"),
+        "ScriptList search_query metadata must include visibleResultCount",
+    );
+}
+
+#[test]
+fn generic_prompt_input_resolves_input_target_when_no_semantic_selection() {
+    let resolve_fn_start = TAB_AI_MODE_SOURCE
+        .find("fn resolve_tab_ai_surface_targets_for_view(")
+        .expect("resolve_tab_ai_surface_targets_for_view must exist");
+    let resolve_fn_body = &TAB_AI_MODE_SOURCE[resolve_fn_start..];
+
+    // The wildcard arm uses `_ => {` inside resolve_tab_ai_surface_targets_for_view
+    let resolve_fn_end = resolve_fn_body[1..]
+        .find("\n    fn ")
+        .unwrap_or(resolve_fn_body.len());
+    let resolve_fn_body = &resolve_fn_body[..resolve_fn_end];
+
+    let wildcard_pos = resolve_fn_body
+        .rfind("_ => {")
+        .expect("wildcard arm must exist in target resolver");
+    let wildcard_body = &resolve_fn_body[wildcard_pos..];
+
+    assert!(
+        wildcard_body.contains("tab_ai_target_from_input_text"),
+        "wildcard arm must fall back to tab_ai_target_from_input_text when no semantic target",
+    );
+    assert!(
+        wildcard_body.contains("ui.input_text"),
+        "wildcard arm must check ui.input_text for the input fallback",
+    );
+}
+
+#[test]
+fn chip_prefix_maps_search_query_to_search() {
+    assert!(
+        TAB_AI_MODE_SOURCE.contains(r#""search_query" => "Search""#),
+        "tab_ai_chip_prefix_for_kind must map search_query to 'Search'",
+    );
+}
+
+#[test]
+fn chip_prefix_maps_input_to_input() {
+    assert!(
+        TAB_AI_MODE_SOURCE.contains(r#""input" => "Input""#),
+        "tab_ai_chip_prefix_for_kind must map input to 'Input'",
+    );
+}
+
+#[test]
+fn search_query_target_builder_logs_resolution_event() {
+    let builder_start = TAB_AI_MODE_SOURCE
+        .find("fn tab_ai_target_from_search_query(")
+        .expect("tab_ai_target_from_search_query must exist");
+    let builder_body = &TAB_AI_MODE_SOURCE[builder_start..];
+    let next_fn = builder_body[1..]
+        .find("\n    fn ")
+        .unwrap_or(builder_body.len());
+    let builder_body = &builder_body[..next_fn];
+
+    assert!(
+        builder_body.contains(r#"event = "tab_ai_search_query_target_resolved""#),
+        "search query target builder must log tab_ai_search_query_target_resolved",
+    );
+    assert!(
+        builder_body.contains(r#"kind: "search_query""#),
+        "search query target must have kind 'search_query'",
+    );
+}
+
+#[test]
+fn input_target_builder_logs_resolution_event() {
+    let builder_start = TAB_AI_MODE_SOURCE
+        .find("fn tab_ai_target_from_input_text(")
+        .expect("tab_ai_target_from_input_text must exist");
+    let builder_body = &TAB_AI_MODE_SOURCE[builder_start..];
+    let next_fn = builder_body[1..]
+        .find("\n    fn ")
+        .unwrap_or(builder_body.len());
+    let builder_body = &builder_body[..next_fn];
+
+    assert!(
+        builder_body.contains(r#"event = "tab_ai_input_target_resolved""#),
+        "input target builder must log tab_ai_input_target_resolved",
+    );
+    assert!(
+        builder_body.contains(r#"kind: "input""#),
+        "input target must have kind 'input'",
+    );
+    assert!(
+        builder_body.contains("inputPreview"),
+        "input target metadata must include inputPreview (not the full body)",
+    );
+    assert!(
+        builder_body.contains("inputLength"),
+        "input target metadata must include inputLength",
+    );
+}
+
+#[test]
+fn ask_anything_fallback_only_when_no_focused_target() {
+    // The ask_anything_fallback must only trigger when no focused target
+    // was resolved — query text and input text should prevent it.
+    let begin_fn_start = TAB_AI_MODE_SOURCE
+        .find("fn begin_tab_ai_harness_entry(")
+        .expect("begin_tab_ai_harness_entry must exist");
+    let begin_fn_body = &TAB_AI_MODE_SOURCE[begin_fn_start..];
+    let next_fn = begin_fn_body[1..]
+        .find("\n    fn ")
+        .unwrap_or(begin_fn_body.len());
+    let begin_fn_body = &begin_fn_body[..next_fn];
+
+    assert!(
+        begin_fn_body.contains("should_use_tab_ai_ask_anything_fallback"),
+        "begin_tab_ai_harness_entry must call should_use_tab_ai_ask_anything_fallback",
+    );
+    // The fallback helper must check for absence of focused target
+    let fallback_fn_start = TAB_AI_MODE_SOURCE
+        .find("fn should_use_tab_ai_ask_anything_fallback(")
+        .expect("should_use_tab_ai_ask_anything_fallback must exist");
+    let fallback_fn_body = &TAB_AI_MODE_SOURCE[fallback_fn_start..];
+    let next_fn = fallback_fn_body[1..]
+        .find("\n    fn ")
+        .unwrap_or(fallback_fn_body.len());
+    let fallback_fn_body = &fallback_fn_body[..next_fn];
+
+    assert!(
+        fallback_fn_body.contains("focused_target")
+            || fallback_fn_body.contains("focused_part"),
+        "ask_anything_fallback must check for absence of a focused target or focused part",
+    );
+}
+
+#[test]
+fn search_query_and_input_targets_prevent_ambient_capture() {
+    // When a search_query or input target is resolved, the code takes
+    // the focused-target path (not the ask_anything fallback), which
+    // means ambient capture is NOT triggered.
+    let begin_fn_start = TAB_AI_MODE_SOURCE
+        .find("fn begin_tab_ai_harness_entry(")
+        .expect("begin_tab_ai_harness_entry must exist");
+    let begin_fn_body = &TAB_AI_MODE_SOURCE[begin_fn_start..];
+    let next_fn = begin_fn_body[1..]
+        .find("\n    fn ")
+        .unwrap_or(begin_fn_body.len());
+    let begin_fn_body = &begin_fn_body[..next_fn];
+
+    // The focused-target path and the ask_anything path must be mutually
+    // exclusive branches — ambient capture only runs under use_ask_anything_fallback.
+    assert!(
+        begin_fn_body.contains("if use_ask_anything_fallback"),
+        "ambient capture must be gated behind use_ask_anything_fallback",
+    );
+    assert!(
+        begin_fn_body.contains("tab_ai_focus_chip_staged"),
+        "focused-target path must log tab_ai_focus_chip_staged",
+    );
+    assert!(
+        begin_fn_body.contains("tab_ai_ask_anything_fallback"),
+        "ask_anything fallback path must log tab_ai_ask_anything_fallback",
+    );
+    // The focused-target branch must NOT call spawn_tab_ai_pre_switch_capture
+    // — only the ask_anything branch does.
+    assert!(
+        begin_fn_body.contains("if !use_ask_anything_fallback"),
+        "focused-target part must be built only when NOT using ask_anything_fallback",
+    );
+}
