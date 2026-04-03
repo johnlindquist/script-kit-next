@@ -630,6 +630,59 @@ impl ScriptListApp {
             .map(|s| s.to_string())
     }
 
+    /// Extract a `TabAiTargetContext` from an `AiContextPart::FocusedTarget`,
+    /// returning `None` for any other variant or `None` input.
+    fn tab_ai_focused_target_from_part(
+        part: Option<&crate::ai::message_parts::AiContextPart>,
+    ) -> Option<crate::ai::TabAiTargetContext> {
+        match part {
+            Some(crate::ai::message_parts::AiContextPart::FocusedTarget { target, .. }) => {
+                Some(target.clone())
+            }
+            _ => None,
+        }
+    }
+
+    /// Seed `tab_ai_harness_apply_back_route` synchronously from the source
+    /// view, UI snapshot, and an optional focused part.  When `focused_part`
+    /// is `AiContextPart::FocusedTarget`, the concrete target metadata is
+    /// preserved in the route so downstream apply-back consumers can identify
+    /// what the user's chip refers to.
+    fn seed_tab_ai_apply_back_route(
+        &mut self,
+        source_view: &AppView,
+        ui_snapshot: &crate::ai::TabAiUiSnapshot,
+        focused_part: Option<&crate::ai::message_parts::AiContextPart>,
+    ) {
+        let early_source_type = detect_tab_ai_source_type_early(source_view, ui_snapshot);
+        let focused_target = Self::tab_ai_focused_target_from_part(focused_part);
+
+        self.tab_ai_harness_apply_back_route = early_source_type
+            .clone()
+            .and_then(|source_type| {
+                build_tab_ai_apply_back_hint(Some(&source_type)).map(|hint| {
+                    crate::ai::TabAiApplyBackRoute {
+                        source_type,
+                        hint,
+                        focused_target: focused_target.clone(),
+                    }
+                })
+            });
+
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "tab_ai_apply_back_route_seeded",
+            source_view = match source_view {
+                AppView::ScriptList => "ScriptList",
+                _ => "Other",
+            },
+            has_early_source_type = early_source_type.is_some(),
+            has_focused_target = focused_target.is_some(),
+            focused_target_kind = ?focused_target.as_ref().map(|t| t.kind.as_str()),
+            focused_target_source = ?focused_target.as_ref().map(|t| t.source.as_str()),
+        );
+    }
+
     /// Open the ACP chat view and stage context.
     ///
     /// When `focused_part` is `Some`, stages it as a visible chip on the
@@ -792,19 +845,14 @@ impl ScriptListApp {
         self.tab_ai_harness_return_view = Some(source_view.clone());
         self.tab_ai_harness_return_focus_target = Some(self.tab_ai_return_focus_target());
 
-        // Seed apply-back route synchronously (desktop snapshot not yet available)
-        let early_source_type =
-            detect_tab_ai_source_type_early(&request.source_view, &request.ui_snapshot);
-        if let Some(ref source_type) = early_source_type {
-            let apply_back_hint = build_tab_ai_apply_back_hint(Some(source_type));
-            self.tab_ai_harness_apply_back_route = apply_back_hint.map(|hint| {
-                crate::ai::TabAiApplyBackRoute {
-                    source_type: source_type.clone(),
-                    hint,
-                    focused_target: None,
-                }
-            });
-        }
+        // Seed apply-back route synchronously so focused-chip ACP sessions
+        // retain the concrete target metadata even though they skip deferred
+        // context capture.
+        self.seed_tab_ai_apply_back_route(
+            &request.source_view,
+            &request.ui_snapshot,
+            focused_part.as_ref(),
+        );
 
         // --- View switch FIRST: user sees the ACP chat surface immediately ---
         self.current_view = AppView::AcpChatView {
@@ -1111,22 +1159,12 @@ impl ScriptListApp {
 
         // Seed apply-back route synchronously so the footer shows the correct
         // Cmd+Enter label on first render and the first ⌘↩ press works without
-        // waiting for the deferred capture.  Desktop snapshot is not available
-        // yet, but for known-source views (ClipboardHistory, running prompts,
-        // ScriptList) the prompt type alone is sufficient for classification.
-        // The deferred capture callback will overwrite this with the full
-        // desktop-aware route once it completes.
-        let early_source_type = detect_tab_ai_source_type_early(&request.source_view, &request.ui_snapshot);
-        if let Some(ref source_type) = early_source_type {
-            let apply_back_hint = build_tab_ai_apply_back_hint(Some(source_type));
-            self.tab_ai_harness_apply_back_route = apply_back_hint.map(|hint| {
-                crate::ai::TabAiApplyBackRoute {
-                    source_type: source_type.clone(),
-                    hint,
-                    focused_target: None,
-                }
-            });
-        }
+        // waiting for the deferred capture.  PTY path has no focused part.
+        self.seed_tab_ai_apply_back_route(
+            &request.source_view,
+            &request.ui_snapshot,
+            None,
+        );
 
         // --- View switch FIRST: user sees the terminal immediately ---
         self.current_view = AppView::QuickTerminalView {
