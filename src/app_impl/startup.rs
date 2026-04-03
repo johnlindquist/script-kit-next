@@ -1553,11 +1553,22 @@ impl ScriptListApp {
                             }
                         }
 
-                        // Handle Cmd+W for AcpChatView (restores previous view, not full window close)
+                        // Handle Cmd+W for AcpChatView (close the window entirely)
                         if has_cmd && key.eq_ignore_ascii_case("w") && !has_shift
                             && matches!(this.current_view, AppView::AcpChatView { .. })
                         {
-                            logging::log("KEY", "Interceptor: Cmd+W -> close ACP chat");
+                            logging::log("KEY", "Interceptor: Cmd+W -> close window from ACP chat");
+                            this.close_tab_ai_harness_terminal(cx);
+                            this.close_and_reset_window(cx);
+                            cx.stop_propagation();
+                            return;
+                        }
+
+                        // Handle Escape for AcpChatView (return to main menu)
+                        if crate::ui_foundation::is_key_escape(key) && !has_cmd && !has_shift
+                            && matches!(this.current_view, AppView::AcpChatView { .. })
+                        {
+                            logging::log("KEY", "Interceptor: Escape -> return to main menu from ACP chat");
                             this.close_tab_ai_harness_terminal(cx);
                             cx.stop_propagation();
                             return;

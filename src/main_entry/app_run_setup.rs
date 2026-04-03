@@ -2113,8 +2113,9 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                         logging::log("STDIN", &format!("SimulateKey: Dispatching '{}' to AcpChatView", key_lower));
                                         let entity_clone = entity.clone();
                                         if has_cmd && key_lower == "w" {
-                                            logging::log("STDIN", "SimulateKey: Cmd+W - close ACP chat");
+                                            logging::log("STDIN", "SimulateKey: Cmd+W - close window from ACP chat");
                                             view.close_tab_ai_harness_terminal(ctx);
+                                            view.close_and_reset_window(ctx);
                                         } else if has_cmd && key_lower == "k" {
                                             logging::log("STDIN", "SimulateKey: Cmd+K - open actions in ACP chat");
                                             view.toggle_actions(ctx, window);
@@ -2144,7 +2145,8 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                                 });
                                             });
                                         } else if key_lower == "escape" {
-                                            logging::log("STDIN", "SimulateKey: Escape in ACP chat");
+                                            logging::log("STDIN", "SimulateKey: Escape - return to main menu from ACP chat");
+                                            view.close_tab_ai_harness_terminal(ctx);
                                         } else if key_lower.chars().count() == 1 {
                                             let ch = key_lower.chars().next().unwrap_or(' ');
                                             entity_clone.update(ctx, |chat, cx| {
