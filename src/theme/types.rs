@@ -137,11 +137,11 @@ pub struct BackgroundOpacity {
 }
 
 fn default_selected_opacity() -> f32 {
-    0.33 // Selection with vibrancy — increased for clearer active-item contrast
+    0.18 // Selection — whisper-subtle highlight over vibrancy
 }
 
 fn default_hover_opacity() -> f32 {
-    0.22 // Hover feedback — increased for clearer pointer/selection tracking
+    0.12 // Hover — barely visible state affordance
 }
 
 fn default_preview_opacity() -> f32 {
@@ -191,8 +191,8 @@ impl BackgroundOpacity {
             title_bar: 0.30,                 // Title bar areas
             search_box: 0.40,                // Search input backgrounds
             log_panel: 0.40,                 // Log/terminal panels
-            selected: 0.33, // Selected list item highlight — improved visibility on vibrancy
-            hover: 0.22,    // Hovered list item highlight — clearer state affordance
+            selected: 0.18, // Selected list item — whisper-subtle highlight over vibrancy
+            hover: 0.12,    // Hovered list item — barely visible state affordance
             preview: 0.0,   // Preview panel (0 = fully transparent)
             dialog: 0.15,   // Dialogs/popups - very low opacity, let vibrancy blur show through
             input: 0.30,    // Input fields
@@ -221,16 +221,16 @@ impl BackgroundOpacity {
             title_bar: 0.85,                 // Match main for consistency
             search_box: 0.90,                // 90% - matches POC input_area_bg
             log_panel: 0.90,                 // Slightly more opaque for terminal readability
-            selected: 0.36, // Light mode selection - tuned for stronger non-text contrast
-            hover: 0.26,    // Light mode hover - visible on bright vibrancy backgrounds
-            preview: 0.0,   // Preview panel (0 = fully transparent)
-            dialog: 0.85,   // Dialogs match main
-            input: 0.90,    // Input fields - 90% like POC input_area_bg
-            panel: 0.85,    // Panels match main
-            input_inactive: 0.85, // Input fields when empty/inactive
-            input_active: 0.90, // Input fields when has text/active
-            border_inactive: 0.30, // Borders when inactive
-            border_active: 0.45, // Borders when active
+            selected: 0.20,                  // Light mode selection — whisper-subtle darkening
+            hover: 0.14,                     // Light mode hover — barely visible state affordance
+            preview: 0.0,                    // Preview panel (0 = fully transparent)
+            dialog: 0.85,                    // Dialogs match main
+            input: 0.90,                     // Input fields - 90% like POC input_area_bg
+            panel: 0.85,                     // Panels match main
+            input_inactive: 0.85,            // Input fields when empty/inactive
+            input_active: 0.90,              // Input fields when has text/active
+            border_inactive: 0.30,           // Borders when inactive
+            border_active: 0.45,             // Borders when active
             vibrancy_background: Some(0.85), // Match POC: 85% opacity (0xD9/255)
         }
     }
@@ -424,7 +424,7 @@ pub struct AccentColors {
 /// Default subtle selection color
 /// Uses white for near-invisible Raycast-like highlighting
 fn default_selected_subtle() -> HexColor {
-    0xffffff // White - rendered at very low opacity for subtle brightening
+    0x5a5a5a // Optimal: closest to dark bg that passes 4.5:1 contrast at selected opacity
 }
 
 /// Border and UI element colors
@@ -759,7 +759,7 @@ impl ColorScheme {
             },
             accent: AccentColors {
                 selected: 0xfbbf24,        // Script Kit primary: #fbbf24 (yellow/gold)
-                selected_subtle: 0xffffff, // White - near-invisible brightening like Raycast
+                selected_subtle: 0x5a5a5a, // Optimal: closest to bg that passes 4.5:1 at selected opacity
             },
             ui: UIColors {
                 border: 0x464647,

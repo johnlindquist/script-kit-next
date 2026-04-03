@@ -54,7 +54,11 @@
 
                         // (dark/light badge removed — section headers provide this info)
 
-                        let sel_bg = rgba((selection_bg << 8) | selected_alpha);
+                        // Ensure selection is clearly visible in theme chooser
+                        // (theme chooser needs stronger selection than main menu
+                        // because users are comparing themes visually)
+                        let chooser_sel_alpha = selected_alpha.max(0x50);
+                        let sel_bg = rgba((selection_bg << 8) | chooser_sel_alpha);
                         let border_rgba = rgba((ui_border << 8) | 0x30);
 
                         // Section label for light themes (only when unfiltered)
@@ -151,10 +155,10 @@
                             .gap(px(2.0))
                             .child(
                                 div()
-                                    .text_size(px(14.0))
-                                    .line_height(px(20.0))
+                                    .text_size(px(crate::list_item::NAME_FONT_SIZE))
+                                    .line_height(px(crate::list_item::NAME_LINE_HEIGHT))
                                     .when(is_selected, |d| {
-                                        d.font_weight(gpui::FontWeight::MEDIUM)
+                                        d.font_weight(gpui::FontWeight::SEMIBOLD)
                                     })
                                     .text_color(name_color)
                                     .child(name.clone()),
@@ -221,27 +225,7 @@
             .flex()
             .flex_col()
             .gap(px(6.0))
-            .child(
-                div()
-                    .flex()
-                    .flex_row()
-                    .items_center()
-                    .gap(px(8.0))
-                    .child(
-                        div()
-                            .text_sm()
-                            .font_weight(gpui::FontWeight::SEMIBOLD)
-                            .text_color(rgb(text_primary))
-                            .child("Themes"),
-                    )
-                    .child(
-                        div().text_xs().text_color(rgb(text_dimmed)).child(format!(
-                            "{} dark · {} light",
-                            dark_count, light_count
-                        )),
-                    ),
-            )
-            // Search input
+            // Search input (no title — consistent with other UIs)
             .child(
                 div()
                     .flex()

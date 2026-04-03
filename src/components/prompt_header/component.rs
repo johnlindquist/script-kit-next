@@ -67,9 +67,9 @@ impl PromptHeader {
             self.config.filter_text.clone().into()
         };
 
-        // Text color: muted for placeholder, primary for input
+        // Text color: dimmed for placeholder (whisper chrome), primary for input
         let text_color = if filter_is_empty {
-            colors.text_muted.to_rgb()
+            colors.text_dimmed.to_rgb()
         } else {
             colors.text_primary.to_rgb()
         };
