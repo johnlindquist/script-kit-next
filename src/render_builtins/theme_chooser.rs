@@ -25,10 +25,6 @@ const THEME_ITEM_SWATCH_GAP_MIN: f32 = 2.0;
 const THEME_ITEM_SWATCH_GAP_MAX: f32 = 4.0;
 const THEME_LIST_VERTICAL_PADDING_MIN: f32 = 2.0;
 const THEME_LIST_VERTICAL_PADDING_MAX: f32 = 6.0;
-const THEME_ITEM_BADGE_HORIZONTAL_PADDING_MIN: f32 = 8.0;
-const THEME_ITEM_BADGE_HORIZONTAL_PADDING_MAX: f32 = 10.0;
-const THEME_ITEM_BADGE_VERTICAL_PADDING_MIN: f32 = 2.0;
-const THEME_ITEM_BADGE_VERTICAL_PADDING_MAX: f32 = 4.0;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct ThemeChooserRowLayout {
@@ -38,8 +34,6 @@ struct ThemeChooserRowLayout {
     text_gap: f32,
     swatch_gap: f32,
     list_vertical_padding: f32,
-    badge_horizontal_padding: f32,
-    badge_vertical_padding: f32,
 }
 
 impl ScriptListApp {
@@ -171,15 +165,6 @@ impl ScriptListApp {
             THEME_LIST_VERTICAL_PADDING_MIN,
             THEME_LIST_VERTICAL_PADDING_MAX,
         );
-        let badge_horizontal_padding = spacing.padding_sm.clamp(
-            THEME_ITEM_BADGE_HORIZONTAL_PADDING_MIN,
-            THEME_ITEM_BADGE_HORIZONTAL_PADDING_MAX,
-        );
-        let badge_vertical_padding = (spacing.padding_xs / 2.0).clamp(
-            THEME_ITEM_BADGE_VERTICAL_PADDING_MIN,
-            THEME_ITEM_BADGE_VERTICAL_PADDING_MAX,
-        );
-
         ThemeChooserRowLayout {
             item_height,
             horizontal_padding,
@@ -187,8 +172,6 @@ impl ScriptListApp {
             text_gap,
             swatch_gap,
             list_vertical_padding,
-            badge_horizontal_padding,
-            badge_vertical_padding,
         }
     }
 
@@ -510,28 +493,23 @@ impl ScriptListApp {
                         let preset = &presets_for_list[preset_idx];
                         let name = preset.name;
                         let desc = preset.description;
-                        let is_dark = preset.is_dark;
                         let colors = &preview_colors[preset_idx];
                         let is_first_light =
                             filter_is_empty && preset_idx == first_light_idx && first_light_idx > 0;
 
-                        // Color swatches
-                        let swatch = |color: u32| {
-                            div()
-                                .w(px(14.0))
-                                .h(px(24.0))
-                                .rounded(px(3.0))
-                                .bg(rgb(color))
-                        };
-                        let palette = div()
+                        // Compact color bar — thin horizontal strip showing theme palette
+                        let color_bar = div()
                             .flex()
                             .flex_row()
-                            .gap(px(row_layout.swatch_gap))
-                            .child(swatch(colors.bg))
-                            .child(swatch(colors.accent))
-                            .child(swatch(colors.text))
-                            .child(swatch(colors.secondary))
-                            .child(swatch(colors.border));
+                            .w(px(40.0))
+                            .h(px(8.0))
+                            .rounded(px(4.0))
+                            .overflow_hidden()
+                            .child(div().flex_1().bg(rgb(colors.bg)))
+                            .child(div().flex_1().bg(rgb(colors.accent)))
+                            .child(div().flex_1().bg(rgb(colors.text)))
+                            .child(div().flex_1().bg(rgb(colors.secondary)))
+                            .child(div().flex_1().bg(rgb(colors.border)));
 
                         // Checkmark for original (saved) theme
                         let indicator = if is_original {
@@ -544,20 +522,6 @@ impl ScriptListApp {
                         } else {
                             div().w(px(16.0))
                         };
-
-                        // Dark/light badge
-                        let badge_text = if is_dark { "dark" } else { "light" };
-                        let badge_border = rgba((ui_border << 8) | ALPHA_BADGE_BORDER);
-                        let badge = div()
-                            .text_xs()
-                            .text_color(rgb(text_dimmed))
-                            .ml_auto()
-                            .px(px(row_layout.badge_horizontal_padding))
-                            .py(px(row_layout.badge_vertical_padding))
-                            .rounded(px(4.0))
-                            .border_1()
-                            .border_color(badge_border)
-                            .child(badge_text);
 
                         let border_rgba = rgba((ui_border << 8) | ALPHA_FOOTER_BORDER);
 
@@ -635,6 +599,27 @@ impl ScriptListApp {
                             };
 
                         // Build item row
+                        let text_col = div()
+                            .flex()
+                            .flex_col()
+                            .overflow_hidden()
+                            .gap(px(row_layout.text_gap))
+                            .child(
+                                div()
+                                    .text_sm()
+                                    .when(is_original || is_selected, |d| {
+                                        d.font_weight(gpui::FontWeight::SEMIBOLD)
+                                    })
+                                    .text_color(rgb(name_color))
+                                    .child(name),
+                            )
+                            // Description only revealed on focused row
+                            .when(is_selected, |d| {
+                                d.child(
+                                    div().text_xs().text_color(rgb(text_secondary)).child(desc),
+                                )
+                            });
+
                         let row = div()
                             .id(ix)
                             .w_full()
@@ -655,27 +640,8 @@ impl ScriptListApp {
                             })
                             .on_click(click_handler)
                             .child(indicator)
-                            .child(palette)
-                            .child(
-                                div()
-                                    .flex()
-                                    .flex_col()
-                                    .overflow_hidden()
-                                    .gap(px(row_layout.text_gap))
-                                    .child(
-                                        div()
-                                            .text_sm()
-                                            .when(is_original || is_selected, |d| {
-                                                d.font_weight(gpui::FontWeight::SEMIBOLD)
-                                            })
-                                            .text_color(rgb(name_color))
-                                            .child(name),
-                                    )
-                                    .child(
-                                        div().text_xs().text_color(rgb(text_secondary)).child(desc),
-                                    ),
-                            )
-                            .child(badge);
+                            .child(color_bar)
+                            .child(text_col);
 
                         if let Some(label) = section_label {
                             div()
@@ -1621,8 +1587,6 @@ mod theme_chooser_filter_tests {
         assert_eq!(layout.text_gap, 4.0);
         assert_eq!(layout.swatch_gap, 2.0);
         assert_eq!(layout.list_vertical_padding, 4.0);
-        assert_eq!(layout.badge_horizontal_padding, 8.0);
-        assert_eq!(layout.badge_vertical_padding, 2.0);
     }
 
     #[test]
@@ -1648,14 +1612,6 @@ mod theme_chooser_filter_tests {
         assert_eq!(
             layout.list_vertical_padding,
             THEME_LIST_VERTICAL_PADDING_MAX
-        );
-        assert_eq!(
-            layout.badge_horizontal_padding,
-            THEME_ITEM_BADGE_HORIZONTAL_PADDING_MAX
-        );
-        assert_eq!(
-            layout.badge_vertical_padding,
-            THEME_ITEM_BADGE_VERTICAL_PADDING_MAX
         );
     }
 }

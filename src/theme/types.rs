@@ -755,7 +755,7 @@ impl ColorScheme {
                 tertiary: 0x999999,
                 muted: 0x808080,
                 dimmed: 0x666666,
-                on_accent: 0xffffff, // Light text for focused items on accent backgrounds
+                on_accent: 0x1e1e1e, // Dark text for focused items on bright accent backgrounds
             },
             accent: AccentColors {
                 selected: 0xfbbf24,        // Script Kit primary: #fbbf24 (yellow/gold)
@@ -2404,9 +2404,10 @@ mod tests {
     }
 
     #[test]
-    fn test_dark_default_uses_light_on_accent_text() {
+    fn test_dark_default_uses_dark_on_accent_text() {
         let dark_theme = Theme::dark_default();
-        assert_eq!(dark_theme.colors.text.on_accent, 0xffffff);
+        // Dark text on bright yellow (#FBBF24) accent for WCAG contrast
+        assert_eq!(dark_theme.colors.text.on_accent, 0x1e1e1e);
     }
 
     #[test]

@@ -1,7 +1,6 @@
         // ── Pre-compute data for list closure ──────────────────────
         let preset_names: Vec<String> = presets.iter().map(|p| p.name.to_string()).collect();
         let preset_descs: Vec<String> = presets.iter().map(|p| p.description.to_string()).collect();
-        let preset_is_dark: Vec<bool> = presets.iter().map(|p| p.is_dark).collect();
         let selected = selected_index;
         let orig_idx = original_index;
         let first_light_idx = first_light;
@@ -21,30 +20,25 @@
                         let is_original = preset_idx == orig_idx;
                         let name = &preset_names[preset_idx];
                         let desc = &preset_descs[preset_idx];
-                        let is_dark = preset_is_dark[preset_idx];
                         let colors = &preview_colors[preset_idx];
                         let is_first_light = filter_is_empty
                             && preset_idx == first_light_idx
                             && first_light_idx > 0;
 
-                        // Color swatches
-                        let swatch = |color: u32| {
-                            div()
-                                .w(px(14.0))
-                                .h(px(24.0))
-                                .rounded(px(3.0))
-                                .bg(rgb(color))
-                        };
-                        let palette = div()
+                        // Compact color bar — thin horizontal strip showing theme palette
+                        let color_bar = div()
                             .flex()
                             .flex_row()
-                            .gap(px(2.0))
-                            .mr(px(10.0))
-                            .child(swatch(colors.bg))
-                            .child(swatch(colors.accent))
-                            .child(swatch(colors.text))
-                            .child(swatch(colors.secondary))
-                            .child(swatch(colors.border));
+                            .w(px(40.0))
+                            .h(px(8.0))
+                            .rounded(px(4.0))
+                            .overflow_hidden()
+                            .mr(px(8.0))
+                            .child(div().flex_1().bg(rgb(colors.bg)))
+                            .child(div().flex_1().bg(rgb(colors.accent)))
+                            .child(div().flex_1().bg(rgb(colors.text)))
+                            .child(div().flex_1().bg(rgb(colors.secondary)))
+                            .child(div().flex_1().bg(rgb(colors.border)));
 
                         // Checkmark for original (saved) theme
                         let indicator = if is_original {
@@ -58,19 +52,7 @@
                             div().w(px(16.0))
                         };
 
-                        // Dark/light badge
-                        let badge_text = if is_dark { "dark" } else { "light" };
-                        let badge_border = rgba((ui_border << 8) | 0x40);
-                        let badge = div()
-                            .text_xs()
-                            .text_color(rgb(text_dimmed))
-                            .ml_auto()
-                            .px(px(6.0))
-                            .py(px(2.0))
-                            .rounded(px(4.0))
-                            .border_1()
-                            .border_color(badge_border)
-                            .child(badge_text.to_string());
+                        // (dark/light badge removed — section headers provide this info)
 
                         let sel_bg = rgba((selection_bg << 8) | selected_alpha);
                         let border_rgba = rgba((ui_border << 8) | 0x30);
@@ -160,6 +142,30 @@
                         };
 
                         // Build item row
+                        let text_col = div()
+                            .flex()
+                            .flex_col()
+                            .overflow_hidden()
+                            .gap(px(1.0))
+                            .child(
+                                div()
+                                    .text_sm()
+                                    .when(is_original || is_selected, |d| {
+                                        d.font_weight(gpui::FontWeight::SEMIBOLD)
+                                    })
+                                    .text_color(rgb(name_color))
+                                    .child(name.clone()),
+                            )
+                            // Description only revealed on focused row
+                            .when(is_selected, |d| {
+                                d.child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(rgb(text_secondary))
+                                        .child(desc.clone()),
+                                )
+                            });
+
                         let row = div()
                             .id(ix)
                             .w_full()
@@ -176,30 +182,8 @@
                             .when(!is_selected, |d| d.hover(move |s| s.bg(hover_bg)))
                             .on_click(click_handler)
                             .child(indicator)
-                            .child(palette)
-                            .child(
-                                div()
-                                    .flex()
-                                    .flex_col()
-                                    .overflow_hidden()
-                                    .gap(px(1.0))
-                                    .child(
-                                        div()
-                                            .text_sm()
-                                            .when(is_original || is_selected, |d| {
-                                                d.font_weight(gpui::FontWeight::SEMIBOLD)
-                                            })
-                                            .text_color(rgb(name_color))
-                                            .child(name.clone()),
-                                    )
-                                    .child(
-                                        div()
-                                            .text_xs()
-                                            .text_color(rgb(text_secondary))
-                                            .child(desc.clone()),
-                                    ),
-                            )
-                            .child(badge);
+                            .child(color_bar)
+                            .child(text_col);
 
                         if let Some(label) = section_label {
                             div()

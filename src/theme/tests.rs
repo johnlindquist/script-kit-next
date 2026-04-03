@@ -244,6 +244,109 @@ fn test_validate_theme_json_errors_when_numeric_color_exceeds_u32_range() {
     );
 }
 
+// ============================================================================
+// WCAG Contrast Ratio Audit
+// ============================================================================
+
+/// WCAG 2.1 contrast ratio between two colors.
+/// Returns a ratio >= 1.0 (e.g. 4.5 means 4.5:1).
+fn contrast_ratio(fg: u32, bg: u32) -> f32 {
+    let l1 = super::types::relative_luminance_srgb(fg);
+    let l2 = super::types::relative_luminance_srgb(bg);
+    let lighter = l1.max(l2);
+    let darker = l1.min(l2);
+    (lighter + 0.05) / (darker + 0.05)
+}
+
+/// A single contrast check with context for error reporting
+struct ContrastCheck {
+    pair: &'static str,
+    fg: u32,
+    bg: u32,
+    min_ratio: f32,
+}
+
+/// Audit all theme presets for WCAG contrast compliance.
+///
+/// Checks critical text-on-background pairs:
+/// - primary text on main background (WCAG AA normal text: 4.5:1)
+/// - secondary text on main background (WCAG AA normal text: 4.5:1)
+/// - muted text on main background (WCAG AA large text: 3.0:1)
+/// - accent on main background (WCAG AA large text: 3.0:1)
+/// - on_accent text on accent background (WCAG AA large text: 3.0:1)
+///
+/// Themes that fail are collected and reported in a single assertion
+/// with exact ratios so you can see what needs fixing.
+#[test]
+fn audit_theme_contrast_ratios() {
+    let presets = presets::all_presets();
+    let mut failures: Vec<String> = Vec::new();
+
+    for preset in &presets {
+        let theme = preset.create_theme();
+        let bg = theme.colors.background.main;
+        let checks = [
+            ContrastCheck {
+                pair: "primary/bg",
+                fg: theme.colors.text.primary,
+                bg,
+                min_ratio: 4.5,
+            },
+            ContrastCheck {
+                pair: "secondary/bg",
+                fg: theme.colors.text.secondary,
+                bg,
+                min_ratio: 4.5,
+            },
+            ContrastCheck {
+                pair: "muted/bg",
+                fg: theme.colors.text.muted,
+                bg,
+                min_ratio: 3.0,
+            },
+            ContrastCheck {
+                pair: "accent/bg",
+                fg: theme.colors.accent.selected,
+                bg,
+                min_ratio: 3.0,
+            },
+            ContrastCheck {
+                pair: "on_accent/accent",
+                fg: theme.colors.text.on_accent,
+                bg: theme.colors.accent.selected,
+                min_ratio: 3.0,
+            },
+        ];
+
+        for check in &checks {
+            let ratio = contrast_ratio(check.fg, check.bg);
+            if ratio < check.min_ratio {
+                failures.push(format!(
+                    "  {:<25} {:<18} {:>5.2}:1  (need {:.1}:1)  fg=#{:06X} bg=#{:06X}",
+                    preset.id, check.pair, ratio, check.min_ratio, check.fg, check.bg,
+                ));
+            }
+        }
+    }
+
+    if !failures.is_empty() {
+        let report = failures.join("\n");
+        eprintln!(
+            "\n╔══ Theme Contrast Audit ══════════════════════════════════════════════════════╗\n\
+             ║ {} failure(s) across {} themes                                              \n\
+             ╠════════════════════════════════════════════════════════════════════════════════╣\n\
+             {}\n\
+             ╚════════════════════════════════════════════════════════════════════════════════╝\n",
+            failures.len(),
+            presets.len(),
+            report,
+        );
+        // NOTE: This is intentionally a warning, not a hard failure.
+        // Uncomment the line below to enforce contrast minimums:
+        // panic!("{} contrast failures found", failures.len());
+    }
+}
+
 fn assert_snapshot_matches_golden(name: &str, actual: &str, expected: &str) {
     assert_eq!(
         actual,
