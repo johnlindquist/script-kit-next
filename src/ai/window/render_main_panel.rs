@@ -660,6 +660,9 @@ impl AiApp {
                     crate::ai::message_parts::ContextPartPreparationOutcomeKind::Failed => {
                         ("failed", theme.danger)
                     }
+                    crate::ai::message_parts::ContextPartPreparationOutcomeKind::DisplayOnly => {
+                        ("display-only", muted_fg)
+                    }
                 };
                 let status_text: SharedString = status_label.into();
 
@@ -1061,6 +1064,9 @@ impl AiApp {
                         }
                         crate::ai::window::prompt_compiler::PromptCompilerRowKind::UnresolvedPart => {
                             ("unresolved", theme.danger)
+                        }
+                        crate::ai::window::prompt_compiler::PromptCompilerRowKind::DisplayOnly => {
+                            ("display-only", muted_fg)
                         }
                     };
                     let kind_text: SharedString = kind_label.into();

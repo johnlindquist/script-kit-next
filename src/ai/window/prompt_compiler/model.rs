@@ -19,6 +19,8 @@ pub(crate) enum PromptCompilerRowKind {
     Failed,
     DuplicateDropped,
     UnresolvedPart,
+    /// Display-only chip (e.g. `AmbientContext`) — no prompt block produced.
+    DisplayOnly,
 }
 
 /// A single line-item in the prompt compiler preview.
@@ -78,6 +80,9 @@ impl PromptCompilerPreview {
                     PromptCompilerRowKind::MetadataOnly
                 }
                 ContextPartPreparationOutcomeKind::Failed => PromptCompilerRowKind::Failed,
+                ContextPartPreparationOutcomeKind::DisplayOnly => {
+                    PromptCompilerRowKind::DisplayOnly
+                }
             };
             rows.push(PromptCompilerRow {
                 kind,

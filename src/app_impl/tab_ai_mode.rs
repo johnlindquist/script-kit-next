@@ -337,6 +337,55 @@ impl ScriptListApp {
         .detach();
     }
 
+    /// Map a target kind to its human-readable chip prefix.
+    fn tab_ai_chip_prefix_for_kind(kind: &str) -> &'static str {
+        match kind {
+            "file" => "File",
+            "directory" => "Folder",
+            "clipboard_entry" => "Clipboard",
+            "script" | "scriptlet" | "builtin" => "Command",
+            "window" => "Window",
+            "app" => "App",
+            "process" => "Process",
+            "menu_command" => "Menu Command",
+            "agent" => "Agent",
+            "fallback" => "Suggestion",
+            _ => "Selection",
+        }
+    }
+
+    /// Format a canonical chip label from a resolved target.
+    fn format_tab_ai_focused_chip_label(
+        target: &crate::ai::TabAiTargetContext,
+    ) -> String {
+        format!(
+            "{}: {}",
+            Self::tab_ai_chip_prefix_for_kind(&target.kind),
+            target.label
+        )
+    }
+
+    /// Resolve targets for a view and emit a structured audit log.
+    fn resolve_tab_ai_targets_with_audit_for_view(
+        &self,
+        view: &AppView,
+        ui: &crate::ai::TabAiUiSnapshot,
+        phase: &str,
+    ) -> (
+        Option<crate::ai::TabAiTargetContext>,
+        Vec<crate::ai::TabAiTargetContext>,
+    ) {
+        let (focused_target, visible_targets) =
+            self.resolve_tab_ai_surface_targets_for_view(view, ui);
+        crate::ai::TabAiTargetAudit::from_targets(
+            &ui.prompt_type,
+            &focused_target,
+            &visible_targets,
+        )
+        .emit_with_phase(phase);
+        (focused_target, visible_targets)
+    }
+
     /// Build a focused-target `AiContextPart` from the current view's
     /// resolved focus, if any. Returns `None` when the active surface has
     /// no resolvable focused item (e.g. empty list, generic prompt).
@@ -346,18 +395,20 @@ impl ScriptListApp {
         ui_snapshot: &crate::ai::TabAiUiSnapshot,
     ) -> Option<crate::ai::message_parts::AiContextPart> {
         let (focused_target, _visible_targets) =
-            self.resolve_tab_ai_surface_targets_for_view(source_view, ui_snapshot);
+            self.resolve_tab_ai_targets_with_audit_for_view(
+                source_view,
+                ui_snapshot,
+                "pre_open",
+            );
         focused_target.map(|target| {
-            let label = match target.kind.as_str() {
-                "file" => format!("File: {}", target.label),
-                "directory" => format!("Folder: {}", target.label),
-                "clipboard_entry" => format!("Clipboard: {}", target.label),
-                "script" | "scriptlet" | "builtin" => format!("Command: {}", target.label),
-                "window" => format!("Window: {}", target.label),
-                "app" => format!("App: {}", target.label),
-                "process" => format!("Process: {}", target.label),
-                _ => target.label.clone(),
-            };
+            let label = Self::format_tab_ai_focused_chip_label(&target);
+            tracing::info!(
+                target: "script_kit::tab_ai",
+                event = "tab_ai_focused_chip_label_built",
+                item_source = %target.source,
+                item_kind = %target.kind,
+                chip_label = %label,
+            );
             crate::ai::message_parts::AiContextPart::FocusedTarget { target, label }
         })
     }
@@ -789,8 +840,8 @@ impl ScriptListApp {
             let _ = thread.update(cx, |thread, cx| {
                 thread.add_context_part(
                     crate::ai::message_parts::AiContextPart::ResourceUri {
-                        uri: "kit://context?profile=minimal".to_string(),
-                        label: "Ask Anything".to_string(),
+                        uri: crate::ai::message_parts::ASK_ANYTHING_RESOURCE_URI.to_string(),
+                        label: crate::ai::message_parts::ASK_ANYTHING_LABEL.to_string(),
                     },
                     cx,
                 );
@@ -963,7 +1014,7 @@ impl ScriptListApp {
                     // Stage context on the AcpThread
                     let stage_context_started_at = std::time::Instant::now();
                     let _ = thread_entity.update(cx, |thread, cx| {
-                        if let Err(e) = thread.stage_context(&context, cx) {
+                        if let Err(e) = thread.stage_ask_anything_context(&context, cx) {
                             tracing::warn!(
                                 event = "tab_ai_acp_stage_context_failed",
                                 error = %e,
@@ -1700,7 +1751,7 @@ impl ScriptListApp {
             }
         };
         let (focused_target, visible_targets) =
-            self.resolve_tab_ai_surface_targets_for_view(&source_view, &ui);
+            self.resolve_tab_ai_targets_with_audit_for_view(&source_view, &ui, "submit_context");
 
         let suggested_intents = crate::ai::build_tab_ai_suggested_intents(
             focused_target.as_ref(),

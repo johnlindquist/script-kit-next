@@ -171,11 +171,12 @@ impl TabAiTargetAudit {
         }
     }
 
-    /// Emit this audit as a structured `tracing::info` log line.
-    pub fn emit(&self) {
+    /// Emit this audit as a structured `tracing::info` log line with a phase tag.
+    pub fn emit_with_phase(&self, phase: &str) {
         tracing::info!(
             target: "script_kit::tab_ai",
             event = "tab_ai_target_audit",
+            phase = phase,
             schema_version = self.schema_version,
             prompt_type = %self.prompt_type,
             has_focused_target = self.has_focused_target,
@@ -185,6 +186,11 @@ impl TabAiTargetAudit {
             focused_semantic_id = ?self.focused_semantic_id,
             visible_kinds = ?self.visible_kinds,
         );
+    }
+
+    /// Emit this audit as a structured `tracing::info` log line.
+    pub fn emit(&self) {
+        self.emit_with_phase("unspecified");
     }
 }
 

@@ -162,6 +162,11 @@ pub(crate) struct AcpThread {
     /// `resolve_context_parts_with_receipt`. Supports add/remove/dedup.
     pending_context_parts: Vec<crate::ai::message_parts::AiContextPart>,
 
+    /// Whether the Ask Anything ambient context path is still active.
+    /// Set `true` when an Ask Anything chip is staged; cleared when the
+    /// chip is removed. When `false`, deferred ambient capture is suppressed.
+    pending_ambient_context_enabled: bool,
+
     /// Whether the deferred context capture has completed.
     context_bootstrap_state: AcpContextBootstrapState,
     /// Whether a submit was attempted while context was still `Preparing`.
@@ -233,6 +238,7 @@ impl AcpThread {
             pending_context_blocks: Vec::new(),
             pending_context_consumed: false,
             pending_context_parts: Vec::new(),
+            pending_ambient_context_enabled: false,
             context_bootstrap_state: AcpContextBootstrapState::Preparing,
             queued_submit_while_bootstrapping: false,
             context_bootstrap_note: Some(
@@ -292,6 +298,87 @@ impl AcpThread {
 
         cx.notify();
         Ok(())
+    }
+
+    /// Stage ambient context from a deferred Ask Anything capture.
+    ///
+    /// If the Ask Anything chip was removed before capture finished, this
+    /// is a no-op that still marks bootstrap as ready.  Otherwise it stages
+    /// the context blocks and promotes the visible chip from `ResourceUri`
+    /// to `AmbientContext` (display-only).
+    pub(crate) fn stage_ask_anything_context(
+        &mut self,
+        context: &crate::ai::TabAiContextBlob,
+        cx: &mut Context<Self>,
+    ) -> Result<(), String> {
+        if !self.pending_ambient_context_enabled {
+            tracing::info!(
+                target: "script_kit::tab_ai",
+                event = "acp_ask_anything_stage_skipped_removed",
+            );
+            self.context_bootstrap_state = AcpContextBootstrapState::Ready;
+            self.context_bootstrap_note = Some("Ask Anything removed".into());
+
+            let submit_now = self.queued_submit_while_bootstrapping
+                && !self.input.text().trim().is_empty()
+                && !matches!(
+                    self.status,
+                    AcpThreadStatus::Streaming | AcpThreadStatus::WaitingForPermission
+                );
+            self.queued_submit_while_bootstrapping = false;
+
+            if submit_now {
+                return self.submit_input(cx);
+            }
+            cx.notify();
+            return Ok(());
+        }
+
+        self.pending_context_blocks = build_tab_ai_acp_context_blocks(context)?;
+        self.pending_context_consumed = false;
+        self.promote_ask_anything_chip_to_ambient();
+        self.context_bootstrap_state = AcpContextBootstrapState::Ready;
+        self.context_bootstrap_note = Some("Context attached".into());
+
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "acp_ask_anything_promoted_to_ambient_chip",
+            block_count = self.pending_context_blocks.len(),
+        );
+
+        let submit_now = self.queued_submit_while_bootstrapping
+            && !self.input.text().trim().is_empty()
+            && !matches!(
+                self.status,
+                AcpThreadStatus::Streaming | AcpThreadStatus::WaitingForPermission
+            );
+        self.queued_submit_while_bootstrapping = false;
+
+        if submit_now {
+            return self.submit_input(cx);
+        }
+        cx.notify();
+        Ok(())
+    }
+
+    /// Replace the initial Ask Anything `ResourceUri` chip with a display-only
+    /// `AmbientContext` chip. If the resource chip was already removed, pushes
+    /// a new ambient chip.
+    fn promote_ask_anything_chip_to_ambient(&mut self) {
+        if let Some(part) = self
+            .pending_context_parts
+            .iter_mut()
+            .find(|part| part.is_ask_anything_resource())
+        {
+            *part = crate::ai::message_parts::AiContextPart::AmbientContext {
+                label: crate::ai::message_parts::ASK_ANYTHING_LABEL.to_string(),
+            };
+            return;
+        }
+        self.pending_context_parts
+            .push(crate::ai::message_parts::AiContextPart::AmbientContext {
+                label: crate::ai::message_parts::ASK_ANYTHING_LABEL.to_string(),
+            });
     }
 
     /// Mark the context bootstrap as ready without staging ambient context
@@ -473,7 +560,11 @@ impl AcpThread {
     pub(super) fn prepare_turn_blocks(&mut self, input: &str) -> Vec<ContentBlock> {
         let mut blocks = Vec::new();
 
-        let has_context = !self.pending_context_consumed;
+        let has_pending_parts = !self.pending_context_parts.is_empty();
+        let has_pending_blocks = !self.pending_context_blocks.is_empty();
+        let has_context =
+            !self.pending_context_consumed && (has_pending_parts || has_pending_blocks);
+
         if has_context {
             blocks.extend(self.pending_context_blocks.clone());
 
@@ -1016,8 +1107,11 @@ impl AcpThread {
         part: crate::ai::message_parts::AiContextPart,
         cx: &mut Context<Self>,
     ) {
-        let already_present = self.pending_context_parts.iter().any(|existing| existing == &part);
-        if already_present {
+        if part.is_ask_anything_resource() || part.is_ambient_context_chip() {
+            self.pending_ambient_context_enabled = true;
+        }
+
+        if self.pending_context_parts.iter().any(|existing| existing == &part) {
             tracing::info!(
                 target: "script_kit::tab_ai",
                 event = "acp_context_part_add_skipped_duplicate",
@@ -1039,11 +1133,33 @@ impl AcpThread {
     }
 
     /// Remove a typed context part by index.
+    ///
+    /// When an Ask Anything or AmbientContext chip is removed, clears the
+    /// staged ambient blocks so they are not submitted.
     pub(crate) fn remove_context_part(&mut self, index: usize, cx: &mut Context<Self>) {
         if index >= self.pending_context_parts.len() {
             return;
         }
         let removed = self.pending_context_parts.remove(index);
+        let removed_ambient =
+            removed.is_ask_anything_resource() || removed.is_ambient_context_chip();
+
+        if removed_ambient {
+            self.pending_ambient_context_enabled = self
+                .pending_context_parts
+                .iter()
+                .any(|part| part.is_ask_anything_resource() || part.is_ambient_context_chip());
+
+            if !self.pending_ambient_context_enabled {
+                self.pending_context_blocks.clear();
+                self.pending_context_consumed = false;
+                tracing::info!(
+                    target: "script_kit::tab_ai",
+                    event = "acp_ambient_context_cleared_via_chip",
+                );
+            }
+        }
+
         tracing::info!(
             target: "script_kit::tab_ai",
             event = "acp_context_part_removed",
@@ -1084,6 +1200,7 @@ impl AcpThread {
             pending_context_blocks: context_blocks,
             pending_context_consumed: false,
             pending_context_parts: Vec::new(),
+            pending_ambient_context_enabled: false,
             context_bootstrap_state: AcpContextBootstrapState::Ready,
             queued_submit_while_bootstrapping: false,
             context_bootstrap_note: None,
@@ -1197,6 +1314,7 @@ mod tests {
             pending_context_blocks,
             pending_context_consumed,
             pending_context_parts: Vec::new(),
+            pending_ambient_context_enabled: false,
             context_bootstrap_state: AcpContextBootstrapState::Ready,
             queued_submit_while_bootstrapping: false,
             context_bootstrap_note: None,
