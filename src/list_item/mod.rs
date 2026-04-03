@@ -98,9 +98,9 @@ const ICON_SVG_SIZE: f32 = 16.0;
 // =============================================================================
 
 /// Item name font size (14px — dense desktop default for primary labels)
-const NAME_FONT_SIZE: f32 = 14.0;
+pub(crate) const NAME_FONT_SIZE: f32 = 14.0;
 /// Item name line height
-const NAME_LINE_HEIGHT: f32 = 20.0;
+pub(crate) const NAME_LINE_HEIGHT: f32 = 20.0;
 /// Item description font size (12px — minimum for desktop legibility)
 const DESC_FONT_SIZE: f32 = 12.0;
 /// Item description line height (16px fits better within 40px item height)
@@ -160,10 +160,10 @@ const SECTION_GAP: f32 = 6.0;
 /// 85% opacity — used for selected description text
 const ALPHA_STRONG: u32 = 0xD9;
 /// 70% opacity — selected description remains secondary to the item title
-const ALPHA_DESC_SELECTED: u32 = 0xB3;
+pub(crate) const ALPHA_DESC_SELECTED: u32 = 0xB3;
 /// 72% opacity — used for non-selected item names
 /// Softer than ALPHA_STRONG to let non-selected items recede (Raycast/Spotlight pattern)
-const ALPHA_NAME_QUIET: u32 = 0xB8;
+pub(crate) const ALPHA_NAME_QUIET: u32 = 0xB8;
 /// 50% opacity — used for non-selected item icons
 /// Low enough that icons don't compete for attention; selected items restore full color
 const ALPHA_ICON_QUIET: u32 = 0x80;
@@ -1072,7 +1072,7 @@ impl RenderOnce for ListItem {
             // Build StyledText with highlighted matched characters
             let index_set: HashSet<usize> = indices.iter().copied().collect();
             let highlight_color = if self.selected {
-                rgb(colors.text_on_accent)
+                rgb(colors.text_primary)
             } else {
                 rgba((colors.text_primary << 8) | ALPHA_MATCH_HIGHLIGHT)
             };
@@ -1115,9 +1115,10 @@ impl RenderOnce for ListItem {
                 .child(styled)
         } else {
             // Plain text rendering (no search active)
-            // Mute non-selected names to let selected item stand out
+            // Selected: full-opacity primary text for maximum readability
+            // Unselected: quieted primary text so selected item stands out
             let name_color = if self.selected {
-                rgb(colors.text_on_accent)
+                rgb(colors.text_primary)
             } else {
                 rgba((colors.text_primary << 8) | ALPHA_NAME_QUIET)
             };
@@ -1152,19 +1153,20 @@ impl RenderOnce for ListItem {
             };
 
             if show_description {
-                let desc_alpha = if self.selected {
-                    ALPHA_DESC_SELECTED
+                // Selected: use primary text (readable against selection bg)
+                // Unselected: use secondary text (recedes in the list)
+                let desc_color = if self.selected {
+                    rgba((colors.text_primary << 8) | ALPHA_DESC_SELECTED)
                 } else {
-                    ALPHA_DESC_QUIET
+                    rgba((colors.text_secondary << 8) | ALPHA_DESC_QUIET)
                 };
-                let desc_color = rgba((colors.text_secondary << 8) | desc_alpha);
                 let desc_element = if let Some(ref desc_indices) =
                     self.description_highlight_indices
                 {
                     // Build StyledText with highlighted matched characters in description
                     let index_set: HashSet<usize> = desc_indices.iter().copied().collect();
                     let highlight_color = if self.selected {
-                        rgba((colors.text_on_accent << 8) | ALPHA_MATCH_HIGHLIGHT)
+                        rgba((colors.text_primary << 8) | ALPHA_MATCH_HIGHLIGHT)
                     } else {
                         rgba((colors.text_secondary << 8) | ALPHA_HINT)
                     };
