@@ -643,10 +643,10 @@ mod from_dialog_builtin_action_validation_tests_11 {
         };
         let actions = get_notes_command_bar_actions(&info);
         // new_note, duplicate_note, delete_note, browse_notes, find_in_note, format, copy_note_as,
-        // copy_deeplink, create_quicklink, export, enable_auto_sizing = 11
-        assert_eq!(actions.len(), 11);
+        // copy_deeplink, create_quicklink, export, send_to_ai, enable_auto_sizing = 12
+        assert_eq!(actions.len(), 12);
     }
-    
+
     #[test]
     fn cat14_trash_view_hides_editing_actions() {
         let info = NotesInfo {
@@ -3112,7 +3112,7 @@ mod from_dialog_builtin_action_validation_tests_12 {
                 .iter()
                 .filter_map(|a| a.section.as_deref())
                 .collect();
-            assert_eq!(sections.len(), 5, "Expected 5 sections: {:?}", sections);
+            assert_eq!(sections.len(), 6, "Expected 6 sections: {:?}", sections);
         }
     
         #[test]
@@ -8043,8 +8043,8 @@ mod from_dialog_builtin_action_validation_tests_15 {
             };
             let actions = get_notes_command_bar_actions(&info);
             // Should have max actions: new_note, duplicate, delete, browse, find, format,
-            // copy_note_as, copy_deeplink, create_quicklink, export, enable_auto_sizing
-            assert_eq!(actions.len(), 11, "Full feature set should be 11 actions");
+            // copy_note_as, copy_deeplink, create_quicklink, export, send_to_ai, enable_auto_sizing
+            assert_eq!(actions.len(), 12, "Full feature set should be 12 actions");
         }
     
         #[test]
@@ -8057,8 +8057,8 @@ mod from_dialog_builtin_action_validation_tests_15 {
             let actions = get_notes_command_bar_actions(&info);
             let ids = action_ids(&actions);
             assert!(!ids.contains(&"enable_auto_sizing".to_string()));
-            // Full set minus enable_auto_sizing = 10
-            assert_eq!(actions.len(), 10);
+            // Full set minus enable_auto_sizing = 11
+            assert_eq!(actions.len(), 11);
         }
     
         #[test]
@@ -10368,11 +10368,11 @@ mod from_dialog_builtin_action_validation_tests_16 {
                 .iter()
                 .filter_map(|a| a.section.as_deref())
                 .collect();
-            // Notes, Edit, Copy, Export, Settings
+            // Notes, Edit, Copy, Export, AI, Settings
             assert_eq!(
                 sections.len(),
-                5,
-                "full feature has 5 sections: {:?}",
+                6,
+                "full feature has 6 sections: {:?}",
                 sections
             );
         }
@@ -15076,8 +15076,9 @@ mod from_dialog_builtin_action_validation_tests_18 {
             // Edit: find_in_note, format
             // Copy: copy_note_as, copy_deeplink, create_quicklink
             // Export: export
+            // AI: send_to_ai
             // Settings: enable_auto_sizing
-            assert_eq!(actions.len(), 11);
+            assert_eq!(actions.len(), 12);
         }
 
         #[test]
@@ -15088,7 +15089,7 @@ mod from_dialog_builtin_action_validation_tests_18 {
                 auto_sizing_enabled: true,
             };
             let actions = get_notes_command_bar_actions(&info);
-            assert_eq!(actions.len(), 10);
+            assert_eq!(actions.len(), 11);
             assert!(!actions.iter().any(|a| a.id == "enable_auto_sizing"));
         }
     

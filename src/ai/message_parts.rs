@@ -6,19 +6,29 @@ use std::sync::Arc;
 ///
 /// Each variant represents a different source of context that will be
 /// resolved into a prompt block at submit time.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase", tag = "kind")]
 pub enum AiContextPart {
     /// An MCP resource URI (e.g. `kit://context?profile=minimal`)
     ResourceUri { uri: String, label: String },
     /// A local file path attachment
     FilePath { path: String, label: String },
+    /// A focused UI target resolved from the active surface (e.g. a selected
+    /// script, clipboard entry, or file). Carries the full target context so
+    /// it can be rendered as a chip and resolved into a deterministic prompt
+    /// block at submit time.
+    FocusedTarget {
+        target: crate::ai::tab_context::TabAiTargetContext,
+        label: String,
+    },
 }
 
 impl AiContextPart {
     pub fn label(&self) -> &str {
         match self {
-            Self::ResourceUri { label, .. } | Self::FilePath { label, .. } => label,
+            Self::ResourceUri { label, .. }
+            | Self::FilePath { label, .. }
+            | Self::FocusedTarget { label, .. } => label,
         }
     }
 
@@ -27,6 +37,7 @@ impl AiContextPart {
         match self {
             Self::ResourceUri { uri, .. } => uri,
             Self::FilePath { path, .. } => path,
+            Self::FocusedTarget { target, .. } => &target.semantic_id,
         }
     }
 }
@@ -135,7 +146,41 @@ pub fn resolve_context_part_to_prompt_block(
                 ))
             }
         },
+        AiContextPart::FocusedTarget { target, label } => {
+            resolve_focused_target_part(target, label)
+        }
     }
+}
+
+/// Resolve a `FocusedTarget` context part into a deterministic prompt block.
+///
+/// The block includes target source, kind, semantic ID, label, and serialized
+/// metadata so the agent can unambiguously identify the focused subject.
+fn resolve_focused_target_part(
+    target: &crate::ai::tab_context::TabAiTargetContext,
+    label: &str,
+) -> Result<String> {
+    let metadata_json = target
+        .metadata
+        .as_ref()
+        .map(serde_json::to_string_pretty)
+        .transpose()
+        .context("Failed to serialize focused target metadata")?
+        .unwrap_or_else(|| "{}".to_string());
+
+    tracing::info!(
+        kind = "focused_target",
+        source = %target.source,
+        item_kind = %target.kind,
+        semantic_id = %target.semantic_id,
+        label = %label,
+        "Resolved focused target context part"
+    );
+
+    Ok(format!(
+        "<context source=\"focusedTarget\" itemSource=\"{}\" itemKind=\"{}\" semanticId=\"{}\">\nLabel: {}\nMetadata:\n{}\n</context>",
+        target.source, target.kind, target.semantic_id, label, metadata_json,
+    ))
 }
 
 /// Resolve multiple context parts, returning a machine-readable receipt.
@@ -236,7 +281,7 @@ pub struct ContextAssemblyDuplicate {
 }
 
 /// Deterministic receipt from merging mention-derived and pending context parts.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ContextAssemblyReceipt {
     pub mention_count: usize,
@@ -348,7 +393,7 @@ pub struct ContextPartPreparationOutcome {
     pub detail: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct PreparedMessageReceipt {
     pub schema_version: u32,
@@ -478,6 +523,31 @@ fn resolve_context_part_for_preparation(
                 ),
             },
         },
+        AiContextPart::FocusedTarget { target, label } => {
+            match resolve_focused_target_part(target, label) {
+                Ok(prompt_block) => (
+                    ContextPartPreparationOutcome {
+                        label: label.clone(),
+                        source: target.semantic_id.clone(),
+                        kind: ContextPartPreparationOutcomeKind::FullContent,
+                        detail: Some(format!(
+                            "itemSource={}, itemKind={}",
+                            target.source, target.kind
+                        )),
+                    },
+                    Some(prompt_block),
+                ),
+                Err(error) => (
+                    ContextPartPreparationOutcome {
+                        label: label.clone(),
+                        source: target.semantic_id.clone(),
+                        kind: ContextPartPreparationOutcomeKind::Failed,
+                        detail: Some(format!("Failed to resolve focused target: {error}")),
+                    },
+                    None,
+                ),
+            }
+        }
     }
 }
 
@@ -1031,6 +1101,111 @@ mod tests {
         assert_eq!(assembly.pending_count, 1);
         assert_eq!(assembly.merged_count, 1);
         assert_eq!(assembly.duplicates_removed, 1);
+    }
+
+    #[test]
+    fn test_serde_roundtrip_focused_target() {
+        let part = AiContextPart::FocusedTarget {
+            target: crate::ai::tab_context::TabAiTargetContext {
+                source: "FileSearch".to_string(),
+                kind: "file".to_string(),
+                semantic_id: "choice:0:main.rs".to_string(),
+                label: "main.rs".to_string(),
+                metadata: Some(serde_json::json!({ "path": "/tmp/main.rs" })),
+            },
+            label: "File: main.rs".to_string(),
+        };
+        let json = serde_json::to_string(&part).expect("serialize");
+        let deserialized: AiContextPart = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(part, deserialized);
+        assert!(json.contains("\"kind\":\"focusedTarget\""));
+        assert!(json.contains("\"semanticId\""));
+    }
+
+    #[test]
+    fn test_focused_target_label_and_source() {
+        let part = AiContextPart::FocusedTarget {
+            target: crate::ai::tab_context::TabAiTargetContext {
+                source: "ScriptList".to_string(),
+                kind: "script".to_string(),
+                semantic_id: "choice:2:my-script".to_string(),
+                label: "My Script".to_string(),
+                metadata: None,
+            },
+            label: "Command: My Script".to_string(),
+        };
+        assert_eq!(part.label(), "Command: My Script");
+        assert_eq!(part.source(), "choice:2:my-script");
+    }
+
+    #[test]
+    fn test_resolve_focused_target_produces_context_block() {
+        let part = AiContextPart::FocusedTarget {
+            target: crate::ai::tab_context::TabAiTargetContext {
+                source: "FileSearch".to_string(),
+                kind: "file".to_string(),
+                semantic_id: "choice:0:tab_ai_mode.rs".to_string(),
+                label: "tab_ai_mode.rs".to_string(),
+                metadata: Some(serde_json::json!({ "path": "/tmp/tab_ai_mode.rs" })),
+            },
+            label: "File: tab_ai_mode.rs".to_string(),
+        };
+
+        let block =
+            resolve_context_part_to_prompt_block(&part, &[], &[]).expect("resolve should succeed");
+
+        assert!(block.contains("source=\"focusedTarget\""));
+        assert!(block.contains("itemSource=\"FileSearch\""));
+        assert!(block.contains("itemKind=\"file\""));
+        assert!(block.contains("semanticId=\"choice:0:tab_ai_mode.rs\""));
+        assert!(block.contains("Label: File: tab_ai_mode.rs"));
+        assert!(block.contains("/tmp/tab_ai_mode.rs"));
+    }
+
+    #[test]
+    fn test_resolve_focused_target_no_metadata() {
+        let part = AiContextPart::FocusedTarget {
+            target: crate::ai::tab_context::TabAiTargetContext {
+                source: "ScriptList".to_string(),
+                kind: "script".to_string(),
+                semantic_id: "choice:0:hello".to_string(),
+                label: "hello".to_string(),
+                metadata: None,
+            },
+            label: "Command: hello".to_string(),
+        };
+
+        let block =
+            resolve_context_part_to_prompt_block(&part, &[], &[]).expect("resolve should succeed");
+
+        assert!(block.contains("source=\"focusedTarget\""));
+        assert!(block.contains("{}"), "empty metadata should be '{{}}'");
+    }
+
+    #[test]
+    fn test_prepare_user_message_with_focused_target() {
+        let part = AiContextPart::FocusedTarget {
+            target: crate::ai::tab_context::TabAiTargetContext {
+                source: "ClipboardHistory".to_string(),
+                kind: "clipboard_entry".to_string(),
+                semantic_id: "choice:0:clip".to_string(),
+                label: "clip".to_string(),
+                metadata: Some(serde_json::json!({ "contentType": "text/plain" })),
+            },
+            label: "Clipboard: clip".to_string(),
+        };
+
+        let receipt = prepare_user_message_with_receipt("explain this", &[part], &[], &[]);
+
+        assert_eq!(receipt.decision, PreparedMessageDecision::Ready);
+        assert_eq!(receipt.context.attempted, 1);
+        assert_eq!(receipt.context.resolved, 1);
+        assert!(receipt.final_user_content.contains("focusedTarget"));
+        assert!(receipt.final_user_content.ends_with("explain this"));
+        assert_eq!(
+            receipt.outcomes[0].kind,
+            ContextPartPreparationOutcomeKind::FullContent
+        );
     }
 
     #[test]

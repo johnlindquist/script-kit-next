@@ -1035,12 +1035,10 @@ impl ScriptListApp {
                     // Subtle top border to separate hint strip from list
                     .border_t(px(crate::window_resize::mini_layout::DIVIDER_HEIGHT))
                     .border_color(rgba(chrome.divider_rgba))
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(rgba(hint_text_rgba))
-                            .child("↵ Run   ⌘K Actions   Tab AI"),
-                    ),
+                    .child(crate::components::render_hint_icons(
+                        &["↵ Run", "⌘K Actions", "Tab AI"],
+                        hint_text_rgba,
+                    )),
             );
 
             if let Some(panel) = log_panel {

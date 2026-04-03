@@ -292,6 +292,114 @@ fn add_attachment_deduplicates_by_path() {
     assert_eq!(parts.len(), 1);
 }
 
+// ---------- FocusedTarget composer-state tests ----------
+
+#[test]
+fn focused_target_part_is_preserved_in_order_with_other_parts() {
+    let parts = vec![
+        AiContextPart::FocusedTarget {
+            label: "File: main.rs".to_string(),
+            target: script_kit_gpui::ai::TabAiTargetContext {
+                source: "FileSearch".to_string(),
+                kind: "file".to_string(),
+                semantic_id: "choice:0:main.rs".to_string(),
+                label: "main.rs".to_string(),
+                metadata: None,
+            },
+        },
+        AiContextPart::FilePath {
+            path: "/tmp/example.txt".to_string(),
+            label: "example.txt".to_string(),
+        },
+        AiContextPart::ResourceUri {
+            uri: "kit://context?profile=minimal".to_string(),
+            label: "Context".to_string(),
+        },
+    ];
+
+    assert_eq!(parts[0].label(), "File: main.rs");
+    assert_eq!(parts[1].label(), "example.txt");
+    assert_eq!(parts[2].label(), "Context");
+}
+
+#[test]
+fn focused_target_is_not_extracted_by_file_path_parts() {
+    let parts = vec![
+        AiContextPart::FocusedTarget {
+            label: "Command: hello".to_string(),
+            target: script_kit_gpui::ai::TabAiTargetContext {
+                source: "ScriptList".to_string(),
+                kind: "script".to_string(),
+                semantic_id: "choice:0:hello".to_string(),
+                label: "hello".to_string(),
+                metadata: None,
+            },
+        },
+        AiContextPart::FilePath {
+            path: "/tmp/file.rs".to_string(),
+            label: "file.rs".to_string(),
+        },
+    ];
+
+    let paths = file_path_parts(&parts);
+    assert_eq!(paths, vec!["/tmp/file.rs"]);
+}
+
+#[test]
+fn removing_focused_target_preserves_other_parts() {
+    let mut parts = vec![
+        AiContextPart::FocusedTarget {
+            label: "File: main.rs".to_string(),
+            target: script_kit_gpui::ai::TabAiTargetContext {
+                source: "FileSearch".to_string(),
+                kind: "file".to_string(),
+                semantic_id: "choice:0:main.rs".to_string(),
+                label: "main.rs".to_string(),
+                metadata: None,
+            },
+        },
+        AiContextPart::FilePath {
+            path: "/tmp/keep.rs".to_string(),
+            label: "keep.rs".to_string(),
+        },
+    ];
+
+    // Remove the FocusedTarget at index 0
+    parts.remove(0);
+
+    assert_eq!(parts.len(), 1);
+    assert_eq!(parts[0].label(), "keep.rs");
+    assert_eq!(file_path_parts(&parts), vec!["/tmp/keep.rs"]);
+}
+
+#[test]
+fn focused_target_deduplication_by_equality() {
+    let target = script_kit_gpui::ai::TabAiTargetContext {
+        source: "FileSearch".to_string(),
+        kind: "file".to_string(),
+        semantic_id: "choice:0:main.rs".to_string(),
+        label: "main.rs".to_string(),
+        metadata: None,
+    };
+
+    let part_a = AiContextPart::FocusedTarget {
+        label: "File: main.rs".to_string(),
+        target: target.clone(),
+    };
+    let part_b = AiContextPart::FocusedTarget {
+        label: "File: main.rs".to_string(),
+        target,
+    };
+
+    // Same values should be equal
+    assert_eq!(part_a, part_b);
+
+    // merge_context_parts should deduplicate
+    let merged =
+        script_kit_gpui::ai::message_parts::merge_context_parts(&[part_a], &[part_b]);
+    assert_eq!(merged.len(), 1);
+}
+
 #[test]
 fn add_attachment_does_not_confuse_file_path_with_resource_uri() {
     let mut parts = vec![AiContextPart::ResourceUri {
@@ -303,3 +411,4 @@ fn add_attachment_does_not_confuse_file_path_with_resource_uri() {
     assert!(add_attachment(&mut parts, "/tmp/file.rs"));
     assert_eq!(parts.len(), 2);
 }
+

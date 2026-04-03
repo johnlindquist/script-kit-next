@@ -86,6 +86,28 @@ pub(super) fn derive_context_preview_info(
                 description: format!("File attachment ({file_size})"),
             }
         }
+        crate::ai::message_parts::AiContextPart::FocusedTarget { target, label } => {
+            tracing::info!(
+                checkpoint = "context_preview_derived",
+                label = %label,
+                source = %target.source,
+                kind = %target.kind,
+                semantic_id = %target.semantic_id,
+                profile = "focused_target",
+                "derived focused target context preview info"
+            );
+
+            ContextPreviewInfo {
+                label: label.clone(),
+                source_uri: format!("focused-target://{}:{}", target.source, target.semantic_id),
+                profile: ContextPreviewProfile::Custom,
+                has_diagnostics: false,
+                description: format!(
+                    "Focused {} from {}",
+                    target.kind, target.source
+                ),
+            }
+        }
     }
 }
 

@@ -20,7 +20,8 @@ impl NotesApp {
                     | NotesAction::CreateQuicklink
                     | NotesAction::Export
                     | NotesAction::Format
-                    | NotesAction::DeleteNote => can_edit,
+                    | NotesAction::DeleteNote
+                    | NotesAction::SendToAi => can_edit,
                     NotesAction::RestoreNote | NotesAction::PermanentlyDeleteNote => {
                         has_selection && is_trash
                     }
@@ -225,6 +226,23 @@ impl NotesApp {
             NotesAction::EnableAutoSizing => {
                 self.enable_auto_sizing(window, cx);
             }
+            NotesAction::SendToAi => {
+                let content = self.editor_state.read(cx).value().to_string();
+                if content.trim().is_empty() {
+                    self.show_action_feedback("Note is empty", true);
+                } else {
+                    // Open AI window and set input to note content
+                    if let Err(e) = crate::ai::open_ai_window(cx) {
+                        tracing::warn!(%e, "send_to_ai_open_failed");
+                        self.show_action_feedback("Failed to open AI", true);
+                    } else if let Err(e) = crate::ai::set_ai_input(cx, &content, false) {
+                        tracing::warn!(%e, "send_to_ai_set_input_failed");
+                        self.show_action_feedback("Failed to send to AI", true);
+                    } else {
+                        self.show_action_feedback("Sent to AI", false);
+                    }
+                }
+            }
             NotesAction::Cancel => {
                 // Panel was cancelled, nothing to do
             }
@@ -259,6 +277,7 @@ impl NotesApp {
             "restore_note" => Some(NotesAction::RestoreNote),
             "permanently_delete_note" => Some(NotesAction::PermanentlyDeleteNote),
             "enable_auto_sizing" => Some(NotesAction::EnableAutoSizing),
+            "send_to_ai" => Some(NotesAction::SendToAi),
             _ => {
                 tracing::warn!(action_id, "Unknown action ID from CommandBar");
                 None

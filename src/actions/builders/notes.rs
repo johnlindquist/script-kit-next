@@ -201,6 +201,20 @@ pub fn get_notes_command_bar_actions(info: &NotesInfo) -> Vec<Action> {
         );
     }
 
+    if info.has_selection && !info.is_trash_view {
+        actions.push(
+            Action::new(
+                "send_to_ai",
+                "Send to AI",
+                Some("Send note content to AI chat".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⇧⌘A")
+            .with_icon(IconName::BoltFilled)
+            .with_section("AI"),
+        );
+    }
+
     if !info.auto_sizing_enabled {
         actions.push(
             Action::new(

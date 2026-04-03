@@ -17,7 +17,7 @@ pub struct ActionableContextFailure {
     pub remediation: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct AiPreflightAudit {
     pub schema_version: u32,

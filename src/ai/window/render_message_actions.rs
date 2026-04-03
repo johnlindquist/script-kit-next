@@ -21,10 +21,17 @@ impl AiApp {
                 .current_messages
                 .iter()
                 .any(|m| m.role == MessageRole::Assistant);
-            let hint: SharedString = if has_assistant {
-                "\u{2318}K Actions \u{00b7} \u{2318}\u{21e7}C Copy \u{00b7} \u{2318}\u{21e7}E Export \u{00b7} \u{2318}N New".into()
+            let hint_color = cx
+                .theme()
+                .muted_foreground
+                .opacity(mini_style.action_hint_reveal_opacity);
+            let hints_element = if has_assistant {
+                crate::components::render_hint_icons_hsla(
+                    &["⌘K Actions", "⌘⇧C Copy", "⌘⇧E Export", "⌘N New"],
+                    hint_color,
+                )
             } else {
-                "\u{2318}K Actions \u{00b7} \u{2318}N New".into()
+                crate::components::render_hint_icons_hsla(&["⌘K Actions", "⌘N New"], hint_color)
             };
             return div()
                 .id("message-actions-mini")
@@ -42,13 +49,7 @@ impl AiApp {
                         .pl(MINI_MESSAGE_PX)
                         .pt(SP_1)
                         .pb(SP_1)
-                        .text_xs()
-                        .text_color(
-                            cx.theme()
-                                .muted_foreground
-                                .opacity(mini_style.action_hint_reveal_opacity),
-                        )
-                        .child(hint),
+                        .child(hints_element),
                 )
                 .into_any_element();
         }

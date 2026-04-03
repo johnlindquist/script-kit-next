@@ -54,5 +54,5 @@ pub use browse_panel::{BrowsePanel, NoteAction, NoteListItem};
 #[allow(unused_imports)]
 pub use window::{
     close_notes_window, inject_text_into_notes, is_notes_window, is_notes_window_open,
-    open_notes_window, quick_capture, NotesApp,
+    open_notes_window, quick_capture, save_note_with_content, NotesApp,
 };

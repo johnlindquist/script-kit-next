@@ -123,6 +123,10 @@ pub(crate) struct AcpThreadInit {
     pub initial_input: Option<String>,
     /// Display name for the agent (shown in toolbar, e.g. "Claude Code").
     pub display_name: SharedString,
+    /// Available models for this agent.
+    pub available_models: Vec<super::config::AcpModelEntry>,
+    /// Initially selected model ID (e.g. "claude-sonnet-4-6").
+    pub selected_model_id: Option<String>,
 }
 
 /// GPUI entity that owns one ACP conversation thread.
@@ -152,6 +156,11 @@ pub(crate) struct AcpThread {
     pending_context_blocks: Vec<ContentBlock>,
     /// Whether staged context has already been consumed.
     pending_context_consumed: bool,
+
+    /// Typed context parts visible as chips in the composer.
+    /// Resolved into prompt blocks at submit time via
+    /// `resolve_context_parts_with_receipt`. Supports add/remove/dedup.
+    pending_context_parts: Vec<crate::ai::message_parts::AiContextPart>,
 
     /// Whether the deferred context capture has completed.
     context_bootstrap_state: AcpContextBootstrapState,
@@ -187,6 +196,14 @@ pub(crate) struct AcpThread {
 
     /// Monotonically increasing message ID counter.
     next_message_id: u64,
+
+    // ── Model selection ──────────────────────────────────────
+    /// Available models for this agent.
+    available_models: Vec<super::config::AcpModelEntry>,
+    /// Currently selected model ID.
+    selected_model_id: Option<String>,
+    /// Display name for the selected model.
+    selected_model_display_name: Option<SharedString>,
 }
 
 impl AcpThread {
@@ -215,6 +232,7 @@ impl AcpThread {
             pending_permission: None,
             pending_context_blocks: Vec::new(),
             pending_context_consumed: false,
+            pending_context_parts: Vec::new(),
             context_bootstrap_state: AcpContextBootstrapState::Preparing,
             queued_submit_while_bootstrapping: false,
             context_bootstrap_note: Some(
@@ -231,6 +249,16 @@ impl AcpThread {
             stream_task: None,
             permission_task: None,
             next_message_id: 1,
+            selected_model_display_name: {
+                let id = init.selected_model_id.as_deref();
+                id.and_then(|sel| {
+                    init.available_models.iter().find(|m| m.id == sel).map(|m| {
+                        SharedString::from(m.display_name.clone().unwrap_or_else(|| m.id.clone()))
+                    })
+                })
+            },
+            selected_model_id: init.selected_model_id,
+            available_models: init.available_models,
         };
         this.bind_permission_listener(cx);
         this
@@ -264,6 +292,28 @@ impl AcpThread {
 
         cx.notify();
         Ok(())
+    }
+
+    /// Mark the context bootstrap as ready without staging ambient context
+    /// blocks. Used by the focused-target Tab path where only typed context
+    /// parts (chips) are staged — no hidden `TabAiContextBlob`.
+    pub(crate) fn mark_context_bootstrap_ready(&mut self, cx: &mut Context<Self>) {
+        self.context_bootstrap_state = AcpContextBootstrapState::Ready;
+        self.context_bootstrap_note = Some("Context attached".into());
+
+        let should_auto_submit = self.queued_submit_while_bootstrapping
+            && !self.input.text().trim().is_empty()
+            && !matches!(
+                self.status,
+                AcpThreadStatus::Streaming | AcpThreadStatus::WaitingForPermission
+            );
+        self.queued_submit_while_bootstrapping = false;
+
+        if should_auto_submit {
+            let _ = self.submit_input(cx);
+        } else {
+            cx.notify();
+        }
     }
 
     /// Mark the context bootstrap as failed with a human-readable note.
@@ -426,9 +476,27 @@ impl AcpThread {
         let has_context = !self.pending_context_consumed;
         if has_context {
             blocks.extend(self.pending_context_blocks.clone());
-            // No automatic artifact authoring guidance — users should
-            // explicitly invoke /script-authoring when they want to
-            // create scripts. Default is exploration mode.
+
+            // Resolve typed context parts (focused-target chips, resource URIs, files)
+            // into prompt blocks and prepend them.
+            if !self.pending_context_parts.is_empty() {
+                let receipt = crate::ai::message_parts::resolve_context_parts_with_receipt(
+                    &self.pending_context_parts,
+                    &[],
+                    &[],
+                );
+                tracing::info!(
+                    target: "script_kit::tab_ai",
+                    event = "acp_submit_resolved_context_parts",
+                    attempted = receipt.attempted,
+                    resolved = receipt.resolved,
+                    failures = receipt.failures.len(),
+                );
+                if !receipt.prompt_prefix.is_empty() {
+                    blocks.push(ContentBlock::Text(TextContent::new(receipt.prompt_prefix)));
+                }
+            }
+
             self.pending_context_consumed = true;
         }
 
@@ -823,6 +891,37 @@ impl AcpThread {
         &self.display_name
     }
 
+    /// Short display name for the currently selected model, or the agent name if none selected.
+    pub(crate) fn selected_model_display(&self) -> &str {
+        self.selected_model_display_name
+            .as_deref()
+            .unwrap_or(&self.display_name)
+    }
+
+    /// Available models for this agent.
+    pub(crate) fn available_models(&self) -> &[super::config::AcpModelEntry] {
+        &self.available_models
+    }
+
+    /// Currently selected model ID, if any.
+    pub(crate) fn selected_model_id(&self) -> Option<&str> {
+        self.selected_model_id.as_deref()
+    }
+
+    /// Select a model by ID. Updates the display name and notifies.
+    pub(crate) fn select_model(&mut self, model_id: &str, cx: &mut Context<Self>) {
+        if let Some(entry) = self.available_models.iter().find(|m| m.id == model_id) {
+            self.selected_model_id = Some(entry.id.clone());
+            self.selected_model_display_name = Some(SharedString::from(
+                entry
+                    .display_name
+                    .clone()
+                    .unwrap_or_else(|| entry.id.clone()),
+            ));
+            cx.notify();
+        }
+    }
+
     /// Elapsed seconds since streaming started, or `None` if not streaming.
     pub(crate) fn stream_elapsed_secs(&self) -> Option<u64> {
         self.stream_started_at.map(|t| t.elapsed().as_secs())
@@ -902,6 +1001,59 @@ impl AcpThread {
     pub(crate) fn context_bootstrap_note(&self) -> Option<&str> {
         self.context_bootstrap_note.as_ref().map(|s| s.as_ref())
     }
+
+    // ── Typed context parts (composer chips) ─────────────────────
+
+    /// Read the pending context parts (visible as chips in the composer).
+    pub(crate) fn pending_context_parts(&self) -> &[crate::ai::message_parts::AiContextPart] {
+        &self.pending_context_parts
+    }
+
+    /// Add a typed context part. Deduplicates by value equality — if an
+    /// identical part already exists the call is a no-op.
+    pub(crate) fn add_context_part(
+        &mut self,
+        part: crate::ai::message_parts::AiContextPart,
+        cx: &mut Context<Self>,
+    ) {
+        let already_present = self.pending_context_parts.iter().any(|existing| existing == &part);
+        if already_present {
+            tracing::info!(
+                target: "script_kit::tab_ai",
+                event = "acp_context_part_add_skipped_duplicate",
+                label = %part.label(),
+                source = %part.source(),
+            );
+            return;
+        }
+
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "acp_context_part_added",
+            label = %part.label(),
+            source = %part.source(),
+            count_before = self.pending_context_parts.len(),
+        );
+        self.pending_context_parts.push(part);
+        cx.notify();
+    }
+
+    /// Remove a typed context part by index.
+    pub(crate) fn remove_context_part(&mut self, index: usize, cx: &mut Context<Self>) {
+        if index >= self.pending_context_parts.len() {
+            return;
+        }
+        let removed = self.pending_context_parts.remove(index);
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "acp_context_part_removed",
+            index,
+            label = %removed.label(),
+            source = %removed.source(),
+            remaining = self.pending_context_parts.len(),
+        );
+        cx.notify();
+    }
 }
 
 /// Test-only helpers exposed to sibling modules in `src/ai/acp/`.
@@ -931,6 +1083,7 @@ impl AcpThread {
             pending_permission: None,
             pending_context_blocks: context_blocks,
             pending_context_consumed: false,
+            pending_context_parts: Vec::new(),
             context_bootstrap_state: AcpContextBootstrapState::Ready,
             queued_submit_while_bootstrapping: false,
             context_bootstrap_note: None,
@@ -945,6 +1098,9 @@ impl AcpThread {
             stream_task: None,
             permission_task: None,
             next_message_id: 1,
+            available_models: Vec::new(),
+            selected_model_id: None,
+            selected_model_display_name: None,
         }
     }
 
@@ -1040,6 +1196,7 @@ mod tests {
             pending_permission: None,
             pending_context_blocks,
             pending_context_consumed,
+            pending_context_parts: Vec::new(),
             context_bootstrap_state: AcpContextBootstrapState::Ready,
             queued_submit_while_bootstrapping: false,
             context_bootstrap_note: None,
@@ -1054,6 +1211,9 @@ mod tests {
             stream_task: None,
             permission_task: None,
             next_message_id: 1,
+            available_models: Vec::new(),
+            selected_model_id: None,
+            selected_model_display_name: None,
         }
     }
 

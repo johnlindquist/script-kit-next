@@ -2345,8 +2345,8 @@ mod from_dialog_builtin_action_validation_tests_22 {
             auto_sizing_enabled: false,
         };
         let actions = get_notes_command_bar_actions(&info);
-        // Full: new+dup+delete+browse+find+format+copy_note_as+copy_deeplink+create_quicklink+export+auto_sizing = 11
-        assert_eq!(actions.len(), 11);
+        // Full: new+dup+delete+browse+find+format+copy_note_as+copy_deeplink+create_quicklink+export+send_to_ai+auto_sizing = 12
+        assert_eq!(actions.len(), 12);
     }
 
     #[test]
@@ -2357,10 +2357,10 @@ mod from_dialog_builtin_action_validation_tests_22 {
             auto_sizing_enabled: true,
         };
         let actions = get_notes_command_bar_actions(&info);
-        // Same as full minus enable_auto_sizing = 10
-        assert_eq!(actions.len(), 10);
+        // Same as full minus enable_auto_sizing = 11
+        assert_eq!(actions.len(), 11);
     }
-    
+
     #[test]
     fn batch22_notes_no_selection_no_trash() {
         let info = NotesInfo {
@@ -5249,8 +5249,8 @@ mod from_dialog_builtin_action_validation_tests_24 {
         };
         let actions = get_notes_command_bar_actions(&info);
         // new_note, duplicate_note, delete_note, browse_notes, find_in_note, format,
-        // copy_note_as, copy_deeplink, create_quicklink, export, enable_auto_sizing = 11
-        assert_eq!(actions.len(), 11);
+        // copy_note_as, copy_deeplink, create_quicklink, export, send_to_ai, enable_auto_sizing = 12
+        assert_eq!(actions.len(), 12);
     }
 
     #[test]
@@ -5261,10 +5261,10 @@ mod from_dialog_builtin_action_validation_tests_24 {
             auto_sizing_enabled: true,
         };
         let actions = get_notes_command_bar_actions(&info);
-        // Same minus enable_auto_sizing = 10
-        assert_eq!(actions.len(), 10);
+        // Same minus enable_auto_sizing = 11
+        assert_eq!(actions.len(), 11);
     }
-    
+
     #[test]
     fn batch24_notes_no_selection_count() {
         let info = NotesInfo {
@@ -10118,8 +10118,8 @@ mod from_dialog_builtin_action_validation_tests_28 {
             auto_sizing_enabled: false,
         };
         let actions = get_notes_command_bar_actions(&info);
-        // new_note, duplicate, delete, browse, find, format, copy_note_as, copy_deeplink, create_quicklink, export, auto_sizing
-        assert_eq!(actions.len(), 11);
+        // new_note, duplicate, delete, browse, find, format, copy_note_as, copy_deeplink, create_quicklink, export, send_to_ai, auto_sizing
+        assert_eq!(actions.len(), 12);
     }
 
     #[test]
@@ -10130,10 +10130,10 @@ mod from_dialog_builtin_action_validation_tests_28 {
             auto_sizing_enabled: true,
         };
         let actions = get_notes_command_bar_actions(&info);
-        // Same minus auto_sizing = 10
-        assert_eq!(actions.len(), 10);
+        // Same minus auto_sizing = 11
+        assert_eq!(actions.len(), 11);
     }
-    
+
     #[test]
     fn cat28_19_notes_no_selection_count() {
         let info = NotesInfo {
@@ -12639,8 +12639,8 @@ mod from_dialog_builtin_action_validation_tests_30 {
         };
         let actions = get_notes_command_bar_actions(&info);
         // new_note, duplicate_note, delete_note, browse_notes, find_in_note, format,
-        // copy_note_as, copy_deeplink, create_quicklink, export, enable_auto_sizing = 11
-        assert_eq!(actions.len(), 11);
+        // copy_note_as, copy_deeplink, create_quicklink, export, send_to_ai, enable_auto_sizing = 12
+        assert_eq!(actions.len(), 12);
     }
 
     #[test]
@@ -12651,10 +12651,10 @@ mod from_dialog_builtin_action_validation_tests_30 {
             auto_sizing_enabled: true,
         };
         let actions = get_notes_command_bar_actions(&info);
-        // same minus enable_auto_sizing = 10
-        assert_eq!(actions.len(), 10);
+        // same minus enable_auto_sizing = 11
+        assert_eq!(actions.len(), 11);
     }
-    
+
     #[test]
     fn batch30_notes_no_selection_3_actions() {
         let info = NotesInfo {

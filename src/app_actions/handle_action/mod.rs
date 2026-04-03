@@ -981,6 +981,37 @@ impl ScriptListApp {
                     Some("Conversation copied as markdown".to_string());
                 outcome
             }
+            "acp_save_as_note" => {
+                let entity = entity.clone();
+                let messages = &entity.read(cx).thread.read(cx).messages;
+                let mut md = String::from("# AI Chat Conversation\n\n");
+                for msg in messages {
+                    let role_label = match msg.role {
+                        crate::ai::acp::thread::AcpThreadMessageRole::User => "**You**",
+                        crate::ai::acp::thread::AcpThreadMessageRole::Assistant => "**Assistant**",
+                        crate::ai::acp::thread::AcpThreadMessageRole::Thought => "**Thinking**",
+                        crate::ai::acp::thread::AcpThreadMessageRole::Tool => "**Tool**",
+                        crate::ai::acp::thread::AcpThreadMessageRole::System => "**System**",
+                        crate::ai::acp::thread::AcpThreadMessageRole::Error => "**Error**",
+                    };
+                    md.push_str(&format!("{role_label}\n\n{}\n\n---\n\n", msg.body));
+                }
+                if md == "# AI Chat Conversation\n\n" {
+                    let mut o = DispatchOutcome::success();
+                    o.user_message = Some("No messages to save".to_string());
+                    return o;
+                }
+                if let Err(e) = crate::notes::save_note_with_content(cx, md) {
+                    tracing::warn!(%e, "acp_save_as_note_failed");
+                    let mut o = DispatchOutcome::success();
+                    o.user_message = Some(format!("Failed to save note: {e}"));
+                    o
+                } else {
+                    let mut o = DispatchOutcome::success();
+                    o.user_message = Some("Conversation saved as note".to_string());
+                    o
+                }
+            }
             "acp_show_history" => {
                 let entries = crate::ai::acp::history::load_history();
                 if entries.is_empty() {

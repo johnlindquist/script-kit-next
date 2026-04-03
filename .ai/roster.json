@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-03-30T12:15:56.458Z",
+  "updatedAt": "2026-04-03T04:20:58.321Z",
   "agents": {
     "tab-ai-instant-context-a1": {
       "id": "tab-ai-instant-context-a1",
@@ -329,6 +329,120 @@
           "src/dictation/runtime.rs",
           "src/dictation/tests.rs",
           "src/dictation/transcription.rs"
+        ]
+      },
+      "claimed_at": {}
+    },
+    "keyboard-shortcut-consistency-a1": {
+      "id": "keyboard-shortcut-consistency-a1",
+      "kind": "codex",
+      "mode": "exec",
+      "model": "openai/gpt-5.4",
+      "task": "Implement keyboard shortcut rendering consistency fixes across Script Kit GPUI. This is a Rust GPUI app.\n\nCONTEXT: We just added SVG keyboard glyph icons (return.svg, tab.svg, command.svg in assets/icons/) and a parse_hint() function in src/components/hint_strip.rs that converts Unicode glyph prefixes to SVG icons. Several surfaces are migrated but parse_hint() only handles ↵/⏎/↩, ⌘, and Tab. Multi-key chords like ⌘⇧↵ render as command-icon + raw text '⇧↵'.\n\nTASKS (in order):\n1. Copy shift.svg and escape.svg from ~/dev/zed/assets/icons/ into assets/icons/. Change stroke='black' to stroke='currentColor' in both. Add CARGO_MANIFEST_DIR external path constants for them in src/components/hint_strip.rs alongside the existing RETURN_ICON_PATH, TAB_ICON_PATH, COMMAND_ICON_PATH.\n\n2. Expand parse_hint() in src/components/hint_strip.rs to handle:\n   - ⇧ (U+21E7 Shift) → shift.svg icon\n   - Esc prefix → text-only keycap (no SVG needed, just render 'Esc' as a styled keycap element)\n   - Multi-glyph prefixes: when a hint starts with multiple modifier glyphs (e.g. '⌘⇧↵'), parse ALL of them into separate icons before the label text. The current code only matches the first character.\n\n3. Update the HintElement enum to support multiple icons: instead of KeyHint { icon_path, label }, support KeyHint { icon_paths: Vec<&'static str>, label } or similar so ⌘⇧↵ renders as [cmd-icon][shift-icon][return-icon] + 'Send + Context'.\n\n4. For 'Esc' text (no SVG), render it as a small styled text keycap (similar to how Zed renders Key { key, color, size } — a small div with text_xs, rounded corners, and muted background).\n\nVERIFICATION GATE (mandatory before reporting success):\ncargo check --lib && cargo clippy --lib -- -D warnings\n\nKEY FILES:\n- src/components/hint_strip.rs — the parse_hint() function and render_hint_element_hsla()\n- src/components/mod.rs — exports render_hint_icons, render_hint_icons_hsla\n- src/icons/types/embedded.rs — EmbeddedIcon enum (has Return, Tab, Command variants)\n- assets/icons/ — SVG icon files\n- ~/dev/zed/assets/icons/shift.svg and escape.svg — source SVGs to copy\n\nCONSTRAINTS:\n- SVGs MUST use stroke='currentColor' not stroke='black'\n- MUST use svg().external_path() with CARGO_MANIFEST_DIR absolute paths (not svg().path())\n- Do NOT modify any files outside hint_strip.rs, embedded.rs, mod.rs, and the new SVG assets unless strictly necessary\n- Run: cargo check --lib && cargo clippy --lib -- -D warnings",
+      "scope": "src/components/hint_strip.rs,src/components/mod.rs,src/icons/types/embedded.rs,assets/icons/",
+      "readonly": false,
+      "status": "done",
+      "claims": [],
+      "createdAt": "2026-04-03T03:23:42.772Z",
+      "lastSeenAt": "2026-04-03T03:29:56.900Z",
+      "host": "johns.macbook.pro.lan",
+      "startSha": "12a8d59f1cf9d25db33016b47b82e8c75b4b5193",
+      "notes": "done. exit=0. final=.ai/logs/keyboard-shortcut-consistency-a1.final.md. See final message file.",
+      "report": {
+        "schema": "opex.agent_report.v1",
+        "agentId": "keyboard-shortcut-consistency-a1",
+        "taskSummary": "Added consistent multi-key keyboard shortcut hint parsing and rendering with Shift and Esc support, plus new keyboard glyph assets.",
+        "tests": [
+          {
+            "cmd": "cargo check --lib",
+            "result": "pass"
+          },
+          {
+            "cmd": "cargo clippy --lib -- -D warnings",
+            "result": "pass"
+          }
+        ],
+        "changedFiles": [
+          "src/components/hint_strip.rs",
+          "src/components/mod.rs",
+          "src/icons/types/embedded.rs",
+          "assets/icons/escape.svg",
+          "assets/icons/shift.svg"
+        ],
+        "commitCount": 1,
+        "commitShas": [
+          "faedb59eb2952c060d5ef51677032be4da02dcb3"
+        ],
+        "commitFiles": [
+          "assets/icons/escape.svg",
+          "assets/icons/shift.svg",
+          "src/components/hint_strip.rs",
+          "src/components/mod.rs",
+          "src/icons/types/embedded.rs"
+        ]
+      },
+      "claimed_at": {}
+    },
+    "vibrancy-fixes-a1": {
+      "id": "vibrancy-fixes-a1",
+      "kind": "codex",
+      "mode": "exec",
+      "model": "openai/gpt-5.4",
+      "task": "Fix three opacity/vibrancy issues in the theme chooser. All three are in the same file cluster so do them together.\n\nTASK 1 — Window Opacity slider edits wrong field:\nThe 'Window Opacity' control in src/render_builtins/theme_chooser_customize_controls.rs (~line 86) changes op.main and op.title_bar, but the actual root blur/backdrop control is op.vibrancy_background. Change the slider's on_click handler to set op.vibrancy_background = value instead of op.main/op.title_bar. Also update the Cmd+-/= keyboard handlers in src/render_builtins/theme_chooser_setup_key.rs and src/render_builtins/theme_chooser.rs to change vibrancy_background instead of main/title_bar. The OPACITY_PRESETS array and find_opacity_preset_index should compare against vibrancy_background, not main.\n\nTASK 2 — Wire VibrancyMaterial to native layer:\nsrc/platform/vibrancy_config.rs has configure_window_vibrancy_material_for_appearance(is_dark: bool) which hardcodes HUD_WINDOW for dark and POPOVER for light (line 84). Add a VibrancyMaterial parameter so the user's material selection takes effect. The VibrancyMaterial enum is in src/theme/types.rs (variants: Hud, Popover, Menu, Sidebar, Content). Map each to its NSVisualEffectMaterial constant. Update all call sites (search for configure_window_vibrancy_material_for_appearance in src/main_entry/app_run_setup.rs, src/main_entry/runtime_stdin.rs, src/main_entry/runtime_stdin_match_core.rs, src/main_entry/runtime_window.rs, src/main_sections/window_visibility.rs) to pass the current theme's vibrancy.material. Also update the non-macOS stub signature.\n\nTASK 3 — Live vibrancy toggle doesn't update native window:\nWhen toggling vibrancy on/off in the theme chooser, the code only calls sync_gpui_component_theme + cx.notify(). It does NOT update the native window's blur state. After the GPUI sync in the vibrancy toggle handlers (in theme_chooser_customize_controls.rs, theme_chooser_setup_key.rs, theme_chooser.rs — search for 'vibrancy.enabled = !'), also call platform::configure_window_vibrancy_material_for_appearance with the current is_dark and material values.\n\nVERIFICATION: Run cargo check && cargo clippy --lib -- -D warnings. The project uses include!() files so standard module rules don't apply in those dirs. Tests: cargo nextest run --lib (timeout 120s).\n\nKEY FILES: src/render_builtins/theme_chooser_customize_controls.rs, src/render_builtins/theme_chooser_setup_key.rs, src/render_builtins/theme_chooser.rs, src/platform/vibrancy_config.rs, src/theme/types.rs (VibrancyMaterial enum), src/main_entry/app_run_setup.rs, src/main_entry/runtime_stdin.rs, src/main_entry/runtime_stdin_match_core.rs, src/main_entry/runtime_window.rs, src/main_sections/window_visibility.rs",
+      "scope": "src/render_builtins/theme_chooser*.rs,src/platform/vibrancy_config.rs,src/theme/types.rs,src/main_entry/*.rs,src/main_sections/window_visibility.rs",
+      "readonly": false,
+      "status": "needs_split",
+      "claims": [],
+      "createdAt": "2026-04-03T04:10:37.455Z",
+      "lastSeenAt": "2026-04-03T04:20:58.321Z",
+      "host": "johns.macbook.pro.lan",
+      "startSha": "b38266d68275109e1db1bad98ed0590f16e224e1",
+      "notes": "[policy] commits touch files outside declared scope",
+      "report": {
+        "schema": "opex.agent_report.v1",
+        "agentId": "vibrancy-fixes-a1",
+        "taskSummary": "Fixed theme chooser opacity and vibrancy controls so window opacity targets vibrancy_background, native material selection follows the chosen VibrancyMaterial, and live vibrancy toggles/material changes immediately reconfigure the native window.",
+        "tests": [
+          {
+            "cmd": "cargo check",
+            "result": "pass"
+          },
+          {
+            "cmd": "cargo clippy --lib -- -D warnings",
+            "result": "pass"
+          },
+          {
+            "cmd": "cargo nextest run --lib",
+            "result": "pass"
+          }
+        ],
+        "changedFiles": [
+          "src/render_builtins/theme_chooser_customize_controls.rs",
+          "src/render_builtins/theme_chooser_setup_key.rs",
+          "src/render_builtins/theme_chooser.rs",
+          "src/platform/vibrancy_config.rs",
+          "src/platform/secondary_window_config.rs",
+          "src/main_entry/app_run_setup.rs",
+          "src/main_entry/runtime_stdin.rs",
+          "src/main_entry/runtime_stdin_match_core.rs",
+          "src/main_entry/runtime_window.rs",
+          "src/main_sections/window_visibility.rs"
+        ],
+        "commitCount": 1,
+        "commitShas": [
+          "89223034793c59c20a961643fb52c576072cd92f"
+        ],
+        "commitFiles": [
+          "src/main_entry/app_run_setup.rs",
+          "src/main_entry/runtime_stdin_match_core.rs",
+          "src/main_entry/runtime_stdin.rs",
+          "src/main_entry/runtime_window.rs",
+          "src/main_sections/window_visibility.rs",
+          "src/platform/secondary_window_config.rs",
+          "src/platform/vibrancy_config.rs",
+          "src/render_builtins/theme_chooser_customize_controls.rs",
+          "src/render_builtins/theme_chooser_setup_key.rs",
+          "src/render_builtins/theme_chooser.rs"
         ]
       },
       "claimed_at": {}

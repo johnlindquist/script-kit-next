@@ -3615,3 +3615,149 @@ fn acp_mod_exports_required_types() {
     assert!(ACP_MOD_SOURCE.contains("pub(crate) use permission_broker::"));
     assert!(ACP_MOD_SOURCE.contains("pub(crate) use client::"));
 }
+
+// =========================================================================
+// Focused-target chip routing and Ask Anything fallback
+// =========================================================================
+
+#[test]
+fn tab_ai_default_path_stages_focused_target_chip() {
+    assert!(
+        TAB_AI_MODE_SOURCE.contains("build_tab_ai_focused_part_for_view"),
+        "default Tab path must build a focused-target context part",
+    );
+    assert!(
+        TAB_AI_MODE_SOURCE.contains("AiContextPart::FocusedTarget"),
+        "default Tab path must use a FocusedTarget context part",
+    );
+}
+
+#[test]
+fn tab_ai_has_explicit_ask_anything_fallback() {
+    assert!(
+        TAB_AI_MODE_SOURCE.contains("tab_ai_ask_anything_fallback"),
+        "Tab AI routing must have an explicit Ask Anything fallback log/event",
+    );
+    assert!(
+        TAB_AI_MODE_SOURCE.contains("should_use_tab_ai_ask_anything_fallback"),
+        "Tab AI routing must have a should_use_tab_ai_ask_anything_fallback helper",
+    );
+}
+
+#[test]
+fn tab_ai_focused_path_skips_ambient_capture() {
+    // When a focused target is resolved, begin_tab_ai_harness_entry must NOT
+    // call spawn_tab_ai_pre_switch_capture for the focused-target branch.
+    let begin_fn_start = TAB_AI_MODE_SOURCE
+        .find("fn begin_tab_ai_harness_entry(")
+        .expect("begin_tab_ai_harness_entry must exist");
+    let begin_fn_body = &TAB_AI_MODE_SOURCE[begin_fn_start..];
+    let next_fn = begin_fn_body[1..]
+        .find("\n    fn ")
+        .unwrap_or(begin_fn_body.len());
+    let begin_fn_body = &begin_fn_body[..next_fn];
+
+    assert!(
+        begin_fn_body.contains("if use_ask_anything_fallback"),
+        "begin_tab_ai_harness_entry must gate ambient capture on ask_anything_fallback",
+    );
+    assert!(
+        begin_fn_body.contains("tab_ai_focus_chip_staged"),
+        "focused-target path must log tab_ai_focus_chip_staged",
+    );
+    assert!(
+        begin_fn_body.contains("tab_ai_ask_anything_fallback"),
+        "fallback path must log tab_ai_ask_anything_fallback",
+    );
+}
+
+#[test]
+fn tab_ai_acp_open_stages_chip_on_thread() {
+    let open_fn_start = TAB_AI_MODE_SOURCE
+        .find("fn open_tab_ai_acp_view_from_request_impl(")
+        .expect("open_tab_ai_acp_view_from_request_impl must exist");
+    let open_fn_body = &TAB_AI_MODE_SOURCE[open_fn_start..];
+
+    assert!(
+        open_fn_body.contains("thread.add_context_part(part, cx)"),
+        "ACP open path must stage the focused chip on the thread",
+    );
+    assert!(
+        open_fn_body.contains("acp_focused_chip_staged_on_thread"),
+        "ACP open path must log focused-chip staging on the thread",
+    );
+}
+
+#[test]
+fn tab_ai_focused_path_marks_bootstrap_ready_without_ambient() {
+    let open_fn_start = TAB_AI_MODE_SOURCE
+        .find("fn open_tab_ai_acp_view_from_request_impl(")
+        .expect("open_tab_ai_acp_view_from_request_impl must exist");
+    let open_fn_body = &TAB_AI_MODE_SOURCE[open_fn_start..];
+
+    assert!(
+        open_fn_body.contains("mark_context_bootstrap_ready"),
+        "focused-target path must mark bootstrap ready without waiting for deferred capture",
+    );
+}
+
+#[test]
+fn tab_ai_ask_anything_fallback_stages_resource_uri_chip() {
+    let open_fn_start = TAB_AI_MODE_SOURCE
+        .find("fn open_tab_ai_acp_view_from_request_impl(")
+        .expect("open_tab_ai_acp_view_from_request_impl must exist");
+    let open_fn_body = &TAB_AI_MODE_SOURCE[open_fn_start..];
+
+    assert!(
+        open_fn_body.contains("Ask Anything"),
+        "Ask Anything fallback must stage a resource URI chip labeled 'Ask Anything'",
+    );
+    assert!(
+        open_fn_body.contains("kit://context?profile=minimal"),
+        "Ask Anything fallback must use the minimal desktop context profile",
+    );
+}
+
+#[test]
+fn acp_view_renders_pending_context_chips() {
+    assert!(
+        ACP_VIEW_SOURCE.contains("render_pending_context_chips"),
+        "AcpChatView must render pending context chips",
+    );
+    assert!(
+        ACP_VIEW_SOURCE.contains("acp-pending-context-chips"),
+        "AcpChatView must have an element ID for the chips container",
+    );
+}
+
+#[test]
+fn acp_thread_supports_context_parts() {
+    assert!(
+        ACP_THREAD_SOURCE.contains("pending_context_parts"),
+        "AcpThread must store typed context parts",
+    );
+    assert!(
+        ACP_THREAD_SOURCE.contains("fn add_context_part("),
+        "AcpThread must have an add_context_part method",
+    );
+    assert!(
+        ACP_THREAD_SOURCE.contains("fn remove_context_part("),
+        "AcpThread must have a remove_context_part method",
+    );
+    assert!(
+        ACP_THREAD_SOURCE.contains("fn mark_context_bootstrap_ready("),
+        "AcpThread must have a mark_context_bootstrap_ready method",
+    );
+}
+
+#[test]
+fn acp_thread_resolves_context_parts_on_submit() {
+    assert!(
+        ACP_THREAD_SOURCE.contains("acp_submit_resolved_context_parts"),
+        "AcpThread must resolve context parts at submit time and log it",
+    );
+    assert!(
+        ACP_THREAD_SOURCE.contains("resolve_context_parts_with_receipt"),
+        "AcpThread must use resolve_context_parts_with_receipt for typed parts",
+    );
+}

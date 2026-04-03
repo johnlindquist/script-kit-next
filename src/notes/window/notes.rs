@@ -155,6 +155,35 @@ impl NotesApp {
         info!(note_id = %id, "New note created");
     }
 
+    /// Create a new note pre-filled with the given content.
+    ///
+    /// Used by cross-window features like "Save as Note" from the AI chat.
+    pub(crate) fn create_note_with_content(
+        &mut self,
+        content: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> anyhow::Result<()> {
+        if content.is_empty() {
+            self.create_note(window, cx);
+            return Ok(());
+        }
+
+        let note = Note::with_content(content);
+        let id = note.id;
+
+        storage::save_note(&note).map_err(|e| {
+            tracing::error!(error = %e, "Failed to create note with content");
+            anyhow::anyhow!("Failed to create note with content: {e}")
+        })?;
+
+        self.notes.insert(0, note);
+        self.select_note(id, window, cx);
+
+        info!(note_id = %id, "New note created with content");
+        Ok(())
+    }
+
     /// Create a new note pre-filled with system clipboard content (Cmd+Shift+N)
     pub(super) fn create_note_from_clipboard(
         &mut self,

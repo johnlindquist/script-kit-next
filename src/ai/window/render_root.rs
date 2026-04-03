@@ -518,24 +518,23 @@ impl Render for AiApp {
                             // Streaming indicator dot — pulsing 8px accent dot
                             .when(is_streaming, |el| {
                                 let accent = cx.theme().accent;
-                                let pulse_duration =
-                                    std::time::Duration::from_millis(ANIM_CYCLE_MS);
+                                let spin_duration =
+                                    std::time::Duration::from_millis(SPINNER_CYCLE_MS);
+                                let frames = SPINNER_FRAMES;
                                 el.child(
                                     div()
-                                        .id("ai-mini-streaming-dot")
-                                        .size(S2)
-                                        .rounded_full()
-                                        .bg(accent)
+                                        .id("ai-mini-streaming-spinner")
+                                        .text_xs()
+                                        .text_color(accent)
                                         .flex_shrink_0()
+                                        .child(frames[0])
                                         .with_animation(
-                                            "mini-streaming-dot-pulse",
-                                            Animation::new(pulse_duration).repeat(),
+                                            "mini-streaming-spinner",
+                                            Animation::new(spin_duration).repeat(),
                                             move |el, delta| {
-                                                let sine =
-                                                    (delta * std::f32::consts::PI * 2.0).sin();
-                                                let opacity =
-                                                    CURSOR_OPACITY_BASE + CURSOR_OPACITY_AMP * sine;
-                                                el.bg(accent.opacity(opacity))
+                                                let idx = (delta * frames.len() as f32) as usize
+                                                    % frames.len();
+                                                el.child(frames[idx])
                                             },
                                         ),
                                 )
