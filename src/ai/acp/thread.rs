@@ -129,6 +129,16 @@ pub(crate) struct AcpThreadInit {
     pub selected_model_id: Option<String>,
 }
 
+/// One-shot context payload consumed by `prepare_turn_blocks()`.
+///
+/// Holds the resolved hidden blocks and the resolution receipt from typed
+/// context parts. Produced by `take_pending_context_for_turn()` and consumed
+/// exactly once per submission.
+struct PendingContextTurn {
+    blocks: Vec<ContentBlock>,
+    receipt: crate::ai::message_parts::ContextResolutionReceipt,
+}
+
 /// GPUI entity that owns one ACP conversation thread.
 ///
 /// Holds durable message history, staged context blocks (consumed once on
@@ -280,23 +290,9 @@ impl AcpThread {
         cx: &mut Context<Self>,
     ) -> Result<(), String> {
         self.pending_context_blocks = build_tab_ai_acp_context_blocks(context)?;
-        self.pending_context_consumed = false;
-        self.context_bootstrap_state = AcpContextBootstrapState::Ready;
-        self.context_bootstrap_note = Some("Context attached".into());
-
-        let should_auto_submit = self.queued_submit_while_bootstrapping
-            && !self.input.text().trim().is_empty()
-            && !matches!(
-                self.status,
-                AcpThreadStatus::Streaming | AcpThreadStatus::WaitingForPermission
-            );
-        self.queued_submit_while_bootstrapping = false;
-
-        if should_auto_submit {
-            return self.submit_input(cx);
-        }
-
-        cx.notify();
+        self.pending_ambient_context_enabled = false;
+        self.arm_pending_context("stage_context");
+        self.finish_bootstrap(AcpContextBootstrapState::Ready, "Context attached", cx);
         Ok(())
     }
 
@@ -312,35 +308,18 @@ impl AcpThread {
         cx: &mut Context<Self>,
     ) -> Result<(), String> {
         if !self.pending_ambient_context_enabled {
-            tracing::info!(
-                target: "script_kit::tab_ai",
-                event = "acp_ask_anything_stage_skipped_removed",
+            self.clear_pending_ambient_context("ask_anything_removed_before_stage");
+            self.finish_bootstrap(
+                AcpContextBootstrapState::Ready,
+                "Ask Anything removed",
+                cx,
             );
-            self.pending_context_blocks.clear();
-            self.pending_context_consumed = false;
-            self.context_bootstrap_state = AcpContextBootstrapState::Ready;
-            self.context_bootstrap_note = Some("Ask Anything removed".into());
-
-            let submit_now = self.queued_submit_while_bootstrapping
-                && !self.input.text().trim().is_empty()
-                && !matches!(
-                    self.status,
-                    AcpThreadStatus::Streaming | AcpThreadStatus::WaitingForPermission
-                );
-            self.queued_submit_while_bootstrapping = false;
-
-            if submit_now {
-                return self.submit_input(cx);
-            }
-            cx.notify();
             return Ok(());
         }
 
         self.pending_context_blocks = build_tab_ai_acp_context_blocks(context)?;
-        self.pending_context_consumed = false;
         self.promote_ask_anything_chip_to_ambient();
-        self.context_bootstrap_state = AcpContextBootstrapState::Ready;
-        self.context_bootstrap_note = Some("Ask Anything ready".into());
+        self.arm_pending_context("stage_ask_anything_context");
 
         tracing::info!(
             target: "script_kit::tab_ai",
@@ -348,18 +327,7 @@ impl AcpThread {
             block_count = self.pending_context_blocks.len(),
         );
 
-        let submit_now = self.queued_submit_while_bootstrapping
-            && !self.input.text().trim().is_empty()
-            && !matches!(
-                self.status,
-                AcpThreadStatus::Streaming | AcpThreadStatus::WaitingForPermission
-            );
-        self.queued_submit_while_bootstrapping = false;
-
-        if submit_now {
-            return self.submit_input(cx);
-        }
-        cx.notify();
+        self.finish_bootstrap(AcpContextBootstrapState::Ready, "Ask Anything ready", cx);
         Ok(())
     }
 
@@ -387,22 +355,7 @@ impl AcpThread {
     /// blocks. Used by the focused-target Tab path where only typed context
     /// parts (chips) are staged — no hidden `TabAiContextBlob`.
     pub(crate) fn mark_context_bootstrap_ready(&mut self, cx: &mut Context<Self>) {
-        self.context_bootstrap_state = AcpContextBootstrapState::Ready;
-        self.context_bootstrap_note = Some("Context attached".into());
-
-        let should_auto_submit = self.queued_submit_while_bootstrapping
-            && !self.input.text().trim().is_empty()
-            && !matches!(
-                self.status,
-                AcpThreadStatus::Streaming | AcpThreadStatus::WaitingForPermission
-            );
-        self.queued_submit_while_bootstrapping = false;
-
-        if should_auto_submit {
-            let _ = self.submit_input(cx);
-        } else {
-            cx.notify();
-        }
+        self.finish_bootstrap(AcpContextBootstrapState::Ready, "Context attached", cx);
     }
 
     /// Mark the context bootstrap as failed with a human-readable note.
@@ -414,22 +367,7 @@ impl AcpThread {
         note: impl Into<SharedString>,
         cx: &mut Context<Self>,
     ) {
-        self.context_bootstrap_state = AcpContextBootstrapState::Failed;
-        self.context_bootstrap_note = Some(note.into());
-
-        let should_auto_submit = self.queued_submit_while_bootstrapping
-            && !self.input.text().trim().is_empty()
-            && !matches!(
-                self.status,
-                AcpThreadStatus::Streaming | AcpThreadStatus::WaitingForPermission
-            );
-        self.queued_submit_while_bootstrapping = false;
-
-        if should_auto_submit {
-            let _ = self.submit_input(cx);
-        } else {
-            cx.notify();
-        }
+        self.finish_bootstrap(AcpContextBootstrapState::Failed, note, cx);
     }
 
     /// Update the composer input text (replaces entire content, cursor at end).
@@ -553,8 +491,135 @@ impl AcpThread {
 
     // ── Private helpers ────────────────────────────────────────────
 
+    /// Mark pending context as ready for the next submit.
+    fn arm_pending_context(&mut self, reason: &'static str) {
+        self.pending_context_consumed = false;
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "acp_pending_context_armed",
+            reason,
+            pending_part_count = self.pending_context_parts.len(),
+            pending_block_count = self.pending_context_blocks.len(),
+            ambient_enabled = self.pending_ambient_context_enabled,
+        );
+    }
+
+    /// Clear hidden ambient context blocks and disable the ambient flag.
+    fn clear_pending_ambient_context(&mut self, reason: &'static str) {
+        let cleared_block_count = self.pending_context_blocks.len();
+        self.pending_context_blocks.clear();
+        self.pending_ambient_context_enabled = false;
+        self.pending_context_consumed = false;
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "acp_pending_ambient_context_cleared",
+            reason,
+            cleared_block_count,
+            pending_part_count = self.pending_context_parts.len(),
+        );
+    }
+
+    /// Clear all pending context state (parts, blocks, flags).
+    fn clear_all_pending_context(&mut self, reason: &'static str) {
+        let cleared_part_count = self.pending_context_parts.len();
+        let cleared_block_count = self.pending_context_blocks.len();
+        self.pending_context_parts.clear();
+        self.pending_context_blocks.clear();
+        self.pending_context_consumed = false;
+        self.pending_ambient_context_enabled = false;
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "acp_pending_context_cleared",
+            reason,
+            cleared_part_count,
+            cleared_block_count,
+        );
+    }
+
+    /// Flush a queued submit if conditions allow, otherwise just notify.
+    fn flush_bootstrap_queue(&mut self, cx: &mut Context<Self>) -> Result<(), String> {
+        let submit_now = self.queued_submit_while_bootstrapping
+            && !self.input.text().trim().is_empty()
+            && !matches!(
+                self.status,
+                AcpThreadStatus::Streaming | AcpThreadStatus::WaitingForPermission
+            );
+        self.queued_submit_while_bootstrapping = false;
+
+        if submit_now {
+            return self.submit_input(cx);
+        }
+        cx.notify();
+        Ok(())
+    }
+
+    /// Finalize bootstrap state and flush any queued submit.
+    fn finish_bootstrap(
+        &mut self,
+        state: AcpContextBootstrapState,
+        note: impl Into<SharedString>,
+        cx: &mut Context<Self>,
+    ) {
+        self.context_bootstrap_state = state;
+        self.context_bootstrap_note = Some(note.into());
+        if let Err(error) = self.flush_bootstrap_queue(cx) {
+            tracing::warn!(
+                target: "script_kit::tab_ai",
+                event = "acp_bootstrap_flush_failed",
+                error = %error,
+            );
+        }
+    }
+
+    /// Consume pending context for a single turn. Returns `None` if already
+    /// consumed or nothing is staged. Drains both hidden blocks and typed
+    /// parts, resolves parts into prompt blocks, and marks context consumed.
+    fn take_pending_context_for_turn(&mut self) -> Option<PendingContextTurn> {
+        let has_pending_parts = !self.pending_context_parts.is_empty();
+        let has_pending_blocks = !self.pending_context_blocks.is_empty();
+
+        if self.pending_context_consumed || (!has_pending_parts && !has_pending_blocks) {
+            return None;
+        }
+
+        let blocks = std::mem::take(&mut self.pending_context_blocks);
+        let pending_parts = std::mem::take(&mut self.pending_context_parts);
+        let consumed_block_count = blocks.len();
+        let consumed_part_count = pending_parts.len();
+
+        let receipt = if pending_parts.is_empty() {
+            crate::ai::message_parts::ContextResolutionReceipt {
+                attempted: 0,
+                resolved: 0,
+                failures: Vec::new(),
+                prompt_prefix: String::new(),
+            }
+        } else {
+            crate::ai::message_parts::resolve_context_parts_with_receipt(
+                &pending_parts,
+                &[],
+                &[],
+            )
+        };
+
+        self.pending_context_consumed = true;
+        self.pending_ambient_context_enabled = false;
+
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "acp_pending_context_consumed",
+            consumed_part_count,
+            consumed_block_count,
+            resolved_part_count = receipt.resolved,
+            failed_part_count = receipt.failures.len(),
+        );
+
+        Some(PendingContextTurn { blocks, receipt })
+    }
+
     /// Build the content blocks for a turn, consuming staged context on first use.
     ///
+    /// Delegates to `take_pending_context_for_turn()` for one-shot consumption.
     /// When context is present, the user's text is wrapped with a clear
     /// `--- USER REQUEST ---` marker so the agent distinguishes ambient context
     /// from the actual user intent.
@@ -562,61 +627,32 @@ impl AcpThread {
     pub(super) fn prepare_turn_blocks(&mut self, input: &str) -> Vec<ContentBlock> {
         let mut blocks = Vec::new();
 
-        let has_pending_parts = !self.pending_context_parts.is_empty();
-        let has_pending_blocks = !self.pending_context_blocks.is_empty();
-        let has_context =
-            !self.pending_context_consumed && (has_pending_parts || has_pending_blocks);
+        if let Some(turn) = self.take_pending_context_for_turn() {
+            blocks.extend(turn.blocks);
 
-        if has_context {
-            // Drain both hidden blocks and visible parts so no stale chip
-            // remains visible on the second turn (one-shot consumption).
-            let pending_blocks = std::mem::take(&mut self.pending_context_blocks);
-            let pending_parts = std::mem::take(&mut self.pending_context_parts);
-            let consumed_block_count = pending_blocks.len();
-            let consumed_part_count = pending_parts.len();
-
-            blocks.extend(pending_blocks);
-
-            // Resolve typed context parts (focused-target chips, resource URIs, files)
-            // into prompt blocks and prepend them.
-            if !pending_parts.is_empty() {
-                let receipt = crate::ai::message_parts::resolve_context_parts_with_receipt(
-                    &pending_parts,
-                    &[],
-                    &[],
-                );
+            if turn.receipt.attempted > 0 {
                 tracing::info!(
                     target: "script_kit::tab_ai",
                     event = "acp_submit_resolved_context_parts",
-                    attempted = receipt.attempted,
-                    resolved = receipt.resolved,
-                    failures = receipt.failures.len(),
+                    attempted = turn.receipt.attempted,
+                    resolved = turn.receipt.resolved,
+                    failures = turn.receipt.failures.len(),
                 );
-                if !receipt.prompt_prefix.is_empty() {
-                    blocks.push(ContentBlock::Text(TextContent::new(receipt.prompt_prefix)));
-                }
             }
 
-            self.pending_context_consumed = true;
-            self.pending_ambient_context_enabled = false;
+            if !turn.receipt.prompt_prefix.is_empty() {
+                blocks.push(ContentBlock::Text(TextContent::new(
+                    turn.receipt.prompt_prefix,
+                )));
+            }
 
-            tracing::info!(
-                target: "script_kit::tab_ai",
-                event = "acp_pending_context_consumed",
-                consumed_part_count,
-                consumed_block_count,
-            );
-        }
-
-        if has_context {
-            // Wrap user text with a clear marker so the agent knows
-            // everything above is ambient context and this is the request.
             blocks.push(ContentBlock::Text(TextContent::new(format!(
                 "--- USER REQUEST ---\n{input}"
             ))));
-        } else {
-            blocks.push(ContentBlock::Text(TextContent::new(input)));
+            return blocks;
         }
+
+        blocks.push(ContentBlock::Text(TextContent::new(input)));
         blocks
     }
 
@@ -1045,13 +1081,22 @@ impl AcpThread {
         cx.notify();
     }
 
-    /// Cancel the active streaming turn. Drops the pump task and resets to Idle.
     /// Clear all messages for a fresh conversation within the same session.
+    /// Also clears all pending context state so no stale chips or hidden
+    /// blocks leak into the next conversation.
     pub(crate) fn clear_messages(&mut self, cx: &mut Context<Self>) {
         self.messages.clear();
         self.active_plan_entries.clear();
         self.active_tool_calls.clear();
         self.tool_call_lookup.clear();
+        self.clear_all_pending_context("clear_messages");
+        self.context_bootstrap_state = AcpContextBootstrapState::Ready;
+        self.context_bootstrap_note = None;
+
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "acp_thread_cleared",
+        );
         cx.notify();
     }
 
@@ -1067,11 +1112,14 @@ impl AcpThread {
 
     /// Load saved messages from a conversation history file.
     /// Replaces current messages with the saved ones (read-only view).
+    /// Clears all pending context state so loaded history does not inherit
+    /// stale chips from the previous conversation.
     pub(crate) fn load_saved_messages(
         &mut self,
         saved: &[super::history::SavedMessage],
         cx: &mut Context<Self>,
     ) {
+        self.clear_all_pending_context("load_saved_messages");
         self.messages.clear();
         for msg in saved {
             let role = match msg.role.as_str() {
@@ -1087,6 +1135,8 @@ impl AcpThread {
             self.messages
                 .push(AcpThreadMessage::new(id, role, msg.body.clone()));
         }
+        self.context_bootstrap_state = AcpContextBootstrapState::Ready;
+        self.context_bootstrap_note = None;
         cx.notify();
     }
 
@@ -1137,42 +1187,40 @@ impl AcpThread {
             tracing::info!(
                 target: "script_kit::tab_ai",
                 event = "acp_context_part_add_skipped_duplicate",
-                label = %part.label(),
                 source = %part.source(),
+                label = %part.label(),
             );
             return;
         }
 
         let is_ask_anything = part.is_ask_anything_resource();
-
-        // Any new chip should make the next submit consume staged context again.
-        self.pending_context_consumed = false;
+        let label = part.label().to_string();
+        let source = part.source().to_string();
 
         if is_ask_anything {
-            // Throw away any stale hidden ambient blocks from an earlier fallback.
-            let stale_block_count = self.pending_context_blocks.len();
-            self.pending_context_blocks.clear();
+            self.clear_pending_ambient_context("add_ask_anything_resource");
             self.pending_ambient_context_enabled = true;
             self.context_bootstrap_state = AcpContextBootstrapState::Preparing;
             self.context_bootstrap_note =
                 Some("Capturing desktop context\u{2026}".into());
-
-            tracing::info!(
-                target: "script_kit::tab_ai",
-                event = "acp_ask_anything_chip_armed",
-                stale_block_count,
-                part_count_before = self.pending_context_parts.len(),
-            );
         }
+
+        self.pending_context_parts.push(part);
+        self.arm_pending_context(if is_ask_anything {
+            "add_ask_anything_part"
+        } else {
+            "add_context_part"
+        });
 
         tracing::info!(
             target: "script_kit::tab_ai",
             event = "acp_context_part_added",
-            label = %part.label(),
-            source = %part.source(),
-            count_before = self.pending_context_parts.len(),
+            source = %source,
+            label = %label,
+            is_ask_anything,
+            pending_part_count = self.pending_context_parts.len(),
+            pending_block_count = self.pending_context_blocks.len(),
         );
-        self.pending_context_parts.push(part);
         cx.notify();
     }
 
@@ -1188,52 +1236,31 @@ impl AcpThread {
             return;
         }
         let removed = self.pending_context_parts.remove(index);
-        let removed_before_promotion = removed.is_ask_anything_resource();
-        let removed_after_promotion = removed.is_ambient_context_chip();
-        let removed_ask_anything = removed_before_promotion || removed_after_promotion;
-
-        let mut submit_now = false;
+        let removed_ask_anything =
+            removed.is_ask_anything_resource() || removed.is_ambient_context_chip();
 
         if removed_ask_anything {
-            let hidden_block_count = self.pending_context_blocks.len();
-            self.pending_ambient_context_enabled = false;
-            self.pending_context_blocks.clear();
-            self.pending_context_consumed = false;
-            self.context_bootstrap_state = AcpContextBootstrapState::Ready;
-            self.context_bootstrap_note = Some("Ask Anything removed".into());
-
-            submit_now = self.queued_submit_while_bootstrapping
-                && !self.input.text().trim().is_empty()
-                && !matches!(
-                    self.status,
-                    AcpThreadStatus::Streaming | AcpThreadStatus::WaitingForPermission
-                );
-            self.queued_submit_while_bootstrapping = false;
-
-            tracing::info!(
-                target: "script_kit::tab_ai",
-                event = "acp_ask_anything_chip_removed",
-                removed_before_promotion,
-                removed_after_promotion,
-                hidden_block_count,
-                remaining_parts = self.pending_context_parts.len(),
+            self.clear_pending_ambient_context("remove_ask_anything_part");
+            self.finish_bootstrap(
+                AcpContextBootstrapState::Ready,
+                "Ask Anything removed",
+                cx,
             );
+        } else {
+            self.arm_pending_context("remove_context_part");
+            cx.notify();
         }
 
         tracing::info!(
             target: "script_kit::tab_ai",
             event = "acp_context_part_removed",
             index,
-            label = %removed.label(),
             source = %removed.source(),
-            remaining_parts = self.pending_context_parts.len(),
+            label = %removed.label(),
+            removed_ask_anything,
+            pending_part_count = self.pending_context_parts.len(),
+            pending_block_count = self.pending_context_blocks.len(),
         );
-
-        if submit_now {
-            let _ = self.submit_input(cx);
-            return;
-        }
-        cx.notify();
     }
 }
 
