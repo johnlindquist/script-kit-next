@@ -181,21 +181,16 @@ impl ScriptListApp {
             .as_ref()
             .map(|t| theme::presets::find_current_preset_index(t))
             .unwrap_or(0);
-        // Use raw opacity values (matching main menu's ListItem behavior)
-        let theme_row_selected_bg = rgba((selection_bg << 8) | selected_alpha);
+        // Ensure selection is clearly visible — theme chooser needs stronger
+        // selection than main menu since users are comparing themes visually
+        let chooser_sel_alpha = selected_alpha.max(0x50);
+        let theme_row_selected_bg = rgba((selection_bg << 8) | chooser_sel_alpha);
         let theme_row_hover_bg = rgba((selection_bg << 8) | hover_alpha);
 
         // Filter presets by name or description
         let filtered_indices = Self::theme_chooser_filtered_indices(filter);
         let filtered_count = filtered_indices.len();
         let filter_is_empty = filter.is_empty();
-
-        // Count dark/light in filtered results
-        let dark_count = filtered_indices
-            .iter()
-            .filter(|&&i| presets[i].is_dark)
-            .count();
-        let light_count = filtered_count - dark_count;
 
         // Terminal colors for preview panel
         let terminal = &self.theme.colors.terminal;
@@ -597,10 +592,10 @@ impl ScriptListApp {
                             .gap(px(2.0))
                             .child(
                                 div()
-                                    .text_size(px(14.0))
-                                    .line_height(px(20.0))
+                                    .text_size(px(crate::list_item::NAME_FONT_SIZE))
+                                    .line_height(px(crate::list_item::NAME_LINE_HEIGHT))
                                     .when(is_selected, |d| {
-                                        d.font_weight(gpui::FontWeight::MEDIUM)
+                                        d.font_weight(gpui::FontWeight::SEMIBOLD)
                                     })
                                     .text_color(name_color)
                                     .child(name),
@@ -673,27 +668,7 @@ impl ScriptListApp {
             .flex()
             .flex_col()
             .gap(px(6.0))
-            .child(
-                div()
-                    .flex()
-                    .flex_row()
-                    .items_center()
-                    .gap(px(8.0))
-                    .child(
-                        div()
-                            .text_sm()
-                            .font_weight(gpui::FontWeight::SEMIBOLD)
-                            .text_color(rgb(text_primary))
-                            .child("Themes"),
-                    )
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(rgb(text_dimmed))
-                            .child(format!("{} dark · {} light", dark_count, light_count)),
-                    ),
-            )
-            // Search input
+            // Search input (no title — consistent with other UIs)
             .child(
                 div().flex().flex_row().items_center().child(
                     div().flex_1().flex().flex_row().items_center().child(

@@ -258,6 +258,17 @@ fn contrast_ratio(fg: u32, bg: u32) -> f32 {
     (lighter + 0.05) / (darker + 0.05)
 }
 
+/// Composite a semi-transparent foreground color over an opaque background.
+/// Returns the resulting opaque RGB as a u32.
+fn composite_alpha(fg: u32, alpha: f32, bg: u32) -> u32 {
+    let blend = |shift: u32| {
+        let f = ((fg >> shift) & 0xFF) as f32;
+        let b = ((bg >> shift) & 0xFF) as f32;
+        (f * alpha + b * (1.0 - alpha)).round() as u32
+    };
+    (blend(16) << 16) | (blend(8) << 8) | blend(0)
+}
+
 /// A single contrast check with context for error reporting
 struct ContrastCheck {
     pair: &'static str,
@@ -285,6 +296,12 @@ fn audit_theme_contrast_ratios() {
     for preset in &presets {
         let theme = preset.create_theme();
         let bg = theme.colors.background.main;
+        let opacity = theme.get_opacity();
+
+        // Compute the effective selection background:
+        // accent.selected_subtle at opacity.selected, composited over bg.main
+        let sel_bg = composite_alpha(theme.colors.accent.selected_subtle, opacity.selected, bg);
+
         let checks = [
             ContrastCheck {
                 pair: "primary/bg",
@@ -316,6 +333,21 @@ fn audit_theme_contrast_ratios() {
                 bg: theme.colors.accent.selected,
                 min_ratio: 3.0,
             },
+            // Selected item text contrast: primary text on the composited
+            // selection highlight (accent.selected_subtle @ opacity.selected over bg.main)
+            ContrastCheck {
+                pair: "primary/sel_bg",
+                fg: theme.colors.text.primary,
+                bg: sel_bg,
+                min_ratio: 4.5,
+            },
+            // Dimmed text (input placeholder) must be readable on main bg
+            ContrastCheck {
+                pair: "dimmed/bg",
+                fg: theme.colors.text.dimmed,
+                bg,
+                min_ratio: 1.5, // Placeholders are intentionally quiet but must be visible
+            },
         ];
 
         for check in &checks {
@@ -341,9 +373,115 @@ fn audit_theme_contrast_ratios() {
             presets.len(),
             report,
         );
-        // NOTE: This is intentionally a warning, not a hard failure.
-        // Uncomment the line below to enforce contrast minimums:
-        // panic!("{} contrast failures found", failures.len());
+        panic!(
+            "{} contrast failure(s) found — see report above",
+            failures.len()
+        );
+    }
+}
+
+/// Compute the optimal `selected_subtle` for a theme: the value closest to
+/// `bg_main` that still passes `min_ratio` contrast for `text_primary` against
+/// the composited selection background.
+///
+/// Strategy: binary search between bg_main and a target endpoint.
+/// - Dark themes (light text): search toward white (brighter selection)
+/// - Light themes (dark text): search toward black (darker selection)
+fn compute_optimal_selected_subtle(
+    bg_main: u32,
+    text_primary: u32,
+    opacity_selected: f32,
+    min_ratio: f32,
+) -> u32 {
+    let is_dark = super::types::relative_luminance_srgb(bg_main) < 0.5;
+    // Target: move selected_subtle away from bg toward the opposite extreme
+    let target = if is_dark { 0xFFFFFF } else { 0x000000 };
+
+    // Binary search: find the value closest to bg_main that passes
+    let blend_channel = |bg_ch: u8, tgt_ch: u8, t: f32| -> u8 {
+        (bg_ch as f32 + (tgt_ch as f32 - bg_ch as f32) * t).round() as u8
+    };
+
+    let make_color = |t: f32| -> u32 {
+        let r = blend_channel((bg_main >> 16 & 0xFF) as u8, (target >> 16 & 0xFF) as u8, t);
+        let g = blend_channel((bg_main >> 8 & 0xFF) as u8, (target >> 8 & 0xFF) as u8, t);
+        let b = blend_channel((bg_main & 0xFF) as u8, (target & 0xFF) as u8, t);
+        ((r as u32) << 16) | ((g as u32) << 8) | (b as u32)
+    };
+
+    let check = |t: f32| -> bool {
+        let subtle = make_color(t);
+        let sel_bg = composite_alpha(subtle, opacity_selected, bg_main);
+        contrast_ratio(text_primary, sel_bg) >= min_ratio
+    };
+
+    // Binary search for the minimum t that passes
+    let mut lo: f32 = 0.0;
+    let mut hi: f32 = 1.0;
+    for _ in 0..32 {
+        let mid = (lo + hi) / 2.0;
+        if check(mid) {
+            hi = mid;
+        } else {
+            lo = mid;
+        }
+    }
+
+    make_color(hi)
+}
+
+/// Report optimal selected_subtle values for all themes.
+/// Prints themes where the current value differs significantly from optimal.
+#[test]
+fn report_optimal_selected_subtle() {
+    let presets = presets::all_presets();
+    let mut suggestions: Vec<String> = Vec::new();
+
+    for preset in &presets {
+        let theme = preset.create_theme();
+        let opacity = theme.get_opacity();
+        let optimal = compute_optimal_selected_subtle(
+            theme.colors.background.main,
+            theme.colors.text.primary,
+            opacity.selected,
+            4.5,
+        );
+        let current = theme.colors.accent.selected_subtle;
+
+        // Check if current passes
+        let sel_bg = composite_alpha(current, opacity.selected, theme.colors.background.main);
+        let current_ratio = contrast_ratio(theme.colors.text.primary, sel_bg);
+
+        // Check how far current is from optimal (by luminance distance from bg)
+        let bg_lum = super::types::relative_luminance_srgb(theme.colors.background.main);
+        let current_lum = super::types::relative_luminance_srgb(current);
+        let optimal_lum = super::types::relative_luminance_srgb(optimal);
+        let current_dist = (current_lum - bg_lum).abs();
+        let optimal_dist = (optimal_lum - bg_lum).abs();
+
+        // Flag if current is much farther from bg than needed (over-prominent selection)
+        if current_dist > optimal_dist * 1.5 && current_ratio >= 4.5 {
+            suggestions.push(format!(
+                "  {:<25} current=0x{:06X} optimal=0x{:06X}  (ratio {:.1}:1, could be {:.1}:1 with optimal)",
+                preset.id, current, optimal, current_ratio,
+                {
+                    let opt_sel_bg = composite_alpha(optimal, opacity.selected, theme.colors.background.main);
+                    contrast_ratio(theme.colors.text.primary, opt_sel_bg)
+                },
+            ));
+        }
+    }
+
+    if !suggestions.is_empty() {
+        eprintln!(
+            "\n╔══ Over-prominent selections ════════════════════════════════════════════════╗\n\
+             ║ {} theme(s) have selected_subtle farther from bg than needed               \n\
+             ╠════════════════════════════════════════════════════════════════════════════════╣\n\
+             {}\n\
+             ╚════════════════════════════════════════════════════════════════════════════════╝\n",
+            suggestions.len(),
+            suggestions.join("\n"),
+        );
     }
 }
 

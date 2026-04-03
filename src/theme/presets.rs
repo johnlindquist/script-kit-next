@@ -626,7 +626,7 @@ fn theme_script_kit_light() -> Theme {
         },
         accent: AccentColors {
             selected: 0x0078d4,
-            selected_subtle: 0x1a1a1a,
+            selected_subtle: 0xc0c0c0,
         },
         ui: UIColors {
             border: 0xe0e0e0,
@@ -658,7 +658,7 @@ fn theme_dracula() -> Theme {
         },
         accent: AccentColors {
             selected: 0xbd93f9,
-            selected_subtle: 0xf8f8f2,
+            selected_subtle: 0x5d5f6b,
         },
         ui: UIColors {
             border: 0x44475a,
@@ -708,7 +708,7 @@ fn theme_nord() -> Theme {
         },
         accent: AccentColors {
             selected: 0x88c0d0,
-            selected_subtle: 0xeceff4,
+            selected_subtle: 0x627283,
         },
         ui: UIColors {
             border: 0x4c566a,
@@ -758,7 +758,7 @@ fn theme_catppuccin_mocha() -> Theme {
         },
         accent: AccentColors {
             selected: 0xcba6f7,
-            selected_subtle: 0xcdd6f4,
+            selected_subtle: 0x53547f,
         },
         ui: UIColors {
             border: 0x45475a,
@@ -808,7 +808,7 @@ fn theme_catppuccin_latte() -> Theme {
         },
         accent: AccentColors {
             selected: 0x8839ef,
-            selected_subtle: 0x4c4f69,
+            selected_subtle: 0xb5b7c5,
         },
         ui: UIColors {
             border: 0xbcc0cc,
@@ -858,7 +858,7 @@ fn theme_one_dark() -> Theme {
         },
         accent: AccentColors {
             selected: 0x61afef,
-            selected_subtle: 0xabb2bf,
+            selected_subtle: 0x3e4452,
         },
         ui: UIColors {
             border: 0x3e4452,
@@ -908,7 +908,7 @@ fn theme_tokyo_night() -> Theme {
         },
         accent: AccentColors {
             selected: 0x7aa2f7,
-            selected_subtle: 0xc0caf5,
+            selected_subtle: 0x4c4f73,
         },
         ui: UIColors {
             border: 0x3b4261,
@@ -958,7 +958,7 @@ fn theme_gruvbox_dark() -> Theme {
         },
         accent: AccentColors {
             selected: 0xfe8019,
-            selected_subtle: 0xebdbb2,
+            selected_subtle: 0x5e5650,
         },
         ui: UIColors {
             border: 0x504945,
@@ -1008,7 +1008,7 @@ fn theme_rose_pine() -> Theme {
         },
         accent: AccentColors {
             selected: 0xebbcba,
-            selected_subtle: 0xe0def4,
+            selected_subtle: 0x4a465d,
         },
         ui: UIColors {
             border: 0x403d52,
@@ -1059,7 +1059,7 @@ fn theme_solarized_dark() -> Theme {
         },
         accent: AccentColors {
             selected: 0x268bd2,
-            selected_subtle: 0xfdf6e3,
+            selected_subtle: 0x1c5e6e,
         },
         ui: UIColors {
             border: 0x586e75,
@@ -1109,7 +1109,7 @@ fn theme_solarized_light() -> Theme {
         },
         accent: AccentColors {
             selected: 0x268bd2,
-            selected_subtle: 0x073642,
+            selected_subtle: 0xbdb6a2,
         },
         ui: UIColors {
             border: 0x93a1a1,
@@ -1159,7 +1159,7 @@ fn theme_github_dark() -> Theme {
         },
         accent: AccentColors {
             selected: 0x58a6ff,
-            selected_subtle: 0xf0f6fc,
+            selected_subtle: 0x3e4654,
         },
         ui: UIColors {
             border: 0x30363d,
@@ -1209,7 +1209,7 @@ fn theme_github_light() -> Theme {
         },
         accent: AccentColors {
             selected: 0x0969da,
-            selected_subtle: 0x1f2328,
+            selected_subtle: 0xc5c5c5,
         },
         ui: UIColors {
             border: 0xd0d7de,
@@ -1259,7 +1259,7 @@ fn theme_monokai_pro() -> Theme {
         },
         accent: AccentColors {
             selected: 0xffd866,
-            selected_subtle: 0xfcfcfa,
+            selected_subtle: 0x625f62,
         },
         ui: UIColors {
             border: 0x403e41,
@@ -1309,7 +1309,7 @@ fn theme_everforest_dark() -> Theme {
         },
         accent: AccentColors {
             selected: 0xa7c080,
-            selected_subtle: 0xd3c6aa,
+            selected_subtle: 0x616c6e,
         },
         ui: UIColors {
             border: 0x475258,
@@ -1359,7 +1359,7 @@ fn theme_kanagawa() -> Theme {
         },
         accent: AccentColors {
             selected: 0x7e9cd8,
-            selected_subtle: 0xdcd7ba,
+            selected_subtle: 0x555363,
         },
         ui: UIColors {
             border: 0x54546d,
@@ -1409,7 +1409,7 @@ fn theme_ayu_dark() -> Theme {
         },
         accent: AccentColors {
             selected: 0xe6b450,
-            selected_subtle: 0xb3b1ad,
+            selected_subtle: 0x3a4251,
         },
         ui: UIColors {
             border: 0x1d2631,
@@ -1459,7 +1459,7 @@ fn theme_material_ocean() -> Theme {
         },
         accent: AccentColors {
             selected: 0x84ffff,
-            selected_subtle: 0xeeffff,
+            selected_subtle: 0x3f4457,
         },
         ui: UIColors {
             border: 0x1f2233,
@@ -1513,7 +1513,7 @@ fn theme_monokai() -> Theme {
         },
         accent: AccentColors {
             selected: 0xf92672,
-            selected_subtle: 0xf8f8f2,
+            selected_subtle: 0x5d5e57,
         },
         ui: UIColors {
             border: 0x414339,
@@ -1563,7 +1563,7 @@ fn theme_one_dark_pro() -> Theme {
         },
         accent: AccentColors {
             selected: 0x528bff,
-            selected_subtle: 0xd7dae0,
+            selected_subtle: 0x3e4452,
         },
         ui: UIColors {
             border: 0x3e4452,
@@ -1608,12 +1608,12 @@ fn theme_tokyo_night_storm() -> Theme {
             secondary: 0x8891bc,
             tertiary: 0x545c7e,
             muted: 0x6a75a3,
-            dimmed: 0x3b4261,
+            dimmed: 0x414868,
             on_accent: 0x1f2335,
         },
         accent: AccentColors {
             selected: 0x7aa2f7,
-            selected_subtle: 0xa9b1d6,
+            selected_subtle: 0x535975,
         },
         ui: UIColors {
             border: 0x3b4261,
@@ -1663,7 +1663,7 @@ fn theme_rose_pine_moon() -> Theme {
         },
         accent: AccentColors {
             selected: 0xea9a97,
-            selected_subtle: 0xe0def4,
+            selected_subtle: 0x575170,
         },
         ui: UIColors {
             border: 0x817c9c,
@@ -1708,12 +1708,12 @@ fn theme_poimandres() -> Theme {
             secondary: 0xa6accd,
             tertiary: 0x767c9d,
             muted: 0x767c9d,
-            dimmed: 0x303340,
+            dimmed: 0x3d4050,
             on_accent: 0x1b1e28,
         },
         accent: AccentColors {
             selected: 0x89ddff,
-            selected_subtle: 0xe4f0fb,
+            selected_subtle: 0x4d5265,
         },
         ui: UIColors {
             border: 0x303340,
@@ -1763,7 +1763,7 @@ fn theme_palenight() -> Theme {
         },
         accent: AccentColors {
             selected: 0x8b65ce,
-            selected_subtle: 0xffffff,
+            selected_subtle: 0x4c5374,
         },
         ui: UIColors {
             border: 0x282b3c,
@@ -1813,7 +1813,7 @@ fn theme_horizon_dark() -> Theme {
         },
         accent: AccentColors {
             selected: 0xe95378,
-            selected_subtle: 0xd5d8da,
+            selected_subtle: 0x4e515f,
         },
         ui: UIColors {
             border: 0x2e303e,
@@ -1863,7 +1863,7 @@ fn theme_andromeda() -> Theme {
         },
         accent: AccentColors {
             selected: 0x00e8c6,
-            selected_subtle: 0xd5ced9,
+            selected_subtle: 0x545861,
         },
         ui: UIColors {
             border: 0x1b1d23,
@@ -1913,7 +1913,7 @@ fn theme_synthwave_84() -> Theme {
         },
         accent: AccentColors {
             selected: 0xff7edb,
-            selected_subtle: 0xffffff,
+            selected_subtle: 0x5d536d,
         },
         ui: UIColors {
             border: 0x495495,
@@ -1963,7 +1963,7 @@ fn theme_shades_of_purple() -> Theme {
         },
         accent: AccentColors {
             selected: 0xfad000,
-            selected_subtle: 0xffffff,
+            selected_subtle: 0x67638f,
         },
         ui: UIColors {
             border: 0xfad000,
@@ -2013,7 +2013,7 @@ fn theme_cobalt2() -> Theme {
         },
         accent: AccentColors {
             selected: 0xffc600,
-            selected_subtle: 0xaaaaaa,
+            selected_subtle: 0x4b6b83,
         },
         ui: UIColors {
             border: 0x0d3a58,
@@ -2063,7 +2063,7 @@ fn theme_ayu_mirage() -> Theme {
         },
         accent: AccentColors {
             selected: 0xffcc66,
-            selected_subtle: 0xcccac2,
+            selected_subtle: 0x4f5668,
         },
         ui: UIColors {
             border: 0x171b24,
@@ -2113,7 +2113,7 @@ fn theme_night_owl() -> Theme {
         },
         accent: AccentColors {
             selected: 0x7e57c2,
-            selected_subtle: 0xffffff,
+            selected_subtle: 0x2b5368,
         },
         ui: UIColors {
             border: 0x5f7e97,
@@ -2163,7 +2163,7 @@ fn theme_vitesse_dark() -> Theme {
         },
         accent: AccentColors {
             selected: 0x4d9375,
-            selected_subtle: 0xdbd7ca,
+            selected_subtle: 0x4b4b4b,
         },
         ui: UIColors {
             border: 0x191919,
@@ -2213,7 +2213,7 @@ fn theme_rose_pine_dawn() -> Theme {
         },
         accent: AccentColors {
             selected: 0xc06b67,
-            selected_subtle: 0x575279,
+            selected_subtle: 0xc4bfb7,
         },
         ui: UIColors {
             border: 0x6e6a86,
@@ -2263,7 +2263,7 @@ fn theme_everforest_light() -> Theme {
         },
         accent: AccentColors {
             selected: 0x6f8a38,
-            selected_subtle: 0x5c6a72,
+            selected_subtle: 0xd0ccb8,
         },
         ui: UIColors {
             border: 0xe0dcc7,
@@ -2313,7 +2313,7 @@ fn theme_vitesse_light() -> Theme {
         },
         accent: AccentColors {
             selected: 0x1c6b48,
-            selected_subtle: 0x393a34,
+            selected_subtle: 0xc5c5c2,
         },
         ui: UIColors {
             border: 0xf0f0f0,
@@ -2358,12 +2358,12 @@ fn theme_ayu_light() -> Theme {
             secondary: 0x687484,
             tertiary: 0x687484,
             muted: 0x8e8f92,
-            dimmed: 0xd1d1d1,
+            dimmed: 0xc4c4c4,
             on_accent: 0xffffff,
         },
         accent: AccentColors {
             selected: 0xc07810,
-            selected_subtle: 0x5c6166,
+            selected_subtle: 0xbbbbbd,
         },
         ui: UIColors {
             border: 0x828e9f,
@@ -2413,7 +2413,7 @@ fn theme_night_owl_light() -> Theme {
         },
         accent: AccentColors {
             selected: 0x2aa298,
-            selected_subtle: 0x403f53,
+            selected_subtle: 0xbebebe,
         },
         ui: UIColors {
             border: 0xd9d9d9,
@@ -2467,7 +2467,7 @@ fn theme_gruvbox_light() -> Theme {
         },
         accent: AccentColors {
             selected: 0xd65d0e,
-            selected_subtle: 0x3c3836,
+            selected_subtle: 0xbfb59f,
         },
         ui: UIColors {
             border: 0xd5c4a1,
@@ -2517,7 +2517,7 @@ fn theme_catppuccin_frappe() -> Theme {
         },
         accent: AccentColors {
             selected: 0xca9ee6,
-            selected_subtle: 0xc6d0f5,
+            selected_subtle: 0x616883,
         },
         ui: UIColors {
             border: 0x51576d,
@@ -2567,7 +2567,7 @@ fn theme_catppuccin_macchiato() -> Theme {
         },
         accent: AccentColors {
             selected: 0xc6a0f6,
-            selected_subtle: 0xcad3f5,
+            selected_subtle: 0x575c78,
         },
         ui: UIColors {
             border: 0x494d64,
@@ -2617,7 +2617,7 @@ fn theme_darcula() -> Theme {
         },
         accent: AccentColors {
             selected: 0x6897bb,
-            selected_subtle: 0xa9b7c6,
+            selected_subtle: 0x4e5254,
         },
         ui: UIColors {
             border: 0x4e5254,
@@ -2667,7 +2667,7 @@ fn theme_intellij_light() -> Theme {
         },
         accent: AccentColors {
             selected: 0x4a86c8,
-            selected_subtle: 0x080808,
+            selected_subtle: 0xc5c5c5,
         },
         ui: UIColors {
             border: 0xd1d1d1,
@@ -2717,7 +2717,7 @@ fn theme_moonlight() -> Theme {
         },
         accent: AccentColors {
             selected: 0x82aaff,
-            selected_subtle: 0xc8d3f5,
+            selected_subtle: 0x535874,
         },
         ui: UIColors {
             border: 0x444a73,
@@ -2767,7 +2767,7 @@ fn theme_nightfly() -> Theme {
         },
         accent: AccentColors {
             selected: 0x82aaff,
-            selected_subtle: 0xbdc1c6,
+            selected_subtle: 0x2a5168,
         },
         ui: UIColors {
             border: 0x1d3b53,
@@ -2817,7 +2817,7 @@ fn theme_oxocarbon_dark() -> Theme {
         },
         accent: AccentColors {
             selected: 0x78a9ff,
-            selected_subtle: 0xf2f4f8,
+            selected_subtle: 0x4d4d4d,
         },
         ui: UIColors {
             border: 0x393939,
@@ -2867,7 +2867,7 @@ fn theme_flexoki_dark() -> Theme {
         },
         accent: AccentColors {
             selected: 0xd0a215,
-            selected_subtle: 0xececec,
+            selected_subtle: 0x484746,
         },
         ui: UIColors {
             border: 0x343331,
@@ -2917,7 +2917,7 @@ fn theme_flexoki_light() -> Theme {
         },
         accent: AccentColors {
             selected: 0xad8301,
-            selected_subtle: 0x100f0f,
+            selected_subtle: 0xc5c0b0,
         },
         ui: UIColors {
             border: 0xd0cec5,
@@ -2967,7 +2967,7 @@ fn theme_kanagawa_dragon() -> Theme {
         },
         accent: AccentColors {
             selected: 0x8ba4b0,
-            selected_subtle: 0xc5c9c5,
+            selected_subtle: 0x4d4b4b,
         },
         ui: UIColors {
             border: 0x393836,
@@ -3017,7 +3017,7 @@ fn theme_kanagawa_lotus() -> Theme {
         },
         accent: AccentColors {
             selected: 0xc84053,
-            selected_subtle: 0x545464,
+            selected_subtle: 0xbab494,
         },
         ui: UIColors {
             border: 0xc7c7a5,
@@ -3067,7 +3067,7 @@ fn theme_iceberg_dark() -> Theme {
         },
         accent: AccentColors {
             selected: 0x84a0c6,
-            selected_subtle: 0xc6c8d1,
+            selected_subtle: 0x4a4e64,
         },
         ui: UIColors {
             border: 0x2a2f45,
@@ -3117,7 +3117,7 @@ fn theme_iceberg_light() -> Theme {
         },
         accent: AccentColors {
             selected: 0x2d539e,
-            selected_subtle: 0x33374c,
+            selected_subtle: 0xb4b5bd,
         },
         ui: UIColors {
             border: 0xc7c9d1,
@@ -3162,12 +3162,12 @@ fn theme_bluloco_dark() -> Theme {
             secondary: 0x9da5b4,
             tertiary: 0x7a82da,
             muted: 0x6e7990,
-            dimmed: 0x3f4451,
+            dimmed: 0x474c5a,
             on_accent: 0x282c34,
         },
         accent: AccentColors {
             selected: 0x3691ff,
-            selected_subtle: 0xabb2bf,
+            selected_subtle: 0x596170,
         },
         ui: UIColors {
             border: 0x3f4451,
@@ -3212,12 +3212,12 @@ fn theme_bluloco_light() -> Theme {
             secondary: 0x4a4e56,
             tertiary: 0x828fa1,
             muted: 0x888990,
-            dimmed: 0xd3d3d3,
+            dimmed: 0xc4c4c4,
             on_accent: 0xffffff,
         },
         accent: AccentColors {
             selected: 0x275fe4,
-            selected_subtle: 0x383a42,
+            selected_subtle: 0xbdbdbd,
         },
         ui: UIColors {
             border: 0xe0e0e0,
@@ -3262,12 +3262,12 @@ fn theme_atom_one_light() -> Theme {
             secondary: 0x4f525e,
             tertiary: 0x696c77,
             muted: 0x888990,
-            dimmed: 0xd4d4d4,
+            dimmed: 0xc4c4c4,
             on_accent: 0xfafafa,
         },
         accent: AccentColors {
             selected: 0x4078f2,
-            selected_subtle: 0x383a42,
+            selected_subtle: 0xbebebe,
         },
         ui: UIColors {
             border: 0xdbdbdc,
@@ -3317,7 +3317,7 @@ fn theme_aura_dark() -> Theme {
         },
         accent: AccentColors {
             selected: 0xa277ff,
-            selected_subtle: 0xedecee,
+            selected_subtle: 0x4e4d55,
         },
         ui: UIColors {
             border: 0x29263c,
@@ -3367,7 +3367,7 @@ fn theme_panda_syntax() -> Theme {
         },
         accent: AccentColors {
             selected: 0x19f9d8,
-            selected_subtle: 0xe6e6e6,
+            selected_subtle: 0x5f6162,
         },
         ui: UIColors {
             border: 0x3b3c3d,
@@ -3417,7 +3417,7 @@ fn theme_laserwave() -> Theme {
         },
         accent: AccentColors {
             selected: 0xeb64b9,
-            selected_subtle: 0xffffff,
+            selected_subtle: 0x5f5668,
         },
         ui: UIColors {
             border: 0x40394a,
@@ -3462,12 +3462,12 @@ fn theme_fairy_floss() -> Theme {
             secondary: 0xf0cc20,
             tertiary: 0xc2c0c4,
             muted: 0xb0a8ae,
-            dimmed: 0x716799,
+            dimmed: 0x8078a8,
             on_accent: 0x5a5475,
         },
         accent: AccentColors {
             selected: 0xffb8d1,
-            selected_subtle: 0xf8f8f2,
+            selected_subtle: 0x928bb0,
         },
         ui: UIColors {
             border: 0x716799,
@@ -3517,7 +3517,7 @@ fn theme_zenburn() -> Theme {
         },
         accent: AccentColors {
             selected: 0xf0dfaf,
-            selected_subtle: 0xdcdccc,
+            selected_subtle: 0x6e6e6b,
         },
         ui: UIColors {
             border: 0x5f5f5f,
@@ -3567,7 +3567,7 @@ fn theme_srcery() -> Theme {
         },
         accent: AccentColors {
             selected: 0xfbb829,
-            selected_subtle: 0xfce8c3,
+            selected_subtle: 0x575350,
         },
         ui: UIColors {
             border: 0x2d2c29,
@@ -3612,12 +3612,12 @@ fn theme_papercolor_dark() -> Theme {
             secondary: 0xb2b2b2,
             tertiary: 0x808080,
             muted: 0x6b6b6b,
-            dimmed: 0x3a3a3a,
+            dimmed: 0x3e3e3e,
             on_accent: 0x1c1c1c,
         },
         accent: AccentColors {
             selected: 0x5fafd7,
-            selected_subtle: 0xd0d0d0,
+            selected_subtle: 0x545454,
         },
         ui: UIColors {
             border: 0x303030,
@@ -3667,7 +3667,7 @@ fn theme_papercolor_light() -> Theme {
         },
         accent: AccentColors {
             selected: 0x005faf,
-            selected_subtle: 0x444444,
+            selected_subtle: 0xb4b4b4,
         },
         ui: UIColors {
             border: 0xbcbcbc,

@@ -568,11 +568,11 @@ impl Render for DictationOverlay {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = get_cached_theme();
 
-        // Glassmorphism surface matching vercel-voice: rgba(18,18,22,0.24)
-        // with backdrop blur and rgba(255,255,255,0.18) border.
-        let mut surface_bg = rgb(GLASSMORPHISM_BG);
+        // Glassmorphism surface: use theme bg with low opacity for vibrancy blur,
+        // and theme border with subtle opacity for glass edge.
+        let mut surface_bg = rgb(theme.colors.background.main);
         surface_bg.a = GLASSMORPHISM_BG_OPACITY;
-        let mut border_color = rgb(GLASSMORPHISM_BORDER);
+        let mut border_color = rgb(theme.colors.ui.border);
         border_color.a = GLASSMORPHISM_BORDER_OPACITY;
 
         let timer_color = theme.colors.text.muted.with_opacity(OPACITY_SELECTED);

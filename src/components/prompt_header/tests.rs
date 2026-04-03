@@ -142,8 +142,8 @@ fn test_render_input_area_uses_theme_tokens_for_input_and_placeholder_text() {
     let section = render_input_area_section();
 
     assert!(
-        section.contains("colors.text_muted.to_rgb()"),
-        "PromptHeader placeholder text should use text_muted theme token. Section:\n{}",
+        section.contains("colors.text_dimmed.to_rgb()"),
+        "PromptHeader placeholder text should use text_dimmed theme token. Section:\n{}",
         section
     );
     assert!(
