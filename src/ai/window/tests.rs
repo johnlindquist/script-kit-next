@@ -2511,11 +2511,11 @@ fn test_mini_esc_overlay_precedes_close_in_source() {
     let overlay_pos = source
         .find("showing_mini_history_overlay")
         .expect("mini history overlay Esc handler must exist in render_keydown.rs");
-    // Find the Esc-driven close (final mini Esc), not the Cmd+W close.
-    // The Esc close is the one that calls `esc_close_mini_window`.
+    // Find the Esc-driven return-to-main (final Esc), not the Cmd+W close.
+    // The Esc handler is the one that calls `esc_return_to_main`.
     let close_pos = source
-        .find("esc_close_mini_window")
-        .expect("mini Esc close handler must exist in render_keydown.rs");
+        .find("esc_return_to_main")
+        .expect("final Esc return-to-main handler must exist in render_keydown.rs");
     assert!(
         overlay_pos < close_pos,
         "Mini history overlay Esc handler (byte {overlay_pos}) must appear \

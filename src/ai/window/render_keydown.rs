@@ -701,10 +701,10 @@ impl AiApp {
             return;
         }
 
-        // Mini mode: final Esc closes the window (mirroring Cmd+W behavior)
-        if is_key_escape(key) && self.window_mode.is_mini() {
+        // Final Esc: close AI window and return to main menu
+        if is_key_escape(key) {
             super::telemetry::log_ai_state(
-                "esc_close_mini_window",
+                "esc_return_to_main",
                 "escape_key",
                 &self.debug_snapshot(),
             );
@@ -717,11 +717,13 @@ impl AiApp {
                 "ai_window_close",
                 self.window_mode,
                 "escape_key",
-                "closing",
+                "return_to_main",
             );
             // Clear global handle + state so reopen works correctly
             super::window_api::cleanup_ai_window_globals();
             window.remove_window();
+            // Show the main window so user lands back on the main menu
+            crate::platform::show_main_window_without_activation();
             cx.stop_propagation();
         }
     }

@@ -8,10 +8,12 @@ use std::collections::HashSet;
 use std::time::Duration;
 
 use gpui::{
-    div, list, prelude::*, px, rgb, rgba, App, Context, Entity, FocusHandle, Focusable, FontWeight,
-    IntoElement, ListAlignment, ListState, ParentElement, Render, SharedString, Task, WeakEntity,
-    Window,
+    div, list, prelude::*, px, rgb, rgba, Animation, AnimationExt, App, Context, Entity,
+    FocusHandle, Focusable, FontWeight, IntoElement, ListAlignment, ListState, ParentElement,
+    Render, SharedString, Task, WeakEntity, Window,
 };
+
+use gpui_component::scroll::ScrollableElement;
 
 use crate::components::text_input::{render_text_input_cursor_selection, TextInputRenderConfig};
 use crate::prompts::markdown::render_markdown_with_scope;
@@ -948,23 +950,9 @@ impl AcpChatView {
             .into_any_element()
     }
 
-    #[allow(clippy::too_many_arguments)]
-    fn render_toolbar(
-        &self,
-        status: AcpThreadStatus,
-        _has_input_text: bool,
-        _mode_label: Option<&str>,
-        display_name: &str,
-        elapsed_secs: Option<u64>,
-        streaming_words: Option<usize>,
-        _message_count: usize,
-        _context_state: AcpContextBootstrapState,
-        usage_cost: Option<f64>,
-        _usage_tokens: Option<(u64, u64)>,
-        _cx: &mut Context<Self>,
-    ) -> impl IntoElement {
+    fn render_toolbar(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = theme::get_cached_theme();
-        let is_streaming = matches!(status, AcpThreadStatus::Streaming);
+        let is_streaming = matches!(self.thread.read(cx).status, AcpThreadStatus::Streaming);
 
         // Hint strip opacity: match main menu's OPACITY_TEXT_MUTED (0.65)
         let hint_text_hex = theme.colors.text.primary;
@@ -983,43 +971,35 @@ impl AcpChatView {
             // Subtle top border to separate hint strip from content
             .border_t(px(1.0))
             .border_color(rgba((theme.colors.text.primary << 8) | 0x10))
-            // ── Left: model indicator + streaming info ─────
+            // ── Left: streaming status dot ─────
             .child(
                 div()
                     .flex()
                     .items_center()
-                    .gap(px(8.0))
-                    // Model indicator (status dot + label)
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap(px(4.0))
-                            .text_xs()
-                            .text_color(rgba(hint_text_rgba))
-                            .child(div().size(px(5.0)).rounded_full().bg(if is_streaming {
-                                rgb(theme.colors.accent.selected)
-                            } else {
-                                rgba((theme.colors.text.primary << 8) | 0x40)
-                            }))
-                            .child(display_name.to_string()),
-                    )
-                    // Streaming indicator (elapsed time + word count)
-                    .when_some(elapsed_secs.filter(|&s| s >= 2), |d, secs| {
-                        d.child(div().text_xs().text_color(rgba(hint_text_rgba)).child(
-                            match streaming_words {
-                                Some(words) if words > 5 => format!("{secs}s \u{00b7} {words}w"),
-                                _ => format!("{secs}s"),
-                            },
-                        ))
-                    })
-                    // Cost indicator
-                    .when_some(usage_cost.filter(|&c| c > 0.0), |d, cost| {
+                    .gap(px(6.0))
+                    .when(is_streaming, |d| {
+                        let accent = rgb(theme.colors.accent.selected);
+                        let pulse_duration = Duration::from_millis(1200);
                         d.child(
                             div()
-                                .text_xs()
-                                .text_color(rgba(hint_text_rgba))
-                                .child(format!("${cost:.2}")),
+                                .id("acp-streaming-dot")
+                                .size(px(6.0))
+                                .rounded_full()
+                                .bg(accent)
+                                .with_animation(
+                                    "acp-streaming-dot-pulse",
+                                    Animation::new(pulse_duration).repeat(),
+                                    move |el, delta| {
+                                        let sine = (delta * std::f32::consts::PI * 2.0).sin();
+                                        let a = 0.5 + 0.5 * sine;
+                                        el.bg(gpui::Rgba {
+                                            r: accent.r,
+                                            g: accent.g,
+                                            b: accent.b,
+                                            a,
+                                        })
+                                    },
+                                ),
                         )
                     }),
             )
@@ -1572,9 +1552,10 @@ impl AcpChatView {
             return;
         }
 
-        // Escape: consume to prevent window dismiss. Only Cmd+W closes.
+        // Escape with no open dialogs: let it propagate to the main window
+        // interceptor, which will return to the main menu.
         if crate::ui_foundation::is_key_escape(key) {
-            cx.stop_propagation();
+            cx.propagate();
             return;
         }
 
@@ -1630,24 +1611,7 @@ impl Render for AcpChatView {
         let cursor_visible = self.cursor_visible;
         let pending_permission = thread.pending_permission.clone();
         let plan_entries = thread.active_plan_entries().to_vec();
-        let mode_label = thread.active_mode_id().map(str::to_string);
-        let display_name = thread.display_name().to_string();
-        let elapsed_secs = thread.stream_elapsed_secs();
-        let context_state = thread.context_bootstrap_state();
         let messages: Vec<AcpThreadMessage> = thread.messages.clone();
-        // Streaming word count: count words in last assistant message when streaming
-        let streaming_words = if matches!(status, AcpThreadStatus::Streaming) {
-            messages
-                .iter()
-                .rev()
-                .find(|m| matches!(m.role, AcpThreadMessageRole::Assistant))
-                .map(|m| m.body.split_whitespace().count())
-                .filter(|&c| c > 0)
-        } else {
-            None
-        };
-        let usage_cost = thread.usage_cost_usd;
-        let usage_tokens = thread.usage_tokens;
         let colors = Self::prompt_colors();
         let theme = theme::get_cached_theme();
 
@@ -1952,11 +1916,15 @@ impl Render for AcpChatView {
                 let weak_view: WeakEntity<AcpChatView> = cx.entity().downgrade();
                 let colors_snap = colors;
                 let theme_snap = theme::get_cached_theme();
-                let is_streaming = matches!(status, AcpThreadStatus::Streaming);
-                let cursor_vis = self.cursor_visible;
+                let _is_streaming = matches!(status, AcpThreadStatus::Streaming);
 
                 d.child(
-                    list(self.list_state.clone(), move |ix, _window, _cx| {
+                    div()
+                        .relative()
+                        .flex_1()
+                        .min_h(px(0.))
+                        .overflow_hidden()
+                        .child(list(self.list_state.clone(), move |ix, _window, _cx| {
                         let msg = &messages_snapshot[ix];
                         let msg_id = msg.id;
                         let is_collapsible = matches!(
@@ -2044,25 +2012,11 @@ impl Render for AcpChatView {
                                 is_collapsed,
                                 on_toggle,
                             ))
-                            // Streaming cursor: pulsing block at end of last assistant message
-                            .when(
-                                is_streaming
-                                    && ix == messages_snapshot.len() - 1
-                                    && matches!(msg.role, AcpThreadMessageRole::Assistant),
-                                |d| {
-                                    d.child(
-                                        div()
-                                            .px(px(12.0))
-                                            .text_sm()
-                                            .opacity(if cursor_vis { 0.60 } else { 0.15 })
-                                            .child("\u{2588}"),
-                                    )
-                                },
-                            )
                             .into_any()
                     })
-                    .flex_1()
-                    .with_sizing_behavior(gpui::ListSizingBehavior::Auto),
+                    .size_full()
+                    .with_sizing_behavior(gpui::ListSizingBehavior::Auto))
+                        .vertical_scrollbar(&self.list_state),
                 )
             })
             // ── Plan strip ────────────────────────────────────
@@ -2079,20 +2033,8 @@ impl Render for AcpChatView {
             .when(self.attach_menu_open, |d| {
                 d.child(self.render_attach_menu(cx))
             })
-            // ── BOTTOM: Toolbar with cwd ─────────────────────
-            .child(self.render_toolbar(
-                status,
-                !input_text.is_empty(),
-                mode_label.as_deref(),
-                &display_name,
-                elapsed_secs,
-                streaming_words,
-                messages.len(),
-                context_state,
-                usage_cost,
-                usage_tokens,
-                cx,
-            ))
+            // ── BOTTOM: Hint strip ─────────────────────
+            .child(self.render_toolbar(cx))
             // ── Permission overlay ────────────────────────────
             .when_some(pending_permission, |d, request| {
                 d.child(Self::render_permission_overlay(
