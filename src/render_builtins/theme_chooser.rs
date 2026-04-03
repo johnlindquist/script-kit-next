@@ -536,10 +536,12 @@ impl ScriptListApp {
                             None
                         };
 
+                        // Match main menu ListItem: on_accent for selected,
+                        // primary with quiet alpha for unselected
                         let name_color = if is_selected {
-                            accent_color
+                            rgb(text_on_accent)
                         } else {
-                            text_primary
+                            rgba((text_primary << 8) | 0xB8)
                         };
 
                         // Click handler: select + preview via filtered index
@@ -587,25 +589,29 @@ impl ScriptListApp {
                                 }
                             };
 
-                        // Build item row
+                        // Build item row — match main menu ListItem rendering
                         let text_col = div()
                             .flex()
                             .flex_col()
                             .overflow_hidden()
-                            .gap(px(row_layout.text_gap))
+                            .gap(px(2.0))
                             .child(
                                 div()
-                                    .text_sm()
-                                    .when(is_original || is_selected, |d| {
-                                        d.font_weight(gpui::FontWeight::SEMIBOLD)
+                                    .text_size(px(14.0))
+                                    .line_height(px(20.0))
+                                    .when(is_selected, |d| {
+                                        d.font_weight(gpui::FontWeight::MEDIUM)
                                     })
-                                    .text_color(rgb(name_color))
+                                    .text_color(name_color)
                                     .child(name),
                             )
-                            // Description only revealed on focused row
+                            // Description revealed on focused row
                             .when(is_selected, |d| {
                                 d.child(
-                                    div().text_xs().text_color(rgb(text_secondary)).child(desc),
+                                    div()
+                                        .text_xs()
+                                        .text_color(rgba((text_secondary << 8) | 0xB3))
+                                        .child(desc),
                                 )
                             });
 
