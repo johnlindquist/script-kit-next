@@ -3719,6 +3719,128 @@ fn tab_ai_ask_anything_fallback_stages_resource_uri_chip() {
 }
 
 #[test]
+fn acp_focused_chip_session_retains_focused_target_in_apply_back_route() {
+    let focused_target_helper_start = TAB_AI_MODE_SOURCE
+        .find("fn tab_ai_focused_target_from_part(")
+        .expect("tab_ai_focused_target_from_part must exist");
+    let focused_target_helper_body =
+        &TAB_AI_MODE_SOURCE[focused_target_helper_start..];
+    let focused_target_helper_end = focused_target_helper_body[1..]
+        .find("\n    fn ")
+        .unwrap_or(focused_target_helper_body.len());
+    let focused_target_helper_body =
+        &focused_target_helper_body[..focused_target_helper_end];
+
+    assert!(
+        focused_target_helper_body.contains("AiContextPart::FocusedTarget { target, .. }"),
+        "tab_ai_focused_target_from_part must extract AiContextPart::FocusedTarget",
+    );
+    assert!(
+        focused_target_helper_body.contains("Some(target.clone())"),
+        "tab_ai_focused_target_from_part must preserve the focused target payload",
+    );
+    assert!(
+        focused_target_helper_body.contains("_ => None"),
+        "tab_ai_focused_target_from_part must return None for non-focused parts",
+    );
+
+    let seed_fn_start = TAB_AI_MODE_SOURCE
+        .find("fn seed_tab_ai_apply_back_route(")
+        .expect("seed_tab_ai_apply_back_route must exist");
+    let seed_fn_body = &TAB_AI_MODE_SOURCE[seed_fn_start..];
+    let seed_fn_end = seed_fn_body[1..]
+        .find("\n    fn ")
+        .unwrap_or(seed_fn_body.len());
+    let seed_fn_body = &seed_fn_body[..seed_fn_end];
+
+    assert!(
+        seed_fn_body.contains("Self::tab_ai_focused_target_from_part(focused_part)"),
+        "seed_tab_ai_apply_back_route must derive focused_target from tab_ai_focused_target_from_part",
+    );
+    assert!(
+        seed_fn_body.contains("focused_target: focused_target.clone()"),
+        "seed_tab_ai_apply_back_route must persist the focused target into TabAiApplyBackRoute",
+    );
+    assert!(
+        !seed_fn_body.contains("focused_target: None"),
+        "seed_tab_ai_apply_back_route must not hardcode focused_target: None",
+    );
+
+    let open_fn_start = TAB_AI_MODE_SOURCE
+        .find("fn open_tab_ai_acp_view_from_request_impl(")
+        .expect("open_tab_ai_acp_view_from_request_impl must exist");
+    let open_fn_body = &TAB_AI_MODE_SOURCE[open_fn_start..];
+    let open_fn_end = open_fn_body[1..]
+        .find("\n    fn ")
+        .unwrap_or(open_fn_body.len());
+    let open_fn_body = &open_fn_body[..open_fn_end];
+
+    assert!(
+        open_fn_body.contains("self.seed_tab_ai_apply_back_route("),
+        "ACP open path must seed the apply-back route through seed_tab_ai_apply_back_route",
+    );
+    assert!(
+        open_fn_body.contains("focused_part.as_ref()"),
+        "ACP focused-chip open path must pass focused_part.as_ref() into seed_tab_ai_apply_back_route",
+    );
+    assert!(
+        !open_fn_body.contains("focused_target: None"),
+        "ACP open path must not hardcode focused_target: None during early route seeding",
+    );
+}
+
+#[test]
+fn ask_anything_fallback_seeds_route_without_focused_target() {
+    let open_fn_start = TAB_AI_MODE_SOURCE
+        .find("fn open_tab_ai_acp_view_from_request_impl(")
+        .expect("open_tab_ai_acp_view_from_request_impl must exist");
+    let open_fn_body = &TAB_AI_MODE_SOURCE[open_fn_start..];
+    let open_fn_end = open_fn_body[1..]
+        .find("\n    fn ")
+        .unwrap_or(open_fn_body.len());
+    let open_fn_body = &open_fn_body[..open_fn_end];
+
+    assert!(
+        open_fn_body.contains("self.current_view = AppView::AcpChatView"),
+        "Ask Anything fallback must still open the ACP chat view",
+    );
+    assert!(
+        open_fn_body.contains("else if use_ask_anything_fallback"),
+        "ACP open path must keep the Ask Anything fallback branch",
+    );
+    assert!(
+        open_fn_body.contains("self.seed_tab_ai_apply_back_route("),
+        "Ask Anything fallback must seed the apply-back route before deferred capture",
+    );
+    assert!(
+        open_fn_body.contains("focused_part.as_ref()"),
+        "Ask Anything fallback must pass the optional focused part into the route seed helper",
+    );
+
+    let seed_fn_start = TAB_AI_MODE_SOURCE
+        .find("fn seed_tab_ai_apply_back_route(")
+        .expect("seed_tab_ai_apply_back_route must exist");
+    let seed_fn_body = &TAB_AI_MODE_SOURCE[seed_fn_start..];
+    let seed_fn_end = seed_fn_body[1..]
+        .find("\n    fn ")
+        .unwrap_or(seed_fn_body.len());
+    let seed_fn_body = &seed_fn_body[..seed_fn_end];
+
+    assert!(
+        seed_fn_body.contains("let focused_target = Self::tab_ai_focused_target_from_part(focused_part);"),
+        "seed_tab_ai_apply_back_route must only derive a focused target from the optional focused part",
+    );
+    assert!(
+        seed_fn_body.contains("has_focused_target = focused_target.is_some()"),
+        "seed_tab_ai_apply_back_route must explicitly track whether a focused target exists",
+    );
+    assert!(
+        !seed_fn_body.contains("focused_target: Some("),
+        "seed_tab_ai_apply_back_route must not inject a spurious focused target when none exists",
+    );
+}
+
+#[test]
 fn acp_view_renders_pending_context_chips() {
     assert!(
         ACP_VIEW_SOURCE.contains("render_pending_context_chips"),
