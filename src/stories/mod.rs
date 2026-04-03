@@ -7,6 +7,7 @@ mod actions_mini_variations;
 mod actions_window_stories;
 mod arg_prompt_stories;
 mod button_stories;
+mod context_indicator_variations;
 mod design_token_stories;
 mod drop_prompt_stories;
 mod env_prompt_stories;
@@ -39,6 +40,7 @@ pub use actions_mini_variations::ActionsMiniVariationsStory;
 pub use actions_window_stories::ActionsWindowStory;
 pub use arg_prompt_stories::ArgPromptStory;
 pub use button_stories::ButtonStory;
+pub use context_indicator_variations::ContextIndicatorVariationsStory;
 pub use design_token_stories::DesignTokenStory;
 pub use drop_prompt_stories::DropPromptStory;
 pub use env_prompt_stories::EnvPromptStory;
@@ -70,6 +72,7 @@ static ALL_STORIES: LazyLock<Vec<StoryEntry>> = LazyLock::new(|| {
         StoryEntry::new(Box::new(DesignTokenStory)),
         // Components
         StoryEntry::new(Box::new(ButtonStory)),
+        StoryEntry::new(Box::new(ContextIndicatorVariationsStory)),
         StoryEntry::new(Box::new(ToastStory)),
         StoryEntry::new(Box::new(FormFieldStory)),
         StoryEntry::new(Box::new(ListItemStory)),

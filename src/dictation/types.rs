@@ -56,16 +56,11 @@ pub struct CapturedAudioChunk {
     pub duration: Duration,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct DictationLevel {
-    pub rms: f32,
-    pub peak: f32,
-}
-
 #[derive(Debug, Clone, PartialEq)]
 pub enum DictationCaptureEvent {
     Chunk(CapturedAudioChunk),
-    Level(DictationLevel),
+    /// FFT-derived frequency-domain bar levels (0.0–1.0 each, 9 bars).
+    Bars([f32; 9]),
     EndOfStream,
 }
 

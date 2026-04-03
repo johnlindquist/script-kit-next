@@ -473,6 +473,7 @@ impl AcpThread {
                 ui_thread_id: self.ui_thread_id.clone(),
                 cwd: self.cwd.clone(),
                 blocks,
+                model_id: self.selected_model_id.clone(),
             })
             .map_err(|error| error.to_string())?;
 
@@ -627,7 +628,9 @@ impl AcpThread {
         }
 
         let blocks = std::mem::take(&mut self.pending_context_blocks);
-        let pending_parts = std::mem::take(&mut self.pending_context_parts);
+        // Clone parts so the chip remains visible after submit.
+        // The `pending_context_consumed` flag prevents re-resolution.
+        let pending_parts = self.pending_context_parts.clone();
         let consumed_block_count = blocks.len();
         let consumed_part_count = pending_parts.len();
 
@@ -639,11 +642,7 @@ impl AcpThread {
                 prompt_prefix: String::new(),
             }
         } else {
-            crate::ai::message_parts::resolve_context_parts_with_receipt(
-                &pending_parts,
-                &[],
-                &[],
-            )
+            crate::ai::message_parts::resolve_context_parts_with_receipt(&pending_parts, &[], &[])
         };
 
         self.pending_context_consumed = true;
@@ -1096,7 +1095,7 @@ impl AcpThread {
         self.selected_model_id.as_deref()
     }
 
-    /// Select a model by ID. Updates the display name and notifies.
+    /// Select a model by ID. Updates the display name, persists to settings, and notifies.
     pub(crate) fn select_model(&mut self, model_id: &str, cx: &mut Context<Self>) {
         if let Some(entry) = self.available_models.iter().find(|m| m.id == model_id) {
             self.selected_model_id = Some(entry.id.clone());
@@ -1106,6 +1105,22 @@ impl AcpThread {
                     .clone()
                     .unwrap_or_else(|| entry.id.clone()),
             ));
+
+            // Persist selection to settings.json (non-fatal).
+            let id = entry.id.clone();
+            std::thread::Builder::new()
+                .name("acp-save-model".into())
+                .spawn(move || {
+                    let mut prefs = crate::config::load_user_preferences();
+                    prefs.ai.selected_model_id = Some(id.clone());
+                    if let Err(e) = crate::config::save_user_preferences(&prefs) {
+                        tracing::warn!(error = %e, "failed_to_persist_model_selection");
+                    } else {
+                        tracing::info!(model = %id, "model_selection_persisted");
+                    }
+                })
+                .ok();
+
             cx.notify();
         }
     }
@@ -1361,10 +1376,7 @@ impl AcpThread {
     }
 
     /// Add a context part without a GPUI context (skips `cx.notify()`).
-    pub(super) fn add_context_part_test(
-        &mut self,
-        part: crate::ai::message_parts::AiContextPart,
-    ) {
+    pub(super) fn add_context_part_test(&mut self, part: crate::ai::message_parts::AiContextPart) {
         let already_present = self
             .pending_context_parts
             .iter()
@@ -2068,10 +2080,11 @@ mod tests {
         );
         assert!(thread.pending_context_consumed);
 
-        // 3. Chip should be consumed (taken from the vector).
-        assert!(
-            thread.pending_context_parts.is_empty(),
-            "chips must be consumed after first submit — no stale chips on second turn"
+        // 3. Chip stays visible after submit (not drained).
+        assert_eq!(
+            thread.pending_context_parts.len(),
+            1,
+            "chip must persist after submit so it remains visible in the composer"
         );
 
         // 4. Second submit should carry no context.

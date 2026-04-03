@@ -6,9 +6,9 @@ use crate::dictation::transcription::{
 };
 use crate::dictation::types::{
     CapturedAudioChunk, CompletedDictationCapture, DictationCaptureConfig, DictationCaptureEvent,
-    DictationDestination, DictationLevel, RawAudioChunk,
+    DictationDestination, RawAudioChunk,
 };
-use crate::dictation::visualizer::{bars_for_level, compute_level};
+use crate::dictation::visualizer::{silent_bars, AudioVisualiser};
 use crate::dictation::DictationOverlayState;
 use anyhow::Result;
 use parking_lot::Mutex;
@@ -68,26 +68,35 @@ fn normalize_chunk_mixes_resamples_and_sets_duration() {
 }
 
 #[test]
-fn compute_level_reports_rms_and_peak_with_clamping() {
-    let level = compute_level(&[2.0, -0.5, 0.5]);
-    assert!((level.peak - 1.0).abs() < 1e-6);
-    assert!(level.rms > 0.0 && level.rms <= 1.0);
+fn fft_visualiser_returns_none_until_window_fills() {
+    let mut vis = AudioVisualiser::new_speech(16_000);
+    // 100 samples is less than the 1024-sample FFT window — should return None.
+    let silence = vec![0.0_f32; 100];
+    assert!(vis.feed(&silence).is_none());
 }
 
 #[test]
-fn bars_for_level_are_symmetric_and_clamped() {
-    let bars = bars_for_level(DictationLevel {
-        rms: 0.5,
-        peak: 0.8,
-    });
-
+fn fft_visualiser_returns_bars_when_window_fills() {
+    let mut vis = AudioVisualiser::new_speech(16_000);
+    // Generate a 440 Hz sine tone — 1024 samples at 16 kHz.
+    let samples: Vec<f32> = (0..1024)
+        .map(|i| (2.0 * std::f32::consts::PI * 440.0 * i as f32 / 16_000.0).sin() * 0.5)
+        .collect();
+    let bars = vis.feed(&samples);
+    assert!(bars.is_some(), "should return bars after full window");
+    let bars = bars.expect("bars");
     assert_eq!(bars.len(), 9);
-    assert_eq!(bars[0], bars[8]);
-    assert_eq!(bars[1], bars[7]);
-    assert_eq!(bars[2], bars[6]);
-    assert_eq!(bars[3], bars[5]);
-    assert!(bars[4] >= bars[3]);
-    assert!(bars.into_iter().all(|bar| (0.08..=1.0).contains(&bar)));
+    assert!(
+        bars.iter().all(|&b| (0.0..=1.0).contains(&b)),
+        "all bars should be 0.0–1.0"
+    );
+}
+
+#[test]
+fn silent_bars_are_minimum_height() {
+    let bars = silent_bars();
+    assert_eq!(bars.len(), 9);
+    assert!(bars.iter().all(|&b| b < 0.1), "silent bars should be low");
 }
 
 // ---------------------------------------------------------------------------
@@ -281,7 +290,7 @@ fn run_processor_honors_chunk_duration_and_flushes_tail() {
         match event {
             DictationCaptureEvent::Chunk(chunk) => chunk_lengths.push(chunk.samples.len()),
             DictationCaptureEvent::EndOfStream => break,
-            DictationCaptureEvent::Level(_) => {}
+            DictationCaptureEvent::Bars(_) => {}
         }
     }
 
@@ -315,7 +324,7 @@ fn run_processor_emits_exact_chunk_with_no_tail() {
         match event {
             DictationCaptureEvent::Chunk(chunk) => chunk_lengths.push(chunk.samples.len()),
             DictationCaptureEvent::EndOfStream => break,
-            DictationCaptureEvent::Level(_) => {}
+            DictationCaptureEvent::Bars(_) => {}
         }
     }
 
@@ -357,7 +366,7 @@ fn run_processor_buffers_across_multiple_raw_chunks() {
         match event {
             DictationCaptureEvent::Chunk(chunk) => chunk_lengths.push(chunk.samples.len()),
             DictationCaptureEvent::EndOfStream => break,
-            DictationCaptureEvent::Level(_) => {}
+            DictationCaptureEvent::Bars(_) => {}
         }
     }
 
@@ -772,10 +781,7 @@ fn stop_path_collects_all_chunks_including_tail_after_handle_drop() {
         }))
         .expect("send chunk 1");
 
-        tx.send_blocking(DictationCaptureEvent::Level(DictationLevel {
-            rms: 0.3,
-            peak: 0.5,
-        }))
+        tx.send_blocking(DictationCaptureEvent::Bars([0.3; 9]))
         .expect("send level");
 
         // Tail chunk — the one that would be lost if we drained with
@@ -796,7 +802,7 @@ fn stop_path_collects_all_chunks_including_tail_after_handle_drop() {
     while let Ok(event) = rx.recv_blocking() {
         match event {
             DictationCaptureEvent::Chunk(chunk) => chunks.push(chunk),
-            DictationCaptureEvent::Level(_) => {}
+            DictationCaptureEvent::Bars(_) => {}
             DictationCaptureEvent::EndOfStream => break,
         }
     }
@@ -836,7 +842,7 @@ fn stop_path_empty_recording_produces_none() {
     while let Ok(event) = rx.recv_blocking() {
         match event {
             DictationCaptureEvent::Chunk(chunk) => chunks.push(chunk),
-            DictationCaptureEvent::Level(_) => {}
+            DictationCaptureEvent::Bars(_) => {}
             DictationCaptureEvent::EndOfStream => break,
         }
     }
@@ -876,7 +882,7 @@ fn stop_path_errors_when_channel_closes_without_eos() {
     while let Ok(event) = rx.recv_blocking() {
         match event {
             DictationCaptureEvent::Chunk(chunk) => chunks.push(chunk),
-            DictationCaptureEvent::Level(_) => {}
+            DictationCaptureEvent::Bars(_) => {}
             DictationCaptureEvent::EndOfStream => {
                 saw_eos = true;
                 break;
@@ -4157,16 +4163,16 @@ fn confirming_render_uses_error_and_success_colors() {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn waveform_center_bar_leads_edges_on_speech() {
-    use super::visualizer::bars_for_level;
-
-    let bars = bars_for_level(DictationLevel {
-        rms: 0.35,
-        peak: 0.85,
-    });
-    assert!(bars[4] > bars[0]);
-    assert!(bars[4] > bars[8]);
-    assert!(bars.iter().all(|bar| *bar >= 0.08 && *bar <= 1.0));
+fn fft_visualiser_produces_nonzero_bars_for_speech_tone() {
+    let mut vis = AudioVisualiser::new_speech(16_000);
+    // 440 Hz sine at moderate volume — should light up at least some bars.
+    let samples: Vec<f32> = (0..1024)
+        .map(|i| (2.0 * std::f32::consts::PI * 440.0 * i as f32 / 16_000.0).sin() * 0.3)
+        .collect();
+    let bars = vis.feed(&samples).expect("should produce bars");
+    let max_bar = bars.iter().cloned().fold(0.0_f32, f32::max);
+    assert!(max_bar > 0.05, "speech tone should produce visible bars");
+    assert!(bars.iter().all(|bar| *bar >= 0.0 && *bar <= 1.0));
 }
 
 #[test]

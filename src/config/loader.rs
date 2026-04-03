@@ -169,6 +169,7 @@ fn recover_user_preferences_fields(value: Value, correlation_id: &str) -> Script
         layout: parse_required_field(object, "layout", defaults.layout, correlation_id),
         theme: parse_required_field(object, "theme", defaults.theme, correlation_id),
         dictation: parse_required_field(object, "dictation", defaults.dictation, correlation_id),
+        ai: parse_required_field(object, "ai", defaults.ai, correlation_id),
     }
 }
 

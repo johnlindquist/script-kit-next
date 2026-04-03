@@ -70,6 +70,8 @@ impl ScriptListApp {
         let design_typography = render_context.design_typography;
         let actions_dialog_top = render_context.actions_dialog_top;
         let actions_dialog_right = render_context.actions_dialog_right;
+        let typography_resolver =
+            crate::theme::TypographyResolver::new(self.theme.as_ref(), self.current_design);
         let _filtered = self.filtered_arg_choices();
         #[allow(clippy::unnecessary_map_or)]
         let has_actions = actions
@@ -253,7 +255,7 @@ impl ScriptListApp {
                     .flex_row()
                     .items_center()
                     .h(px(input_height))
-                    .text_size(px(design_typography.font_size_lg))
+                    .text_size(px(typography_resolver.font_size_xl()))
                     .text_color(if input_is_empty {
                         rgb(text_muted)
                     } else {

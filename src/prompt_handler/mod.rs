@@ -234,13 +234,12 @@ impl ScriptListApp {
                 self.arg_selected_index = 0;
                 self.focused_input = FocusedInput::ArgPrompt;
                 self.pending_focus = Some(FocusTarget::AppRoot);
-                // Mini shows limited choices (capped at 5 items height)
                 let view_type = if choice_count == 0 {
                     ViewType::ArgPromptNoChoices
                 } else {
                     ViewType::ArgPromptWithChoices
                 };
-                resize_to_view_sync(view_type, choice_count.min(5));
+                resize_to_view_sync(view_type, choice_count);
                 cx.notify();
             }
             PromptMessage::ShowMicro {

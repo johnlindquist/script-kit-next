@@ -3723,13 +3723,11 @@ fn acp_focused_chip_session_retains_focused_target_in_apply_back_route() {
     let focused_target_helper_start = TAB_AI_MODE_SOURCE
         .find("fn tab_ai_focused_target_from_part(")
         .expect("tab_ai_focused_target_from_part must exist");
-    let focused_target_helper_body =
-        &TAB_AI_MODE_SOURCE[focused_target_helper_start..];
+    let focused_target_helper_body = &TAB_AI_MODE_SOURCE[focused_target_helper_start..];
     let focused_target_helper_end = focused_target_helper_body[1..]
         .find("\n    fn ")
         .unwrap_or(focused_target_helper_body.len());
-    let focused_target_helper_body =
-        &focused_target_helper_body[..focused_target_helper_end];
+    let focused_target_helper_body = &focused_target_helper_body[..focused_target_helper_end];
 
     assert!(
         focused_target_helper_body.contains("AiContextPart::FocusedTarget { target, .. }"),
@@ -4061,8 +4059,7 @@ fn ask_anything_fallback_only_when_no_focused_target() {
     let fallback_fn_body = &fallback_fn_body[..next_fn];
 
     assert!(
-        fallback_fn_body.contains("focused_target")
-            || fallback_fn_body.contains("focused_part"),
+        fallback_fn_body.contains("focused_target") || fallback_fn_body.contains("focused_part"),
         "ask_anything_fallback must check for absence of a focused target or focused part",
     );
 }

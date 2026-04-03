@@ -295,6 +295,18 @@ pub struct ScriptKitUserPreferences {
     /// Dictation / microphone settings.
     #[serde(default)]
     pub dictation: DictationPreferences,
+    /// AI chat settings.
+    #[serde(default)]
+    pub ai: AiPreferences,
+}
+
+/// AI chat preferences persisted in `settings.json`.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct AiPreferences {
+    /// Last-selected model ID (e.g. "claude-sonnet-4-6").
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub selected_model_id: Option<String>,
 }
 
 // ============================================

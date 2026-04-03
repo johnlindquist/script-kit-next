@@ -21,6 +21,8 @@ pub(crate) struct AcpPromptTurnRequest {
     pub cwd: PathBuf,
     /// Content blocks to send as the prompt.
     pub blocks: Vec<ContentBlock>,
+    /// Optional model ID to set on the session before prompting.
+    pub model_id: Option<String>,
 }
 
 /// Typed events emitted by the ACP worker for a single turn.
@@ -99,6 +101,7 @@ mod tests {
             ui_thread_id: "thread-1".to_string(),
             cwd: PathBuf::from("/tmp"),
             blocks: vec![],
+            model_id: None,
         };
         let debug = format!("{:?}", request);
         assert!(debug.contains("thread-1"));
@@ -112,6 +115,7 @@ mod tests {
                 ui_thread_id: "t1".to_string(),
                 cwd: PathBuf::from("."),
                 blocks: vec![],
+                model_id: None,
             },
             event_tx: tx,
         };

@@ -662,4 +662,3 @@ fn e2e_submit_full_success_preserves_all_blocks_in_order() {
         "first file should come before second file"
     );
 }
-

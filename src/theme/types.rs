@@ -1858,6 +1858,7 @@ mod tests {
                 preset_id: preset_id.map(ToString::to_string),
             },
             dictation: Default::default(),
+            ai: Default::default(),
         }
     }
 

@@ -344,7 +344,9 @@ pub fn save_note_with_content(cx: &mut App, content: String) -> Result<()> {
     // If window exists, create note in the existing window
     if let (Some(handle), Some(notes_app)) = (existing_handle, existing_app.clone()) {
         let result = handle.update(cx, |_root, window, cx| {
-            notes_app.update(cx, |app, cx| app.create_note_with_content(content.clone(), window, cx))
+            notes_app.update(cx, |app, cx| {
+                app.create_note_with_content(content.clone(), window, cx)
+            })
         });
 
         if let Ok(Ok(())) = result {
@@ -375,7 +377,9 @@ pub fn save_note_with_content(cx: &mut App, content: String) -> Result<()> {
 
     if let (Some(handle), Some(notes_app)) = (handle, notes_app) {
         let result = handle.update(cx, |_root, window, cx| {
-            notes_app.update(cx, |app, cx| app.create_note_with_content(content, window, cx))
+            notes_app.update(cx, |app, cx| {
+                app.create_note_with_content(content, window, cx)
+            })
         });
 
         if let Ok(Ok(())) = result {

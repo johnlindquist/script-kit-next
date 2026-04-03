@@ -174,8 +174,8 @@ fn test_arg_prompt_header_uses_design_token_large_input_size() {
         .expect("failed to read src/render_prompts/arg/render.rs");
 
     assert!(
-        source.contains(".text_size(px(design_typography.font_size_lg))"),
-        "arg prompt header input should use design typography token for large input text"
+        source.contains("typography_resolver.font_size_xl()"),
+        "arg prompt header input should use TypographyResolver for consistent font size"
     );
     assert!(
         !source.contains(".text_xl()"),

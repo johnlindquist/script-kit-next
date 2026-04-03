@@ -434,7 +434,7 @@ unsafe fn screen_geometry_for_window_frame(
 }
 /// Layout constants for height calculations
 pub mod layout {
-    use crate::panel::{CURSOR_HEIGHT_LG, CURSOR_MARGIN_Y, HEADER_PADDING_Y};
+    use crate::panel::{CURSOR_HEIGHT_LG, CURSOR_MARGIN_Y};
     use gpui::{px, Pixels};
 
     /// List container vertical padding (top + bottom, matches default padding_xs)
@@ -445,10 +445,12 @@ pub mod layout {
     pub const ARG_INPUT_LINE_HEIGHT: f32 = CURSOR_HEIGHT_LG + (CURSOR_MARGIN_Y * 2.0);
     /// Footer height (matches PromptFooter)
     pub const FOOTER_HEIGHT: f32 = 30.0;
+    /// Window border overhead (1px top + 1px bottom from render_impl.rs .border_1())
+    pub const WINDOW_BORDER_Y: f32 = 2.0;
     /// Total input-only height (header only, no list, but with footer)
-    /// Uses HEADER_PADDING_Y from panel.rs for accurate height calculation
+    /// Uses HEADER_PADDING_Y from ui::chrome (same as render scaffold) for accurate height
     pub const ARG_HEADER_HEIGHT: f32 =
-        (HEADER_PADDING_Y * 2.0) + ARG_INPUT_LINE_HEIGHT + FOOTER_HEIGHT;
+        (super::mini_layout::HEADER_PADDING_Y * 2.0) + ARG_INPUT_LINE_HEIGHT + FOOTER_HEIGHT;
 
     /// Minimum window height (input only) - for input-only prompts
     pub const MIN_HEIGHT: Pixels = px(ARG_HEADER_HEIGHT);
@@ -531,7 +533,7 @@ fn height_for_view_with_layout(
             let visible_items = item_count.max(1) as f32;
             let list_height =
                 (visible_items * LIST_ITEM_HEIGHT) + ARG_LIST_PADDING_Y + ARG_DIVIDER_HEIGHT;
-            let total_height = ARG_HEADER_HEIGHT + list_height;
+            let total_height = ARG_HEADER_HEIGHT + list_height + WINDOW_BORDER_Y;
             clamp_height(px(total_height))
         }
         // Input-only prompt - compact
@@ -919,8 +921,10 @@ mod resize_tests {
         let layout = default_layout();
 
         // Arg with choices should size to items, clamped to STANDARD_HEIGHT
-        let base_height =
-            layout::ARG_HEADER_HEIGHT + layout::ARG_DIVIDER_HEIGHT + layout::ARG_LIST_PADDING_Y;
+        let base_height = layout::ARG_HEADER_HEIGHT
+            + layout::ARG_DIVIDER_HEIGHT
+            + layout::ARG_LIST_PADDING_Y
+            + layout::WINDOW_BORDER_Y;
         assert_eq!(
             height_for_view_with_layout(ViewType::ArgPromptWithChoices, 1, &layout),
             px(base_height + LIST_ITEM_HEIGHT)
