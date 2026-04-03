@@ -316,6 +316,8 @@ impl AcpThread {
                 target: "script_kit::tab_ai",
                 event = "acp_ask_anything_stage_skipped_removed",
             );
+            self.pending_context_blocks.clear();
+            self.pending_context_consumed = false;
             self.context_bootstrap_state = AcpContextBootstrapState::Ready;
             self.context_bootstrap_note = Some("Ask Anything removed".into());
 
@@ -338,7 +340,7 @@ impl AcpThread {
         self.pending_context_consumed = false;
         self.promote_ask_anything_chip_to_ambient();
         self.context_bootstrap_state = AcpContextBootstrapState::Ready;
-        self.context_bootstrap_note = Some("Context attached".into());
+        self.context_bootstrap_note = Some("Ask Anything ready".into());
 
         tracing::info!(
             target: "script_kit::tab_ai",
@@ -566,13 +568,20 @@ impl AcpThread {
             !self.pending_context_consumed && (has_pending_parts || has_pending_blocks);
 
         if has_context {
-            blocks.extend(self.pending_context_blocks.clone());
+            // Drain both hidden blocks and visible parts so no stale chip
+            // remains visible on the second turn (one-shot consumption).
+            let pending_blocks = std::mem::take(&mut self.pending_context_blocks);
+            let pending_parts = std::mem::take(&mut self.pending_context_parts);
+            let consumed_block_count = pending_blocks.len();
+            let consumed_part_count = pending_parts.len();
+
+            blocks.extend(pending_blocks);
 
             // Resolve typed context parts (focused-target chips, resource URIs, files)
             // into prompt blocks and prepend them.
-            if !self.pending_context_parts.is_empty() {
+            if !pending_parts.is_empty() {
                 let receipt = crate::ai::message_parts::resolve_context_parts_with_receipt(
-                    &self.pending_context_parts,
+                    &pending_parts,
                     &[],
                     &[],
                 );
@@ -589,6 +598,14 @@ impl AcpThread {
             }
 
             self.pending_context_consumed = true;
+            self.pending_ambient_context_enabled = false;
+
+            tracing::info!(
+                target: "script_kit::tab_ai",
+                event = "acp_pending_context_consumed",
+                consumed_part_count,
+                consumed_block_count,
+            );
         }
 
         if has_context {
@@ -1102,16 +1119,21 @@ impl AcpThread {
 
     /// Add a typed context part. Deduplicates by value equality — if an
     /// identical part already exists the call is a no-op.
+    ///
+    /// When an Ask Anything part is added, stale hidden ambient blocks are
+    /// cleared and the bootstrap state is set to `Preparing` so the deferred
+    /// capture path knows to arm.
     pub(crate) fn add_context_part(
         &mut self,
         part: crate::ai::message_parts::AiContextPart,
         cx: &mut Context<Self>,
     ) {
-        if part.is_ask_anything_resource() || part.is_ambient_context_chip() {
-            self.pending_ambient_context_enabled = true;
-        }
+        let already_present = self
+            .pending_context_parts
+            .iter()
+            .any(|existing| existing == &part);
 
-        if self.pending_context_parts.iter().any(|existing| existing == &part) {
+        if already_present {
             tracing::info!(
                 target: "script_kit::tab_ai",
                 event = "acp_context_part_add_skipped_duplicate",
@@ -1119,6 +1141,28 @@ impl AcpThread {
                 source = %part.source(),
             );
             return;
+        }
+
+        let is_ask_anything = part.is_ask_anything_resource();
+
+        // Any new chip should make the next submit consume staged context again.
+        self.pending_context_consumed = false;
+
+        if is_ask_anything {
+            // Throw away any stale hidden ambient blocks from an earlier fallback.
+            let stale_block_count = self.pending_context_blocks.len();
+            self.pending_context_blocks.clear();
+            self.pending_ambient_context_enabled = true;
+            self.context_bootstrap_state = AcpContextBootstrapState::Preparing;
+            self.context_bootstrap_note =
+                Some("Capturing desktop context\u{2026}".into());
+
+            tracing::info!(
+                target: "script_kit::tab_ai",
+                event = "acp_ask_anything_chip_armed",
+                stale_block_count,
+                part_count_before = self.pending_context_parts.len(),
+            );
         }
 
         tracing::info!(
@@ -1135,29 +1179,45 @@ impl AcpThread {
     /// Remove a typed context part by index.
     ///
     /// When an Ask Anything or AmbientContext chip is removed, clears the
-    /// staged ambient blocks so they are not submitted.
+    /// staged ambient blocks, disables ambient staging, updates the bootstrap
+    /// state/note, and prevents deferred ambient context from being submitted.
+    /// If a submit was queued while bootstrapping and the chip is removed,
+    /// re-evaluates whether to submit now (without ambient context).
     pub(crate) fn remove_context_part(&mut self, index: usize, cx: &mut Context<Self>) {
         if index >= self.pending_context_parts.len() {
             return;
         }
         let removed = self.pending_context_parts.remove(index);
-        let removed_ambient =
-            removed.is_ask_anything_resource() || removed.is_ambient_context_chip();
+        let removed_before_promotion = removed.is_ask_anything_resource();
+        let removed_after_promotion = removed.is_ambient_context_chip();
+        let removed_ask_anything = removed_before_promotion || removed_after_promotion;
 
-        if removed_ambient {
-            self.pending_ambient_context_enabled = self
-                .pending_context_parts
-                .iter()
-                .any(|part| part.is_ask_anything_resource() || part.is_ambient_context_chip());
+        let mut submit_now = false;
 
-            if !self.pending_ambient_context_enabled {
-                self.pending_context_blocks.clear();
-                self.pending_context_consumed = false;
-                tracing::info!(
-                    target: "script_kit::tab_ai",
-                    event = "acp_ambient_context_cleared_via_chip",
+        if removed_ask_anything {
+            let hidden_block_count = self.pending_context_blocks.len();
+            self.pending_ambient_context_enabled = false;
+            self.pending_context_blocks.clear();
+            self.pending_context_consumed = false;
+            self.context_bootstrap_state = AcpContextBootstrapState::Ready;
+            self.context_bootstrap_note = Some("Ask Anything removed".into());
+
+            submit_now = self.queued_submit_while_bootstrapping
+                && !self.input.text().trim().is_empty()
+                && !matches!(
+                    self.status,
+                    AcpThreadStatus::Streaming | AcpThreadStatus::WaitingForPermission
                 );
-            }
+            self.queued_submit_while_bootstrapping = false;
+
+            tracing::info!(
+                target: "script_kit::tab_ai",
+                event = "acp_ask_anything_chip_removed",
+                removed_before_promotion,
+                removed_after_promotion,
+                hidden_block_count,
+                remaining_parts = self.pending_context_parts.len(),
+            );
         }
 
         tracing::info!(
@@ -1166,8 +1226,13 @@ impl AcpThread {
             index,
             label = %removed.label(),
             source = %removed.source(),
-            remaining = self.pending_context_parts.len(),
+            remaining_parts = self.pending_context_parts.len(),
         );
+
+        if submit_now {
+            let _ = self.submit_input(cx);
+            return;
+        }
         cx.notify();
     }
 }
@@ -1219,6 +1284,73 @@ impl AcpThread {
             selected_model_id: None,
             selected_model_display_name: None,
         }
+    }
+
+    /// Add a context part without a GPUI context (skips `cx.notify()`).
+    pub(super) fn add_context_part_test(
+        &mut self,
+        part: crate::ai::message_parts::AiContextPart,
+    ) {
+        let already_present = self
+            .pending_context_parts
+            .iter()
+            .any(|existing| existing == &part);
+        if already_present {
+            return;
+        }
+
+        let is_ask_anything = part.is_ask_anything_resource();
+        self.pending_context_consumed = false;
+
+        if is_ask_anything {
+            self.pending_context_blocks.clear();
+            self.pending_ambient_context_enabled = true;
+            self.context_bootstrap_state = AcpContextBootstrapState::Preparing;
+            self.context_bootstrap_note =
+                Some("Capturing desktop context\u{2026}".into());
+        }
+
+        self.pending_context_parts.push(part);
+    }
+
+    /// Remove a context part by index without a GPUI context (skips `cx.notify()`).
+    pub(super) fn remove_context_part_test(&mut self, index: usize) {
+        if index >= self.pending_context_parts.len() {
+            return;
+        }
+        let removed = self.pending_context_parts.remove(index);
+        let removed_before_promotion = removed.is_ask_anything_resource();
+        let removed_after_promotion = removed.is_ambient_context_chip();
+        let removed_ask_anything = removed_before_promotion || removed_after_promotion;
+
+        if removed_ask_anything {
+            self.pending_ambient_context_enabled = false;
+            self.pending_context_blocks.clear();
+            self.pending_context_consumed = false;
+            self.context_bootstrap_state = AcpContextBootstrapState::Ready;
+            self.context_bootstrap_note = Some("Ask Anything removed".into());
+        }
+    }
+
+    /// Stage Ask Anything context without GPUI context (skips `cx.notify()`).
+    pub(super) fn stage_ask_anything_context_test(
+        &mut self,
+        context: &crate::ai::TabAiContextBlob,
+    ) -> Result<(), String> {
+        if !self.pending_ambient_context_enabled {
+            self.pending_context_blocks.clear();
+            self.pending_context_consumed = false;
+            self.context_bootstrap_state = AcpContextBootstrapState::Ready;
+            self.context_bootstrap_note = Some("Ask Anything removed".into());
+            return Ok(());
+        }
+
+        self.pending_context_blocks = build_tab_ai_acp_context_blocks(context)?;
+        self.pending_context_consumed = false;
+        self.promote_ask_anything_chip_to_ambient();
+        self.context_bootstrap_state = AcpContextBootstrapState::Ready;
+        self.context_bootstrap_note = Some("Ask Anything ready".into());
+        Ok(())
     }
 
     /// Apply an event without a GPUI context (for testing pure logic).
@@ -1683,6 +1815,194 @@ mod tests {
             thread.active_plan_entries(),
             &["Step A", "Step B"],
             "plan should be fully replaced, not appended"
+        );
+    }
+
+    // ── Chip lifecycle regression tests ───────────────────────────
+
+    /// Helper: build a minimal `TabAiContextBlob` for testing stage operations.
+    fn minimal_blob() -> crate::ai::TabAiContextBlob {
+        crate::ai::TabAiContextBlob::from_parts(
+            crate::ai::tab_context::TabAiUiSnapshot {
+                prompt_type: "ScriptList".to_string(),
+                input_text: None,
+                focused_semantic_id: None,
+                selected_semantic_id: None,
+                visible_elements: Vec::new(),
+            },
+            crate::context_snapshot::AiContextSnapshot::default(),
+            Vec::new(),
+            None,
+            Vec::new(),
+            Vec::new(),
+            "2026-01-01T00:00:00Z".to_string(),
+        )
+    }
+
+    /// Helper: build an Ask Anything `ResourceUri` part.
+    fn ask_anything_part() -> crate::ai::message_parts::AiContextPart {
+        crate::ai::message_parts::AiContextPart::ResourceUri {
+            uri: crate::ai::message_parts::ASK_ANYTHING_RESOURCE_URI.to_string(),
+            label: crate::ai::message_parts::ASK_ANYTHING_LABEL.to_string(),
+        }
+    }
+
+    /// Helper: build a focused-target part.
+    fn focused_target_part(name: &str) -> crate::ai::message_parts::AiContextPart {
+        crate::ai::message_parts::AiContextPart::FocusedTarget {
+            target: crate::ai::tab_context::TabAiTargetContext {
+                source: "ScriptList".to_string(),
+                kind: "script".to_string(),
+                semantic_id: format!("choice:0:{name}"),
+                label: name.to_string(),
+                metadata: None,
+            },
+            label: name.to_string(),
+        }
+    }
+
+    /// Regression: Ask Anything chip removed before capture completes.
+    ///
+    /// When the user arms Ask Anything then removes the chip while the deferred
+    /// capture is still running, the thread must disable ambient context so that
+    /// `stage_ask_anything_context` becomes a no-op and no stale blocks are
+    /// attached to the first submit.
+    #[test]
+    fn ask_anything_removed_before_capture_completes() {
+        let mut thread = test_thread(Vec::new(), false);
+
+        // 1. Arm the Ask Anything chip (simulates Tab from a fallback surface).
+        thread.add_context_part_test(ask_anything_part());
+        assert!(thread.pending_ambient_context_enabled);
+        assert_eq!(
+            thread.context_bootstrap_state,
+            AcpContextBootstrapState::Preparing
+        );
+        assert_eq!(thread.pending_context_parts.len(), 1);
+
+        // 2. User removes the chip before capture finishes.
+        thread.remove_context_part_test(0);
+
+        // 3. Assert: ambient disabled, no blocks, bootstrap ready, chip gone.
+        assert!(!thread.pending_ambient_context_enabled);
+        assert!(thread.pending_context_blocks.is_empty());
+        assert_eq!(
+            thread.context_bootstrap_state,
+            AcpContextBootstrapState::Ready
+        );
+        assert_eq!(
+            thread.context_bootstrap_note.as_ref().map(|s| s.as_ref()),
+            Some("Ask Anything removed")
+        );
+        assert!(thread.pending_context_parts.is_empty());
+
+        // 4. Deferred capture completes — should be a no-op.
+        let blob = minimal_blob();
+        thread
+            .stage_ask_anything_context_test(&blob)
+            .expect("stage should succeed");
+        assert!(
+            thread.pending_context_blocks.is_empty(),
+            "blocks should remain empty after late capture"
+        );
+
+        // 5. First submit should carry no ambient context.
+        thread.input.set_text("hello");
+        let blocks = thread.prepare_turn_blocks("hello");
+        assert_eq!(blocks.len(), 1, "only user input, no ambient context");
+    }
+
+    /// Regression: Ask Anything chip removed after ambient promotion.
+    ///
+    /// After capture completes and the chip is promoted from `ResourceUri` to
+    /// `AmbientContext`, removing the promoted chip must clear the hidden
+    /// `pending_context_blocks` so the first submit sends no ambient context.
+    #[test]
+    fn ask_anything_removed_after_ambient_promotion() {
+        let mut thread = test_thread(Vec::new(), false);
+
+        // 1. Arm the Ask Anything chip.
+        thread.add_context_part_test(ask_anything_part());
+        assert!(thread.pending_ambient_context_enabled);
+
+        // 2. Capture completes — promotes chip to AmbientContext, stages blocks.
+        let blob = minimal_blob();
+        thread
+            .stage_ask_anything_context_test(&blob)
+            .expect("stage should succeed");
+
+        // Verify promotion happened.
+        assert_eq!(thread.pending_context_parts.len(), 1);
+        assert!(
+            thread.pending_context_parts[0].is_ambient_context_chip(),
+            "chip should be promoted to AmbientContext"
+        );
+        assert!(
+            !thread.pending_context_blocks.is_empty(),
+            "blocks should be staged"
+        );
+        assert_eq!(
+            thread.context_bootstrap_note.as_ref().map(|s| s.as_ref()),
+            Some("Ask Anything ready")
+        );
+
+        // 3. User removes the promoted chip.
+        thread.remove_context_part_test(0);
+
+        // 4. Assert: ambient disabled, blocks cleared, chip gone.
+        assert!(!thread.pending_ambient_context_enabled);
+        assert!(
+            thread.pending_context_blocks.is_empty(),
+            "removing promoted chip must clear hidden blocks"
+        );
+        assert!(thread.pending_context_parts.is_empty());
+
+        // 5. First submit should carry no ambient context.
+        thread.input.set_text("hello");
+        let blocks = thread.prepare_turn_blocks("hello");
+        assert_eq!(blocks.len(), 1, "only user input, no ambient context");
+    }
+
+    /// Regression: Focused-target chip consumed on first submit.
+    ///
+    /// After a focused-target chip is staged and the first message is submitted,
+    /// the chip must be consumed (removed from `pending_context_parts`) so the
+    /// composer shows no stale chips on the second turn.
+    #[test]
+    fn focused_target_chip_consumed_on_first_submit() {
+        let mut thread = test_thread(Vec::new(), false);
+
+        // 1. Stage a focused-target chip (simulates Tab from a focused surface).
+        thread.add_context_part_test(focused_target_part("my-script"));
+        assert_eq!(thread.pending_context_parts.len(), 1);
+        assert!(!thread.pending_context_consumed);
+
+        // Mark bootstrap as ready (focused path doesn't use deferred capture).
+        thread.context_bootstrap_state = AcpContextBootstrapState::Ready;
+
+        // 2. First submit.
+        let blocks = thread.prepare_turn_blocks("explain this script");
+
+        // Should have: resolved context part block + USER REQUEST marker + input.
+        assert!(
+            blocks.len() >= 2,
+            "first submit should include context + input, got {} blocks",
+            blocks.len()
+        );
+        assert!(thread.pending_context_consumed);
+
+        // 3. Chip should be consumed (taken from the vector).
+        assert!(
+            thread.pending_context_parts.is_empty(),
+            "chips must be consumed after first submit — no stale chips on second turn"
+        );
+
+        // 4. Second submit should carry no context.
+        let blocks2 = thread.prepare_turn_blocks("what else?");
+        assert_eq!(
+            blocks2.len(),
+            1,
+            "second turn should only have user input, no context"
         );
     }
 }
