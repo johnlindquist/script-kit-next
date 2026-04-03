@@ -108,6 +108,22 @@ pub(super) fn derive_context_preview_info(
                 ),
             }
         }
+        crate::ai::message_parts::AiContextPart::AmbientContext { label } => {
+            tracing::info!(
+                checkpoint = "context_preview_derived",
+                label = %label,
+                profile = "ambient",
+                "derived ambient context preview info"
+            );
+
+            ContextPreviewInfo {
+                label: label.clone(),
+                source_uri: "ambient://ask-anything".to_string(),
+                profile: ContextPreviewProfile::Custom,
+                has_diagnostics: false,
+                description: "Ambient desktop context (staged separately)".to_string(),
+            }
+        }
     }
 }
 

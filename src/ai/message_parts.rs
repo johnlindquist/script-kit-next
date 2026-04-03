@@ -2,6 +2,12 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
+/// Canonical label for the Ask Anything ambient context chip.
+pub const ASK_ANYTHING_LABEL: &str = "Ask Anything";
+
+/// Canonical resource URI for the Ask Anything minimal desktop context.
+pub const ASK_ANYTHING_RESOURCE_URI: &str = "kit://context?profile=minimal";
+
 /// A typed context part that can be attached to an AI composer message.
 ///
 /// Each variant represents a different source of context that will be
@@ -21,6 +27,11 @@ pub enum AiContextPart {
         target: crate::ai::tab_context::TabAiTargetContext,
         label: String,
     },
+    /// Display-only ambient context chip. Represents promoted Ask Anything
+    /// context that has already been staged as `pending_context_blocks`.
+    /// Resolves to an empty prompt block (the real content lives in the
+    /// staged blocks).
+    AmbientContext { label: String },
 }
 
 impl AiContextPart {
@@ -28,7 +39,8 @@ impl AiContextPart {
         match self {
             Self::ResourceUri { label, .. }
             | Self::FilePath { label, .. }
-            | Self::FocusedTarget { label, .. } => label,
+            | Self::FocusedTarget { label, .. }
+            | Self::AmbientContext { label } => label,
         }
     }
 
@@ -38,7 +50,23 @@ impl AiContextPart {
             Self::ResourceUri { uri, .. } => uri,
             Self::FilePath { path, .. } => path,
             Self::FocusedTarget { target, .. } => &target.semantic_id,
+            Self::AmbientContext { .. } => "ambient://ask-anything",
         }
+    }
+
+    /// Returns `true` when this part is the initial Ask Anything resource
+    /// chip (before promotion to `AmbientContext`).
+    pub fn is_ask_anything_resource(&self) -> bool {
+        matches!(
+            self,
+            Self::ResourceUri { uri, label }
+                if uri == ASK_ANYTHING_RESOURCE_URI && label == ASK_ANYTHING_LABEL
+        )
+    }
+
+    /// Returns `true` when this part is a promoted ambient context chip.
+    pub fn is_ambient_context_chip(&self) -> bool {
+        matches!(self, Self::AmbientContext { .. })
     }
 }
 
@@ -149,6 +177,14 @@ pub fn resolve_context_part_to_prompt_block(
         AiContextPart::FocusedTarget { target, label } => {
             resolve_focused_target_part(target, label)
         }
+        AiContextPart::AmbientContext { label } => {
+            tracing::info!(
+                kind = "ambient_context_display_only",
+                label = %label,
+                "Skipped display-only ambient context chip during prompt resolution"
+            );
+            Ok(String::new())
+        }
     }
 }
 
@@ -200,6 +236,15 @@ pub fn resolve_context_parts_with_receipt(
     for part in parts {
         match resolve_context_part_to_prompt_block(part, scripts, scriptlets) {
             Ok(block) => {
+                if block.trim().is_empty() {
+                    tracing::info!(
+                        checkpoint = "resolution_display_only",
+                        source = %part.source(),
+                        label = %part.label(),
+                        "context part produced no prompt block"
+                    );
+                    continue;
+                }
                 tracing::info!(
                     checkpoint = "resolution_ok",
                     source = %part.source(),
@@ -381,6 +426,8 @@ pub enum ContextPartPreparationOutcomeKind {
     FullContent,
     MetadataOnly,
     Failed,
+    /// Display-only chip that produces no prompt block (e.g. `AmbientContext`).
+    DisplayOnly,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -548,6 +595,15 @@ fn resolve_context_part_for_preparation(
                 ),
             }
         }
+        AiContextPart::AmbientContext { label } => (
+            ContextPartPreparationOutcome {
+                label: label.clone(),
+                source: "ambient://ask-anything".to_string(),
+                kind: ContextPartPreparationOutcomeKind::DisplayOnly,
+                detail: Some("Display-only ambient context chip".to_string()),
+            },
+            None,
+        ),
     }
 }
 
@@ -574,7 +630,7 @@ pub fn prepare_user_message_with_receipt(
 
         if let Some(block) = prompt_block {
             prompt_blocks.push(block);
-        } else {
+        } else if outcome.kind == ContextPartPreparationOutcomeKind::Failed {
             unresolved_parts.push(part.clone());
             failures.push(ContextResolutionFailure {
                 label: outcome.label.clone(),
@@ -1205,6 +1261,26 @@ mod tests {
         assert_eq!(
             receipt.outcomes[0].kind,
             ContextPartPreparationOutcomeKind::FullContent
+        );
+    }
+
+    #[test]
+    fn test_prepare_user_message_with_ambient_context_is_display_only() {
+        let part = AiContextPart::AmbientContext {
+            label: ASK_ANYTHING_LABEL.to_string(),
+        };
+
+        let receipt = prepare_user_message_with_receipt("answer this", &[part], &[], &[]);
+
+        assert_eq!(receipt.decision, PreparedMessageDecision::Ready);
+        assert_eq!(receipt.context.attempted, 1);
+        assert_eq!(receipt.context.resolved, 0);
+        assert!(receipt.context.failures.is_empty());
+        assert!(receipt.unresolved_parts.is_empty());
+        assert_eq!(receipt.final_user_content, "answer this");
+        assert_eq!(
+            receipt.outcomes[0].kind,
+            ContextPartPreparationOutcomeKind::DisplayOnly
         );
     }
 
