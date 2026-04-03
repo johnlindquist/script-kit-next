@@ -624,160 +624,90 @@ impl ScriptListApp {
                 {
                     if let Some(app) = app_entity.upgrade() {
                         app.update(cx, |this, cx| {
-                            // Handle Tab/Shift+Tab in FileSearchView for directory/file navigation
-                            // CRITICAL: ALWAYS consume Tab/Shift+Tab to prevent focus traversal
-                            if let AppView::FileSearchView {
-                                query,
-                                selected_index,
-                                ..
-                            } = &mut this.current_view
-                            {
-                                // ALWAYS stop propagation for Tab/Shift+Tab in FileSearchView
-                                // This prevents Tab from falling through to focus traversal
+                            // File search: plain Tab captures focused context into ACP,
+                            // Shift+Tab still navigates up one directory level.
+                            if matches!(this.current_view, AppView::FileSearchView { .. }) {
                                 cx.stop_propagation();
 
+                                if this.show_actions_popup {
+                                    return;
+                                }
+
                                 if has_shift {
-                                    // Shift+Tab: Go up one directory level using parent_dir_display helper
-                                    // This handles ~/, /, ./, ../ and regular paths correctly
-                                    if let Some(parent_path) =
-                                        crate::file_search::parent_dir_display(query)
+                                    let current_query = match &this.current_view {
+                                        AppView::FileSearchView { query, .. } => query.clone(),
+                                        _ => String::new(),
+                                    };
+
+                                    let parent_path_opt = if let Some(parsed) =
+                                        crate::file_search::parse_directory_path(&current_query)
                                     {
+                                        if parsed.filter.is_some() {
+                                            Some(parsed.directory)
+                                        } else {
+                                            crate::file_search::parent_dir_display(
+                                                &parsed.directory,
+                                            )
+                                        }
+                                    } else {
+                                        None
+                                    };
+
+                                    if let Some(parent_path) = parent_path_opt {
                                         crate::logging::log(
                                             "KEY",
                                             &format!(
                                                 "Shift+Tab: Navigating up from '{}' to '{}'",
-                                                query, parent_path
+                                                current_query, parent_path
                                             ),
                                         );
-
-                                        // Update the input - handle_filter_input_change will:
-                                        // - Update query
-                                        // - Reset selected_index to 0
-                                        // - Detect directory change
-                                        // - Trigger async directory load
                                         this.gpui_input_state.update(cx, |state, cx| {
                                             state.set_value(parent_path.clone(), window, cx);
-                                            // Ensure cursor is at end with no selection after programmatic set_value
-                                            // This prevents issues where GPUI might leave caret at wrong position
                                             let len = parent_path.len();
                                             state.set_selection(len, len, window, cx);
                                         });
-
                                         cx.notify();
                                     } else {
-                                        // At root (/ or ~/) - no parent to navigate to
-                                        // Key is consumed (stop_propagation called above) but no action taken
                                         crate::logging::log(
                                             "KEY",
                                             &format!(
                                                 "Shift+Tab: Already at root '{}', no-op",
-                                                query
+                                                current_query
                                             ),
                                         );
                                     }
                                 } else {
-                                    // Tab: Enter directory OR autocomplete file name
-                                    // Reuse the precomputed display order instead of
-                                    // re-running Nucleo on every Tab keypress.
-                                    // Use direct field access to avoid borrow conflict
-                                    // with the &mut selected_index from the pattern match.
-                                    let display_len =
-                                        this.file_search_display_indices.len();
-                                    if display_len > 0 {
-                                        let clamped =
-                                            (*selected_index).min(display_len - 1);
-                                        *selected_index = clamped;
-
-                                        let file_info = this
-                                            .file_search_display_indices
-                                            .get(clamped)
-                                            .and_then(|&ri| {
-                                                this.cached_file_results.get(ri)
-                                            })
-                                            .map(|f| (f.file_type.clone(), f.path.clone()));
-
-                                        if let Some((file_type, path)) = file_info {
-                                            if file_type
-                                                == crate::file_search::FileType::Directory
-                                            {
-                                                let shortened =
-                                                    crate::file_search::shorten_path(&path);
-                                                let new_path = format!(
-                                                    "{}/",
-                                                    shortened.trim_end_matches('/')
-                                                );
-                                                crate::logging::log(
-                                                    "KEY",
-                                                    &format!(
-                                                        "Tab: Entering directory: {}",
-                                                        new_path
-                                                    ),
-                                                );
-
-                                                this.gpui_input_state.update(
-                                                    cx,
-                                                    |state, cx| {
-                                                        state.set_value(
-                                                            new_path.clone(),
-                                                            window,
-                                                            cx,
-                                                        );
-                                                        let len = new_path.len();
-                                                        state.set_selection(
-                                                            len, len, window, cx,
-                                                        );
-                                                    },
-                                                );
-
-                                                cx.notify();
-                                            } else {
-                                                let shortened =
-                                                    crate::file_search::shorten_path(&path);
-                                                crate::logging::log(
-                                                    "KEY",
-                                                    &format!(
-                                                        "Tab: Autocompleting file path: {}",
-                                                        shortened
-                                                    ),
-                                                );
-
-                                                this.gpui_input_state.update(
-                                                    cx,
-                                                    |state, cx| {
-                                                        state.set_value(
-                                                            shortened.clone(),
-                                                            window,
-                                                            cx,
-                                                        );
-                                                        let len = shortened.len();
-                                                        state.set_selection(
-                                                            len, len, window, cx,
-                                                        );
-                                                    },
-                                                );
-
-                                                cx.notify();
-                                            }
-                                        }
-                                    } else {
-                                        crate::logging::log(
-                                            "KEY",
-                                            "Tab: No selection to autocomplete, no-op",
-                                        );
-                                    }
+                                    tracing::info!(
+                                        target: "script_kit::tab_ai",
+                                        event = "tab_ai_file_search_plain_tab_to_acp",
+                                    );
+                                    let _ = this.try_route_plain_tab_to_acp_context_capture(cx);
                                 }
                                 return;
                             }
 
-                            // Handle Tab/Shift+Tab in ChatPrompt setup mode
-                            // Must intercept here to prevent GPUI focus traversal from consuming Tab
-                            if let AppView::ChatPrompt { entity, .. } = &this.current_view {
-                                let handled = entity.update(cx, |chat, cx| {
-                                    chat.handle_setup_key("tab", has_shift, cx)
-                                });
-                                if handled {
-                                    cx.stop_propagation();
-                                    return;
+                            // ChatPrompt: plain Tab opens ACP with focused/input context,
+                            // Shift+Tab keeps local setup back-tab behavior.
+                            if matches!(this.current_view, AppView::ChatPrompt { .. }) {
+                                if has_shift {
+                                    if let AppView::ChatPrompt { entity, .. } = &this.current_view {
+                                        let handled = entity.update(cx, |chat, cx| {
+                                            chat.handle_setup_key("tab", true, cx)
+                                        });
+                                        if handled {
+                                            cx.stop_propagation();
+                                            return;
+                                        }
+                                    }
+                                } else {
+                                    tracing::info!(
+                                        target: "script_kit::tab_ai",
+                                        event = "tab_ai_chat_prompt_plain_tab_to_acp",
+                                    );
+                                    if this.try_route_plain_tab_to_acp_context_capture(cx) {
+                                        cx.stop_propagation();
+                                        return;
+                                    }
                                 }
                             }
 
@@ -859,11 +789,10 @@ impl ScriptListApp {
                                 return;
                             }
 
-                            // Universal Tab AI: open the harness terminal surface
-                            // from any non-special surface (not FileSearch, not ChatPrompt setup)
-                            if !has_shift && !this.show_actions_popup {
-                                this.open_tab_ai_chat(cx);
+                            // Universal Tab AI: route any remaining non-AI surface into ACP
+                            if !has_shift && this.try_route_plain_tab_to_acp_context_capture(cx) {
                                 cx.stop_propagation();
+                                return;
                             }
                         });
                     }
