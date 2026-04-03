@@ -817,8 +817,14 @@ impl ScriptListApp {
 
         let agent_display_name = agent.display_name().to_string();
         // Extract model info before `agent` is moved into spawn_with_approval.
-        let default_model_id = agent.models.first().map(|m| m.id.clone());
         let agent_models = agent.models.clone();
+        // Use persisted model from settings.json, falling back to first model.
+        let persisted_model = crate::config::load_user_preferences()
+            .ai
+            .selected_model_id;
+        let default_model_id = persisted_model
+            .filter(|id| agent_models.iter().any(|m| m.id == *id))
+            .or_else(|| agent_models.first().map(|m| m.id.clone()));
 
         let stage_started_at = std::time::Instant::now();
         let connection = match crate::ai::acp::AcpConnection::spawn_with_approval(

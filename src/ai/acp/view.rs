@@ -375,138 +375,96 @@ impl AcpChatView {
         PromptColors::from_theme(&theme::get_cached_theme())
     }
 
-    /// Render pending context part chips above the composer input.
+    /// Render the focused context chip below the composer input.
     ///
-    /// Each chip shows a label, an optional state badge (for Ask Anything),
-    /// and a close button. Visual treatment varies by part type:
-    /// - `FocusedTarget`: accent-tinted chip
-    /// - `AmbientContext` (promoted Ask Anything): accent-tinted with "ready" badge
-    /// - Ask Anything (pre-promotion, `Preparing`): accent-tinted with "capturing" badge
-    /// - Other resource/file parts: neutral-tinted chip
+    /// Accent left-bar design: a 2px gold bar on the left edge with
+    /// a ghost-opacity chip containing the label and a × dismiss button.
+    /// At most one chip is shown (the focused target from the list).
     fn render_pending_context_chips(&self, cx: &mut Context<Self>) -> gpui::AnyElement {
-        let (parts, bootstrap_state) = {
+        let parts = {
             let thread = self.thread.read(cx);
-            (thread.pending_context_parts().to_vec(), thread.context_bootstrap_state())
+            thread.pending_context_parts().to_vec()
         };
 
         if parts.is_empty() {
-            return div().id("acp-pending-context-chips-empty").into_any_element();
+            return div()
+                .id("acp-pending-context-chips-empty")
+                .into_any_element();
         }
 
         let theme = theme::get_cached_theme();
         let accent = theme.colors.accent.selected;
-        let neutral = theme.colors.ui.border;
+        let border = theme.colors.ui.border;
+        let dimmed = theme.colors.text.dimmed;
         let muted_text = theme.colors.text.muted;
         let primary_text = theme.colors.text.primary;
 
-        let chips: Vec<_> = parts
-            .iter()
-            .enumerate()
-            .map(|(idx, part)| {
-                // Determine chip styling and optional badge based on part type.
-                let (chip_bg, chip_border, label_color, badge): (u32, u32, u32, Option<&'static str>) = match part {
-                    crate::ai::message_parts::AiContextPart::FocusedTarget { .. } => (
-                        (accent << 8) | 0x18,
-                        (accent << 8) | 0x34,
-                        accent,
-                        None,
-                    ),
-                    crate::ai::message_parts::AiContextPart::AmbientContext { .. } => (
-                        (accent << 8) | 0x10,
-                        (accent << 8) | 0x24,
-                        primary_text,
-                        Some("ready"),
-                    ),
-                    _ if part.is_ambient_bootstrap_resource()
-                        && matches!(bootstrap_state, AcpContextBootstrapState::Preparing) =>
-                    {
-                        (
-                            (accent << 8) | 0x14,
-                            (accent << 8) | 0x28,
-                            primary_text,
-                            Some("capturing"),
-                        )
-                    }
-                    _ if part.is_ambient_bootstrap_resource() => (
-                        (accent << 8) | 0x12,
-                        (accent << 8) | 0x24,
-                        primary_text,
-                        Some("queued"),
-                    ),
-                    _ => (
-                        (neutral << 8) | 0x14,
-                        (neutral << 8) | 0x30,
-                        primary_text,
-                        None,
-                    ),
-                };
+        // Show only the first context part (focused target).
+        let part = &parts[0];
+        let label = SharedString::from(part.label().to_string());
 
-                let mut chip = div()
-                    .id(SharedString::from(format!("acp-ctx-part-{idx}")))
+        let chip = div()
+            .id("acp-ctx-chip")
+            .flex()
+            .flex_row()
+            .items_center()
+            .gap(px(5.0))
+            // Gold left accent bar
+            .child(
+                div()
+                    .w(px(2.0))
+                    .h(px(14.0))
+                    .rounded(px(1.0))
+                    .bg(rgb(accent)),
+            )
+            // Label + dismiss in ghost container
+            .child(
+                div()
                     .flex()
+                    .flex_row()
                     .items_center()
-                    .gap(px(6.0))
-                    .px(px(8.0))
-                    .py(px(4.0))
-                    .rounded(px(7.0))
-                    .bg(rgba(chip_bg))
-                    .border_1()
-                    .border_color(rgba(chip_border))
+                    .gap(px(4.0))
+                    .px(px(4.0))
+                    .py(px(2.0))
+                    .rounded(px(3.0))
+                    .bg(rgba((border << 8) | 0x0A))
                     .child(
                         div()
                             .text_xs()
-                            .text_color(rgb(label_color))
+                            .text_color(rgb(dimmed))
                             .overflow_hidden()
                             .text_ellipsis()
-                            .max_w(px(220.0))
-                            .child(SharedString::from(part.label().to_string())),
-                    );
-
-                if let Some(badge_text) = badge {
-                    chip = chip.child(
+                            .max_w(px(280.0))
+                            .child(label),
+                    )
+                    .child(
                         div()
+                            .id("acp-ctx-remove-0")
+                            .cursor_pointer()
                             .text_xs()
-                            .text_color(rgb(muted_text))
-                            .px(px(6.0))
+                            .text_color(rgba((muted_text << 8) | 0x60))
+                            .px(px(4.0))
                             .py(px(1.0))
                             .rounded(px(999.0))
-                            .bg(rgba((neutral << 8) | 0x18))
-                            .child(badge_text),
-                    );
-                }
-
-                chip.child(
-                    div()
-                        .id(SharedString::from(format!("acp-ctx-remove-{idx}")))
-                        .cursor_pointer()
-                        .text_xs()
-                        .text_color(rgb(muted_text))
-                        .px(px(4.0))
-                        .py(px(1.0))
-                        .hover(|el| {
-                            el.text_color(rgb(primary_text))
-                                .bg(rgba((neutral << 8) | 0x18))
-                                .rounded(px(999.0))
-                        })
-                        .on_click(cx.listener(move |this, _, _window, cx| {
-                            this.thread.update(cx, |thread, cx| {
-                                thread.remove_context_part(idx, cx);
-                            });
-                        }))
-                        .child("\u{00d7}"),
-                )
-            })
-            .collect();
+                            .hover(|el| {
+                                el.text_color(rgb(primary_text))
+                                    .bg(rgba((border << 8) | 0x18))
+                                    .rounded(px(999.0))
+                            })
+                            .on_click(cx.listener(|this, _, _window, cx| {
+                                this.thread.update(cx, |thread, cx| {
+                                    thread.remove_context_part(0, cx);
+                                });
+                            }))
+                            .child("\u{00d7}"),
+                    ),
+            );
 
         div()
             .id("acp-pending-context-chips")
-            .flex()
-            .flex_row()
-            .flex_wrap()
-            .gap(px(6.0))
             .px(px(12.0))
             .pb(px(6.0))
-            .children(chips)
+            .child(chip)
             .into_any_element()
     }
 
@@ -518,7 +476,10 @@ impl AcpChatView {
     fn render_context_bootstrap_note(&self, cx: &mut Context<Self>) -> gpui::AnyElement {
         let (state, note) = {
             let thread = self.thread.read(cx);
-            (thread.context_bootstrap_state(), thread.context_bootstrap_note().map(|v| v.to_string()))
+            (
+                thread.context_bootstrap_state(),
+                thread.context_bootstrap_note().map(|v| v.to_string()),
+            )
         };
 
         let Some(note) = note.filter(|v| !v.trim().is_empty()) else {
@@ -532,11 +493,9 @@ impl AcpChatView {
         let border = theme.colors.ui.border;
 
         let (fg_color, bg, outline) = match state {
-            AcpContextBootstrapState::Preparing => (
-                accent,
-                (accent << 8) | 0x10,
-                (accent << 8) | 0x24,
-            ),
+            AcpContextBootstrapState::Preparing => {
+                (accent, (accent << 8) | 0x10, (accent << 8) | 0x24)
+            }
             AcpContextBootstrapState::Ready => (
                 theme.colors.text.muted,
                 (border << 8) | 0x10,

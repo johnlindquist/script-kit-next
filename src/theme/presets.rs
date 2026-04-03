@@ -2250,7 +2250,7 @@ fn theme_everforest_light() -> Theme {
         background: BackgroundColors {
             main: 0xfdf6e3,
             title_bar: 0xfdf6e3,
-            search_box: 0xe6e2cc,
+            search_box: 0xEDEAD5,
             log_panel: 0xefebd4,
         },
         text: TextColors {

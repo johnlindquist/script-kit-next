@@ -22,6 +22,8 @@ impl ScriptListApp {
         let render_context = PromptRenderContext::new(self.theme.as_ref(), self.current_design);
         let theme = render_context.theme;
         let design_typography = render_context.design_typography;
+        let typography_resolver =
+            crate::theme::TypographyResolver::new(self.theme.as_ref(), self.current_design);
 
         let text_primary = theme.colors.text.primary;
         let text_muted = theme.colors.text.muted;
@@ -159,7 +161,7 @@ impl ScriptListApp {
                     .flex_row()
                     .items_center()
                     .h(px(input_height))
-                    .text_size(px(design_typography.font_size_lg))
+                    .text_size(px(typography_resolver.font_size_xl()))
                     .text_color(if input_is_empty {
                         rgb(text_muted)
                     } else {

@@ -11,8 +11,10 @@ pub(crate) struct AppChromeColors {
     pub text_primary_hex: u32,
     pub text_secondary_hex: u32,
     pub text_muted_hex: u32,
+    pub text_dimmed_hex: u32,
     pub accent_hex: u32,
 
+    pub window_surface_rgba: u32,
     pub surface_rgba: u32,
     pub input_surface_rgba: u32,
     pub divider_rgba: u32,
@@ -39,8 +41,10 @@ impl AppChromeColors {
             text_primary_hex: colors.text.primary,
             text_secondary_hex: colors.text.secondary,
             text_muted_hex: colors.text.muted,
+            text_dimmed_hex: colors.text.dimmed,
             accent_hex: colors.accent.selected,
 
+            window_surface_rgba: hex_to_rgba_with_opacity(colors.background.main, opacity.main),
             surface_rgba: hex_to_rgba_with_opacity(colors.background.title_bar, opacity.title_bar),
             input_surface_rgba: hex_to_rgba_with_opacity(
                 colors.background.search_box,
@@ -94,6 +98,17 @@ mod tests {
         assert_eq!(
             chrome.hover_rgba,
             hex_to_rgba_with_opacity(theme.colors.accent.selected_subtle, opacity.hover,)
+        );
+    }
+
+    #[test]
+    fn text_dimmed_and_window_surface_resolve_from_theme() {
+        let theme = Theme::light_default();
+        let chrome = AppChromeColors::from_theme(&theme);
+        assert_eq!(chrome.text_dimmed_hex, theme.colors.text.dimmed);
+        assert_eq!(
+            chrome.window_surface_rgba,
+            hex_to_rgba_with_opacity(theme.colors.background.main, theme.get_opacity().main,)
         );
     }
 

@@ -102,10 +102,7 @@ pub(super) fn derive_context_preview_info(
                 source_uri: format!("focused-target://{}:{}", target.source, target.semantic_id),
                 profile: ContextPreviewProfile::Custom,
                 has_diagnostics: false,
-                description: format!(
-                    "Focused {} from {}",
-                    target.kind, target.source
-                ),
+                description: format!("Focused {} from {}", target.kind, target.source),
             }
         }
         crate::ai::message_parts::AiContextPart::AmbientContext { label } => {

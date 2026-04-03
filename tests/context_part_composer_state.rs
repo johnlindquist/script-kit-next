@@ -395,8 +395,7 @@ fn focused_target_deduplication_by_equality() {
     assert_eq!(part_a, part_b);
 
     // merge_context_parts should deduplicate
-    let merged =
-        script_kit_gpui::ai::message_parts::merge_context_parts(&[part_a], &[part_b]);
+    let merged = script_kit_gpui::ai::message_parts::merge_context_parts(&[part_a], &[part_b]);
     assert_eq!(merged.len(), 1);
 }
 
@@ -411,4 +410,3 @@ fn add_attachment_does_not_confuse_file_path_with_resource_uri() {
     assert!(add_attachment(&mut parts, "/tmp/file.rs"));
     assert_eq!(parts.len(), 2);
 }
-

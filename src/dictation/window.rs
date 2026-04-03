@@ -1,8 +1,8 @@
 use gpui::SharedString;
 use std::time::Duration;
 
-use crate::dictation::types::{DictationLevel, DictationSessionPhase};
-use crate::dictation::visualizer::bars_for_level;
+use crate::dictation::types::DictationSessionPhase;
+use crate::dictation::visualizer::silent_bars;
 
 // ---------------------------------------------------------------------------
 // Overlay geometry & waveform contract constants
@@ -139,10 +139,7 @@ impl Default for DictationOverlayState {
         Self {
             phase: DictationSessionPhase::Idle,
             elapsed: Duration::ZERO,
-            bars: bars_for_level(DictationLevel {
-                rms: 0.0,
-                peak: 0.0,
-            }),
+            bars: silent_bars(),
             transcript: SharedString::default(),
         }
     }
@@ -191,6 +188,135 @@ static OVERLAY_ABORT_CALLBACK: Mutex<Option<OverlayAbortCallback>> = Mutex::new(
 pub fn set_overlay_abort_callback(callback: impl Fn(&mut App) + Send + Sync + 'static) {
     *OVERLAY_ABORT_CALLBACK.lock() = Some(Box::new(callback));
 }
+
+// ---------------------------------------------------------------------------
+// Global escape monitor (fires even when overlay is not focused)
+// ---------------------------------------------------------------------------
+
+/// Wrapper for NSEvent monitor ID to make it Send+Sync.
+///
+/// The monitor ID is created and removed on the main thread; the static only
+/// provides cross-thread visibility for the cleanup path.
+#[cfg(target_os = "macos")]
+struct SendableId(cocoa::base::id);
+// SAFETY: The NSEvent monitor ID is created on the main thread and only
+// accessed behind a Mutex. The cleanup call (removeMonitor:) also runs on
+// the main thread. The raw pointer never escapes to a non-main thread.
+#[cfg(target_os = "macos")]
+unsafe impl Send for SendableId {}
+#[cfg(target_os = "macos")]
+unsafe impl Sync for SendableId {}
+
+/// Holds the NSEvent global monitor ID so we can remove it on close.
+#[cfg(target_os = "macos")]
+static GLOBAL_ESCAPE_MONITOR: Mutex<Option<SendableId>> = Mutex::new(None);
+
+/// Install a global key-down monitor that catches Escape pressed in any app.
+///
+/// `NSEvent addGlobalMonitorForEventsMatchingMask:handler:` fires for events
+/// delivered to OTHER applications — our own window receives `KeyDownEvent`
+/// via GPUI's normal path, so there's no double-fire.
+///
+/// The monitor sets `ESCAPE_REQUESTED` to `true`; the overlay pump (16ms tick)
+/// picks it up in GPUI context where it can safely mutate state.
+#[cfg(target_os = "macos")]
+fn install_global_escape_monitor() {
+    use cocoa::base::{id, nil};
+    use objc::{class, msg_send, sel, sel_impl};
+
+    if crate::platform::require_main_thread("install_global_escape_monitor") {
+        return;
+    }
+
+    // Already installed — don't double-register.
+    if GLOBAL_ESCAPE_MONITOR.lock().is_some() {
+        return;
+    }
+
+    // NSEventMaskKeyDown = 1 << 10
+    let mask: u64 = 1 << 10;
+
+    let block = block::ConcreteBlock::new(move |event: id| {
+        // SAFETY: `event` is a valid NSEvent passed by AppKit.
+        // keyCode 53 = Escape on all macOS keyboard layouts.
+        let key_code: u16 = unsafe { msg_send![event, keyCode] };
+        if key_code != 53 {
+            return;
+        }
+
+        tracing::info!(
+            category = "DICTATION",
+            "Global escape monitor: Escape pressed in external app"
+        );
+
+        // Set the flag — the 16ms overlay pump will pick it up on the next
+        // tick and process it inside GPUI context.
+        ESCAPE_REQUESTED.store(true, std::sync::atomic::Ordering::SeqCst);
+    });
+    let block = block.copy();
+
+    // SAFETY: NSEvent is a valid AppKit class on macOS.
+    // addGlobalMonitorForEventsMatchingMask:handler: is called on the main
+    // thread (open_dictation_overlay runs on main). The returned monitor ID
+    // is stored in GLOBAL_ESCAPE_MONITOR for cleanup.
+    let monitor: id = unsafe {
+        let ns_event_class = class!(NSEvent);
+        msg_send![
+            ns_event_class,
+            addGlobalMonitorForEventsMatchingMask: mask
+            handler: &*block
+        ]
+    };
+
+    if monitor != nil {
+        *GLOBAL_ESCAPE_MONITOR.lock() = Some(SendableId(monitor));
+        tracing::debug!(
+            category = "DICTATION",
+            "Global escape monitor installed"
+        );
+    } else {
+        tracing::warn!(
+            category = "DICTATION",
+            "Failed to install global escape monitor"
+        );
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn install_global_escape_monitor() {}
+
+/// Remove the global key-down monitor.
+#[cfg(target_os = "macos")]
+fn remove_global_escape_monitor() {
+    use objc::{class, msg_send, sel, sel_impl};
+
+    if crate::platform::require_main_thread("remove_global_escape_monitor") {
+        return;
+    }
+
+    let monitor = GLOBAL_ESCAPE_MONITOR.lock().take();
+    if let Some(SendableId(monitor)) = monitor {
+        // SAFETY: monitor is a valid id returned by
+        // addGlobalMonitorForEventsMatchingMask:handler:.
+        // removeMonitor: is the correct cleanup API.
+        unsafe {
+            let _: () = msg_send![class!(NSEvent), removeMonitor: monitor];
+        }
+        tracing::debug!(
+            category = "DICTATION",
+            "Global escape monitor removed"
+        );
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn remove_global_escape_monitor() {}
+
+/// Flag: the global escape monitor detected an Escape press that the overlay
+/// needs to process. Checked by `process_global_escape_if_requested` inside
+/// GPUI context on every pump tick.
+static ESCAPE_REQUESTED: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
 
 // ---------------------------------------------------------------------------
 // Confirming-phase copy constants (single source of truth)
@@ -328,13 +454,9 @@ pub struct DictationOverlay {
 
 impl DictationOverlay {
     pub fn new(cx: &mut Context<Self>) -> Self {
-        let bars = bars_for_level(DictationLevel {
-            rms: 0.0,
-            peak: 0.0,
-        });
         Self {
             state: DictationOverlayState::default(),
-            display_bars: bars,
+            display_bars: silent_bars(),
             focus_handle: cx.focus_handle(),
             transcribing_started_at: None,
             reduced_motion: crate::platform::prefers_reduced_motion(),
@@ -375,6 +497,7 @@ impl DictationOverlay {
         // call becomes a harmless no-op.
         let slot = DICTATION_OVERLAY_WINDOW.get_or_init(|| Mutex::new(None));
         slot.lock().take();
+        remove_global_escape_monitor();
         if let Some(cb) = callback {
             cb(cx);
         }
@@ -394,9 +517,50 @@ impl DictationOverlay {
         let slot = DICTATION_OVERLAY_WINDOW.get_or_init(|| Mutex::new(None));
         slot.lock().take();
         *OVERLAY_ABORT_CALLBACK.lock() = None;
+        remove_global_escape_monitor();
         prepare_overlay_window_for_close(window);
         window.remove_window();
         tracing::info!(category = "DICTATION", "Overlay closed from within entity");
+    }
+
+    /// Check whether the global escape monitor flagged an Escape press and
+    /// process it.  Called from the overlay pump tick (every 16ms) so the
+    /// action runs inside GPUI context with full `&mut self` access.
+    pub fn process_global_escape_if_requested(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if !ESCAPE_REQUESTED.swap(false, std::sync::atomic::Ordering::SeqCst) {
+            return;
+        }
+
+        let elapsed = crate::dictation::dictation_elapsed().unwrap_or(self.state.elapsed);
+        let action = overlay_escape_action(&self.state.phase, elapsed);
+
+        tracing::info!(
+            category = "DICTATION",
+            ?action,
+            phase = ?self.state.phase,
+            elapsed_ms = elapsed.as_millis() as u64,
+            "Processing global escape request"
+        );
+
+        match action {
+            OverlayEscapeAction::TransitionToConfirming => {
+                self.enter_confirming(window, cx);
+            }
+            OverlayEscapeAction::ResumeRecording => {
+                self.resume_recording(window, cx);
+            }
+            OverlayEscapeAction::AbortSession => {
+                self.abort_overlay_session(window, cx);
+            }
+            OverlayEscapeAction::CloseOverlay => {
+                self.close_overlay_from_within(window);
+            }
+            OverlayEscapeAction::Propagate => {}
+        }
     }
 
     /// Replace the visual state snapshot (called from the dictation runtime).
@@ -1006,6 +1170,8 @@ pub fn open_dictation_overlay(
 ) -> anyhow::Result<gpui::WindowHandle<DictationOverlay>> {
     use anyhow::Context as _;
 
+    ESCAPE_REQUESTED.store(false, std::sync::atomic::Ordering::SeqCst);
+
     // If already open AND the native window is still alive, return the
     // existing handle.  If the handle is stale (window was closed natively),
     // clear the slot and fall through to create a fresh one.
@@ -1150,6 +1316,10 @@ pub fn open_dictation_overlay(
         *guard = Some(handle);
     }
 
+    // Install global escape monitor so Escape works even when the overlay
+    // doesn't have keyboard focus (user clicked on another app).
+    install_global_escape_monitor();
+
     tracing::info!(category = "DICTATION", "Dictation overlay window opened");
     Ok(handle)
 }
@@ -1166,6 +1336,9 @@ pub fn update_dictation_overlay(state: DictationOverlayState, cx: &mut App) -> a
     };
 
     let _ = handle.update(cx, |view, window, cx| {
+        // Check for global escape before applying state — the escape may
+        // close the overlay, in which case set_state is a no-op.
+        view.process_global_escape_if_requested(window, cx);
         view.set_state(state, window, cx);
     });
 
@@ -1175,6 +1348,9 @@ pub fn update_dictation_overlay(state: DictationOverlayState, cx: &mut App) -> a
 /// Close the dictation overlay window.
 pub fn close_dictation_overlay(cx: &mut App) -> anyhow::Result<()> {
     *OVERLAY_ABORT_CALLBACK.lock() = None;
+    ESCAPE_REQUESTED.store(false, std::sync::atomic::Ordering::SeqCst);
+    // Overlay window already gone is a warning, not an error.
+    remove_global_escape_monitor();
 
     let slot = DICTATION_OVERLAY_WINDOW.get_or_init(|| Mutex::new(None));
     let handle = {

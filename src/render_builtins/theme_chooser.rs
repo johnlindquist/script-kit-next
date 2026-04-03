@@ -1,10 +1,5 @@
 use crate::theme::gpui_integration::{best_contrast_of_two, sync_gpui_component_theme_for_theme};
 
-const ALPHA_BADGE_BORDER: u32 = 0x40;
-const ALPHA_FOOTER_BORDER: u32 = 0x30;
-const ALPHA_TOGGLE_BG: u32 = 0x80;
-const MAX_ALPHA: u32 = 0xFF;
-const MIN_HOVER_ALPHA: f32 = 18.0;
 const THEME_LIST_PAGE_SIZE: usize = 5;
 const OPACITY_MATCH_TOLERANCE: f32 = 0.05;
 const FONT_SIZE_MATCH_TOLERANCE: f32 = 0.5;
@@ -156,23 +151,25 @@ impl ScriptListApp {
         let design_spacing = tokens.spacing();
         let design_typography = tokens.typography();
         let design_visual = tokens.visual();
-        let text_primary = self.theme.colors.text.primary;
-        let text_dimmed = self.theme.colors.text.dimmed;
-        let text_secondary = self.theme.colors.text.secondary;
-        let text_muted = self.theme.colors.text.muted;
-        let accent_color = self.theme.colors.accent.selected;
-        let ui_border = self.theme.colors.ui.border;
-        let selection_bg = self.theme.colors.accent.selected_subtle;
-        let bg_main = self.theme.colors.background.main;
-        let bg_search_box = self.theme.colors.background.search_box;
+        let chrome = theme::AppChromeColors::from_theme(self.theme.as_ref());
+        let text_primary = chrome.text_primary_hex;
+        let text_dimmed = chrome.text_dimmed_hex;
+        let text_secondary = chrome.text_secondary_hex;
+        let text_muted = chrome.text_muted_hex;
+        let accent_color = chrome.accent_hex;
         let text_on_accent = self.theme.colors.text.on_accent;
+        let bg_main = self.theme.colors.background.main;
         let ui_success = self.theme.colors.ui.success;
         let ui_error = self.theme.colors.ui.error;
         let ui_warning = self.theme.colors.ui.warning;
         let ui_info = self.theme.colors.ui.info;
-        let opacity = self.theme.get_opacity();
-        let selected_alpha = (opacity.selected * MAX_ALPHA as f32) as u32;
-        let hover_alpha = (opacity.hover * MAX_ALPHA as f32).max(MIN_HOVER_ALPHA) as u32;
+        let window_surface_bg = rgba(chrome.window_surface_rgba);
+        let search_surface_bg = rgba(chrome.input_surface_rgba);
+        let divider_bg = rgba(chrome.divider_rgba);
+        let border_bg = rgba(chrome.border_rgba);
+        let badge_border_bg = rgba(chrome.badge_border_rgba);
+        let theme_row_selected_bg = rgba(chrome.selection_rgba);
+        let theme_row_hover_bg = rgba(chrome.hover_rgba);
         let presets = theme::presets::presets_cached();
         let preview_colors = theme::presets::preset_preview_colors_cached();
         let first_light = theme::presets::first_light_theme_index();
@@ -181,11 +178,6 @@ impl ScriptListApp {
             .as_ref()
             .map(|t| theme::presets::find_current_preset_index(t))
             .unwrap_or(0);
-        // Ensure selection is clearly visible — theme chooser needs stronger
-        // selection than main menu since users are comparing themes visually
-        let chooser_sel_alpha = selected_alpha.max(0x50);
-        let theme_row_selected_bg = rgba((selection_bg << 8) | chooser_sel_alpha);
-        let theme_row_hover_bg = rgba((selection_bg << 8) | hover_alpha);
 
         // Filter presets by name or description
         let filtered_indices = Self::theme_chooser_filtered_indices(filter);
@@ -450,6 +442,15 @@ impl ScriptListApp {
                     this.theme = new_theme;
                     this.theme_chooser_scroll_handle
                         .scroll_to_item(*selected_index, ScrollStrategy::Nearest);
+                    let active_chrome = theme::AppChromeColors::from_theme(this.theme.as_ref());
+                    tracing::debug!(
+                        preset_id = presets[preset_idx].id,
+                        preset_index = preset_idx,
+                        accent_hex = active_chrome.accent_hex,
+                        selection_rgba = active_chrome.selection_rgba,
+                        input_surface_rgba = active_chrome.input_surface_rgba,
+                        "theme_chooser_preset_preview_applied"
+                    );
                     sync_gpui_component_theme_for_theme(cx, this.theme.as_ref());
                     cx.notify();
                 }
@@ -507,8 +508,6 @@ impl ScriptListApp {
                             div().w(px(16.0))
                         };
 
-                        let border_rgba = rgba((ui_border << 8) | ALPHA_FOOTER_BORDER);
-
                         // Section label for light themes (only when unfiltered)
                         let section_label = if is_first_light {
                             Some(
@@ -517,7 +516,7 @@ impl ScriptListApp {
                                     .pt(px(row_layout.list_vertical_padding + 2.0))
                                     .pb(px(row_layout.list_vertical_padding))
                                     .px(px(row_layout.horizontal_padding))
-                                    .border_color(border_rgba)
+                                    .border_color(divider_bg)
                                     .border_t_1()
                                     .child(
                                         div()
@@ -572,6 +571,15 @@ impl ScriptListApp {
                                             if pidx < presets.len() {
                                                 this.theme = std::sync::Arc::new(
                                                     presets[pidx].create_theme(),
+                                                );
+                                                let active_chrome = theme::AppChromeColors::from_theme(this.theme.as_ref());
+                                                tracing::debug!(
+                                                    preset_id = presets[pidx].id,
+                                                    preset_index = pidx,
+                                                    accent_hex = active_chrome.accent_hex,
+                                                    selection_rgba = active_chrome.selection_rgba,
+                                                    input_surface_rgba = active_chrome.input_surface_rgba,
+                                                    "theme_chooser_preset_preview_applied"
                                                 );
                                                 sync_gpui_component_theme_for_theme(
                                                     cx,
@@ -698,8 +706,7 @@ impl ScriptListApp {
             });
 
         // ── Preview panel with customization controls ─────────────
-        let border_rgba = rgba((ui_border << 8) | ALPHA_BADGE_BORDER);
-        let current_opacity_main = opacity.vibrancy_background.unwrap_or(0.85);
+        let current_opacity_main = self.theme.get_opacity().vibrancy_background.unwrap_or(0.85);
         let vibrancy_enabled = self
             .theme
             .vibrancy
@@ -740,7 +747,7 @@ impl ScriptListApp {
                             .when(is_current, |d| d.border_2().border_color(rgb(text_primary)))
                             .when(!is_current, |d| {
                                 d.border_1()
-                                    .border_color(rgba((ui_border << 8) | ALPHA_BADGE_BORDER))
+                                    .border_color(badge_border_bg)
                             }),
                     )
                     .on_click(
@@ -786,9 +793,9 @@ impl ScriptListApp {
                     })
                     .when(!is_current, |d| {
                         d.border_1()
-                            .border_color(border_rgba)
+                            .border_color(badge_border_bg)
                             .text_color(rgb(text_secondary))
-                            .hover(move |s| s.bg(rgba((selection_bg << 8) | hover_alpha)))
+                            .hover(move |s| s.bg(theme_row_hover_bg))
                     })
                     .tooltip(move |window, cx| {
                         gpui_component::tooltip::Tooltip::new(tooltip_label.clone())
@@ -825,7 +832,7 @@ impl ScriptListApp {
             .items_center()
             .gap(px(8.0))
             .cursor_pointer()
-            .hover(move |s| s.bg(rgba((selection_bg << 8) | hover_alpha)))
+            .hover(move |s| s.bg(theme_row_hover_bg))
             .rounded(px(4.0))
             .px(px(4.0))
             .py(px(2.0))
@@ -860,7 +867,7 @@ impl ScriptListApp {
                     .rounded(px(7.0))
                     .when(vibrancy_enabled, |d| d.bg(rgb(accent_color)))
                     .when(!vibrancy_enabled, |d| {
-                        d.bg(rgba((ui_border << 8) | ALPHA_TOGGLE_BG))
+                        d.bg(badge_border_bg)
                     })
                     .flex()
                     .items_center()
@@ -910,9 +917,9 @@ impl ScriptListApp {
                     })
                     .when(!is_current, |d| {
                         d.border_1()
-                            .border_color(border_rgba)
+                            .border_color(badge_border_bg)
                             .text_color(rgb(text_secondary))
-                            .hover(move |s| s.bg(rgba((selection_bg << 8) | hover_alpha)))
+                            .hover(move |s| s.bg(theme_row_hover_bg))
                     })
                     .tooltip(move |window, cx| {
                         gpui_component::tooltip::Tooltip::new(tooltip_label.clone())
@@ -969,9 +976,9 @@ impl ScriptListApp {
                     })
                     .when(!is_current, |d| {
                         d.border_1()
-                            .border_color(border_rgba)
+                            .border_color(badge_border_bg)
                             .text_color(rgb(text_secondary))
-                            .hover(move |s| s.bg(rgba((selection_bg << 8) | hover_alpha)))
+                            .hover(move |s| s.bg(theme_row_hover_bg))
                     })
                     .tooltip(move |window, cx| {
                         gpui_component::tooltip::Tooltip::new(tooltip_label.clone())
@@ -1014,9 +1021,9 @@ impl ScriptListApp {
             .cursor_pointer()
             .text_xs()
             .border_1()
-            .border_color(border_rgba)
+            .border_color(badge_border_bg)
             .text_color(rgb(text_secondary))
-            .hover(move |s| s.bg(rgba((selection_bg << 8) | hover_alpha)))
+            .hover(move |s| s.bg(theme_row_hover_bg))
             .tooltip(|window, cx| {
                 gpui_component::tooltip::Tooltip::new("Reset to selected preset defaults")
                     .build(window, cx)
@@ -1064,7 +1071,7 @@ impl ScriptListApp {
                 .w_1_2()
                 .h_full()
                 .border_l_1()
-                .border_color(border_rgba)
+                .border_color(divider_bg)
                 .px(px(design_spacing.padding_lg))
                 .py(px(design_spacing.padding_md))
                 .flex()
@@ -1211,9 +1218,9 @@ impl ScriptListApp {
                         .w_full()
                         .h(px(28.0))
                         .rounded(px(6.0))
-                        .bg(rgb(bg_search_box))
+                        .bg(search_surface_bg)
                         .border_1()
-                        .border_color(border_rgba)
+                        .border_color(border_bg)
                         .px(px(10.0))
                         .flex()
                         .flex_row()
@@ -1225,13 +1232,13 @@ impl ScriptListApp {
                                 .child("Search scripts..."),
                         ),
                 )
-                // Mock list items
+                // Mock list items — launcher-style: subtle selection bg + accent bar
                 .child(
                     div()
                         .w_full()
                         .rounded(px(6.0))
                         .border_1()
-                        .border_color(border_rgba)
+                        .border_color(border_bg)
                         .overflow_hidden()
                         .flex()
                         .flex_col()
@@ -1239,7 +1246,9 @@ impl ScriptListApp {
                             div()
                                 .w_full()
                                 .h(px(28.0))
-                                .bg(rgb(accent_color))
+                                .bg(theme_row_selected_bg)
+                                .border_l(px(3.0))
+                                .border_color(rgb(accent_color))
                                 .px(px(10.0))
                                 .flex()
                                 .flex_row()
@@ -1248,7 +1257,7 @@ impl ScriptListApp {
                                     div()
                                         .text_xs()
                                         .font_weight(gpui::FontWeight::SEMIBOLD)
-                                        .text_color(rgb(text_on_accent))
+                                        .text_color(rgb(text_primary))
                                         .child("Selected Item"),
                                 ),
                         )
@@ -1256,7 +1265,7 @@ impl ScriptListApp {
                             div()
                                 .w_full()
                                 .h(px(28.0))
-                                .bg(rgb(bg_main))
+                                .bg(window_surface_bg)
                                 .px(px(10.0))
                                 .flex()
                                 .flex_row()
@@ -1264,7 +1273,9 @@ impl ScriptListApp {
                                 .child(
                                     div()
                                         .text_xs()
-                                        .text_color(rgb(text_primary))
+                                        .text_color(rgba(
+                                            (text_primary << 8) | crate::list_item::ALPHA_NAME_QUIET,
+                                        ))
                                         .child("Regular Item"),
                                 ),
                         )
@@ -1272,7 +1283,7 @@ impl ScriptListApp {
                             div()
                                 .w_full()
                                 .h(px(28.0))
-                                .bg(rgb(bg_main))
+                                .bg(window_surface_bg)
                                 .px(px(10.0))
                                 .flex()
                                 .flex_row()

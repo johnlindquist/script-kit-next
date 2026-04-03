@@ -485,6 +485,82 @@ fn report_optimal_selected_subtle() {
     }
 }
 
+/// Composite a 0xRRGGBBAA chrome token over an opaque background.
+fn composite_rgba(rgba_hex: u32, bg: u32) -> u32 {
+    let fg = rgba_hex >> 8;
+    let alpha = (rgba_hex & 0xFF) as f32 / 255.0;
+    composite_alpha(fg, alpha, bg)
+}
+
+/// Audit resolved `AppChromeColors` surfaces for WCAG contrast compliance
+/// across every preset, not just raw palette values.
+#[test]
+fn audit_app_chrome_surface_contrast() {
+    let presets = presets::all_presets();
+    let mut failures: Vec<String> = Vec::new();
+
+    for preset in &presets {
+        let theme = preset.create_theme();
+        let chrome = crate::theme::chrome::AppChromeColors::from_theme(&theme);
+        let bg = theme.colors.background.main;
+
+        let checks = [
+            ContrastCheck {
+                pair: "primary/window_surface",
+                fg: chrome.text_primary_hex,
+                bg: composite_rgba(chrome.window_surface_rgba, bg),
+                min_ratio: 4.5,
+            },
+            ContrastCheck {
+                pair: "primary/input_surface",
+                fg: chrome.text_primary_hex,
+                bg: composite_rgba(chrome.input_surface_rgba, bg),
+                min_ratio: 4.5,
+            },
+            ContrastCheck {
+                pair: "primary/selection_surface",
+                fg: chrome.text_primary_hex,
+                bg: composite_rgba(chrome.selection_rgba, bg),
+                min_ratio: 4.5,
+            },
+            ContrastCheck {
+                pair: "secondary/badge_surface",
+                fg: chrome.badge_text_hex,
+                bg: composite_rgba(chrome.badge_bg_rgba, bg),
+                min_ratio: 3.0,
+            },
+        ];
+
+        for check in &checks {
+            let ratio = contrast_ratio(check.fg, check.bg);
+            if ratio < check.min_ratio {
+                failures.push(format!(
+                    "  {:<25} {:<24} {:>5.2}:1 (need {:.1}:1) fg=#{:06X} bg=#{:06X}",
+                    preset.id, check.pair, ratio, check.min_ratio, check.fg, check.bg,
+                ));
+            }
+        }
+    }
+
+    if !failures.is_empty() {
+        let report = failures.join("\n");
+        eprintln!(
+            "\n╔══ Chrome Surface Contrast Audit ═════════════════════════════════════════════╗\n\
+             ║ {} failure(s) across {} themes                                              \n\
+             ╠════════════════════════════════════════════════════════════════════════════════╣\n\
+             {}\n\
+             ╚════════════════════════════════════════════════════════════════════════════════╝\n",
+            failures.len(),
+            presets.len(),
+            report,
+        );
+        panic!(
+            "{} chrome-surface contrast failure(s) found — see report above",
+            failures.len()
+        );
+    }
+}
+
 fn assert_snapshot_matches_golden(name: &str, actual: &str, expected: &str) {
     assert_eq!(
         actual,

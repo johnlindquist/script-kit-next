@@ -62,6 +62,8 @@ async-channel = "2.3"          # Async channel for stdin command listener
 
 # Local speech-to-text via Whisper.cpp + Parakeet ONNX (used by dictation feature)
 transcribe-rs = { version = "0.3", features = ["whisper-cpp", "onnx"] }
+rustfft = "6"                  # FFT-based audio visualization for dictation waveform
+block = "0.1"                  # Objective-C block support for NSEvent global monitor
 
 # Model download & extraction (Parakeet ONNX model archive)
 flate2 = "1.0"
@@ -135,7 +137,7 @@ which = "8.0.0"
 hex = "0.4.3"
 
 # ACP (Agent Client Protocol) — standardized editor ↔ AI-agent communication
-agent-client-protocol = { version = "0.10.4", features = ["unstable_session_usage"] }
+agent-client-protocol = { version = "0.10.4", features = ["unstable_session_usage", "unstable_session_model"] }
 async-trait = "0.1"
 tokio = { version = "1", features = ["rt", "sync", "time", "process", "io-util"] }
 tokio-util = { version = "0.7", features = ["compat"] }

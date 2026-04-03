@@ -1,10 +1,9 @@
 use crate::dictation::types::{
     CapturedAudioChunk, DictationCaptureConfig, DictationCaptureEvent, DictationDeviceId,
-    DictationLevel, RawAudioChunk,
+    RawAudioChunk,
 };
-use crate::dictation::visualizer::compute_level;
+use crate::dictation::visualizer::AudioVisualiser;
 use anyhow::{bail, Context, Result};
-use std::collections::VecDeque;
 use std::sync::mpsc;
 use std::thread::JoinHandle;
 use std::time::Duration;
@@ -114,28 +113,21 @@ pub(crate) fn run_processor(
 ) {
     let sample_rate_hz = config.sample_rate_hz.max(1);
     let chunk_sample_count = samples_for_duration(sample_rate_hz, config.chunk_duration).max(1);
-    let window_sample_count = samples_for_duration(sample_rate_hz, config.level_window).max(1);
-    let mut level_window = VecDeque::with_capacity(window_sample_count);
+    let mut visualiser = AudioVisualiser::new_speech(sample_rate_hz);
     let mut pending_samples: Vec<f32> = Vec::with_capacity(chunk_sample_count);
 
     while let Ok(raw_chunk) = raw_rx.recv() {
         let normalized = normalize_chunk(raw_chunk, &config);
 
-        for sample in &normalized.samples {
-            level_window.push_back(*sample);
-            while level_window.len() > window_sample_count {
-                level_window.pop_front();
+        // Feed samples to the FFT visualizer; emit bar levels when a full
+        // window has been processed.
+        if let Some(bars) = visualiser.feed(&normalized.samples) {
+            if event_tx
+                .send_blocking(DictationCaptureEvent::Bars(bars))
+                .is_err()
+            {
+                return;
             }
-        }
-
-        let snapshot: Vec<f32> = level_window.iter().copied().collect();
-        let level: DictationLevel = compute_level(&snapshot);
-
-        if event_tx
-            .send_blocking(DictationCaptureEvent::Level(level))
-            .is_err()
-        {
-            return;
         }
 
         pending_samples.extend_from_slice(&normalized.samples);

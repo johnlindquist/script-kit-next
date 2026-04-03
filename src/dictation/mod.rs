@@ -31,10 +31,10 @@ pub use transcription::{
 pub use types::{
     CapturedAudioChunk, CompletedDictationCapture, DictationCaptureConfig, DictationCaptureEvent,
     DictationDestination, DictationDeviceId, DictationDeviceInfo, DictationDeviceTransport,
-    DictationLevel, DictationModelStatus, DictationSessionPhase, DictationSessionResult,
-    DictationTarget, DictationToggleOutcome, RawAudioChunk,
+    DictationModelStatus, DictationSessionPhase, DictationSessionResult, DictationTarget,
+    DictationToggleOutcome, RawAudioChunk,
 };
-pub use visualizer::{animate_bars, bars_for_level, compute_level};
+pub use visualizer::{animate_bars, silent_bars};
 pub(crate) use window::overlay_phase_copy;
 pub use window::{
     begin_overlay_session, close_dictation_overlay, is_dictation_overlay_open,

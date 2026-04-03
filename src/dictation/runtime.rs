@@ -7,10 +7,9 @@ use crate::dictation::transcription::{
 };
 use crate::dictation::types::{
     CapturedAudioChunk, CompletedDictationCapture, DictationCaptureConfig, DictationCaptureEvent,
-    DictationDeviceId, DictationLevel, DictationSessionPhase, DictationTarget,
-    DictationToggleOutcome,
+    DictationDeviceId, DictationSessionPhase, DictationTarget, DictationToggleOutcome,
 };
-use crate::dictation::visualizer::bars_for_level;
+use crate::dictation::visualizer::silent_bars;
 use crate::dictation::window::DictationOverlayState;
 use anyhow::{Context, Result};
 use gpui::SharedString;
@@ -26,7 +25,7 @@ struct DictationSession {
     capture_handle: Option<DictationCaptureHandle>,
     event_rx: async_channel::Receiver<DictationCaptureEvent>,
     chunks: Vec<CapturedAudioChunk>,
-    last_level: DictationLevel,
+    last_bars: [f32; 9],
     started_at: Instant,
     /// The authoritative overlay phase — written by both the runtime (on start)
     /// and the overlay key handler (on Escape transitions).  The pump reads this
@@ -132,7 +131,7 @@ pub fn snapshot_overlay_state() -> Option<DictationOverlayState> {
     while let Ok(event) = session.event_rx.try_recv() {
         match event {
             DictationCaptureEvent::Chunk(chunk) => session.chunks.push(chunk),
-            DictationCaptureEvent::Level(level) => session.last_level = level,
+            DictationCaptureEvent::Bars(bars) => session.last_bars = bars,
             DictationCaptureEvent::EndOfStream => {}
         }
     }
@@ -140,7 +139,7 @@ pub fn snapshot_overlay_state() -> Option<DictationOverlayState> {
     Some(DictationOverlayState {
         phase: session.overlay_phase.clone(),
         elapsed: session.started_at.elapsed(),
-        bars: bars_for_level(session.last_level),
+        bars: session.last_bars,
         transcript: SharedString::default(),
     })
 }
@@ -283,10 +282,7 @@ fn start_recording(target: DictationTarget) -> Result<()> {
         capture_handle: Some(capture_handle),
         event_rx,
         chunks: Vec::new(),
-        last_level: DictationLevel {
-            rms: 0.0,
-            peak: 0.0,
-        },
+        last_bars: silent_bars(),
         started_at: Instant::now(),
         overlay_phase: DictationSessionPhase::Recording,
         target,
@@ -355,7 +351,7 @@ fn stop_capture_and_collect(session: &mut DictationSession) -> Result<()> {
     while let Ok(event) = session.event_rx.recv_blocking() {
         match event {
             DictationCaptureEvent::Chunk(chunk) => session.chunks.push(chunk),
-            DictationCaptureEvent::Level(level) => session.last_level = level,
+            DictationCaptureEvent::Bars(bars) => session.last_bars = bars,
             DictationCaptureEvent::EndOfStream => return Ok(()),
         }
     }

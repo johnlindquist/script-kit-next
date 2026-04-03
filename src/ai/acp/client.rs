@@ -13,7 +13,8 @@ use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 
 use agent_client_protocol::{
     Agent, ClientCapabilities, ClientSideConnection, FileSystemCapabilities, Implementation,
-    InitializeRequest, NewSessionRequest, PromptRequest, ProtocolVersion, SessionId,
+    InitializeRequest, ModelId, NewSessionRequest, PromptRequest, ProtocolVersion, SessionId,
+    SetSessionModelRequest,
 };
 
 use super::config::AcpAgentConfig;
@@ -333,6 +334,31 @@ async fn handle_prompt_turn(
         .lock()
         .insert(acp_session_id.clone(), event_tx.clone());
 
+    // Set session model if the UI selected one (non-fatal on failure)
+    if let Some(model_id) = &request.model_id {
+        let set_model_req = SetSessionModelRequest::new(
+            SessionId::new(acp_session_id.as_str()),
+            ModelId::new(model_id.as_str()),
+        );
+        match connection.set_session_model(set_model_req).await {
+            Ok(_) => {
+                tracing::info!(
+                    model = %model_id,
+                    session = %acp_session_id,
+                    "acp_session_model_set"
+                );
+            }
+            Err(e) => {
+                tracing::warn!(
+                    model = %model_id,
+                    session = %acp_session_id,
+                    error = %e,
+                    "acp_session_model_set_failed"
+                );
+            }
+        }
+    }
+
     // Send prompt — this blocks until the agent's prompt turn completes
     let prompt_response = connection
         .prompt(PromptRequest::new(
@@ -495,6 +521,7 @@ mod tests {
             ui_thread_id: "test-thread".to_string(),
             cwd: PathBuf::from("/tmp"),
             blocks: vec![],
+            model_id: None,
         };
 
         // This will fail because no worker is listening, but it tests the API shape

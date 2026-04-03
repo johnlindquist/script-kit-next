@@ -41,7 +41,7 @@ fn is_main_thread() -> bool {
 /// Runtime guard: logs an error and returns `true` (caller should bail)
 /// when called from a non-main thread. Works in both debug and release builds.
 #[cfg(target_os = "macos")]
-fn require_main_thread(fn_name: &str) -> bool {
+pub(crate) fn require_main_thread(fn_name: &str) -> bool {
     if !is_main_thread() {
         logging::log(
             "ERROR",

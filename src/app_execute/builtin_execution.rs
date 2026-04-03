@@ -2595,7 +2595,7 @@ impl ScriptListApp {
                         };
                         resize_to_view_sync(
                             ViewType::ArgPromptWithChoices,
-                            choice_count.min(5),
+                            choice_count,
                         );
                         cx.notify();
 

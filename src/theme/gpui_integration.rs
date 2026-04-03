@@ -382,49 +382,28 @@ pub fn sync_gpui_component_theme(cx: &mut App) {
 pub(crate) fn sync_gpui_component_theme_for_theme(cx: &mut App, sk_theme: &Theme) {
     let (mode, custom_colors) = resolve_mode_and_colors(sk_theme);
     let is_dark = matches!(mode, ThemeMode::Dark);
+    let chrome = crate::theme::chrome::AppChromeColors::from_theme(sk_theme);
 
     debug!(
-        appearance = ?sk_theme.appearance,
-        has_dark_colors = sk_theme.has_dark_colors(),
-        "sync_gpui_component_theme_for_theme start"
+        accent_hex = chrome.accent_hex,
+        window_surface_rgba = chrome.window_surface_rgba,
+        input_surface_rgba = chrome.input_surface_rgba,
+        selection_rgba = chrome.selection_rgba,
+        hover_rgba = chrome.hover_rgba,
+        border_rgba = chrome.border_rgba,
+        "gpui_component_theme_chrome_synced"
     );
 
-    // Get font configuration
     let fonts = sk_theme.get_fonts();
 
-    // Apply the custom colors and fonts to the global theme
     let theme = GpuiTheme::global_mut(cx);
     theme.colors = custom_colors;
     theme.mode = mode;
     theme.highlight_theme = Arc::new(build_markdown_highlight_theme(sk_theme, is_dark));
-
-    // Debug: Log the background color to verify vibrancy is applied
-    debug!(
-        background_h = custom_colors.background.h,
-        background_s = custom_colors.background.s,
-        background_l = custom_colors.background.l,
-        background_alpha = custom_colors.background.a,
-        vibrancy_enabled = sk_theme.is_vibrancy_enabled(),
-        opacity_main = sk_theme.get_opacity().main,
-        is_dark = is_dark,
-        "Theme background HSLA set"
-    );
-
-    // Set monospace font for code editor (used by InputState in code_editor mode)
     theme.mono_font_family = fonts.mono_family.clone().into();
     theme.mono_font_size = gpui::px(fonts.mono_size);
-
-    // Set UI font
     theme.font_family = fonts.ui_family.clone().into();
     theme.font_size = gpui::px(fonts.ui_size);
-
-    debug!(
-        mono_font = fonts.mono_family,
-        mono_size = fonts.mono_size,
-        ui_font = fonts.ui_family,
-        ui_size = fonts.ui_size,
-        "Font configuration applied to gpui-component"
-    );
 
     debug!("gpui-component theme synchronized with Script Kit");
 }
