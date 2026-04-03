@@ -433,9 +433,13 @@ app.run(move |cx: &mut App| {
                         // fresh colors (used by vibrancy backgrounds, etc.)
                         let theme = theme::reload_theme_cache();
                         let is_dark = theme.should_use_dark_vibrancy();
+                        let material = theme.get_vibrancy().material;
 
                         // Reconfigure vibrancy materials on NSVisualEffectViews
-                        platform::configure_window_vibrancy_material_for_appearance(is_dark);
+                        platform::configure_window_vibrancy_material_for_appearance(
+                            is_dark,
+                            material,
+                        );
 
                         // Update all secondary windows (Notes, AI, Actions)
                         platform::update_all_secondary_windows_appearance(is_dark);
@@ -1504,7 +1508,11 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                     // Configure vibrancy based on actual theme colors
                                     let theme = theme::get_cached_theme();
                                     let is_dark = theme.should_use_dark_vibrancy();
-                                    platform::configure_window_vibrancy_material_for_appearance(is_dark);
+                                    let material = theme.get_vibrancy().material;
+                                    platform::configure_window_vibrancy_material_for_appearance(
+                                        is_dark,
+                                        material,
+                                    );
                                     PANEL_CONFIGURED.store(true, std::sync::atomic::Ordering::SeqCst);
                                 }
 
@@ -1603,7 +1611,11 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                     // Configure vibrancy based on actual theme colors
                                     let theme = theme::get_cached_theme();
                                     let is_dark = theme.should_use_dark_vibrancy();
-                                    platform::configure_window_vibrancy_material_for_appearance(is_dark);
+                                    let material = theme.get_vibrancy().material;
+                                    platform::configure_window_vibrancy_material_for_appearance(
+                                        is_dark,
+                                        material,
+                                    );
                                     PANEL_CONFIGURED.store(true, std::sync::atomic::Ordering::SeqCst);
                                 }
 

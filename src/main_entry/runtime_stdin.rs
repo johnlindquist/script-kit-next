@@ -102,7 +102,11 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                     // Configure vibrancy based on actual theme colors
                                     let theme = theme::get_cached_theme();
                                     let is_dark = theme.should_use_dark_vibrancy();
-                                    platform::configure_window_vibrancy_material_for_appearance(is_dark);
+                                    let material = theme.get_vibrancy().material;
+                                    platform::configure_window_vibrancy_material_for_appearance(
+                                        is_dark,
+                                        material,
+                                    );
                                     PANEL_CONFIGURED.store(true, std::sync::atomic::Ordering::SeqCst);
                                 }
 
@@ -180,7 +184,11 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                     // Configure vibrancy based on actual theme colors
                                     let theme = theme::get_cached_theme();
                                     let is_dark = theme.should_use_dark_vibrancy();
-                                    platform::configure_window_vibrancy_material_for_appearance(is_dark);
+                                    let material = theme.get_vibrancy().material;
+                                    platform::configure_window_vibrancy_material_for_appearance(
+                                        is_dark,
+                                        material,
+                                    );
                                     PANEL_CONFIGURED.store(true, std::sync::atomic::Ordering::SeqCst);
                                 }
 

@@ -134,14 +134,17 @@
                 }
                 // Cmd+- / Cmd+=: adjust opacity
                 if has_cmd && key == "-" {
-                    let current_main = this.theme.get_opacity().main;
+                    let current_main = this
+                        .theme
+                        .get_opacity()
+                        .vibrancy_background
+                        .unwrap_or(0.85);
                     let idx = Self::find_opacity_preset_index(current_main);
                     if idx > 0 {
                         let target = Self::OPACITY_PRESETS[idx - 1].0;
                         let mut modified = (*this.theme).clone();
                         if let Some(ref mut op) = modified.opacity {
-                            op.main = target;
-                            op.title_bar = target;
+                            op.vibrancy_background = Some(target);
                         }
                         this.theme = std::sync::Arc::new(modified);
                         theme::sync_gpui_component_theme(cx);
@@ -150,14 +153,17 @@
                     return;
                 }
                 if has_cmd && (key == "=" || key == "+") {
-                    let current_main = this.theme.get_opacity().main;
+                    let current_main = this
+                        .theme
+                        .get_opacity()
+                        .vibrancy_background
+                        .unwrap_or(0.85);
                     let idx = Self::find_opacity_preset_index(current_main);
                     if idx < Self::OPACITY_PRESETS.len() - 1 {
                         let target = Self::OPACITY_PRESETS[idx + 1].0;
                         let mut modified = (*this.theme).clone();
                         if let Some(ref mut op) = modified.opacity {
-                            op.main = target;
-                            op.title_bar = target;
+                            op.vibrancy_background = Some(target);
                         }
                         this.theme = std::sync::Arc::new(modified);
                         theme::sync_gpui_component_theme(cx);
@@ -173,6 +179,12 @@
                     }
                     this.theme = std::sync::Arc::new(modified);
                     theme::sync_gpui_component_theme(cx);
+                    let is_dark = this.theme.should_use_dark_vibrancy();
+                    let material = this.theme.get_vibrancy().material;
+                    platform::configure_window_vibrancy_material_for_appearance(
+                        is_dark,
+                        material,
+                    );
                     cx.notify();
                     return;
                 }
@@ -193,6 +205,12 @@
                     }
                     this.theme = std::sync::Arc::new(modified);
                     theme::sync_gpui_component_theme(cx);
+                    let is_dark = this.theme.should_use_dark_vibrancy();
+                    let material = this.theme.get_vibrancy().material;
+                    platform::configure_window_vibrancy_material_for_appearance(
+                        is_dark,
+                        material,
+                    );
                     cx.notify();
                     return;
                 }

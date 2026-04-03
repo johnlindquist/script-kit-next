@@ -318,14 +318,17 @@ impl ScriptListApp {
                 }
                 // Cmd+- / Cmd+=: adjust opacity
                 if has_cmd && key == "-" {
-                    let current_main = this.theme.get_opacity().main;
+                    let current_main = this
+                        .theme
+                        .get_opacity()
+                        .vibrancy_background
+                        .unwrap_or(0.85);
                     let idx = Self::find_opacity_preset_index(current_main);
                     if idx > 0 {
                         let target = Self::OPACITY_PRESETS[idx - 1].0;
                         let mut modified = (*this.theme).clone();
                         if let Some(ref mut op) = modified.opacity {
-                            op.main = target;
-                            op.title_bar = target;
+                            op.vibrancy_background = Some(target);
                         }
                         this.theme = std::sync::Arc::new(modified);
                         sync_gpui_component_theme_for_theme(cx, this.theme.as_ref());
@@ -334,14 +337,17 @@ impl ScriptListApp {
                     return;
                 }
                 if has_cmd && (key == "=" || key == "+") {
-                    let current_main = this.theme.get_opacity().main;
+                    let current_main = this
+                        .theme
+                        .get_opacity()
+                        .vibrancy_background
+                        .unwrap_or(0.85);
                     let idx = Self::find_opacity_preset_index(current_main);
                     if idx < Self::OPACITY_PRESETS.len() - 1 {
                         let target = Self::OPACITY_PRESETS[idx + 1].0;
                         let mut modified = (*this.theme).clone();
                         if let Some(ref mut op) = modified.opacity {
-                            op.main = target;
-                            op.title_bar = target;
+                            op.vibrancy_background = Some(target);
                         }
                         this.theme = std::sync::Arc::new(modified);
                         sync_gpui_component_theme_for_theme(cx, this.theme.as_ref());
@@ -357,6 +363,12 @@ impl ScriptListApp {
                     }
                     this.theme = std::sync::Arc::new(modified);
                     sync_gpui_component_theme_for_theme(cx, this.theme.as_ref());
+                    let is_dark = this.theme.should_use_dark_vibrancy();
+                    let material = this.theme.get_vibrancy().material;
+                    platform::configure_window_vibrancy_material_for_appearance(
+                        is_dark,
+                        material,
+                    );
                     cx.notify();
                     return;
                 }
@@ -377,6 +389,12 @@ impl ScriptListApp {
                     }
                     this.theme = std::sync::Arc::new(modified);
                     sync_gpui_component_theme_for_theme(cx, this.theme.as_ref());
+                    let is_dark = this.theme.should_use_dark_vibrancy();
+                    let material = this.theme.get_vibrancy().material;
+                    platform::configure_window_vibrancy_material_for_appearance(
+                        is_dark,
+                        material,
+                    );
                     cx.notify();
                     return;
                 }
@@ -727,7 +745,7 @@ impl ScriptListApp {
 
         // ── Preview panel with customization controls ─────────────
         let border_rgba = rgba((ui_border << 8) | ALPHA_BADGE_BORDER);
-        let current_opacity_main = opacity.main;
+        let current_opacity_main = opacity.vibrancy_background.unwrap_or(0.85);
         let vibrancy_enabled = self
             .theme
             .vibrancy
@@ -830,8 +848,7 @@ impl ScriptListApp {
                                 app.update(cx, |this, cx| {
                                     let mut modified = (*this.theme).clone();
                                     if let Some(ref mut op) = modified.opacity {
-                                        op.main = value;
-                                        op.title_bar = value;
+                                        op.vibrancy_background = Some(value);
                                     }
                                     this.theme = std::sync::Arc::new(modified);
                                     sync_gpui_component_theme_for_theme(cx, this.theme.as_ref());
@@ -871,6 +888,12 @@ impl ScriptListApp {
                             }
                             this.theme = std::sync::Arc::new(modified);
                             sync_gpui_component_theme_for_theme(cx, this.theme.as_ref());
+                            let is_dark = this.theme.should_use_dark_vibrancy();
+                            let material = this.theme.get_vibrancy().material;
+                            platform::configure_window_vibrancy_material_for_appearance(
+                                is_dark,
+                                material,
+                            );
                             cx.notify();
                         });
                     }
@@ -953,6 +976,12 @@ impl ScriptListApp {
                                     }
                                     this.theme = std::sync::Arc::new(modified);
                                     sync_gpui_component_theme_for_theme(cx, this.theme.as_ref());
+                                    let is_dark = this.theme.should_use_dark_vibrancy();
+                                    let current_material = this.theme.get_vibrancy().material;
+                                    platform::configure_window_vibrancy_material_for_appearance(
+                                        is_dark,
+                                        current_material,
+                                    );
                                     cx.notify();
                                 });
                             }
