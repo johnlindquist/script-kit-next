@@ -193,6 +193,10 @@
         });
         app.gpui_input_subscriptions.push(tab_interceptor);
 
+        // Prewarm the ACP agent config on a background thread so Tab presses
+        // never block on bun transpile of ~/.scriptkit/kit/config.ts.
+        crate::ai::acp::prewarm_agent_config();
+
         // Prewarm the Tab AI harness asynchronously so the first Tab press
         // reuses a live PTY instead of paying spawn cost.  Runs once, silently.
         let app_entity_for_tab_ai_warm = cx.entity().downgrade();
