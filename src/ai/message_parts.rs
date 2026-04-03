@@ -68,6 +68,23 @@ impl AiContextPart {
     pub fn is_ambient_context_chip(&self) -> bool {
         matches!(self, Self::AmbientContext { .. })
     }
+
+    /// Returns `true` for any bootstrap resource that uses the minimal desktop
+    /// context URI, regardless of its display label.
+    pub fn is_ambient_bootstrap_resource(&self) -> bool {
+        matches!(self, Self::ResourceUri { uri, .. } if uri == ASK_ANYTHING_RESOURCE_URI)
+    }
+
+    /// Return the display label for an ambient bootstrap or promoted ambient chip.
+    pub fn ambient_chip_label(&self) -> Option<&str> {
+        match self {
+            Self::ResourceUri { uri, label } if uri == ASK_ANYTHING_RESOURCE_URI => {
+                Some(label.as_str())
+            }
+            Self::AmbientContext { label } => Some(label.as_str()),
+            _ => None,
+        }
+    }
 }
 
 /// Extract file paths from a slice of context parts.

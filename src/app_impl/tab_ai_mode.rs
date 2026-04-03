@@ -520,18 +520,25 @@ impl ScriptListApp {
             &request.source_view,
             &request.ui_snapshot,
         );
-        let focused_part = if !use_ask_anything_fallback {
+
+        // Explicit AI commands (screen, focused window, selected text, browser tab)
+        // must force ambient capture even when the source surface has a focused item.
+        let explicit_ambient_chip_label = Self::tab_ai_explicit_ambient_chip_label(&request.capture_kind)
+            .map(str::to_string);
+
+        let focused_part = if use_ask_anything_fallback || explicit_ambient_chip_label.is_some() {
+            None
+        } else {
             self.build_tab_ai_focused_part_for_view(
                 &request.source_view,
                 &request.ui_snapshot,
             )
-        } else {
-            None
         };
 
-        // Only run expensive ambient capture for the Ask Anything fallback path.
+        // Only run expensive ambient capture for the Ask Anything fallback path
+        // or explicit ambient capture commands.
         // Focused-target Tab flows skip desktop snapshots and screenshots.
-        let capture_rx = if use_ask_anything_fallback {
+        let capture_rx = if use_ask_anything_fallback && explicit_ambient_chip_label.is_none() {
             tracing::info!(
                 target: "script_kit::tab_ai",
                 event = "tab_ai_ask_anything_fallback",
@@ -539,6 +546,17 @@ impl ScriptListApp {
                     AppView::ScriptList => "ScriptList",
                     _ => "Other",
                 },
+            );
+            self.spawn_tab_ai_pre_switch_capture(&request)
+        } else if let Some(ref label) = explicit_ambient_chip_label {
+            tracing::info!(
+                target: "script_kit::tab_ai",
+                event = "tab_ai_explicit_ambient_capture",
+                source_view = match &request.source_view {
+                    AppView::ScriptList => "ScriptList",
+                    _ => "Other",
+                },
+                chip_label = %label,
             );
             self.spawn_tab_ai_pre_switch_capture(&request)
         } else {
@@ -555,7 +573,7 @@ impl ScriptListApp {
             rx
         };
 
-        self.open_tab_ai_acp_view_from_request_impl(request, capture_rx, focused_part, use_ask_anything_fallback, cx);
+        self.open_tab_ai_acp_view_from_request_impl(request, capture_rx, focused_part, use_ask_anything_fallback, explicit_ambient_chip_label, cx);
     }
 
     /// Start background capture immediately on a dedicated OS thread.
@@ -654,6 +672,20 @@ impl ScriptListApp {
             .map(|s| s.to_string())
     }
 
+    /// Return a chip label for entry modes that must always use ambient capture,
+    /// even if the source view has a resolvable focused target.
+    fn tab_ai_explicit_ambient_chip_label(
+        capture_kind: &crate::ai::TabAiCaptureKind,
+    ) -> Option<&'static str> {
+        match capture_kind {
+            crate::ai::TabAiCaptureKind::DefaultContext => None,
+            crate::ai::TabAiCaptureKind::FullScreen => Some("Full Screen"),
+            crate::ai::TabAiCaptureKind::FocusedWindow => Some("Focused Window"),
+            crate::ai::TabAiCaptureKind::SelectedText => Some("Selected Text"),
+            crate::ai::TabAiCaptureKind::BrowserTab => Some("Browser Tab"),
+        }
+    }
+
     /// Extract a `TabAiTargetContext` from an `AiContextPart::FocusedTarget`,
     /// returning `None` for any other variant or `None` input.
     fn tab_ai_focused_target_from_part(
@@ -723,6 +755,7 @@ impl ScriptListApp {
         capture_rx: TabAiDeferredCaptureRx,
         focused_part: Option<crate::ai::message_parts::AiContextPart>,
         use_ask_anything_fallback: bool,
+        explicit_ambient_chip_label: Option<String>,
         cx: &mut Context<Self>,
     ) {
         let open_started_at = std::time::Instant::now();
@@ -894,7 +927,7 @@ impl ScriptListApp {
             elapsed_ms = open_started_at.elapsed().as_millis() as u64,
         );
 
-        // --- Stage focused-target chip or Ask Anything fallback context ---
+        // --- Stage focused-target chip or ambient-capture chip ---
         if let Some(part) = focused_part.clone() {
             let _ = thread.update(cx, |thread, cx| {
                 thread.add_context_part(part, cx);
@@ -907,7 +940,7 @@ impl ScriptListApp {
                     _ => "Other",
                 },
             );
-        } else if use_ask_anything_fallback {
+        } else if use_ask_anything_fallback && explicit_ambient_chip_label.is_none() {
             // Stage a minimal desktop context resource as the Ask Anything chip.
             let _ = thread.update(cx, |thread, cx| {
                 thread.add_context_part(
@@ -925,6 +958,27 @@ impl ScriptListApp {
                     AppView::ScriptList => "ScriptList",
                     _ => "Other",
                 },
+            );
+        } else if let Some(ref label) = explicit_ambient_chip_label {
+            // Stage a labeled ambient capture chip for explicit AI commands.
+            let chip_label = label.clone();
+            let _ = thread.update(cx, |thread, cx| {
+                thread.add_context_part(
+                    crate::ai::message_parts::AiContextPart::ResourceUri {
+                        uri: crate::ai::message_parts::ASK_ANYTHING_RESOURCE_URI.to_string(),
+                        label: chip_label,
+                    },
+                    cx,
+                );
+            });
+            tracing::info!(
+                target: "script_kit::tab_ai",
+                event = "acp_ambient_capture_chip_staged_on_thread",
+                source_view = match &source_view {
+                    AppView::ScriptList => "ScriptList",
+                    _ => "Other",
+                },
+                chip_label = %label,
             );
         }
 
@@ -959,7 +1013,7 @@ impl ScriptListApp {
 
         // --- Focused-target path: mark bootstrap ready immediately ---
         // No deferred capture needed; the chip is already staged.
-        if !use_ask_anything_fallback {
+        if !use_ask_anything_fallback && explicit_ambient_chip_label.is_none() {
             let _ = thread.update(cx, |thread, cx| {
                 thread.mark_context_bootstrap_ready(cx);
                 // Auto-submit if effective intent was resolved (Shift+Tab path)
