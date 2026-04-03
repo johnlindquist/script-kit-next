@@ -786,7 +786,7 @@ impl ScriptListApp {
         );
 
         let stage_started_at = std::time::Instant::now();
-        let agent = match crate::ai::acp::claude_code_agent_config() {
+        let agent = match crate::ai::acp::claude_code_agent_config_cached() {
             Ok(agent) => agent,
             Err(error) => {
                 tracing::error!(
@@ -816,6 +816,10 @@ impl ScriptListApp {
         );
 
         let agent_display_name = agent.display_name().to_string();
+        // Extract model info before `agent` is moved into spawn_with_approval.
+        let default_model_id = agent.models.first().map(|m| m.id.clone());
+        let agent_models = agent.models.clone();
+
         let stage_started_at = std::time::Instant::now();
         let connection = match crate::ai::acp::AcpConnection::spawn_with_approval(
             agent,
@@ -854,28 +858,13 @@ impl ScriptListApp {
             crate::ai::acp::AcpThread::new(
                 connection,
                 permission_rx,
-                {
-                    let agent_config = crate::ai::acp::claude_code_agent_config()
-                        .unwrap_or_else(|_| crate::ai::acp::AcpAgentConfig {
-                            id: "claude-code".into(),
-                            display_name: "Claude Code".into(),
-                            command: "npx".into(),
-                            args: vec![],
-                            env: std::collections::HashMap::new(),
-                            models: vec![],
-                        });
-                    let default_model_id = agent_config
-                        .models
-                        .first()
-                        .map(|m| m.id.clone());
-                    crate::ai::acp::AcpThreadInit {
-                        ui_thread_id: uuid::Uuid::new_v4().to_string(),
-                        cwd,
-                        initial_input: effective_intent.clone(),
-                        display_name: agent_display_name.into(),
-                        available_models: agent_config.models,
-                        selected_model_id: default_model_id,
-                    }
+                crate::ai::acp::AcpThreadInit {
+                    ui_thread_id: uuid::Uuid::new_v4().to_string(),
+                    cwd,
+                    initial_input: effective_intent.clone(),
+                    display_name: agent_display_name.into(),
+                    available_models: agent_models,
+                    selected_model_id: default_model_id,
                 },
                 cx,
             )

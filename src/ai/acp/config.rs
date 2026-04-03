@@ -1,7 +1,11 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::sync::OnceLock;
 
 use crate::ai::ModelInfo;
+
+/// Cached agent config — avoids spawning bun processes on every Tab press.
+static CACHED_AGENT_CONFIG: OnceLock<AcpAgentConfig> = OnceLock::new();
 
 /// Configuration for a generic ACP-compatible AI agent.
 ///
@@ -109,12 +113,58 @@ impl AcpAgentConfig {
     }
 }
 
+/// Return the cached agent config, loading it on first call.
+///
+/// The first call spawns bun to transpile + extract config (~100-500ms).
+/// Subsequent calls return instantly from the `OnceLock` cache.
+/// Call `prewarm_agent_config()` at startup to pay the cost early.
+pub(crate) fn claude_code_agent_config_cached() -> anyhow::Result<AcpAgentConfig> {
+    if let Some(cached) = CACHED_AGENT_CONFIG.get() {
+        return Ok(cached.clone());
+    }
+    let config = claude_code_agent_config()?;
+    // Ignore the error if another thread raced us — their value is equivalent.
+    let _ = CACHED_AGENT_CONFIG.set(config.clone());
+    Ok(config)
+}
+
+/// Prewarm the agent config cache on a background thread.
+/// Call once at startup so Tab presses never block on bun transpile.
+pub(crate) fn prewarm_agent_config() {
+    std::thread::Builder::new()
+        .name("acp-config-prewarm".into())
+        .spawn(|| {
+            let started = std::time::Instant::now();
+            match claude_code_agent_config() {
+                Ok(config) => {
+                    let _ = CACHED_AGENT_CONFIG.set(config);
+                    tracing::info!(
+                        target: "script_kit::tab_ai",
+                        event = "acp_config_prewarmed",
+                        elapsed_ms = started.elapsed().as_millis() as u64,
+                    );
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        target: "script_kit::tab_ai",
+                        event = "acp_config_prewarm_failed",
+                        error = %e,
+                    );
+                }
+            }
+        })
+        .ok();
+}
+
 /// Build an `AcpAgentConfig` for Claude Code from the user's Script Kit config.
 ///
 /// Reads `claudeCode` settings (path, permissionMode, allowedTools, addDirs)
 /// and maps them to ACP agent CLI arguments. Does not touch the PTY terminal
 /// path — this is only used by the ACP event-driven surface.
-pub(crate) fn claude_code_agent_config() -> anyhow::Result<AcpAgentConfig> {
+///
+/// Prefer `claude_code_agent_config_cached()` in hot paths to avoid repeated
+/// bun subprocess spawns.
+fn claude_code_agent_config() -> anyhow::Result<AcpAgentConfig> {
     let config = crate::config::load_config();
     let claude_code = config.claude_code.unwrap_or_default();
 
