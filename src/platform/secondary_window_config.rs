@@ -44,7 +44,12 @@ unsafe fn configure_window_vibrancy_common(
     let content_view: id = msg_send![window, contentView];
     if !content_view.is_null() {
         let mut count = 0;
-        configure_visual_effect_views_recursive(content_view, &mut count, is_dark);
+        let material = if is_dark {
+            crate::theme::VibrancyMaterial::Hud
+        } else {
+            crate::theme::VibrancyMaterial::Popover
+        };
+        configure_visual_effect_views_recursive(content_view, &mut count, is_dark, material);
         let material_name = if is_dark { "HUD_WINDOW" } else { "POPOVER" };
         logging::log(
             log_target,
@@ -269,7 +274,17 @@ pub fn update_all_secondary_windows_appearance(is_dark: bool) {
                 let content_view: id = msg_send![window, contentView];
                 if content_view != nil {
                     let mut vev_count = 0;
-                    configure_visual_effect_views_recursive(content_view, &mut vev_count, is_dark);
+                    let material = if is_dark {
+                        crate::theme::VibrancyMaterial::Hud
+                    } else {
+                        crate::theme::VibrancyMaterial::Popover
+                    };
+                    configure_visual_effect_views_recursive(
+                        content_view,
+                        &mut vev_count,
+                        is_dark,
+                        material,
+                    );
                     logging::log(
                         "APPEARANCE",
                         &format!(

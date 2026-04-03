@@ -5,6 +5,7 @@
 ///
 /// # Arguments
 /// * `is_dark` - true for dark mode (VibrantDark), false for light mode (VibrantLight)
+/// * `material` - the user-selected NSVisualEffect material to apply
 ///
 /// # macOS Behavior
 ///
@@ -16,7 +17,10 @@
 ///
 /// Uses Objective-C message sending internally.
 #[cfg(target_os = "macos")]
-pub fn configure_window_vibrancy_material_for_appearance(is_dark: bool) {
+pub fn configure_window_vibrancy_material_for_appearance(
+    is_dark: bool,
+    material: crate::theme::VibrancyMaterial,
+) {
     if require_main_thread("configure_window_vibrancy_material_for_appearance") {
         return;
     }
@@ -79,9 +83,9 @@ pub fn configure_window_vibrancy_material_for_appearance(is_dark: bool) {
         // Recursively find and configure ALL NSVisualEffectViews
         // Expert feedback: GPUI may nest effect views, so we need to walk the whole tree
         let mut count = 0;
-        configure_visual_effect_views_recursive(content_view, &mut count, is_dark);
+        configure_visual_effect_views_recursive(content_view, &mut count, is_dark, material);
 
-        let material_name = if is_dark { "HUD_WINDOW" } else { "POPOVER" };
+        let material_name = vibrancy_material_name(material);
         if count == 0 {
             logging::log(
                 "PANEL",
@@ -106,8 +110,33 @@ pub fn configure_window_vibrancy_material_for_appearance(is_dark: bool) {
 }
 
 #[cfg(not(target_os = "macos"))]
-pub fn configure_window_vibrancy_material_for_appearance(_is_dark: bool) {
+pub fn configure_window_vibrancy_material_for_appearance(
+    _is_dark: bool,
+    _material: crate::theme::VibrancyMaterial,
+) {
     // No-op on non-macOS platforms
+}
+
+#[cfg(target_os = "macos")]
+fn vibrancy_material_value(material: crate::theme::VibrancyMaterial) -> isize {
+    match material {
+        crate::theme::VibrancyMaterial::Hud => ns_visual_effect_material::HUD_WINDOW,
+        crate::theme::VibrancyMaterial::Popover => ns_visual_effect_material::POPOVER,
+        crate::theme::VibrancyMaterial::Menu => ns_visual_effect_material::MENU,
+        crate::theme::VibrancyMaterial::Sidebar => ns_visual_effect_material::SIDEBAR,
+        crate::theme::VibrancyMaterial::Content => ns_visual_effect_material::CONTENT_BACKGROUND,
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn vibrancy_material_name(material: crate::theme::VibrancyMaterial) -> &'static str {
+    match material {
+        crate::theme::VibrancyMaterial::Hud => "HUD_WINDOW",
+        crate::theme::VibrancyMaterial::Popover => "POPOVER",
+        crate::theme::VibrancyMaterial::Menu => "MENU",
+        crate::theme::VibrancyMaterial::Sidebar => "SIDEBAR",
+        crate::theme::VibrancyMaterial::Content => "CONTENT_BACKGROUND",
+    }
 }
 
 /// Recursively walk view hierarchy and configure all NSVisualEffectViews.
@@ -115,7 +144,8 @@ pub fn configure_window_vibrancy_material_for_appearance(_is_dark: bool) {
 /// # Arguments
 /// * `view` - The view to configure
 /// * `count` - Counter for configured views
-/// * `is_dark` - Whether to use dark mode material (HUD_WINDOW) or light mode material (POPOVER)
+/// * `is_dark` - Whether to use dark appearance (VibrantDark) or light appearance (VibrantLight)
+/// * `material` - The configured vibrancy material to apply
 ///
 /// # Safety
 ///
@@ -123,7 +153,12 @@ pub fn configure_window_vibrancy_material_for_appearance(_is_dark: bool) {
 /// Subview array and its elements are accessed via count-bounded iteration.
 /// UTF8String pointers are nil-checked before CStr::from_ptr.
 #[cfg(target_os = "macos")]
-unsafe fn configure_visual_effect_views_recursive(view: id, count: &mut usize, is_dark: bool) {
+unsafe fn configure_visual_effect_views_recursive(
+    view: id,
+    count: &mut usize,
+    is_dark: bool,
+    material: crate::theme::VibrancyMaterial,
+) {
     // Check if this view is an NSVisualEffectView
     let is_vev: bool = msg_send![view, isKindOfClass: class!(NSVisualEffectView)];
     if is_vev {
@@ -157,15 +192,8 @@ unsafe fn configure_visual_effect_views_recursive(view: id, count: &mut usize, i
         // ║ (like Actions popup) take focus. Combined with tint alpha in              ║
         // ║ gpui_integration.rs. See: /Users/johnlindquist/dev/mac-panel-window/      ║
         // ╚════════════════════════════════════════════════════════════════════════════╝
-        // Material selection based on appearance mode:
-        // - Dark mode: HUD_WINDOW (13) - designed for dark UIs, high contrast
-        // - Light mode: POPOVER (6) - cleaner light appearance with frosted glass effect
-        let material = if is_dark {
-            ns_visual_effect_material::HUD_WINDOW
-        } else {
-            ns_visual_effect_material::POPOVER
-        };
-        let _: () = msg_send![view, setMaterial: material];
+        let material_value = vibrancy_material_value(material);
+        let _: () = msg_send![view, setMaterial: material_value];
         // State: 1=active for dark (prevents dimming), 0=followsWindow for light (cleaner look)
         // NSVisualEffectState: 0=followsWindowActiveState, 1=active, 2=inactive
         // Dark mode: active state prevents dimming when Actions popup opens
@@ -202,7 +230,7 @@ unsafe fn configure_visual_effect_views_recursive(view: id, count: &mut usize, i
             "nil".to_string()
         };
 
-        let material_name = if is_dark { "HUD_WINDOW" } else { "POPOVER" };
+        let material_name = vibrancy_material_name(material);
         logging::log(
             "VIBRANCY",
             &format!(
@@ -225,7 +253,7 @@ unsafe fn configure_visual_effect_views_recursive(view: id, count: &mut usize, i
         let subview_count: usize = msg_send![subviews, count];
         for i in 0..subview_count {
             let child: id = msg_send![subviews, objectAtIndex: i];
-            configure_visual_effect_views_recursive(child, count, is_dark);
+            configure_visual_effect_views_recursive(child, count, is_dark, material);
         }
     }
 }

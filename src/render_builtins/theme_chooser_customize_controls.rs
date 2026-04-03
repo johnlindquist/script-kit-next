@@ -1,6 +1,6 @@
         // ── Preview panel with customization controls ─────────────
         let border_rgba = rgba((ui_border << 8) | 0x40);
-        let current_opacity_main = opacity.main;
+        let current_opacity_main = opacity.vibrancy_background.unwrap_or(0.85);
         let vibrancy_enabled = self
             .theme
             .vibrancy
@@ -83,8 +83,7 @@
                                 app.update(cx, |this, cx| {
                                     let mut modified = (*this.theme).clone();
                                     if let Some(ref mut op) = modified.opacity {
-                                        op.main = value;
-                                        op.title_bar = value;
+                                        op.vibrancy_background = Some(value);
                                     }
                                     this.theme = std::sync::Arc::new(modified);
                                     theme::sync_gpui_component_theme(cx);
@@ -123,6 +122,12 @@
                             }
                             this.theme = std::sync::Arc::new(modified);
                             theme::sync_gpui_component_theme(cx);
+                            let is_dark = this.theme.should_use_dark_vibrancy();
+                            let material = this.theme.get_vibrancy().material;
+                            platform::configure_window_vibrancy_material_for_appearance(
+                                is_dark,
+                                material,
+                            );
                             cx.notify();
                         });
                     }
@@ -199,6 +204,12 @@
                                     }
                                     this.theme = std::sync::Arc::new(modified);
                                     theme::sync_gpui_component_theme(cx);
+                                    let is_dark = this.theme.should_use_dark_vibrancy();
+                                    let current_material = this.theme.get_vibrancy().material;
+                                    platform::configure_window_vibrancy_material_for_appearance(
+                                        is_dark,
+                                        current_material,
+                                    );
                                     cx.notify();
                                 });
                             }
@@ -312,4 +323,3 @@
             .child("Reset to Defaults");
 
         let accent_name = Self::accent_color_name(accent_color);
-

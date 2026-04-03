@@ -191,7 +191,8 @@ fn show_main_window_helper(
         // Uses VibrantDark for dark-colored themes, VibrantLight for light-colored themes
         let theme = theme::get_cached_theme();
         let is_dark = theme.should_use_dark_vibrancy();
-        platform::configure_window_vibrancy_material_for_appearance(is_dark);
+        let material = theme.get_vibrancy().material;
+        platform::configure_window_vibrancy_material_for_appearance(is_dark, material);
         PANEL_CONFIGURED.store(true, Ordering::SeqCst);
     }
 
