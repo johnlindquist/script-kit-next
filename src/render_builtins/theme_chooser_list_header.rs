@@ -79,12 +79,12 @@
                             None
                         };
 
-                        // Match main menu ListItem: on_accent for selected,
-                        // primary with quiet alpha for unselected
+                        // Match main menu ListItem: full primary for selected,
+                        // quieted primary for unselected
                         let name_color = if is_selected {
-                            rgb(text_on_accent)
+                            rgb(text_primary)
                         } else {
-                            rgba((text_primary << 8) | 0xB8)
+                            rgba((text_primary << 8) | crate::list_item::ALPHA_NAME_QUIET)
                         };
 
                         // Click handler: select + preview via filtered index
@@ -159,14 +159,13 @@
                                     .text_color(name_color)
                                     .child(name.clone()),
                             )
-                            // Description revealed on focused row
+                            // Description revealed on focused row — use primary
+                            // text at reduced alpha for readability on selection bg
                             .when(is_selected, |d| {
                                 d.child(
                                     div()
                                         .text_xs()
-                                        .text_color(rgba(
-                                            (text_secondary << 8) | 0xB3,
-                                        ))
+                                        .text_color(rgba((text_primary << 8) | crate::list_item::ALPHA_DESC_SELECTED))
                                         .child(desc.clone()),
                                 )
                             });
