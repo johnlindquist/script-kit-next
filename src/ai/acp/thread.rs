@@ -251,9 +251,7 @@ impl AcpThread {
             pending_ambient_context_enabled: false,
             context_bootstrap_state: AcpContextBootstrapState::Preparing,
             queued_submit_while_bootstrapping: false,
-            context_bootstrap_note: Some(
-                "Attaching selection, window, and clipboard context\u{2026}".into(),
-            ),
+            context_bootstrap_note: None,
             active_plan_entries: Vec::new(),
             active_mode_id: None,
             available_commands: Vec::new(),
@@ -307,11 +305,15 @@ impl AcpThread {
         context: &crate::ai::TabAiContextBlob,
         cx: &mut Context<Self>,
     ) -> Result<(), String> {
+        let ambient_label = self
+            .current_ambient_chip_label()
+            .unwrap_or_else(|| crate::ai::message_parts::ASK_ANYTHING_LABEL.to_string());
+
         if !self.pending_ambient_context_enabled {
             self.clear_pending_ambient_context("ask_anything_removed_before_stage");
             self.finish_bootstrap(
                 AcpContextBootstrapState::Ready,
-                "Ask Anything removed",
+                Self::ambient_capture_removed_note(&ambient_label),
                 cx,
             );
             return Ok(());
@@ -325,24 +327,58 @@ impl AcpThread {
             target: "script_kit::tab_ai",
             event = "acp_ask_anything_promoted_to_ambient_chip",
             block_count = self.pending_context_blocks.len(),
+            chip_label = %ambient_label,
         );
 
-        self.finish_bootstrap(AcpContextBootstrapState::Ready, "Ask Anything ready", cx);
+        self.finish_bootstrap(
+            AcpContextBootstrapState::Ready,
+            Self::ambient_capture_ready_note(&ambient_label),
+            cx,
+        );
         Ok(())
     }
 
-    /// Replace the initial Ask Anything `ResourceUri` chip with a display-only
-    /// `AmbientContext` chip. If the resource chip was already removed, pushes
-    /// a new ambient chip.
+    fn ambient_capture_preparing_note(label: &str) -> SharedString {
+        if label == crate::ai::message_parts::ASK_ANYTHING_LABEL {
+            "Capturing desktop context\u{2026}".into()
+        } else {
+            format!("Capturing {label}\u{2026}").into()
+        }
+    }
+
+    fn ambient_capture_ready_note(label: &str) -> SharedString {
+        if label == crate::ai::message_parts::ASK_ANYTHING_LABEL {
+            "Ask Anything ready".into()
+        } else {
+            format!("{label} ready").into()
+        }
+    }
+
+    fn ambient_capture_removed_note(label: &str) -> SharedString {
+        if label == crate::ai::message_parts::ASK_ANYTHING_LABEL {
+            "Ask Anything removed".into()
+        } else {
+            format!("{label} removed").into()
+        }
+    }
+
+    fn current_ambient_chip_label(&self) -> Option<String> {
+        self.pending_context_parts
+            .iter()
+            .find_map(|part| part.ambient_chip_label().map(|value| value.to_string()))
+    }
+
+    /// Replace the initial ambient bootstrap `ResourceUri` chip with a
+    /// display-only `AmbientContext` chip, preserving the original label.
+    /// If the resource chip was already removed, pushes a new ambient chip.
     fn promote_ask_anything_chip_to_ambient(&mut self) {
         if let Some(part) = self
             .pending_context_parts
             .iter_mut()
-            .find(|part| part.is_ask_anything_resource())
+            .find(|part| part.is_ambient_bootstrap_resource())
         {
-            *part = crate::ai::message_parts::AiContextPart::AmbientContext {
-                label: crate::ai::message_parts::ASK_ANYTHING_LABEL.to_string(),
-            };
+            let label = part.label().to_string();
+            *part = crate::ai::message_parts::AiContextPart::AmbientContext { label };
             return;
         }
         self.pending_context_parts
@@ -355,7 +391,15 @@ impl AcpThread {
     /// blocks. Used by the focused-target Tab path where only typed context
     /// parts (chips) are staged — no hidden `TabAiContextBlob`.
     pub(crate) fn mark_context_bootstrap_ready(&mut self, cx: &mut Context<Self>) {
-        self.finish_bootstrap(AcpContextBootstrapState::Ready, "Context attached", cx);
+        self.context_bootstrap_state = AcpContextBootstrapState::Ready;
+        self.context_bootstrap_note = None;
+        if let Err(error) = self.flush_bootstrap_queue(cx) {
+            tracing::warn!(
+                target: "script_kit::tab_ai",
+                event = "acp_bootstrap_flush_failed",
+                error = %error,
+            );
+        }
     }
 
     /// Mark the context bootstrap as failed with a human-readable note.
@@ -1193,21 +1237,23 @@ impl AcpThread {
             return;
         }
 
-        let is_ask_anything = part.is_ask_anything_resource();
+        let is_ambient_bootstrap = part.is_ambient_bootstrap_resource();
+        let ambient_label = part.ambient_chip_label().map(|value| value.to_string());
         let label = part.label().to_string();
         let source = part.source().to_string();
 
-        if is_ask_anything {
-            self.clear_pending_ambient_context("add_ask_anything_resource");
+        if is_ambient_bootstrap {
+            self.clear_pending_ambient_context("add_ambient_bootstrap_resource");
             self.pending_ambient_context_enabled = true;
             self.context_bootstrap_state = AcpContextBootstrapState::Preparing;
-            self.context_bootstrap_note =
-                Some("Capturing desktop context\u{2026}".into());
+            self.context_bootstrap_note = ambient_label
+                .as_deref()
+                .map(Self::ambient_capture_preparing_note);
         }
 
         self.pending_context_parts.push(part);
-        self.arm_pending_context(if is_ask_anything {
-            "add_ask_anything_part"
+        self.arm_pending_context(if is_ambient_bootstrap {
+            "add_ambient_bootstrap_part"
         } else {
             "add_context_part"
         });
@@ -1217,7 +1263,8 @@ impl AcpThread {
             event = "acp_context_part_added",
             source = %source,
             label = %label,
-            is_ask_anything,
+            is_ambient_bootstrap,
+            ambient_label = ?ambient_label,
             pending_part_count = self.pending_context_parts.len(),
             pending_block_count = self.pending_context_blocks.len(),
         );
@@ -1236,14 +1283,13 @@ impl AcpThread {
             return;
         }
         let removed = self.pending_context_parts.remove(index);
-        let removed_ask_anything =
-            removed.is_ask_anything_resource() || removed.is_ambient_context_chip();
+        let removed_ambient_label = removed.ambient_chip_label().map(|value| value.to_string());
 
-        if removed_ask_anything {
-            self.clear_pending_ambient_context("remove_ask_anything_part");
+        if let Some(ref ambient_label) = removed_ambient_label {
+            self.clear_pending_ambient_context("remove_ambient_context_part");
             self.finish_bootstrap(
                 AcpContextBootstrapState::Ready,
-                "Ask Anything removed",
+                Self::ambient_capture_removed_note(ambient_label),
                 cx,
             );
         } else {
@@ -1257,7 +1303,8 @@ impl AcpThread {
             index,
             source = %removed.source(),
             label = %removed.label(),
-            removed_ask_anything,
+            removed_ambient = removed_ambient_label.is_some(),
+            ambient_label = ?removed_ambient_label,
             pending_part_count = self.pending_context_parts.len(),
             pending_block_count = self.pending_context_blocks.len(),
         );
@@ -1326,15 +1373,16 @@ impl AcpThread {
             return;
         }
 
-        let is_ask_anything = part.is_ask_anything_resource();
+        let is_ambient_bootstrap = part.is_ambient_bootstrap_resource();
         self.pending_context_consumed = false;
 
-        if is_ask_anything {
+        if is_ambient_bootstrap {
             self.pending_context_blocks.clear();
             self.pending_ambient_context_enabled = true;
             self.context_bootstrap_state = AcpContextBootstrapState::Preparing;
-            self.context_bootstrap_note =
-                Some("Capturing desktop context\u{2026}".into());
+            self.context_bootstrap_note = part
+                .ambient_chip_label()
+                .map(Self::ambient_capture_preparing_note);
         }
 
         self.pending_context_parts.push(part);
@@ -1346,16 +1394,14 @@ impl AcpThread {
             return;
         }
         let removed = self.pending_context_parts.remove(index);
-        let removed_before_promotion = removed.is_ask_anything_resource();
-        let removed_after_promotion = removed.is_ambient_context_chip();
-        let removed_ask_anything = removed_before_promotion || removed_after_promotion;
+        let removed_ambient_label = removed.ambient_chip_label().map(|value| value.to_string());
 
-        if removed_ask_anything {
+        if let Some(ref ambient_label) = removed_ambient_label {
             self.pending_ambient_context_enabled = false;
             self.pending_context_blocks.clear();
             self.pending_context_consumed = false;
             self.context_bootstrap_state = AcpContextBootstrapState::Ready;
-            self.context_bootstrap_note = Some("Ask Anything removed".into());
+            self.context_bootstrap_note = Some(Self::ambient_capture_removed_note(ambient_label));
         }
     }
 
@@ -1364,11 +1410,15 @@ impl AcpThread {
         &mut self,
         context: &crate::ai::TabAiContextBlob,
     ) -> Result<(), String> {
+        let ambient_label = self
+            .current_ambient_chip_label()
+            .unwrap_or_else(|| crate::ai::message_parts::ASK_ANYTHING_LABEL.to_string());
+
         if !self.pending_ambient_context_enabled {
             self.pending_context_blocks.clear();
             self.pending_context_consumed = false;
             self.context_bootstrap_state = AcpContextBootstrapState::Ready;
-            self.context_bootstrap_note = Some("Ask Anything removed".into());
+            self.context_bootstrap_note = Some(Self::ambient_capture_removed_note(&ambient_label));
             return Ok(());
         }
 
@@ -1376,7 +1426,7 @@ impl AcpThread {
         self.pending_context_consumed = false;
         self.promote_ask_anything_chip_to_ambient();
         self.context_bootstrap_state = AcpContextBootstrapState::Ready;
-        self.context_bootstrap_note = Some("Ask Anything ready".into());
+        self.context_bootstrap_note = Some(Self::ambient_capture_ready_note(&ambient_label));
         Ok(())
     }
 

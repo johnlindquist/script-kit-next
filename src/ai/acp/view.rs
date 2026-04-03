@@ -417,7 +417,7 @@ impl AcpChatView {
                         primary_text,
                         Some("ready"),
                     ),
-                    _ if part.is_ask_anything_resource()
+                    _ if part.is_ambient_bootstrap_resource()
                         && matches!(bootstrap_state, AcpContextBootstrapState::Preparing) =>
                     {
                         (
@@ -427,7 +427,7 @@ impl AcpChatView {
                             Some("capturing"),
                         )
                     }
-                    _ if part.is_ask_anything_resource() => (
+                    _ if part.is_ambient_bootstrap_resource() => (
                         (accent << 8) | 0x12,
                         (accent << 8) | 0x24,
                         primary_text,
