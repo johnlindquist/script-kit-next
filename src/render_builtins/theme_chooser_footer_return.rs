@@ -1,26 +1,10 @@
-        // ── Footer with keyboard shortcuts ─────────────────────────
-        let shortcut_rows: &[&[(&str, &str)]] = &[
-            &[
-                ("\u{2191}\u{2193}", "Preview"),
-                ("Enter", "Apply"),
-                ("Esc", "Cancel"),
-                ("PgUp/Dn", "Jump"),
-                ("Type", "Search"),
-            ],
-            &[
-                ("\u{2318}[]", "Accent"),
-                ("\u{2318}-/=", "Opacity"),
-                ("\u{2318}B", "Vibrancy"),
-                ("\u{2318}M", "Material"),
-                ("\u{2318}R", "Reset"),
-            ],
-        ];
-
-        let shortcut = |key: &str, label: &str| {
+        // ── Footer — three-key hint strip ─────────────────────────
+        let footer_border = rgba((ui_border << 8) | 0x30);
+        let hint = |key: &str, label: &str| {
             div()
                 .flex()
                 .flex_row()
-                .gap(px(4.0))
+                .gap(px(3.0))
                 .child(
                     div()
                         .text_xs()
@@ -35,7 +19,6 @@
                 )
         };
 
-        let footer_border = rgba((ui_border << 8) | 0x30);
         let footer = div()
             .w_full()
             .px(px(design_spacing.padding_lg))
@@ -43,16 +26,12 @@
             .border_t_1()
             .border_color(footer_border)
             .flex()
-            .flex_col()
-            .gap(px(2.0))
-            .children(shortcut_rows.iter().map(|row| {
-                div()
-                    .flex()
-                    .flex_row()
-                    .justify_center()
-                    .gap(px(12.0))
-                    .children(row.iter().map(|(key, label)| shortcut(key, label)))
-            }));
+            .flex_row()
+            .justify_end()
+            .gap(px(12.0))
+            .child(hint("\u{21b5}", "Apply"))
+            .child(hint("\u{2318}K", "Actions"))
+            .child(hint("Esc", "Back"));
 
         // ── Empty state when filter has no matches ─────────────────
         if filtered_count == 0 {

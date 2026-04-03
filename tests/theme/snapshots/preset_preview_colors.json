@@ -150,6 +150,316 @@
     "border": "#1F2233"
   },
   {
+    "id": "monokai",
+    "name": "Monokai",
+    "is_dark": true,
+    "bg": "#272822",
+    "accent": "#F92672",
+    "text": "#F8F8F2",
+    "secondary": "#CCCCC7",
+    "border": "#414339"
+  },
+  {
+    "id": "one-dark-pro",
+    "name": "One Dark Pro",
+    "is_dark": true,
+    "bg": "#282C34",
+    "accent": "#528BFF",
+    "text": "#ABB2BF",
+    "secondary": "#9DA5B4",
+    "border": "#3E4452"
+  },
+  {
+    "id": "tokyo-night-storm",
+    "name": "Tokyo Night Storm",
+    "is_dark": true,
+    "bg": "#24283B",
+    "accent": "#7AA2F7",
+    "text": "#A9B1D6",
+    "secondary": "#8891BC",
+    "border": "#3B4261"
+  },
+  {
+    "id": "rose-pine-moon",
+    "name": "Rosé Pine Moon",
+    "is_dark": true,
+    "bg": "#232136",
+    "accent": "#EA9A97",
+    "text": "#E0DEF4",
+    "secondary": "#C4A7E7",
+    "border": "#817C9C"
+  },
+  {
+    "id": "poimandres",
+    "name": "Poimandres",
+    "is_dark": true,
+    "bg": "#1B1E28",
+    "accent": "#89DDFF",
+    "text": "#A6ACCD",
+    "secondary": "#A6ACCD",
+    "border": "#303340"
+  },
+  {
+    "id": "palenight",
+    "name": "Palenight",
+    "is_dark": true,
+    "bg": "#292D3E",
+    "accent": "#8B65CE",
+    "text": "#BFC7D5",
+    "secondary": "#929AC9",
+    "border": "#282B3C"
+  },
+  {
+    "id": "horizon-dark",
+    "name": "Horizon Dark",
+    "is_dark": true,
+    "bg": "#1C1E26",
+    "accent": "#E95378",
+    "text": "#D5D8DA",
+    "secondary": "#BBBBBB",
+    "border": "#2E303E"
+  },
+  {
+    "id": "andromeda",
+    "name": "Andromeda",
+    "is_dark": true,
+    "bg": "#23262E",
+    "accent": "#00E8C6",
+    "text": "#D5CED9",
+    "secondary": "#BAAFC0",
+    "border": "#1B1D23"
+  },
+  {
+    "id": "synthwave-84",
+    "name": "SynthWave '84",
+    "is_dark": true,
+    "bg": "#262335",
+    "accent": "#FF7EDB",
+    "text": "#FFFFFF",
+    "secondary": "#B6B1B1",
+    "border": "#495495"
+  },
+  {
+    "id": "shades-of-purple",
+    "name": "Shades of Purple",
+    "is_dark": true,
+    "bg": "#2D2B55",
+    "accent": "#FAD000",
+    "text": "#FFFFFF",
+    "secondary": "#A599E9",
+    "border": "#FAD000"
+  },
+  {
+    "id": "cobalt2",
+    "name": "Cobalt2",
+    "is_dark": true,
+    "bg": "#193549",
+    "accent": "#FFC600",
+    "text": "#FFFFFF",
+    "secondary": "#AAAAAA",
+    "border": "#0D3A58"
+  },
+  {
+    "id": "ayu-mirage",
+    "name": "Ayu Mirage",
+    "is_dark": true,
+    "bg": "#1F2430",
+    "accent": "#FFCC66",
+    "text": "#CCCAC2",
+    "secondary": "#828EA1",
+    "border": "#171B24"
+  },
+  {
+    "id": "night-owl",
+    "name": "Night Owl",
+    "is_dark": true,
+    "bg": "#011627",
+    "accent": "#7E57C2",
+    "text": "#D6DEEB",
+    "secondary": "#89A4BB",
+    "border": "#5F7E97"
+  },
+  {
+    "id": "vitesse-dark",
+    "name": "Vitesse Dark",
+    "is_dark": true,
+    "bg": "#121212",
+    "accent": "#4D9375",
+    "text": "#DBD7CA",
+    "secondary": "#BFBAAA",
+    "border": "#191919"
+  },
+  {
+    "id": "catppuccin-frappe",
+    "name": "Catppuccin Frappé",
+    "is_dark": true,
+    "bg": "#303446",
+    "accent": "#CA9EE6",
+    "text": "#C6D0F5",
+    "secondary": "#B5BFE2",
+    "border": "#51576D"
+  },
+  {
+    "id": "catppuccin-macchiato",
+    "name": "Catppuccin Macchiato",
+    "is_dark": true,
+    "bg": "#24273A",
+    "accent": "#C6A0F6",
+    "text": "#CAD3F5",
+    "secondary": "#B8C0E0",
+    "border": "#494D64"
+  },
+  {
+    "id": "darcula",
+    "name": "Darcula",
+    "is_dark": true,
+    "bg": "#2B2B2B",
+    "accent": "#6897BB",
+    "text": "#A9B7C6",
+    "secondary": "#959595",
+    "border": "#4E5254"
+  },
+  {
+    "id": "moonlight",
+    "name": "Moonlight II",
+    "is_dark": true,
+    "bg": "#222436",
+    "accent": "#82AAFF",
+    "text": "#C8D3F5",
+    "secondary": "#A9B8E8",
+    "border": "#444A73"
+  },
+  {
+    "id": "nightfly",
+    "name": "Nightfly",
+    "is_dark": true,
+    "bg": "#011627",
+    "accent": "#82AAFF",
+    "text": "#BDC1C6",
+    "secondary": "#ACB4C2",
+    "border": "#1D3B53"
+  },
+  {
+    "id": "oxocarbon-dark",
+    "name": "Oxocarbon Dark",
+    "is_dark": true,
+    "bg": "#161616",
+    "accent": "#78A9FF",
+    "text": "#F2F4F8",
+    "secondary": "#DDE1E6",
+    "border": "#393939"
+  },
+  {
+    "id": "flexoki-dark",
+    "name": "Flexoki Dark",
+    "is_dark": true,
+    "bg": "#100F0F",
+    "accent": "#D0A215",
+    "text": "#ECECEC",
+    "secondary": "#B7B5AC",
+    "border": "#343331"
+  },
+  {
+    "id": "kanagawa-dragon",
+    "name": "Kanagawa Dragon",
+    "is_dark": true,
+    "bg": "#181616",
+    "accent": "#8BA4B0",
+    "text": "#C5C9C5",
+    "secondary": "#A6A69C",
+    "border": "#393836"
+  },
+  {
+    "id": "iceberg-dark",
+    "name": "Iceberg Dark",
+    "is_dark": true,
+    "bg": "#161821",
+    "accent": "#84A0C6",
+    "text": "#C6C8D1",
+    "secondary": "#9A9CA5",
+    "border": "#2A2F45"
+  },
+  {
+    "id": "bluloco-dark",
+    "name": "Bluloco Dark",
+    "is_dark": true,
+    "bg": "#282C34",
+    "accent": "#3691FF",
+    "text": "#ABB2BF",
+    "secondary": "#9DA5B4",
+    "border": "#3F4451"
+  },
+  {
+    "id": "aura-dark",
+    "name": "Aura Dark",
+    "is_dark": true,
+    "bg": "#15141B",
+    "accent": "#A277FF",
+    "text": "#EDECEE",
+    "secondary": "#BDBDBD",
+    "border": "#29263C"
+  },
+  {
+    "id": "panda-syntax",
+    "name": "Panda Syntax",
+    "is_dark": true,
+    "bg": "#292A2B",
+    "accent": "#19F9D8",
+    "text": "#E6E6E6",
+    "secondary": "#CCCCCC",
+    "border": "#3B3C3D"
+  },
+  {
+    "id": "laserwave",
+    "name": "Laserwave",
+    "is_dark": true,
+    "bg": "#27212E",
+    "accent": "#EB64B9",
+    "text": "#FFFFFF",
+    "secondary": "#B4A5C8",
+    "border": "#40394A"
+  },
+  {
+    "id": "fairy-floss",
+    "name": "Fairy Floss",
+    "is_dark": true,
+    "bg": "#5A5475",
+    "accent": "#FFB8D1",
+    "text": "#F8F8F2",
+    "secondary": "#F0CC20",
+    "border": "#716799"
+  },
+  {
+    "id": "zenburn",
+    "name": "Zenburn",
+    "is_dark": true,
+    "bg": "#3F3F3F",
+    "accent": "#F0DFAF",
+    "text": "#DCDCCC",
+    "secondary": "#C0C0A0",
+    "border": "#5F5F5F"
+  },
+  {
+    "id": "srcery",
+    "name": "Srcery",
+    "is_dark": true,
+    "bg": "#1C1B19",
+    "accent": "#FBB829",
+    "text": "#FCE8C3",
+    "secondary": "#D0BFA1",
+    "border": "#2D2C29"
+  },
+  {
+    "id": "papercolor-dark",
+    "name": "PaperColor Dark",
+    "is_dark": true,
+    "bg": "#1C1C1C",
+    "accent": "#5FAFD7",
+    "text": "#D0D0D0",
+    "secondary": "#B2B2B2",
+    "border": "#303030"
+  },
+  {
     "id": "script-kit-light",
     "name": "Script Kit Light",
     "is_dark": false,
@@ -188,5 +498,135 @@
     "text": "#1F2328",
     "secondary": "#424A53",
     "border": "#D0D7DE"
+  },
+  {
+    "id": "rose-pine-dawn",
+    "name": "Rosé Pine Dawn",
+    "is_dark": false,
+    "bg": "#FAF4ED",
+    "accent": "#C06B67",
+    "text": "#575279",
+    "secondary": "#7A6493",
+    "border": "#6E6A86"
+  },
+  {
+    "id": "everforest-light",
+    "name": "Everforest Light",
+    "is_dark": false,
+    "bg": "#FDF6E3",
+    "accent": "#6F8A38",
+    "text": "#5C6A72",
+    "secondary": "#627660",
+    "border": "#E0DCC7"
+  },
+  {
+    "id": "vitesse-light",
+    "name": "Vitesse Light",
+    "is_dark": false,
+    "bg": "#FFFFFF",
+    "accent": "#1C6B48",
+    "text": "#393A34",
+    "secondary": "#4E4F47",
+    "border": "#F0F0F0"
+  },
+  {
+    "id": "ayu-light",
+    "name": "Ayu Light",
+    "is_dark": false,
+    "bg": "#F8F9FA",
+    "accent": "#C07810",
+    "text": "#5C6166",
+    "secondary": "#687484",
+    "border": "#828E9F"
+  },
+  {
+    "id": "night-owl-light",
+    "name": "Night Owl Light",
+    "is_dark": false,
+    "bg": "#FBFBFB",
+    "accent": "#2AA298",
+    "text": "#403F53",
+    "secondary": "#403F53",
+    "border": "#D9D9D9"
+  },
+  {
+    "id": "gruvbox-light",
+    "name": "Gruvbox Light",
+    "is_dark": false,
+    "bg": "#FBF1C7",
+    "accent": "#D65D0E",
+    "text": "#3C3836",
+    "secondary": "#504945",
+    "border": "#D5C4A1"
+  },
+  {
+    "id": "intellij-light",
+    "name": "IntelliJ Light",
+    "is_dark": false,
+    "bg": "#FFFFFF",
+    "accent": "#4A86C8",
+    "text": "#080808",
+    "secondary": "#000080",
+    "border": "#D1D1D1"
+  },
+  {
+    "id": "flexoki-light",
+    "name": "Flexoki Light",
+    "is_dark": false,
+    "bg": "#FFFCF0",
+    "accent": "#AD8301",
+    "text": "#100F0F",
+    "secondary": "#403E3C",
+    "border": "#D0CEC5"
+  },
+  {
+    "id": "kanagawa-lotus",
+    "name": "Kanagawa Lotus",
+    "is_dark": false,
+    "bg": "#F2ECBC",
+    "accent": "#C84053",
+    "text": "#545464",
+    "secondary": "#43436C",
+    "border": "#C7C7A5"
+  },
+  {
+    "id": "iceberg-light",
+    "name": "Iceberg Light",
+    "is_dark": false,
+    "bg": "#E8E9EC",
+    "accent": "#2D539E",
+    "text": "#33374C",
+    "secondary": "#454964",
+    "border": "#C7C9D1"
+  },
+  {
+    "id": "bluloco-light",
+    "name": "Bluloco Light",
+    "is_dark": false,
+    "bg": "#F9F9F9",
+    "accent": "#275FE4",
+    "text": "#383A42",
+    "secondary": "#4A4E56",
+    "border": "#E0E0E0"
+  },
+  {
+    "id": "atom-one-light",
+    "name": "Atom One Light",
+    "is_dark": false,
+    "bg": "#FAFAFA",
+    "accent": "#4078F2",
+    "text": "#383A42",
+    "secondary": "#4F525E",
+    "border": "#DBDBDC"
+  },
+  {
+    "id": "papercolor-light",
+    "name": "PaperColor Light",
+    "is_dark": false,
+    "bg": "#EEEEEE",
+    "accent": "#005FAF",
+    "text": "#444444",
+    "secondary": "#4A7070",
+    "border": "#BCBCBC"
   }
 ]
