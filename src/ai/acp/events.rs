@@ -64,6 +64,11 @@ pub(crate) enum AcpEvent {
     },
     /// The turn completed normally.
     TurnFinished { stop_reason: String },
+    /// Agent requires setup (authentication, install, etc.).
+    SetupRequired {
+        reason: String,
+        auth_methods: Vec<String>,
+    },
     /// The turn failed with an error.
     Failed { error: String },
 }

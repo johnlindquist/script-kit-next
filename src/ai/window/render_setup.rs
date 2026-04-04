@@ -60,7 +60,7 @@ impl AiApp {
                     .text_xl()
                     .font_weight(gpui::FontWeight::SEMIBOLD)
                     .text_color(cx.theme().foreground)
-                    .child("API Key Required"),
+                    .child("ACP Agent Required"),
             )
             // Description
             .child(
@@ -69,7 +69,7 @@ impl AiApp {
                     .text_color(cx.theme().muted_foreground)
                     .text_center()
                     .max_w(SETUP_DESCRIPTION_MAX_W)
-                    .child("Set up an AI provider to use the Ask AI feature."),
+                    .child("Add, install, or authenticate an ACP-compatible agent to continue."),
             )
             // Configure Vercel AI Gateway button
             .child(
@@ -149,7 +149,7 @@ impl AiApp {
                             .text_sm()
                             .font_weight(gpui::FontWeight::MEDIUM)
                             .text_color(cx.theme().muted_foreground)
-                            .child("Connect to Claude Code"),
+                            .child("Open ACP Agent Catalog"),
                     ),
             )
             // Claude Code setup feedback (shown when config saved but CLI not found)
@@ -188,7 +188,7 @@ impl AiApp {
                         div()
                             .text_xs()
                             .text_color(cx.theme().muted_foreground.opacity(OPACITY_STRONG))
-                            .child("Requires Claude Code CLI installed"),
+                            .child("Supports any ACP-compatible agent"),
                     )
                     .child(
                         div()

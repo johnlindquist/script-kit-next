@@ -688,23 +688,27 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                         } else if has_cmd && key_lower == "n" {
                                             logging::log("STDIN", "SimulateKey: Cmd+N - new conversation in ACP chat");
                                             entity_clone.update(ctx, |chat, cx| {
-                                                chat.thread.update(cx, |thread, cx| {
-                                                    thread.clear_messages(cx);
-                                                });
+                                                if let Some(t) = chat.thread() {
+                                                    t.update(cx, |thread, cx| {
+                                                        thread.clear_messages(cx);
+                                                    });
+                                                }
                                                 chat.collapsed_ids.clear();
                                                 cx.notify();
                                             });
                                         } else if key_lower == "enter" && !has_shift {
                                             logging::log("STDIN", "SimulateKey: Enter - submit ACP input");
                                             entity_clone.update(ctx, |chat, cx| {
-                                                let _ = chat.thread.update(cx, |thread, cx| thread.submit_input(cx));
+                                                if let Some(t) = chat.thread() { let _ = t.update(cx, |thread, cx| thread.submit_input(cx)); }
                                             });
                                         } else if key_lower == "backspace" {
                                             entity_clone.update(ctx, |chat, cx| {
-                                                chat.thread.update(cx, |thread, cx| {
-                                                    thread.input.backspace();
-                                                    cx.notify();
-                                                });
+                                                if let Some(t) = chat.thread() {
+                                                    t.update(cx, |thread, cx| {
+                                                        thread.input.backspace();
+                                                        cx.notify();
+                                                    });
+                                                }
                                             });
                                         } else if key_lower == "escape" {
                                             logging::log("STDIN", "SimulateKey: Escape - return to main menu from ACP chat");
@@ -713,10 +717,12 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                             // Single character — insert at cursor
                                             let ch = key_lower.chars().next().unwrap_or(' ');
                                             entity_clone.update(ctx, |chat, cx| {
-                                                chat.thread.update(cx, |thread, cx| {
-                                                    thread.input.insert_char(ch);
-                                                    cx.notify();
-                                                });
+                                                if let Some(t) = chat.thread() {
+                                                    t.update(cx, |thread, cx| {
+                                                        thread.input.insert_char(ch);
+                                                        cx.notify();
+                                                    });
+                                                }
                                             });
                                         } else {
                                             logging::log("STDIN", &format!("SimulateKey: Unhandled key '{}' in AcpChatView", key_lower));
@@ -944,9 +950,9 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                         entity.update(ctx, |chat, cx| {
                                             chat.set_input(text.clone(), cx);
                                             if submit {
-                                                let _ = chat
-                                                    .thread
-                                                    .update(cx, |thread, cx| thread.submit_input(cx));
+                                                if let Some(t) = chat.thread() {
+                                                    let _ = t.update(cx, |thread, cx| thread.submit_input(cx));
+                                                }
                                             }
                                         });
                                         Ok(())

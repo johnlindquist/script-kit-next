@@ -705,14 +705,14 @@ fn picker_items_have_no_highlights_for_empty_query() {
 fn empty_state_hints_mention_mode() {
     let hints = super::empty_state_hints(ContextPickerTrigger::Mention);
     assert!(hints.len() >= 3);
-    assert!(hints[0].starts_with('@'));
+    assert!(hints[0].display.starts_with('@'));
 }
 
 #[test]
 fn empty_state_hints_slash_mode() {
     let hints = super::empty_state_hints(ContextPickerTrigger::Slash);
     assert!(hints.len() >= 3);
-    assert!(hints[0].starts_with('/'));
+    assert!(hints[0].display.starts_with('/'));
 }
 
 // ── Scroll-into-view and navigation edge cases ────────────────────────────
@@ -788,7 +788,7 @@ fn slash_exact_command_scores_1000() {
     // "context" is the slash command for Current Context (without the leading /)
     let spec = ContextAttachmentKind::Current.spec();
     let (score, _, _) =
-        super::score_builtin_with_highlights(spec, ContextPickerTrigger::Slash, "context");
+        super::score_builtin_with_trigger(spec, ContextPickerTrigger::Slash, "context");
     assert_eq!(
         score, 1000,
         "Exact slash command match should score 1000 in slash mode"
@@ -800,7 +800,7 @@ fn slash_prefix_command_outranks_label_prefix() {
     // Query "con" is a prefix of slash command "context" — should score 500+
     let spec = ContextAttachmentKind::Current.spec();
     let (slash_score, _, _) =
-        super::score_builtin_with_highlights(spec, ContextPickerTrigger::Slash, "con");
+        super::score_builtin_with_trigger(spec, ContextPickerTrigger::Slash, "con");
     assert!(
         slash_score >= 500,
         "Slash prefix match should be tier 2 (500+), got {}",
@@ -812,9 +812,9 @@ fn slash_prefix_command_outranks_label_prefix() {
 fn slash_mode_exact_outranks_prefix() {
     let spec = ContextAttachmentKind::Current.spec();
     let (exact, _, _) =
-        super::score_builtin_with_highlights(spec, ContextPickerTrigger::Slash, "context");
+        super::score_builtin_with_trigger(spec, ContextPickerTrigger::Slash, "context");
     let (prefix, _, _) =
-        super::score_builtin_with_highlights(spec, ContextPickerTrigger::Slash, "con");
+        super::score_builtin_with_trigger(spec, ContextPickerTrigger::Slash, "con");
     assert!(
         exact > prefix,
         "Exact slash match ({}) should outrank prefix ({})",

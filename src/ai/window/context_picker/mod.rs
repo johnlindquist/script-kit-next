@@ -16,9 +16,7 @@ use crate::ai::context_contract::{context_attachment_specs, ContextAttachmentKin
 use crate::ai::message_parts::AiContextPart;
 use types::{ContextPickerItem, ContextPickerItemKind, ContextPickerState, ContextPickerTrigger};
 
-/// Minimum query length before file/folder results are shown.
-/// Built-in items always show (they are few and high-value).
-const FILE_SEARCH_MIN_QUERY_LEN: usize = 2;
+use std::sync::OnceLock;
 
 /// Maximum number of file/folder results to include.
 const FILE_RESULTS_LIMIT: usize = 10;
@@ -181,22 +179,191 @@ pub(crate) struct ContextPickerEmptyStateHint {
 }
 
 /// Hint chips for the empty state when no results match.
+///
+/// These are the canonical entries shared by both the AI window picker and
+/// ACP.  `@file:<path>` uses `insertion: "@file:"` so clicking it keeps
+/// the picker open for file suggestions instead of fabricating a fake path.
 pub(crate) fn empty_state_hints(trigger: ContextPickerTrigger) -> &'static [ContextPickerEmptyStateHint] {
     static MENTION_HINTS: &[ContextPickerEmptyStateHint] = &[
-        ContextPickerEmptyStateHint { display: "@context", insertion: "@context" },
-        ContextPickerEmptyStateHint { display: "@selection", insertion: "@selection" },
-        ContextPickerEmptyStateHint { display: "@browser", insertion: "@browser" },
+        ContextPickerEmptyStateHint { display: "@screenshot", insertion: "@screenshot" },
+        ContextPickerEmptyStateHint { display: "@clipboard", insertion: "@clipboard" },
+        ContextPickerEmptyStateHint { display: "@git-diff", insertion: "@git-diff" },
+        ContextPickerEmptyStateHint { display: "@recent-scripts", insertion: "@recent-scripts" },
+        ContextPickerEmptyStateHint { display: "@calendar", insertion: "@calendar" },
+        ContextPickerEmptyStateHint { display: "@file:<path>", insertion: "@file:" },
     ];
     static SLASH_HINTS: &[ContextPickerEmptyStateHint] = &[
-        ContextPickerEmptyStateHint { display: "/context", insertion: "/context" },
-        ContextPickerEmptyStateHint { display: "/selection", insertion: "/selection" },
-        ContextPickerEmptyStateHint { display: "/browser", insertion: "/browser" },
+        ContextPickerEmptyStateHint { display: "/compact", insertion: "/compact " },
+        ContextPickerEmptyStateHint { display: "/clear", insertion: "/clear " },
+        ContextPickerEmptyStateHint { display: "/help", insertion: "/help " },
     ];
     match trigger {
         ContextPickerTrigger::Mention => MENTION_HINTS,
         ContextPickerTrigger::Slash => SLASH_HINTS,
     }
 }
+
+// ── Cached built-in picker seeds ──────────────────────────────────────
+
+#[derive(Debug, Clone)]
+struct BuiltinPickerSeed {
+    kind: ContextAttachmentKind,
+    label: &'static str,
+    label_lower: String,
+    mention_meta: &'static str,
+    mention_meta_lower: String,
+    slash_meta: &'static str,
+    slash_meta_lower: String,
+    has_slash_command: bool,
+}
+
+fn builtin_picker_seeds() -> &'static [BuiltinPickerSeed] {
+    static CACHE: OnceLock<Vec<BuiltinPickerSeed>> = OnceLock::new();
+    CACHE.get_or_init(|| {
+        context_attachment_specs()
+            .iter()
+            .map(|spec| {
+                let mention_meta = spec
+                    .mention
+                    .or(spec.slash_command)
+                    .unwrap_or(spec.action_title);
+                let slash_meta = spec
+                    .slash_command
+                    .or(spec.mention)
+                    .unwrap_or(spec.action_title);
+                BuiltinPickerSeed {
+                    kind: spec.kind,
+                    label: spec.label,
+                    label_lower: spec.label.to_lowercase(),
+                    mention_meta,
+                    mention_meta_lower: mention_meta.to_lowercase(),
+                    slash_meta,
+                    slash_meta_lower: slash_meta.to_lowercase(),
+                    has_slash_command: spec.slash_command.is_some(),
+                }
+            })
+            .collect()
+    })
+}
+
+fn builtin_seed(kind: ContextAttachmentKind) -> &'static BuiltinPickerSeed {
+    builtin_picker_seeds()
+        .iter()
+        .find(|seed| seed.kind == kind)
+        .unwrap_or_else(|| unreachable!("missing BuiltinPickerSeed"))
+}
+
+fn file_search_query(trigger: ContextPickerTrigger, query: &str) -> Option<String> {
+    if trigger != ContextPickerTrigger::Mention {
+        return None;
+    }
+    let lower = query.trim().to_lowercase();
+    if lower == "file" || lower == "file:" {
+        return Some(String::new());
+    }
+    if lower.starts_with("file:") {
+        return Some(query.trim().get(5..).unwrap_or_default().to_string());
+    }
+    None
+}
+
+fn split_file_query(
+    base_dir: &std::path::Path,
+    raw_query: &str,
+) -> (std::path::PathBuf, String) {
+    if raw_query.is_empty() {
+        return (base_dir.to_path_buf(), String::new());
+    }
+    let query_path = std::path::Path::new(raw_query);
+    let ends_with_sep = raw_query.ends_with(std::path::MAIN_SEPARATOR);
+    let parent = if ends_with_sep {
+        query_path
+    } else {
+        query_path.parent().unwrap_or(std::path::Path::new(""))
+    };
+    let name_filter = if ends_with_sep {
+        ""
+    } else {
+        query_path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("")
+    };
+    let search_dir = if parent.as_os_str().is_empty() {
+        base_dir.to_path_buf()
+    } else if parent.is_absolute() {
+        parent.to_path_buf()
+    } else {
+        base_dir.join(parent)
+    };
+    (search_dir, name_filter.to_lowercase())
+}
+
+fn score_builtin_seed(
+    seed: &BuiltinPickerSeed,
+    trigger: ContextPickerTrigger,
+    query: &str,
+) -> (u32, Vec<usize>, Vec<usize>) {
+    if query.is_empty() {
+        return (100, Vec::new(), Vec::new());
+    }
+
+    let (display_meta, primary, secondary) = match trigger {
+        ContextPickerTrigger::Mention => (
+            seed.mention_meta,
+            seed.mention_meta_lower.trim_start_matches(['@', '/']).to_string(),
+            seed.slash_meta_lower.trim_start_matches(['@', '/']).to_string(),
+        ),
+        ContextPickerTrigger::Slash => (
+            seed.slash_meta,
+            seed.slash_meta_lower.trim_start_matches(['@', '/']).to_string(),
+            seed.mention_meta_lower.trim_start_matches(['@', '/']).to_string(),
+        ),
+    };
+
+    let mut best_score = 0u32;
+    let mut best_label_hits = Vec::new();
+    let mut best_meta_hits = Vec::new();
+
+    let compute_hits = |q: &str| -> (Vec<usize>, Vec<usize>) {
+        (
+            match_query_chars(q, seed.label).unwrap_or_default(),
+            match_query_chars_in_display_meta(q, display_meta).unwrap_or_default(),
+        )
+    };
+
+    if primary == query {
+        best_score = 1000;
+        (best_label_hits, best_meta_hits) = compute_hits(query);
+    }
+    if best_score < 500 && !primary.is_empty() && primary.starts_with(query) {
+        best_score = 500 + (100 - query.len().min(99) as u32);
+        (best_label_hits, best_meta_hits) = compute_hits(query);
+    }
+    if best_score < 500 && !secondary.is_empty() && secondary.starts_with(query) {
+        best_score = 500 + (100 - query.len().min(99) as u32);
+        (best_label_hits, best_meta_hits) = compute_hits(query);
+    }
+    if best_score < 400 && seed.label_lower.starts_with(query) {
+        best_score = 400;
+        (best_label_hits, best_meta_hits) = compute_hits(query);
+    }
+    if best_score < 200 && seed.label_lower.contains(query) {
+        best_score = 200;
+        best_label_hits = match_query_chars(query, seed.label).unwrap_or_default();
+        best_meta_hits = Vec::new();
+    }
+    if best_score < 100
+        && ((!primary.is_empty() && primary.contains(query))
+            || (!secondary.is_empty() && secondary.contains(query)))
+    {
+        best_score = 100;
+        (best_label_hits, best_meta_hits) = compute_hits(query);
+    }
+
+    (best_score, best_label_hits, best_meta_hits)
+}
+
 
 impl AiApp {
     /// Synchronize the `context_picker_list_state` item count with the
@@ -411,72 +578,60 @@ impl AiApp {
 
 /// Build the ranked list of picker items for a given trigger and query.
 ///
-/// Items are grouped: built-ins first, then files, then folders.
-/// Within each group, items are sorted by relevance score (descending),
-/// with ties broken by original order (stable sort).
+/// Uses the cached `BuiltinPickerSeed` catalog to avoid per-query
+/// lowercasing and metadata reconstruction. File results are only
+/// included when the query resolves to explicit `@file:` intent.
 pub fn build_picker_items(trigger: ContextPickerTrigger, query: &str) -> Vec<ContextPickerItem> {
     let query_lower = query.to_lowercase();
-    let mut items = Vec::new();
+    let mut items = Vec::with_capacity(builtin_picker_seeds().len());
 
-    // 1. Built-in items from canonical specs
-    for spec in context_attachment_specs() {
-        // In Slash mode, only include specs that have a slash_command
-        if trigger == ContextPickerTrigger::Slash && spec.slash_command.is_none() {
+    for seed in builtin_picker_seeds() {
+        if trigger == ContextPickerTrigger::Slash && !seed.has_slash_command {
             continue;
         }
 
-        let (score, label_hits, meta_hits) =
-            score_builtin_with_highlights(spec, trigger, &query_lower);
+        let (score, label_hits, meta_hits) = score_builtin_seed(seed, trigger, &query_lower);
 
-        if score > 0 || query_lower.is_empty() {
-            // Build meta: trigger-aware — mention mode prefers @mention,
-            // slash mode prefers /command.
-            let meta_str: &str = match trigger {
-                ContextPickerTrigger::Mention => spec
-                    .mention
-                    .or(spec.slash_command)
-                    .unwrap_or(spec.action_title),
-                ContextPickerTrigger::Slash => spec
-                    .slash_command
-                    .or(spec.mention)
-                    .unwrap_or(spec.action_title),
-            };
-
-            items.push(ContextPickerItem {
-                id: SharedString::from(format!("builtin:{:?}", spec.kind).to_lowercase()),
-                label: spec.label.into(),
-                meta: meta_str.into(),
-                kind: ContextPickerItemKind::BuiltIn(spec.kind),
-                score: if query_lower.is_empty() { 100 } else { score },
-                label_highlight_indices: if query_lower.is_empty() {
-                    Vec::new()
-                } else {
-                    label_hits
-                },
-                meta_highlight_indices: if query_lower.is_empty() {
-                    Vec::new()
-                } else {
-                    meta_hits
-                },
-            });
+        if score == 0 && !query_lower.is_empty() {
+            continue;
         }
+
+        let meta = match trigger {
+            ContextPickerTrigger::Mention => seed.mention_meta,
+            ContextPickerTrigger::Slash => seed.slash_meta,
+        };
+
+        items.push(ContextPickerItem {
+            id: SharedString::from(format!("builtin:{:?}", seed.kind).to_lowercase()),
+            label: SharedString::from(seed.label),
+            meta: SharedString::from(meta),
+            kind: ContextPickerItemKind::BuiltIn(seed.kind),
+            score: if query_lower.is_empty() { 100 } else { score },
+            label_highlight_indices: label_hits,
+            meta_highlight_indices: meta_hits,
+        });
     }
 
-    // 2. File/folder results (only when query is long enough, mention mode only)
-    if trigger == ContextPickerTrigger::Mention && query_lower.len() >= FILE_SEARCH_MIN_QUERY_LEN {
+    // File/folder results only when the user explicitly types @file: intent
+    if let Some(file_query) = file_search_query(trigger, query) {
         if let Ok(cwd) = std::env::current_dir() {
-            collect_file_items(&cwd, &query_lower, &mut items);
+            collect_file_items(&cwd, &file_query, &mut items);
         }
+    } else {
+        tracing::debug!(
+            target: "ai",
+            ?trigger,
+            query = %query,
+            "ai_context_picker_file_scan_skipped"
+        );
     }
 
-    // Stable sort: by section priority first (BuiltIn < File < Folder), then by score descending
     items.sort_by(|a, b| {
         let section_a = section_priority(&a.kind);
         let section_b = section_priority(&b.kind);
         section_a.cmp(&section_b).then(b.score.cmp(&a.score))
     });
 
-    // Log ranked items for observability (top 5 only to avoid noise)
     for (rank, item) in items.iter().enumerate().take(5) {
         tracing::debug!(
             target: "ai",
@@ -492,218 +647,127 @@ pub fn build_picker_items(trigger: ContextPickerTrigger, query: &str) -> Vec<Con
     items
 }
 
-/// Score a built-in spec against the user query, returning (score, label_hits, meta_hits).
-///
-/// The `trigger` parameter determines which meta string is used for highlight
-/// computation so that the returned `meta_hits` indices align with the
-/// trigger-aware meta displayed in the picker row.
-fn score_builtin_with_highlights(
-    spec: &crate::ai::context_contract::ContextAttachmentSpec,
-    trigger: ContextPickerTrigger,
-    query: &str,
-) -> (u32, Vec<usize>, Vec<usize>) {
-    if query.is_empty() {
-        return (100, Vec::new(), Vec::new());
-    }
-
-    let label_lower = spec.label.to_lowercase();
-    let mention_lower = spec
-        .mention
-        .map(|m| m.trim_start_matches('@').to_lowercase())
-        .unwrap_or_default();
-    let slash_lower = spec
-        .slash_command
-        .map(|s| s.trim_start_matches('/').to_lowercase())
-        .unwrap_or_default();
-
-    // Use trigger-aware meta for highlight computation so indices
-    // match what the picker row actually displays.
-    let display_meta: &str = match trigger {
-        ContextPickerTrigger::Mention => spec
-            .mention
-            .or(spec.slash_command)
-            .unwrap_or(spec.action_title),
-        ContextPickerTrigger::Slash => spec
-            .slash_command
-            .or(spec.mention)
-            .unwrap_or(spec.action_title),
-    };
-    let mut best_score = 0u32;
-    let mut best_label_hits = Vec::new();
-    let mut best_meta_hits = Vec::new();
-
-    // Helper: compute both highlight vectors for the current query.
-    // Uses match_query_chars_in_display_meta so indices account for
-    // leading `@`/`/` prefix in the displayed meta string.
-    let compute_hits = |q: &str| -> (Vec<usize>, Vec<usize>) {
-        (
-            match_query_chars(q, spec.label).unwrap_or_default(),
-            match_query_chars_in_display_meta(q, display_meta).unwrap_or_default(),
-        )
-    };
-
-    // ── Tier 1 (1000): Exact match on mention or slash command ──
-    // In Slash mode, an exact slash-command match is equally strong;
-    // in Mention mode, an exact mention match leads.
-    if mention_lower == query || slash_lower == query {
-        best_score = 1000;
-        (best_label_hits, best_meta_hits) = compute_hits(query);
-    }
-
-    // ── Tier 2 (500+): Prefix match on trigger-primary identifier ──
-    // In Slash mode, slash-command prefix is promoted to the same tier as
-    // mention prefix; in Mention mode, mention prefix leads.
-    if best_score < 500 {
-        let primary_match = match trigger {
-            ContextPickerTrigger::Slash => {
-                !slash_lower.is_empty() && slash_lower.starts_with(query)
-            }
-            ContextPickerTrigger::Mention => {
-                !mention_lower.is_empty() && mention_lower.starts_with(query)
-            }
-        };
-        if primary_match {
-            let s = 500 + (100 - query.len().min(99) as u32);
-            if s > best_score {
-                best_score = s;
-                (best_label_hits, best_meta_hits) = compute_hits(query);
-            }
-        }
-    }
-
-    // ── Tier 2b (500+): Prefix on the secondary identifier ──
-    // Mention prefix in slash mode, slash prefix in mention mode.
-    if best_score < 500 {
-        let secondary_match = match trigger {
-            ContextPickerTrigger::Slash => {
-                !mention_lower.is_empty() && mention_lower.starts_with(query)
-            }
-            ContextPickerTrigger::Mention => {
-                !slash_lower.is_empty() && slash_lower.starts_with(query)
-            }
-        };
-        if secondary_match {
-            let s = 500 + (100 - query.len().min(99) as u32);
-            if s > best_score {
-                best_score = s;
-                (best_label_hits, best_meta_hits) = compute_hits(query);
-            }
-        }
-    }
-
-    // ── Tier 3 (400): Prefix match on label ──
-    if best_score < 400 && label_lower.starts_with(query) {
-        best_score = 400;
-        (best_label_hits, best_meta_hits) = compute_hits(query);
-    }
-
-    // ── Tier 4 (200): Substring match on label ──
-    if best_score < 200 && label_lower.contains(query) {
-        best_score = 200;
-        best_label_hits = match_query_chars(query, spec.label).unwrap_or_default();
-        best_meta_hits = Vec::new();
-    }
-
-    // ── Tier 5 (100): Substring match on mention or slash ──
-    if best_score < 100 && (mention_lower.contains(query) || slash_lower.contains(query)) {
-        best_score = 100;
-        (best_label_hits, best_meta_hits) = compute_hits(query);
-    }
-
-    (best_score, best_label_hits, best_meta_hits)
-}
-
 /// Score a built-in spec against the user query (mention mode).
-///
-/// Returns 0 if no match, higher values for better matches.
-/// Deterministic: same query always produces the same score.
 pub fn score_builtin(
     spec: &crate::ai::context_contract::ContextAttachmentSpec,
     query: &str,
 ) -> u32 {
-    score_builtin_with_highlights(spec, ContextPickerTrigger::Mention, query).0
+    score_builtin_seed(
+        builtin_seed(spec.kind),
+        ContextPickerTrigger::Mention,
+        &query.to_lowercase(),
+    )
+    .0
 }
 
 /// Score a built-in spec against the user query with a specific trigger mode.
-///
-/// Returns `(score, label_highlight_indices, meta_highlight_indices)`.
-/// Use this to verify trigger-aware ranking in integration tests.
 pub fn score_builtin_with_trigger(
     spec: &crate::ai::context_contract::ContextAttachmentSpec,
     trigger: ContextPickerTrigger,
     query: &str,
 ) -> (u32, Vec<usize>, Vec<usize>) {
-    score_builtin_with_highlights(spec, trigger, query)
+    score_builtin_seed(builtin_seed(spec.kind), trigger, &query.to_lowercase())
 }
 
 /// Collect file and folder items from the given directory matching the query.
-fn collect_file_items(dir: &std::path::Path, query: &str, items: &mut Vec<ContextPickerItem>) {
-    let entries = match std::fs::read_dir(dir) {
-        Ok(e) => e,
-        Err(_) => return,
+fn collect_file_items(
+    dir: &std::path::Path,
+    raw_query: &str,
+    items: &mut Vec<ContextPickerItem>,
+) {
+    let (search_dir, name_filter) = split_file_query(dir, raw_query);
+
+    let read_dir = match std::fs::read_dir(&search_dir) {
+        Ok(rd) => rd,
+        Err(error) => {
+            tracing::debug!(
+                target: "ai",
+                query = %raw_query,
+                dir = %search_dir.display(),
+                %error,
+                "ai_context_picker_file_scan_failed"
+            );
+            return;
+        }
     };
 
-    let mut file_count = 0;
-    let mut folder_count = 0;
+    let mut entries: Vec<_> = read_dir.flatten().collect();
+    entries.sort_by_key(|entry| entry.file_name());
 
-    for entry in entries.flatten() {
+    let mut file_count = 0usize;
+    let mut folder_count = 0usize;
+
+    for entry in entries {
         if file_count + folder_count >= FILE_RESULTS_LIMIT {
             break;
         }
 
         let name = entry.file_name().to_string_lossy().to_string();
-        let name_lower = name.to_lowercase();
-
-        // Skip hidden files/folders
         if name.starts_with('.') {
             continue;
         }
 
-        if !name_lower.contains(query) {
+        let name_lower = name.to_lowercase();
+        if !name_filter.is_empty() && !name_lower.contains(&name_filter) {
             continue;
         }
 
         let path = entry.path();
         let is_dir = path.is_dir();
 
-        let score = if name_lower.starts_with(query) {
+        let score = if name_filter.is_empty() || name_lower.starts_with(&name_filter) {
             200
         } else {
             100
         };
 
-        let label_hits = match_query_chars(query, &name).unwrap_or_default();
-
-        // Use @file: prefix for meta so mention-mode rows display
-        // the canonical inline token form.
         let meta = format!("@file:{}", path.display());
+
+        let item = ContextPickerItem {
+            id: SharedString::from(format!(
+                "{}:{}",
+                if is_dir { "folder" } else { "file" },
+                path.display()
+            )),
+            label: SharedString::from(name.clone()),
+            meta: SharedString::from(meta.clone()),
+            kind: if is_dir {
+                ContextPickerItemKind::Folder(path.clone())
+            } else {
+                ContextPickerItemKind::File(path.clone())
+            },
+            score,
+            label_highlight_indices: if name_filter.is_empty() {
+                Vec::new()
+            } else {
+                match_query_chars(&name_filter, &name).unwrap_or_default()
+            },
+            meta_highlight_indices: if raw_query.is_empty() {
+                Vec::new()
+            } else {
+                match_query_chars(raw_query, &meta).unwrap_or_default()
+            },
+        };
 
         if is_dir {
             if folder_count < FILE_RESULTS_LIMIT / 2 {
-                items.push(ContextPickerItem {
-                    id: SharedString::from(format!("folder:{}", path.display())),
-                    label: name.into(),
-                    meta: meta.into(),
-                    kind: ContextPickerItemKind::Folder(path),
-                    score,
-                    label_highlight_indices: label_hits,
-                    meta_highlight_indices: Vec::new(),
-                });
+                items.push(item);
                 folder_count += 1;
             }
         } else if file_count < FILE_RESULTS_LIMIT / 2 {
-            items.push(ContextPickerItem {
-                id: SharedString::from(format!("file:{}", path.display())),
-                label: name.into(),
-                meta: meta.into(),
-                kind: ContextPickerItemKind::File(path),
-                score,
-                label_highlight_indices: label_hits,
-                meta_highlight_indices: Vec::new(),
-            });
+            items.push(item);
             file_count += 1;
         }
     }
+
+    tracing::info!(
+        target: "ai",
+        query = %raw_query,
+        dir = %search_dir.display(),
+        file_count,
+        folder_count,
+        "ai_context_picker_file_scan_complete"
+    );
 }
 
 /// Map item kind to section priority for stable sort grouping.

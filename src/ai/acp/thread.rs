@@ -860,6 +860,19 @@ impl AcpThread {
                     });
                 }
             }
+            AcpEvent::SetupRequired { reason, auth_methods } => {
+                tracing::info!(
+                    target: "script_kit::tab_ai",
+                    event = "acp_setup_required_event",
+                    reason = %reason,
+                    auth_method_count = auth_methods.len(),
+                );
+                changed |= self.push_message(
+                    AcpThreadMessageRole::System,
+                    format!("Setup required: {reason}"),
+                );
+                changed |= self.set_status(AcpThreadStatus::Error);
+            }
             AcpEvent::Failed { error } => {
                 if self.pending_permission.take().is_some() {
                     changed = true;

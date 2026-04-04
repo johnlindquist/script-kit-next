@@ -299,7 +299,7 @@ impl ScriptListApp {
         );
 
         entity.update(cx, |chat, cx| {
-            chat.thread.update(cx, |thread, cx| {
+            chat.live_thread().update(cx, |thread, cx| {
                 thread.set_input(submission_text, cx);
                 if let Err(error) = thread.submit_input(cx) {
                     tracing::warn!(

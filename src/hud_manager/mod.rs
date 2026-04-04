@@ -13,7 +13,7 @@ use crate::components::button::{Button, ButtonColors, ButtonVariant};
 use crate::logging;
 use crate::theme::get_cached_theme;
 use gpui::{
-    div, point, prelude::*, px, rgb, size, App, Context, ElementId, Pixels, Render, SharedString,
+    div, point, prelude::*, px, rgb, size, App, Context, ElementId, Render, SharedString,
     Window, WindowBackgroundAppearance, WindowBounds, WindowHandle, WindowOptions,
 };
 use gpui_component::tooltip::Tooltip;
