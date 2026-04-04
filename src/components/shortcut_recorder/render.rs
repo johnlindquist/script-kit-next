@@ -24,7 +24,7 @@ impl Render for ShortcutRecorder {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         crate::components::hint_strip::emit_shortcut_chrome_audit(
             "shortcut_recorder",
-            "compact-inline-preview",
+            "compact-inline-unboxed-preview",
         );
 
         let colors = self.colors;

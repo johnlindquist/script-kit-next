@@ -1164,7 +1164,7 @@ impl Render for NotesActionsPanel {
         let theme = cx.theme();
         crate::components::hint_strip::emit_shortcut_chrome_audit(
             "notes_actions_panel",
-            "compact-inline-focused-only",
+            "compact-inline-whisper-all-rows",
         );
 
         // Vibrancy-aware colors using Script Kit theme hex values
@@ -1284,14 +1284,13 @@ impl Render for NotesActionsPanel {
                                     };
                                     let row_label = row.label().to_string();
 
-                                    let show_shortcut = is_selected;
                                     let shortcut_badges: AnyElement = match row {
                                         NotesPanelRow::BuiltIn(item) => {
                                             let tokens = item.action.shortcut_tokens();
-                                            render_shortcut_keys_dynamic(&tokens, theme, show_shortcut)
+                                            render_shortcut_keys_dynamic(&tokens, theme, is_selected, is_enabled)
                                         }
                                         NotesPanelRow::Sdk(action) => {
-                                            render_shortcut_keys_dynamic(&action.shortcut_keys, theme, show_shortcut)
+                                            render_shortcut_keys_dynamic(&action.shortcut_keys, theme, is_selected, is_enabled)
                                         }
                                     };
 
@@ -1339,13 +1338,17 @@ impl Render for NotesActionsPanel {
                                                 .child(
                                                     div()
                                                         .flex_1()
+                                                        .min_w(px(0.))
                                                         .flex()
                                                         .flex_row()
                                                         .items_center()
                                                         .justify_between()
-                                                        // Left: icon + label
+                                                        .gap(px(12.0))
+                                                        // Left: icon + label (shrinkable)
                                                         .child(
                                                             div()
+                                                                .flex_1()
+                                                                .min_w(px(0.))
                                                                 .flex()
                                                                 .flex_row()
                                                                 .items_center()
@@ -1355,15 +1358,21 @@ impl Render for NotesActionsPanel {
                                                                     svg()
                                                                         .external_path(row.icon().external_path())
                                                                         .size(px(16.))
+                                                                        .flex_shrink_0()
                                                                         .text_color(if is_enabled {
                                                                             theme.foreground
                                                                         } else {
                                                                             theme.muted_foreground
                                                                         }),
                                                                 )
-                                                                // Label
+                                                                // Label (truncates when badges are present)
                                                                 .child(
                                                                     div()
+                                                                        .flex_1()
+                                                                        .min_w(px(0.))
+                                                                        .overflow_hidden()
+                                                                        .text_ellipsis()
+                                                                        .whitespace_nowrap()
                                                                         .text_sm()
                                                                         .text_color(if is_enabled {
                                                                             theme.foreground
@@ -1380,7 +1389,7 @@ impl Render for NotesActionsPanel {
                                                                         .child(row_label.clone()),
                                                                 ),
                                                         )
-                                                        // Right: shortcut badge
+                                                        // Right: shortcut badge (always visible)
                                                         .child(shortcut_badges),
                                                 ),
                                         )
@@ -1437,14 +1446,34 @@ impl Render for NotesActionsPanel {
     }
 }
 
-fn render_shortcut_keys_dynamic(keys: &[String], theme: &Theme, visible: bool) -> AnyElement {
-    if !visible || keys.is_empty() {
+fn render_shortcut_keys_dynamic(
+    keys: &[String],
+    theme: &Theme,
+    is_selected: bool,
+    is_enabled: bool,
+) -> AnyElement {
+    if keys.is_empty() {
         return div().into_any_element();
     }
+
+    let glyph = {
+        let mut c = theme.muted_foreground;
+        c.a = if is_enabled {
+            if is_selected {
+                0.92
+            } else {
+                0.74
+            }
+        } else {
+            0.52
+        };
+        c
+    };
+
     crate::components::hint_strip::render_inline_shortcut_keys(
         keys.iter().map(String::as_str),
         crate::components::hint_strip::whisper_inline_shortcut_colors(
-            theme.muted_foreground,
+            glyph,
             theme.muted_foreground,
             true,
         ),
@@ -1502,14 +1531,13 @@ mod tests {
         );
 
         // Delete normalizes backspace glyph
-        assert_eq!(
-            NotesAction::DeleteNote.shortcut_tokens(),
-            vec!["⌘", "⌫"]
-        );
+        assert_eq!(NotesAction::DeleteNote.shortcut_tokens(), vec!["⌘", "⌫"]);
 
         // PermanentlyDeleteNote has no shortcut
         assert!(NotesAction::PermanentlyDeleteNote.shortcut_hint().is_none());
-        assert!(NotesAction::PermanentlyDeleteNote.shortcut_tokens().is_empty());
+        assert!(NotesAction::PermanentlyDeleteNote
+            .shortcut_tokens()
+            .is_empty());
         assert_eq!(NotesAction::PermanentlyDeleteNote.shortcut_display(), "");
     }
 
