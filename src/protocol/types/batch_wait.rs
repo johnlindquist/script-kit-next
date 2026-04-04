@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 ///
 /// All fields are optional; omitted fields are treated as "don't care".
 /// A match succeeds when every present field equals the corresponding live value.
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct StateMatchSpec {
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -73,6 +73,9 @@ pub enum WaitCondition {
 pub enum BatchCommand {
     SetInput {
         text: String,
+    },
+    ForceSubmit {
+        value: serde_json::Value,
     },
     WaitFor {
         condition: WaitCondition,
@@ -147,6 +150,7 @@ pub enum TransactionErrorCode {
     SelectionNotFound,
     InvalidCondition,
     UnsupportedCommand,
+    UnsupportedPrompt,
     ActionFailed,
 }
 
@@ -185,6 +189,32 @@ impl TransactionError {
             code: TransactionErrorCode::SelectionNotFound,
             message: message.into(),
             suggestion: None,
+        }
+    }
+
+    /// Create an element-not-found error from a semantic ID.
+    pub fn element_not_found(semantic_id: &str) -> Self {
+        Self {
+            code: TransactionErrorCode::ElementNotFound,
+            message: format!("Element not found: {semantic_id}"),
+            suggestion: Some(
+                "Run getElements() to discover visible semantic IDs, \
+                 or waitFor elementExists before targeting."
+                    .to_string(),
+            ),
+        }
+    }
+
+    /// Create an unsupported-prompt error from a message string.
+    pub fn unsupported_prompt(message: impl Into<String>) -> Self {
+        Self {
+            code: TransactionErrorCode::UnsupportedPrompt,
+            message: message.into(),
+            suggestion: Some(
+                "Check getState().promptType to verify the current prompt \
+                 supports this operation."
+                    .to_string(),
+            ),
         }
     }
 }

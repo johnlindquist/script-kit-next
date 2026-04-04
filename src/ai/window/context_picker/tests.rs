@@ -452,6 +452,186 @@ fn enter_and_tab_both_route_to_accept() {
     // (The existing test `enter_and_tab_accept_picker_selection` covers this)
 }
 
+// ── V05 ranking and meta verification ──────────────────────────────────
+
+#[test]
+fn slash_con_ranks_context_before_context_full() {
+    let items = build_picker_items(ContextPickerTrigger::Slash, "con");
+    let context_pos = items.iter().position(|i| {
+        matches!(
+            i.kind,
+            ContextPickerItemKind::BuiltIn(ContextAttachmentKind::Current)
+        )
+    });
+    let context_full_pos = items.iter().position(|i| {
+        matches!(
+            i.kind,
+            ContextPickerItemKind::BuiltIn(ContextAttachmentKind::Full)
+        )
+    });
+    assert!(
+        context_pos.is_some() && context_full_pos.is_some(),
+        "Both /context and /context-full should match 'con'"
+    );
+    assert!(
+        context_pos.unwrap() < context_full_pos.unwrap(),
+        "/context (pos {}) should rank before /context-full (pos {})",
+        context_pos.unwrap(),
+        context_full_pos.unwrap(),
+    );
+}
+
+#[test]
+fn mention_sel_shows_slash_selection_as_meta() {
+    let items = build_picker_items(ContextPickerTrigger::Mention, "sel");
+    let selection = items
+        .iter()
+        .find(|i| {
+            matches!(
+                i.kind,
+                ContextPickerItemKind::BuiltIn(ContextAttachmentKind::Selection)
+            )
+        })
+        .expect("Selection should be in results for 'sel'");
+    assert_eq!(
+        selection.meta.as_ref(),
+        "/selection",
+        "Selection meta should be the slash command '/selection'"
+    );
+    assert!(
+        !selection.label_highlight_indices.is_empty(),
+        "Selection label should have highlight indices for 'sel'"
+    );
+}
+
+#[test]
+fn mention_sel_has_meta_highlight_indices() {
+    let items = build_picker_items(ContextPickerTrigger::Mention, "sel");
+    let selection = items
+        .iter()
+        .find(|i| {
+            matches!(
+                i.kind,
+                ContextPickerItemKind::BuiltIn(ContextAttachmentKind::Selection)
+            )
+        })
+        .expect("Selection should be in results");
+    assert!(
+        !selection.meta_highlight_indices.is_empty(),
+        "Selection meta should have highlight indices for 'sel' in '/selection'"
+    );
+}
+
+// ── Scroll reveal source audit ─────────────────────────────────────────
+
+#[test]
+fn context_picker_render_uses_list_not_children() {
+    let source = include_str!("render.rs");
+    assert!(
+        source.contains("list(self.context_picker_list_state.clone()"),
+        "Context picker must render through GPUI list state, not raw .children()"
+    );
+    assert!(
+        !source.contains(".children(rows)"),
+        "Context picker must not use .children(rows) — use list() for scroll reveal"
+    );
+}
+
+#[test]
+fn context_picker_sync_and_reveal_called_on_open() {
+    let source = include_str!("mod.rs");
+    let open_fn_start = source
+        .find("fn open_context_picker(")
+        .expect("open_context_picker function");
+    let open_fn_body = &source[open_fn_start..source.len().min(open_fn_start + 1400)];
+    assert!(
+        open_fn_body.contains("sync_context_picker_list_state()"),
+        "open_context_picker must call sync_context_picker_list_state"
+    );
+    assert!(
+        open_fn_body.contains("reveal_selected_context_picker_item"),
+        "open_context_picker must call reveal_selected_context_picker_item"
+    );
+}
+
+#[test]
+fn context_picker_sync_and_reveal_called_on_filter() {
+    let source = include_str!("mod.rs");
+    let filter_fn_start = source
+        .find("fn update_context_picker_query(")
+        .expect("update_context_picker_query function");
+    let filter_fn_body = &source[filter_fn_start..source.len().min(filter_fn_start + 1200)];
+    assert!(
+        filter_fn_body.contains("sync_context_picker_list_state()"),
+        "update_context_picker_query must call sync_context_picker_list_state"
+    );
+    assert!(
+        filter_fn_body.contains("reveal_selected_context_picker_item"),
+        "update_context_picker_query must call reveal_selected_context_picker_item"
+    );
+}
+
+#[test]
+fn context_picker_reveal_called_on_prev_and_next() {
+    let source = include_str!("mod.rs");
+
+    let prev_start = source
+        .find("fn context_picker_select_prev(")
+        .expect("context_picker_select_prev function");
+    let prev_body = &source[prev_start..source.len().min(prev_start + 500)];
+    assert!(
+        prev_body.contains("reveal_selected_context_picker_item(\"keyboard_prev\""),
+        "context_picker_select_prev must reveal with reason \"keyboard_prev\""
+    );
+
+    let next_start = source
+        .find("fn context_picker_select_next(")
+        .expect("context_picker_select_next function");
+    let next_body = &source[next_start..source.len().min(next_start + 500)];
+    assert!(
+        next_body.contains("reveal_selected_context_picker_item(\"keyboard_next\""),
+        "context_picker_select_next must reveal with reason \"keyboard_next\""
+    );
+}
+
+#[test]
+fn context_picker_reveal_emits_structured_log() {
+    let source = include_str!("mod.rs");
+    let reveal_start = source
+        .find("fn reveal_selected_context_picker_item(")
+        .expect("reveal_selected_context_picker_item function");
+    let reveal_body = &source[reveal_start..source.len().min(reveal_start + 1200)];
+    assert!(
+        reveal_body.contains("target: \"ai\""),
+        "reveal must log to target \"ai\""
+    );
+    assert!(
+        reveal_body.contains("reason"),
+        "reveal must log the reason"
+    );
+    assert!(
+        reveal_body.contains("selected_index"),
+        "reveal must log the selected_index"
+    );
+    assert!(
+        reveal_body.contains("ai_context_picker_scrolled_to_selected"),
+        "reveal must log ai_context_picker_scrolled_to_selected"
+    );
+}
+
+#[test]
+fn context_picker_sync_resets_last_scrolled_index() {
+    let source = include_str!("mod.rs");
+    let sync_start = source
+        .find("fn sync_context_picker_list_state(")
+        .expect("sync_context_picker_list_state function");
+    let sync_body = &source[sync_start..source.len().min(sync_start + 500)];
+    assert!(
+        sync_body.contains("context_picker_last_scrolled_index = None"),
+        "sync must reset last_scrolled_index to invalidate stale reveal cache"
+    );
+}
+
 // ── match_query_chars tests ─────────────────────────────────────────────
 
 #[test]
