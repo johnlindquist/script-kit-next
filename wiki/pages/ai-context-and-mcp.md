@@ -1,20 +1,20 @@
 ---
 title: "AI Context and MCP"
 slug: "ai-context-and-mcp"
-sourceSnapshot: "4be166ea"
+sourceSnapshot: "c9fbc3ca"
 sourceDocuments:
-  - "raw/4be166ea/docs/AI_CONTEXT_AWARENESS_PATTERNS.md"
-  - "raw/4be166ea/src/context_snapshot/types.rs"
-  - "raw/4be166ea/src/mcp_resources/mod.rs"
-  - "raw/4be166ea/src/ai/message_parts.rs"
-  - "raw/4be166ea/tests/context_snapshot.rs"
-  - "raw/4be166ea/tests/context_part_resolution.rs"
+  - "raw/c9fbc3ca/docs/AI_CONTEXT_AWARENESS_PATTERNS.md"
+  - "raw/c9fbc3ca/src/context_snapshot/types.rs"
+  - "raw/c9fbc3ca/src/mcp_resources/mod.rs"
+  - "raw/c9fbc3ca/src/ai/message_parts.rs"
+  - "raw/c9fbc3ca/tests/context_snapshot.rs"
+  - "raw/c9fbc3ca/tests/context_part_resolution.rs"
 relatedPages:
   - "protocol-and-introspection"
   - "tab-ai-harness"
   - "verification-and-testing"
 generatedBy: "scripts/wiki/ingest.ts"
-generatedAt: "2026-04-04T18:48:29.295Z"
+generatedAt: "2026-04-04T19:40:47.586Z"
 ---
 
 # AI Context and MCP
@@ -36,12 +36,12 @@ Schema-versioned desktop context capture, MCP resources, and typed context-part 
 - `tests/context_part_resolution.rs` — Context part resolution tests. Integration tests for ResourceUri and FilePath resolution behavior.
 
 ## Source Documents
-- [raw/4be166ea/docs/AI_CONTEXT_AWARENESS_PATTERNS.md](../raw/4be166ea/docs/AI_CONTEXT_AWARENESS_PATTERNS.md)
-- [raw/4be166ea/src/context_snapshot/types.rs](../raw/4be166ea/src/context_snapshot/types.rs)
-- [raw/4be166ea/src/mcp_resources/mod.rs](../raw/4be166ea/src/mcp_resources/mod.rs)
-- [raw/4be166ea/src/ai/message_parts.rs](../raw/4be166ea/src/ai/message_parts.rs)
-- [raw/4be166ea/tests/context_snapshot.rs](../raw/4be166ea/tests/context_snapshot.rs)
-- [raw/4be166ea/tests/context_part_resolution.rs](../raw/4be166ea/tests/context_part_resolution.rs)
+- [raw/c9fbc3ca/docs/AI_CONTEXT_AWARENESS_PATTERNS.md](../raw/c9fbc3ca/docs/AI_CONTEXT_AWARENESS_PATTERNS.md)
+- [raw/c9fbc3ca/src/context_snapshot/types.rs](../raw/c9fbc3ca/src/context_snapshot/types.rs)
+- [raw/c9fbc3ca/src/mcp_resources/mod.rs](../raw/c9fbc3ca/src/mcp_resources/mod.rs)
+- [raw/c9fbc3ca/src/ai/message_parts.rs](../raw/c9fbc3ca/src/ai/message_parts.rs)
+- [raw/c9fbc3ca/tests/context_snapshot.rs](../raw/c9fbc3ca/tests/context_snapshot.rs)
+- [raw/c9fbc3ca/tests/context_part_resolution.rs](../raw/c9fbc3ca/tests/context_part_resolution.rs)
 
 ## Related Pages
 - [protocol-and-introspection](./protocol-and-introspection.md)

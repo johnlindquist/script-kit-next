@@ -1,18 +1,18 @@
 ---
 title: "Verification and Testing"
 slug: "verification-and-testing"
-sourceSnapshot: "4be166ea"
+sourceSnapshot: "c9fbc3ca"
 sourceDocuments:
-  - "raw/4be166ea/CLAUDE.md"
-  - "raw/4be166ea/tests/context_snapshot.rs"
-  - "raw/4be166ea/tests/context_part_resolution.rs"
-  - "raw/4be166ea/tests/tab_ai_context.rs"
+  - "raw/c9fbc3ca/CLAUDE.md"
+  - "raw/c9fbc3ca/tests/context_snapshot.rs"
+  - "raw/c9fbc3ca/tests/context_part_resolution.rs"
+  - "raw/c9fbc3ca/tests/tab_ai_context.rs"
 relatedPages:
   - "project-overview"
   - "ai-context-and-mcp"
   - "tab-ai-harness"
 generatedBy: "scripts/wiki/ingest.ts"
-generatedAt: "2026-04-04T18:48:29.295Z"
+generatedAt: "2026-04-04T19:40:47.586Z"
 ---
 
 # Verification and Testing
@@ -32,10 +32,10 @@ The repository's required verification gate and the existing contract tests arou
 - `tests/tab_ai_context.rs` — Tab AI context tests. Integration tests for the Tab AI context blob schema and serialization.
 
 ## Source Documents
-- [raw/4be166ea/CLAUDE.md](../raw/4be166ea/CLAUDE.md)
-- [raw/4be166ea/tests/context_snapshot.rs](../raw/4be166ea/tests/context_snapshot.rs)
-- [raw/4be166ea/tests/context_part_resolution.rs](../raw/4be166ea/tests/context_part_resolution.rs)
-- [raw/4be166ea/tests/tab_ai_context.rs](../raw/4be166ea/tests/tab_ai_context.rs)
+- [raw/c9fbc3ca/CLAUDE.md](../raw/c9fbc3ca/CLAUDE.md)
+- [raw/c9fbc3ca/tests/context_snapshot.rs](../raw/c9fbc3ca/tests/context_snapshot.rs)
+- [raw/c9fbc3ca/tests/context_part_resolution.rs](../raw/c9fbc3ca/tests/context_part_resolution.rs)
+- [raw/c9fbc3ca/tests/tab_ai_context.rs](../raw/c9fbc3ca/tests/tab_ai_context.rs)
 
 ## Related Pages
 - [project-overview](./project-overview.md)

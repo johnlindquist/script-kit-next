@@ -1,17 +1,17 @@
 ---
 title: "Project Overview"
 slug: "project-overview"
-sourceSnapshot: "4be166ea"
+sourceSnapshot: "c9fbc3ca"
 sourceDocuments:
-  - "raw/4be166ea/CLAUDE.md"
-  - "raw/4be166ea/README.md"
+  - "raw/c9fbc3ca/CLAUDE.md"
+  - "raw/c9fbc3ca/README.md"
 relatedPages:
   - "architecture"
   - "design-principles"
   - "verification-and-testing"
   - "tab-ai-harness"
 generatedBy: "scripts/wiki/ingest.ts"
-generatedAt: "2026-04-04T18:48:29.295Z"
+generatedAt: "2026-04-04T19:40:47.586Z"
 ---
 
 # Project Overview
@@ -29,8 +29,8 @@ What Script Kit GPUI is, how it is positioned, and the major product surfaces it
 - `README.md` — Project overview. High-level product positioning, setup, prompt APIs, configuration, and built-in capabilities.
 
 ## Source Documents
-- [raw/4be166ea/CLAUDE.md](../raw/4be166ea/CLAUDE.md)
-- [raw/4be166ea/README.md](../raw/4be166ea/README.md)
+- [raw/c9fbc3ca/CLAUDE.md](../raw/c9fbc3ca/CLAUDE.md)
+- [raw/c9fbc3ca/README.md](../raw/c9fbc3ca/README.md)
 
 ## Related Pages
 - [architecture](./architecture.md)
