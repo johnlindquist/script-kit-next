@@ -32,6 +32,20 @@ fn h(hex: u32) -> Hsla {
     Hsla::from(rgb(hex))
 }
 
+fn ha(hex: u32, alpha_byte: u32) -> Hsla {
+    let mut c = Hsla::from(rgb(hex));
+    c.a = alpha_byte as f32 / 255.0;
+    c
+}
+
+fn gold() -> Hsla {
+    h(GOLD)
+}
+
+fn clear() -> Hsla {
+    hsla(0., 0., 0., 0.)
+}
+
 // ─── Mock data ────────────────────────────────────────────────────────
 
 struct MentionItem {
@@ -182,28 +196,32 @@ impl Story for AtMentionPickerVariationsStory {
 
         // Group: Picker Overlay Style (1-7)
         container = container.child(
-            story_section("Picker Overlay — How the dropdown looks when @ is typed")
-                .children(variants[0..7].iter().enumerate().map(|(i, v)| {
-                    variation_row(i + 1, v, self.render_variant(v))
-                })),
+            story_section("Picker Overlay — How the dropdown looks when @ is typed").children(
+                variants[0..7]
+                    .iter()
+                    .enumerate()
+                    .map(|(i, v)| variation_row(i + 1, v, self.render_variant(v))),
+            ),
         );
 
         // Group: Inline Chip Style (8-14)
         container = container.child(
-            story_section(
-                "Inline Chips — How accepted @mentions render in the input",
-            )
-            .children(variants[7..14].iter().enumerate().map(|(i, v)| {
-                variation_row(i + 8, v, self.render_variant(v))
-            })),
+            story_section("Inline Chips — How accepted @mentions render in the input").children(
+                variants[7..14]
+                    .iter()
+                    .enumerate()
+                    .map(|(i, v)| variation_row(i + 8, v, self.render_variant(v))),
+            ),
         );
 
         // Group: Full Composition (15-21)
         container = container.child(
-            story_section("Full Composition — Picker + chips + input together")
-                .children(variants[14..21].iter().enumerate().map(|(i, v)| {
-                    variation_row(i + 15, v, self.render_variant(v))
-                })),
+            story_section("Full Composition — Picker + chips + input together").children(
+                variants[14..21]
+                    .iter()
+                    .enumerate()
+                    .map(|(i, v)| variation_row(i + 15, v, self.render_variant(v))),
+            ),
         );
 
         container.into_any_element()
@@ -351,15 +369,10 @@ fn composer_shell(
         .bg(rgb(bg))
         .rounded(px(8.0))
         .border_1()
-        .border_color(rgba((border << 8) | 0x20))
+        .border_color(ha(border, 0x20))
         .overflow_hidden()
         // Input row
-        .child(
-            div()
-                .px(px(12.0))
-                .py(px(10.0))
-                .child(input_content),
-        )
+        .child(div().px(px(12.0)).py(px(10.0)).child(input_content))
         // Chips row (if present)
         .when_some(chips_below, |d, chips| d.child(chips))
         // Picker overlay (if present)
@@ -374,7 +387,7 @@ fn composer_shell(
                 .px(px(12.0))
                 .py(px(6.0))
                 .border_t_1()
-                .border_color(rgba((border << 8) | 0x10))
+                .border_color(ha(border, 0x10))
                 .child(
                     div()
                         .text_xs()
@@ -432,13 +445,7 @@ fn input_with_chips_and_query(
     }
 
     // Blinking cursor
-    row = row.child(
-        div()
-            .w(px(2.0))
-            .h(px(16.0))
-            .bg(rgb(GOLD))
-            .rounded(px(1.0)),
-    );
+    row = row.child(div().w(px(2.0)).h(px(16.0)).bg(gold()).rounded(px(1.0)));
 
     if prefix_text.is_empty() && chips.is_empty() && query_text.is_empty() {
         row = row.child(
@@ -479,8 +486,13 @@ fn render_chip(label: &str, icon_tint: Option<u32>, style: ChipStyle) -> AnyElem
             .px(px(8.0))
             .py(px(1.0))
             .rounded(px(999.0))
-            .bg(rgba((border << 8) | 0x10))
-            .child(div().text_xs().text_color(rgb(dimmed)).child(label.to_string()))
+            .bg(ha(border, 0x10))
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(rgb(dimmed))
+                    .child(label.to_string()),
+            )
             .into_any_element(),
 
         ChipStyle::GoldTint => div()
@@ -491,11 +503,11 @@ fn render_chip(label: &str, icon_tint: Option<u32>, style: ChipStyle) -> AnyElem
             .px(px(8.0))
             .py(px(1.0))
             .rounded(px(4.0))
-            .bg(rgba((GOLD << 8) | 0x1E))
+            .bg(ha(0xfbbf24, 0x1E))
             .child(
                 div()
                     .text_xs()
-                    .text_color(h(GOLD).opacity(PRESENT))
+                    .text_color(h(0xfbbf24).opacity(PRESENT))
                     .child(label.to_string()),
             )
             .into_any_element(),
@@ -509,15 +521,20 @@ fn render_chip(label: &str, icon_tint: Option<u32>, style: ChipStyle) -> AnyElem
             .py(px(1.0))
             .rounded(px(2.0))
             .border_1()
-            .border_color(rgba((border << 8) | 0x28))
-            .child(div().text_xs().text_color(rgb(dimmed)).child(label.to_string()))
+            .border_color(ha(border, 0x28))
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(rgb(dimmed))
+                    .child(label.to_string()),
+            )
             .into_any_element(),
 
         ChipStyle::FlushAt => div()
             .child(
                 div()
                     .text_xs()
-                    .text_color(h(GOLD).opacity(MUTED_OP))
+                    .text_color(h(0xfbbf24).opacity(MUTED_OP))
                     .child(label.to_string()),
             )
             .into_any_element(),
@@ -530,9 +547,9 @@ fn render_chip(label: &str, icon_tint: Option<u32>, style: ChipStyle) -> AnyElem
             .px(px(6.0))
             .py(px(1.0))
             .rounded(px(4.0))
-            .bg(rgba((border << 8) | 0x0C))
+            .bg(ha(border, 0x0C))
             .border_1()
-            .border_color(rgba((border << 8) | 0x18))
+            .border_color(ha(border, 0x18))
             .child(
                 div()
                     .font_family(FONT_MONO)
@@ -552,9 +569,14 @@ fn render_chip(label: &str, icon_tint: Option<u32>, style: ChipStyle) -> AnyElem
                 .px(px(8.0))
                 .py(px(1.0))
                 .rounded(px(999.0))
-                .bg(rgba((border << 8) | 0x10))
+                .bg(ha(border, 0x10))
                 .child(div().text_xs().child(icon.to_string()))
-                .child(div().text_xs().text_color(rgb(dimmed)).child(label.to_string()))
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(rgb(dimmed))
+                        .child(label.to_string()),
+                )
                 .into_any_element()
         }
 
@@ -571,7 +593,7 @@ fn render_chip(label: &str, icon_tint: Option<u32>, style: ChipStyle) -> AnyElem
                 div()
                     .w_full()
                     .h(px(1.5))
-                    .bg(h(GOLD).opacity(HINT))
+                    .bg(h(0xfbbf24).opacity(HINT))
                     .rounded(px(1.0)),
             )
             .into_any_element(),
@@ -602,11 +624,7 @@ fn render_picker_vibrancy_monoline() -> AnyElement {
                 .justify_between()
                 .px(px(12.0))
                 .py(px(4.0))
-                .bg(if selected {
-                    rgba((fg << 8) | 0x0A)
-                } else {
-                    transparent_black()
-                })
+                .bg(if selected { ha(fg, 0x0A) } else { clear() })
                 // Gold bar
                 .child(
                     div()
@@ -618,15 +636,15 @@ fn render_picker_vibrancy_monoline() -> AnyElement {
                                 .w(px(2.0))
                                 .h(px(14.0))
                                 .rounded(px(1.0))
-                                .bg(if selected { rgb(GOLD) } else { transparent_black() }),
+                                .bg(if selected { gold() } else { clear() }),
                         )
                         .child(
                             div()
                                 .text_sm()
                                 .text_color(if selected {
-                                    rgb(fg)
+                                    h(fg)
                                 } else {
-                                    rgba((fg << 8) | ((MUTED_OP * 255.0) as u32))
+                                    h(fg).opacity(MUTED_OP)
                                 })
                                 .child(item.label),
                         ),
@@ -634,7 +652,7 @@ fn render_picker_vibrancy_monoline() -> AnyElement {
                 .child(
                     div()
                         .text_xs()
-                        .text_color(rgba((dimmed << 8) | ((HINT * 255.0) as u32)))
+                        .text_color(h(dimmed).opacity(HINT))
                         .child(item.mention),
                 )
         }))
@@ -671,7 +689,7 @@ fn render_picker_gold_bar() -> AnyElement {
                                 .w(px(2.0))
                                 .h(px(14.0))
                                 .rounded(px(1.0))
-                                .bg(if selected { rgb(GOLD) } else { transparent_black() }),
+                                .bg(if selected { gold() } else { clear() }),
                         )
                         .child(
                             div()
@@ -685,7 +703,7 @@ fn render_picker_gold_bar() -> AnyElement {
                         div()
                             .pl(px(8.0))
                             .text_xs()
-                            .text_color(rgba((dimmed << 8) | ((HINT * 255.0) as u32)))
+                            .text_color(h(dimmed).opacity(HINT))
                             .child(item.description),
                     )
                 })
@@ -706,11 +724,8 @@ fn render_picker_grouped_sections() -> AnyElement {
     let mut picker_col = div().w_full().max_h(px(PICKER_MAX_H)).py(px(2.0));
 
     // Group by category
-    let categories: &[(&str, &[usize])] = &[
-        ("CAPTURE", &[0, 1]),
-        ("CONTEXT", &[2]),
-        ("SCRIPTS", &[3]),
-    ];
+    let categories: &[(&str, &[usize])] =
+        &[("CAPTURE", &[0, 1]), ("CONTEXT", &[2]), ("SCRIPTS", &[3])];
 
     for (cat_name, indices) in categories {
         picker_col = picker_col.child(
@@ -720,7 +735,7 @@ fn render_picker_grouped_sections() -> AnyElement {
                 .pb(px(2.0))
                 .text_xs()
                 .font_weight(FontWeight::MEDIUM)
-                .text_color(rgba((dimmed << 8) | ((HINT * 255.0) as u32)))
+                .text_color(h(dimmed).opacity(HINT))
                 .child(cat_name.to_string()),
         );
 
@@ -734,11 +749,7 @@ fn render_picker_grouped_sections() -> AnyElement {
                         .justify_between()
                         .px(px(12.0))
                         .py(px(3.0))
-                        .bg(if selected {
-                            rgba((fg << 8) | 0x0A)
-                        } else {
-                            transparent_black()
-                        })
+                        .bg(if selected { ha(fg, 0x0A) } else { clear() })
                         .child(
                             div()
                                 .flex()
@@ -749,11 +760,7 @@ fn render_picker_grouped_sections() -> AnyElement {
                                         .w(px(2.0))
                                         .h(px(14.0))
                                         .rounded(px(1.0))
-                                        .bg(if selected {
-                                            rgb(GOLD)
-                                        } else {
-                                            transparent_black()
-                                        }),
+                                        .bg(if selected { gold() } else { clear() }),
                                 )
                                 .child(div().text_xs().child(item.icon_char))
                                 .child(
@@ -766,7 +773,7 @@ fn render_picker_grouped_sections() -> AnyElement {
                         .child(
                             div()
                                 .text_xs()
-                                .text_color(rgba((dimmed << 8) | ((HINT * 255.0) as u32)))
+                                .text_color(h(dimmed).opacity(HINT))
                                 .child(item.mention),
                         ),
                 );
@@ -806,7 +813,7 @@ fn render_picker_compact_two_col() -> AnyElement {
                                 .w(px(2.0))
                                 .h(px(12.0))
                                 .rounded(px(1.0))
-                                .bg(if selected { rgb(GOLD) } else { transparent_black() }),
+                                .bg(if selected { gold() } else { clear() }),
                         )
                         .child(
                             div()
@@ -819,7 +826,7 @@ fn render_picker_compact_two_col() -> AnyElement {
                     div()
                         .text_xs()
                         .font_family(FONT_MONO)
-                        .text_color(rgba((dimmed << 8) | 0x60))
+                        .text_color(h(dimmed).opacity(0.38))
                         .child(item.mention),
                 )
         }))
@@ -848,11 +855,7 @@ fn render_picker_icon_grid() -> AnyElement {
                 .gap(px(8.0))
                 .px(px(12.0))
                 .py(px(4.0))
-                .bg(if selected {
-                    rgba((fg << 8) | 0x08)
-                } else {
-                    transparent_black()
-                })
+                .bg(if selected { ha(fg, 0x08) } else { clear() })
                 // Icon circle
                 .child(
                     div()
@@ -862,7 +865,7 @@ fn render_picker_icon_grid() -> AnyElement {
                         .items_center()
                         .justify_center()
                         .rounded(px(6.0))
-                        .bg(rgba((border << 8) | 0x14))
+                        .bg(ha(border, 0x14))
                         .text_xs()
                         .child(item.icon_char),
                 )
@@ -881,7 +884,7 @@ fn render_picker_icon_grid() -> AnyElement {
                             d.child(
                                 div()
                                     .text_xs()
-                                    .text_color(rgba((dimmed << 8) | ((HINT * 255.0) as u32)))
+                                    .text_color(h(dimmed).opacity(HINT))
                                     .child(item.description),
                             )
                         }),
@@ -916,11 +919,7 @@ fn render_picker_fuzzy_highlight() -> AnyElement {
                 .justify_between()
                 .px(px(12.0))
                 .py(px(4.0))
-                .bg(if selected {
-                    rgba((fg << 8) | 0x08)
-                } else {
-                    transparent_black()
-                })
+                .bg(if selected { ha(fg, 0x08) } else { clear() })
                 .child(
                     div()
                         .flex()
@@ -931,14 +930,14 @@ fn render_picker_fuzzy_highlight() -> AnyElement {
                                 .w(px(2.0))
                                 .h(px(14.0))
                                 .rounded(px(1.0))
-                                .bg(if selected { rgb(GOLD) } else { transparent_black() }),
+                                .bg(if selected { gold() } else { clear() }),
                         )
                         .child(label_chars),
                 )
                 .child(
                     div()
                         .text_xs()
-                        .text_color(rgba((dimmed << 8) | ((HINT * 255.0) as u32)))
+                        .text_color(h(dimmed).opacity(HINT))
                         .child(item.mention),
                 )
         }))
@@ -955,7 +954,7 @@ fn fuzzy_highlight_label(
     dimmed: u32,
     selected: bool,
 ) -> AnyElement {
-    let base_color = if selected { rgb(fg) } else { rgb(dimmed) };
+    let base_color = if selected { h(fg) } else { h(dimmed) };
 
     let lower_label = label.to_lowercase();
     let lower_query = query.to_lowercase();
@@ -976,7 +975,7 @@ fn fuzzy_highlight_label(
         let is_match = match_indices.contains(&i);
         row = row.child(
             div()
-                .text_color(if is_match { rgb(GOLD) } else { base_color })
+                .text_color(if is_match { gold() } else { base_color })
                 .when(is_match, |d| d.font_weight(FontWeight::BOLD))
                 .child(ch.to_string()),
         );
@@ -1004,7 +1003,7 @@ fn render_picker_cursor_anchored() -> AnyElement {
                 .bg(rgb(bg))
                 .rounded(px(6.0))
                 .border_1()
-                .border_color(rgba((border << 8) | 0x20))
+                .border_color(ha(border, 0x20))
                 .py(px(2.0))
                 .shadow_md()
                 .children(FILTERED_ITEMS.iter().enumerate().map(|(i, item)| {
@@ -1015,17 +1014,13 @@ fn render_picker_cursor_anchored() -> AnyElement {
                         .gap(px(6.0))
                         .px(px(8.0))
                         .py(px(3.0))
-                        .bg(if selected {
-                            rgba((fg << 8) | 0x08)
-                        } else {
-                            transparent_black()
-                        })
+                        .bg(if selected { ha(fg, 0x08) } else { clear() })
                         .child(
                             div()
                                 .w(px(2.0))
                                 .h(px(12.0))
                                 .rounded(px(1.0))
-                                .bg(if selected { rgb(GOLD) } else { transparent_black() }),
+                                .bg(if selected { gold() } else { clear() }),
                         )
                         .child(
                             div()
@@ -1097,7 +1092,7 @@ fn render_chip_mono_capsule() -> AnyElement {
 fn render_chip_icon_badge() -> AnyElement {
     let input = input_with_chips_and_query(
         "Explain ",
-        &[("@clipboard", Some(GOLD))],
+        &[("@clipboard", Some(0xfbbf24))],
         " to me",
         ChipStyle::IconBadge,
     );
@@ -1151,7 +1146,7 @@ fn render_full_whisper_minimal() -> AnyElement {
                                 .w(px(2.0))
                                 .h(px(14.0))
                                 .rounded(px(1.0))
-                                .bg(if selected { rgb(GOLD) } else { transparent_black() }),
+                                .bg(if selected { gold() } else { clear() }),
                         )
                         .child(
                             div()
@@ -1163,7 +1158,7 @@ fn render_full_whisper_minimal() -> AnyElement {
                 .child(
                     div()
                         .text_xs()
-                        .text_color(rgba((dimmed << 8) | ((HINT * 255.0) as u32)))
+                        .text_color(h(dimmed).opacity(HINT))
                         .child(item.mention),
                 )
         }))
@@ -1187,7 +1182,8 @@ fn render_full_raycast_polish() -> AnyElement {
 
     let mut picker_col = div().w_full().py(px(2.0));
 
-    let categories: &[(&str, &[usize])] = &[("CAPTURE", &[0, 1]), ("CONTEXT", &[2]), ("SCRIPTS", &[3])];
+    let categories: &[(&str, &[usize])] =
+        &[("CAPTURE", &[0, 1]), ("CONTEXT", &[2]), ("SCRIPTS", &[3])];
 
     for (cat_name, indices) in categories {
         picker_col = picker_col.child(
@@ -1197,7 +1193,7 @@ fn render_full_raycast_polish() -> AnyElement {
                 .pb(px(2.0))
                 .text_xs()
                 .font_weight(FontWeight::MEDIUM)
-                .text_color(rgba((dimmed << 8) | ((HINT * 255.0) as u32)))
+                .text_color(h(dimmed).opacity(HINT))
                 .child(cat_name.to_string()),
         );
 
@@ -1211,11 +1207,7 @@ fn render_full_raycast_polish() -> AnyElement {
                         .gap(px(8.0))
                         .px(px(12.0))
                         .py(px(3.0))
-                        .bg(if selected {
-                            rgba((fg << 8) | 0x08)
-                        } else {
-                            transparent_black()
-                        })
+                        .bg(if selected { ha(fg, 0x08) } else { clear() })
                         .child(
                             div()
                                 .w(px(22.0))
@@ -1224,7 +1216,7 @@ fn render_full_raycast_polish() -> AnyElement {
                                 .items_center()
                                 .justify_center()
                                 .rounded(px(5.0))
-                                .bg(rgba((border << 8) | 0x14))
+                                .bg(ha(border, 0x14))
                                 .text_xs()
                                 .child(item.icon_char),
                         )
@@ -1238,7 +1230,7 @@ fn render_full_raycast_polish() -> AnyElement {
                         .child(
                             div()
                                 .text_xs()
-                                .text_color(rgba((dimmed << 8) | 0x60))
+                                .text_color(h(dimmed).opacity(0.38))
                                 .child(item.mention),
                         ),
                 );
@@ -1254,12 +1246,8 @@ fn render_full_cursor_style() -> AnyElement {
     let fg = t.colors.text.primary;
     let dimmed = t.colors.text.dimmed;
 
-    let input = input_with_chips_and_query(
-        "Fix ",
-        &[("@git-diff", None)],
-        " @scr",
-        ChipStyle::FlushAt,
-    );
+    let input =
+        input_with_chips_and_query("Fix ", &[("@git-diff", None)], " @scr", ChipStyle::FlushAt);
 
     let picker = div()
         .w_full()
@@ -1282,7 +1270,7 @@ fn render_full_cursor_style() -> AnyElement {
                     div()
                         .text_xs()
                         .font_family(FONT_MONO)
-                        .text_color(rgba((dimmed << 8) | 0x50))
+                        .text_color(h(dimmed).opacity(0.31))
                         .child(item.mention),
                 )
         }))
@@ -1315,11 +1303,7 @@ fn render_full_claude_code() -> AnyElement {
                 .justify_between()
                 .px(px(12.0))
                 .py(px(4.0))
-                .bg(if selected {
-                    rgba((fg << 8) | 0x06)
-                } else {
-                    transparent_black()
-                })
+                .bg(if selected { ha(fg, 0x06) } else { clear() })
                 .child(
                     div()
                         .flex()
@@ -1330,7 +1314,7 @@ fn render_full_claude_code() -> AnyElement {
                                 .w(px(2.0))
                                 .h(px(14.0))
                                 .rounded(px(1.0))
-                                .bg(if selected { rgb(GOLD) } else { transparent_black() }),
+                                .bg(if selected { gold() } else { clear() }),
                         )
                         .child(label_el),
                 )
@@ -1338,7 +1322,7 @@ fn render_full_claude_code() -> AnyElement {
                     div()
                         .text_xs()
                         .font_family(FONT_MONO)
-                        .text_color(rgba((dimmed << 8) | 0x50))
+                        .text_color(h(dimmed).opacity(0.31))
                         .child(item.mention),
                 )
         }))
@@ -1362,12 +1346,8 @@ fn render_full_dense_power() -> AnyElement {
     let fg = t.colors.text.primary;
     let dimmed = t.colors.text.dimmed;
 
-    let input = input_with_chips_and_query(
-        "",
-        &[("@clipboard", None)],
-        " @scr",
-        ChipStyle::OutlinedTag,
-    );
+    let input =
+        input_with_chips_and_query("", &[("@clipboard", None)], " @scr", ChipStyle::OutlinedTag);
 
     let picker = div()
         .w_full()
@@ -1390,7 +1370,7 @@ fn render_full_dense_power() -> AnyElement {
                                 .w(px(2.0))
                                 .h(px(10.0))
                                 .rounded(px(1.0))
-                                .bg(if selected { rgb(GOLD) } else { transparent_black() }),
+                                .bg(if selected { gold() } else { clear() }),
                         )
                         .child(
                             div()
@@ -1403,7 +1383,7 @@ fn render_full_dense_power() -> AnyElement {
                     div()
                         .text_xs()
                         .font_family(FONT_MONO)
-                        .text_color(rgba((dimmed << 8) | 0x40))
+                        .text_color(h(dimmed).opacity(0.25))
                         .child(item.mention),
                 )
         }))
@@ -1428,7 +1408,7 @@ fn render_full_gold_signature() -> AnyElement {
         .w_full()
         .py(px(2.0))
         .border_t_1()
-        .border_color(rgba((GOLD << 8) | 0x10))
+        .border_color(ha(0xfbbf24, 0x10))
         .children(FILTERED_ITEMS.iter().enumerate().map(|(i, item)| {
             let selected = i == 0;
             div()
@@ -1438,9 +1418,9 @@ fn render_full_gold_signature() -> AnyElement {
                 .px(px(12.0))
                 .py(px(4.0))
                 .bg(if selected {
-                    rgba((GOLD << 8) | 0x08)
+                    ha(0xfbbf24, 0x08)
                 } else {
-                    transparent_black()
+                    clear()
                 })
                 .child(
                     div()
@@ -1452,23 +1432,19 @@ fn render_full_gold_signature() -> AnyElement {
                                 .w(px(2.0))
                                 .h(px(14.0))
                                 .rounded(px(1.0))
-                                .bg(if selected { rgb(GOLD) } else { transparent_black() }),
+                                .bg(if selected { gold() } else { clear() }),
                         )
                         .child(
                             div()
                                 .text_sm()
-                                .text_color(if selected {
-                                    rgb(fg)
-                                } else {
-                                    rgb(dimmed)
-                                })
+                                .text_color(if selected { rgb(fg) } else { rgb(dimmed) })
                                 .child(item.label),
                         ),
                 )
                 .child(
                     div()
                         .text_xs()
-                        .text_color(h(GOLD).opacity(if selected { MUTED_OP } else { HINT }))
+                        .text_color(h(0xfbbf24).opacity(if selected { MUTED_OP } else { HINT }))
                         .child(item.mention),
                 )
         }))

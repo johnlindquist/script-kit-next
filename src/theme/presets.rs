@@ -952,19 +952,46 @@ fn find_min_visible_selected_subtle_dark(bg: u32, opacity_selected: f32) -> u32 
 // ============================================================================
 
 fn theme_script_kit_dark() -> Theme {
-    Theme::dark_default()
+    build_dark_theme(ColorScheme {
+        background: BackgroundColors {
+            main: 0x0f0f0f,
+            title_bar: 0x1a1a1a,
+            search_box: 0x2a2a2a,
+            log_panel: 0x080808,
+        },
+        text: TextColors {
+            primary: 0xeeeeee,
+            secondary: 0xcccccc,
+            tertiary: 0x999999,
+            muted: 0x808080,
+            dimmed: 0x666666,
+            on_accent: 0x0f0f0f,
+        },
+        accent: AccentColors {
+            selected: 0xfbbf24,
+            selected_subtle: 0x5a5a5a,
+        },
+        ui: UIColors {
+            border: 0x343434,
+            success: 0x00ff00,
+            error: 0xef4444,
+            warning: 0xf59e0b,
+            info: 0x3b82f6,
+        },
+        terminal: TerminalColors::dark_default(),
+    })
 }
 
 fn theme_script_kit_light() -> Theme {
     build_light_theme(ColorScheme {
         background: BackgroundColors {
-            main: 0xfafafa,
+            main: 0xffffff,
             title_bar: 0xffffff,
             search_box: 0xffffff,
             log_panel: 0xf5f5f5,
         },
         text: TextColors {
-            primary: 0x1a1a1a,
+            primary: 0x2c2c2c,
             secondary: 0x4a4a4a,
             tertiary: 0x6b6b6b,
             muted: 0x808080,
@@ -972,7 +999,7 @@ fn theme_script_kit_light() -> Theme {
             on_accent: 0xffffff,
         },
         accent: AccentColors {
-            selected: 0x0078d4,
+            selected: 0x2f86d3,
             selected_subtle: 0xc0c0c0,
         },
         ui: UIColors {
