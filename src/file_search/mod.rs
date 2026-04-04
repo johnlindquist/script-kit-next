@@ -320,11 +320,7 @@ pub fn get_file_metadata(path: &str) -> Option<FileMetadata> {
         .map(|d| d.as_secs())
         .unwrap_or(0);
 
-    let file_type = if metadata.is_dir() {
-        FileType::Directory
-    } else {
-        detect_file_type(path_obj)
-    };
+    let file_type = detect_file_type(path_obj);
 
     // Check permissions
     let readable = path_obj.exists(); // If we got metadata, it's readable

@@ -3,10 +3,10 @@
 //! This module contains all the story definitions for the storybook.
 //! Stories are manually registered in get_all_stories().
 
-mod at_mention_picker_variations;
 mod actions_mini_variations;
 mod actions_window_stories;
 mod arg_prompt_stories;
+mod at_mention_picker_variations;
 mod button_stories;
 mod context_indicator_variations;
 mod design_token_stories;
@@ -39,10 +39,10 @@ use crate::storybook::StoryEntry;
 use std::sync::LazyLock;
 
 // Re-export story types
-pub use at_mention_picker_variations::AtMentionPickerVariationsStory;
 pub use actions_mini_variations::ActionsMiniVariationsStory;
 pub use actions_window_stories::ActionsWindowStory;
 pub use arg_prompt_stories::ArgPromptStory;
+pub use at_mention_picker_variations::AtMentionPickerVariationsStory;
 pub use button_stories::ButtonStory;
 pub use context_indicator_variations::ContextIndicatorVariationsStory;
 pub use design_token_stories::DesignTokenStory;

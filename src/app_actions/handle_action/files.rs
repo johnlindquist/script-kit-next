@@ -49,7 +49,17 @@ impl ScriptListApp {
 
     /// Build a `FileResult` from live filesystem metadata.
     fn build_file_result_from_metadata(path: &str) -> Option<crate::file_search::FileResult> {
-        crate::file_search::get_file_metadata(path).map(|meta| crate::file_search::FileResult {
+        let meta = crate::file_search::get_file_metadata(path)?;
+        tracing::info!(
+            category = "FILE_SEARCH",
+            event = "build_file_result_from_metadata",
+            path = %meta.path,
+            ?meta.file_type,
+            modified = meta.modified,
+            size = meta.size,
+            "Built file-search result from live metadata"
+        );
+        Some(crate::file_search::FileResult {
             path: meta.path,
             name: meta.name,
             size: meta.size,
@@ -115,7 +125,7 @@ impl ScriptListApp {
                 }
             }
 
-            self.apply_file_search_sort_mode();
+            self.sort_directory_results();
             self.recompute_file_search_display_indices();
         } else {
             // Global search or cross-directory — full refresh.
@@ -192,7 +202,7 @@ impl ScriptListApp {
         if current_dir.is_some() && new_dir.as_ref() == current_dir.as_ref() {
             if let Some(new_entry) = Self::build_file_result_from_metadata(preferred_path) {
                 self.cached_file_results.push(new_entry);
-                self.apply_file_search_sort_mode();
+                self.sort_directory_results();
                 self.recompute_file_search_display_indices();
             }
         } else {
