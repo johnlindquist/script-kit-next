@@ -172,7 +172,6 @@ pub(crate) fn render_text_input_cursor_selection(config: TextInputRenderConfig<'
 
     content
 }
-
 fn render_cursor(config: &TextInputRenderConfig<'_>) -> Div {
     let mut cursor = div().w(px(config.cursor_width)).h(px(config.cursor_height));
     if config.cursor_margin_y > 0.0 {

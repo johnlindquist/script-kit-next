@@ -36,7 +36,9 @@ impl AiApp {
         let selected_index = state.selected_index;
         let entity = cx.entity().clone();
 
-        let picker_list = list(self.context_picker_list_state.clone(), move |ix, _window, _cx| {
+        let picker_list = list(
+            self.context_picker_list_state.clone(),
+            move |ix, _window, _cx| {
                 let item = match items.get(ix) {
                     Some(i) => i,
                     None => return div().into_any_element(),
@@ -67,7 +69,8 @@ impl AiApp {
                     });
                 })
                 .into_any_element()
-            })
+            },
+        )
         .with_sizing_behavior(ListSizingBehavior::Infer)
         .max_h(px(260.))
         .min_h(px(0.));

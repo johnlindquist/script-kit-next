@@ -239,33 +239,6 @@ pub fn get_resource_definitions() -> Vec<McpResource> {
             ),
             mime_type: "text/plain".to_string(),
         },
-        McpResource {
-            uri: "kit://dictation".to_string(),
-            name: "Dictation".to_string(),
-            description: Some(
-                "Most recent dictated text captured by Script Kit. Returns a stable JSON envelope and never fails when no provider is configured."
-                    .to_string(),
-            ),
-            mime_type: "application/json".to_string(),
-        },
-        McpResource {
-            uri: "kit://calendar".to_string(),
-            name: "Calendar".to_string(),
-            description: Some(
-                "Upcoming calendar events in a prompt-safe JSON envelope."
-                    .to_string(),
-            ),
-            mime_type: "application/json".to_string(),
-        },
-        McpResource {
-            uri: "kit://notifications".to_string(),
-            name: "Notifications".to_string(),
-            description: Some(
-                "Recent notifications in newest-first order, capped and summarized for prompt use."
-                    .to_string(),
-            ),
-            mime_type: "application/json".to_string(),
-        },
     ];
     resources.extend(transaction_resources::transaction_resource_definitions());
     resources
@@ -306,15 +279,6 @@ pub fn read_resource(
         }
         _ if uri == "kit://focused-item" || uri.starts_with("kit://focused-item?") => {
             read_focused_item_resource(uri)
-        }
-        _ if uri == "kit://dictation" || uri.starts_with("kit://dictation?") => {
-            read_dictation_resource(uri)
-        }
-        _ if uri == "kit://calendar" || uri.starts_with("kit://calendar?") => {
-            read_calendar_resource(uri)
-        }
-        _ if uri == "kit://notifications" || uri.starts_with("kit://notifications?") => {
-            read_notifications_resource(uri)
         }
         "kit://git-status" => read_git_status_resource(),
         "kit://git-diff" => read_git_diff_resource(),
@@ -1079,61 +1043,6 @@ pub fn publish_focused_item(item: FocusedItemInfo) {
 #[allow(dead_code)] // Public API surface — called when surfaces are dismissed at runtime
 pub fn clear_focused_item() {
     *FOCUSED_ITEM_SLOT.lock() = None;
-}
-
-// ---------------------------------------------------------------
-// Env-backed JSON resources: dictation, calendar, notifications
-// ---------------------------------------------------------------
-
-/// Read a JSON resource backed by an environment variable, falling back to
-/// a static empty envelope when the variable is unset.
-fn read_env_backed_json_resource(
-    uri: &str,
-    env_key: &str,
-    empty_json: &str,
-    event_name: &'static str,
-) -> Result<ResourceContent, String> {
-    let text = std::env::var(env_key).unwrap_or_else(|_| empty_json.to_string());
-    tracing::info!(
-        target: "ai",
-        event = %event_name,
-        %uri,
-        env_key,
-        bytes = text.len(),
-        "mcp_env_json_resource_read"
-    );
-    Ok(ResourceContent {
-        uri: uri.to_string(),
-        mime_type: "application/json".to_string(),
-        text,
-    })
-}
-
-fn read_dictation_resource(uri: &str) -> Result<ResourceContent, String> {
-    read_env_backed_json_resource(
-        uri,
-        "SCRIPT_KIT_DICTATION_JSON",
-        r#"{"schemaVersion":1,"type":"dictation","ok":true,"available":false,"items":[],"note":"No dictation provider configured."}"#,
-        "mcp_dictation_resource_read",
-    )
-}
-
-fn read_calendar_resource(uri: &str) -> Result<ResourceContent, String> {
-    read_env_backed_json_resource(
-        uri,
-        "SCRIPT_KIT_CALENDAR_JSON",
-        r#"{"schemaVersion":1,"type":"calendar","ok":true,"available":false,"items":[],"note":"No calendar provider configured."}"#,
-        "mcp_calendar_resource_read",
-    )
-}
-
-fn read_notifications_resource(uri: &str) -> Result<ResourceContent, String> {
-    read_env_backed_json_resource(
-        uri,
-        "SCRIPT_KIT_NOTIFICATIONS_JSON",
-        r#"{"schemaVersion":1,"type":"notifications","ok":true,"available":false,"items":[],"note":"No notifications provider configured."}"#,
-        "mcp_notifications_resource_read",
-    )
 }
 
 // ---------------------------------------------------------------
@@ -1969,7 +1878,7 @@ mod tests {
         // REQUIREMENT: resources/list returns all three resources
         let resources = get_resource_definitions();
 
-        assert_eq!(resources.len(), 19, "Should have exactly 19 resources");
+        assert_eq!(resources.len(), 16, "Should have exactly 16 resources");
 
         let uris: Vec<&str> = resources.iter().map(|r| r.uri.as_str()).collect();
         assert!(uris.contains(&"kit://state"), "Should include kit://state");
@@ -2158,7 +2067,7 @@ mod tests {
         assert!(resource_array.is_some());
 
         let resource_array = resource_array.unwrap();
-        assert_eq!(resource_array.len(), 19);
+        assert_eq!(resource_array.len(), 16);
 
         // First resource should have expected fields
         let first = &resource_array[0];

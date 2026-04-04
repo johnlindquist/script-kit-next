@@ -139,7 +139,9 @@ pub use self::window::context_picker::types::{
     ContextPickerItem, ContextPickerItemKind, ContextPickerItemSnapshot, ContextPickerSection,
     ContextPickerSnapshot, ContextPickerState,
 };
-pub use self::window::context_picker::{build_picker_items, score_builtin, score_builtin_with_trigger};
+pub use self::window::context_picker::{
+    build_picker_items, score_builtin, score_builtin_with_trigger,
+};
 pub use self::window::context_preflight::{
     estimate_tokens_from_text, preflight_state_from_receipt, status_from_decision,
     ContextPreflightSnapshot, ContextPreflightState, ContextPreflightStatus,
