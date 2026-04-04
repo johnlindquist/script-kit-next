@@ -579,6 +579,22 @@ pub(crate) fn render_universal_prompt_hint_strip() -> AnyElement {
     render_simple_hint_strip(universal_prompt_hints(), None)
 }
 
+/// Renderer for the canonical three-key footer with click handlers.
+///
+/// `on_run` fires for "↵ Run", `on_actions` for "⌘K Actions", `on_ai` for "Tab AI".
+#[allow(dead_code)]
+pub(crate) fn render_universal_prompt_hint_strip_clickable(
+    on_run: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
+    on_actions: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
+    on_ai: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
+) -> AnyElement {
+    crate::components::HintStrip::new(universal_prompt_hints())
+        .on_hint_click(0, on_run)
+        .on_hint_click(1, on_actions)
+        .on_hint_click(2, on_ai)
+        .into_any_element()
+}
+
 /// Returns `true` only when `hints` matches the canonical three-key set in exact order.
 #[allow(dead_code)]
 #[inline]
@@ -968,8 +984,8 @@ mod prompt_layout_shell_tests {
             "render_template_prompt should not use PromptFooter"
         );
         assert!(
-            body.contains("render_universal_prompt_hint_strip("),
-            "render_template_prompt should use the universal hint strip"
+            body.contains("clickable_universal_hint_strip("),
+            "render_template_prompt should use the clickable universal hint strip"
         );
         assert!(
             body.contains("STANDARD_HEIGHT"),
@@ -985,8 +1001,8 @@ mod prompt_layout_shell_tests {
             "render_naming_prompt should not use PromptFooter"
         );
         assert!(
-            body.contains("render_universal_prompt_hint_strip("),
-            "render_naming_prompt should use the universal hint strip"
+            body.contains("clickable_universal_hint_strip("),
+            "render_naming_prompt should use the clickable universal hint strip"
         );
         assert!(
             body.contains("STANDARD_HEIGHT"),

@@ -332,6 +332,33 @@ pub fn ensure_theme_service(cx: &mut App) {
     .detach();
 }
 
+/// Persist a theme to disk, reload the global cache, sync gpui-component + native
+/// window state, bump the theme revision, and notify every open window — all in
+/// one atomic step.
+///
+/// Use this from the theme chooser Apply path (and any other code that wants to
+/// commit a theme change app-wide) instead of writing to disk and hoping the
+/// file-watcher picks it up.
+#[allow(dead_code)] // Called from render_builtins/theme_chooser.rs (include!() binary target)
+pub(crate) fn persist_theme_and_sync_all_windows(
+    cx: &mut App,
+    theme: &crate::theme::Theme,
+    source: &'static str,
+) -> anyhow::Result<super::types::Theme> {
+    crate::theme::presets::write_theme_to_disk(theme)?;
+    let applied_theme = reload_theme_cache_sync_and_bump_revision(cx);
+    windows::notify_all_windows(cx);
+
+    let chrome = crate::theme::chrome::AppChromeColors::from_theme(&applied_theme);
+    info!(
+        source,
+        theme_revision = theme_revision(),
+        accent_hex = chrome.accent_hex,
+        "theme_persisted_and_synced_all_windows"
+    );
+    Ok(applied_theme)
+}
+
 /// Check if the theme service is currently running.
 ///
 /// Mainly useful for debugging/testing.

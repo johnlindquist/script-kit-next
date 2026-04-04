@@ -173,7 +173,7 @@ impl ScriptListApp {
         let design_visual = tokens.visual();
 
         // Unified color, typography, and spacing resolution
-        let color_resolver = crate::theme::ColorResolver::new(&self.theme, self.current_design);
+        let color_resolver = crate::theme::ColorResolver::new_theme_first(&self.theme, self.current_design);
         let typography_resolver =
             crate::theme::TypographyResolver::new(&self.theme, self.current_design);
         let spacing_resolver = crate::theme::SpacingResolver::new(self.current_design);
@@ -1035,8 +1035,18 @@ impl ScriptListApp {
                     // Subtle top border to separate hint strip from list
                     .border_t(px(crate::window_resize::mini_layout::DIVIDER_HEIGHT))
                     .border_color(rgba(chrome.divider_rgba))
-                    .child(crate::components::render_hint_icons(
-                        &["↵ Run", "⌘K Actions", "Tab AI"],
+                    .child(crate::components::render_hint_icons_clickable(
+                        vec![
+                            crate::components::ClickableHint::new("↵ Run", cx.listener(|this, _: &gpui::ClickEvent, _window, cx| {
+                                this.execute_selected(cx);
+                            })),
+                            crate::components::ClickableHint::new("⌘K Actions", cx.listener(|this, _: &gpui::ClickEvent, window, cx| {
+                                this.toggle_actions(cx, window);
+                            })),
+                            crate::components::ClickableHint::new("Tab AI", cx.listener(|this, _: &gpui::ClickEvent, _window, cx| {
+                                this.open_tab_ai_chat(cx);
+                            })),
+                        ],
                         hint_text_rgba,
                     )),
             );

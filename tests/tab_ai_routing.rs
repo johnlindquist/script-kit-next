@@ -4184,3 +4184,217 @@ fn harness_source_contains_launchpad_include() {
         "harness module must include START_HERE.md as the canonical launchpad source"
     );
 }
+
+// =========================================================================
+// Regression: surface selection routes script-authoring to QuickTerminalView
+// =========================================================================
+
+/// Helper: extract begin_tab_ai_harness_entry function body from source.
+fn extract_begin_tab_ai_harness_entry_body() -> &'static str {
+    let fn_start = TAB_AI_MODE_SOURCE
+        .find("fn begin_tab_ai_harness_entry(")
+        .expect("begin_tab_ai_harness_entry must exist");
+    let fn_body = &TAB_AI_MODE_SOURCE[fn_start..];
+    let next_fn = fn_body[1..]
+        .find("\n    fn ")
+        .unwrap_or(fn_body.len());
+    &fn_body[..next_fn]
+}
+
+#[test]
+fn begin_tab_ai_harness_entry_computes_surface_preference_before_routing() {
+    let fn_body = extract_begin_tab_ai_harness_entry_body();
+    assert!(
+        fn_body.contains("tab_ai_surface_preference_for_prompt"),
+        "begin_tab_ai_harness_entry must compute surface preference from shared markers"
+    );
+    assert!(
+        fn_body.contains("surface_preference.use_quick_terminal"),
+        "begin_tab_ai_harness_entry must branch on use_quick_terminal"
+    );
+}
+
+#[test]
+fn begin_tab_ai_harness_entry_routes_quick_terminal_to_harness_terminal() {
+    let fn_body = extract_begin_tab_ai_harness_entry_body();
+    assert!(
+        fn_body.contains("if surface_preference.use_quick_terminal"),
+        "begin_tab_ai_harness_entry must use surface_preference.use_quick_terminal as branch condition"
+    );
+    assert!(
+        fn_body.contains("open_tab_ai_harness_terminal_from_request(request, capture_rx, cx)"),
+        "when use_quick_terminal is true, must route to open_tab_ai_harness_terminal_from_request"
+    );
+}
+
+#[test]
+fn begin_tab_ai_harness_entry_routes_acp_chat_when_no_verification_markers() {
+    let fn_body = extract_begin_tab_ai_harness_entry_body();
+    assert!(
+        fn_body.contains("open_tab_ai_acp_view_from_request_impl("),
+        "when use_quick_terminal is false, must route to ACP chat"
+    );
+}
+
+#[test]
+fn begin_tab_ai_harness_entry_emits_surface_selected_log() {
+    let fn_body = extract_begin_tab_ai_harness_entry_body();
+
+    assert!(
+        fn_body.contains(r#"event = "tab_ai_surface_selected""#),
+        "begin_tab_ai_harness_entry must emit tab_ai_surface_selected log event"
+    );
+    assert!(
+        fn_body.contains(r#"surface = if surface_preference.use_quick_terminal { "quick_terminal" } else { "acp_chat" }"#),
+        "surface log field must resolve to quick_terminal or acp_chat"
+    );
+    assert!(
+        fn_body.contains(r#"reason = if surface_preference.use_quick_terminal { "script_verification_required" } else { "default_acp" }"#),
+        "reason log field must resolve to script_verification_required or default_acp"
+    );
+    assert!(
+        fn_body.contains("includes_script_authoring_skill = surface_preference.includes_script_authoring_skill"),
+        "surface_selected log must include script_authoring_skill marker"
+    );
+    assert!(
+        fn_body.contains("includes_bun_build_verification = surface_preference.includes_bun_build_verification"),
+        "surface_selected log must include bun_build_verification marker"
+    );
+    assert!(
+        fn_body.contains("includes_bun_execute_verification = surface_preference.includes_bun_execute_verification"),
+        "surface_selected log must include bun_execute_verification marker"
+    );
+}
+
+// =========================================================================
+// Regression: ScriptList submit selects QuickTerminalView (source contract)
+// =========================================================================
+
+#[test]
+fn surface_preference_helper_requires_all_three_markers_for_quick_terminal() {
+    // tab_ai_surface_preference_for_prompt must AND all three marker flags
+    // to set use_quick_terminal = true.
+    assert!(
+        HARNESS_SOURCE.contains(
+            "use_quick_terminal: markers.includes_script_authoring_skill\n            && markers.includes_bun_build_verification\n            && markers.includes_bun_execute_verification"
+        ),
+        "use_quick_terminal must require all three verification markers"
+    );
+}
+
+#[test]
+fn script_list_submit_forces_artifact_guidance() {
+    // The deterministic ScriptList + Submit + non-empty-intent path must
+    // force artifact guidance, which carries the verification markers.
+    assert!(
+        HARNESS_SOURCE.contains(
+            r#"prompt_type == "ScriptList""#
+        ),
+        "should_force_artifact_guidance must check for ScriptList prompt type"
+    );
+    assert!(
+        HARNESS_SOURCE.contains("TabAiHarnessSubmissionMode::Submit"),
+        "should_force_artifact_guidance must require Submit mode"
+    );
+}
+
+#[test]
+fn surface_preference_non_authoring_returns_all_false() {
+    // The surface preference helper must return all-false when no appendix
+    // is produced (the early-return path).
+    assert!(
+        HARNESS_SOURCE.contains(
+            "return TabAiSurfacePreference {\n            use_quick_terminal: false,\n            includes_script_authoring_skill: false,\n            includes_bun_build_verification: false,\n            includes_bun_execute_verification: false,"
+        ),
+        "when no guidance is produced, all preference flags must be false"
+    );
+}
+
+// =========================================================================
+// Regression: shared guidance contains mandatory verification text
+// =========================================================================
+
+#[test]
+fn harness_guidance_contains_mandatory_script_verification_header() {
+    assert!(
+        HARNESS_SOURCE.contains(r#"const SCRIPT_VERIFICATION_GATE_HEADER: &str = "MANDATORY SCRIPT VERIFICATION""#),
+        "harness must define MANDATORY SCRIPT VERIFICATION header constant"
+    );
+    // The header constant must be used in the gate builder
+    assert!(
+        HARNESS_SOURCE.contains("SCRIPT_VERIFICATION_GATE_HEADER"),
+        "gate builder must reference the MANDATORY SCRIPT VERIFICATION header"
+    );
+}
+
+#[test]
+fn harness_guidance_contains_bun_build_verification_marker() {
+    assert!(
+        HARNESS_SOURCE.contains(
+            r#"bun build ~/.scriptkit/kit/main/scripts/<name>.ts --target=bun --outfile ~/.scriptkit/tmp/test-scripts/<name>.verify.mjs"#
+        ),
+        "harness must define the Bun build verification command"
+    );
+}
+
+#[test]
+fn harness_guidance_contains_sk_verify_execution_marker() {
+    assert!(
+        HARNESS_SOURCE.contains(
+            "SK_VERIFY=1 bun ~/.scriptkit/kit/main/scripts/<name>.ts"
+        ),
+        "harness must define the SK_VERIFY=1 bun execution command"
+    );
+}
+
+#[test]
+fn harness_guidance_contains_failure_policy() {
+    assert!(
+        HARNESS_SOURCE.contains("fix the script and rerun both commands"),
+        "harness must include the failure policy requiring fix-and-rerun"
+    );
+}
+
+#[test]
+fn harness_verification_markers_are_used_in_from_guidance() {
+    // TabAiVerificationGuidanceMarkers::from_guidance must check all three constants
+    assert!(
+        HARNESS_SOURCE.contains("SCRIPT_AUTHORING_SKILL_MARKER"),
+        "from_guidance must check SCRIPT_AUTHORING_SKILL_MARKER"
+    );
+    assert!(
+        HARNESS_SOURCE.contains("BUN_BUILD_VERIFICATION_MARKER"),
+        "from_guidance must check BUN_BUILD_VERIFICATION_MARKER"
+    );
+    assert!(
+        HARNESS_SOURCE.contains("BUN_EXECUTE_VERIFICATION_MARKER"),
+        "from_guidance must check BUN_EXECUTE_VERIFICATION_MARKER"
+    );
+}
+
+// =========================================================================
+// Regression: unit tests for surface preference exist in harness module
+// =========================================================================
+
+#[test]
+fn harness_module_has_surface_preference_unit_tests() {
+    // The harness module must contain unit tests that exercise the surface
+    // preference helper with ScriptList + Submit + intent → quick_terminal
+    // and non-authoring flows → acp_chat.
+    assert!(
+        HARNESS_SOURCE.contains("fn surface_preference_script_list_submit_uses_quick_terminal"),
+        "harness module must have unit test for ScriptList submit → quick_terminal"
+    );
+    assert!(
+        HARNESS_SOURCE.contains("fn surface_preference_non_authoring_stays_acp"),
+        "harness module must have unit test for non-authoring → acp_chat"
+    );
+    assert!(
+        HARNESS_SOURCE.contains("fn surface_preference_no_appendix_returns_all_false"),
+        "harness module must have unit test for no-appendix → all false"
+    );
+    assert!(
+        HARNESS_SOURCE.contains("fn surface_preference_none_intent_returns_all_false"),
+        "harness module must have unit test for None intent → all false"
+    );
+}

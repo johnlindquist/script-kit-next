@@ -191,7 +191,7 @@ impl ScriptListApp {
                     .child(entity),
             )
             // Universal three-key hint strip footer
-            .child(crate::components::render_universal_prompt_hint_strip())
+            .child(self.clickable_universal_hint_strip(cx))
             // Actions dialog overlay
             .when_some(
                 render_actions_backdrop(
@@ -263,8 +263,8 @@ mod editor_prompt_tests {
     fn test_editor_uses_universal_hint_strip_footer() {
         const EDITOR_RENDER_SOURCE: &str = include_str!("editor.rs");
         assert!(
-            EDITOR_RENDER_SOURCE.contains("render_universal_prompt_hint_strip()"),
-            "editor prompt should use the canonical three-key hint strip"
+            EDITOR_RENDER_SOURCE.contains("clickable_universal_hint_strip("),
+            "editor prompt should use the clickable three-key hint strip"
         );
     }
 

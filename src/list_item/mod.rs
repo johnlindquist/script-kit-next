@@ -1004,40 +1004,38 @@ impl RenderOnce for ListItem {
                     )
             }
             Some(IconKind::Svg(name)) => {
-                // Convert string to IconName and render SVG
-                // Use external_path() for file system SVGs (not path() which is for embedded assets)
-                if let Some(icon_name) = icon_name_from_str(name) {
-                    let svg_path = icon_name.external_path();
-                    div()
-                        .w(icon_size)
-                        .h(icon_size)
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .flex_shrink_0()
-                        .child(
-                            svg()
-                                .external_path(svg_path)
-                                .size(svg_size)
-                                .text_color(icon_text_color),
-                        )
+                // Resolve icon name to SVG path:
+                // 1. Try internal IconName enum (Script Kit's own icons)
+                // 2. Fall back to vendored Lucide SVGs by kebab-case name
+                // 3. Last resort: Code icon
+                let svg_path: String = if let Some(icon_name) = icon_name_from_str(name) {
+                    icon_name.external_path().to_string()
                 } else {
-                    // Fallback to Code icon if name not recognized
-                    let svg_path = IconName::Code.external_path();
-                    div()
-                        .w(icon_size)
-                        .h(icon_size)
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .flex_shrink_0()
-                        .child(
-                            svg()
-                                .external_path(svg_path)
-                                .size(svg_size)
-                                .text_color(icon_text_color),
-                        )
-                }
+                    // Try Lucide vendored path (kebab-case name → vendor SVG)
+                    let lucide_path = format!(
+                        "{}/vendor/gpui-component/crates/assets/assets/icons/{}.svg",
+                        env!("CARGO_MANIFEST_DIR"),
+                        name
+                    );
+                    if std::path::Path::new(&lucide_path).exists() {
+                        lucide_path
+                    } else {
+                        IconName::Code.external_path().to_string()
+                    }
+                };
+                div()
+                    .w(icon_size)
+                    .h(icon_size)
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .flex_shrink_0()
+                    .child(
+                        svg()
+                            .external_path(svg_path)
+                            .size(svg_size)
+                            .text_color(icon_text_color),
+                    )
             }
             None => {
                 div().w(px(0.)).h(px(0.)) // No space if no icon

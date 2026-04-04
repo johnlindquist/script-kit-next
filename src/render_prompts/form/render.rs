@@ -140,10 +140,7 @@ impl ScriptListApp {
                     .child(entity.clone()),
             )
             // Shared three-key hint strip footer
-            .child(crate::components::render_simple_hint_strip(
-                crate::components::universal_prompt_hints(),
-                None,
-            ))
+            .child(self.clickable_universal_hint_strip(cx))
             // Actions dialog overlay
             .when_some(
                 render_actions_backdrop(

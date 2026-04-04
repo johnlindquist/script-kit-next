@@ -62,7 +62,10 @@ pub use focusable_prompt_wrapper::{
 #[allow(unused_imports)]
 pub use form_fields::{FormCheckbox, FormFieldColors, FormFieldState, FormTextArea, FormTextField};
 #[allow(unused_imports)]
-pub use hint_strip::{render_hint_icons, render_hint_icons_clickable, render_hint_icons_hsla, HintStrip};
+pub use hint_strip::{
+    render_hint_icons, render_hint_icons_clickable, render_hint_icons_hsla, ClickableHint,
+    HintStrip,
+};
 #[allow(unused_imports)]
 pub use inline_prompt_input::InlinePromptInput;
 #[allow(unused_imports)]
@@ -81,7 +84,8 @@ pub use prompt_header::{PromptHeader, PromptHeaderColors, PromptHeaderConfig};
 #[allow(unused_imports)]
 pub(crate) use prompt_layout_shell::{
     emit_prompt_chrome_audit, emit_prompt_hint_audit, is_universal_prompt_hints,
-    render_universal_prompt_hint_strip, universal_prompt_hints, PromptChromeAudit, PromptHintAudit,
+    render_universal_prompt_hint_strip, render_universal_prompt_hint_strip_clickable,
+    universal_prompt_hints, PromptChromeAudit, PromptHintAudit,
     UNIVERSAL_PROMPT_HINT_COUNT,
 };
 #[allow(unused_imports)]

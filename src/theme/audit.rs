@@ -30,9 +30,30 @@ fn sample(
     }
 }
 
+/// Composite foreground hex at alpha over background hex (simple alpha blend).
+fn composite_over(fg_hex: u32, alpha: f32, bg_hex: u32) -> u32 {
+    let blend = |fg_ch: u32, bg_ch: u32| -> u32 {
+        ((fg_ch as f32 * alpha + bg_ch as f32 * (1.0 - alpha)).round() as u32).min(255)
+    };
+    let r = blend((fg_hex >> 16) & 0xFF, (bg_hex >> 16) & 0xFF);
+    let g = blend((fg_hex >> 8) & 0xFF, (bg_hex >> 8) & 0xFF);
+    let b = blend(fg_hex & 0xFF, bg_hex & 0xFF);
+    (r << 16) | (g << 8) | b
+}
+
 pub fn audit_theme_contrast(theme: &Theme) -> Vec<ThemeContrastSample> {
     let colors = &theme.colors;
+    let opacity = theme.get_opacity();
+
+    // Composited selection background: selected_subtle at opacity.selected over bg.main
+    let selection_bg = composite_over(
+        colors.accent.selected_subtle,
+        opacity.selected,
+        colors.background.main,
+    );
+
     vec![
+        // ── Window surface ──────────────────────────────────────
         sample(
             "window.primary",
             colors.text.primary,
@@ -46,17 +67,58 @@ pub fn audit_theme_contrast(theme: &Theme) -> Vec<ThemeContrastSample> {
             4.5,
         ),
         sample(
+            "window.muted",
+            colors.text.muted,
+            colors.background.main,
+            3.0,
+        ),
+        // ── Input / search box surface ──────────────────────────
+        sample(
             "input.primary",
             colors.text.primary,
             colors.background.search_box,
             4.5,
         ),
         sample(
+            "input.secondary",
+            colors.text.secondary,
+            colors.background.search_box,
+            3.0,
+        ),
+        // ── Title bar / chrome surface ──────────────────────────
+        sample(
+            "chrome.primary",
+            colors.text.primary,
+            colors.background.title_bar,
+            4.5,
+        ),
+        sample(
+            "chrome.secondary",
+            colors.text.secondary,
+            colors.background.title_bar,
+            3.0,
+        ),
+        // ── Selection / accent surfaces ─────────────────────────
+        sample(
             "accent.on_accent",
             colors.text.on_accent,
             colors.accent.selected,
             4.5,
         ),
+        sample(
+            "selection.primary",
+            colors.text.primary,
+            selection_bg,
+            4.5,
+        ),
+        // ── Border visibility ───────────────────────────────────
+        sample(
+            "border.on_window",
+            colors.ui.border,
+            colors.background.main,
+            1.2,
+        ),
+        // ── Semantic status colors ──────────────────────────────
         sample(
             "success.auto_text",
             best_readable_text_hex(colors.ui.success),
@@ -110,7 +172,7 @@ mod tests {
     fn default_dark_theme_has_expected_sample_count() {
         let theme = Theme::dark_default();
         let samples = audit_theme_contrast(&theme);
-        assert_eq!(samples.len(), 8);
+        assert_eq!(samples.len(), 14);
     }
 
     #[test]

@@ -382,6 +382,27 @@ pub fn all_presets() -> Vec<ThemePreset> {
             is_dark: true,
             theme: theme_vesper,
         },
+        ThemePreset {
+            id: "midnight-blue",
+            name: "Midnight Blue",
+            description: "Deep navy dark theme with steel-blue accents",
+            is_dark: true,
+            theme: theme_midnight_blue,
+        },
+        ThemePreset {
+            id: "ember",
+            name: "Ember",
+            description: "Warm charcoal theme with amber glow",
+            is_dark: true,
+            theme: theme_ember,
+        },
+        ThemePreset {
+            id: "arctic",
+            name: "Arctic",
+            description: "Cool dark theme with icy cyan accents",
+            is_dark: true,
+            theme: theme_arctic,
+        },
         // ── Light Themes ─────────────────────────────────────────
         ThemePreset {
             id: "script-kit-light",
@@ -515,6 +536,27 @@ pub fn all_presets() -> Vec<ThemePreset> {
             description: "Minimal white theme with subtle warm tones",
             is_dark: false,
             theme: theme_alabaster,
+        },
+        ThemePreset {
+            id: "linen",
+            name: "Linen",
+            description: "Warm cream light theme with soft brown accents",
+            is_dark: false,
+            theme: theme_linen,
+        },
+        ThemePreset {
+            id: "slate-morning",
+            name: "Slate Morning",
+            description: "Cool gray light theme with teal accents",
+            is_dark: false,
+            theme: theme_slate_morning,
+        },
+        ThemePreset {
+            id: "coral-reef",
+            name: "Coral Reef",
+            description: "Warm light theme with coral and sea-green accents",
+            is_dark: false,
+            theme: theme_coral_reef,
         },
     ]
 }
@@ -3955,6 +3997,306 @@ fn theme_alabaster() -> Theme {
             bright_magenta: 0x9c27b0,
             bright_cyan: 0x00838f,
             bright_white: 0x2c2c2c,
+        },
+    })
+}
+
+fn theme_midnight_blue() -> Theme {
+    build_dark_theme(ColorScheme {
+        background: BackgroundColors {
+            main: 0x0d1b2a,
+            title_bar: 0x1b2838,
+            search_box: 0x1b3a4b,
+            log_panel: 0x1b2838,
+        },
+        text: TextColors {
+            primary: 0xd6e4f0,
+            secondary: 0x8eacc5,
+            tertiary: 0x6b8faa,
+            muted: 0x5a7d99,
+            dimmed: 0x2e4a5e,
+            on_accent: 0x0d1b2a,
+        },
+        accent: AccentColors {
+            selected: 0x5b9bd5,
+            selected_subtle: 0x1e3a5f,
+        },
+        ui: UIColors {
+            border: 0x2e4a5e,
+            success: 0x5cad6a,
+            error: 0xd9534f,
+            warning: 0xe0a458,
+            info: 0x5b9bd5,
+        },
+        terminal: TerminalColors {
+            foreground: None,
+            background: None,
+            black: 0x0d1b2a,
+            red: 0xd9534f,
+            green: 0x5cad6a,
+            yellow: 0xe0a458,
+            blue: 0x5b9bd5,
+            magenta: 0xb48ead,
+            cyan: 0x5fb3b3,
+            white: 0xd6e4f0,
+            bright_black: 0x2e4a5e,
+            bright_red: 0xef6b6b,
+            bright_green: 0x7cc98a,
+            bright_yellow: 0xf0c674,
+            bright_blue: 0x81b5e8,
+            bright_magenta: 0xc9a0dc,
+            bright_cyan: 0x7fcfcf,
+            bright_white: 0xeef4fa,
+        },
+    })
+}
+
+fn theme_ember() -> Theme {
+    build_dark_theme(ColorScheme {
+        background: BackgroundColors {
+            main: 0x1a1210,
+            title_bar: 0x241c18,
+            search_box: 0x2e2420,
+            log_panel: 0x241c18,
+        },
+        text: TextColors {
+            primary: 0xe8d5c4,
+            secondary: 0xb89a82,
+            tertiary: 0x9a7d66,
+            muted: 0x8a6f5a,
+            dimmed: 0x4a3828,
+            on_accent: 0x1a1210,
+        },
+        accent: AccentColors {
+            selected: 0xe0954a,
+            selected_subtle: 0x4a3020,
+        },
+        ui: UIColors {
+            border: 0x4a3828,
+            success: 0x7eb563,
+            error: 0xd95050,
+            warning: 0xe0954a,
+            info: 0x6ba3be,
+        },
+        terminal: TerminalColors {
+            foreground: None,
+            background: None,
+            black: 0x1a1210,
+            red: 0xd95050,
+            green: 0x7eb563,
+            yellow: 0xe0954a,
+            blue: 0x6ba3be,
+            magenta: 0xc07eb5,
+            cyan: 0x6bbeb5,
+            white: 0xe8d5c4,
+            bright_black: 0x4a3828,
+            bright_red: 0xf06666,
+            bright_green: 0x98cc7d,
+            bright_yellow: 0xf0aa66,
+            bright_blue: 0x88bbd5,
+            bright_magenta: 0xd898cc,
+            bright_cyan: 0x88d5cc,
+            bright_white: 0xf5ebe0,
+        },
+    })
+}
+
+fn theme_arctic() -> Theme {
+    build_dark_theme(ColorScheme {
+        background: BackgroundColors {
+            main: 0x101820,
+            title_bar: 0x18222e,
+            search_box: 0x1e2c3a,
+            log_panel: 0x18222e,
+        },
+        text: TextColors {
+            primary: 0xdce8f0,
+            secondary: 0x96b0c4,
+            tertiary: 0x7494ae,
+            muted: 0x607e96,
+            dimmed: 0x304050,
+            on_accent: 0x101820,
+        },
+        accent: AccentColors {
+            selected: 0x5ccfe6,
+            selected_subtle: 0x1a3a4a,
+        },
+        ui: UIColors {
+            border: 0x304050,
+            success: 0x6ad4a0,
+            error: 0xe06060,
+            warning: 0xe0b050,
+            info: 0x5ccfe6,
+        },
+        terminal: TerminalColors {
+            foreground: None,
+            background: None,
+            black: 0x101820,
+            red: 0xe06060,
+            green: 0x6ad4a0,
+            yellow: 0xe0b050,
+            blue: 0x5ccfe6,
+            magenta: 0xc48aff,
+            cyan: 0x5ccfe6,
+            white: 0xdce8f0,
+            bright_black: 0x304050,
+            bright_red: 0xf07878,
+            bright_green: 0x88e8b8,
+            bright_yellow: 0xf0c868,
+            bright_blue: 0x7ce0f0,
+            bright_magenta: 0xd8a4ff,
+            bright_cyan: 0x7ce0f0,
+            bright_white: 0xf0f6fa,
+        },
+    })
+}
+
+fn theme_linen() -> Theme {
+    build_light_theme(ColorScheme {
+        background: BackgroundColors {
+            main: 0xf5efe6,
+            title_bar: 0xeae2d6,
+            search_box: 0xe0d8ca,
+            log_panel: 0xeae2d6,
+        },
+        text: TextColors {
+            primary: 0x3d3530,
+            secondary: 0x6b5e52,
+            tertiary: 0x8a7d70,
+            muted: 0x887862,
+            dimmed: 0xbfb5a5,
+            on_accent: 0xf5efe6,
+        },
+        accent: AccentColors {
+            selected: 0x8b6542,
+            selected_subtle: 0xd8c8b0,
+        },
+        ui: UIColors {
+            border: 0xd5cab8,
+            success: 0x5a8a3a,
+            error: 0xb54040,
+            warning: 0xc08030,
+            info: 0x4a7a9a,
+        },
+        terminal: TerminalColors {
+            foreground: None,
+            background: None,
+            black: 0xf5efe6,
+            red: 0xb54040,
+            green: 0x5a8a3a,
+            yellow: 0xc08030,
+            blue: 0x4a6aaa,
+            magenta: 0x8a5090,
+            cyan: 0x4a8a8a,
+            white: 0x3d3530,
+            bright_black: 0xb5a898,
+            bright_red: 0xd04a4a,
+            bright_green: 0x6aa04a,
+            bright_yellow: 0xd89840,
+            bright_blue: 0x5580c0,
+            bright_magenta: 0xa060a8,
+            bright_cyan: 0x5aa0a0,
+            bright_white: 0x2a2420,
+        },
+    })
+}
+
+fn theme_slate_morning() -> Theme {
+    build_light_theme(ColorScheme {
+        background: BackgroundColors {
+            main: 0xeef1f5,
+            title_bar: 0xe2e6ec,
+            search_box: 0xd8dce4,
+            log_panel: 0xe2e6ec,
+        },
+        text: TextColors {
+            primary: 0x2d333b,
+            secondary: 0x556070,
+            tertiary: 0x72808e,
+            muted: 0x78838f,
+            dimmed: 0xaab2bc,
+            on_accent: 0xeef1f5,
+        },
+        accent: AccentColors {
+            selected: 0x2a8a7a,
+            selected_subtle: 0xb8d8d0,
+        },
+        ui: UIColors {
+            border: 0xc8cdd5,
+            success: 0x3a8a5a,
+            error: 0xc04040,
+            warning: 0xc09030,
+            info: 0x2a8a7a,
+        },
+        terminal: TerminalColors {
+            foreground: None,
+            background: None,
+            black: 0xeef1f5,
+            red: 0xc04040,
+            green: 0x3a8a5a,
+            yellow: 0xc09030,
+            blue: 0x3a6aaa,
+            magenta: 0x7a5090,
+            cyan: 0x2a8a7a,
+            white: 0x2d333b,
+            bright_black: 0xa8b0b8,
+            bright_red: 0xd85050,
+            bright_green: 0x4aa06a,
+            bright_yellow: 0xd8a840,
+            bright_blue: 0x5080c0,
+            bright_magenta: 0x9060a8,
+            bright_cyan: 0x40a090,
+            bright_white: 0x1a2028,
+        },
+    })
+}
+
+fn theme_coral_reef() -> Theme {
+    build_light_theme(ColorScheme {
+        background: BackgroundColors {
+            main: 0xfaf5f2,
+            title_bar: 0xf0e8e4,
+            search_box: 0xe8ddd8,
+            log_panel: 0xf0e8e4,
+        },
+        text: TextColors {
+            primary: 0x3a3232,
+            secondary: 0x685858,
+            tertiary: 0x887070,
+            muted: 0x988888,
+            dimmed: 0xccc0b8,
+            on_accent: 0xfaf5f2,
+        },
+        accent: AccentColors {
+            selected: 0xd06050,
+            selected_subtle: 0xf0c8c0,
+        },
+        ui: UIColors {
+            border: 0xd8ccc5,
+            success: 0x4a9060,
+            error: 0xd06050,
+            warning: 0xc89040,
+            info: 0x4888a8,
+        },
+        terminal: TerminalColors {
+            foreground: None,
+            background: None,
+            black: 0xfaf5f2,
+            red: 0xd06050,
+            green: 0x4a9060,
+            yellow: 0xc89040,
+            blue: 0x4870a0,
+            magenta: 0xa05888,
+            cyan: 0x3a9090,
+            white: 0x3a3232,
+            bright_black: 0xb0a8a0,
+            bright_red: 0xe87060,
+            bright_green: 0x60a878,
+            bright_yellow: 0xe0a850,
+            bright_blue: 0x6088b8,
+            bright_magenta: 0xb86aa0,
+            bright_cyan: 0x50a8a8,
+            bright_white: 0x2a2222,
         },
     })
 }

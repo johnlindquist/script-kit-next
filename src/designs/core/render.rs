@@ -178,26 +178,10 @@ pub fn render_design_item(
                     (sm.scriptlet.name.clone(), description, badge, Some(icon))
                 }
                 SearchResult::BuiltIn(bm) => {
-                    // Built-ins: try to map their icon to SVG, fallback to Settings
+                    // Built-ins: pass icon name through directly (Lucide kebab-case)
                     let icon = match &bm.entry.icon {
-                        Some(emoji) => {
-                            // Try to infer SVG from common emoji patterns
-                            match emoji.as_str() {
-                                "⚙️" | "🔧" => IconKind::Svg("Settings".to_string()),
-                                "📋" => IconKind::Svg("Copy".to_string()),
-                                "🔍" | "🔎" => IconKind::Svg("MagnifyingGlass".to_string()),
-                                "📁" => IconKind::Svg("Folder".to_string()),
-                                "🖥️" | "💻" => IconKind::Svg("Terminal".to_string()),
-                                "⚡" | "🔥" => IconKind::Svg("BoltFilled".to_string()),
-                                "⭐" | "🌟" => IconKind::Svg("StarFilled".to_string()),
-                                "✓" | "✅" => IconKind::Svg("Check".to_string()),
-                                "▶️" | "🎬" => IconKind::Svg("PlayFilled".to_string()),
-                                "🗑️" => IconKind::Svg("Trash".to_string()),
-                                "➕" => IconKind::Svg("Plus".to_string()),
-                                _ => IconKind::Svg("Settings".to_string()),
-                            }
-                        }
-                        None => IconKind::Svg("Settings".to_string()),
+                        Some(name) => IconKind::Svg(name.clone()),
+                        None => IconKind::Svg("settings".to_string()),
                     };
                     (
                         bm.entry.name.clone(),

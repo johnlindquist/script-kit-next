@@ -95,6 +95,30 @@ impl ColorResolver {
         resolver
     }
 
+    /// Create a theme-first color resolver that always uses the active theme colors,
+    /// regardless of the current design variant.
+    ///
+    /// Use this for surfaces that must visually track the active theme (e.g. prompt
+    /// shells, theme chooser-adjacent views, windows that should match the live
+    /// chooser preview). Changing the active theme will update text, background,
+    /// accent, and border colors on these surfaces even when the design variant
+    /// is not `Default`.
+    pub fn new_theme_first(theme: &Theme, variant: DesignVariant) -> Self {
+        let resolver = Self::from_theme(theme);
+
+        debug!(
+            variant = %variant.name(),
+            source = "theme_first",
+            background = %format_args!("{:#08x}", resolver.background),
+            text_primary = %format_args!("{:#08x}", resolver.text_primary),
+            accent = %format_args!("{:#08x}", resolver.accent),
+            border = %format_args!("{:#08x}", resolver.border),
+            "ColorResolver initialized"
+        );
+
+        resolver
+    }
+
     /// Create a resolver from theme colors (Default variant)
     fn from_theme(theme: &Theme) -> Self {
         let colors = &theme.colors;
@@ -320,6 +344,46 @@ mod tests {
         let brutalist_resolver = TypographyResolver::new(&theme, DesignVariant::Brutalist);
 
         assert_eq!(brutalist_resolver.primary_font(), "Helvetica Neue");
+    }
+
+    #[test]
+    fn test_theme_first_ignores_design_tokens() {
+        let theme = Theme::default();
+
+        // Standard resolver for Minimal uses design tokens
+        let standard = ColorResolver::new(&theme, DesignVariant::Minimal);
+        let tokens = get_tokens(DesignVariant::Minimal);
+        let design_colors = tokens.colors();
+        assert_eq!(standard.primary_text_color(), design_colors.text_primary);
+
+        // Theme-first resolver for Minimal still uses theme colors
+        let theme_first = ColorResolver::new_theme_first(&theme, DesignVariant::Minimal);
+        assert_eq!(theme_first.primary_text_color(), theme.colors.text.primary);
+        assert_eq!(theme_first.empty_text_color(), theme.colors.text.muted);
+        assert_eq!(theme_first.primary_accent(), theme.colors.accent.selected);
+        assert_eq!(theme_first.main_background(), theme.colors.background.main);
+        assert_eq!(theme_first.border_color(), theme.colors.ui.border);
+    }
+
+    #[test]
+    fn test_theme_first_matches_default_variant() {
+        let theme = Theme::default();
+        let default_resolver = ColorResolver::new(&theme, DesignVariant::Default);
+        let theme_first = ColorResolver::new_theme_first(&theme, DesignVariant::Minimal);
+
+        // Both should produce identical colors since both use theme
+        assert_eq!(
+            default_resolver.primary_text_color(),
+            theme_first.primary_text_color()
+        );
+        assert_eq!(
+            default_resolver.primary_accent(),
+            theme_first.primary_accent()
+        );
+        assert_eq!(
+            default_resolver.main_background(),
+            theme_first.main_background()
+        );
     }
 
     #[test]
