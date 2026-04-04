@@ -3060,15 +3060,10 @@ fn selection_fallback_recognizes_harness_result() {
 }
 
 #[test]
-fn selection_fallback_routes_through_quick_submit_planner() {
+fn selection_fallback_routes_to_acp_chat() {
     assert!(
-        SELECTION_FALLBACK_SOURCE
-            .contains("self.submit_to_current_or_new_tab_ai_harness_from_text("),
-        "non-empty Send to AI fallback must route through the quick-submit planner",
-    );
-    assert!(
-        SELECTION_FALLBACK_SOURCE.contains("TabAiQuickSubmitSource::Fallback"),
-        "Send to AI fallback must identify its source as Fallback",
+        SELECTION_FALLBACK_SOURCE.contains("self.open_tab_ai_acp_with_entry_intent("),
+        "Send to AI fallback must route to ACP chat",
     );
 }
 
