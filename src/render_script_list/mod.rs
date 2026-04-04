@@ -1223,6 +1223,7 @@ impl ScriptListApp {
             }
             if footer_config.show_secondary {
                 footer_config = footer_config.show_secondary(self.has_actions());
+                footer_config = footer_config.secondary_active(self.show_actions_popup);
             }
 
             #[allow(unused_mut)]
