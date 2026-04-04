@@ -749,7 +749,7 @@ impl ScriptListApp {
         if surface_preference.use_quick_terminal && !force_acp_surface {
             self.open_tab_ai_harness_terminal_from_request(request, capture_rx, cx);
         } else {
-            self.open_tab_ai_acp_view_from_request_impl(request, capture_rx, focused_part, use_ask_anything_fallback, explicit_ambient_chip_label, cx);
+            self.open_tab_ai_acp_view_from_request_impl(request, capture_rx, focused_part, use_ask_anything_fallback, explicit_ambient_chip_label, force_acp_surface, cx);
         }
     }
 
@@ -933,6 +933,7 @@ impl ScriptListApp {
         focused_part: Option<crate::ai::message_parts::AiContextPart>,
         use_ask_anything_fallback: bool,
         explicit_ambient_chip_label: Option<String>,
+        force_acp_surface: bool,
         cx: &mut Context<Self>,
     ) {
         let open_started_at = std::time::Instant::now();
@@ -945,25 +946,39 @@ impl ScriptListApp {
 
         // Build ACP initial input via the shared helper, ensuring the same
         // verification contract as the PTY submission path.
+        // When force_acp_surface is set (Auto Submit fallback), use the raw
+        // intent without script-authoring guidance — the query may be general.
         let acp_initial_input = effective_intent.clone().map(|intent| {
-            let initial_input =
-                crate::ai::harness::build_tab_ai_acp_initial_input_for_prompt(
-                    &request.ui_snapshot.prompt_type,
-                    &intent,
+            if force_acp_surface {
+                tracing::info!(
+                    target: "script_kit::tab_ai",
+                    event = "tab_ai_acp_initial_input_built",
+                    prompt_type = %request.ui_snapshot.prompt_type,
+                    guidance_appended = false,
+                    forced_by_script_list_submit = false,
+                    force_acp_surface = true,
+                );
+                intent
+            } else {
+                let initial_input =
+                    crate::ai::harness::build_tab_ai_acp_initial_input_for_prompt(
+                        &request.ui_snapshot.prompt_type,
+                        &intent,
+                    );
+
+                tracing::info!(
+                    target: "script_kit::tab_ai",
+                    event = "tab_ai_acp_initial_input_built",
+                    prompt_type = %request.ui_snapshot.prompt_type,
+                    guidance_appended = initial_input.guidance_appended,
+                    forced_by_script_list_submit = initial_input.forced_by_script_list_submit,
+                    includes_script_authoring_skill = initial_input.includes_script_authoring_skill,
+                    includes_bun_build_verification = initial_input.includes_bun_build_verification,
+                    includes_bun_execute_verification = initial_input.includes_bun_execute_verification,
                 );
 
-            tracing::info!(
-                target: "script_kit::tab_ai",
-                event = "tab_ai_acp_initial_input_built",
-                prompt_type = %request.ui_snapshot.prompt_type,
-                guidance_appended = initial_input.guidance_appended,
-                forced_by_script_list_submit = initial_input.forced_by_script_list_submit,
-                includes_script_authoring_skill = initial_input.includes_script_authoring_skill,
-                includes_bun_build_verification = initial_input.includes_bun_build_verification,
-                includes_bun_execute_verification = initial_input.includes_bun_execute_verification,
-            );
-
-            initial_input.text
+                initial_input.text
+            }
         });
 
         tracing::info!(
