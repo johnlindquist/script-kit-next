@@ -2587,7 +2587,10 @@ impl ScriptListApp {
                         self.arg_input.clear();
                         self.arg_selected_index = start_index;
                         self.focused_input = FocusedInput::ArgPrompt;
-                        self.pending_focus = Some(FocusTarget::AppRoot);
+                        self.filter_text.clear();
+                        self.pending_filter_sync = true;
+                        self.pending_placeholder = Some("Select microphone...".to_string());
+                        self.pending_focus = Some(FocusTarget::MainFilter);
                         self.current_view = AppView::MiniPrompt {
                             id: BUILTIN_MIC_SELECT_PROMPT_ID.to_string(),
                             placeholder: "Select microphone...".to_string(),

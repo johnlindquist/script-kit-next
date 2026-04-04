@@ -186,6 +186,7 @@ impl ScriptListApp {
                     self.action_shortcuts.clear();
                 }
 
+                let pending_placeholder = placeholder.clone();
                 self.current_view = AppView::ArgPrompt {
                     id,
                     placeholder,
@@ -193,11 +194,13 @@ impl ScriptListApp {
                     actions,
                 };
                 self.arg_input.clear();
+                self.filter_text.clear();
                 self.arg_selected_index = 0;
                 self.focused_input = FocusedInput::ArgPrompt;
-                // Request focus via pending_focus mechanism (will be applied on next render)
-                self.pending_focus = Some(FocusTarget::AppRoot); // ArgPrompt uses parent focus
-                                                                 // Resize window based on number of choices
+                self.pending_filter_sync = true;
+                self.pending_placeholder = Some(pending_placeholder);
+                self.pending_focus = Some(FocusTarget::MainFilter);
+                // Resize window based on number of choices
                 let view_type = if choice_count == 0 {
                     ViewType::ArgPromptNoChoices
                 } else {
@@ -225,15 +228,19 @@ impl ScriptListApp {
                 self.sdk_actions = None;
                 self.action_shortcuts.clear();
 
+                let pending_placeholder = placeholder.clone();
                 self.current_view = AppView::MiniPrompt {
                     id,
                     placeholder,
                     choices,
                 };
                 self.arg_input.clear();
+                self.filter_text.clear();
                 self.arg_selected_index = 0;
                 self.focused_input = FocusedInput::ArgPrompt;
-                self.pending_focus = Some(FocusTarget::AppRoot);
+                self.pending_filter_sync = true;
+                self.pending_placeholder = Some(pending_placeholder);
+                self.pending_focus = Some(FocusTarget::MainFilter);
                 let view_type = if choice_count == 0 {
                     ViewType::ArgPromptNoChoices
                 } else {

@@ -359,6 +359,23 @@ fn resolve_mode_and_colors(sk_theme: &Theme) -> (ThemeMode, ThemeColor) {
     (mode, colors)
 }
 
+/// Apply native window vibrancy/material for the given theme.
+fn sync_native_window_theme_for_theme(sk_theme: &Theme, source: &'static str) {
+    let vibrancy = sk_theme.get_vibrancy();
+    let use_dark_vibrancy = sk_theme.should_use_dark_vibrancy();
+    crate::platform::configure_window_vibrancy_material_for_appearance(
+        use_dark_vibrancy,
+        vibrancy.material,
+    );
+    debug!(
+        source,
+        vibrancy_enabled = vibrancy.enabled,
+        vibrancy_material = %vibrancy.material,
+        use_dark_vibrancy,
+        "native_window_theme_synchronized"
+    );
+}
+
 /// Sync Script Kit theme with gpui-component's global Theme
 ///
 /// This function loads the Script Kit theme and applies it to gpui-component's
@@ -369,22 +386,25 @@ fn resolve_mode_and_colors(sk_theme: &Theme) -> (ThemeMode, ThemeColor) {
 /// 2. When system appearance changes (light/dark mode)
 /// 3. When theme.json is reloaded
 pub fn sync_gpui_component_theme(cx: &mut App) {
-    // Load Script Kit's theme
     let sk_theme = get_cached_theme();
-
-    sync_gpui_component_theme_for_theme(cx, &sk_theme);
+    sync_gpui_component_theme_for_theme_with_source(cx, &sk_theme, "cached_theme_sync");
 }
 
-/// Sync gpui-component theme from a specific Script Kit theme instance.
+/// Source-tagged authoritative runtime theme sync entrypoint.
 ///
-/// Use this when the active in-memory theme differs from the cached on-disk
-/// theme (for example, while previewing presets in the theme chooser).
-pub(crate) fn sync_gpui_component_theme_for_theme(cx: &mut App, sk_theme: &Theme) {
+/// Applies both gpui-component theme state and native vibrancy/material state
+/// in one call, ensuring every sync path gets both updates atomically.
+pub(crate) fn sync_gpui_component_theme_for_theme_with_source(
+    cx: &mut App,
+    sk_theme: &Theme,
+    source: &'static str,
+) {
     let (mode, custom_colors) = resolve_mode_and_colors(sk_theme);
     let is_dark = matches!(mode, ThemeMode::Dark);
     let chrome = crate::theme::chrome::AppChromeColors::from_theme(sk_theme);
 
     debug!(
+        source,
         accent_hex = chrome.accent_hex,
         window_surface_rgba = chrome.window_surface_rgba,
         input_surface_rgba = chrome.input_surface_rgba,
@@ -405,7 +425,15 @@ pub(crate) fn sync_gpui_component_theme_for_theme(cx: &mut App, sk_theme: &Theme
     theme.font_family = fonts.ui_family.clone().into();
     theme.font_size = gpui::px(fonts.ui_size);
 
-    debug!("gpui-component theme synchronized with Script Kit");
+    debug!(
+        source,
+        mode = ?mode,
+        font_family = %fonts.ui_family,
+        mono_font_family = %fonts.mono_family,
+        "gpui_component_theme_synchronized"
+    );
+
+    sync_native_window_theme_for_theme(sk_theme, source);
 }
 
 fn theme_style(

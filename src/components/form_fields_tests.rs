@@ -174,8 +174,9 @@ fn test_arg_prompt_header_uses_design_token_large_input_size() {
         .expect("failed to read src/render_prompts/arg/render.rs");
 
     assert!(
-        source.contains("typography_resolver.font_size_xl()"),
-        "arg prompt header input should use TypographyResolver for consistent font size"
+        source.contains(".with_size(Size::Size(px(")
+            && source.contains("typography_resolver.font_size_xl()"),
+        "arg prompt header input should use TypographyResolver via the shared Input component size"
     );
     assert!(
         !source.contains(".text_xl()"),

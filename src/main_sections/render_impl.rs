@@ -202,6 +202,8 @@ impl Render for ScriptListApp {
                 | AppView::ProcessManagerView { .. }
                 | AppView::CurrentAppCommandsView { .. }
                 | AppView::SearchAiPresetsView { .. }
+                | AppView::MiniPrompt { .. }
+                | AppView::ArgPrompt { .. }
         ) {
             self.sync_filter_input_if_needed(window, cx);
         }

@@ -58,8 +58,8 @@ impl ScriptListApp {
     }
     fn render_arg_prompt(
         &mut self,
-        id: String,
-        placeholder: String,
+        _id: String,
+        _placeholder: String,
         choices: Vec<Choice>,
         actions: Option<Vec<ProtocolAction>>,
         cx: &mut Context<Self>,
@@ -79,8 +79,8 @@ impl ScriptListApp {
             .map_or(false, |action_list| !action_list.is_empty());
         let has_choices = !choices.is_empty();
 
-        // Key handler for arg prompt
-        let prompt_id = id.clone();
+        // Navigation key handler — Escape, arrows, Tab, Cmd+K, actions
+        // Text editing is handled by the Input component; Enter by the subscription
         let has_actions_for_handler = has_actions;
         let handle_key = cx.listener(
             move |this: &mut Self,
@@ -105,24 +105,18 @@ impl ScriptListApp {
                 }
 
                 let key = event.keystroke.key.as_str();
-                let key_char = event.keystroke.key_char.as_deref();
                 let has_cmd = event.keystroke.modifiers.platform;
                 let modifiers = &event.keystroke.modifiers;
-                let key_lower = key.to_lowercase();
 
-                // Arrow up/down: list navigation (use allocation-free helpers)
+                // Arrow up/down: list navigation
                 if ui_foundation::is_key_up(key) && !modifiers.shift {
                     if this.arg_selected_index > 0 {
                         this.arg_selected_index -= 1;
-                        // P0: Scroll to keep selection visible
                         this.arg_list_scroll_handle
                             .scroll_to_item(this.arg_selected_index, ScrollStrategy::Nearest);
-                        logging::log_debug(
-                            "SCROLL",
-                            &format!("P0: Arg up: selected_index={}", this.arg_selected_index),
-                        );
                         cx.notify();
                     }
+                    cx.stop_propagation();
                     return;
                 }
 
@@ -130,65 +124,30 @@ impl ScriptListApp {
                     let filtered = this.filtered_arg_choices();
                     if this.arg_selected_index < filtered.len().saturating_sub(1) {
                         this.arg_selected_index += 1;
-                        // P0: Scroll to keep selection visible
                         this.arg_list_scroll_handle
                             .scroll_to_item(this.arg_selected_index, ScrollStrategy::Nearest);
-                        logging::log_debug(
-                            "SCROLL",
-                            &format!("P0: Arg down: selected_index={}", this.arg_selected_index),
-                        );
                         cx.notify();
                     }
+                    cx.stop_propagation();
                     return;
                 }
 
                 if key.eq_ignore_ascii_case("tab") && !has_cmd && !modifiers.alt && !modifiers.shift
                 {
                     this.apply_arg_tab_completion(window, cx);
+                    cx.stop_propagation();
                     return;
                 }
 
-                if ui_foundation::is_key_enter(key) {
-                    this.submit_arg_prompt_from_current_state(&prompt_id, cx);
-                    return;
-                }
-
-                // Delegate all other keys to TextInputState for editing, selection, clipboard
-                let old_text = this.arg_input.text().to_string();
-
-                // PRESERVE SELECTION: Capture the original index of the currently selected item
-                // BEFORE handle_key changes the text (which changes the filtered results)
-                let prev_original_idx = this
-                    .filtered_arg_choices()
-                    .get(this.arg_selected_index)
-                    .map(|(orig_idx, _)| *orig_idx);
-
-                let handled = this.arg_input.handle_key(
-                    &key_lower,
-                    key_char,
-                    modifiers.platform, // Cmd key on macOS
-                    modifiers.alt,
-                    modifiers.shift,
-                    cx,
-                );
-
-                if handled {
-                    // If text changed (not just cursor move), update selection and resize
-                    if this.arg_input.text() != old_text {
-                        this.sync_arg_prompt_after_text_change(prev_original_idx, window, cx);
-                    }
-                    cx.notify();
-                }
+                // All other keys propagate to the Input component
+                cx.propagate();
             },
         );
-
-        let input_is_empty = self.arg_input.is_empty();
 
         // P4: Pre-compute theme values for arg prompt - use theme for consistent styling
         let arg_list_colors = ListItemColors::from_theme(theme);
         let text_primary = theme.colors.text.primary;
         let text_muted = theme.colors.text.muted;
-        let accent_color = theme.colors.accent.selected;
 
         // P0: Clone data needed for uniform_list closure
         let arg_selected_index = self.arg_selected_index;
@@ -241,54 +200,35 @@ impl ScriptListApp {
             .into_any_element()
         };
 
+        // Use the same Input component as the main menu
+        let input_height = CURSOR_HEIGHT_LG + (CURSOR_MARGIN_Y * 2.0);
         let header = div()
             .w_full()
             .flex()
             .flex_row()
             .items_center()
             .gap(px(HEADER_GAP))
-            .child({
-                let input_height = CURSOR_HEIGHT_LG + (CURSOR_MARGIN_Y * 2.0);
+            .child(
                 div()
                     .flex_1()
                     .flex()
-                    .flex_row()
                     .items_center()
-                    .h(px(input_height))
-                    .text_size(px(typography_resolver.font_size_xl()))
-                    .text_color(if input_is_empty {
-                        rgb(text_muted)
-                    } else {
-                        rgb(text_primary)
-                    })
-                    .when(input_is_empty, |d: gpui::Div| {
-                        let is_cursor_visible =
-                            self.focused_input == FocusedInput::ArgPrompt && self.cursor_visible;
-                        d.child(
-                            div()
-                                .flex()
-                                .flex_row()
-                                .items_center()
-                                .child(
-                                    div()
-                                        .w(px(CURSOR_WIDTH))
-                                        .h(px(CURSOR_HEIGHT_LG))
-                                        .when(is_cursor_visible, |d: gpui::Div| {
-                                            d.bg(rgb(text_primary))
-                                        }),
-                                )
-                                .child(
-                                    div()
-                                        .ml(px(-(CURSOR_WIDTH)))
-                                        .text_color(rgb(text_muted))
-                                        .child(placeholder.clone()),
-                                ),
-                        )
-                    })
-                    .when(!input_is_empty, |d: gpui::Div| {
-                        d.child(self.render_arg_input_text(text_primary, accent_color))
-                    })
-            });
+                    .child(
+                        div().flex_1().flex().flex_row().items_center().child(
+                            Input::new(&self.gpui_input_state)
+                                .w_full()
+                                .h(px(input_height))
+                                .px(px(0.))
+                                .py(px(0.))
+                                .with_size(Size::Size(px(
+                                    typography_resolver.font_size_xl()
+                                )))
+                                .appearance(false)
+                                .bordered(false)
+                                .focus_bordered(false),
+                        ),
+                    ),
+            );
 
         let content = if has_choices {
             div()
@@ -324,7 +264,7 @@ impl ScriptListApp {
         .font_family(design_typography.font_family)
         .key_context("arg_prompt")
         .track_focus(&self.focus_handle)
-        .on_key_down(handle_key)
+        .capture_key_down(handle_key)
         .when_some(
             render_actions_backdrop(
                 self.show_actions_popup,
