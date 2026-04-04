@@ -313,51 +313,84 @@ impl ScriptListApp {
     ///
     /// By computing this OUTSIDE of render, we ensure that animation tickers
     /// calling cx.notify() at 60fps don't re-run expensive Nucleo scoring.
-    pub fn recompute_file_search_display_indices(&mut self) {
-        // Get current filter pattern from the query
-        let filter_pattern = if let AppView::FileSearchView { ref query, .. } = self.current_view {
-            // Use frozen filter if set (during directory transitions)
-            if let Some(ref frozen) = self.file_search_frozen_filter {
-                frozen.clone()
-            } else if let Some(parsed) = crate::file_search::parse_directory_path(query) {
-                parsed.filter
-            } else if !query.is_empty() {
-                Some(query.clone())
-            } else {
-                None
+    /// Re-sort display indices for a directory-browse view using the active
+    /// `file_search_sort_mode`.  This ensures filtered directory views respect
+    /// the user-selected sort instead of drifting to Nucleo match order.
+    fn sort_file_search_display_indices_for_directory(&self, indices: &mut [usize]) {
+        let mode = self.file_search_sort_mode;
+        indices.sort_by(|a_idx, b_idx| {
+            let a = self.cached_file_results.get(*a_idx);
+            let b = self.cached_file_results.get(*b_idx);
+            match (a, b) {
+                (Some(a), Some(b)) => Self::compare_file_search_results_for_mode(mode, a, b),
+                (Some(_), None) => std::cmp::Ordering::Less,
+                (None, Some(_)) => std::cmp::Ordering::Greater,
+                (None, None) => a_idx.cmp(b_idx),
             }
-        } else {
-            None
-        };
+        });
+        tracing::debug!(
+            category = "FILE_SEARCH",
+            event = "sort_directory_display_indices",
+            ?mode,
+            display_count = indices.len(),
+            "Applied active sort mode to directory display indices"
+        );
+    }
+
+    pub fn recompute_file_search_display_indices(&mut self) {
+        let (filter_pattern, is_directory_query) =
+            if let AppView::FileSearchView { ref query, .. } = self.current_view {
+                let parsed = crate::file_search::parse_directory_path(query);
+                let filter_pattern = if let Some(ref frozen) = self.file_search_frozen_filter {
+                    frozen.clone()
+                } else if let Some(ref parsed) = parsed {
+                    parsed.filter.clone()
+                } else if !query.is_empty() {
+                    Some(query.clone())
+                } else {
+                    None
+                };
+                (filter_pattern, parsed.is_some())
+            } else {
+                (None, false)
+            };
 
         let cached_count = self.cached_file_results.len();
 
-        // Compute display indices
         self.file_search_display_indices = if let Some(ref pattern) = filter_pattern {
-            // Use Nucleo fuzzy matching and return only the indices, sorted by score
-            let indices: Vec<usize> = crate::file_search::filter_results_nucleo_simple(
+            let mut indices: Vec<usize> = crate::file_search::filter_results_nucleo_simple(
                 &self.cached_file_results,
                 pattern,
             )
             .into_iter()
             .map(|(idx, _)| idx)
             .collect();
+            if is_directory_query {
+                self.sort_file_search_display_indices_for_directory(&mut indices);
+            }
             tracing::debug!(
                 event = "recompute_display_indices",
                 pattern = %pattern,
                 cached_count,
-                display_count = indices.len()
+                display_count = indices.len(),
+                is_directory_query,
+                ?self.file_search_sort_mode
             );
             indices
         } else {
-            // No filter - show all results in order
+            let mut indices: Vec<usize> = (0..self.cached_file_results.len()).collect();
+            if is_directory_query {
+                self.sort_file_search_display_indices_for_directory(&mut indices);
+            }
             tracing::debug!(
                 event = "recompute_display_indices",
                 mode = "no_filter",
                 cached_count,
-                display_count = cached_count
+                display_count = indices.len(),
+                is_directory_query,
+                ?self.file_search_sort_mode
             );
-            (0..self.cached_file_results.len()).collect()
+            indices
         };
     }
 

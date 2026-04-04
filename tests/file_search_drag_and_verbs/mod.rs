@@ -475,7 +475,7 @@ fn refresh_directory_shows_hud_and_restores_focus() {
         .find("\"refresh_directory\" =>")
         .expect("refresh_directory handler must exist");
     let handler_section =
-        &FILES_ACTION_SOURCE[handler_start..(handler_start + 1200).min(FILES_ACTION_SOURCE.len())];
+        &FILES_ACTION_SOURCE[handler_start..(handler_start + 1400).min(FILES_ACTION_SOURCE.len())];
 
     assert!(
         handler_section.contains("\"Refreshed Directory\""),
@@ -506,5 +506,67 @@ fn refresh_directory_returns_error_when_no_directory_active() {
     assert!(
         handler_section.contains("DispatchOutcome::error("),
         "refresh_directory must return error when no directory is active"
+    );
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Filtered directory views obey the selected sort mode
+// ──────────────────────────────────────────────────────────────────────
+
+#[test]
+fn filtered_directory_recompute_reapplies_active_sort_mode() {
+    let source = include_str!("../../src/app_execute/utility_views.rs");
+    let recompute_start = source
+        .find("pub fn recompute_file_search_display_indices(")
+        .expect("recompute_file_search_display_indices must exist");
+    let recompute_section = &source[recompute_start..(recompute_start + 2600).min(source.len())];
+
+    assert!(
+        recompute_section.contains("let (filter_pattern, is_directory_query)"),
+        "recompute_file_search_display_indices must detect directory queries separately from filter text"
+    );
+    assert!(
+        recompute_section
+            .contains("self.sort_file_search_display_indices_for_directory(&mut indices);"),
+        "filtered directory results must be re-sorted with the active file_search_sort_mode"
+    );
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Directory stream batches reapply the active sort mode before recompute
+// ──────────────────────────────────────────────────────────────────────
+
+#[test]
+fn directory_stream_batches_reapply_active_sort_mode_before_recompute() {
+    let source = include_str!("../../src/app_impl/filter_input_change.rs");
+    let block_start = source
+        .find("if needs_recompute {")
+        .expect("needs_recompute block must exist");
+    let block = &source[block_start..(block_start + 1200).min(source.len())];
+
+    assert!(
+        block.contains("let is_directory_query = matches!("),
+        "stream batch handling must identify directory queries before recompute"
+    );
+    assert!(
+        block.contains("self.apply_file_search_sort_mode();"),
+        "stream batch handling must reapply the active sort mode before recomputing indices"
+    );
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Sort mode paths emit verification logs
+// ──────────────────────────────────────────────────────────────────────
+
+#[test]
+fn sort_mode_paths_emit_verification_logs() {
+    let source = include_str!("../../src/app_actions/handle_action/files.rs");
+    assert!(
+        source.contains("event = \"sort_action_selected\""),
+        "sort action handler must emit a structured log when a sort action is chosen"
+    );
+    assert!(
+        source.contains("event = \"apply_file_search_sort_mode\""),
+        "sort application must emit a structured log for runtime verification"
     );
 }

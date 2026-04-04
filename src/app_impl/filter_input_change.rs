@@ -643,6 +643,21 @@ impl ScriptListApp {
         }
 
         if needs_recompute {
+            let is_directory_query = matches!(
+                &self.current_view,
+                AppView::FileSearchView { query, .. }
+                    if crate::file_search::parse_directory_path(query).is_some()
+            );
+            if is_directory_query {
+                self.apply_file_search_sort_mode();
+                tracing::debug!(
+                    category = "FILE_SEARCH",
+                    event = "stream_batch_reapplied_sort",
+                    ?self.file_search_sort_mode,
+                    cached_count = self.cached_file_results.len(),
+                    "Reapplied active directory sort before recomputing streamed results"
+                );
+            }
             self.recompute_file_search_display_indices();
             self.restore_file_search_selection_after_results_change(
                 preferred_selected_path.as_deref(),
