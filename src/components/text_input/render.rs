@@ -3,7 +3,18 @@ use crate::{
     panel::{CURSOR_HEIGHT_LG, CURSOR_WIDTH},
     ui_foundation::ALPHA_SELECTION,
 };
-use gpui::{div, px, rgb, rgba, Div, Hsla, ParentElement, Styled};
+use gpui::{div, px, rgb, rgba, Div, Hsla, IntoElement, ParentElement, Styled};
+
+/// A character range to render with a specific text color.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct TextHighlightRange {
+    /// Start character index (inclusive).
+    pub start: usize,
+    /// End character index (exclusive).
+    pub end: usize,
+    /// Override text color for this range.
+    pub color: u32,
+}
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct TextInputRenderIndicator<'a> {
@@ -34,6 +45,9 @@ pub(crate) struct TextInputRenderConfig<'a> {
     pub leading_indicator: Option<TextInputRenderIndicator<'a>>,
     pub trailing_indicator: Option<TextInputRenderIndicator<'a>>,
     pub transform: Option<fn(&str) -> String>,
+    /// Character ranges to render with a specific text color (e.g. gold @mentions).
+    /// Ranges are in terms of character indices in the full text.
+    pub highlight_ranges: &'a [TextHighlightRange],
 }
 
 impl<'a> TextInputRenderConfig<'a> {
@@ -60,6 +74,7 @@ impl<'a> TextInputRenderConfig<'a> {
             leading_indicator: None,
             trailing_indicator: None,
             transform: None,
+            highlight_ranges: &[],
         }
     }
 }
@@ -69,6 +84,10 @@ struct ComputedTextInputSegments {
     before: String,
     selected: String,
     after: String,
+    /// Character offset of `before` in the full text.
+    before_char_offset: usize,
+    /// Character offset of `after` in the full text.
+    after_char_offset: usize,
     show_cursor: bool,
     show_leading_indicator: bool,
     show_trailing_indicator: bool,
@@ -97,8 +116,20 @@ pub(crate) fn render_text_input_cursor_selection(config: TextInputRenderConfig<'
             );
         }
     }
+    let has_highlights = !config.highlight_ranges.is_empty();
     if !segments.before.is_empty() {
-        content = content.child(div().child(format_segment(&segments.before, config.transform)));
+        if has_highlights {
+            content = content.child(render_segment_with_highlights(
+                &segments.before,
+                segments.before_char_offset,
+                config.highlight_ranges,
+                config.text_color,
+                config.transform,
+            ));
+        } else {
+            content =
+                content.child(div().child(format_segment(&segments.before, config.transform)));
+        }
     }
     if segments.show_cursor {
         if config.cursor_gap_before > 0.0 {
@@ -117,7 +148,18 @@ pub(crate) fn render_text_input_cursor_selection(config: TextInputRenderConfig<'
         );
     }
     if !segments.after.is_empty() {
-        content = content.child(div().child(format_segment(&segments.after, config.transform)));
+        if has_highlights {
+            content = content.child(render_segment_with_highlights(
+                &segments.after,
+                segments.after_char_offset,
+                config.highlight_ranges,
+                config.text_color,
+                config.transform,
+            ));
+        } else {
+            content =
+                content.child(div().child(format_segment(&segments.after, config.transform)));
+        }
     }
     if segments.show_trailing_indicator {
         if let Some(indicator) = config.trailing_indicator {
@@ -153,6 +195,68 @@ fn format_segment(segment: &str, transform: Option<fn(&str) -> String>) -> Strin
     }
 }
 
+/// Render a text segment, splitting it into sub-spans where highlight ranges
+/// overlap. Characters outside any highlight range use `default_color`.
+fn render_segment_with_highlights(
+    segment: &str,
+    segment_char_offset: usize,
+    highlights: &[TextHighlightRange],
+    default_color: u32,
+    transform: Option<fn(&str) -> String>,
+) -> gpui::AnyElement {
+    if segment.is_empty() {
+        return div().into_any_element();
+    }
+
+    let seg_chars: Vec<char> = segment.chars().collect();
+    let seg_len = seg_chars.len();
+
+    // Build a color map for each character in this segment.
+    let mut colors: Vec<u32> = vec![default_color; seg_len];
+    for hl in highlights {
+        if hl.end <= segment_char_offset || hl.start >= segment_char_offset + seg_len {
+            continue;
+        }
+        let local_start = hl.start.saturating_sub(segment_char_offset);
+        let local_end = (hl.end - segment_char_offset).min(seg_len);
+        for c in &mut colors[local_start..local_end] {
+            *c = hl.color;
+        }
+    }
+
+    // Group consecutive characters with the same color into runs.
+    let mut spans: Vec<(String, u32)> = Vec::new();
+    let mut run_start = 0;
+    while run_start < seg_len {
+        let run_color = colors[run_start];
+        let mut run_end = run_start + 1;
+        while run_end < seg_len && colors[run_end] == run_color {
+            run_end += 1;
+        }
+        let text: String = seg_chars[run_start..run_end].iter().collect();
+        spans.push((text, run_color));
+        run_start = run_end;
+    }
+
+    if spans.len() == 1 {
+        let (text, color) = &spans[0];
+        return div()
+            .text_color(rgb(*color))
+            .child(format_segment(text, transform))
+            .into_any_element();
+    }
+
+    let mut container = div().flex().flex_row();
+    for (text, color) in &spans {
+        container = container.child(
+            div()
+                .text_color(rgb(*color))
+                .child(format_segment(text, transform)),
+        );
+    }
+    container.into_any_element()
+}
+
 fn compute_text_input_segments(config: &TextInputRenderConfig<'_>) -> ComputedTextInputSegments {
     let chars: Vec<char> = config.text.chars().collect();
     let text_len = chars.len();
@@ -184,7 +288,7 @@ fn compute_text_input_segments(config: &TextInputRenderConfig<'_>) -> ComputedTe
         ))
     });
 
-    let (before, selected, after, show_cursor) =
+    let (before, selected, after, show_cursor, before_char_offset, after_char_offset) =
         if let Some((selection_start, selection_end)) = local_selection {
             (
                 visible_chars[..selection_start].iter().collect(),
@@ -193,6 +297,8 @@ fn compute_text_input_segments(config: &TextInputRenderConfig<'_>) -> ComputedTe
                     .collect(),
                 visible_chars[selection_end..].iter().collect(),
                 false,
+                window_start,
+                window_start + selection_end,
             )
         } else {
             (
@@ -200,6 +306,8 @@ fn compute_text_input_segments(config: &TextInputRenderConfig<'_>) -> ComputedTe
                 String::new(),
                 visible_chars[local_cursor..].iter().collect(),
                 true,
+                window_start,
+                window_start + local_cursor,
             )
         };
 
@@ -207,6 +315,8 @@ fn compute_text_input_segments(config: &TextInputRenderConfig<'_>) -> ComputedTe
         before,
         selected,
         after,
+        before_char_offset,
+        after_char_offset,
         show_cursor,
         show_leading_indicator: window_start > 0,
         show_trailing_indicator: window_end < text_len,
