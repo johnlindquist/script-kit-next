@@ -10,6 +10,7 @@
  *   bun scripts/config-cli.ts list             - Show all options with values
  *   bun scripts/config-cli.ts validate         - Check if config is valid
  *   bun scripts/config-cli.ts reset [key]      - Restore default(s)
+ *   bun scripts/config-cli.ts validate-change <json> - Validate a proposed change
  *   bun scripts/config-cli.ts --help           - Show this help
  * 
  * Output is JSON by default for AI parsing.
@@ -18,6 +19,18 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
+
+import {
+  isValidCommandId,
+  parseCommandConfigPath,
+  validateCommandConfigFieldValue,
+  validateCommandConfigValue,
+  validateCommandsConfig,
+} from './config-schema';
+import type {
+  ConfigChange,
+  ValidateConfigChangeResult,
+} from './config-schema';
 
 // NOTE: This CLI only manages ~/.scriptkit/kit/config.ts.
 // Runtime preferences such as dictation.selectedDeviceId live in
@@ -481,6 +494,9 @@ interface Result<T> {
   success: boolean;
   data?: T;
   error?: string;
+  valid?: boolean;
+  errors?: string[];
+  warnings?: string[];
 }
 
 function output(result: Result<unknown>): void {
@@ -1095,6 +1111,88 @@ async function cmdReset(key?: string): Promise<void> {
   }
 }
 
+function validateConfigChange(change: ConfigChange): ValidateConfigChangeResult {
+  if (change.key === "commands") {
+    return validateCommandsConfig(change.value);
+  }
+
+  if (change.key.startsWith("commands.")) {
+    const parsedPath = parseCommandConfigPath(change.key);
+    if (!parsedPath) {
+      const commandId = change.key.slice("commands.".length).split(".")[0];
+      return {
+        valid: false,
+        errors: [{
+          path: change.key,
+          code: "invalidCommandId",
+          message: `Invalid command id: ${commandId}`,
+        }],
+        warnings: [],
+      };
+    }
+
+    const errors = parsedPath.fieldPath
+      ? validateCommandConfigFieldValue(
+          parsedPath.fieldPath,
+          change.value,
+          change.key,
+        )
+      : validateCommandConfigValue(change.value, change.key);
+
+    return {
+      valid: errors.length === 0,
+      normalizedValue: errors.length === 0 ? change.value : undefined,
+      errors,
+      warnings: [],
+    };
+  }
+
+  // Fall back to existing scalar validation for other keys
+  const basic = validateValue(change.key, change.value);
+  return {
+    valid: basic.valid,
+    normalizedValue: basic.valid ? change.value : undefined,
+    errors: basic.valid
+      ? []
+      : [{
+          path: change.key,
+          code: "invalidValue",
+          message: basic.error ?? "Invalid value",
+        }],
+    warnings: [],
+  };
+}
+
+async function cmdValidateChange(payload: string): Promise<void> {
+  let change: ConfigChange;
+  try {
+    change = JSON.parse(payload) as ConfigChange;
+  } catch {
+    error("Invalid JSON payload for validate-change");
+    return;
+  }
+
+  const result = validateConfigChange(change);
+
+  // Structured log to stderr (machine-readable)
+  console.error(JSON.stringify({
+    ts: new Date().toISOString(),
+    level: "info",
+    msg: "config.validate_change",
+    key: change.key,
+    valid: result.valid,
+    errorCount: result.errors.length,
+    warningCount: result.warnings.length,
+  }));
+
+  if (!result.valid) {
+    output({ success: false, ...result });
+    process.exit(1);
+  }
+
+  success(result);
+}
+
 function showHelp(): void {
   const help = `
 Script Kit Config CLI
@@ -1184,6 +1282,9 @@ async function main(): Promise<void> {
       break;
     case 'reset':
       await cmdReset(args[1]);
+      break;
+    case 'validate-change':
+      await cmdValidateChange(args[1]);
       break;
     default:
       error(`Unknown command: ${command}. Use --help for usage.`);

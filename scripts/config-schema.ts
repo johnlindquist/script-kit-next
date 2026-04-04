@@ -1058,3 +1058,291 @@ export function isValidCommandId(value: string): value is CommandId {
     value.startsWith("scriptlet/")
   );
 }
+
+// =============================================================================
+// PREWRITE VALIDATION
+// =============================================================================
+
+/**
+ * A single validation message with machine-readable code.
+ */
+export interface ValidationMessage {
+  path: string;
+  code: string;
+  message: string;
+}
+
+/**
+ * Result of validating a proposed config change before write.
+ */
+export interface ValidateConfigChangeResult {
+  valid: boolean;
+  normalizedValue?: unknown;
+  errors: ValidationMessage[];
+  warnings: ValidationMessage[];
+}
+
+/**
+ * A proposed config change: a top-level key and its new value.
+ */
+export interface ConfigChange {
+  key: string;
+  value: unknown;
+}
+
+const VALID_KEY_MODIFIERS = ["meta", "ctrl", "alt", "shift"] as const;
+
+const VALID_KEY_CODES = [
+  "KeyA", "KeyB", "KeyC", "KeyD", "KeyE", "KeyF", "KeyG",
+  "KeyH", "KeyI", "KeyJ", "KeyK", "KeyL", "KeyM", "KeyN",
+  "KeyO", "KeyP", "KeyQ", "KeyR", "KeyS", "KeyT", "KeyU",
+  "KeyV", "KeyW", "KeyX", "KeyY", "KeyZ",
+  "Digit0", "Digit1", "Digit2", "Digit3", "Digit4",
+  "Digit5", "Digit6", "Digit7", "Digit8", "Digit9",
+  "Space", "Enter", "Tab", "Escape", "Backspace", "Delete",
+  "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight",
+  "Home", "End", "PageUp", "PageDown", "Insert",
+  "Semicolon", "Quote", "Comma", "Period", "Slash",
+  "Backslash", "BracketLeft", "BracketRight",
+  "Minus", "Equal", "Backquote",
+  "F1", "F2", "F3", "F4", "F5", "F6",
+  "F7", "F8", "F9", "F10", "F11", "F12",
+  "F13", "F14", "F15", "F16", "F17", "F18",
+  "F19", "F20", "F21", "F22", "F23", "F24",
+  "CapsLock", "NumLock", "ScrollLock", "PrintScreen", "Pause",
+] as const;
+
+const COMMAND_CONFIG_PATH_SUFFIXES = [
+  "shortcut.modifiers",
+  "shortcut.key",
+  "shortcut",
+  "hidden",
+  "confirmationRequired",
+] as const;
+
+/**
+ * Validate a HotkeyConfig shape.
+ */
+function validateHotkeyShape(value: unknown, path: string): ValidationMessage[] {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return [{ path, code: "invalidType", message: `${path} must be an object` }];
+  }
+  const hotkey = value as Record<string, unknown>;
+  const errors: ValidationMessage[] = [];
+
+  if (!Array.isArray(hotkey.modifiers)) {
+    errors.push({
+      path: `${path}.modifiers`,
+      code: "invalidType",
+      message: `${path}.modifiers must be an array`,
+    });
+  } else {
+    for (const mod of hotkey.modifiers) {
+      if (!VALID_KEY_MODIFIERS.includes(mod as (typeof VALID_KEY_MODIFIERS)[number])) {
+        errors.push({
+          path: `${path}.modifiers`,
+          code: "invalidModifier",
+          message: `Invalid modifier: ${mod}. Valid: ${VALID_KEY_MODIFIERS.join(", ")}`,
+        });
+      }
+    }
+  }
+
+  if (typeof hotkey.key !== "string") {
+    errors.push({
+      path: `${path}.key`,
+      code: "invalidType",
+      message: `${path}.key must be a string`,
+    });
+  } else if (!VALID_KEY_CODES.includes(hotkey.key as (typeof VALID_KEY_CODES)[number])) {
+    errors.push({
+      path: `${path}.key`,
+      code: "invalidKeyCode",
+      message: `Invalid key code: ${hotkey.key}`,
+    });
+  }
+
+  return errors;
+}
+
+/**
+ * Validate the value of a single CommandConfig entry.
+ */
+export function validateCommandConfigValue(
+  value: unknown,
+  path: string,
+): ValidationMessage[] {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return [{ path, code: "invalidType", message: `${path} must be an object` }];
+  }
+
+  const config = value as Record<string, unknown>;
+  const errors: ValidationMessage[] = [];
+  const knownKeys = ["shortcut", "hidden", "confirmationRequired"];
+
+  for (const key of Object.keys(config)) {
+    if (!knownKeys.includes(key)) {
+      errors.push({
+        path: `${path}.${key}`,
+        code: "unknownCommandConfigKey",
+        message: `Unknown command config key: ${key}`,
+      });
+    }
+  }
+
+  if ("shortcut" in config && config.shortcut !== undefined) {
+    errors.push(...validateHotkeyShape(config.shortcut, `${path}.shortcut`));
+  }
+
+  if ("hidden" in config && typeof config.hidden !== "boolean") {
+    errors.push({
+      path: `${path}.hidden`,
+      code: "invalidType",
+      message: `${path}.hidden must be a boolean`,
+    });
+  }
+
+  if (
+    "confirmationRequired" in config &&
+    typeof config.confirmationRequired !== "boolean"
+  ) {
+    errors.push({
+      path: `${path}.confirmationRequired`,
+      code: "invalidType",
+      message: `${path}.confirmationRequired must be a boolean`,
+    });
+  }
+
+  return errors;
+}
+
+/**
+ * Validate a full `commands` config object.
+ * Rejects dash-style builtin IDs and validates each CommandConfig value.
+ */
+export function validateCommandsConfig(
+  value: unknown,
+  path = "commands",
+): ValidateConfigChangeResult {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return {
+      valid: false,
+      errors: [{ path, code: "invalidType", message: `${path} must be an object` }],
+      warnings: [],
+    };
+  }
+
+  const commands = value as Record<string, unknown>;
+  const errors: ValidationMessage[] = [];
+
+  for (const [commandId, commandConfig] of Object.entries(commands)) {
+    if (!isValidCommandId(commandId)) {
+      errors.push({
+        path: `${path}.${commandId}`,
+        code: "invalidCommandId",
+        message: `Invalid command id: ${commandId}`,
+      });
+      continue;
+    }
+    errors.push(
+      ...validateCommandConfigValue(commandConfig, `${path}.${commandId}`),
+    );
+  }
+
+  return {
+    valid: errors.length === 0,
+    normalizedValue: errors.length === 0 ? commands : undefined,
+    errors,
+    warnings: [],
+  };
+}
+
+export interface ParsedCommandConfigPath {
+  commandId: CommandId;
+  fieldPath?: string;
+}
+
+export function parseCommandConfigPath(key: string): ParsedCommandConfigPath | null {
+  if (!key.startsWith("commands.")) {
+    return null;
+  }
+
+  const remainder = key.slice("commands.".length);
+  for (const suffix of COMMAND_CONFIG_PATH_SUFFIXES) {
+    const fieldSuffix = `.${suffix}`;
+    if (!remainder.endsWith(fieldSuffix)) {
+      continue;
+    }
+
+    const commandId = remainder.slice(0, -fieldSuffix.length);
+    if (!isValidCommandId(commandId)) {
+      return null;
+    }
+
+    return { commandId, fieldPath: suffix };
+  }
+
+  if (!isValidCommandId(remainder)) {
+    return null;
+  }
+
+  return { commandId: remainder };
+}
+
+export function validateCommandConfigFieldValue(
+  fieldPath: string,
+  value: unknown,
+  path: string,
+): ValidationMessage[] {
+  switch (fieldPath) {
+    case "hidden":
+    case "confirmationRequired":
+      return typeof value === "boolean"
+        ? []
+        : [{
+            path,
+            code: "invalidType",
+            message: `${path} must be a boolean`,
+          }];
+    case "shortcut":
+      return validateHotkeyShape(value, path);
+    case "shortcut.modifiers":
+      if (!Array.isArray(value)) {
+        return [{
+          path,
+          code: "invalidType",
+          message: `${path} must be an array`,
+        }];
+      }
+      return value.flatMap((modifier) =>
+        VALID_KEY_MODIFIERS.includes(modifier as (typeof VALID_KEY_MODIFIERS)[number])
+          ? []
+          : [{
+              path,
+              code: "invalidModifier",
+              message: `Invalid modifier: ${modifier}. Valid: ${VALID_KEY_MODIFIERS.join(", ")}`,
+            }],
+      );
+    case "shortcut.key":
+      if (typeof value !== "string") {
+        return [{
+          path,
+          code: "invalidType",
+          message: `${path} must be a string`,
+        }];
+      }
+      return VALID_KEY_CODES.includes(value as (typeof VALID_KEY_CODES)[number])
+        ? []
+        : [{
+            path,
+            code: "invalidKeyCode",
+            message: `Invalid key code: ${value}`,
+          }];
+    default:
+      return [{
+        path,
+        code: "unknownCommandConfigKey",
+        message: `Unknown command config key: ${fieldPath}`,
+      }];
+  }
+}
