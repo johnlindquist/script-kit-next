@@ -33,23 +33,45 @@ pub fn lucide_from_str(name: &str) -> Option<gpui_component::IconName> {
         "align-center" => Some(gpui_component::IconName::AlignCenter),
         "align-end-horizontal" => Some(gpui_component::IconName::AlignEndHorizontal),
         "align-end-vertical" => Some(gpui_component::IconName::AlignEndVertical),
-        "align-horizontal-distribute-center" => Some(gpui_component::IconName::AlignHorizontalDistributeCenter),
-        "align-horizontal-distribute-end" => Some(gpui_component::IconName::AlignHorizontalDistributeEnd),
-        "align-horizontal-distribute-start" => Some(gpui_component::IconName::AlignHorizontalDistributeStart),
-        "align-horizontal-justify-center" => Some(gpui_component::IconName::AlignHorizontalJustifyCenter),
+        "align-horizontal-distribute-center" => {
+            Some(gpui_component::IconName::AlignHorizontalDistributeCenter)
+        }
+        "align-horizontal-distribute-end" => {
+            Some(gpui_component::IconName::AlignHorizontalDistributeEnd)
+        }
+        "align-horizontal-distribute-start" => {
+            Some(gpui_component::IconName::AlignHorizontalDistributeStart)
+        }
+        "align-horizontal-justify-center" => {
+            Some(gpui_component::IconName::AlignHorizontalJustifyCenter)
+        }
         "align-horizontal-justify-end" => Some(gpui_component::IconName::AlignHorizontalJustifyEnd),
-        "align-horizontal-justify-start" => Some(gpui_component::IconName::AlignHorizontalJustifyStart),
-        "align-horizontal-space-around" => Some(gpui_component::IconName::AlignHorizontalSpaceAround),
-        "align-horizontal-space-between" => Some(gpui_component::IconName::AlignHorizontalSpaceBetween),
+        "align-horizontal-justify-start" => {
+            Some(gpui_component::IconName::AlignHorizontalJustifyStart)
+        }
+        "align-horizontal-space-around" => {
+            Some(gpui_component::IconName::AlignHorizontalSpaceAround)
+        }
+        "align-horizontal-space-between" => {
+            Some(gpui_component::IconName::AlignHorizontalSpaceBetween)
+        }
         "align-justify" => Some(gpui_component::IconName::AlignJustify),
         "align-left" => Some(gpui_component::IconName::AlignLeft),
         "align-right" => Some(gpui_component::IconName::AlignRight),
         "align-start-horizontal" => Some(gpui_component::IconName::AlignStartHorizontal),
         "align-start-vertical" => Some(gpui_component::IconName::AlignStartVertical),
-        "align-vertical-distribute-center" => Some(gpui_component::IconName::AlignVerticalDistributeCenter),
-        "align-vertical-distribute-end" => Some(gpui_component::IconName::AlignVerticalDistributeEnd),
-        "align-vertical-distribute-start" => Some(gpui_component::IconName::AlignVerticalDistributeStart),
-        "align-vertical-justify-center" => Some(gpui_component::IconName::AlignVerticalJustifyCenter),
+        "align-vertical-distribute-center" => {
+            Some(gpui_component::IconName::AlignVerticalDistributeCenter)
+        }
+        "align-vertical-distribute-end" => {
+            Some(gpui_component::IconName::AlignVerticalDistributeEnd)
+        }
+        "align-vertical-distribute-start" => {
+            Some(gpui_component::IconName::AlignVerticalDistributeStart)
+        }
+        "align-vertical-justify-center" => {
+            Some(gpui_component::IconName::AlignVerticalJustifyCenter)
+        }
         "align-vertical-justify-end" => Some(gpui_component::IconName::AlignVerticalJustifyEnd),
         "align-vertical-justify-start" => Some(gpui_component::IconName::AlignVerticalJustifyStart),
         "align-vertical-space-around" => Some(gpui_component::IconName::AlignVerticalSpaceAround),
@@ -374,8 +396,12 @@ pub fn lucide_from_str(name: &str) -> Option<gpui_component::IconName> {
         "chart-gantt" => Some(gpui_component::IconName::ChartGantt),
         "chart-line" => Some(gpui_component::IconName::ChartLine),
         "chart-network" => Some(gpui_component::IconName::ChartNetwork),
-        "chart-no-axes-column-decreasing" => Some(gpui_component::IconName::ChartNoAxesColumnDecreasing),
-        "chart-no-axes-column-increasing" => Some(gpui_component::IconName::ChartNoAxesColumnIncreasing),
+        "chart-no-axes-column-decreasing" => {
+            Some(gpui_component::IconName::ChartNoAxesColumnDecreasing)
+        }
+        "chart-no-axes-column-increasing" => {
+            Some(gpui_component::IconName::ChartNoAxesColumnIncreasing)
+        }
         "chart-no-axes-column" => Some(gpui_component::IconName::ChartNoAxesColumn),
         "chart-no-axes-combined" => Some(gpui_component::IconName::ChartNoAxesCombined),
         "chart-no-axes-gantt" => Some(gpui_component::IconName::ChartNoAxesGantt),
@@ -868,7 +894,9 @@ pub fn lucide_from_str(name: &str) -> Option<gpui_component::IconName> {
         "git-merge" => Some(gpui_component::IconName::GitMerge),
         "git-pull-request-arrow" => Some(gpui_component::IconName::GitPullRequestArrow),
         "git-pull-request-closed" => Some(gpui_component::IconName::GitPullRequestClosed),
-        "git-pull-request-create-arrow" => Some(gpui_component::IconName::GitPullRequestCreateArrow),
+        "git-pull-request-create-arrow" => {
+            Some(gpui_component::IconName::GitPullRequestCreateArrow)
+        }
         "git-pull-request-create" => Some(gpui_component::IconName::GitPullRequestCreate),
         "git-pull-request-draft" => Some(gpui_component::IconName::GitPullRequestDraft),
         "git-pull-request" => Some(gpui_component::IconName::GitPullRequest),
@@ -1483,7 +1511,9 @@ pub fn lucide_from_str(name: &str) -> Option<gpui_component::IconName> {
         "school-2" => Some(gpui_component::IconName::School2),
         "school" => Some(gpui_component::IconName::School),
         "scissors-line-dashed" => Some(gpui_component::IconName::ScissorsLineDashed),
-        "scissors-square-dashed-bottom" => Some(gpui_component::IconName::ScissorsSquareDashedBottom),
+        "scissors-square-dashed-bottom" => {
+            Some(gpui_component::IconName::ScissorsSquareDashedBottom)
+        }
         "scissors-square" => Some(gpui_component::IconName::ScissorsSquare),
         "scissors" => Some(gpui_component::IconName::Scissors),
         "scooter" => Some(gpui_component::IconName::Scooter),
@@ -1617,9 +1647,15 @@ pub fn lucide_from_str(name: &str) -> Option<gpui_component::IconName> {
         "square-arrow-up-right" => Some(gpui_component::IconName::SquareArrowUpRight),
         "square-arrow-up" => Some(gpui_component::IconName::SquareArrowUp),
         "square-asterisk" => Some(gpui_component::IconName::SquareAsterisk),
-        "square-bottom-dashed-scissors" => Some(gpui_component::IconName::SquareBottomDashedScissors),
-        "square-centerline-dashed-horizontal" => Some(gpui_component::IconName::SquareCenterlineDashedHorizontal),
-        "square-centerline-dashed-vertical" => Some(gpui_component::IconName::SquareCenterlineDashedVertical),
+        "square-bottom-dashed-scissors" => {
+            Some(gpui_component::IconName::SquareBottomDashedScissors)
+        }
+        "square-centerline-dashed-horizontal" => {
+            Some(gpui_component::IconName::SquareCenterlineDashedHorizontal)
+        }
+        "square-centerline-dashed-vertical" => {
+            Some(gpui_component::IconName::SquareCenterlineDashedVertical)
+        }
         "square-chart-gantt" => Some(gpui_component::IconName::SquareChartGantt),
         "square-check-big" => Some(gpui_component::IconName::SquareCheckBig),
         "square-check" => Some(gpui_component::IconName::SquareCheck),

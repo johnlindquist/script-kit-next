@@ -860,3 +860,43 @@ fn should_include_artifact_authoring_guidance_detects_authoring_intents() {
     assert!(!should_include_artifact_authoring_guidance(Some("")));
     assert!(!should_include_artifact_authoring_guidance(Some("   ")));
 }
+
+#[test]
+fn script_authoring_submission_includes_bun_verification_contract() {
+    let context = make_context("ScriptList", Some("script"));
+    let submission = build_tab_ai_harness_submission(
+        &context,
+        Some("make a clipboard cleanup command"),
+        TabAiHarnessSubmissionMode::Submit,
+        None,
+        None,
+        &[],
+    )
+    .expect("submission should build");
+
+    assert!(submission.contains("~/.scriptkit/skills/script-authoring/SKILL.md"));
+    assert!(submission.contains(
+        "bun build ~/.scriptkit/kit/main/scripts/<name>.ts --target=bun --outfile ~/.scriptkit/tmp/test-scripts/<name>.verify.mjs"
+    ));
+    assert!(submission.contains("SK_VERIFY=1 bun ~/.scriptkit/kit/main/scripts/<name>.ts"));
+    assert!(submission.contains("Do not report success until both commands pass"));
+}
+
+#[test]
+fn embedded_script_authoring_skill_requires_bun_fix_loop() {
+    let skill = include_str!("../kit-init/skills/script-authoring/SKILL.md");
+    assert!(skill.contains("process.env.SK_VERIFY === \"1\""));
+    assert!(skill.contains(
+        "bun build ~/.scriptkit/kit/main/scripts/<name>.ts --target=bun --outfile ~/.scriptkit/tmp/test-scripts/<name>.verify.mjs"
+    ));
+    assert!(skill.contains("SK_VERIFY=1 bun ~/.scriptkit/kit/main/scripts/<name>.ts"));
+    assert!(skill.contains("Never report success until both commands pass"));
+}
+
+#[test]
+fn embedded_hello_world_starter_is_verification_friendly() {
+    let starter = include_str!("../kit-init/examples/scripts/hello-world.ts");
+    assert!(starter.contains("process.env.SK_VERIFY === \"1\""));
+    assert!(starter.contains("console.log(JSON.stringify({ ok: true, greeting }))"));
+    assert!(starter.contains("await arg(\"Who should I greet?\")"));
+}

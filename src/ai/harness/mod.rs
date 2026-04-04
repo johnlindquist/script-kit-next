@@ -835,8 +835,19 @@ pub fn build_tab_ai_harness_submission(
         .filter(|value| !value.is_empty());
 
     if should_include_artifact_authoring_guidance(effective_intent) {
+        let guidance = build_tab_ai_artifact_authoring_guidance_block();
+        tracing::info!(
+            event = "tab_ai_artifact_authoring_guidance_appended",
+            includes_script_authoring_skill = guidance
+                .contains("~/.scriptkit/skills/script-authoring/SKILL.md"),
+            includes_bun_build_verification = guidance.contains(
+                "bun build ~/.scriptkit/kit/main/scripts/<name>.ts --target=bun --outfile ~/.scriptkit/tmp/test-scripts/<name>.verify.mjs"
+            ),
+            includes_bun_execute_verification = guidance
+                .contains("SK_VERIFY=1 bun ~/.scriptkit/kit/main/scripts/<name>.ts"),
+        );
         output.push_str("\n\n");
-        output.push_str(&build_tab_ai_artifact_authoring_guidance_block());
+        output.push_str(&guidance);
     }
 
     match effective_intent {

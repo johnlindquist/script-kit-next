@@ -782,7 +782,7 @@ fn stop_path_collects_all_chunks_including_tail_after_handle_drop() {
         .expect("send chunk 1");
 
         tx.send_blocking(DictationCaptureEvent::Bars([0.3; 9]))
-        .expect("send level");
+            .expect("send level");
 
         // Tail chunk — the one that would be lost if we drained with
         // try_recv() before the handle was dropped.
