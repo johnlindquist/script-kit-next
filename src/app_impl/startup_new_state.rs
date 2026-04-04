@@ -73,6 +73,7 @@
             file_search_cancel: None,
             file_search_display_indices: Vec::new(),
             show_actions_popup: false,
+            actions_closed_at: None,
             actions_dialog: None,
             cursor_visible: true,
             focused_input: FocusedInput::MainFilter,

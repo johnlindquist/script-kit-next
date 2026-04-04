@@ -430,6 +430,7 @@ impl ScriptListApp {
             file_search_display_indices: Vec::new(),
             file_search_preview_thumbnail: FileSearchThumbnailPreviewState::Idle,
             show_actions_popup: false,
+            actions_closed_at: None,
             actions_dialog: None,
             cursor_visible: true,
             focused_input: FocusedInput::MainFilter,

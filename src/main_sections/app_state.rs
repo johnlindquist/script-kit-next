@@ -126,6 +126,9 @@ struct ScriptListApp {
     file_search_preview_thumbnail: FileSearchThumbnailPreviewState,
     // Actions popup overlay
     show_actions_popup: bool,
+    /// Timestamp of the last actions popup close, used to debounce reopen from
+    /// activation-triggered close racing with the footer button click handler.
+    actions_closed_at: Option<std::time::Instant>,
     // ActionsDialog entity for focus management
     actions_dialog: Option<Entity<ActionsDialog>>,
     // Cursor blink state and focus tracking
