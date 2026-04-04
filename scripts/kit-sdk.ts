@@ -2551,7 +2551,11 @@ type ResponseMessage =
   | MenuActionResultMessage
   | { type: 'chatSubmit'; id: string; text: string }
   | { type: 'displayListResult'; requestId: string; displays: DisplayInfo[] }
-  | { type: 'frontmostWindowResult'; requestId: string; window?: SystemWindowInfo };
+  | { type: 'frontmostWindowResult'; requestId: string; window?: SystemWindowInfo }
+  | StateResultMessage
+  | ElementsResultMessage
+  | WaitForResultMessage
+  | BatchResultMessage;
 
 /** Initial chat message to show the prompt */
 interface ChatMessageType {
@@ -7793,6 +7797,354 @@ globalThis._getScriptOutput = function _getScriptOutput(): Record<string, unknow
 globalThis._resetScriptIO = function _resetScriptIO(): void {
   scriptInputData = null;
   scriptOutputData = {};
+};
+
+// =============================================================================
+// UI Introspection / Deterministic Transactions
+// =============================================================================
+
+export type TransactionTraceMode = 'off' | 'on' | 'onFailure';
+
+export interface PromptState {
+  promptType: string;
+  promptId?: string;
+  placeholder?: string;
+  inputValue: string;
+  choiceCount: number;
+  visibleChoiceCount: number;
+  selectedIndex: number;
+  selectedValue?: string;
+  isFocused: boolean;
+  windowVisible: boolean;
+}
+
+export type ElementType = 'choice' | 'input' | 'button' | 'panel' | 'list' | 'unknown';
+
+export interface ElementInfo {
+  semanticId: string;
+  type: ElementType;
+  text?: string;
+  value?: string;
+  selected?: boolean;
+  focused?: boolean;
+  index?: number;
+}
+
+export interface ElementsSnapshot {
+  elements: ElementInfo[];
+  totalCount: number;
+  truncated: boolean;
+  focusedSemanticId?: string;
+  selectedSemanticId?: string;
+  warnings: string[];
+}
+
+export type WaitNamedCondition =
+  | 'choicesRendered'
+  | 'inputEmpty'
+  | 'windowVisible'
+  | 'windowFocused';
+
+export type WaitCondition =
+  | WaitNamedCondition
+  | { type: 'elementExists'; semanticId: string }
+  | { type: 'elementVisible'; semanticId: string }
+  | { type: 'elementFocused'; semanticId: string }
+  | {
+      type: 'stateMatch';
+      state: Partial<
+        Pick<PromptState, 'promptType' | 'inputValue' | 'selectedValue' | 'windowVisible'>
+      >;
+    };
+
+export interface TransactionErrorData {
+  code?: string;
+  message: string;
+  details?: string;
+}
+
+export interface WaitForOptions {
+  timeout?: number;
+  pollInterval?: number;
+  trace?: TransactionTraceMode;
+}
+
+export interface WaitForResult {
+  success: boolean;
+  elapsed: number;
+  error?: TransactionErrorData;
+  trace?: unknown;
+}
+
+export type BatchCommand =
+  | { type: 'setInput'; text: string }
+  | { type: 'forceSubmit'; value: unknown }
+  | ({ type: 'waitFor'; condition: WaitCondition } & WaitForOptions);
+
+export interface BatchOptions {
+  stopOnError?: boolean;
+  rollbackOnError?: boolean;
+  timeout?: number;
+  sequential?: boolean;
+}
+
+export interface BatchResultEntry {
+  success: boolean;
+  elapsed?: number;
+  error?: TransactionErrorData;
+  value?: unknown;
+}
+
+export interface BatchResult {
+  success: boolean;
+  results: BatchResultEntry[];
+  failedAt?: number;
+  totalElapsed: number;
+  trace?: unknown;
+}
+
+// Internal message types for protocol communication
+
+type GetStateMessage = {
+  type: 'getState';
+  requestId: string;
+};
+
+type StateResultMessage = {
+  type: 'stateResult';
+  requestId: string;
+  promptType: string;
+  promptId?: string;
+  placeholder?: string;
+  inputValue: string;
+  choiceCount: number;
+  visibleChoiceCount: number;
+  selectedIndex: number;
+  selectedValue?: string;
+  isFocused: boolean;
+  windowVisible: boolean;
+};
+
+type GetElementsMessage = {
+  type: 'getElements';
+  requestId: string;
+  limit?: number;
+};
+
+type ElementsResultMessage = {
+  type: 'elementsResult';
+  requestId: string;
+  elements: ElementInfo[];
+  totalCount: number;
+  truncated: boolean;
+  focusedSemanticId?: string;
+  selectedSemanticId?: string;
+  warnings?: string[];
+};
+
+type WaitForMessage = {
+  type: 'waitFor';
+  requestId: string;
+  condition: WaitCondition;
+  timeout?: number;
+  pollInterval?: number;
+  trace?: TransactionTraceMode;
+};
+
+type WaitForResultMessage = {
+  type: 'waitForResult';
+  requestId: string;
+  success: boolean;
+  elapsed: number;
+  error?: TransactionErrorData;
+  trace?: unknown;
+};
+
+type BatchMessage = {
+  type: 'batch';
+  requestId: string;
+  commands: BatchCommand[];
+  options?: BatchOptions;
+  trace?: TransactionTraceMode;
+};
+
+type BatchResultMessage = {
+  type: 'batchResult';
+  requestId: string;
+  success: boolean;
+  results: BatchResultEntry[];
+  failedAt?: number;
+  totalElapsed: number;
+  trace?: unknown;
+};
+
+declare global {
+  var getState: () => Promise<PromptState>;
+  var getElements: (limit?: number) => Promise<ElementsSnapshot>;
+  var waitFor: (
+    condition: WaitCondition,
+    options?: WaitForOptions
+  ) => Promise<WaitForResult>;
+  var batch: (
+    commands: BatchCommand[],
+    options?: BatchOptions & { trace?: TransactionTraceMode }
+  ) => Promise<BatchResult>;
+}
+
+globalThis.getState = async function getState(): Promise<PromptState> {
+  const requestId = nextId();
+  const fallback: StateResultMessage = {
+    type: 'stateResult',
+    requestId,
+    promptType: 'unknown',
+    inputValue: '',
+    choiceCount: 0,
+    visibleChoiceCount: 0,
+    selectedIndex: -1,
+    isFocused: false,
+    windowVisible: false,
+  };
+
+  return new Promise((resolve) => {
+    addPending(
+      requestId,
+      (msg: ResponseMessage) => {
+        const state = (msg.type === 'stateResult' ? msg : fallback) as StateResultMessage;
+        resolve({
+          promptType: state.promptType,
+          promptId: state.promptId,
+          placeholder: state.placeholder,
+          inputValue: state.inputValue,
+          choiceCount: state.choiceCount,
+          visibleChoiceCount: state.visibleChoiceCount,
+          selectedIndex: state.selectedIndex,
+          selectedValue: state.selectedValue,
+          isFocused: state.isFocused,
+          windowVisible: state.windowVisible,
+        });
+      },
+      fallback
+    );
+    const message: GetStateMessage = { type: 'getState', requestId };
+    send(message);
+  });
+};
+
+globalThis.getElements = async function getElements(limit = 50): Promise<ElementsSnapshot> {
+  const requestId = nextId();
+  const fallback: ElementsResultMessage = {
+    type: 'elementsResult',
+    requestId,
+    elements: [],
+    totalCount: 0,
+    truncated: false,
+    warnings: [],
+  };
+
+  return new Promise((resolve) => {
+    addPending(
+      requestId,
+      (msg: ResponseMessage) => {
+        const result = (msg.type === 'elementsResult' ? msg : fallback) as ElementsResultMessage;
+        resolve({
+          elements: result.elements ?? [],
+          totalCount: result.totalCount ?? 0,
+          truncated: result.truncated ?? false,
+          focusedSemanticId: result.focusedSemanticId,
+          selectedSemanticId: result.selectedSemanticId,
+          warnings: result.warnings ?? [],
+        });
+      },
+      fallback
+    );
+    const message: GetElementsMessage = { type: 'getElements', requestId, limit };
+    send(message);
+  });
+};
+
+globalThis.waitFor = async function waitFor(
+  condition: WaitCondition,
+  options?: WaitForOptions
+): Promise<WaitForResult> {
+  const requestId = nextId();
+  const fallback: WaitForResultMessage = {
+    type: 'waitForResult',
+    requestId,
+    success: false,
+    elapsed: 0,
+    error: { message: 'waitFor fallback response used' },
+  };
+
+  return new Promise((resolve) => {
+    addPending(
+      requestId,
+      (msg: ResponseMessage) => {
+        const result = (msg.type === 'waitForResult' ? msg : fallback) as WaitForResultMessage;
+        resolve({
+          success: result.success,
+          elapsed: result.elapsed,
+          error: result.error,
+          trace: result.trace,
+        });
+      },
+      fallback
+    );
+    const message: WaitForMessage = {
+      type: 'waitFor',
+      requestId,
+      condition,
+      timeout: options?.timeout,
+      pollInterval: options?.pollInterval,
+      trace: options?.trace,
+    };
+    send(message);
+  });
+};
+
+globalThis.batch = async function batch(
+  commands: BatchCommand[],
+  options?: BatchOptions & { trace?: TransactionTraceMode }
+): Promise<BatchResult> {
+  const requestId = nextId();
+  const fallback: BatchResultMessage = {
+    type: 'batchResult',
+    requestId,
+    success: false,
+    results: [],
+    totalElapsed: 0,
+  };
+
+  return new Promise((resolve) => {
+    addPending(
+      requestId,
+      (msg: ResponseMessage) => {
+        const result = (msg.type === 'batchResult' ? msg : fallback) as BatchResultMessage;
+        resolve({
+          success: result.success,
+          results: result.results ?? [],
+          failedAt: result.failedAt,
+          totalElapsed: result.totalElapsed ?? 0,
+          trace: result.trace,
+        });
+      },
+      fallback
+    );
+    const message: BatchMessage = {
+      type: 'batch',
+      requestId,
+      commands,
+      options: options
+        ? {
+            stopOnError: options.stopOnError,
+            rollbackOnError: options.rollbackOnError,
+            timeout: options.timeout,
+            sequential: options.sequential,
+          }
+        : undefined,
+      trace: options?.trace,
+    };
+    send(message);
+  });
 };
 
 export {};

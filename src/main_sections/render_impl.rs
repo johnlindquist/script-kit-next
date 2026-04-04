@@ -125,7 +125,6 @@ impl Render for ScriptListApp {
                 confirm::route_key_to_confirm_popup("escape", cx);
             }
             if actions::is_actions_window_open() {
-                logging::log("FOCUS", "Main window regained focus - closing actions popup");
                 actions::close_actions_window(cx);
                 self.show_actions_popup = false;
                 self.actions_closed_at = Some(std::time::Instant::now());
@@ -497,7 +496,6 @@ impl Render for ScriptListApp {
                     confirm::route_key_to_confirm_popup("escape", cx);
                 }
                 if actions::is_actions_window_open() {
-                    logging::log("FOCUS", "Main window clicked - closing actions popup");
                     actions::close_actions_window(cx);
                     this.show_actions_popup = false;
                     this.actions_closed_at = Some(std::time::Instant::now());

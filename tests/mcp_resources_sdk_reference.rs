@@ -2,7 +2,7 @@
 //! is verification-friendly: it contains the `SK_VERIFY` branch and, when executed
 //! with `SK_VERIFY=1`, produces deterministic JSON stdout.
 
-use script_kit_gpui::mcp_resources::{self, SdkReferenceDocument};
+use script_kit_gpui::mcp_resources::{self, SdkReferenceDocument, SDK_REFERENCE_SCHEMA_VERSION};
 
 /// Helper: read and deserialize the SDK reference document.
 fn read_sdk_reference() -> SdkReferenceDocument {
@@ -69,6 +69,43 @@ fn sdk_reference_harness_workflow_example_imports_sdk() {
         script.contains(r#"import "@scriptkit/sdk""#),
         "example_test_script must import @scriptkit/sdk"
     );
+}
+
+#[test]
+fn sdk_reference_lists_ui_automation_functions() {
+    let doc = read_sdk_reference();
+    assert_eq!(doc.schema_version, SDK_REFERENCE_SCHEMA_VERSION);
+
+    for (name, signature, category) in [
+        (
+            "getState",
+            "await getState(): Promise<PromptState>",
+            "automation",
+        ),
+        (
+            "getElements",
+            "await getElements(limit?: number): Promise<ElementsSnapshot>",
+            "automation",
+        ),
+        (
+            "waitFor",
+            "await waitFor(condition: WaitCondition, options?: WaitForOptions): Promise<WaitForResult>",
+            "automation",
+        ),
+        (
+            "batch",
+            "await batch(commands: BatchCommand[], options?: BatchOptions): Promise<BatchResult>",
+            "automation",
+        ),
+    ] {
+        let entry = doc
+            .functions
+            .iter()
+            .find(|e| e.name == name)
+            .unwrap_or_else(|| panic!("missing sdk function entry: {name}"));
+        assert_eq!(entry.signature, signature, "signature mismatch for {name}");
+        assert_eq!(entry.category, category, "category mismatch for {name}");
+    }
 }
 
 // -------------------------------------------------------

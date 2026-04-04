@@ -218,30 +218,19 @@ impl ScriptListApp {
 
     fn begin_actions_popup_window_open(&mut self, cx: &mut Context<Self>, window: &mut Window) {
         self.show_actions_popup = true;
+        self.actions_closed_at = None; // Clear debounce on open
         self.push_focus_overlay(focus_coordinator::FocusRequest::actions_dialog(), cx);
         self.focus_handle.focus(window, cx);
         self.gpui_input_focused = false;
     }
 
     pub(crate) fn toggle_actions(&mut self, cx: &mut Context<Self>, window: &mut Window) {
-        let popup_state = self.show_actions_popup;
-        let window_open = is_actions_window_open();
-        logging::log(
-            "KEY",
-            &format!(
-                "Toggling actions popup (show_actions_popup={}, is_actions_window_open={})",
-                popup_state, window_open
-            ),
-        );
+        let recently_closed = self.was_actions_recently_closed();
         if self.show_actions_popup || is_actions_window_open() {
             self.close_actions_popup(ActionsDialogHost::MainList, window, cx);
-        } else if self.was_actions_recently_closed() {
+        } else if recently_closed {
             // The activation-triggered close (focus_lost) already closed the dialog
             // between mouseDown and the click handler. Suppress reopen.
-            logging::log(
-                "KEY",
-                "Suppressed actions reopen — closed by activation observer within debounce window",
-            );
         } else {
             if !self.has_actions() {
                 return;
