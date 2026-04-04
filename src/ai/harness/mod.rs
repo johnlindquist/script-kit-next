@@ -865,8 +865,7 @@ pub(crate) fn build_tab_ai_artifact_authoring_appendix_for_prompt(
     let forced_by_script_list_submit =
         should_force_artifact_guidance_for_script_list_submit(prompt_type, effective_intent, mode);
 
-    if forced_by_script_list_submit
-        || should_include_artifact_authoring_guidance(effective_intent)
+    if forced_by_script_list_submit || should_include_artifact_authoring_guidance(effective_intent)
     {
         Some((
             build_tab_ai_artifact_authoring_guidance_block(),
@@ -2190,9 +2189,7 @@ mod tests {
         assert!(submission.contains(
             "bun build ~/.scriptkit/kit/main/scripts/<name>.ts --target=bun --outfile ~/.scriptkit/tmp/test-scripts/<name>.verify.mjs"
         ));
-        assert!(
-            submission.contains("SK_VERIFY=1 bun ~/.scriptkit/kit/main/scripts/<name>.ts")
-        );
+        assert!(submission.contains("SK_VERIFY=1 bun ~/.scriptkit/kit/main/scripts/<name>.ts"));
     }
 
     #[test]
@@ -2980,25 +2977,23 @@ mod cleanup_contract_audits {
 
     #[test]
     fn acp_initial_input_authoring_case_appends_guidance_with_all_markers_true() {
-        let input = super::build_tab_ai_acp_initial_input_for_prompt(
-            "ScriptList",
-            "clipboard cleanup",
-        );
+        let input =
+            super::build_tab_ai_acp_initial_input_for_prompt("ScriptList", "clipboard cleanup");
         assert!(input.guidance_appended);
         assert!(input.forced_by_script_list_submit);
         assert!(input.includes_script_authoring_skill);
         assert!(input.includes_bun_build_verification);
         assert!(input.includes_bun_execute_verification);
-        assert!(input.text.starts_with("--- Script Kit artifact authoring guidance ---"));
+        assert!(input
+            .text
+            .starts_with("--- Script Kit artifact authoring guidance ---"));
         assert!(input.text.contains("User intent:\nclipboard cleanup"));
     }
 
     #[test]
     fn acp_initial_input_non_authoring_case_omits_guidance_with_all_markers_false() {
-        let input = super::build_tab_ai_acp_initial_input_for_prompt(
-            "FileSearch",
-            "rename this file",
-        );
+        let input =
+            super::build_tab_ai_acp_initial_input_for_prompt("FileSearch", "rename this file");
         assert!(!input.guidance_appended);
         assert!(!input.forced_by_script_list_submit);
         assert!(!input.includes_script_authoring_skill);
@@ -3020,10 +3015,7 @@ mod cleanup_contract_audits {
             super::TabAiHarnessSubmissionMode::Submit,
         );
         // Both should return the same &'static str pointer.
-        assert!(std::ptr::eq(
-            first.unwrap().0,
-            second.unwrap().0,
-        ));
+        assert!(std::ptr::eq(first.unwrap().0, second.unwrap().0,));
     }
 
     // ── Surface-preference helper tests ──────────────────────────────
@@ -3035,7 +3027,10 @@ mod cleanup_contract_audits {
             Some("clipboard cleanup"),
             super::TabAiHarnessSubmissionMode::Submit,
         );
-        assert!(pref.use_quick_terminal, "script authoring flow must prefer quick terminal");
+        assert!(
+            pref.use_quick_terminal,
+            "script authoring flow must prefer quick terminal"
+        );
         assert!(pref.includes_script_authoring_skill);
         assert!(pref.includes_bun_build_verification);
         assert!(pref.includes_bun_execute_verification);
@@ -3048,7 +3043,10 @@ mod cleanup_contract_audits {
             Some("rename this file"),
             super::TabAiHarnessSubmissionMode::Submit,
         );
-        assert!(!pref.use_quick_terminal, "non-authoring flow must stay on ACP");
+        assert!(
+            !pref.use_quick_terminal,
+            "non-authoring flow must stay on ACP"
+        );
         assert!(!pref.includes_script_authoring_skill);
         assert!(!pref.includes_bun_build_verification);
         assert!(!pref.includes_bun_execute_verification);

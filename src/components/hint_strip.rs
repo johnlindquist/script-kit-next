@@ -1,6 +1,10 @@
 #![allow(dead_code)]
 
-use std::rc::Rc;
+use std::{
+    collections::HashSet,
+    rc::Rc,
+    sync::{Mutex, OnceLock},
+};
 
 use gpui::{
     div, prelude::*, px, rgba, svg, AnyElement, App, ClickEvent, FontWeight, IntoElement,
@@ -147,6 +151,209 @@ enum KeyHintPart {
     Icon(&'static str),
     Keycap(SharedString),
 }
+
+// ─── Shared compact shortcut renderer ────────────────────────────────
+
+const INLINE_SHORTCUT_GAP: f32 = 3.0;
+const INLINE_SHORTCUT_ICON_SIZE: f32 = 12.0;
+const INLINE_SHORTCUT_TEXT_SIZE: f32 = 11.0;
+const INLINE_SHORTCUT_KEYCAP_PADDING_X: f32 = 4.0;
+const INLINE_SHORTCUT_KEYCAP_PADDING_Y: f32 = 1.0;
+const INLINE_SHORTCUT_KEYCAP_RADIUS: f32 = 4.0;
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct InlineShortcutColors {
+    pub glyph: gpui::Hsla,
+    pub keycap_bg: gpui::Hsla,
+    pub keycap_border: Option<gpui::Hsla>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+struct ShortcutChromeAudit {
+    surface: &'static str,
+    mode: &'static str,
+}
+
+fn seen_shortcut_chrome_audits() -> &'static Mutex<HashSet<ShortcutChromeAudit>> {
+    static SEEN: OnceLock<Mutex<HashSet<ShortcutChromeAudit>>> = OnceLock::new();
+    SEEN.get_or_init(|| Mutex::new(HashSet::new()))
+}
+
+pub(crate) fn emit_shortcut_chrome_audit(surface: &'static str, mode: &'static str) {
+    let audit = ShortcutChromeAudit { surface, mode };
+    let mut seen = seen_shortcut_chrome_audits()
+        .lock()
+        .unwrap_or_else(|poison| poison.into_inner());
+    if seen.insert(audit.clone()) {
+        tracing::info!(surface = surface, mode = mode, "shortcut_chrome_audit");
+    }
+}
+
+enum InlineShortcutToken {
+    Icon(&'static str),
+    Text(SharedString),
+    Keycap(SharedString),
+}
+
+fn is_symbol_shortcut_char(ch: char) -> bool {
+    matches!(
+        ch,
+        '⌘' | '⌃'
+            | '⌥'
+            | '⇧'
+            | '↵'
+            | '↩'
+            | '⏎'
+            | '⎋'
+            | '⇥'
+            | '⌫'
+            | '␣'
+            | '↑'
+            | '↓'
+            | '←'
+            | '→'
+            | '⇞'
+            | '⇟'
+            | '↖'
+            | '↘'
+    )
+}
+
+fn normalize_shortcut_part(part: &str) -> String {
+    match part.to_lowercase().as_str() {
+        "cmd" | "command" | "meta" | "super" => "⌘".to_string(),
+        "ctrl" | "control" => "⌃".to_string(),
+        "alt" | "option" | "opt" => "⌥".to_string(),
+        "shift" => "⇧".to_string(),
+        "enter" | "return" => "↵".to_string(),
+        "escape" | "esc" => "⎋".to_string(),
+        "tab" => "⇥".to_string(),
+        "space" => "␣".to_string(),
+        "backspace" | "delete" => "⌫".to_string(),
+        "up" | "arrowup" => "↑".to_string(),
+        "down" | "arrowdown" => "↓".to_string(),
+        "left" | "arrowleft" => "←".to_string(),
+        "right" | "arrowright" => "→".to_string(),
+        "pageup" => "⇞".to_string(),
+        "pagedown" => "⇟".to_string(),
+        "home" => "↖".to_string(),
+        "end" => "↘".to_string(),
+        other if other.chars().all(is_symbol_shortcut_char) => other.to_string(),
+        other => other.to_uppercase(),
+    }
+}
+
+pub(crate) fn shortcut_tokens_from_hint(shortcut: &str) -> Vec<String> {
+    let trimmed = shortcut.trim();
+    if trimmed.is_empty() {
+        return Vec::new();
+    }
+
+    // "cmd+shift+k" style
+    if trimmed.contains('+') || trimmed.chars().any(char::is_whitespace) {
+        return trimmed
+            .replace('+', " ")
+            .split_whitespace()
+            .map(normalize_shortcut_part)
+            .collect();
+    }
+
+    // "⌃⌘↑" style — each char is a token
+    if trimmed.chars().any(is_symbol_shortcut_char) {
+        return trimmed
+            .chars()
+            .map(|ch| {
+                if is_symbol_shortcut_char(ch) {
+                    ch.to_string()
+                } else {
+                    ch.to_uppercase().to_string()
+                }
+            })
+            .collect();
+    }
+
+    vec![normalize_shortcut_part(trimmed)]
+}
+
+fn inline_shortcut_token(token: &str) -> InlineShortcutToken {
+    match token {
+        "⌘" => InlineShortcutToken::Icon(COMMAND_ICON_PATH),
+        "⇧" => InlineShortcutToken::Icon(SHIFT_ICON_PATH),
+        "↵" | "↩" | "⏎" => InlineShortcutToken::Icon(RETURN_ICON_PATH),
+        "⇥" => InlineShortcutToken::Icon(TAB_ICON_PATH),
+        value if value.chars().count() > 1 => InlineShortcutToken::Keycap(value.to_string().into()),
+        value => InlineShortcutToken::Text(value.to_uppercase().into()),
+    }
+}
+
+pub(crate) fn render_inline_shortcut_keys<'a>(
+    keys: impl IntoIterator<Item = &'a str>,
+    colors: InlineShortcutColors,
+) -> AnyElement {
+    let mut row = div()
+        .flex()
+        .flex_row()
+        .items_center()
+        .gap(px(INLINE_SHORTCUT_GAP));
+    let mut has_keys = false;
+
+    for key in keys {
+        has_keys = true;
+        row = row.child(match inline_shortcut_token(key) {
+            InlineShortcutToken::Icon(icon_path) => svg()
+                .external_path(icon_path)
+                .size(px(INLINE_SHORTCUT_ICON_SIZE))
+                .flex_shrink_0()
+                .text_color(colors.glyph)
+                .into_any_element(),
+            InlineShortcutToken::Text(text) => div()
+                .text_size(px(INLINE_SHORTCUT_TEXT_SIZE))
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(colors.glyph)
+                .child(text)
+                .into_any_element(),
+            InlineShortcutToken::Keycap(text) => {
+                let mut chip = div()
+                    .px(px(INLINE_SHORTCUT_KEYCAP_PADDING_X))
+                    .py(px(INLINE_SHORTCUT_KEYCAP_PADDING_Y))
+                    .rounded(px(INLINE_SHORTCUT_KEYCAP_RADIUS))
+                    .bg(colors.keycap_bg)
+                    .text_xs()
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(colors.glyph)
+                    .child(text);
+                if let Some(border) = colors.keycap_border {
+                    chip = chip.border_1().border_color(border);
+                }
+                chip.into_any_element()
+            }
+        });
+    }
+
+    if has_keys {
+        row.into_any_element()
+    } else {
+        div().into_any_element()
+    }
+}
+
+#[cfg(test)]
+mod inline_shortcut_tests {
+    use super::shortcut_tokens_from_hint;
+
+    #[test]
+    fn shortcut_tokens_handle_raw_and_symbol_inputs() {
+        assert_eq!(
+            shortcut_tokens_from_hint("cmd+shift+k"),
+            vec!["⌘", "⇧", "K"]
+        );
+        assert_eq!(shortcut_tokens_from_hint("⌃⌘↑"), vec!["⌃", "⌘", "↑"]);
+        assert_eq!(shortcut_tokens_from_hint("cmd+pageup"), vec!["⌘", "⇞"]);
+        assert_eq!(shortcut_tokens_from_hint("cmd+home"), vec!["⌘", "↖"]);
+    }
+}
+
+// ─── End shared compact shortcut renderer ────────────────────────────
 
 fn is_boundary_or_end(rest: &str) -> bool {
     rest.is_empty() || rest.chars().next().is_some_and(char::is_whitespace)

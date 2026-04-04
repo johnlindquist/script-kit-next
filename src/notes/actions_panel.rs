@@ -25,7 +25,6 @@
 //! - Type to search/filter actions
 
 use super::window::OPACITY_DISABLED;
-use crate::actions::ActionsDialog;
 use crate::designs::icon_variations::IconName;
 use crate::protocol::ProtocolAction;
 use gpui::{
@@ -520,8 +519,7 @@ fn resolve_navigation_intent(key: &str) -> Option<NotesNavigationIntent> {
 
 fn format_protocol_shortcut_keys(shortcut: Option<&str>) -> Vec<String> {
     shortcut
-        .map(ActionsDialog::format_shortcut_hint)
-        .map(|hint| ActionsDialog::parse_shortcut_keycaps(&hint))
+        .map(crate::components::hint_strip::shortcut_tokens_from_hint)
         .unwrap_or_default()
 }
 
@@ -1135,6 +1133,10 @@ impl Focusable for NotesActionsPanel {
 impl Render for NotesActionsPanel {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = cx.theme();
+        crate::components::hint_strip::emit_shortcut_chrome_audit(
+            "notes_actions_panel",
+            "compact-inline",
+        );
 
         // Vibrancy-aware colors using Script Kit theme hex values
         let bg_color = Self::get_vibrancy_background();
@@ -1404,43 +1406,26 @@ impl Render for NotesActionsPanel {
     }
 }
 
-fn render_shortcut_badges<'a>(
-    keys: impl IntoIterator<Item = &'a str>,
-    theme: &Theme,
-) -> AnyElement {
-    let mut row = div().flex().flex_row().items_center().gap(px(4.0));
-    let mut has_keys = false;
-
-    for key in keys {
-        has_keys = true;
-        row = row.child(
-            div()
-                .min_w(px(18.0))
-                .px(px(6.0))
-                .py(px(2.0))
-                .bg(theme.muted)
-                .border_1()
-                .border_color(theme.border)
-                .rounded(px(5.0))
-                .text_xs()
-                .text_color(theme.muted_foreground)
-                .child(key.to_string()),
-        );
-    }
-
-    if has_keys {
-        row.into_any_element()
-    } else {
-        div().into_any_element()
-    }
-}
-
 fn render_shortcut_keys(keys: &[&'static str], theme: &Theme) -> AnyElement {
-    render_shortcut_badges(keys.iter().copied(), theme)
+    crate::components::hint_strip::render_inline_shortcut_keys(
+        keys.iter().copied(),
+        crate::components::hint_strip::InlineShortcutColors {
+            glyph: theme.muted_foreground,
+            keycap_bg: theme.muted,
+            keycap_border: Some(theme.border),
+        },
+    )
 }
 
 fn render_shortcut_keys_dynamic(keys: &[String], theme: &Theme) -> AnyElement {
-    render_shortcut_badges(keys.iter().map(String::as_str), theme)
+    crate::components::hint_strip::render_inline_shortcut_keys(
+        keys.iter().map(String::as_str),
+        crate::components::hint_strip::InlineShortcutColors {
+            glyph: theme.muted_foreground,
+            keycap_bg: theme.muted,
+            keycap_border: Some(theme.border),
+        },
+    )
 }
 
 #[cfg(test)]
