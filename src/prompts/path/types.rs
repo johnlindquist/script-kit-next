@@ -88,6 +88,16 @@ pub struct PathPrompt {
     pub actions_search_text: Arc<Mutex<String>>,
     /// Whether to show blinking cursor (for focused state)
     pub cursor_visible: bool,
+    /// Cached render-row data rebuilt when filtered_entries changes,
+    /// avoiding a per-render Vec allocation inside the list closure.
+    pub render_rows: Arc<Vec<PathEntryRenderRow>>,
+}
+
+/// Lightweight row data for the uniform_list closure.
+#[derive(Clone)]
+pub struct PathEntryRenderRow {
+    pub name: gpui::SharedString,
+    pub is_dir: bool,
 }
 
 /// A file system entry (file or directory)

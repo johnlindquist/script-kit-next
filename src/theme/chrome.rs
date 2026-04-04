@@ -3,6 +3,16 @@ use crate::ui_foundation::hex_to_rgba_with_opacity;
 use super::opacity::{OPACITY_GHOST, OPACITY_GHOST_SOFT};
 use super::Theme;
 
+fn composite_over(fg_hex: u32, alpha: f32, bg_hex: u32) -> u32 {
+    let blend = |fg_ch: u32, bg_ch: u32| -> u32 {
+        ((fg_ch as f32 * alpha + bg_ch as f32 * (1.0 - alpha)).round() as u32).min(255)
+    };
+    let r = blend((fg_hex >> 16) & 0xFF, (bg_hex >> 16) & 0xFF);
+    let g = blend((fg_hex >> 8) & 0xFF, (bg_hex >> 8) & 0xFF);
+    let b = blend(fg_hex & 0xFF, bg_hex & 0xFF);
+    (r << 16) | (g << 8) | b
+}
+
 /// Shared chrome contract for app surfaces, badges, selection, and hover.
 ///
 /// All color/opacity decisions route through `Theme` — view code consumes
@@ -76,6 +86,12 @@ impl AppChromeColors {
     pub(crate) fn from_theme(theme: &Theme) -> Self {
         let opacity = theme.get_opacity();
         let colors = &theme.colors;
+        let accent_badge_bg_rgba = hex_to_rgba_with_opacity(colors.accent.selected, opacity.hover);
+        let accent_badge_surface = composite_over(
+            colors.accent.selected,
+            opacity.hover,
+            colors.background.main,
+        );
 
         Self {
             text_primary_hex: colors.text.primary,
@@ -123,12 +139,12 @@ impl AppChromeColors {
             badge_border_rgba: hex_to_rgba_with_opacity(colors.ui.border, opacity.border_inactive),
             badge_text_hex: colors.text.secondary,
 
-            accent_badge_bg_rgba: hex_to_rgba_with_opacity(colors.accent.selected, opacity.hover),
+            accent_badge_bg_rgba,
             accent_badge_border_rgba: hex_to_rgba_with_opacity(
                 colors.accent.selected,
                 opacity.selected,
             ),
-            accent_badge_text_hex: colors.text.on_accent,
+            accent_badge_text_hex: super::best_readable_text_hex(accent_badge_surface),
 
             drop_target_bg_rgba: hex_to_rgba_with_opacity(
                 colors.background.search_box,

@@ -70,6 +70,12 @@ pub fn audit_theme_contrast(theme: &Theme) -> Vec<ThemeContrastSample> {
     let surface_log = composite_rgba_over(chrome.log_panel_surface_rgba, colors.background.main);
     let badge_bg = composite_rgba_over(chrome.badge_bg_rgba, colors.background.main);
 
+    // Prompt/form proxy surfaces composited over main background
+    let prompt_field_idle = composite_rgba_over(chrome.badge_bg_rgba, colors.background.main);
+    let prompt_field_focused = composite_rgba_over(chrome.input_active_rgba, colors.background.main);
+    let prompt_checkbox_checked =
+        composite_rgba_over(chrome.accent_badge_bg_rgba, colors.background.main);
+
     let samples = vec![
         // ── Window surface ──────────────────────────────────────
         sample(
@@ -169,6 +175,31 @@ pub fn audit_theme_contrast(theme: &Theme) -> Vec<ThemeContrastSample> {
             4.5,
         ),
         sample("badge.text", chrome.badge_text_hex, badge_bg, 3.0),
+        // ── Prompt/form proxy surfaces ─────────────────────────
+        sample(
+            "prompt.field.label",
+            colors.text.primary,
+            prompt_field_idle,
+            4.5,
+        ),
+        sample(
+            "prompt.field.help",
+            colors.text.secondary,
+            prompt_field_idle,
+            3.0,
+        ),
+        sample(
+            "prompt.field.focused",
+            colors.text.primary,
+            prompt_field_focused,
+            4.5,
+        ),
+        sample(
+            "prompt.checkbox.checked",
+            chrome.accent_badge_text_hex,
+            prompt_checkbox_checked,
+            4.5,
+        ),
         // ── Semantic status colors ──────────────────────────────
         sample(
             "success.auto_text",
@@ -225,16 +256,18 @@ mod tests {
     fn default_dark_theme_has_expected_sample_count() {
         let theme = Theme::dark_default();
         let samples = audit_theme_contrast(&theme);
-        assert_eq!(samples.len(), 21);
+        assert_eq!(samples.len(), 25);
     }
 
     #[test]
     fn default_light_theme_passes_all_contrast_checks() {
         let theme = Theme::light_default();
-        let (passing, total) = theme_contrast_score(&theme);
-        assert_eq!(
-            passing, total,
-            "light default should pass all contrast checks"
+        let samples = audit_theme_contrast(&theme);
+        let failing: Vec<_> = samples.iter().filter(|s| !s.passes()).collect();
+        assert!(
+            failing.is_empty(),
+            "light default should pass all contrast checks, failing: {:?}",
+            failing
         );
     }
 

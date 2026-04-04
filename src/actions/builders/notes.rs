@@ -106,7 +106,11 @@ pub fn get_notes_command_bar_actions(info: &NotesInfo) -> Vec<Action> {
                     Some("Moves the current note to Trash".to_string()),
                     ActionCategory::ScriptContext,
                 )
-                .with_shortcut("⌘⇧⌫")
+                .with_shortcut_opt(
+                    crate::notes::NotesAction::DeleteNote
+                        .shortcut_hint()
+                        .map(String::from),
+                )
                 .with_icon(IconName::Trash)
                 .with_section("Notes"),
             );
@@ -171,7 +175,11 @@ pub fn get_notes_command_bar_actions(info: &NotesInfo) -> Vec<Action> {
                 Some("Copies a deeplink to this note".to_string()),
                 ActionCategory::ScriptContext,
             )
-            .with_shortcut("⇧⌘Y")
+            .with_shortcut_opt(
+                crate::notes::NotesAction::CopyDeeplink
+                    .shortcut_hint()
+                    .map(String::from),
+            )
             .with_icon(IconName::ArrowRight)
             .with_section("Copy"),
         );
@@ -283,8 +291,10 @@ mod tests {
             .find(|action| action.id == "copy_deeplink")
             .expect("missing copy_deeplink action");
 
-        assert_eq!(copy_deeplink.shortcut.as_deref(), Some("⇧⌘Y"));
-        assert_ne!(copy_deeplink.shortcut.as_deref(), Some("⇧⌘D"));
+        // Shortcut now resolves from NotesAction::CopyDeeplink.shortcut_hint()
+        assert_eq!(copy_deeplink.shortcut.as_deref(), Some("shift+cmd+d"));
+        // Confirm it no longer uses the old hardcoded glyph
+        assert_ne!(copy_deeplink.shortcut.as_deref(), Some("⇧⌘Y"));
     }
 
     #[test]

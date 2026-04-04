@@ -2216,7 +2216,8 @@ impl Render for ActionsDialog {
                                             .child(left_side);
 
                                         // Right side: keyboard shortcuts only on the focused row.
-                                        // This keeps the actions list visually quiet and makes the hint feel earned.
+                                        // This keeps the actions list visually quiet and aligns with
+                                        // the focused-only shortcut treatment used across dense lists.
                                         let show_shortcut = is_selected;
                                         if style.shortcut_visible && show_shortcut {
                                             if let Some(shortcut_tokens) = action_shortcut_tokens_for_render(action) {

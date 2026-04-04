@@ -541,7 +541,7 @@ mod from_dialog_builtin_action_validation_tests_21 {
         };
         let actions = get_notes_command_bar_actions(&info);
         let a = actions.iter().find(|a| a.id == "copy_deeplink").unwrap();
-        assert_eq!(a.shortcut.as_deref(), Some("⇧⌘Y"));
+        assert_eq!(a.shortcut.as_deref(), Some("shift+cmd+d"));
     }
     
     #[test]

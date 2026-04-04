@@ -25,6 +25,7 @@ impl PathPrompt {
         // Load entries from current path
         let entries = Self::load_entries(&current_path);
         let filtered_entries = entries.clone();
+        let render_rows = Arc::new(Self::build_render_rows(&filtered_entries));
 
         PathPrompt {
             id,
@@ -46,7 +47,24 @@ impl PathPrompt {
             actions_showing: Arc::new(Mutex::new(false)),
             actions_search_text: Arc::new(Mutex::new(String::new())),
             cursor_visible: true,
+            render_rows,
         }
+    }
+
+    /// Build lightweight render-row data from filtered entries.
+    fn build_render_rows(filtered: &[PathEntry]) -> Vec<PathEntryRenderRow> {
+        filtered
+            .iter()
+            .map(|e| PathEntryRenderRow {
+                name: gpui::SharedString::from(e.name.clone()),
+                is_dir: e.is_dir,
+            })
+            .collect()
+    }
+
+    /// Rebuild the cached render rows from current filtered_entries.
+    fn rebuild_render_rows(&mut self) {
+        self.render_rows = Arc::new(Self::build_render_rows(&self.filtered_entries));
     }
 
     fn format_path_prefix(path: &str) -> String {
@@ -155,6 +173,8 @@ impl PathPrompt {
         if self.selected_index >= self.filtered_entries.len() {
             self.selected_index = 0;
         }
+
+        self.rebuild_render_rows();
     }
 
     /// Set the current filter text programmatically
@@ -179,6 +199,7 @@ impl PathPrompt {
         self.filter_text.clear();
         self.filtered_entries = self.entries.clone();
         self.selected_index = 0;
+        self.rebuild_render_rows();
         cx.notify();
     }
 
