@@ -61,6 +61,10 @@ pub struct Action {
     /// Displayed as a badge next to the action title
     pub shortcut: Option<String>,
 
+    /// Pre-tokenized shortcut parts for compact inline rendering.
+    /// Filled once during action construction to avoid per-render parsing.
+    pub shortcut_tokens: Option<Vec<String>>,
+
     /// Routing flag: if true, send ActionTriggered to SDK; if false, handle locally.
     /// Built-in actions default to false. SDK actions with handlers set this to true.
     #[allow(dead_code)]
@@ -207,6 +211,7 @@ impl Action {
             description,
             category,
             shortcut: None,
+            shortcut_tokens: None,
             has_action: false,
             value: None,
             icon: None,
@@ -220,7 +225,17 @@ impl Action {
 
     pub fn with_shortcut(mut self, shortcut: impl Into<String>) -> Self {
         let shortcut_str = shortcut.into();
+        let shortcut_tokens =
+            crate::components::hint_strip::shortcut_tokens_from_hint(&shortcut_str);
+        tracing::info!(
+            target: "script_kit::actions",
+            action_id = %self.id,
+            shortcut = %shortcut_str,
+            token_count = shortcut_tokens.len(),
+            "action_shortcut_tokens_cached"
+        );
         self.shortcut_lower = Some(shortcut_str.to_lowercase());
+        self.shortcut_tokens = Some(shortcut_tokens);
         self.shortcut = Some(shortcut_str);
         self
     }
@@ -229,7 +244,17 @@ impl Action {
     /// Add an optional shortcut to the action
     pub fn with_shortcut_opt(mut self, shortcut: Option<String>) -> Self {
         if let Some(s) = shortcut {
+            let shortcut_tokens =
+                crate::components::hint_strip::shortcut_tokens_from_hint(&s);
+            tracing::info!(
+                target: "script_kit::actions",
+                action_id = %self.id,
+                shortcut = %s,
+                token_count = shortcut_tokens.len(),
+                "action_shortcut_tokens_cached"
+            );
             self.shortcut_lower = Some(s.to_lowercase());
+            self.shortcut_tokens = Some(shortcut_tokens);
             self.shortcut = Some(s);
         }
         self

@@ -940,6 +940,7 @@ mod command_bar_set_actions_tests {
             description: None,
             category: ActionCategory::ScriptContext,
             shortcut: None,
+            shortcut_tokens: None,
             has_action: true,
             value: None,
             icon: None,

@@ -992,12 +992,16 @@ impl ActionsDialog {
                 }
                 sdk_action_indices.push(protocol_index);
                 let shortcut = pa.shortcut.as_ref().map(|s| Self::format_shortcut_hint(s));
+                let shortcut_tokens = shortcut.as_ref().map(|s| {
+                    crate::components::hint_strip::shortcut_tokens_from_hint(s)
+                });
                 Some(Action {
                     id: pa.name.clone(),
                     title: pa.name.clone(),
                     description: pa.description.clone(),
                     category: ActionCategory::ScriptContext,
                     shortcut: shortcut.clone(),
+                    shortcut_tokens,
                     has_action: pa.has_action,
                     value: pa.value.clone(),
                     icon: None,    // SDK actions don't currently have icons
@@ -2199,7 +2203,18 @@ impl Render for ActionsDialog {
 
                                         // Right side: keyboard shortcuts as compact inline glyphs
                                         if style.shortcut_visible {
-                                            if let Some(ref shortcut) = action.shortcut {
+                                            if let Some(shortcut_tokens) = action.shortcut_tokens.as_ref() {
+                                                content = content.child(
+                                                    crate::components::hint_strip::render_inline_shortcut_keys(
+                                                        shortcut_tokens.iter().map(String::as_str),
+                                                        crate::components::hint_strip::whisper_inline_shortcut_colors(
+                                                            shortcut_glyph_color.into(),
+                                                            shortcut_chrome_color.into(),
+                                                            true,
+                                                        ),
+                                                    ),
+                                                );
+                                            } else if let Some(ref shortcut) = action.shortcut {
                                                 let shortcut_tokens =
                                                     crate::components::hint_strip::shortcut_tokens_from_hint(
                                                         shortcut,

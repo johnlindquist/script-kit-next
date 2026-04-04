@@ -77,10 +77,38 @@ fn is_term_prompt_actions_toggle_shortcut(has_cmd: bool, has_shift: bool, key: &
 
 #[inline]
 fn render_terminal_prompt_hint_strip(
-    _route: Option<&crate::ai::TabAiApplyBackRoute>,
-    _return_view: Option<&AppView>,
+    route: Option<&crate::ai::TabAiApplyBackRoute>,
+    return_view: Option<&AppView>,
 ) -> AnyElement {
-    crate::components::prompt_layout_shell::render_simple_hint_strip("⌘W Close".to_string(), None)
+    let show_script_verification_hint = return_view.is_some();
+    let can_apply_back = route.is_some() && return_view.is_some();
+
+    let mut items: Vec<String> = Vec::new();
+
+    if show_script_verification_hint {
+        items.push("Bun verify required".to_string());
+    }
+
+    if can_apply_back {
+        items.push("⌘↩ Apply".to_string());
+    }
+
+    items.push("⌘W Close".to_string());
+
+    let leading = if show_script_verification_hint {
+        let theme = crate::theme::get_cached_theme();
+        Some(crate::components::prompt_layout_shell::render_hint_strip_leading_text(
+            "This session must bun build, run with SK_VERIFY=1, and fix failures before reporting success.",
+            theme.colors.text.primary,
+        ))
+    } else {
+        None
+    };
+
+    crate::components::prompt_layout_shell::render_simple_hint_strip(
+        items.join(" · "),
+        leading,
+    )
 }
 
 impl ScriptListApp {
@@ -202,6 +230,10 @@ impl ScriptListApp {
                         // - Cmd+W closes the wrapper and restores the previous view/focus.
                         // This is intentional: CLI harnesses (Claude Code, Codex, etc.)
                         // use Escape for their own TUI navigation (cancel, dismiss, etc.).
+                        //
+                        // Verification-bearing script-authoring launches use
+                        // QuickTerminalView intentionally so the Bun gate happens
+                        // inside the live harness terminal session.
                         if is_quick_terminal
                             && has_cmd
                             && !has_shift

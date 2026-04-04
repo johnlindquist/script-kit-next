@@ -600,51 +600,17 @@ impl ListItemColors {
 /// - "ctrl+c" → "⌃C"
 /// - "alt+enter" → "⌥↩"
 ///
-/// If the input already contains macOS symbols (⌘, ⇧, ⌥, ⌃), returns as-is.
+/// Delegates to the shared hint_strip normalizer to prevent mapping drift.
+/// Preserves legacy `↩` output for plain-string callers by replacing `↵` → `↩`.
 pub fn format_shortcut_display(shortcut: &str) -> String {
-    // If already contains macOS modifier symbols, return as-is
-    if shortcut.contains('⌘')
-        || shortcut.contains('⇧')
-        || shortcut.contains('⌥')
-        || shortcut.contains('⌃')
-    {
-        return shortcut.to_string();
-    }
-
-    // Normalize: replace '+' with space, then split on whitespace.
-    // This handles both space-delimited ("opt i", "cmd shift k") and
-    // plus-delimited ("cmd+shift+k") shortcut formats from Script Kit metadata.
-    let normalized = shortcut.replace('+', " ");
-    let parts: Vec<&str> = normalized.split_whitespace().collect();
-    let mut result = String::new();
-
-    for part in &parts {
-        match part.to_lowercase().as_str() {
-            "cmd" | "command" | "meta" | "super" => result.push('⌘'),
-            "shift" => result.push('⇧'),
-            "alt" | "option" | "opt" => result.push('⌥'),
-            "ctrl" | "control" => result.push('⌃'),
-            "enter" | "return" => result.push('↩'),
-            "escape" | "esc" => result.push('⎋'),
-            "tab" => result.push('⇥'),
-            "space" => result.push('␣'),
-            "backspace" | "delete" => result.push('⌫'),
-            "up" | "arrowup" => result.push('↑'),
-            "down" | "arrowdown" => result.push('↓'),
-            "left" | "arrowleft" => result.push('←'),
-            "right" | "arrowright" => result.push('→'),
-            key => {
-                // Uppercase single-character keys, preserve multi-char keys as-is
-                if key.len() == 1 {
-                    result.push_str(&key.to_uppercase());
-                } else {
-                    result.push_str(key);
-                }
-            }
-        }
-    }
-
-    result
+    let display = crate::components::hint_strip::compact_shortcut_display_string(shortcut)
+        .replace('↵', "↩");
+    crate::components::hint_strip::emit_shortcut_normalization_audit(
+        "list_item_format",
+        shortcut,
+        &display,
+    );
+    display
 }
 /// Search rows keep shortcuts only on the actively focused row to avoid right-side noise.
 pub(crate) fn should_show_search_shortcut(

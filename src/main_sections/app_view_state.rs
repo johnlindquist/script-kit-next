@@ -217,10 +217,11 @@ enum AppView {
         filter: String,
         selected_index: usize,
     },
-    /// Showing the ACP-backed Tab AI chat surface.
+    /// Showing the ACP-backed Tab AI chat surface for the default Tab path.
     ///
-    /// Replaces `QuickTerminalView` for the Tab AI entry path.
-    /// Script-triggered terminals continue to use `QuickTerminalView`.
+    /// Verification-bearing script-authoring requests deliberately route to
+    /// `QuickTerminalView` so the agent can run Bun verification inside the
+    /// live harness terminal session before reporting success.
     AcpChatView {
         entity: Entity<crate::ai::acp::view::AcpChatView>,
     },
