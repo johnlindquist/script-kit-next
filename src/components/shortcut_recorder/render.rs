@@ -22,6 +22,11 @@ impl Focusable for ShortcutRecorder {
 
 impl Render for ShortcutRecorder {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        crate::components::hint_strip::emit_shortcut_chrome_audit(
+            "shortcut_recorder",
+            "compact-inline",
+        );
+
         let colors = self.colors;
         let button_colors = ButtonColors::from_theme(&self.theme);
         let overlay_appear = self.overlay_appear_style();

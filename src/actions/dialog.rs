@@ -84,17 +84,6 @@ fn actions_dialog_default_style() -> ActionsDialogStyleFallback {
     }
 }
 
-#[cfg(feature = "storybook")]
-fn actions_dialog_uses_inline_shortcuts(
-    style: &crate::storybook::actions_dialog_variations::ActionsDialogStyle,
-) -> bool {
-    crate::storybook::actions_dialog_variations::actions_dialog_style_uses_inline_shortcuts(style)
-}
-
-#[cfg(not(feature = "storybook"))]
-fn actions_dialog_uses_inline_shortcuts(_style: &ActionsDialogStyleFallback) -> bool {
-    false
-}
 
 /// Helper function to combine a hex color with an alpha value
 /// Delegates to DesignColors::hex_with_alpha for DRY
@@ -2049,34 +2038,12 @@ impl Render for ActionsDialog {
                                         } else {
                                             secondary_text
                                         };
-                                        // Keycap colors: derive from theme for both light and dark mode
-                                        // Uses theme border color with appropriate alpha values
-                                        let (mut keycap_bg, mut keycap_border, mut shortcut_color) =
+                                        // Shortcut color: whisper-chrome preset from shared renderer
+                                        let mut shortcut_color =
                                             if design_variant == DesignVariant::Default {
-                                                // Use theme-derived colors for both modes
-                                                // Light mode: higher alpha for visibility on light bg
-                                                // Dark mode: lower alpha for subtlety on dark bg
-                                                let bg_alpha: u8 =
-                                                    if is_dark_mode { 0x80 } else { 0xCC };
-                                                let border_alpha: u8 =
-                                                    if is_dark_mode { 0xA0 } else { 0xDD };
-                                                (
-                                                    rgba(hex_with_alpha(
-                                                        this.theme.colors.ui.border,
-                                                        bg_alpha,
-                                                    )),
-                                                    rgba(hex_with_alpha(
-                                                        this.theme.colors.ui.border,
-                                                        border_alpha,
-                                                    )),
-                                                    rgb(this.theme.colors.text.secondary),
-                                                )
+                                                rgb(this.theme.colors.text.secondary)
                                             } else {
-                                                (
-                                                    rgba(hex_with_alpha(item_colors.border, 0x80)),
-                                                    rgba(hex_with_alpha(item_colors.border, 0xA0)),
-                                                    dimmed_text,
-                                                )
+                                                dimmed_text
                                             };
 
                                         let title_color = if is_destructive {
@@ -2085,30 +2052,6 @@ impl Render for ActionsDialog {
                                             title_color
                                         };
                                         if is_destructive {
-                                            keycap_bg = if design_variant == DesignVariant::Default
-                                            {
-                                                rgba(hex_with_alpha(
-                                                    this.theme.colors.ui.error,
-                                                    if is_dark_mode { 0x40 } else { 0x2A },
-                                                ))
-                                            } else {
-                                                rgba(hex_with_alpha(
-                                                    item_colors.error,
-                                                    if is_dark_mode { 0x40 } else { 0x2A },
-                                                ))
-                                            };
-                                            keycap_border =
-                                                if design_variant == DesignVariant::Default {
-                                                    rgba(hex_with_alpha(
-                                                        this.theme.colors.ui.error,
-                                                        if is_dark_mode { 0x90 } else { 0xB0 },
-                                                    ))
-                                                } else {
-                                                    rgba(hex_with_alpha(
-                                                        item_colors.error,
-                                                        if is_dark_mode { 0x90 } else { 0xB0 },
-                                                    ))
-                                                };
                                             shortcut_color = destructive_text;
                                         }
 
@@ -2252,34 +2195,24 @@ impl Render for ActionsDialog {
                                         // Right side: keyboard shortcuts as compact inline glyphs
                                         if style.shortcut_visible {
                                             if let Some(ref shortcut) = action.shortcut {
-                                                if actions_dialog_uses_inline_shortcuts(&style) {
-                                                    let mut shortcut_label = div()
-                                                        .text_xs()
-                                                        .text_color(shortcut_color)
-                                                        .child(shortcut.clone());
-                                                    if style.mono_font {
-                                                        shortcut_label = shortcut_label
-                                                            .font_family(
-                                                                crate::list_item::FONT_MONO,
-                                                            );
-                                                    }
-                                                    content = content.child(shortcut_label);
-                                                } else {
-                                                    let shortcut_tokens =
-                                                        crate::components::hint_strip::shortcut_tokens_from_hint(
-                                                            shortcut,
-                                                        );
-                                                    content = content.child(
-                                                        crate::components::hint_strip::render_inline_shortcut_keys(
-                                                            shortcut_tokens.iter().map(String::as_str),
-                                                            crate::components::hint_strip::InlineShortcutColors {
-                                                                glyph: shortcut_color.into(),
-                                                                keycap_bg: keycap_bg.into(),
-                                                                keycap_border: Some(keycap_border.into()),
-                                                            },
-                                                        ),
+                                                let shortcut_tokens =
+                                                    crate::components::hint_strip::shortcut_tokens_from_hint(
+                                                        shortcut,
                                                     );
-                                                }
+                                                content = content.child(
+                                                    crate::components::hint_strip::render_inline_shortcut_keys(
+                                                        shortcut_tokens.iter().map(String::as_str),
+                                                        crate::components::hint_strip::whisper_inline_shortcut_colors(
+                                                            shortcut_color.into(),
+                                                            if is_destructive {
+                                                                destructive_text.into()
+                                                            } else {
+                                                                dimmed_text.into()
+                                                            },
+                                                            true,
+                                                        ),
+                                                    ),
+                                                );
                                             }
                                         }
 

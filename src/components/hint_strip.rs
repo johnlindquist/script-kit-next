@@ -168,6 +168,33 @@ pub(crate) struct InlineShortcutColors {
     pub keycap_border: Option<gpui::Hsla>,
 }
 
+/// Shared whisper-chrome preset for compact inline shortcuts.
+///
+/// Produces ultra-low-opacity keycap backgrounds (0.08) with faint borders (0.18),
+/// matching the whisper-chrome design language used in the footer hint strip.
+/// All primary surfaces should use this instead of per-surface keycap opacity tuning.
+#[inline]
+pub(crate) fn whisper_inline_shortcut_colors(
+    glyph: gpui::Hsla,
+    chrome: gpui::Hsla,
+    show_border: bool,
+) -> InlineShortcutColors {
+    let mut bg = chrome;
+    bg.a = 0.08;
+    let border = if show_border {
+        let mut b = chrome;
+        b.a = 0.18;
+        Some(b)
+    } else {
+        None
+    };
+    InlineShortcutColors {
+        glyph,
+        keycap_bg: bg,
+        keycap_border: border,
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 struct ShortcutChromeAudit {
     surface: &'static str,
