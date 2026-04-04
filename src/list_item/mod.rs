@@ -527,7 +527,9 @@ mod list_item_colors_tests {
 
 #[cfg(test)]
 mod row_shortcut_policy_tests {
-    use super::{should_show_row_shortcut, should_show_search_shortcut, RowShortcutVisibilityPolicy};
+    use super::{
+        should_show_row_shortcut, should_show_search_shortcut, RowShortcutVisibilityPolicy,
+    };
 
     #[test]
     fn selected_only_shows_shortcut_on_focused_row() {

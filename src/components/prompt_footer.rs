@@ -190,6 +190,8 @@ pub struct PromptFooterConfig {
     pub primary_disabled: bool,
     /// Disable interactions on the secondary button
     pub secondary_disabled: bool,
+    /// Whether the secondary button is in a pressed/active toggle state
+    pub secondary_active: bool,
     /// Optional helper text shown next to logo (e.g., "Tab 1 of 2 · Tab to continue")
     pub helper_text: Option<String>,
     /// Optional info label shown before buttons (e.g., "typescript", "5 items")
@@ -209,6 +211,7 @@ impl Default for PromptFooterConfig {
             show_info_label: true,
             primary_disabled: false,
             secondary_disabled: false,
+            secondary_active: false,
             helper_text: None,
             info_label: None,
         }
@@ -278,6 +281,12 @@ impl PromptFooterConfig {
     /// Set whether the secondary button is disabled
     pub fn secondary_disabled(mut self, disabled: bool) -> Self {
         self.secondary_disabled = disabled;
+        self
+    }
+
+    /// Set whether the secondary button is in a pressed/active toggle state
+    pub fn secondary_active(mut self, active: bool) -> Self {
+        self.secondary_active = active;
         self
     }
 
@@ -381,6 +390,7 @@ impl PromptFooter {
         label: String,
         shortcut: String,
         disabled: bool,
+        active: bool,
         on_click: Option<Rc<FooterClickCallback>>,
     ) -> impl IntoElement {
         let theme = crate::theme::get_cached_theme();
@@ -420,7 +430,9 @@ impl PromptFooter {
             .child(label_element)
             .child(shortcut_element);
 
-        if is_clickable {
+        if active {
+            button = button.bg(active_bg).cursor_pointer();
+        } else if is_clickable {
             button = button
                 .cursor_pointer()
                 .hover(move |s| s.bg(hover_bg))
@@ -515,6 +527,7 @@ impl RenderOnce for PromptFooter {
                 this.config.primary_label.clone(),
                 this.config.primary_shortcut.clone(),
                 this.config.primary_disabled,
+                false,
                 this.on_primary_click.clone(),
             ));
         }
@@ -529,6 +542,7 @@ impl RenderOnce for PromptFooter {
                 this.config.secondary_label.clone(),
                 this.config.secondary_shortcut.clone(),
                 this.config.secondary_disabled,
+                this.config.secondary_active,
                 this.on_secondary_click.clone(),
             ));
         }
