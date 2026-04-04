@@ -317,8 +317,8 @@ pub const SCRIPTS_RESOURCE_SCHEMA_VERSION: u32 = 1;
 pub const SCRIPTLETS_RESOURCE_SCHEMA_VERSION: u32 = 1;
 
 /// Schema version for the `kit://sdk-reference` resource.
-/// Bumped to 3: migrated to @scriptkit/sdk, new paths, export const metadata format.
-pub const SDK_REFERENCE_SCHEMA_VERSION: u32 = 3;
+/// Bumped to 4: adds public UI introspection and deterministic transaction APIs.
+pub const SDK_REFERENCE_SCHEMA_VERSION: u32 = 4;
 
 /// Schema-versioned envelope for script metadata.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -602,6 +602,38 @@ fn build_sdk_function_refs() -> Vec<SdkFunctionRef> {
             description: "Resolve a path relative to the user's home directory.".into(),
             category: "filesystem".into(),
         },
+        SdkFunctionRef {
+            name: "getState".into(),
+            signature: "await getState(): Promise<PromptState>".into(),
+            description: "Read the current Script Kit prompt state without mutating the UI."
+                .into(),
+            category: "automation".into(),
+        },
+        SdkFunctionRef {
+            name: "getElements".into(),
+            signature: "await getElements(limit?: number): Promise<ElementsSnapshot>".into(),
+            description:
+                "Return visible UI elements with semantic IDs, focus, selection, truncation, and warnings."
+                    .into(),
+            category: "automation".into(),
+        },
+        SdkFunctionRef {
+            name: "waitFor".into(),
+            signature:
+                "await waitFor(condition: WaitCondition, options?: WaitForOptions): Promise<WaitForResult>"
+                    .into(),
+            description: "Poll until a UI condition is satisfied or the timeout expires.".into(),
+            category: "automation".into(),
+        },
+        SdkFunctionRef {
+            name: "batch".into(),
+            signature:
+                "await batch(commands: BatchCommand[], options?: BatchOptions): Promise<BatchResult>"
+                    .into(),
+            description:
+                "Execute a deterministic sequence of UI commands with structured results.".into(),
+            category: "automation".into(),
+        },
     ]
 }
 
@@ -752,6 +784,12 @@ fn read_kit_scriptlets_resource(scriptlets: &[Arc<Scriptlet>]) -> Result<Resourc
 /// Read kit://sdk-reference resource
 fn read_sdk_reference_resource() -> Result<ResourceContent, String> {
     let doc = build_sdk_reference_document();
+    tracing::info!(
+        category = "MCP",
+        schema_version = doc.schema_version,
+        function_count = doc.functions.len(),
+        "Built kit://sdk-reference document"
+    );
     let json = serde_json::to_string_pretty(&doc)
         .map_err(|e| format!("Failed to serialize SDK reference: {e}"))?;
     Ok(ResourceContent {
