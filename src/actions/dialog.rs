@@ -2214,10 +2214,13 @@ impl Render for ActionsDialog {
                                             .justify_between()
                                             .child(left_side);
 
-                                        // Right side: keyboard shortcuts only on the focused row.
-                                        // This keeps the actions list visually quiet and aligns with
-                                        // the focused-only shortcut treatment used across dense lists.
-                                        let show_shortcut = is_selected;
+                                        // Action menus intentionally keep shortcuts visible on all rows.
+                                        // Dense launcher rows use SelectedOnly; this dialog opts into AllRows explicitly.
+                                        let show_shortcut = crate::list_item::should_show_row_shortcut(
+                                            crate::list_item::RowShortcutVisibilityPolicy::AllRows,
+                                            is_selected,
+                                            false,
+                                        );
                                         if style.shortcut_visible && show_shortcut {
                                             if let Some(shortcut_tokens) = action_shortcut_tokens_for_render(action) {
                                                 content = content.child(

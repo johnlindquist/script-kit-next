@@ -94,9 +94,8 @@ mod tests {
             "Mini footer should delegate to the shared universal hint strip"
         );
         assert!(
-            CHAT_RENDER_INPUT_SOURCE.contains("CHAT_LAYOUT_INPUT_BG_FOCUSED_ALPHA")
-                && CHAT_RENDER_INPUT_SOURCE.contains("CHAT_LAYOUT_INPUT_BG_IDLE_ALPHA"),
-            "Input surface should use shared opacity constants"
+            CHAT_RENDER_INPUT_SOURCE.contains("AppChromeColors::from_theme("),
+            "Input surface should use AppChromeColors for background tokens"
         );
         assert!(
             CHAT_RENDER_TURNS_SOURCE.contains("CHAT_LAYOUT_CARD_PADDING_X")

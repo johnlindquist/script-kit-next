@@ -7,7 +7,6 @@
 //! - Footer with model selector and "Continue in Chat"
 //! - Actions menu (⌘+K) with model picker
 
-use crate::components::prompt_footer::PromptFooterColors;
 use crate::components::TextInputState;
 use crate::designs::icon_variations::IconName;
 use gpui::{
@@ -56,12 +55,6 @@ pub(super) const CHAT_LAYOUT_MESSAGES_PADDING_Y: f32 = CHAT_LAYOUT_SECTION_PADDI
 pub(super) const CHAT_LAYOUT_CARD_PADDING_X: f32 = 12.0;
 pub(super) const CHAT_LAYOUT_CARD_PADDING_Y: f32 = 10.0;
 pub(super) const CHAT_LAYOUT_BORDER_ALPHA: u32 = 0x40;
-pub(super) const CHAT_LAYOUT_INPUT_BG_FOCUSED_ALPHA: u32 = 0xC0;
-pub(super) const CHAT_LAYOUT_INPUT_BG_IDLE_ALPHA: u32 = 0x90;
-pub(super) const CHAT_LAYOUT_INPUT_BORDER_FOCUSED_ALPHA: u32 = 0x90;
-pub(super) const CHAT_LAYOUT_INPUT_BORDER_IDLE_ALPHA: u32 = 0x55;
-pub(super) const CHAT_LAYOUT_FOOTER_BG_DARK_ALPHA: u8 = 0x24;
-pub(super) const CHAT_LAYOUT_FOOTER_BG_LIGHT_ALPHA: u8 = 0x14;
 
 use self::types::{
     build_conversation_turns, default_conversation_starters, next_reveal_boundary,
