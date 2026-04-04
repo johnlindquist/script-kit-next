@@ -689,6 +689,78 @@ pub fn find_current_preset_index(theme: &Theme) -> usize {
         .unwrap_or(0)
 }
 
+/// Result of classifying how a theme relates to stock presets.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PresetMatchKind {
+    /// Theme is byte-for-byte identical to a stock preset.
+    ExactMatch,
+    /// Theme shares (background.main, accent.selected) with a preset but differs
+    /// in accent, opacity, vibrancy, or other fields.
+    Modified,
+    /// Theme does not match any stock preset by key fields.
+    Custom,
+}
+
+/// Full classification of a theme against the preset library.
+#[derive(Debug, Clone)]
+pub struct PresetMatchResult {
+    /// Index into `presets_cached()` of the closest preset (0 if Custom).
+    pub preset_index: usize,
+    /// Classification kind.
+    pub kind: PresetMatchKind,
+}
+
+impl PresetMatchResult {
+    pub fn is_exact(&self) -> bool {
+        self.kind == PresetMatchKind::ExactMatch
+    }
+}
+
+/// Classify a theme against all stock presets.
+///
+/// Uses JSON serialization for exact comparison, which is reliable but not
+/// suitable for hot render paths. Call once per preset resolution, not per frame.
+pub fn classify_theme_preset_match(theme: &Theme) -> PresetMatchResult {
+    let cache = presets_cache();
+    let key = preset_bg_accent_key(theme.colors.background.main, theme.colors.accent.selected);
+
+    if let Some(&preset_index) = cache.preset_index_by_bg_accent.get(&key) {
+        let stock_theme = &cache.preset_themes[preset_index];
+
+        // Exact match: compare via JSON serialization for reliability
+        let exact = themes_are_equal(theme, stock_theme);
+
+        let kind = if exact {
+            PresetMatchKind::ExactMatch
+        } else {
+            PresetMatchKind::Modified
+        };
+
+        PresetMatchResult {
+            preset_index,
+            kind,
+        }
+    } else {
+        // No key match — fully custom theme. Fall back to index 0.
+        PresetMatchResult {
+            preset_index: 0,
+            kind: PresetMatchKind::Custom,
+        }
+    }
+}
+
+/// Compare two themes by serialized JSON for field-level equality.
+/// Handles f32 fields correctly via serde's representation.
+fn themes_are_equal(a: &Theme, b: &Theme) -> bool {
+    let Ok(json_a) = serde_json::to_string(a) else {
+        return false;
+    };
+    let Ok(json_b) = serde_json::to_string(b) else {
+        return false;
+    };
+    json_a == json_b
+}
+
 /// Index of the first light theme in all_presets() (used for section separator rendering)
 pub fn first_light_theme_index() -> usize {
     presets_cache().first_light_theme_index
@@ -705,10 +777,12 @@ pub fn all_preset_preview_colors() -> Vec<PresetPreviewColors> {
 // ============================================================================
 
 fn build_dark_theme(colors: ColorScheme) -> Theme {
+    let opacity = BackgroundOpacity::dark_default();
+    let colors = normalize_dark_interactive_tokens(colors, &opacity);
     Theme {
         colors,
         focus_aware: None,
-        opacity: Some(BackgroundOpacity::dark_default()),
+        opacity: Some(opacity),
         drop_shadow: Some(DropShadow::default()),
         vibrancy: Some(VibrancySettings::default()),
         fonts: Some(FontConfig::default()),
@@ -717,10 +791,12 @@ fn build_dark_theme(colors: ColorScheme) -> Theme {
 }
 
 fn build_light_theme(colors: ColorScheme) -> Theme {
+    let opacity = BackgroundOpacity::light_default();
+    let colors = normalize_light_interactive_tokens(colors, &opacity);
     Theme {
         colors,
         focus_aware: None,
-        opacity: Some(BackgroundOpacity::light_default()),
+        opacity: Some(opacity),
         drop_shadow: Some(DropShadow {
             opacity: 0.12,
             ..DropShadow::default()
@@ -729,6 +805,149 @@ fn build_light_theme(colors: ColorScheme) -> Theme {
         fonts: Some(FontConfig::default()),
         appearance: AppearanceMode::Light,
     }
+}
+
+/// Minimum contrast ratio between composited selection background and plain
+/// background for interactive state visibility.  1.10:1 matches the dark
+/// theme's whisper-subtle selection and guarantees a perceptible darkening on
+/// any light surface.
+const MIN_SELECTION_VISIBILITY_RATIO: f32 = 1.10;
+
+/// Normalize `selected_subtle` and `on_accent` for light themes so the shared
+/// chrome contract (selection highlights, hover states, accent badges) stays
+/// legible regardless of which preset is active.
+fn normalize_light_interactive_tokens(
+    mut colors: ColorScheme,
+    opacity: &BackgroundOpacity,
+) -> ColorScheme {
+    let bg = colors.background.main;
+
+    // --- selected_subtle: ensure selection highlight is visible ---------------
+    let composited = composite_over(colors.accent.selected_subtle, opacity.selected, bg);
+    let vis_ratio = selection_visibility_ratio(composited, bg);
+
+    if vis_ratio < MIN_SELECTION_VISIBILITY_RATIO {
+        let fixed = find_min_visible_selected_subtle(bg, opacity.selected);
+        colors.accent.selected_subtle = fixed;
+    }
+
+    // --- on_accent: ensure accent badge text is readable ---------------------
+    let on_accent_ratio =
+        super::helpers::contrast_ratio(colors.text.on_accent, colors.accent.selected);
+    if on_accent_ratio < 3.0 {
+        let fixed = super::best_readable_text_hex(colors.accent.selected);
+        colors.text.on_accent = fixed;
+    }
+
+    colors
+}
+
+/// Normalize `selected_subtle` for dark themes using the same visibility
+/// contract as light themes.  Dark presets with very dark `selected_subtle`
+/// values (close to their background) get brightened toward white.
+fn normalize_dark_interactive_tokens(
+    mut colors: ColorScheme,
+    opacity: &BackgroundOpacity,
+) -> ColorScheme {
+    let bg = colors.background.main;
+    let composited = composite_over(colors.accent.selected_subtle, opacity.selected, bg);
+    let vis_ratio = selection_visibility_ratio(composited, bg);
+
+    if vis_ratio < MIN_SELECTION_VISIBILITY_RATIO {
+        let fixed = find_min_visible_selected_subtle_dark(bg, opacity.selected);
+        colors.accent.selected_subtle = fixed;
+    }
+
+    colors
+}
+
+/// Composite a foreground color at `alpha` over an opaque background.
+fn composite_over(fg: u32, alpha: f32, bg: u32) -> u32 {
+    let blend = |shift: u32| {
+        let f = ((fg >> shift) & 0xFF) as f32;
+        let b = ((bg >> shift) & 0xFF) as f32;
+        (f * alpha + b * (1.0 - alpha)).round() as u32
+    };
+    (blend(16) << 16) | (blend(8) << 8) | blend(0)
+}
+
+/// WCAG-style contrast ratio between two opaque colors.
+fn selection_visibility_ratio(composited: u32, bg: u32) -> f32 {
+    let l1 = super::types::relative_luminance_srgb(composited);
+    let l2 = super::types::relative_luminance_srgb(bg);
+    let lighter = l1.max(l2);
+    let darker = l1.min(l2);
+    (lighter + 0.05) / (darker + 0.05)
+}
+
+/// Binary search for the darkest (closest to bg) `selected_subtle` value that
+/// still produces a visible selection highlight at the given opacity.
+/// For light themes: blends toward black.
+fn find_min_visible_selected_subtle(bg: u32, opacity_selected: f32) -> u32 {
+    let bg_r = ((bg >> 16) & 0xFF) as f32;
+    let bg_g = ((bg >> 8) & 0xFF) as f32;
+    let bg_b = (bg & 0xFF) as f32;
+
+    let make_color = |t: f32| -> u32 {
+        // Blend from bg toward black (0x000000) by factor t
+        let r = (bg_r * (1.0 - t)).round() as u32;
+        let g = (bg_g * (1.0 - t)).round() as u32;
+        let b = (bg_b * (1.0 - t)).round() as u32;
+        (r << 16) | (g << 8) | b
+    };
+
+    let check = |t: f32| -> bool {
+        let subtle = make_color(t);
+        let composited = composite_over(subtle, opacity_selected, bg);
+        selection_visibility_ratio(composited, bg) >= MIN_SELECTION_VISIBILITY_RATIO
+    };
+
+    // Binary search for minimum t that passes
+    let mut lo: f32 = 0.0;
+    let mut hi: f32 = 1.0;
+    for _ in 0..32 {
+        let mid = (lo + hi) / 2.0;
+        if check(mid) {
+            hi = mid;
+        } else {
+            lo = mid;
+        }
+    }
+    make_color(hi)
+}
+
+/// Binary search for the closest-to-bg `selected_subtle` that still produces
+/// visible selection on a dark background.  Blends toward white.
+fn find_min_visible_selected_subtle_dark(bg: u32, opacity_selected: f32) -> u32 {
+    let bg_r = ((bg >> 16) & 0xFF) as f32;
+    let bg_g = ((bg >> 8) & 0xFF) as f32;
+    let bg_b = (bg & 0xFF) as f32;
+
+    let make_color = |t: f32| -> u32 {
+        // Blend from bg toward white (0xFFFFFF) by factor t
+        let r = (bg_r + (255.0 - bg_r) * t).round() as u32;
+        let g = (bg_g + (255.0 - bg_g) * t).round() as u32;
+        let b = (bg_b + (255.0 - bg_b) * t).round() as u32;
+        (r << 16) | (g << 8) | b
+    };
+
+    let check = |t: f32| -> bool {
+        let subtle = make_color(t);
+        let composited = composite_over(subtle, opacity_selected, bg);
+        selection_visibility_ratio(composited, bg) >= MIN_SELECTION_VISIBILITY_RATIO
+    };
+
+    let mut lo: f32 = 0.0;
+    let mut hi: f32 = 1.0;
+    for _ in 0..32 {
+        let mid = (lo + hi) / 2.0;
+        if check(mid) {
+            hi = mid;
+        } else {
+            lo = mid;
+        }
+    }
+    make_color(hi)
 }
 
 // ============================================================================
@@ -4519,5 +4738,107 @@ mod tests {
         assert_eq!(normalize_preset_search_text("Rosé Pine"), "ros pine");
         assert_eq!(normalize_preset_search_text("Frappé"), "frapp");
         assert_eq!(normalize_preset_search_text("one-dark-pro"), "one dark pro");
+    }
+
+    // ── PresetMatchResult / classify_theme_preset_match tests ────────
+
+    #[test]
+    fn test_classify_exact_match_for_all_stock_presets() {
+        for (index, preset) in presets_cached().iter().enumerate() {
+            let theme = preset.create_theme();
+            let result = classify_theme_preset_match(&theme);
+            assert_eq!(
+                result.kind,
+                PresetMatchKind::ExactMatch,
+                "Stock preset '{}' (index {}) should be ExactMatch, got {:?}",
+                preset.id,
+                index,
+                result.kind
+            );
+            assert_eq!(result.preset_index, index);
+            assert!(result.is_exact());
+        }
+    }
+
+    #[test]
+    fn test_classify_accent_only_change_is_modified() {
+        let mut theme = presets_cached()[0].create_theme();
+        // Change accent but keep background.main the same
+        // (find a different accent that doesn't collide with another preset's key)
+        let original_accent = theme.colors.accent.selected;
+        theme.colors.accent.selected = if original_accent != 0xFF0000 {
+            0xFF0000
+        } else {
+            0x00FF00
+        };
+        // Since accent changed, the bg+accent key won't match any preset → Custom
+        let result = classify_theme_preset_match(&theme);
+        assert_ne!(
+            result.kind,
+            PresetMatchKind::ExactMatch,
+            "Accent-only change should not be ExactMatch"
+        );
+    }
+
+    #[test]
+    fn test_classify_opacity_only_change_is_modified() {
+        let mut theme = presets_cached()[0].create_theme();
+        // Modify opacity but keep bg+accent the same
+        let mut opacity = theme.opacity.clone().unwrap_or_default();
+        opacity.main = 0.99;
+        theme.opacity = Some(opacity);
+        let result = classify_theme_preset_match(&theme);
+        assert_eq!(
+            result.kind,
+            PresetMatchKind::Modified,
+            "Opacity-only change should be Modified (bg+accent still match preset)"
+        );
+        assert!(!result.is_exact());
+    }
+
+    #[test]
+    fn test_classify_vibrancy_only_change_is_modified() {
+        let mut theme = presets_cached()[0].create_theme();
+        // Toggle vibrancy enabled
+        if let Some(ref mut v) = theme.vibrancy {
+            v.enabled = !v.enabled;
+        }
+        let result = classify_theme_preset_match(&theme);
+        assert_eq!(
+            result.kind,
+            PresetMatchKind::Modified,
+            "Vibrancy-only change should be Modified"
+        );
+    }
+
+    #[test]
+    fn test_classify_fully_custom_theme_is_custom() {
+        let mut theme = presets_cached()[0].create_theme();
+        // Use bg+accent that no preset has
+        theme.colors.background.main = 0x010101;
+        theme.colors.accent.selected = 0x020202;
+        let result = classify_theme_preset_match(&theme);
+        assert_eq!(
+            result.kind,
+            PresetMatchKind::Custom,
+            "Fully custom theme should be Custom"
+        );
+    }
+
+    #[test]
+    fn test_classify_preserves_preset_index_for_modified() {
+        use crate::theme::VibrancyMaterial;
+        let preset = &presets_cached()[2]; // pick a non-zero preset
+        let mut theme = preset.create_theme();
+        // Modify vibrancy material to make it non-exact
+        if let Some(ref mut v) = theme.vibrancy {
+            v.material = match v.material {
+                VibrancyMaterial::Popover => VibrancyMaterial::Hud,
+                _ => VibrancyMaterial::Popover,
+            };
+        }
+        let result = classify_theme_preset_match(&theme);
+        assert_eq!(result.preset_index, 2);
+        assert_eq!(result.kind, PresetMatchKind::Modified);
     }
 }

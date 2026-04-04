@@ -71,28 +71,53 @@ impl FormFieldColors {
     }
 }
 
-/// Pre-computed whisper-chrome surface for form fields
+/// Pre-computed whisper-chrome surface for form fields.
 #[derive(Clone, Copy, Debug)]
 pub struct FormFieldSurface {
-    /// Background color with low alpha
+    /// Background color with low alpha.
     pub background: gpui::Rgba,
-    /// Border color — accent on focus, ghost otherwise
+    /// Border color — accent on focus, ghost otherwise.
     pub border: gpui::Rgba,
+    /// Accent fill used by checked controls on the same surface.
+    pub checked_fill: gpui::Rgba,
 }
 
 impl FormFieldColors {
     /// Compute a whisper-chrome surface for a form field.
-    /// Focused fields get slightly higher alpha; unfocused fields rest at ghost opacity.
+    /// Focused fields use `background_focused` at a slightly stronger opacity,
+    /// while idle fields stay in ghost opacity.
     pub fn whisper_surface(&self, focused: bool) -> FormFieldSurface {
-        let background_alpha: u32 = if focused { 0x1A } else { 0x10 };
-        let border_alpha: u32 = if focused { 0x66 } else { 0x22 };
+        use crate::theme::opacity::{
+            OPACITY_WHISPER_ACCENT_FILL, OPACITY_WHISPER_BORDER_IDLE,
+            OPACITY_WHISPER_SURFACE_FOCUSED, OPACITY_WHISPER_SURFACE_IDLE,
+        };
+        use crate::ui_foundation::hex_to_rgba_with_opacity;
+
+        let background_hex = if focused {
+            self.background_focused
+        } else {
+            self.background
+        };
+        let background_opacity = if focused {
+            OPACITY_WHISPER_SURFACE_FOCUSED
+        } else {
+            OPACITY_WHISPER_SURFACE_IDLE
+        };
+
         FormFieldSurface {
-            background: gpui::rgba((self.background << 8) | background_alpha),
+            background: gpui::rgba(hex_to_rgba_with_opacity(background_hex, background_opacity)),
             border: if focused {
                 gpui::rgb(self.border_focused)
             } else {
-                gpui::rgba((self.border << 8) | border_alpha)
+                gpui::rgba(hex_to_rgba_with_opacity(
+                    self.border,
+                    OPACITY_WHISPER_BORDER_IDLE,
+                ))
             },
+            checked_fill: gpui::rgba(hex_to_rgba_with_opacity(
+                self.checkbox_checked,
+                OPACITY_WHISPER_ACCENT_FILL,
+            )),
         }
     }
 }

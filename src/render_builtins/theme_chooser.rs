@@ -779,11 +779,18 @@ impl ScriptListApp {
         let presets = theme::presets::presets_cached();
         let preview_colors = theme::presets::preset_preview_colors_cached();
         let first_light = theme::presets::first_light_theme_index();
-        let original_index = self
+        let original_match = self
             .theme_before_chooser
             .as_ref()
-            .map(|t| theme::presets::find_current_preset_index(t))
+            .map(|t| theme::presets::classify_theme_preset_match(t));
+        let original_index = original_match
+            .as_ref()
+            .map(|m| m.preset_index)
             .unwrap_or(0);
+        let original_is_exact = original_match
+            .as_ref()
+            .map(|m| m.is_exact())
+            .unwrap_or(false);
 
         // Filter presets by name or description
         let filtered_indices = Self::theme_chooser_filtered_indices(filter);
@@ -1016,6 +1023,7 @@ impl ScriptListApp {
         let presets_for_list = presets;
         let selected = selected_index;
         let orig_idx = original_index;
+        let orig_exact = original_is_exact;
         let first_light_idx = first_light;
         let filtered_indices_for_list = filtered_indices.clone();
         let entity_handle_for_customize = entity_handle.clone();
@@ -1055,8 +1063,9 @@ impl ScriptListApp {
                             .child(div().flex_1().bg(rgb(colors.secondary)))
                             .child(div().flex_1().bg(rgb(colors.border)));
 
-                        // "Saved" badge for original theme — trailing accessory
+                        // Badge for original theme — "Saved" if exact match, "Modified" if remixed
                         let saved_badge = if is_original {
+                            let label = if orig_exact { "Saved" } else { "Modified" };
                             Some(
                                 div()
                                     .px(px(6.0))
@@ -1068,7 +1077,7 @@ impl ScriptListApp {
                                     .text_xs()
                                     .font_weight(gpui::FontWeight::MEDIUM)
                                     .text_color(accent_badge_text)
-                                    .child("Saved")
+                                    .child(label)
                                     .into_any_element(),
                             )
                         } else {

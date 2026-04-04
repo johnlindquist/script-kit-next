@@ -93,7 +93,7 @@ impl Render for FormCheckbox {
 
         // Checkbox box styling
         let box_bg = if checked {
-            rgba((colors.checkbox_checked << 8) | 0x66)
+            surface.checked_fill
         } else {
             surface.background
         };

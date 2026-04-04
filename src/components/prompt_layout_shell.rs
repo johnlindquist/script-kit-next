@@ -984,12 +984,8 @@ mod prompt_layout_shell_tests {
             "render_template_prompt should not use PromptFooter"
         );
         assert!(
-            body.contains("clickable_universal_hint_strip("),
-            "render_template_prompt should use the clickable universal hint strip"
-        );
-        assert!(
-            body.contains("STANDARD_HEIGHT"),
-            "render_template_prompt should use STANDARD_HEIGHT"
+            body.contains("render_wrapped_prompt_entity("),
+            "render_template_prompt should delegate to render_wrapped_prompt_entity"
         );
     }
 
@@ -1001,12 +997,8 @@ mod prompt_layout_shell_tests {
             "render_naming_prompt should not use PromptFooter"
         );
         assert!(
-            body.contains("clickable_universal_hint_strip("),
-            "render_naming_prompt should use the clickable universal hint strip"
-        );
-        assert!(
-            body.contains("STANDARD_HEIGHT"),
-            "render_naming_prompt should use STANDARD_HEIGHT"
+            body.contains("render_wrapped_prompt_entity("),
+            "render_naming_prompt should delegate to render_wrapped_prompt_entity"
         );
     }
 

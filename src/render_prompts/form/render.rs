@@ -29,6 +29,8 @@ impl ScriptListApp {
             surface = "render_prompts::form",
             prompt_id = %prompt_id,
             field_count,
+            shell = "render_simple_prompt_shell",
+            body_padding = design_spacing.padding_lg,
             "prompt_surface_rendered"
         );
 
@@ -131,43 +133,40 @@ impl ScriptListApp {
         // Form fields have their own focus handles and on_key_down handlers.
         // We DO NOT track_focus on the container - the fields handle their own focus.
         // Enter/Escape/Tab are handled by the handle_key listener above.
-        crate::components::prompt_shell_container(0.0, vibrancy_bg)
-            .h(content_height)
-            .text_color(rgb(design_colors.text_primary))
-            .font_family(design_typography.font_family)
-            .key_context("form_prompt")
-            .on_key_down(handle_key)
-            // Content area with form fields
-            .child(
-                div()
-                    .flex_1()
-                    .w_full()
-                    .min_h(px(0.))
-                    .overflow_y_scrollbar()
-                    .p(px(design_spacing.padding_xl))
-                    // Render the form entity (contains all fields)
-                    .child(entity.clone()),
-            )
-            // Shared three-key hint strip footer
-            .child(self.clickable_universal_hint_strip(cx))
-            // Actions dialog overlay
-            .when_some(
-                render_actions_backdrop(
-                    self.show_actions_popup,
-                    self.actions_dialog.clone(),
-                    actions_dialog_top,
-                    actions_dialog_right,
-                    ActionsBackdropConfig {
-                        backdrop_id: "form-actions-backdrop",
-                        close_host: ActionsDialogHost::FormPrompt,
-                        backdrop_log_message: "Form actions backdrop clicked - dismissing dialog",
-                        show_pointer_cursor: true,
-                    },
-                    cx,
-                ),
-                |d, backdrop_overlay| d.child(backdrop_overlay),
-            )
-            .into_any_element()
+        crate::components::render_simple_prompt_shell(
+            0.0,
+            vibrancy_bg,
+            div()
+                .flex_1()
+                .w_full()
+                .min_h(px(0.))
+                .overflow_y_scrollbar()
+                .p(px(design_spacing.padding_lg))
+                .child(entity.clone()),
+            Some(self.clickable_universal_hint_strip(cx)),
+        )
+        .h(content_height)
+        .text_color(rgb(design_colors.text_primary))
+        .font_family(design_typography.font_family)
+        .key_context("form_prompt")
+        .on_key_down(handle_key)
+        .when_some(
+            render_actions_backdrop(
+                self.show_actions_popup,
+                self.actions_dialog.clone(),
+                actions_dialog_top,
+                actions_dialog_right,
+                ActionsBackdropConfig {
+                    backdrop_id: "form-actions-backdrop",
+                    close_host: ActionsDialogHost::FormPrompt,
+                    backdrop_log_message: "Form actions backdrop clicked - dismissing dialog",
+                    show_pointer_cursor: true,
+                },
+                cx,
+            ),
+            |d, backdrop_overlay| d.child(backdrop_overlay),
+        )
+        .into_any_element()
     }
 }
 
@@ -204,6 +203,26 @@ mod form_prompt_render_backdrop_tests {
         assert!(
             FORM_RENDER_SOURCE.contains("PromptKeyPreambleCfg"),
             "form key handling should configure the shared helper via PromptKeyPreambleCfg"
+        );
+    }
+
+    #[test]
+    fn test_form_uses_shared_minimal_shell() {
+        assert!(
+            FORM_RENDER_SOURCE.contains("render_simple_prompt_shell("),
+            "form render should use the shared minimal shell helper"
+        );
+        assert!(
+            FORM_RENDER_SOURCE.contains("clickable_universal_hint_strip("),
+            "form render should use the clickable hint strip"
+        );
+        assert!(
+            !FORM_RENDER_SOURCE.contains("padding_xl"),
+            "form render should use padding_lg, not padding_xl"
+        );
+        assert!(
+            FORM_RENDER_SOURCE.contains("padding_lg"),
+            "form render should use padding_lg for reduced body padding"
         );
     }
 }
