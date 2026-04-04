@@ -15,6 +15,7 @@ mod env_prompt_stories;
 mod footer_action_variations;
 mod footer_layout_variations;
 mod form_field_stories;
+mod frosted_surface_variations;
 mod header_button_variations;
 mod header_design_variations;
 mod header_logo_variations;
@@ -51,6 +52,7 @@ pub use env_prompt_stories::EnvPromptStory;
 pub use footer_action_variations::FooterActionVariationsStory;
 pub use footer_layout_variations::FooterLayoutVariationsStory;
 pub use form_field_stories::FormFieldStory;
+pub use frosted_surface_variations::FrostedSurfaceVariationsStory;
 pub use header_button_variations::HeaderButtonVariationsStory;
 pub use header_design_variations::HeaderDesignVariationsStory;
 pub use header_logo_variations::HeaderLogoVariationsStory;
@@ -83,6 +85,7 @@ static ALL_STORIES: LazyLock<Vec<StoryEntry>> = LazyLock::new(|| {
         StoryEntry::new(Box::new(FormFieldStory)),
         StoryEntry::new(Box::new(ListItemStory)),
         StoryEntry::new(Box::new(ScrollbarStory)),
+        StoryEntry::new(Box::new(FrostedSurfaceVariationsStory)),
         // Layouts
         StoryEntry::new(Box::new(HeaderVariationsStory)),
         StoryEntry::new(Box::new(HeaderDesignVariationsStory)),
