@@ -93,11 +93,7 @@ impl AiApp {
                         d.child(
                             div()
                                 .text_xs()
-                                .text_color(muted_fg.opacity(if is_selected {
-                                    HINT
-                                } else {
-                                    0.3
-                                }))
+                                .text_color(muted_fg.opacity(if is_selected { HINT } else { 0.3 }))
                                 .text_ellipsis()
                                 .child(subtitle),
                         )

@@ -32,7 +32,9 @@ pub(crate) mod validation;
 pub(crate) use chrome::{AppChromeColors, SemanticChipColors};
 
 // Re-export contrast audit helpers
-pub use audit::{audit_theme_contrast, theme_contrast_score, worst_theme_contrast, ThemeContrastSample};
+pub use audit::{
+    audit_theme_contrast, theme_contrast_score, worst_theme_contrast, ThemeContrastSample,
+};
 
 // Re-export types used externally
 pub(crate) use types::relative_luminance_srgb;

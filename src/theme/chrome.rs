@@ -48,11 +48,7 @@ pub(crate) struct SemanticChipColors {
 impl AppChromeColors {
     /// Resolve contrast-safe chip colors for a given semantic base color.
     #[allow(dead_code)] // used by binary target (theme_chooser.rs)
-    pub(crate) fn semantic_chip_colors(
-        &self,
-        theme: &Theme,
-        base_hex: u32,
-    ) -> SemanticChipColors {
+    pub(crate) fn semantic_chip_colors(&self, theme: &Theme, base_hex: u32) -> SemanticChipColors {
         let opacity = theme.get_opacity();
         let bg_alpha = opacity.hover.max(0.18);
         let border_alpha = opacity.selected.max(0.28);
@@ -88,18 +84,12 @@ impl AppChromeColors {
                 colors.background.search_box,
                 opacity.search_box,
             ),
-            preview_surface_rgba: hex_to_rgba_with_opacity(
-                colors.background.main,
-                opacity.preview,
-            ),
+            preview_surface_rgba: hex_to_rgba_with_opacity(colors.background.main, opacity.preview),
             panel_surface_rgba: hex_to_rgba_with_opacity(
                 colors.background.title_bar,
                 opacity.panel,
             ),
-            dialog_surface_rgba: hex_to_rgba_with_opacity(
-                colors.background.main,
-                opacity.dialog,
-            ),
+            dialog_surface_rgba: hex_to_rgba_with_opacity(colors.background.main, opacity.dialog),
             log_panel_surface_rgba: hex_to_rgba_with_opacity(
                 colors.background.log_panel,
                 opacity.log_panel,

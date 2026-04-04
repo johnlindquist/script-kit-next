@@ -124,8 +124,9 @@ fn config_template_uses_satisfies_config() {
 
 #[test]
 fn builtin_registry_ids_are_canonical_slash_style() {
-    let entries =
-        script_kit_gpui::builtins::get_builtin_entries(&script_kit_gpui::config::BuiltInConfig::default());
+    let entries = script_kit_gpui::builtins::get_builtin_entries(
+        &script_kit_gpui::config::BuiltInConfig::default(),
+    );
     for entry in &entries {
         assert!(
             entry.id.starts_with("builtin/"),
@@ -144,8 +145,9 @@ fn builtin_registry_ids_are_canonical_slash_style() {
 
 #[test]
 fn builtin_registry_roundtrips_with_deeplinks() {
-    let entries =
-        script_kit_gpui::builtins::get_builtin_entries(&script_kit_gpui::config::BuiltInConfig::default());
+    let entries = script_kit_gpui::builtins::get_builtin_entries(
+        &script_kit_gpui::config::BuiltInConfig::default(),
+    );
     for entry in &entries {
         let deeplink = script_kit_gpui::config::command_id_to_deeplink(&entry.id)
             .unwrap_or_else(|e| panic!("valid deeplink for {}: {}", entry.id, e));
