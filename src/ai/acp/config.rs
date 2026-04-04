@@ -1,6 +1,9 @@
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::path::Path;
 use std::sync::OnceLock;
+
+use anyhow::Context as _;
+use serde::{Deserialize, Serialize};
 
 use crate::ai::ModelInfo;
 
@@ -37,6 +40,30 @@ pub struct AcpAgentConfig {
     /// Converted to `ModelInfo` at registration time via `model_infos()`.
     #[serde(default)]
     pub models: Vec<AcpModelEntry>,
+
+    /// Optional install specification for agents not yet on PATH.
+    #[serde(default)]
+    pub install: Option<AcpAgentInstallSpec>,
+
+    /// Optional authentication hint shown in the setup surface.
+    #[serde(default)]
+    pub auth: Option<AcpAgentAuthHint>,
+}
+
+/// How to install an ACP agent that is not yet available.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AcpAgentInstallSpec {
+    pub command: String,
+    #[serde(default)]
+    pub args: Vec<String>,
+}
+
+/// Human-readable authentication guidance for the setup surface.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AcpAgentAuthHint {
+    pub summary: String,
 }
 
 /// A lightweight, serializable model descriptor for ACP agent config files.
@@ -223,7 +250,172 @@ fn claude_code_agent_config() -> anyhow::Result<AcpAgentConfig> {
         args: acp_args,
         env: HashMap::new(),
         models: default_claude_code_models(),
+        install: None,
+        auth: None,
     })
+}
+
+// ---------------------------------------------------------------------------
+// Multi-agent catalog loader
+// ---------------------------------------------------------------------------
+
+/// Check whether `command` resolves to an executable.
+fn command_exists(command: &str) -> bool {
+    if command.trim().is_empty() {
+        return false;
+    }
+    if Path::new(command).exists() {
+        return true;
+    }
+    which::which(command).is_ok()
+}
+
+/// Load all ACP agent configs from every source (legacy + catalog + built-in).
+///
+/// Sources (in priority order):
+/// 1. Legacy Claude Code config (synthesized from `claudeCode` settings).
+/// 2. `~/.scriptkit/acp/agents.json` (user-managed catalog file).
+/// 3. Built-in auto-detection (`opencode`, `codex-acp` on PATH).
+pub(crate) fn load_acp_agent_configs() -> anyhow::Result<Vec<AcpAgentConfig>> {
+    let mut agents = Vec::new();
+
+    // 1. Legacy compatibility: synthesize the existing Claude Code entry.
+    match claude_code_agent_config_cached() {
+        Ok(legacy_claude) => agents.push(legacy_claude),
+        Err(e) => {
+            tracing::debug!(
+                target: "script_kit::tab_ai",
+                event = "acp_legacy_claude_unavailable",
+                error = %e,
+            );
+        }
+    }
+
+    // 2. Script Kit native multi-agent catalog.
+    let catalog_path = super::catalog::default_acp_agents_path();
+    if catalog_path.exists() {
+        let bytes = std::fs::read(&catalog_path)
+            .with_context(|| format!("read ACP agents catalog at {}", catalog_path.display()))?;
+        let file: super::catalog::AcpAgentCatalogFile = serde_json::from_slice(&bytes)
+            .with_context(|| {
+                format!("parse ACP agents catalog at {}", catalog_path.display())
+            })?;
+        // Deduplicate: skip catalog entries whose id already exists.
+        for agent in file.agents {
+            if !agents.iter().any(|existing| existing.id == agent.id) {
+                agents.push(agent);
+            }
+        }
+    }
+
+    // 3. Built-in OpenCode detection.
+    if command_exists("opencode") && !agents.iter().any(|a| a.id == "opencode") {
+        agents.push(AcpAgentConfig {
+            id: "opencode".to_string(),
+            display_name: "OpenCode".to_string(),
+            command: "opencode".to_string(),
+            args: vec!["acp".to_string()],
+            env: HashMap::new(),
+            models: Vec::new(),
+            install: None,
+            auth: None,
+        });
+    }
+
+    // 4. Built-in Codex ACP detection.
+    if command_exists("codex-acp") && !agents.iter().any(|a| a.id == "codex-acp") {
+        agents.push(AcpAgentConfig {
+            id: "codex-acp".to_string(),
+            display_name: "Codex".to_string(),
+            command: "codex-acp".to_string(),
+            args: Vec::new(),
+            env: HashMap::new(),
+            models: Vec::new(),
+            install: Some(AcpAgentInstallSpec {
+                command: "npx".to_string(),
+                args: vec!["@zed-industries/codex-acp".to_string()],
+            }),
+            auth: Some(AcpAgentAuthHint {
+                summary: "Authenticate with ChatGPT, CODEX_API_KEY, or OPENAI_API_KEY."
+                    .to_string(),
+            }),
+        });
+    }
+
+    tracing::info!(
+        target: "script_kit::tab_ai",
+        event = "acp_agent_configs_loaded",
+        total_agents = agents.len(),
+        ids = ?agents.iter().map(|a| a.id.as_str()).collect::<Vec<_>>(),
+    );
+
+    Ok(agents)
+}
+
+/// Build resolved catalog entries with install/auth/config state.
+pub(crate) fn load_acp_agent_catalog_entries(
+) -> anyhow::Result<Vec<super::catalog::AcpAgentCatalogEntry>> {
+    let agents = load_acp_agent_configs()?;
+
+    let entries = agents
+        .into_iter()
+        .map(|agent| {
+            let install_state = if command_exists(&agent.command) || agent.command == "npx" {
+                super::catalog::AcpAgentInstallState::Ready
+            } else if agent.install.is_some() {
+                super::catalog::AcpAgentInstallState::NeedsInstall
+            } else {
+                super::catalog::AcpAgentInstallState::Unsupported
+            };
+
+            let config_state = if agent.command.trim().is_empty() {
+                super::catalog::AcpAgentConfigState::Missing
+            } else {
+                super::catalog::AcpAgentConfigState::Valid
+            };
+
+            let source = if agent.id == "claude-code" {
+                super::catalog::AcpAgentSource::LegacyClaudeCode
+            } else {
+                super::catalog::AcpAgentSource::ScriptKitCatalog
+            };
+
+            let install_hint = agent.install.as_ref().map(|spec| {
+                if spec.args.is_empty() {
+                    gpui::SharedString::from(spec.command.clone())
+                } else {
+                    gpui::SharedString::from(format!(
+                        "{} {}",
+                        spec.command,
+                        spec.args.join(" ")
+                    ))
+                }
+            });
+
+            super::catalog::AcpAgentCatalogEntry {
+                id: agent.id.clone().into(),
+                display_name: agent.display_name.clone().into(),
+                source,
+                install_state,
+                auth_state: super::catalog::AcpAgentAuthState::Unknown,
+                config_state,
+                install_hint,
+                config_hint: Some(
+                    "Edit ~/.scriptkit/acp/agents.json to add or fix ACP agents.".into(),
+                ),
+                config: Some(agent),
+            }
+        })
+        .collect::<Vec<_>>();
+
+    tracing::info!(
+        target: "script_kit::tab_ai",
+        event = "acp_agent_catalog_built",
+        total_entries = entries.len(),
+        ready_entries = entries.iter().filter(|e| e.is_launchable()).count(),
+    );
+
+    Ok(entries)
 }
 
 #[cfg(test)]
@@ -279,6 +471,8 @@ mod tests {
             args: vec!["acp".into()],
             env: HashMap::new(),
             models: vec![],
+            install: None,
+            auth: None,
         };
         assert_eq!(config.provider_id(), "opencode");
         assert_eq!(config.display_name(), "OpenCode");
@@ -293,6 +487,8 @@ mod tests {
             args: vec![],
             env: HashMap::new(),
             models: vec![],
+            install: None,
+            auth: None,
         };
         let json = serde_json::to_string(&config).expect("should serialize");
         let back: AcpAgentConfig = serde_json::from_str(&json).expect("should deserialize");
@@ -313,6 +509,8 @@ mod tests {
                 display_name: None,
                 context_window: None,
             }],
+            install: None,
+            auth: None,
         };
         let infos = config.model_infos();
         assert_eq!(infos.len(), 1);
@@ -336,6 +534,8 @@ mod tests {
                 display_name: Some("Gemini 2.5 Pro".into()),
                 context_window: Some(1_000_000),
             }],
+            install: None,
+            auth: None,
         };
         let infos = config.model_infos();
         assert_eq!(infos[0].display_name, "Gemini 2.5 Pro");

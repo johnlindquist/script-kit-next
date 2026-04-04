@@ -92,6 +92,20 @@ const EMBEDDED_EXAMPLES_README: &str = include_str!("../../kit-init/examples/REA
 const EMBEDDED_EXAMPLES_START_HERE: &str = include_str!("../../kit-init/examples/START_HERE.md");
 /// Skill: agent authoring
 const EMBEDDED_SKILL_AGENTS: &str = include_str!("../../kit-init/skills/agents/SKILL.md");
+/// Default ACP agent catalog (seeded on first run)
+const EMBEDDED_ACP_AGENTS_JSON: &str = r#"{
+  "schemaVersion": 1,
+  "agents": [
+    {
+      "id": "opencode",
+      "displayName": "OpenCode",
+      "command": "opencode",
+      "args": ["acp"],
+      "env": {},
+      "models": []
+    }
+  ]
+}"#;
 /// Example agent: review-pr
 const EMBEDDED_EXAMPLE_AGENT_REVIEW_PR: &str =
     include_str!("../../kit-init/examples/agents/review-pr.claude.md");
@@ -612,6 +626,16 @@ pub fn ensure_kit_setup() -> SetupResult {
     // Comprehensive user guide for learning Script Kit
     let guide_md_path = kit_dir.join("GUIDE.md");
     write_string_if_missing(&guide_md_path, EMBEDDED_GUIDE_MD, &mut warnings, "GUIDE.md");
+
+    // User-owned: ACP agent catalog (only create if missing)
+    // Users add/edit ACP agent entries here for multi-agent support
+    let acp_agents_path = kit_dir.join("acp").join("agents.json");
+    write_string_if_missing(
+        &acp_agents_path,
+        EMBEDDED_ACP_AGENTS_JSON,
+        &mut warnings,
+        "acp/agents.json",
+    );
 
     // Root-level CLAUDE.md — the canonical agent instructions file.
     // Lives at ~/.scriptkit/CLAUDE.md so harnesses that cwd into ~/.scriptkit find it.

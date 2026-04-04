@@ -5,7 +5,9 @@
 //!
 //! # Module Layout
 //!
+//! - `catalog` — Schema-versioned agent catalog file and readiness types.
 //! - `config` — `AcpAgentConfig` for agent discovery and command configuration.
+//! - `preflight` — Launch readiness resolution (blockers before thread spawn).
 //! - `events` — Typed ACP turn/event primitives (`AcpEvent`, `AcpCommand`).
 //! - `permission_broker` — Full-option-set permission forwarding to the UI.
 //! - `types` — Bridging types between ACP and Script Kit internals.
@@ -14,12 +16,14 @@
 
 pub(crate) mod chat_window;
 pub(crate) mod client;
+pub(crate) mod catalog;
 pub(crate) mod config;
 pub(crate) mod context;
 pub(crate) mod events;
 pub(crate) mod handlers;
 pub(crate) mod history;
 pub(crate) mod permission_broker;
+pub(crate) mod preflight;
 pub(crate) mod provider;
 pub(crate) mod thread;
 pub(crate) mod types;
@@ -29,7 +33,14 @@ pub(crate) mod view;
 mod tests;
 
 pub(crate) use client::{AcpConnection, AcpRuntime};
-pub(crate) use config::{claude_code_agent_config_cached, prewarm_agent_config, AcpAgentConfig};
+pub(crate) use catalog::{
+    default_acp_agents_path, AcpAgentAuthState, AcpAgentCatalogEntry, AcpAgentCatalogFile,
+    AcpAgentConfigState, AcpAgentInstallState, AcpAgentSource,
+};
+pub(crate) use config::{
+    claude_code_agent_config_cached, load_acp_agent_catalog_entries, load_acp_agent_configs,
+    prewarm_agent_config, AcpAgentConfig,
+};
 #[allow(deprecated)]
 pub(crate) use context::{
     build_tab_ai_acp_context_blocks, build_tab_ai_acp_guidance_blocks,
@@ -39,6 +50,10 @@ pub(crate) use events::{AcpCommand, AcpEvent, AcpEventRx, AcpPromptTurnRequest};
 pub(crate) use permission_broker::{
     approval_request_input, AcpApprovalOption, AcpApprovalPreview, AcpApprovalPreviewKind,
     AcpApprovalRequest, AcpApprovalRequestInput, AcpPermissionBroker,
+};
+pub(crate) use preflight::{
+    resolve_default_acp_launch, setup_title_for_resolution, AcpLaunchBlocker,
+    AcpLaunchResolution,
 };
 pub(crate) use provider::AcpProvider;
 pub(crate) use thread::{

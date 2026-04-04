@@ -121,6 +121,8 @@ mod tests {
                 display_name: Some("Test Model".into()),
                 context_window: Some(64_000),
             }],
+            install: None,
+            auth: None,
         }
     }
 
@@ -155,6 +157,8 @@ mod tests {
             args: vec![],
             env: HashMap::new(),
             models: vec![],
+            install: None,
+            auth: None,
         };
         let provider = AcpProvider::new(agent);
         // ACP Claude uses "claude-code", legacy uses "claude_code"

@@ -492,6 +492,8 @@ mod tests {
             args: vec![],
             env: HashMap::new(),
             models: vec![],
+            install: None,
+            auth: None,
         };
 
         let runtime = AcpRuntime::spawn(config);
