@@ -233,6 +233,29 @@ fn submission_includes_prompt_type_from_context() {
     );
 }
 
+#[test]
+fn harness_guidance_includes_prompt_sequencing_rule() {
+    let starter = include_str!("../kit-init/examples/START_HERE.md");
+    let skill = include_str!("../kit-init/skills/script-authoring/SKILL.md");
+
+    assert!(
+        starter.contains("Never use `Promise.all`, `Promise.race`, `Promise.any`, or `Promise.allSettled`"),
+        "starter guidance must forbid concurrent Promise combinators with prompt APIs"
+    );
+    assert!(
+        starter.contains("const url1 = await arg(\"URL 1\");"),
+        "starter guidance should show the sequential arg() pattern"
+    );
+    assert!(
+        skill.contains("Never call them concurrently."),
+        "script-authoring skill must explain that prompt APIs are stateful"
+    );
+    assert!(
+        skill.contains("const [url1, url2, url3] = await Promise.all(["),
+        "script-authoring skill should include the concrete anti-pattern example"
+    );
+}
+
 // =========================================================================
 // Harness config validation
 // =========================================================================

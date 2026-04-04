@@ -75,6 +75,23 @@ UX QUALITY BAR
   * preview is HTML (often md(...)) or a function returning HTML.
 * Add actions for common operations (Copy/Open/Save/Reveal/Retry) via Action[] on arg/div/editor or setActions().
 * Use sensible defaults and remember preferences when helpful (env/db/store).
+* Prompt APIs are stateful UI surfaces. Never call them concurrently.
+  * Do NOT use Promise.all / Promise.race / Promise.any / Promise.allSettled with arg, fields, editor, div, form, drop, find, path, textarea, select, or grid.
+  * Multi-step prompt flows must always be sequential:
+    `const first = await arg("First");`
+    `const second = await arg("Second");`
+
+WRONG:
+const [url1, url2, url3] = await Promise.all([
+  arg("URL 1"),
+  arg("URL 2"),
+  arg("URL 3"),
+]);
+
+RIGHT:
+const url1 = await arg("URL 1");
+const url2 = await arg("URL 2");
+const url3 = await arg("URL 3");
 
 ERROR HANDLING
 
@@ -523,6 +540,17 @@ fn prepare_script_from_ai_response_with_contract(
         anyhow::bail!(
             "Generated script contract invalid (state=current_app_recipe_header_not_at_top). \
              The script contains // Current-App-Recipe-* headers, but they are not at the top of the file after normalization."
+        );
+    }
+
+    if contract
+        .warnings
+        .iter()
+        .any(|warning| warning == "concurrent_prompt_apis")
+    {
+        anyhow::bail!(
+            "Generated script contract invalid (state=concurrent_prompt_apis). \
+             Script Kit prompt APIs must not be called concurrently with Promise combinators."
         );
     }
 
@@ -1017,6 +1045,9 @@ fn audit_generated_script_contract(script: &str) -> GeneratedScriptContractAudit
     if recipe_header && !recipe_at_top {
         warnings.push("current_app_recipe_header_not_at_top".to_string());
     }
+    if has_concurrent_prompt_api_usage(script) {
+        warnings.push("concurrent_prompt_apis".to_string());
+    }
 
     GeneratedScriptContractAudit {
         metadata_style,
@@ -1027,6 +1058,56 @@ fn audit_generated_script_contract(script: &str) -> GeneratedScriptContractAudit
         current_app_recipe_header_at_top: recipe_at_top,
         warnings,
     }
+}
+
+fn has_concurrent_prompt_api_usage(script: &str) -> bool {
+    const PROMISE_COMBINATORS: [&str; 4] = [
+        "promise.all",
+        "promise.race",
+        "promise.any",
+        "promise.allsettled",
+    ];
+    const PROMPT_APIS: [&str; 11] = [
+        "arg(",
+        "fields(",
+        "editor(",
+        "div(",
+        "form(",
+        "drop(",
+        "find(",
+        "path(",
+        "textarea(",
+        "select(",
+        "grid(",
+    ];
+
+    let normalized = script
+        .chars()
+        .filter(|ch| !ch.is_whitespace())
+        .collect::<String>()
+        .to_ascii_lowercase();
+
+    PROMISE_COMBINATORS.iter().any(|combinator| {
+        let mut search_start = 0usize;
+
+        while let Some(relative_index) = normalized[search_start..].find(combinator) {
+            let start = search_start + relative_index;
+            let remainder = &normalized[start..];
+            let end = remainder
+                .find(';')
+                .map(|offset| start + offset)
+                .unwrap_or(normalized.len());
+            let window = &normalized[start..end];
+
+            if PROMPT_APIS.iter().any(|prompt_api| window.contains(prompt_api)) {
+                return true;
+            }
+
+            search_start = start + combinator.len();
+        }
+
+        false
+    })
 }
 
 /// Split recipe headers from the rest of the script so they can be preserved at the top.
@@ -1807,6 +1888,77 @@ export const metadata = {
         assert!(contract
             .warnings
             .contains(&"mixed_metadata_formats".to_string()));
+    }
+
+    #[test]
+    fn audit_detects_concurrent_prompt_apis() {
+        let input = r#"import "@scriptkit/sdk";
+export const metadata = {
+  name: "Open 3 Windows",
+  description: "Open 3 new browser windows to different URLs",
+};
+
+const urls = await Promise.all([
+  arg("URL 1"),
+  arg("URL 2"),
+  arg("URL 3"),
+]);
+
+await div(JSON.stringify(urls));
+"#;
+
+        let contract = audit_generated_script_contract(input);
+        assert!(contract
+            .warnings
+            .contains(&"concurrent_prompt_apis".to_string()));
+    }
+
+    #[test]
+    fn audit_allows_sequential_prompt_apis() {
+        let input = r#"import "@scriptkit/sdk";
+export const metadata = {
+  name: "Open 3 Windows",
+  description: "Open 3 new browser windows to different URLs",
+};
+
+const url1 = await arg("URL 1");
+const url2 = await arg("URL 2");
+const url3 = await arg("URL 3");
+
+await div(JSON.stringify([url1, url2, url3]));
+"#;
+
+        let contract = audit_generated_script_contract(input);
+        assert!(
+            !contract
+                .warnings
+                .contains(&"concurrent_prompt_apis".to_string())
+        );
+    }
+
+    #[test]
+    fn prepare_script_rejects_concurrent_prompt_apis() {
+        let input = r#"import "@scriptkit/sdk";
+export const metadata = {
+  name: "Open 3 Windows",
+  description: "Open 3 new browser windows to different URLs",
+};
+
+const urls = await Promise.all([
+  arg("URL 1"),
+  arg("URL 2"),
+  arg("URL 3"),
+]);
+
+await div(JSON.stringify(urls));
+"#;
+
+        let error =
+            prepare_script_from_ai_response_with_contract("open three windows", input)
+                .expect_err("concurrent prompt APIs must be rejected");
+
+        let message = format!("{error:#}");
+        assert!(message.contains("concurrent_prompt_apis"));
     }
 
     #[test]
