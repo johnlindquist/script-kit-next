@@ -48,6 +48,9 @@ import type {
 
 export type { Config };
 
+// Re-export validation types from config-schema
+export type { ValidationMessage, ValidateConfigChangeResult, ConfigChange } from './config-schema';
+
 export interface ConfigOption {
   key: string;
   type: string;
@@ -221,6 +224,33 @@ async function validate(): Promise<ValidateResult> {
 }
 
 /**
+ * Validate a proposed config change before writing.
+ * Returns structured validation result with errors/warnings.
+ */
+async function validateChange(change: { key: string; value: unknown }): Promise<{
+  valid: boolean;
+  normalizedValue?: unknown;
+  errors: Array<{ path: string; code: string; message: string }>;
+  warnings: Array<{ path: string; code: string; message: string }>;
+}> {
+  return runCLI(['validate-change', JSON.stringify(change)]);
+}
+
+/**
+ * Validate a config change then write it if valid.
+ * Throws if the change is invalid.
+ */
+async function setValidated(key: string, value: unknown): Promise<SetResult> {
+  const validation = await validateChange({ key, value });
+  if (!validation.valid) {
+    throw new Error(
+      validation.errors.map(err => `${err.path}: ${err.message}`).join('\n'),
+    );
+  }
+  return set(key, validation.normalizedValue ?? value);
+}
+
+/**
  * Reset a config value to default (or all values if no key specified)
  */
 async function reset(key?: string): Promise<{ key?: string; value?: unknown; message: string; config?: Config }> {
@@ -237,8 +267,10 @@ async function reset(key?: string): Promise<{ key?: string; value?: unknown; mes
 export const config = {
   get,
   set,
+  setValidated,
   list,
   validate,
+  validateChange,
   reset
 };
 

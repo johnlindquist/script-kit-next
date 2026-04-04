@@ -707,6 +707,32 @@ export interface HotkeyConfig {
   key: KeyCode;
 }
 
+// =============================================================================
+// COMMAND ID TYPES
+// =============================================================================
+
+/** Built-in Script Kit feature command ID: `builtin/{feature-name}` */
+export type BuiltinCommandId = `builtin/${string}`;
+
+/** Application command ID (macOS bundle identifier): `app/{bundle-id}` */
+export type AppCommandId = `app/${string}`;
+
+/** User script command ID: `script/{script-name}` */
+export type ScriptCommandId = `script/${string}`;
+
+/** Scriptlet command ID: `scriptlet/{uuid-or-name}` */
+export type ScriptletCommandId = `scriptlet/${string}`;
+
+/** Union of all valid command ID formats. */
+export type CommandId =
+  | BuiltinCommandId
+  | AppCommandId
+  | ScriptCommandId
+  | ScriptletCommandId;
+
+/** Map of command IDs to their configurations. */
+export type CommandsConfig = Partial<Record<CommandId, CommandConfig>>;
+
 /**
  * Per-command configuration for shortcuts and visibility.
  * 
@@ -1396,7 +1422,7 @@ export interface Config {
    * }
    * ```
    */
-  commands?: Record<string, CommandConfig>;
+  commands?: Partial<Record<CommandId, CommandConfig>>;
 
   /**
    * Claude Code CLI provider configuration.
