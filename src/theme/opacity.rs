@@ -53,6 +53,15 @@ pub const OPACITY_NEAR_FULL: f32 = 0.85;
 /// Active/pressed state (button hover, focused chrome).
 pub const OPACITY_ACTIVE: f32 = 0.90;
 
+/// Idle prompt-field whisper surface.
+pub const OPACITY_WHISPER_SURFACE_IDLE: f32 = OPACITY_GHOST;
+/// Focused prompt-field whisper surface.
+pub const OPACITY_WHISPER_SURFACE_FOCUSED: f32 = 0.10;
+/// Idle prompt-field whisper border.
+pub const OPACITY_WHISPER_BORDER_IDLE: f32 = 0.13;
+/// Accent fill for checked controls that still sit on whisper surfaces.
+pub const OPACITY_WHISPER_ACCENT_FILL: f32 = OPACITY_ACCENT_MEDIUM;
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -200,7 +200,11 @@ impl ScriptListApp {
         entity: Entity<TemplatePrompt>,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        tracing::info!(surface = "render_prompts::template", "prompt_surface_rendered");
+        tracing::info!(
+            surface = "render_prompts::template",
+            shell = "render_simple_prompt_shell",
+            "prompt_surface_rendered"
+        );
         crate::components::emit_prompt_chrome_audit(
             &crate::components::PromptChromeAudit::minimal_list(
                 "render_prompts::template",
@@ -209,25 +213,7 @@ impl ScriptListApp {
         );
         let hints = crate::components::universal_prompt_hints();
         crate::components::emit_prompt_hint_audit("render_prompts::template", &hints);
-        let render_context = PromptRenderContext::new(self.theme.as_ref(), self.current_design);
-        let theme = render_context.theme;
-        let design_spacing = render_context.design_spacing;
-        let vibrancy_bg = get_vibrancy_background(theme);
-
-        crate::components::prompt_shell_container(0.0, vibrancy_bg)
-            .h(window_resize::layout::STANDARD_HEIGHT)
-            .on_key_down(cx.listener(Self::other_prompt_shell_handle_key_default))
-            .child(
-                div()
-                    .flex_1()
-                    .w_full()
-                    .min_h(px(0.))
-                    .overflow_y_scrollbar()
-                    .p(px(design_spacing.padding_xl))
-                    .child(entity),
-            )
-            .child(self.clickable_universal_hint_strip(cx))
-            .into_any_element()
+        self.render_wrapped_prompt_entity(entity, Self::other_prompt_shell_handle_key_default, cx)
     }
 
     fn render_chat_prompt(
@@ -265,7 +251,11 @@ impl ScriptListApp {
         entity: Entity<prompts::NamingPrompt>,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        tracing::info!(surface = "render_prompts::naming", "prompt_surface_rendered");
+        tracing::info!(
+            surface = "render_prompts::naming",
+            shell = "render_simple_prompt_shell",
+            "prompt_surface_rendered"
+        );
         crate::components::emit_prompt_chrome_audit(
             &crate::components::PromptChromeAudit::minimal_list(
                 "render_prompts::naming",
@@ -274,25 +264,7 @@ impl ScriptListApp {
         );
         let hints = crate::components::universal_prompt_hints();
         crate::components::emit_prompt_hint_audit("render_prompts::naming", &hints);
-        let render_context = PromptRenderContext::new(self.theme.as_ref(), self.current_design);
-        let theme = render_context.theme;
-        let design_spacing = render_context.design_spacing;
-        let vibrancy_bg = get_vibrancy_background(theme);
-
-        crate::components::prompt_shell_container(0.0, vibrancy_bg)
-            .h(window_resize::layout::STANDARD_HEIGHT)
-            .on_key_down(cx.listener(Self::other_prompt_shell_handle_key_default))
-            .child(
-                div()
-                    .flex_1()
-                    .w_full()
-                    .min_h(px(0.))
-                    .overflow_y_scrollbar()
-                    .p(px(design_spacing.padding_xl))
-                    .child(entity),
-            )
-            .child(self.clickable_universal_hint_strip(cx))
-            .into_any_element()
+        self.render_wrapped_prompt_entity(entity, Self::other_prompt_shell_handle_key_default, cx)
     }
 
     fn render_webcam_prompt(
@@ -433,6 +405,8 @@ mod other_prompt_render_wrapper_tests {
             "render_select_prompt",
             "render_env_prompt",
             "render_drop_prompt",
+            "render_template_prompt",
+            "render_naming_prompt",
         ] {
             let body = fn_source(fn_name);
             assert!(
@@ -509,36 +483,28 @@ mod other_prompt_render_wrapper_tests {
     }
 
     #[test]
-    fn render_template_prompt_uses_hint_strip() {
+    fn render_template_prompt_uses_shared_wrapper() {
         let body = fn_source("render_template_prompt");
         assert!(
             !body.contains("PromptFooter::new("),
             "render_template_prompt should not use PromptFooter"
         );
         assert!(
-            body.contains("clickable_universal_hint_strip("),
-            "render_template_prompt should use the clickable hint strip"
-        );
-        assert!(
-            body.contains("window_resize::layout::STANDARD_HEIGHT"),
-            "render_template_prompt should use STANDARD_HEIGHT"
+            body.contains("render_wrapped_prompt_entity("),
+            "render_template_prompt should delegate to render_wrapped_prompt_entity"
         );
     }
 
     #[test]
-    fn render_naming_prompt_uses_hint_strip() {
+    fn render_naming_prompt_uses_shared_wrapper() {
         let body = fn_source("render_naming_prompt");
         assert!(
             !body.contains("PromptFooter::new("),
             "render_naming_prompt should not use PromptFooter"
         );
         assert!(
-            body.contains("clickable_universal_hint_strip("),
-            "render_naming_prompt should use the clickable hint strip"
-        );
-        assert!(
-            body.contains("window_resize::layout::STANDARD_HEIGHT"),
-            "render_naming_prompt should use STANDARD_HEIGHT"
+            body.contains("render_wrapped_prompt_entity("),
+            "render_naming_prompt should delegate to render_wrapped_prompt_entity"
         );
     }
 

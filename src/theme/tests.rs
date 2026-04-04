@@ -596,3 +596,148 @@ fn assert_snapshot_matches_golden(name: &str, actual: &str, expected: &str) {
 fn to_hex_rgb(color: u32) -> String {
     format!("#{:06X}", color & 0x00FF_FFFF)
 }
+
+/// Audit all presets for selection/hover *visibility*: the composited
+/// selection background must be perceptibly distinct from the plain
+/// background (contrast >= 1.10:1).
+///
+/// This catches light-theme presets where `selected_subtle` is so close
+/// to the background that selection and hover highlights are invisible.
+#[test]
+fn audit_selection_visibility_across_presets() {
+    let presets = presets::all_presets();
+    let mut failures: Vec<String> = Vec::new();
+
+    for preset in &presets {
+        let theme = preset.create_theme();
+        let opacity = theme.get_opacity();
+        let bg = theme.colors.background.main;
+        let subtle = theme.colors.accent.selected_subtle;
+
+        let sel_bg = composite_alpha(subtle, opacity.selected, bg);
+        let hover_bg = composite_alpha(subtle, opacity.hover, bg);
+
+        let sel_vis = contrast_ratio(sel_bg, bg);
+        let hover_vis = contrast_ratio(hover_bg, bg);
+
+        // Selection must be visible (>= 1.10:1)
+        if sel_vis < 1.10 {
+            failures.push(format!(
+                "  {:<25} selection  {:>5.3}:1  (need 1.10:1)  subtle=#{:06X} bg=#{:06X}",
+                preset.id, sel_vis, subtle, bg,
+            ));
+        }
+
+        // Hover can be subtler than selection but must still register (>= 1.05:1)
+        if hover_vis < 1.05 {
+            failures.push(format!(
+                "  {:<25} hover      {:>5.3}:1  (need 1.05:1)  subtle=#{:06X} bg=#{:06X}",
+                preset.id, hover_vis, subtle, bg,
+            ));
+        }
+    }
+
+    if !failures.is_empty() {
+        let report = failures.join("\n");
+        eprintln!(
+            "\n╔══ Selection Visibility Audit ════════════════════════════════════════════════╗\n\
+             ║ {} failure(s) across {} presets                                              \n\
+             ╠════════════════════════════════════════════════════════════════════════════════╣\n\
+             {}\n\
+             ╚════════════════════════════════════════════════════════════════════════════════╝\n",
+            failures.len(),
+            presets.len(),
+            report,
+        );
+        panic!(
+            "{} selection-visibility failure(s) found — see report above",
+            failures.len()
+        );
+    }
+}
+
+/// Verify that the normalization pass in `build_light_theme()` actually
+/// corrects weak `selected_subtle` values rather than letting them through.
+#[test]
+fn light_preset_normalization_produces_visible_selection() {
+    let presets = presets::all_presets();
+
+    for preset in &presets {
+        if preset.is_dark {
+            continue;
+        }
+        let theme = preset.create_theme();
+        let opacity = theme.get_opacity();
+        let bg = theme.colors.background.main;
+
+        let sel_bg = composite_alpha(
+            theme.colors.accent.selected_subtle,
+            opacity.selected,
+            bg,
+        );
+        let vis = contrast_ratio(sel_bg, bg);
+
+        assert!(
+            vis >= 1.10,
+            "Light preset {:?} has invisible selection: {:.3}:1 (need >= 1.10:1) \
+             selected_subtle=#{:06X} bg=#{:06X}",
+            preset.id,
+            vis,
+            theme.colors.accent.selected_subtle,
+            bg,
+        );
+    }
+}
+
+/// Verify classify_theme_preset_match returns ExactMatch for every stock preset
+/// and Modified when any single field is tweaked.
+#[test]
+fn classify_preset_match_exact_vs_modified() {
+    use super::presets::{classify_theme_preset_match, PresetMatchKind};
+
+    // Every stock preset must be exact
+    for preset in presets::presets_cached() {
+        let theme = preset.create_theme();
+        let result = classify_theme_preset_match(&theme);
+        assert_eq!(
+            result.kind,
+            PresetMatchKind::ExactMatch,
+            "preset '{}' should be exact",
+            preset.id
+        );
+    }
+
+    // Opacity-only tweak → Modified
+    let mut tweaked = presets::presets_cached()[0].create_theme();
+    let mut opacity = tweaked.opacity.clone().unwrap_or_default();
+    opacity.main += 0.01;
+    tweaked.opacity = Some(opacity);
+    assert_eq!(
+        classify_theme_preset_match(&tweaked).kind,
+        PresetMatchKind::Modified,
+    );
+}
+
+/// Verify that `on_accent` has adequate contrast against `accent.selected`
+/// for all light presets after normalization.
+#[test]
+fn light_preset_on_accent_readable_after_normalization() {
+    let presets = presets::all_presets();
+
+    for preset in &presets {
+        if preset.is_dark {
+            continue;
+        }
+        let theme = preset.create_theme();
+        let ratio = contrast_ratio(theme.colors.text.on_accent, theme.colors.accent.selected);
+
+        assert!(
+            ratio >= 3.0,
+            "Light preset {:?}: on_accent (#{:06X}) vs accent (#{:06X}) = {:.2}:1 (need >= 3.0:1)",
+            preset.id,
+            theme.colors.text.on_accent,
+            theme.colors.accent.selected,
+            ratio,
+        );
+    }
+}
