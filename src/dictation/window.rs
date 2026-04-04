@@ -270,10 +270,7 @@ fn install_global_escape_monitor() {
 
     if monitor != nil {
         *GLOBAL_ESCAPE_MONITOR.lock() = Some(SendableId(monitor));
-        tracing::debug!(
-            category = "DICTATION",
-            "Global escape monitor installed"
-        );
+        tracing::debug!(category = "DICTATION", "Global escape monitor installed");
     } else {
         tracing::warn!(
             category = "DICTATION",
@@ -302,10 +299,7 @@ fn remove_global_escape_monitor() {
         unsafe {
             let _: () = msg_send![class!(NSEvent), removeMonitor: monitor];
         }
-        tracing::debug!(
-            category = "DICTATION",
-            "Global escape monitor removed"
-        );
+        tracing::debug!(category = "DICTATION", "Global escape monitor removed");
     }
 }
 
@@ -315,8 +309,7 @@ fn remove_global_escape_monitor() {}
 /// Flag: the global escape monitor detected an Escape press that the overlay
 /// needs to process. Checked by `process_global_escape_if_requested` inside
 /// GPUI context on every pump tick.
-static ESCAPE_REQUESTED: std::sync::atomic::AtomicBool =
-    std::sync::atomic::AtomicBool::new(false);
+static ESCAPE_REQUESTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 // ---------------------------------------------------------------------------
 // Confirming-phase copy constants (single source of truth)

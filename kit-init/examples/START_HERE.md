@@ -18,6 +18,8 @@ Use a script when the request needs Script Kit UI, Bun APIs, file work, HTTP wor
 Copy from: `scripts/hello-world.ts`
 Write to: `~/.scriptkit/kit/main/scripts/<name>.ts`
 
+Then read `~/.scriptkit/skills/script-authoring/SKILL.md`. For scripts, writing the file is not enough. You must syntax-check and run the script in the current Claude Code terminal before you report success.
+
 Good matches:
 - `make a clipboard cleanup command`
 - `make a GitHub helper`
@@ -70,6 +72,20 @@ Pick **mdflow agent** if it should run through a model backend.
 - `make a bundle of text snippets` → `~/.scriptkit/kit/main/extensions/snippets.md`
 - `make an agent that reviews staged changes in Claude` → `~/.scriptkit/kit/main/agents/review-pr.claude.md`
 
+## Mandatory Script Verification
+
+For every script created from the harness:
+
+```bash
+bun build ~/.scriptkit/kit/main/scripts/<name>.ts --target=bun --outfile ~/.scriptkit/tmp/test-scripts/<name>.verify.mjs
+```
+
+```bash
+SK_VERIFY=1 bun ~/.scriptkit/kit/main/scripts/<name>.ts
+```
+
+If the script normally needs UI or typed input, add an `SK_VERIFY=1` branch first so the Bun execution step is non-interactive. If either command fails, fix the script and rerun both commands. Do not report success until both commands pass and the observed output matches the request.
+
 ## Copy Commands
 
 ```bash
@@ -86,12 +102,23 @@ cp ~/.scriptkit/examples/agents/review-pr.claude.md ~/.scriptkit/kit/main/agents
 import "@scriptkit/sdk";
 
 export const metadata = {
-  name: "My Script",
-  description: "What it does",
+  name: "Hello World",
+  description: "Verification-friendly starter script",
 };
 
-const value = await arg("What should this script do?");
-await div(`<div class="p-8 text-2xl">${value}</div>`);
+const isVerify = process.env.SK_VERIFY === "1";
+
+const name = isVerify
+  ? "verification"
+  : await arg("Who should I greet?");
+
+const greeting = `Hello, ${name}!`;
+
+if (isVerify) {
+  console.log(JSON.stringify({ ok: true, greeting }));
+} else {
+  await div(`<div class="p-8 text-2xl">${greeting}</div>`);
+}
 ```
 
 ### Extension bundle / scriptlet bundle → `~/.scriptkit/kit/main/extensions/<name>.md`

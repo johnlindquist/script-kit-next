@@ -155,10 +155,66 @@ await notify(`Created: ${path}`);
 
 ## Verification
 
-After creating a script:
-1. Open Script Kit (default: Cmd+Space or your configured hotkey)
-2. Type the script name — it should appear in the list
-3. Run it to verify behavior
+When you create or edit a script from the Tab AI harness, writing the file is not enough. You must verify the actual script inside the current Claude Code terminal session before you report success.
+
+Required loop for every script:
+
+1. Save the script to `~/.scriptkit/kit/main/scripts/<name>.ts`
+2. If the script normally uses UI or typed input (`arg`, `div`, `editor`, `fields`, etc.), add a non-interactive smoke path behind `process.env.SK_VERIFY === "1"`
+3. Syntax-check / transpile it with Bun:
+   ```bash
+   bun build ~/.scriptkit/kit/main/scripts/<name>.ts --target=bun --outfile ~/.scriptkit/tmp/test-scripts/<name>.verify.mjs
+   ```
+4. Execute it with Bun:
+   ```bash
+   SK_VERIFY=1 bun ~/.scriptkit/kit/main/scripts/<name>.ts
+   ```
+5. Confirm the stdout, written file, or other observable result matches the request
+6. If either command fails, fix the script and rerun both commands
+7. Never report success until both commands pass and the observed behavior is correct
+
+### Verification-Friendly Pattern
+
+Use this when the real script flow is interactive but the harness still needs a terminal-only execution path:
+
+```typescript
+import "@scriptkit/sdk";
+
+export const metadata = {
+  name: "My Script",
+  description: "What it does",
+};
+
+const isVerify = process.env.SK_VERIFY === "1";
+
+const value = isVerify
+  ? "verification input"
+  : await arg("What should this script do?");
+
+const output = `Result: ${value}`;
+
+if (isVerify) {
+  console.log(JSON.stringify({ ok: true, output }));
+} else {
+  await div(`<div class="p-8 text-2xl">${output}</div>`);
+}
+```
+
+For UI-heavy requests, the Bun gate is still mandatory. If you also want to manually open Script Kit afterward, do that **after** the Bun gate — not instead of it.
+
+### Sample Input and Expected Output
+
+- Sample file: `~/.scriptkit/kit/main/scripts/hello-world.ts`
+- Sample command 1:
+  ```bash
+  bun build ~/.scriptkit/kit/main/scripts/hello-world.ts --target=bun --outfile ~/.scriptkit/tmp/test-scripts/hello-world.verify.mjs
+  ```
+  Expected result: exit code 0; file `~/.scriptkit/tmp/test-scripts/hello-world.verify.mjs` exists.
+- Sample command 2:
+  ```bash
+  SK_VERIFY=1 bun ~/.scriptkit/kit/main/scripts/hello-world.ts
+  ```
+  Expected stdout: `{"ok":true,"greeting":"Hello, verification!"}`
 
 ## Common Mistakes
 

@@ -48,8 +48,7 @@ impl AudioVisualiser {
         // Pre-compute Hann window
         let window: Vec<f32> = (0..window_size)
             .map(|i| {
-                0.5 * (1.0
-                    - (2.0 * std::f32::consts::PI * i as f32 / window_size as f32).cos())
+                0.5 * (1.0 - (2.0 * std::f32::consts::PI * i as f32 / window_size as f32).cos())
             })
             .collect();
 

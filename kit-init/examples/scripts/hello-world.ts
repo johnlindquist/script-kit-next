@@ -2,16 +2,19 @@ import "@scriptkit/sdk";
 
 export const metadata = {
   name: "Hello World",
-  description: "A simple greeting demonstrating basic prompts and display",
+  description: "Verification-friendly starter script",
 };
 
-const name = await arg("What's your name?", ["World", "Script Kit", "Friend"]);
+const isVerify = process.env.SK_VERIFY === "1";
 
-await div(`
-  <div class="flex flex-col items-center justify-center h-full p-8">
-    <h1 class="text-4xl font-bold text-yellow-400 mb-4">
-      Hello, ${name}!
-    </h1>
-    <p class="text-gray-400 text-lg">Welcome to Script Kit</p>
-  </div>
-`);
+const name = isVerify
+  ? "verification"
+  : await arg("Who should I greet?");
+
+const greeting = `Hello, ${name}!`;
+
+if (isVerify) {
+  console.log(JSON.stringify({ ok: true, greeting }));
+} else {
+  await div(`<div class="p-8 text-2xl">${greeting}</div>`);
+}
