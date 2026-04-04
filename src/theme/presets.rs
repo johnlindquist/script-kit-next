@@ -375,6 +375,13 @@ pub fn all_presets() -> Vec<ThemePreset> {
             is_dark: true,
             theme: theme_papercolor_dark,
         },
+        ThemePreset {
+            id: "vesper",
+            name: "Vesper",
+            description: "Warm amber-tinted dark theme for night coding",
+            is_dark: true,
+            theme: theme_vesper,
+        },
         // ── Light Themes ─────────────────────────────────────────
         ThemePreset {
             id: "script-kit-light",
@@ -502,6 +509,13 @@ pub fn all_presets() -> Vec<ThemePreset> {
             is_dark: false,
             theme: theme_papercolor_light,
         },
+        ThemePreset {
+            id: "alabaster",
+            name: "Alabaster",
+            description: "Minimal white theme with subtle warm tones",
+            is_dark: false,
+            theme: theme_alabaster,
+        },
     ]
 }
 
@@ -538,10 +552,8 @@ fn build_preset_search_blob(preset: &ThemePreset) -> String {
 
 struct PresetsCache {
     presets: Vec<ThemePreset>,
-    #[allow(dead_code)]
     preset_themes: Vec<std::sync::Arc<Theme>>,
     preset_preview_colors: Vec<PresetPreviewColors>,
-    #[allow(dead_code)]
     preset_search_blobs: Vec<String>,
     first_light_theme_index: usize,
     preset_index_by_bg_accent: HashMap<u64, usize>,
@@ -603,12 +615,10 @@ pub(crate) fn preset_preview_colors_cached() -> &'static [PresetPreviewColors] {
     &presets_cache().preset_preview_colors
 }
 
-#[allow(dead_code)]
 pub(crate) fn preset_theme_cached(index: usize) -> std::sync::Arc<Theme> {
     presets_cache().preset_themes[index].clone()
 }
 
-#[allow(dead_code)]
 pub(crate) fn filtered_preset_indices_cached(filter: &str) -> Vec<usize> {
     let cache = presets_cache();
     let needle = normalize_preset_search_text(filter);
@@ -3845,6 +3855,106 @@ fn theme_papercolor_light() -> Theme {
             bright_magenta: 0xd75f00,
             bright_cyan: 0x005faf,
             bright_white: 0x005f87,
+        },
+    })
+}
+
+fn theme_vesper() -> Theme {
+    build_dark_theme(ColorScheme {
+        background: BackgroundColors {
+            main: 0x101010,
+            title_bar: 0x181818,
+            search_box: 0x1c1c1c,
+            log_panel: 0x141414,
+        },
+        text: TextColors {
+            primary: 0xd4cfc9,
+            secondary: 0xa09a93,
+            tertiary: 0x7b756f,
+            muted: 0x756e67,
+            dimmed: 0x403a34,
+            on_accent: 0x101010,
+        },
+        accent: AccentColors {
+            selected: 0xffc799,
+            selected_subtle: 0x3d3528,
+        },
+        ui: UIColors {
+            border: 0x2a2520,
+            success: 0x6bbd6b,
+            error: 0xd47766,
+            warning: 0xdba16b,
+            info: 0x7ab0df,
+        },
+        terminal: TerminalColors {
+            foreground: None,
+            background: None,
+            black: 0x101010,
+            red: 0xd47766,
+            green: 0x6bbd6b,
+            yellow: 0xdba16b,
+            blue: 0x7ab0df,
+            magenta: 0xc49ec4,
+            cyan: 0x5db5a4,
+            white: 0xd4cfc9,
+            bright_black: 0x605a54,
+            bright_red: 0xe89a8c,
+            bright_green: 0x8cd48c,
+            bright_yellow: 0xe8bd8c,
+            bright_blue: 0x9ec6e8,
+            bright_magenta: 0xd4b8d4,
+            bright_cyan: 0x80ccbd,
+            bright_white: 0xede8e2,
+        },
+    })
+}
+
+fn theme_alabaster() -> Theme {
+    build_light_theme(ColorScheme {
+        background: BackgroundColors {
+            main: 0xf7f1e3,
+            title_bar: 0xeee8d5,
+            search_box: 0xe8e0cc,
+            log_panel: 0xeee8d5,
+        },
+        text: TextColors {
+            primary: 0x434343,
+            secondary: 0x6a6a5e,
+            tertiary: 0x8b8b7a,
+            muted: 0x8a8578,
+            dimmed: 0xccc7b8,
+            on_accent: 0xf7f1e3,
+        },
+        accent: AccentColors {
+            selected: 0x007acc,
+            selected_subtle: 0xc8d8e8,
+        },
+        ui: UIColors {
+            border: 0xd5cfbb,
+            success: 0x448c27,
+            error: 0xaa3731,
+            warning: 0xc18401,
+            info: 0x007acc,
+        },
+        terminal: TerminalColors {
+            foreground: None,
+            background: None,
+            black: 0xf7f1e3,
+            red: 0xaa3731,
+            green: 0x448c27,
+            yellow: 0xc18401,
+            blue: 0x325cc0,
+            magenta: 0x7a3e9d,
+            cyan: 0x0083b2,
+            white: 0x434343,
+            bright_black: 0xada99e,
+            bright_red: 0xd32f2f,
+            bright_green: 0x558b2f,
+            bright_yellow: 0xf9a825,
+            bright_blue: 0x1565c0,
+            bright_magenta: 0x9c27b0,
+            bright_cyan: 0x00838f,
+            bright_white: 0x2c2c2c,
         },
     })
 }

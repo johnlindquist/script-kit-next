@@ -470,6 +470,16 @@
     "border": "#303030"
   },
   {
+    "id": "vesper",
+    "name": "Vesper",
+    "is_dark": true,
+    "bg": "#101010",
+    "accent": "#FFC799",
+    "text": "#D4CFC9",
+    "secondary": "#A09A93",
+    "border": "#2A2520"
+  },
+  {
     "id": "script-kit-light",
     "name": "Script Kit Light",
     "is_dark": false,
@@ -648,5 +658,15 @@
     "text": "#444444",
     "secondary": "#4A7070",
     "border": "#BCBCBC"
+  },
+  {
+    "id": "alabaster",
+    "name": "Alabaster",
+    "is_dark": false,
+    "bg": "#F7F1E3",
+    "accent": "#007ACC",
+    "text": "#434343",
+    "secondary": "#6A6A5E",
+    "border": "#D5CFBB"
   }
 ]

@@ -814,12 +814,16 @@ fn should_force_artifact_guidance_for_script_list_submit(
 // Verification-marker constants and detection
 // ---------------------------------------------------------------------------
 
-const SCRIPT_AUTHORING_SKILL_MARKER: &str =
+pub(crate) const SCRIPT_AUTHORING_SKILL_MARKER: &str =
     "~/.scriptkit/skills/script-authoring/SKILL.md";
-const BUN_BUILD_VERIFICATION_MARKER: &str =
+pub(crate) const BUN_BUILD_VERIFICATION_MARKER: &str =
     "bun build ~/.scriptkit/kit/main/scripts/<name>.ts --target=bun --outfile ~/.scriptkit/tmp/test-scripts/<name>.verify.mjs";
-const BUN_EXECUTE_VERIFICATION_MARKER: &str =
+pub(crate) const BUN_EXECUTE_VERIFICATION_MARKER: &str =
     "SK_VERIFY=1 bun ~/.scriptkit/kit/main/scripts/<name>.ts";
+pub(crate) const BUN_VERIFICATION_SUCCESS_CRITERIA: &str =
+    "Confirm the stdout, written file, or other observable result from the script in ~/.scriptkit/kit/main/scripts/ matches the user's request.";
+pub(crate) const BUN_VERIFICATION_FAILURE_POLICY: &str =
+    "If either Bun command fails, fix the script and rerun both commands inside the same Claude Code terminal session before reporting success.";
 
 /// Structured detection of which verification markers are present in a
 /// guidance block.  Used by both the ACP and PTY telemetry paths so marker
@@ -947,10 +951,34 @@ pub(crate) fn build_tab_ai_acp_initial_input_for_prompt(
 const TAB_AI_ONE_SHOT_LAUNCHPAD_SOURCE: &str =
     include_str!("../../../kit-init/examples/START_HERE.md");
 
+const SCRIPT_VERIFICATION_GATE_HEADER: &str = "MANDATORY SCRIPT VERIFICATION";
+
+fn build_tab_ai_script_verification_gate() -> String {
+    format!(
+        concat!(
+            "{}\n",
+            "If the correct artifact is a `.ts` script under `~/.scriptkit/kit/main/scripts/`, ",
+            "verify that final script inside this Claude Code terminal session before reporting success.\n",
+            "Read: {}\n",
+            "Build: {}\n",
+            "Run: {}\n",
+            "Observe: {}\n",
+            "Failure policy: {}\n",
+        ),
+        SCRIPT_VERIFICATION_GATE_HEADER,
+        SCRIPT_AUTHORING_SKILL_MARKER,
+        BUN_BUILD_VERIFICATION_MARKER,
+        BUN_EXECUTE_VERIFICATION_MARKER,
+        BUN_VERIFICATION_SUCCESS_CRITERIA,
+        BUN_VERIFICATION_FAILURE_POLICY,
+    )
+}
+
 /// Cached guidance block — allocated once on first access.
 static TAB_AI_ARTIFACT_AUTHORING_GUIDANCE_BLOCK: LazyLock<String> = LazyLock::new(|| {
     format!(
-        "--- Script Kit artifact authoring guidance ---\n{}\n--- end artifact authoring guidance ---",
+        "--- Script Kit artifact authoring guidance ---\n{}\n\n{}\n--- end artifact authoring guidance ---",
+        build_tab_ai_script_verification_gate().trim_end(),
         TAB_AI_ONE_SHOT_LAUNCHPAD_SOURCE.trim_end()
     )
 });
@@ -1004,6 +1032,7 @@ pub fn build_tab_ai_harness_submission(
         tracing::info!(
             event = "tab_ai_artifact_authoring_guidance_appended",
             forced_by_script_list_submit,
+            script_verification_gate_present = guidance.contains(SCRIPT_VERIFICATION_GATE_HEADER),
             includes_script_authoring_skill = markers.includes_script_authoring_skill,
             includes_bun_build_verification = markers.includes_bun_build_verification,
             includes_bun_execute_verification = markers.includes_bun_execute_verification,
