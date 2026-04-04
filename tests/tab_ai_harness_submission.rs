@@ -900,3 +900,47 @@ fn embedded_hello_world_starter_is_verification_friendly() {
     assert!(starter.contains("console.log(JSON.stringify({ ok: true, greeting }))"));
     assert!(starter.contains("await arg(\"Who should I greet?\")"));
 }
+
+// =========================================================================
+// ScriptList submit forces artifact authoring guidance (deterministic path)
+// =========================================================================
+
+#[test]
+fn script_list_submit_with_bare_generation_query_includes_script_verification_contract() {
+    let context = make_context("ScriptList", Some("clipboard cleanup"));
+    let submission = build_tab_ai_harness_submission(
+        &context,
+        Some("clipboard cleanup"),
+        TabAiHarnessSubmissionMode::Submit,
+        None,
+        None,
+        &[],
+    )
+    .expect("submission should build");
+
+    assert!(submission.contains("--- Script Kit artifact authoring guidance ---"));
+    assert!(submission.contains("~/.scriptkit/skills/script-authoring/SKILL.md"));
+    assert!(submission.contains(
+        "bun build ~/.scriptkit/kit/main/scripts/<name>.ts --target=bun --outfile ~/.scriptkit/tmp/test-scripts/<name>.verify.mjs"
+    ));
+    assert!(submission.contains("SK_VERIFY=1 bun ~/.scriptkit/kit/main/scripts/<name>.ts"));
+}
+
+#[test]
+fn script_list_paste_only_with_same_query_does_not_force_script_verification_contract() {
+    let context = make_context("ScriptList", Some("clipboard cleanup"));
+    let submission = build_tab_ai_harness_submission(
+        &context,
+        Some("clipboard cleanup"),
+        TabAiHarnessSubmissionMode::PasteOnly,
+        None,
+        None,
+        &[],
+    )
+    .expect("submission should build");
+
+    assert!(
+        !submission.contains("--- Script Kit artifact authoring guidance ---"),
+        "PasteOnly must not force the authoring block for non-artifact intents"
+    );
+}
