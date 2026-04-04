@@ -86,6 +86,30 @@ SK_VERIFY=1 bun ~/.scriptkit/kit/main/scripts/<name>.ts
 
 If the script normally needs UI or typed input, add an `SK_VERIFY=1` branch first so the Bun execution step is non-interactive. If either command fails, fix the script and rerun both commands. Do not report success until both commands pass and the observed output matches the request.
 
+## Prompt Sequencing Rule
+
+Script Kit prompt APIs are interactive UI surfaces. Do not call them concurrently.
+
+Never use `Promise.all`, `Promise.race`, `Promise.any`, or `Promise.allSettled` with `arg`, `fields`, `editor`, `div`, `form`, `drop`, `find`, `path`, `textarea`, `select`, or `grid`.
+
+Wrong:
+
+```typescript
+const [url1, url2, url3] = await Promise.all([
+  arg("URL 1"),
+  arg("URL 2"),
+  arg("URL 3"),
+]);
+```
+
+Right:
+
+```typescript
+const url1 = await arg("URL 1");
+const url2 = await arg("URL 2");
+const url3 = await arg("URL 3");
+```
+
 ## Copy Commands
 
 ```bash

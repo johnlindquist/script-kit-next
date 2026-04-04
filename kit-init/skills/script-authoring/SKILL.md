@@ -200,6 +200,31 @@ if (isVerify) {
 
 For UI-heavy requests, the Bun gate is still mandatory. If you also want to manually open Script Kit afterward, do that **after** the Bun gate — not instead of it.
 
+## Prompt Sequencing
+
+Script Kit prompt APIs are stateful interactive surfaces. Never call them concurrently.
+
+- Do not use `Promise.all`, `Promise.race`, `Promise.any`, or `Promise.allSettled` with `arg`, `fields`, `editor`, `div`, `form`, `drop`, `find`, `path`, `textarea`, `select`, or `grid`
+- Multi-step prompt flows must be sequential
+
+Wrong:
+
+```typescript
+const [url1, url2, url3] = await Promise.all([
+  arg("URL 1"),
+  arg("URL 2"),
+  arg("URL 3"),
+]);
+```
+
+Right:
+
+```typescript
+const url1 = await arg("URL 1");
+const url2 = await arg("URL 2");
+const url3 = await arg("URL 3");
+```
+
 ## Path Safety
 
 - Prefer `home(...)` for user-relative paths such as `Documents`, `Downloads`, and `.scriptkit`
