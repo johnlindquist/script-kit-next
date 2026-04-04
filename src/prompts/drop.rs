@@ -5,14 +5,15 @@
 //! - Display dropped file information
 //! - Submit file paths
 
-use gpui::{div, prelude::*, px, rgb, rgba, Context, FocusHandle, Focusable, Render, Window};
+use gpui::{div, prelude::*, px, rgb, Context, FocusHandle, Focusable, Render, Window};
 use std::sync::Arc;
 
 use crate::components::{FocusablePrompt, FocusablePromptInterceptedKey};
 use crate::designs::{get_tokens, DesignVariant};
 use crate::logging;
 use crate::theme;
-use crate::ui_foundation::{get_vibrancy_background, is_key_enter};
+use crate::theme::opacity::{OPACITY_GHOST, OPACITY_GHOST_SOFT};
+use crate::ui_foundation::{get_vibrancy_background, hex_to_rgba_with_opacity, is_key_enter};
 
 use super::SubmitCallback;
 
@@ -125,22 +126,14 @@ impl Render for DropPrompt {
         // VIBRANCY: Use foundation helper - returns None when vibrancy enabled (let Root handle bg)
         let vibrancy_bg = get_vibrancy_background(&self.theme);
 
-        let (_main_bg, text_color, muted_color, border_color) =
-            if self.design_variant == DesignVariant::Default {
-                (
-                    rgb(self.theme.colors.background.main),
-                    rgb(self.theme.colors.text.secondary),
-                    rgb(self.theme.colors.text.muted),
-                    rgb(self.theme.colors.ui.border),
-                )
-            } else {
-                (
-                    rgb(colors.background),
-                    rgb(colors.text_secondary),
-                    rgb(colors.text_muted),
-                    rgb(colors.border),
-                )
-            };
+        let (text_color, muted_color) = if self.design_variant == DesignVariant::Default {
+            (
+                rgb(self.theme.colors.text.secondary),
+                rgb(self.theme.colors.text.muted),
+            )
+        } else {
+            (rgb(colors.text_secondary), rgb(colors.text_muted))
+        };
 
         let placeholder = self
             .placeholder
@@ -152,11 +145,17 @@ impl Render for DropPrompt {
             .clone()
             .unwrap_or_else(|| "Drag and drop files to upload".to_string());
 
-        // Drop zone styling - use low-opacity for vibrancy support (see VIBRANCY.md)
+        // Whisper chrome: ghost-opacity background at rest, gold accent when dragging
         let drop_zone_bg = if self.is_drag_over {
-            rgba((self.theme.colors.accent.selected_subtle << 8) | 0x0f) // ~6% opacity
+            hex_to_rgba_with_opacity(self.theme.colors.accent.selected_subtle, OPACITY_GHOST)
         } else {
-            rgb(self.theme.colors.background.search_box)
+            hex_to_rgba_with_opacity(self.theme.colors.background.search_box, OPACITY_GHOST_SOFT)
+        };
+        // Ghost border: barely visible at rest, gold emphasis when active
+        let drop_zone_border = if self.is_drag_over {
+            hex_to_rgba_with_opacity(self.theme.colors.accent.selected_subtle, OPACITY_GHOST)
+        } else {
+            hex_to_rgba_with_opacity(self.theme.colors.ui.border, OPACITY_GHOST)
         };
 
         let container = div()
@@ -169,7 +168,7 @@ impl Render for DropPrompt {
             .text_color(text_color)
             .p(px(spacing.padding_lg))
             .child(
-                // Drop zone
+                // Drop zone — whisper chrome: ghost bg, hairline border, no rounding
                 div()
                     .flex()
                     .flex_col()
@@ -178,9 +177,8 @@ impl Render for DropPrompt {
                     .w_full()
                     .h(px(200.))
                     .bg(drop_zone_bg)
-                    .border_2()
-                    .border_color(border_color)
-                    .rounded(px(8.))
+                    .border_1()
+                    .border_color(drop_zone_border)
                     .child(div().text_2xl().child("📁"))
                     .child(
                         div()
