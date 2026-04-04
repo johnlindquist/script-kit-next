@@ -88,3 +88,99 @@ fn test_should_show_search_description_only_when_selected_hovered_or_description
         true   // has_description_match
     ));
 }
+
+// =============================================================================
+// Accessory slot builder tests
+// =============================================================================
+
+/// Verify that ListItem can be constructed with leading and trailing accessory
+/// slots via the builder API without panicking.
+#[test]
+fn test_list_item_accessory_builders_accept_elements() {
+    use crate::list_item::{ListItem, ListItemColors};
+    use gpui::*;
+
+    let colors = ListItemColors {
+        text_primary: 0xFFFFFF,
+        text_secondary: 0xCCCCCC,
+        text_muted: 0x999999,
+        text_dimmed: 0x666666,
+        accent_selected: 0xFBBF24,
+        accent_selected_subtle: 0xFBBF24,
+        background: 0x1E1E1E,
+        background_selected: 0x2A2A2A,
+        selected_opacity: 0.15,
+        hover_opacity: 0.10,
+        warning_bg: 0xFF0000,
+        text_on_accent: 0x000000,
+    };
+
+    // Leading only
+    let _item = ListItem::new("With leading", colors)
+        .leading_accessory(div().w(px(40.0)).h(px(8.0)));
+
+    // Trailing only
+    let _item = ListItem::new("With trailing", colors)
+        .trailing_accessory(div().child("Saved"));
+
+    // Both
+    let _item = ListItem::new("With both", colors)
+        .leading_accessory(div().w(px(40.0)).h(px(8.0)))
+        .trailing_accessory(div().child("Saved"));
+}
+
+/// Verify that _opt variants accept None without panicking.
+#[test]
+fn test_list_item_accessory_opt_builders_accept_none() {
+    use crate::list_item::{ListItem, ListItemColors};
+
+    let colors = ListItemColors {
+        text_primary: 0xFFFFFF,
+        text_secondary: 0xCCCCCC,
+        text_muted: 0x999999,
+        text_dimmed: 0x666666,
+        accent_selected: 0xFBBF24,
+        accent_selected_subtle: 0xFBBF24,
+        background: 0x1E1E1E,
+        background_selected: 0x2A2A2A,
+        selected_opacity: 0.15,
+        hover_opacity: 0.10,
+        warning_bg: 0xFF0000,
+        text_on_accent: 0x000000,
+    };
+
+    let _item = ListItem::new("No accessories", colors)
+        .leading_accessory_opt(None)
+        .trailing_accessory_opt(None);
+}
+
+/// Verify that accessory slots compose with existing builder methods.
+#[test]
+fn test_list_item_accessory_composes_with_existing_builders() {
+    use crate::list_item::{ListItem, ListItemColors};
+    use gpui::*;
+
+    let colors = ListItemColors {
+        text_primary: 0xFFFFFF,
+        text_secondary: 0xCCCCCC,
+        text_muted: 0x999999,
+        text_dimmed: 0x666666,
+        accent_selected: 0xFBBF24,
+        accent_selected_subtle: 0xFBBF24,
+        background: 0x1E1E1E,
+        background_selected: 0x2A2A2A,
+        selected_opacity: 0.15,
+        hover_opacity: 0.10,
+        warning_bg: 0xFF0000,
+        text_on_accent: 0x000000,
+    };
+
+    // Full chain: icon + description + leading + trailing + accent bar
+    let _item = ListItem::new("Full chain", colors)
+        .icon("📄")
+        .description("A description")
+        .with_accent_bar(true)
+        .selected(true)
+        .leading_accessory(div().w(px(40.0)).h(px(8.0)))
+        .trailing_accessory(div().child("Saved"));
+}

@@ -4429,3 +4429,223 @@ fn harness_module_has_surface_preference_unit_tests() {
         "harness module must have unit test for None intent → all false"
     );
 }
+
+// =========================================================================
+// AC: Authoring flow (ScriptList + Submit) produces verification-bearing
+//     guidance and selects the quick terminal path (runtime call)
+// =========================================================================
+
+#[test]
+fn script_list_submit_authoring_flow_selects_quick_terminal_with_all_markers() {
+    // Runtime call: ScriptList + Submit + non-empty intent must produce
+    // verification-bearing guidance that selects the quick terminal surface.
+    let pref = script_kit_gpui::ai::tab_ai_surface_preference_for_prompt(
+        "ScriptList",
+        Some("clipboard cleanup"),
+        script_kit_gpui::ai::TabAiHarnessSubmissionMode::Submit,
+    );
+    assert!(
+        pref.use_quick_terminal,
+        "ScriptList + Submit + intent must select quick_terminal"
+    );
+    assert!(
+        pref.includes_script_authoring_skill,
+        "authoring flow must include script_authoring_skill marker"
+    );
+    assert!(
+        pref.includes_bun_build_verification,
+        "authoring flow must include bun_build_verification marker"
+    );
+    assert!(
+        pref.includes_bun_execute_verification,
+        "authoring flow must include bun_execute_verification marker"
+    );
+}
+
+// =========================================================================
+// AC: Non-authoring flow omits appendix and stays on ACP (runtime call)
+// =========================================================================
+
+#[test]
+fn non_authoring_flow_stays_acp_with_no_markers() {
+    // Runtime call: FileSearch + Submit + non-artifact intent must NOT
+    // produce verification-bearing guidance and must stay on ACP.
+    let pref = script_kit_gpui::ai::tab_ai_surface_preference_for_prompt(
+        "FileSearch",
+        Some("rename this file"),
+        script_kit_gpui::ai::TabAiHarnessSubmissionMode::Submit,
+    );
+    assert!(
+        !pref.use_quick_terminal,
+        "non-authoring flow must stay on ACP"
+    );
+    assert!(
+        !pref.includes_script_authoring_skill,
+        "non-authoring flow must not include script_authoring_skill"
+    );
+    assert!(
+        !pref.includes_bun_build_verification,
+        "non-authoring flow must not include bun_build_verification"
+    );
+    assert!(
+        !pref.includes_bun_execute_verification,
+        "non-authoring flow must not include bun_execute_verification"
+    );
+}
+
+// =========================================================================
+// AC: Runtime log — authoring flow emits tab_ai_artifact_authoring_guidance_appended
+//     with all three verification markers set to true
+// =========================================================================
+
+#[test]
+fn harness_submission_authoring_flow_emits_guidance_appended_log_with_all_markers() {
+    // Source contract: build_tab_ai_harness_submission must emit the
+    // tab_ai_artifact_authoring_guidance_appended log event with all
+    // verification marker fields when an authoring appendix is resolved.
+    let fn_start = HARNESS_SOURCE
+        .find("pub fn build_tab_ai_harness_submission(")
+        .expect("build_tab_ai_harness_submission must exist");
+    let fn_body = &HARNESS_SOURCE[fn_start..];
+    // Find the next top-level fn or end of file.
+    let fn_end = fn_body[1..]
+        .find("\npub fn ")
+        .or_else(|| fn_body[1..].find("\npub(crate) fn "))
+        .or_else(|| fn_body[1..].find("\nfn "))
+        .unwrap_or(fn_body.len());
+    let fn_body = &fn_body[..fn_end];
+
+    assert!(
+        fn_body.contains(r#"event = "tab_ai_artifact_authoring_guidance_appended""#),
+        "harness submission must emit tab_ai_artifact_authoring_guidance_appended log"
+    );
+    assert!(
+        fn_body.contains("includes_script_authoring_skill = appendix.markers.includes_script_authoring_skill"),
+        "guidance_appended log must include script_authoring_skill marker from appendix"
+    );
+    assert!(
+        fn_body.contains("includes_bun_build_verification = appendix.markers.includes_bun_build_verification"),
+        "guidance_appended log must include bun_build_verification marker from appendix"
+    );
+    assert!(
+        fn_body.contains("includes_bun_execute_verification = appendix.markers.includes_bun_execute_verification"),
+        "guidance_appended log must include bun_execute_verification marker from appendix"
+    );
+    assert!(
+        fn_body.contains("use_quick_terminal = appendix.use_quick_terminal"),
+        "guidance_appended log must include use_quick_terminal from appendix"
+    );
+}
+
+// =========================================================================
+// AC: Runtime log — non-authoring flow does NOT emit the guidance-appended
+//     event (the resolve call returns None so the log block is skipped)
+// =========================================================================
+
+#[test]
+fn non_authoring_harness_submission_omits_guidance_block() {
+    // Runtime call: a non-authoring submission must NOT contain the guidance
+    // block in its output, confirming the guidance_appended log is never hit.
+    let context = script_kit_gpui::ai::TabAiContextBlob {
+        schema_version: 2,
+        ui: script_kit_gpui::ai::TabAiUiSnapshot {
+            prompt_type: "FileSearch".into(),
+            input_text: Some("rename this file".into()),
+            focused_semantic_id: None,
+            selected_semantic_id: None,
+            visible_elements: vec![],
+        },
+        desktop: None,
+        targets: vec![],
+        clipboard_history: vec![],
+        prior_automations: script_kit_gpui::ai::TabAiMemoryResolution {
+            suggestions: vec![],
+            outcome: script_kit_gpui::ai::TabAiMemoryResolutionOutcome::NoPriorAutomations,
+        },
+        invocation_receipt: None,
+    };
+
+    let output = script_kit_gpui::ai::build_tab_ai_harness_submission(
+        &context,
+        Some("rename this file"),
+        script_kit_gpui::ai::TabAiHarnessSubmissionMode::Submit,
+        None,
+        None,
+        &[],
+    )
+    .expect("submission must succeed");
+
+    // The guidance block delimiter should NOT appear in the output.
+    assert!(
+        !output.contains("--- Script Kit artifact authoring guidance ---"),
+        "non-authoring submission must not contain artifact authoring guidance"
+    );
+    // The verification gate header should NOT appear either.
+    assert!(
+        !output.contains("MANDATORY SCRIPT VERIFICATION"),
+        "non-authoring submission must not contain verification gate"
+    );
+}
+
+#[test]
+fn authoring_harness_submission_contains_verification_guidance() {
+    // Runtime call: a ScriptList + Submit authoring submission must contain
+    // the verification guidance block with all three markers present.
+    let context = script_kit_gpui::ai::TabAiContextBlob {
+        schema_version: 2,
+        ui: script_kit_gpui::ai::TabAiUiSnapshot {
+            prompt_type: "ScriptList".into(),
+            input_text: Some("clipboard cleanup".into()),
+            focused_semantic_id: None,
+            selected_semantic_id: None,
+            visible_elements: vec![],
+        },
+        desktop: None,
+        targets: vec![],
+        clipboard_history: vec![],
+        prior_automations: script_kit_gpui::ai::TabAiMemoryResolution {
+            suggestions: vec![],
+            outcome: script_kit_gpui::ai::TabAiMemoryResolutionOutcome::NoPriorAutomations,
+        },
+        invocation_receipt: None,
+    };
+
+    let output = script_kit_gpui::ai::build_tab_ai_harness_submission(
+        &context,
+        Some("clipboard cleanup"),
+        script_kit_gpui::ai::TabAiHarnessSubmissionMode::Submit,
+        None,
+        None,
+        &[],
+    )
+    .expect("submission must succeed");
+
+    // The guidance block delimiter must appear.
+    assert!(
+        output.contains("--- Script Kit artifact authoring guidance ---"),
+        "authoring submission must contain artifact authoring guidance"
+    );
+    // The verification gate header must appear.
+    assert!(
+        output.contains("MANDATORY SCRIPT VERIFICATION"),
+        "authoring submission must contain mandatory verification gate"
+    );
+    // All three verification markers must be present.
+    assert!(
+        output.contains(script_kit_gpui::ai::SCRIPT_AUTHORING_SKILL_MARKER),
+        "authoring submission must include script-authoring skill marker"
+    );
+    assert!(
+        output.contains(script_kit_gpui::ai::BUN_BUILD_VERIFICATION_MARKER),
+        "authoring submission must include bun build verification marker"
+    );
+    assert!(
+        output.contains(script_kit_gpui::ai::BUN_EXECUTE_VERIFICATION_MARKER),
+        "authoring submission must include bun execute verification marker"
+    );
+    // The user intent must follow the guidance.
+    assert!(
+        output.contains("User intent:\nclipboard cleanup"),
+        "authoring submission must include the user intent after guidance"
+    );
+}
