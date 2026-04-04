@@ -4099,3 +4099,106 @@ fn search_query_and_input_targets_prevent_ambient_capture() {
         "focused-target part must be built only when NOT using ask_anything_fallback",
     );
 }
+
+// =========================================================================
+// Mandatory script verification guidance: ACP path parity
+// =========================================================================
+
+#[test]
+fn acp_path_calls_shared_artifact_authoring_appendix_builder() {
+    // The ACP view opener must call the same shared appendix builder used by
+    // the PTY submission path, ensuring both surfaces carry identical
+    // verification guidance.
+    let acp_fn_start = TAB_AI_MODE_SOURCE
+        .find("fn open_tab_ai_acp_view_from_request_impl(")
+        .expect("open_tab_ai_acp_view_from_request_impl must exist");
+    let acp_fn_body = &TAB_AI_MODE_SOURCE[acp_fn_start..];
+    let next_fn = acp_fn_body[1..]
+        .find("\n    fn ")
+        .unwrap_or(acp_fn_body.len());
+    let acp_fn_body = &acp_fn_body[..next_fn];
+
+    assert!(
+        acp_fn_body.contains("build_tab_ai_artifact_authoring_appendix_for_prompt"),
+        "ACP path must call the same shared appendix builder as the PTY path"
+    );
+}
+
+#[test]
+fn acp_path_logs_verification_contract_telemetry() {
+    let acp_fn_start = TAB_AI_MODE_SOURCE
+        .find("fn open_tab_ai_acp_view_from_request_impl(")
+        .expect("open_tab_ai_acp_view_from_request_impl must exist");
+    let acp_fn_body = &TAB_AI_MODE_SOURCE[acp_fn_start..];
+    let next_fn = acp_fn_body[1..]
+        .find("\n    fn ")
+        .unwrap_or(acp_fn_body.len());
+    let acp_fn_body = &acp_fn_body[..next_fn];
+
+    assert!(
+        acp_fn_body.contains("tab_ai_acp_artifact_authoring_guidance_appended"),
+        "ACP path must emit the artifact authoring guidance telemetry event"
+    );
+    assert!(
+        acp_fn_body.contains("includes_script_authoring_skill"),
+        "ACP telemetry must check whether guidance references the script-authoring skill"
+    );
+    assert!(
+        acp_fn_body.contains("includes_bun_build_verification"),
+        "ACP telemetry must check whether guidance includes the bun build command"
+    );
+    assert!(
+        acp_fn_body.contains("includes_bun_execute_verification"),
+        "ACP telemetry must check whether guidance includes the SK_VERIFY bun execute command"
+    );
+}
+
+#[test]
+fn acp_path_formats_guidance_before_user_intent() {
+    // When guidance is appended, it must come before the "User intent:" line
+    // so the agent sees verification rules before the task description.
+    let acp_fn_start = TAB_AI_MODE_SOURCE
+        .find("fn open_tab_ai_acp_view_from_request_impl(")
+        .expect("open_tab_ai_acp_view_from_request_impl must exist");
+    let acp_fn_body = &TAB_AI_MODE_SOURCE[acp_fn_start..];
+    let next_fn = acp_fn_body[1..]
+        .find("\n    fn ")
+        .unwrap_or(acp_fn_body.len());
+    let acp_fn_body = &acp_fn_body[..next_fn];
+
+    // The format string must place guidance before "User intent:"
+    assert!(
+        acp_fn_body.contains(r#"format!("{guidance}\n\nUser intent:\n{intent}\n")"#),
+        "ACP path must format guidance before the User intent line"
+    );
+}
+
+#[test]
+fn acp_path_passes_submit_mode_to_appendix_builder() {
+    // The ACP path must pass Submit mode (not PasteOnly) to the appendix
+    // builder, since ACP always auto-submits when there is an effective intent.
+    let acp_fn_start = TAB_AI_MODE_SOURCE
+        .find("fn open_tab_ai_acp_view_from_request_impl(")
+        .expect("open_tab_ai_acp_view_from_request_impl must exist");
+    let acp_fn_body = &TAB_AI_MODE_SOURCE[acp_fn_start..];
+    let next_fn = acp_fn_body[1..]
+        .find("\n    fn ")
+        .unwrap_or(acp_fn_body.len());
+    let acp_fn_body = &acp_fn_body[..next_fn];
+
+    assert!(
+        acp_fn_body.contains("TabAiHarnessSubmissionMode::Submit"),
+        "ACP path must pass Submit mode to the shared appendix builder"
+    );
+}
+
+#[test]
+fn harness_source_contains_launchpad_include() {
+    // The harness module must embed START_HERE.md as the single source of
+    // truth for artifact authoring guidance. If the include path changes,
+    // this test catches it.
+    assert!(
+        HARNESS_SOURCE.contains("kit-init/examples/START_HERE.md"),
+        "harness module must include START_HERE.md as the canonical launchpad source"
+    );
+}

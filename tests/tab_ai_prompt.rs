@@ -352,3 +352,145 @@ fn tab_ai_save_offer_uses_ghost_opacity_divider() {
         "save-offer overlay must use OPACITY_GHOST for its divider"
     );
 }
+
+// ── Mandatory script verification contract regression tests ─────────
+//
+// These tests lock the canonical launchpad and script-authoring skill
+// against accidental removal of the Bun verification loop.  They
+// read the source files directly so a broken contract fails the test
+// suite before any runtime behavior is affected.
+
+const LAUNCHPAD_SOURCE: &str = include_str!("../kit-init/examples/START_HERE.md");
+const SCRIPT_AUTHORING_SKILL_SOURCE: &str =
+    include_str!("../kit-init/skills/script-authoring/SKILL.md");
+const HARNESS_MOD_SOURCE: &str = include_str!("../src/ai/harness/mod.rs");
+
+#[test]
+fn launchpad_requires_reading_script_authoring_skill() {
+    assert!(
+        LAUNCHPAD_SOURCE.contains("~/.scriptkit/skills/script-authoring/SKILL.md"),
+        "START_HERE.md must route agents to the script-authoring skill for verification guidance"
+    );
+}
+
+#[test]
+fn launchpad_includes_bun_build_verification_command() {
+    assert!(
+        LAUNCHPAD_SOURCE.contains(
+            "bun build ~/.scriptkit/kit/main/scripts/<name>.ts --target=bun --outfile ~/.scriptkit/tmp/test-scripts/<name>.verify.mjs"
+        ),
+        "START_HERE.md must include the exact bun build syntax-check command"
+    );
+}
+
+#[test]
+fn launchpad_includes_bun_execute_verification_command() {
+    assert!(
+        LAUNCHPAD_SOURCE.contains("SK_VERIFY=1 bun ~/.scriptkit/kit/main/scripts/<name>.ts"),
+        "START_HERE.md must include the exact SK_VERIFY=1 bun execute command"
+    );
+}
+
+#[test]
+fn launchpad_requires_both_commands_pass_before_success() {
+    assert!(
+        LAUNCHPAD_SOURCE.contains("Do not report success until both commands pass"),
+        "START_HERE.md must explicitly forbid reporting success before verification passes"
+    );
+}
+
+#[test]
+fn script_authoring_skill_includes_bun_build_verification_command() {
+    assert!(
+        SCRIPT_AUTHORING_SKILL_SOURCE.contains(
+            "bun build ~/.scriptkit/kit/main/scripts/<name>.ts --target=bun --outfile ~/.scriptkit/tmp/test-scripts/<name>.verify.mjs"
+        ),
+        "SKILL.md must include the exact bun build syntax-check command"
+    );
+}
+
+#[test]
+fn script_authoring_skill_includes_bun_execute_verification_command() {
+    assert!(
+        SCRIPT_AUTHORING_SKILL_SOURCE
+            .contains("SK_VERIFY=1 bun ~/.scriptkit/kit/main/scripts/<name>.ts"),
+        "SKILL.md must include the exact SK_VERIFY=1 bun execute command"
+    );
+}
+
+#[test]
+fn script_authoring_skill_requires_never_report_success_until_pass() {
+    assert!(
+        SCRIPT_AUTHORING_SKILL_SOURCE.contains("Never report success until both commands pass"),
+        "SKILL.md must explicitly forbid reporting success before verification passes"
+    );
+}
+
+#[test]
+fn script_authoring_skill_requires_sk_verify_branch() {
+    assert!(
+        SCRIPT_AUTHORING_SKILL_SOURCE.contains("process.env.SK_VERIFY === \"1\""),
+        "SKILL.md must document the SK_VERIFY non-interactive branch pattern"
+    );
+}
+
+#[test]
+fn harness_submission_builder_appends_guidance_for_script_list_submit() {
+    // The harness submission builder must call the shared appendix builder
+    // with the ScriptList force path, ensuring every PTY submission for a
+    // ScriptList submit carries the verification contract.
+    let builder_fn_start = HARNESS_MOD_SOURCE
+        .find("pub fn build_tab_ai_harness_submission(")
+        .expect("build_tab_ai_harness_submission must exist");
+    let builder_body = &HARNESS_MOD_SOURCE[builder_fn_start..];
+    let next_fn = builder_body[1..]
+        .find("\npub ")
+        .or_else(|| builder_body[1..].find("\nfn "))
+        .unwrap_or(builder_body.len());
+    let builder_body = &builder_body[..next_fn];
+
+    assert!(
+        builder_body.contains("build_tab_ai_artifact_authoring_appendix_for_prompt"),
+        "PTY submission builder must call the shared appendix builder"
+    );
+    assert!(
+        builder_body.contains("~/.scriptkit/skills/script-authoring/SKILL.md"),
+        "PTY submission builder must log whether guidance references the script-authoring skill"
+    );
+}
+
+#[test]
+fn paste_only_with_no_intent_does_not_receive_verification_guidance() {
+    // PasteOnly + None intent must not trigger the artifact guidance path.
+    // Validated via the actual builder function.
+    let context = script_kit_gpui::ai::TabAiContextBlob::from_parts(
+        script_kit_gpui::ai::TabAiUiSnapshot {
+            prompt_type: "ScriptList".to_string(),
+            ..Default::default()
+        },
+        Default::default(),
+        vec![],
+        None,
+        vec![],
+        vec![],
+        "2026-04-03T00:00:00Z".to_string(),
+    );
+    let submission = script_kit_gpui::ai::build_tab_ai_harness_submission(
+        &context,
+        None,
+        script_kit_gpui::ai::TabAiHarnessSubmissionMode::PasteOnly,
+        None,
+        None,
+        &[],
+    )
+    .expect("submission should build");
+
+    assert!(
+        !submission.contains("--- Script Kit artifact authoring guidance ---"),
+        "PasteOnly with no intent must not append the verification guidance block"
+    );
+    assert!(
+        !submission.contains("SK_VERIFY=1"),
+        "PasteOnly with no intent must not contain the SK_VERIFY execution command"
+    );
+}

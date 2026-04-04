@@ -794,7 +794,7 @@ pub fn should_include_artifact_authoring_guidance(intent: Option<&str>) -> bool 
 /// The current heuristic-based classifier remains as a fallback for other prompt
 /// types and submission modes.
 fn should_force_artifact_guidance_for_script_list_submit(
-    context: &crate::ai::TabAiContextBlob,
+    prompt_type: &str,
     effective_intent: Option<&str>,
     mode: TabAiHarnessSubmissionMode,
 ) -> bool {
@@ -803,9 +803,41 @@ fn should_force_artifact_guidance_for_script_list_submit(
         .map(|value| !value.is_empty())
         .unwrap_or(false);
 
-    context.ui.prompt_type == "ScriptList"
+    prompt_type == "ScriptList"
         && matches!(mode, TabAiHarnessSubmissionMode::Submit)
         && has_non_empty_intent
+}
+
+/// Build the artifact-authoring guidance appendix for a Tab AI submission.
+///
+/// Returns `Some((guidance_block, forced_by_script_list_submit))` when guidance
+/// should be appended — either because the intent heuristic matched or because
+/// the deterministic ScriptList + Submit + non-empty-intent path forced it.
+///
+/// This is the single-sourced entry point consumed by both the PTY submission
+/// builder and the ACP initial-input path.
+pub(crate) fn build_tab_ai_artifact_authoring_appendix_for_prompt(
+    prompt_type: &str,
+    effective_intent: Option<&str>,
+    mode: TabAiHarnessSubmissionMode,
+) -> Option<(String, bool)> {
+    let effective_intent = effective_intent
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+
+    let forced_by_script_list_submit =
+        should_force_artifact_guidance_for_script_list_submit(prompt_type, effective_intent, mode);
+
+    if forced_by_script_list_submit
+        || should_include_artifact_authoring_guidance(effective_intent)
+    {
+        Some((
+            build_tab_ai_artifact_authoring_guidance_block(),
+            forced_by_script_list_submit,
+        ))
+    } else {
+        None
+    }
 }
 
 /// Canonical one-shot authoring launchpad for harness mode.
@@ -835,8 +867,10 @@ fn build_tab_ai_artifact_authoring_guidance_block() -> String {
 /// - `PasteOnly` without intent: stages context only, no synthetic turn text.
 /// - With intent (either mode): appends the intent as `User intent:`.
 ///
-/// When the intent contains an authoring verb + artifact word, a text-native
-/// artifact authoring guidance block is appended between context and intent.
+/// When the submission is an artifact-creation request — either by heuristic
+/// intent detection or by the deterministic `ScriptList` submit path — a
+/// text-native artifact authoring guidance block is appended between context
+/// and intent.
 pub fn build_tab_ai_harness_submission(
     context: &crate::ai::TabAiContextBlob,
     intent: Option<&str>,
@@ -855,13 +889,13 @@ pub fn build_tab_ai_harness_submission(
         .map(str::trim)
         .filter(|value| !value.is_empty());
 
-    let forced_by_script_list_submit =
-        should_force_artifact_guidance_for_script_list_submit(context, effective_intent, mode);
-
-    if forced_by_script_list_submit
-        || should_include_artifact_authoring_guidance(effective_intent)
+    if let Some((guidance, forced_by_script_list_submit)) =
+        build_tab_ai_artifact_authoring_appendix_for_prompt(
+            &context.ui.prompt_type,
+            effective_intent,
+            mode,
+        )
     {
-        let guidance = build_tab_ai_artifact_authoring_guidance_block();
         tracing::info!(
             event = "tab_ai_artifact_authoring_guidance_appended",
             forced_by_script_list_submit,
