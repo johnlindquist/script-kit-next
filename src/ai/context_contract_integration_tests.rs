@@ -9,7 +9,7 @@ fn explicit_context_surfaces_share_one_contract_end_to_end() {
     crate::context_snapshot::enable_deterministic_context_capture();
     // Step 1: Parse @mentions through the production parser (which delegates
     // to the canonical context_contract module).
-    let parsed = parse_context_mentions("@context\n@browser\n\nPlease summarize what matters.");
+    let parsed = parse_context_mentions("@snapshot\n@browser\n\nPlease summarize what matters.");
 
     assert_eq!(
         parsed.cleaned_content, "Please summarize what matters.",
@@ -18,7 +18,7 @@ fn explicit_context_surfaces_share_one_contract_end_to_end() {
     assert_eq!(
         parsed.parts.len(),
         2,
-        "should parse @context and @browser; got: {:?}",
+        "should parse @snapshot and @browser; got: {:?}",
         parsed.parts
     );
 

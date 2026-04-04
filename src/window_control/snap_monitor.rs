@@ -1,9 +1,15 @@
+#[cfg(target_os = "macos")]
+use std::sync::Arc;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     LazyLock, Mutex,
 };
+#[cfg(target_os = "macos")]
+use std::thread;
+#[cfg(target_os = "macos")]
+use std::time::Duration;
 
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, Result};
 use gpui::{App, AsyncApp};
 
 use super::query::{get_frontmost_window_of_previous_app, has_accessibility_permission};
@@ -119,84 +125,154 @@ fn handle_snap_monitor_event(event: SnapMonitorEvent, cx: &mut App) -> Result<()
 }
 
 #[cfg(target_os = "macos")]
-#[derive(Clone, Copy)]
-struct SendableId(cocoa::base::id);
+struct SendableMachPortRef(Option<core_foundation::mach_port::CFMachPortRef>);
 
 #[cfg(target_os = "macos")]
-// SAFETY: AppKit monitor IDs are opaque Objective-C objects managed on the main thread.
-unsafe impl Send for SendableId {}
+// SAFETY: The mach port ref is only accessed on the monitor thread or through a mutex
+// when re-enabling the event tap after timeout/user-input disablement.
+unsafe impl Send for SendableMachPortRef {}
 
 #[cfg(target_os = "macos")]
-// SAFETY: The opaque monitor handle is only stored for lifetime management.
-unsafe impl Sync for SendableId {}
-
-#[cfg(target_os = "macos")]
-static GLOBAL_MOUSE_MONITOR: LazyLock<Mutex<Option<SendableId>>> =
-    LazyLock::new(|| Mutex::new(None));
+// SAFETY: CFMachPortRef is a Core Foundation reference type guarded by a mutex here.
+unsafe impl Sync for SendableMachPortRef {}
 
 #[cfg(target_os = "macos")]
 fn install_global_mouse_monitor() -> Result<()> {
-    use cocoa::base::{id, nil};
-    use objc::{class, msg_send, sel, sel_impl};
-
-    if crate::platform::require_main_thread("install_global_mouse_monitor") {
+    if !has_accessibility_permission() {
         return Ok(());
     }
 
-    if GLOBAL_MOUSE_MONITOR
-        .lock()
-        .map_err(|e| anyhow!("snap mouse monitor lock poisoned: {e}"))?
-        .is_some()
-    {
-        return Ok(());
-    }
-
-    // NSEventMaskLeftMouseDown = 1 << 1
-    // NSEventMaskLeftMouseUp = 1 << 2
-    // NSEventMaskLeftMouseDragged = 1 << 6
-    let mask: u64 = (1 << 1) | (1 << 2) | (1 << 6);
-
-    let block = block::ConcreteBlock::new(move |event: id| {
-        // SAFETY: `event` is a valid NSEvent delivered by AppKit.
-        let event_type: usize = unsafe { msg_send![event, type] };
-        let snap_event = match event_type {
-            1 => Some(SnapMonitorEvent::Pressed),
-            2 => Some(SnapMonitorEvent::Released),
-            6 => Some(SnapMonitorEvent::Dragged),
-            _ => None,
-        };
-
-        if let Some(snap_event) = snap_event {
-            let _ = SNAP_MONITOR_CHANNEL.0.try_send(snap_event);
-        }
-    });
-    let block = block.copy();
-
-    // SAFETY: NSEvent is a valid AppKit class on macOS and the monitor is installed
-    // on the main thread. The returned opaque monitor handle is retained by AppKit
-    // until removed or process exit.
-    let monitor: id = unsafe {
-        msg_send![
-            class!(NSEvent),
-            addGlobalMonitorForEventsMatchingMask: mask
-            handler: &*block
-        ]
-    };
-
-    if monitor == nil {
-        bail!("Failed to install global snap mouse monitor");
-    }
-
-    *GLOBAL_MOUSE_MONITOR
-        .lock()
-        .map_err(|e| anyhow!("snap mouse monitor lock poisoned: {e}"))? = Some(SendableId(monitor));
-
-    Ok(())
+    thread::Builder::new()
+        .name("snap-mouse-monitor".to_string())
+        .spawn(run_global_mouse_monitor)
+        .map(|_| ())
+        .map_err(|error| anyhow!("failed to spawn snap mouse monitor thread: {error}"))
 }
 
 #[cfg(not(target_os = "macos"))]
 fn install_global_mouse_monitor() -> Result<()> {
     Ok(())
+}
+
+#[cfg(target_os = "macos")]
+fn run_global_mouse_monitor() {
+    use core_foundation::base::TCFType;
+    use core_foundation::runloop::{kCFRunLoopCommonModes, kCFRunLoopDefaultMode, CFRunLoop};
+    use core_graphics::event::{
+        CGEvent, CGEventTap, CGEventTapLocation, CGEventTapOptions, CGEventTapPlacement,
+        CGEventType,
+    };
+
+    let current_run_loop = CFRunLoop::get_current();
+    let mach_port_ref: Arc<std::sync::Mutex<SendableMachPortRef>> =
+        Arc::new(std::sync::Mutex::new(SendableMachPortRef(None)));
+    let mach_port_for_callback = Arc::clone(&mach_port_ref);
+    let sender = SNAP_MONITOR_CHANNEL.0.clone();
+
+    let event_tap = match CGEventTap::new(
+        CGEventTapLocation::HID,
+        CGEventTapPlacement::HeadInsertEventTap,
+        CGEventTapOptions::ListenOnly,
+        vec![
+            CGEventType::LeftMouseDown,
+            CGEventType::LeftMouseUp,
+            CGEventType::LeftMouseDragged,
+        ],
+        move |_proxy, event_type, _event: &CGEvent| {
+            match event_type {
+                CGEventType::TapDisabledByTimeout | CGEventType::TapDisabledByUserInput => {
+                    reenable_mouse_tap(&mach_port_for_callback);
+                    return None;
+                }
+                _ => {}
+            }
+
+            if let Some(event) = snap_event_from_cg_event_type(event_type) {
+                let _ = sender.try_send(event);
+            }
+
+            None
+        },
+    ) {
+        Ok(tap) => tap,
+        Err(()) => {
+            tracing::warn!(
+                target: "script_kit::snap_monitor",
+                event = "snap_drag_monitor_tap_create_failed",
+                "failed to create snap mouse event tap"
+            );
+            return;
+        }
+    };
+
+    if let Ok(mut guard) = mach_port_ref.lock() {
+        guard.0 = Some(event_tap.mach_port.as_concrete_TypeRef());
+    } else {
+        tracing::warn!(
+            target: "script_kit::snap_monitor",
+            event = "snap_drag_monitor_tap_store_failed",
+            "failed to store snap mouse event tap handle"
+        );
+        return;
+    }
+
+    let run_loop_source = match event_tap.mach_port.create_runloop_source(0) {
+        Ok(source) => source,
+        Err(()) => {
+            tracing::warn!(
+                target: "script_kit::snap_monitor",
+                event = "snap_drag_monitor_runloop_source_failed",
+                "failed to create snap mouse event tap run loop source"
+            );
+            return;
+        }
+    };
+
+    // SAFETY: The run loop source was created from a valid event tap and is added
+    // to the current thread's run loop in a common mode for event delivery.
+    unsafe {
+        current_run_loop.add_source(&run_loop_source, kCFRunLoopCommonModes);
+    }
+    event_tap.enable();
+
+    loop {
+        let _ = CFRunLoop::run_in_mode(
+            // SAFETY: kCFRunLoopDefaultMode is a valid Core Foundation constant.
+            unsafe { kCFRunLoopDefaultMode },
+            Duration::from_millis(250),
+            true,
+        );
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn snap_event_from_cg_event_type(
+    event_type: core_graphics::event::CGEventType,
+) -> Option<SnapMonitorEvent> {
+    use core_graphics::event::CGEventType;
+
+    match event_type {
+        CGEventType::LeftMouseDown => Some(SnapMonitorEvent::Pressed),
+        CGEventType::LeftMouseDragged => Some(SnapMonitorEvent::Dragged),
+        CGEventType::LeftMouseUp => Some(SnapMonitorEvent::Released),
+        _ => None,
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn reenable_mouse_tap(mach_port_ref: &Arc<std::sync::Mutex<SendableMachPortRef>>) {
+    extern "C" {
+        fn CGEventTapEnable(tap: core_foundation::mach_port::CFMachPortRef, enable: bool);
+    }
+
+    if let Ok(guard) = mach_port_ref.lock() {
+        if let Some(port) = guard.0 {
+            // SAFETY: `port` is the valid mach port backing the CGEventTap.
+            unsafe {
+                CGEventTapEnable(port, true);
+            }
+        }
+    }
 }
 
 /// Install the snap drag monitor that detects external window drags and
@@ -286,5 +362,24 @@ mod tests {
             bounds: Bounds::new(900, 100, 1200, 800),
         };
         assert!(!should_start_runtime(armed, None));
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn maps_mouse_event_types() {
+        use core_graphics::event::CGEventType;
+
+        assert_eq!(
+            snap_event_from_cg_event_type(CGEventType::LeftMouseDown),
+            Some(SnapMonitorEvent::Pressed)
+        );
+        assert_eq!(
+            snap_event_from_cg_event_type(CGEventType::LeftMouseDragged),
+            Some(SnapMonitorEvent::Dragged)
+        );
+        assert_eq!(
+            snap_event_from_cg_event_type(CGEventType::LeftMouseUp),
+            Some(SnapMonitorEvent::Released)
+        );
     }
 }

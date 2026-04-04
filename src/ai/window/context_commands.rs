@@ -63,9 +63,21 @@ mod tests {
     #[test]
     fn test_parse_with_whitespace() {
         assert_eq!(
-            parse_context_slash_command("  /context  "),
+            parse_context_slash_command("  /snapshot  "),
             Some(ContextAttachmentKind::Current),
             "Leading/trailing whitespace should be trimmed"
+        );
+    }
+
+    #[test]
+    fn test_legacy_context_aliases_still_parse() {
+        assert_eq!(
+            parse_context_slash_command("/context"),
+            Some(ContextAttachmentKind::Current)
+        );
+        assert_eq!(
+            parse_context_slash_command("/context-full"),
+            Some(ContextAttachmentKind::Full)
         );
     }
 

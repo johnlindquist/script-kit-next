@@ -1277,6 +1277,11 @@ impl AcpThread {
             self.context_bootstrap_note = ambient_label
                 .as_deref()
                 .map(Self::ambient_capture_preparing_note);
+        } else if !self.pending_ambient_context_enabled
+            && matches!(self.context_bootstrap_state, AcpContextBootstrapState::Preparing)
+        {
+            self.context_bootstrap_state = AcpContextBootstrapState::Ready;
+            self.context_bootstrap_note = None;
         }
 
         self.pending_context_parts.push(part);
@@ -1408,6 +1413,11 @@ impl AcpThread {
             self.context_bootstrap_note = part
                 .ambient_chip_label()
                 .map(Self::ambient_capture_preparing_note);
+        } else if !self.pending_ambient_context_enabled
+            && matches!(self.context_bootstrap_state, AcpContextBootstrapState::Preparing)
+        {
+            self.context_bootstrap_state = AcpContextBootstrapState::Ready;
+            self.context_bootstrap_note = None;
         }
 
         self.pending_context_parts.push(part);
@@ -2114,5 +2124,42 @@ mod tests {
             1,
             "second turn should only have user input, no context"
         );
+    }
+
+    #[test]
+    fn non_ambient_part_marks_bootstrap_ready_when_no_ambient_capture_is_pending() {
+        let mut thread = test_thread(Vec::new(), false);
+        thread.context_bootstrap_state = AcpContextBootstrapState::Preparing;
+        thread.context_bootstrap_note = Some("Queued · sending when context is attached…".into());
+
+        thread.add_context_part_test(focused_target_part("my-script"));
+
+        assert_eq!(
+            thread.context_bootstrap_state,
+            AcpContextBootstrapState::Ready,
+            "typed context attachments should not leave the composer stuck in Preparing"
+        );
+        assert_eq!(
+            thread.context_bootstrap_note,
+            None,
+            "manual non-ambient attachments should clear the queued bootstrap note"
+        );
+        assert_eq!(thread.pending_context_parts.len(), 1);
+    }
+
+    #[test]
+    fn current_context_picker_part_marks_bootstrap_ready_instead_of_waiting_for_ambient_capture() {
+        let mut thread = test_thread(Vec::new(), false);
+        thread.context_bootstrap_state = AcpContextBootstrapState::Preparing;
+        thread.context_bootstrap_note = Some("Capturing Current Context…".into());
+
+        thread.add_context_part_test(crate::ai::message_parts::AiContextPart::ResourceUri {
+            uri: crate::ai::message_parts::ASK_ANYTHING_RESOURCE_URI.to_string(),
+            label: "Current Context".to_string(),
+        });
+
+        assert_eq!(thread.context_bootstrap_state, AcpContextBootstrapState::Ready);
+        assert_eq!(thread.context_bootstrap_note, None);
+        assert!(!thread.pending_ambient_context_enabled);
     }
 }

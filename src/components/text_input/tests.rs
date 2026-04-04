@@ -249,3 +249,15 @@ fn test_visible_window_range_centers_cursor_when_possible() {
     assert_eq!((start, end), (9, 18));
     assert!(input.cursor() >= start && input.cursor() <= end);
 }
+
+#[test]
+fn test_set_cursor_clamps_to_text_length() {
+    let mut input = TextInputState::with_text("hello");
+    input.set_cursor(2);
+    assert_eq!(input.cursor(), 2);
+    assert!(input.selection().is_empty());
+
+    input.set_cursor(99);
+    assert_eq!(input.cursor(), 5);
+    assert!(input.selection().is_empty());
+}

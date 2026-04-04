@@ -1609,6 +1609,15 @@ impl AcpChatView {
         out
     }
 
+    /// Return the caret position immediately after replacing `char_range`
+    /// with `replacement`.
+    fn caret_after_replacement(
+        char_range: &std::ops::Range<usize>,
+        replacement: &str,
+    ) -> usize {
+        char_range.start + replacement.chars().count()
+    }
+
     /// Accept the currently selected picker row, optionally submitting literal
     /// slash commands after insertion.
     ///
@@ -1638,7 +1647,15 @@ impl AcpChatView {
         // ── Literal ACP slash commands stay in the composer as `/command ` text ──
         if session.trigger == ContextPickerTrigger::Slash {
             if let ContextPickerItemKind::SlashCommand(command) = &item.kind {
+                let current_text = self.live_thread().read(cx).input.text().to_string();
                 let command_text = format!("/{command} ");
+                let next_text = Self::replace_text_in_char_range(
+                    &current_text,
+                    session.trigger_range.clone(),
+                    &command_text,
+                );
+                let next_cursor =
+                    Self::caret_after_replacement(&session.trigger_range, &command_text);
                 tracing::info!(
                     target: "script_kit::tab_ai",
                     event = "acp_picker_literal_slash_inserted",
@@ -1646,7 +1663,8 @@ impl AcpChatView {
                     submit,
                 );
                 self.live_thread().update(cx, |thread, cx| {
-                    thread.input.set_text(command_text);
+                    thread.input.set_text(next_text);
+                    thread.input.set_cursor(next_cursor);
                     if submit {
                         let _ = thread.submit_input(cx);
                     } else {
@@ -1662,7 +1680,7 @@ impl AcpChatView {
         let (part, inline_text, allow_inline_sync) = match &item.kind {
             ContextPickerItemKind::BuiltIn(kind) => (
                 kind.part(),
-                kind.spec().mention.unwrap_or("@context").to_string(),
+                kind.spec().mention.unwrap_or("@snapshot").to_string(),
                 session.trigger == ContextPickerTrigger::Mention,
             ),
             ContextPickerItemKind::File(path) | ContextPickerItemKind::Folder(path) => {
@@ -1690,6 +1708,7 @@ impl AcpChatView {
         } else {
             String::new()
         };
+        let next_cursor = Self::caret_after_replacement(&session.trigger_range, &replacement);
 
         let next_text = Self::replace_text_in_char_range(
             &current_text,
@@ -1698,8 +1717,8 @@ impl AcpChatView {
         );
 
         self.live_thread().update(cx, |thread, cx| {
-            thread.input.move_to_end(false);
             thread.input.set_text(next_text);
+            thread.input.set_cursor(next_cursor);
             thread.add_context_part(part.clone(), cx);
             cx.notify();
         });
@@ -3116,5 +3135,23 @@ mod tests {
             AcpChatView::ACP_INPUT_PADDING_X,
             "picker should stay aligned to the input gutter when the anchor is too far left"
         );
+    }
+
+    #[test]
+    fn caret_after_replacement_tracks_inserted_token_not_end_of_composer() {
+        let range = 6..10;
+        let replacement = "@snapshot ";
+        assert_eq!(
+            AcpChatView::caret_after_replacement(&range, replacement),
+            16,
+            "caret should land immediately after the accepted token"
+        );
+    }
+
+    #[test]
+    fn replace_text_in_char_range_preserves_surrounding_text() {
+        let updated =
+            AcpChatView::replace_text_in_char_range("hello @con", 6..10, "@snapshot ");
+        assert_eq!(updated, "hello @snapshot ");
     }
 }

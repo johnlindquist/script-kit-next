@@ -3,6 +3,10 @@ use crate::ai::message_parts::AiContextPart;
 pub(crate) const CONTEXT_SECTION: &str = "Context";
 pub(crate) const CLEAR_CONTEXT_ACTION_ID: &str = "chat:clear_context";
 pub(crate) const CLEAR_CONTEXT_ACTION_TITLE: &str = "Clear Context";
+const CURRENT_SNAPSHOT_SLASH_ALIASES: &[&str] = &["/context"];
+const CURRENT_SNAPSHOT_MENTION_ALIASES: &[&str] = &["@context"];
+const FULL_SNAPSHOT_SLASH_ALIASES: &[&str] = &["/context-full"];
+const FULL_SNAPSHOT_MENTION_ALIASES: &[&str] = &["@context-full"];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ContextAttachmentKind {
@@ -33,6 +37,8 @@ pub struct ContextAttachmentSpec {
     pub action_title: &'static str,
     pub slash_command: Option<&'static str>,
     pub mention: Option<&'static str>,
+    pub slash_aliases: &'static [&'static str],
+    pub mention_aliases: &'static [&'static str],
     pub uri: &'static str,
     pub label: &'static str,
 }
@@ -41,18 +47,22 @@ const CONTEXT_ATTACHMENT_SPECS: [ContextAttachmentSpec; 18] = [
     ContextAttachmentSpec {
         kind: ContextAttachmentKind::Current,
         action_id: "chat:add_current_context",
-        action_title: "Attach Current Context",
-        slash_command: Some("/context"),
-        mention: Some("@context"),
+        action_title: "Attach Current Snapshot",
+        slash_command: Some("/snapshot"),
+        mention: Some("@snapshot"),
+        slash_aliases: CURRENT_SNAPSHOT_SLASH_ALIASES,
+        mention_aliases: CURRENT_SNAPSHOT_MENTION_ALIASES,
         uri: "kit://context?profile=minimal",
         label: "Current Context",
     },
     ContextAttachmentSpec {
         kind: ContextAttachmentKind::Full,
         action_id: "chat:add_context_full",
-        action_title: "Attach Full Context",
-        slash_command: Some("/context-full"),
-        mention: Some("@context-full"),
+        action_title: "Attach Full Snapshot",
+        slash_command: Some("/snapshot-full"),
+        mention: Some("@snapshot-full"),
+        slash_aliases: FULL_SNAPSHOT_SLASH_ALIASES,
+        mention_aliases: FULL_SNAPSHOT_MENTION_ALIASES,
         uri: "kit://context",
         label: "Current Context (Full)",
     },
@@ -62,6 +72,8 @@ const CONTEXT_ATTACHMENT_SPECS: [ContextAttachmentSpec; 18] = [
         action_title: "Attach Selected Text",
         slash_command: Some("/selection"),
         mention: Some("@selection"),
+        slash_aliases: &[],
+        mention_aliases: &[],
         uri: "kit://context?selectedText=1&frontmostApp=0&menuBar=0&browserUrl=0&focusedWindow=0",
         label: "Selection",
     },
@@ -71,6 +83,8 @@ const CONTEXT_ATTACHMENT_SPECS: [ContextAttachmentSpec; 18] = [
         action_title: "Attach Browser URL",
         slash_command: Some("/browser"),
         mention: Some("@browser"),
+        slash_aliases: &[],
+        mention_aliases: &[],
         uri: "kit://context?selectedText=0&frontmostApp=0&menuBar=0&browserUrl=1&focusedWindow=0",
         label: "Browser URL",
     },
@@ -80,6 +94,8 @@ const CONTEXT_ATTACHMENT_SPECS: [ContextAttachmentSpec; 18] = [
         action_title: "Attach Focused Window",
         slash_command: Some("/window"),
         mention: Some("@window"),
+        slash_aliases: &[],
+        mention_aliases: &[],
         uri: "kit://context?selectedText=0&frontmostApp=1&menuBar=0&browserUrl=0&focusedWindow=1",
         label: "Focused Window",
     },
@@ -89,6 +105,8 @@ const CONTEXT_ATTACHMENT_SPECS: [ContextAttachmentSpec; 18] = [
         action_title: "Attach Context Diagnostics",
         slash_command: None,
         mention: Some("@diagnostics"),
+        slash_aliases: &[],
+        mention_aliases: &[],
         uri: "kit://context?diagnostics=1",
         label: "Context Diagnostics",
     },
@@ -98,6 +116,8 @@ const CONTEXT_ATTACHMENT_SPECS: [ContextAttachmentSpec; 18] = [
         action_title: "Attach Screenshot",
         slash_command: Some("/screenshot"),
         mention: Some("@screenshot"),
+        slash_aliases: &[],
+        mention_aliases: &[],
         uri: "kit://context?screenshot=1&selectedText=0&frontmostApp=0&menuBar=0&browserUrl=0&focusedWindow=0",
         label: "Screenshot",
     },
@@ -107,6 +127,8 @@ const CONTEXT_ATTACHMENT_SPECS: [ContextAttachmentSpec; 18] = [
         action_title: "Attach Clipboard History",
         slash_command: Some("/clipboard"),
         mention: Some("@clipboard"),
+        slash_aliases: &[],
+        mention_aliases: &[],
         uri: "kit://clipboard-history",
         label: "Clipboard",
     },
@@ -116,6 +138,8 @@ const CONTEXT_ATTACHMENT_SPECS: [ContextAttachmentSpec; 18] = [
         action_title: "Attach Frontmost App",
         slash_command: Some("/frontmost-app"),
         mention: Some("@frontmost-app"),
+        slash_aliases: &[],
+        mention_aliases: &[],
         uri: "kit://context?selectedText=0&frontmostApp=1&menuBar=0&browserUrl=0&focusedWindow=0",
         label: "Frontmost App",
     },
@@ -125,6 +149,8 @@ const CONTEXT_ATTACHMENT_SPECS: [ContextAttachmentSpec; 18] = [
         action_title: "Attach Menu Bar",
         slash_command: Some("/menu-bar"),
         mention: Some("@menu-bar"),
+        slash_aliases: &[],
+        mention_aliases: &[],
         uri: "kit://context?selectedText=0&frontmostApp=0&menuBar=1&browserUrl=0&focusedWindow=0",
         label: "Menu Bar",
     },
@@ -134,6 +160,8 @@ const CONTEXT_ATTACHMENT_SPECS: [ContextAttachmentSpec; 18] = [
         action_title: "Attach Recent Scripts",
         slash_command: Some("/recent-scripts"),
         mention: Some("@recent-scripts"),
+        slash_aliases: &[],
+        mention_aliases: &[],
         uri: "kit://scripts",
         label: "Recent Scripts",
     },
@@ -143,6 +171,8 @@ const CONTEXT_ATTACHMENT_SPECS: [ContextAttachmentSpec; 18] = [
         action_title: "Attach Git Status",
         slash_command: Some("/git-status"),
         mention: Some("@git-status"),
+        slash_aliases: &[],
+        mention_aliases: &[],
         uri: "kit://git-status",
         label: "Git Status",
     },
@@ -152,6 +182,8 @@ const CONTEXT_ATTACHMENT_SPECS: [ContextAttachmentSpec; 18] = [
         action_title: "Attach Git Diff",
         slash_command: Some("/git-diff"),
         mention: Some("@git-diff"),
+        slash_aliases: &[],
+        mention_aliases: &[],
         uri: "kit://git-diff",
         label: "Git Diff",
     },
@@ -161,6 +193,8 @@ const CONTEXT_ATTACHMENT_SPECS: [ContextAttachmentSpec; 18] = [
         action_title: "Attach Running Processes",
         slash_command: Some("/processes"),
         mention: Some("@processes"),
+        slash_aliases: &[],
+        mention_aliases: &[],
         uri: "kit://processes",
         label: "Processes",
     },
@@ -170,6 +204,8 @@ const CONTEXT_ATTACHMENT_SPECS: [ContextAttachmentSpec; 18] = [
         action_title: "Attach System Info",
         slash_command: Some("/system"),
         mention: Some("@system"),
+        slash_aliases: &[],
+        mention_aliases: &[],
         uri: "kit://system",
         label: "System Info",
     },
@@ -179,6 +215,8 @@ const CONTEXT_ATTACHMENT_SPECS: [ContextAttachmentSpec; 18] = [
         action_title: "Attach Dictation",
         slash_command: Some("/dictation"),
         mention: Some("@dictation"),
+        slash_aliases: &[],
+        mention_aliases: &[],
         uri: "kit://dictation",
         label: "Dictation",
     },
@@ -188,6 +226,8 @@ const CONTEXT_ATTACHMENT_SPECS: [ContextAttachmentSpec; 18] = [
         action_title: "Attach Calendar Events",
         slash_command: Some("/calendar"),
         mention: Some("@calendar"),
+        slash_aliases: &[],
+        mention_aliases: &[],
         uri: "kit://calendar",
         label: "Calendar",
     },
@@ -197,6 +237,8 @@ const CONTEXT_ATTACHMENT_SPECS: [ContextAttachmentSpec; 18] = [
         action_title: "Attach Notifications",
         slash_command: Some("/notifications"),
         mention: Some("@notifications"),
+        slash_aliases: &[],
+        mention_aliases: &[],
         uri: "kit://notifications",
         label: "Notifications",
     },
@@ -254,7 +296,10 @@ impl ContextAttachmentKind {
         let trimmed = input.trim();
         context_attachment_specs()
             .iter()
-            .find(|spec| spec.slash_command == Some(trimmed))
+            .find(|spec| {
+                spec.slash_command == Some(trimmed)
+                    || spec.slash_aliases.contains(&trimmed)
+            })
             .map(|spec| spec.kind)
     }
 
@@ -262,7 +307,10 @@ impl ContextAttachmentKind {
         let trimmed = input.trim();
         context_attachment_specs()
             .iter()
-            .find(|spec| spec.mention == Some(trimmed))
+            .find(|spec| {
+                spec.mention == Some(trimmed)
+                    || spec.mention_aliases.contains(&trimmed)
+            })
             .map(|spec| spec.kind)
     }
 }
@@ -358,6 +406,26 @@ mod tests {
             unique_action_ids = action_ids.len(),
             unique_uris = uris.len(),
             "context_attachment_roundtrip_complete"
+        );
+    }
+
+    #[test]
+    fn current_snapshot_aliases_remain_accepted() {
+        assert_eq!(
+            ContextAttachmentKind::from_slash_command("/context"),
+            Some(ContextAttachmentKind::Current)
+        );
+        assert_eq!(
+            ContextAttachmentKind::from_mention_line("@context"),
+            Some(ContextAttachmentKind::Current)
+        );
+        assert_eq!(
+            ContextAttachmentKind::from_slash_command("/context-full"),
+            Some(ContextAttachmentKind::Full)
+        );
+        assert_eq!(
+            ContextAttachmentKind::from_mention_line("@context-full"),
+            Some(ContextAttachmentKind::Full)
         );
     }
 }

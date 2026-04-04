@@ -8,6 +8,14 @@ pub const ASK_ANYTHING_LABEL: &str = "Ask Anything";
 /// Canonical resource URI for the Ask Anything minimal desktop context.
 pub const ASK_ANYTHING_RESOURCE_URI: &str = "kit://context?profile=minimal";
 
+const DEFERRED_AMBIENT_CAPTURE_LABELS: &[&str] = &[
+    ASK_ANYTHING_LABEL,
+    "Full Screen",
+    "Focused Window",
+    "Selected Text",
+    "Browser Tab",
+];
+
 /// A typed context part that can be attached to an AI composer message.
 ///
 /// Each variant represents a different source of context that will be
@@ -69,10 +77,19 @@ impl AiContextPart {
         matches!(self, Self::AmbientContext { .. })
     }
 
-    /// Returns `true` for any bootstrap resource that uses the minimal desktop
-    /// context URI, regardless of its display label.
+    /// Returns `true` only for resource chips that must wait on a deferred
+    /// ambient capture task before submit.
+    ///
+    /// Inline picker attachments such as `@context` also use the minimal
+    /// desktop-context URI, but they should resolve directly on submit rather
+    /// than entering the ambient bootstrap state machine.
     pub fn is_ambient_bootstrap_resource(&self) -> bool {
-        matches!(self, Self::ResourceUri { uri, .. } if uri == ASK_ANYTHING_RESOURCE_URI)
+        matches!(
+            self,
+            Self::ResourceUri { uri, label }
+                if uri == ASK_ANYTHING_RESOURCE_URI
+                    && DEFERRED_AMBIENT_CAPTURE_LABELS.contains(&label.as_str())
+        )
     }
 
     /// Return the display label for an ambient bootstrap or promoted ambient chip.
@@ -1174,6 +1191,39 @@ mod tests {
         assert_eq!(assembly.pending_count, 1);
         assert_eq!(assembly.merged_count, 1);
         assert_eq!(assembly.duplicates_removed, 1);
+    }
+
+    #[test]
+    fn current_context_picker_part_is_not_treated_as_ambient_bootstrap() {
+        let part = AiContextPart::ResourceUri {
+            uri: ASK_ANYTHING_RESOURCE_URI.to_string(),
+            label: "Current Context".to_string(),
+        };
+
+        assert!(
+            !part.is_ambient_bootstrap_resource(),
+            "@context should resolve directly on submit instead of waiting on deferred capture"
+        );
+    }
+
+    #[test]
+    fn ask_anything_and_explicit_capture_labels_still_use_ambient_bootstrap() {
+        for label in [
+            ASK_ANYTHING_LABEL,
+            "Full Screen",
+            "Focused Window",
+            "Selected Text",
+            "Browser Tab",
+        ] {
+            let part = AiContextPart::ResourceUri {
+                uri: ASK_ANYTHING_RESOURCE_URI.to_string(),
+                label: label.to_string(),
+            };
+            assert!(
+                part.is_ambient_bootstrap_resource(),
+                "{label} should keep using deferred ambient capture"
+            );
+        }
     }
 
     #[test]

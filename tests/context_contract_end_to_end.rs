@@ -20,11 +20,11 @@ fn parse_mentions(raw: &str) -> (String, Vec<AiContextPart>) {
     for line in raw.lines() {
         let trimmed = line.trim();
         let part = match trimmed {
-            "@context" => Some(AiContextPart::ResourceUri {
+            "@snapshot" | "@context" => Some(AiContextPart::ResourceUri {
                 uri: "kit://context?profile=minimal".to_string(),
                 label: "Current Context".to_string(),
             }),
-            "@context-full" => Some(AiContextPart::ResourceUri {
+            "@snapshot-full" | "@context-full" => Some(AiContextPart::ResourceUri {
                 uri: "kit://context".to_string(),
                 label: "Current Context (Full)".to_string(),
             }),
@@ -66,11 +66,11 @@ fn parse_mentions(raw: &str) -> (String, Vec<AiContextPart>) {
 fn explicit_context_surfaces_share_one_contract_end_to_end() {
     script_kit_gpui::context_snapshot::enable_deterministic_context_capture();
     // Step 1: Parse mentions from raw composer input
-    let raw = "@context\n@browser\n\nPlease summarize what matters.";
+    let raw = "@snapshot\n@browser\n\nPlease summarize what matters.";
     let (cleaned, mention_parts) = parse_mentions(raw);
 
     assert_eq!(cleaned, "Please summarize what matters.");
-    assert_eq!(mention_parts.len(), 2, "should parse @context and @browser");
+    assert_eq!(mention_parts.len(), 2, "should parse @snapshot and @browser");
 
     // Step 2: Simulate pending context chips (from UI actions)
     let pending = vec![
