@@ -34,11 +34,6 @@ impl ShortcutRecorder {
         let colors = self.colors;
         let keycaps = self.get_display_keycaps();
 
-        crate::components::hint_strip::emit_shortcut_chrome_audit(
-            "shortcut_recorder",
-            "compact-inline",
-        );
-
         let content = if keycaps.is_empty() {
             div()
                 .text_sm()
@@ -48,11 +43,11 @@ impl ShortcutRecorder {
         } else {
             crate::components::hint_strip::render_inline_shortcut_keys(
                 keycaps.iter().map(String::as_str),
-                crate::components::hint_strip::InlineShortcutColors {
-                    glyph: rgba((colors.text_primary << 8) | 0xD0).into(),
-                    keycap_bg: rgba((colors.keycap_bg << 8) | 0x28).into(),
-                    keycap_border: Some(rgba((colors.keycap_border << 8) | 0x40).into()),
-                },
+                crate::components::hint_strip::whisper_inline_shortcut_colors(
+                    rgba((colors.text_primary << 8) | 0xD0).into(),
+                    rgba((colors.border << 8) | 0xFF).into(),
+                    true,
+                ),
             )
         };
 

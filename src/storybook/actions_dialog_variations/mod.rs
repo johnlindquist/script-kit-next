@@ -69,7 +69,7 @@ impl VariationId for ActionsDialogVariationId {
             Self::GhostPills => "Rounded pill rows with stronger selection chrome",
             Self::Typewriter => "Monospace prompt treatment with a terminal-style prefix",
             Self::SingleColumn => "Label-only rows with icons and shortcuts removed",
-            Self::InlineKeys => "Shortcut hints rendered inline instead of keycaps",
+            Self::InlineKeys => "Shortcut hints rendered inline with shared compact glyph chrome",
             Self::SearchFocused => "Search divider emphasized to anchor the input row",
             Self::DotAccent => "Selection background removed in favor of a small leading dot",
         }
@@ -318,10 +318,6 @@ pub fn resolve_actions_dialog_style(
 
 pub fn adopted_actions_dialog_style() -> ActionsDialogStyle {
     adopted_surface_live::<ActionsDialogSurface>()
-}
-
-pub fn actions_dialog_style_uses_inline_shortcuts(style: &ActionsDialogStyle) -> bool {
-    *style == SPECS[5].style
 }
 
 #[cfg(test)]

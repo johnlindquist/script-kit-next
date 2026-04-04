@@ -60,6 +60,11 @@ pub fn render_actions_dialog_presentation(
     style: ActionsDialogStyle,
     theme: &Theme,
 ) -> AnyElement {
+    crate::components::hint_strip::emit_shortcut_chrome_audit(
+        "actions_dialog_storybook",
+        "compact-inline",
+    );
+
     let mono: SharedString = SharedString::from(crate::list_item::FONT_MONO);
 
     // Container
@@ -308,52 +313,27 @@ fn render_action_row(
     } else {
         theme.colors.text.secondary.to_rgb()
     });
-    if style.shortcut_visible && uses_inline_shortcuts(style) {
-        // Inline keys mode: title + shortcut in same flex row
-        let mut inline_row = div()
-            .flex_1()
-            .min_w(px(0.))
-            .flex()
-            .flex_row()
-            .items_center()
-            .gap(px(8.));
-        inline_row = inline_row.child(title_el.child(action.title.clone()));
-        if let Some(ref shortcut) = action.shortcut {
-            inline_row = inline_row.child(
-                div()
-                    .text_size(px(11.))
-                    .text_color(theme.colors.text.dimmed.with_opacity(0.35))
-                    .child(shortcut.clone()),
-            );
-        }
-        row = row.child(inline_row);
-    } else {
-        row = row.child(title_el.child(action.title.clone()));
+    row = row.child(title_el.child(action.title.clone()));
 
-        // Shortcut badge (non-inline) — compact inline glyphs
-        if style.shortcut_visible {
-            if let Some(ref shortcut) = action.shortcut {
-                let shortcut_tokens =
-                    crate::components::hint_strip::shortcut_tokens_from_hint(shortcut.as_ref());
-                row = row.child(crate::components::hint_strip::render_inline_shortcut_keys(
-                    shortcut_tokens.iter().map(String::as_str),
-                    crate::components::hint_strip::InlineShortcutColors {
-                        glyph: theme.colors.text.dimmed.to_rgb().into(),
-                        keycap_bg: theme.colors.text.dimmed.with_opacity(0.08).into(),
-                        keycap_border: Some(theme.colors.ui.border.with_opacity(0.18).into()),
-                    },
-                ));
-            }
+    // Shortcut badge — compact inline glyphs via shared whisper preset
+    if style.shortcut_visible {
+        if let Some(ref shortcut) = action.shortcut {
+            let shortcut_tokens =
+                crate::components::hint_strip::shortcut_tokens_from_hint(shortcut.as_ref());
+            row = row.child(crate::components::hint_strip::render_inline_shortcut_keys(
+                shortcut_tokens.iter().map(String::as_str),
+                crate::components::hint_strip::whisper_inline_shortcut_colors(
+                    theme.colors.text.dimmed.to_rgb().into(),
+                    theme.colors.text.dimmed.to_rgb().into(),
+                    true,
+                ),
+            ));
         }
     }
 
     row.into_any_element()
 }
 
-/// Check if this style matches the inline-keys variant.
-fn uses_inline_shortcuts(style: &ActionsDialogStyle) -> bool {
-    crate::storybook::actions_dialog_variations::actions_dialog_style_uses_inline_shortcuts(style)
-}
 
 // ─── Tests ────────────────────────────────────────────────────────────
 

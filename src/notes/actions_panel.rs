@@ -196,13 +196,42 @@ impl NotesAction {
         }
     }
 
+    /// Get the hint-format shortcut string for this action (e.g. "cmd+n", "escape").
+    ///
+    /// This is the single source of truth for shortcut tokens; all rendering and
+    /// display methods derive from this via the shared tokenizer in `hint_strip`.
+    pub fn shortcut_hint(&self) -> Option<&'static str> {
+        match self {
+            NotesAction::NewNote => Some("cmd+n"),
+            NotesAction::DuplicateNote => Some("cmd+d"),
+            NotesAction::BrowseNotes => Some("cmd+p"),
+            NotesAction::FindInNote => Some("cmd+f"),
+            NotesAction::CopyNoteAs => Some("shift+cmd+c"),
+            NotesAction::CopyDeeplink => Some("shift+cmd+d"),
+            NotesAction::CreateQuicklink => Some("shift+cmd+l"),
+            NotesAction::Export => Some("shift+cmd+e"),
+            NotesAction::MoveListItemUp => Some("ctrl+cmd+up"),
+            NotesAction::MoveListItemDown => Some("ctrl+cmd+down"),
+            NotesAction::Format => Some("shift+cmd+t"),
+            NotesAction::DeleteNote => Some("cmd+backspace"),
+            NotesAction::RestoreNote => Some("cmd+z"),
+            NotesAction::PermanentlyDeleteNote => None,
+            NotesAction::EnableAutoSizing => Some("cmd+a"),
+            NotesAction::SendToAi => Some("shift+cmd+a"),
+            NotesAction::Cancel => Some("escape"),
+        }
+    }
+
+    /// Get normalized shortcut tokens via the shared tokenizer.
+    pub fn shortcut_tokens(&self) -> Vec<String> {
+        self.shortcut_hint()
+            .map(crate::components::hint_strip::shortcut_tokens_from_hint)
+            .unwrap_or_default()
+    }
+
     /// Get the formatted shortcut display string
     pub fn shortcut_display(&self) -> String {
-        if self.shortcut_keys().is_empty() {
-            return String::new();
-        }
-
-        self.shortcut_keys().join("")
+        self.shortcut_tokens().join("")
     }
 
     /// Get the icon for this action (uses local IconName from designs module)
@@ -1257,7 +1286,8 @@ impl Render for NotesActionsPanel {
 
                                     let shortcut_badges: AnyElement = match row {
                                         NotesPanelRow::BuiltIn(item) => {
-                                            render_shortcut_keys(item.action.shortcut_keys(), theme)
+                                            let tokens = item.action.shortcut_tokens();
+                                            render_shortcut_keys_dynamic(&tokens, theme)
                                         }
                                         NotesPanelRow::Sdk(action) => {
                                             render_shortcut_keys_dynamic(&action.shortcut_keys, theme)
@@ -1406,25 +1436,14 @@ impl Render for NotesActionsPanel {
     }
 }
 
-fn render_shortcut_keys(keys: &[&'static str], theme: &Theme) -> AnyElement {
-    crate::components::hint_strip::render_inline_shortcut_keys(
-        keys.iter().copied(),
-        crate::components::hint_strip::InlineShortcutColors {
-            glyph: theme.muted_foreground,
-            keycap_bg: theme.muted,
-            keycap_border: Some(theme.border),
-        },
-    )
-}
-
 fn render_shortcut_keys_dynamic(keys: &[String], theme: &Theme) -> AnyElement {
     crate::components::hint_strip::render_inline_shortcut_keys(
         keys.iter().map(String::as_str),
-        crate::components::hint_strip::InlineShortcutColors {
-            glyph: theme.muted_foreground,
-            keycap_bg: theme.muted,
-            keycap_border: Some(theme.border),
-        },
+        crate::components::hint_strip::whisper_inline_shortcut_colors(
+            theme.muted_foreground,
+            theme.muted_foreground,
+            true,
+        ),
     )
 }
 
@@ -1460,6 +1479,48 @@ mod tests {
         assert_eq!(NotesAction::MoveListItemUp.shortcut_display(), "⌃⌘↑");
         assert_eq!(NotesAction::MoveListItemDown.shortcut_display(), "⌃⌘↓");
         assert_eq!(NotesAction::Format.shortcut_display(), "⇧⌘T");
+    }
+
+    #[test]
+    fn test_shortcut_hint_normalizes_cancel_and_movement() {
+        // Cancel renders as the normalized escape glyph, not "Esc"
+        assert_eq!(NotesAction::Cancel.shortcut_tokens(), vec!["⎋"]);
+        assert_eq!(NotesAction::Cancel.shortcut_display(), "⎋");
+
+        // Movement shortcuts normalize through the shared tokenizer
+        assert_eq!(
+            NotesAction::MoveListItemUp.shortcut_tokens(),
+            vec!["⌃", "⌘", "↑"]
+        );
+        assert_eq!(
+            NotesAction::MoveListItemDown.shortcut_tokens(),
+            vec!["⌃", "⌘", "↓"]
+        );
+
+        // Delete normalizes backspace glyph
+        assert_eq!(
+            NotesAction::DeleteNote.shortcut_tokens(),
+            vec!["⌘", "⌫"]
+        );
+
+        // PermanentlyDeleteNote has no shortcut
+        assert!(NotesAction::PermanentlyDeleteNote.shortcut_hint().is_none());
+        assert!(NotesAction::PermanentlyDeleteNote.shortcut_tokens().is_empty());
+        assert_eq!(NotesAction::PermanentlyDeleteNote.shortcut_display(), "");
+    }
+
+    #[test]
+    fn test_shortcut_hint_covers_all_actions() {
+        // Every action except PermanentlyDeleteNote has a shortcut hint
+        for action in NotesAction::all() {
+            if *action != NotesAction::PermanentlyDeleteNote {
+                assert!(
+                    action.shortcut_hint().is_some(),
+                    "{:?} should have a shortcut hint",
+                    action
+                );
+            }
+        }
     }
 
     #[test]
