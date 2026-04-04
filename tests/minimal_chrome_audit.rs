@@ -142,3 +142,97 @@ fn form_prompt_wrapper_has_no_prompt_footer_or_hardcoded_hex() {
     );
     eprintln!("{{\"audit\":\"minimal_chrome\",\"surface\":\"form_prompt\",\"footer_absent\":true,\"hardcoded_hex_absent\":true,\"status\":\"pass\"}}");
 }
+
+#[test]
+fn path_prompt_render_has_tracing_and_no_hardcoded_hex() {
+    let outer_source = include_str!("../src/render_prompts/path.rs");
+    let inner_source = include_str!("../src/prompts/path/render.rs");
+
+    assert!(
+        outer_source.contains("tracing::info!("),
+        "path prompt outer render should emit tracing::info"
+    );
+    assert!(
+        !outer_source.contains("rgb(0x"),
+        "path prompt outer render should not contain hardcoded hex rgb colors"
+    );
+    assert!(
+        !inner_source.contains("PromptFooter::new("),
+        "path prompt inner render should not use PromptFooter"
+    );
+    eprintln!("{{\"audit\":\"minimal_chrome\",\"surface\":\"path\",\"tracing_present\":true,\"hardcoded_hex_absent\":true,\"status\":\"pass\"}}");
+}
+
+#[test]
+fn template_prompt_render_has_tracing_and_uses_shared_helpers() {
+    let source = include_str!("../src/prompts/template/render.rs");
+    let outer_source = include_str!("../src/render_prompts/other.rs");
+
+    assert!(
+        outer_source.contains("surface = \"render_prompts::template\""),
+        "template prompt outer render should emit tracing with surface tag"
+    );
+    assert!(
+        source.contains("prompt_field_style("),
+        "template prompt should use shared prompt_field_style"
+    );
+    assert!(
+        !source.contains("rgb(0x"),
+        "template prompt should not contain hardcoded hex rgb colors"
+    );
+    eprintln!("{{\"audit\":\"minimal_chrome\",\"surface\":\"template\",\"tracing_present\":true,\"shared_helpers\":true,\"status\":\"pass\"}}");
+}
+
+#[test]
+fn drop_prompt_uses_whisper_chrome_not_heavy_borders() {
+    let source = include_str!("../src/prompts/drop.rs");
+
+    assert!(
+        !source.contains(".border_2()"),
+        "drop prompt should not use heavy border_2 chrome"
+    );
+    assert!(
+        !source.contains(".rounded(px(8."))
+            && !source.contains(".rounded_md()")
+            && !source.contains(".rounded_lg()"),
+        "drop prompt should not use rounded corners (whisper chrome = sharp edges)"
+    );
+    assert!(
+        source.contains("OPACITY_GHOST"),
+        "drop prompt should use ghost opacity constants for whisper chrome"
+    );
+    let outer_source = include_str!("../src/render_prompts/other.rs");
+    assert!(
+        outer_source.contains("surface = \"render_prompts::drop\""),
+        "drop prompt outer render should emit tracing with surface tag"
+    );
+    eprintln!("{{\"audit\":\"minimal_chrome\",\"surface\":\"drop\",\"whisper_chrome\":true,\"tracing_present\":true,\"status\":\"pass\"}}");
+}
+
+#[test]
+fn naming_prompt_render_has_tracing_and_uses_shared_helpers() {
+    let source = include_str!("../src/prompts/naming/render.rs");
+    let outer_source = include_str!("../src/render_prompts/other.rs");
+
+    assert!(
+        outer_source.contains("surface = \"render_prompts::naming\""),
+        "naming prompt outer render should emit tracing with surface tag"
+    );
+    assert!(
+        source.contains("prompt_form_intro("),
+        "naming prompt should use shared prompt_form_intro"
+    );
+    assert!(
+        source.contains("prompt_form_section("),
+        "naming prompt should use shared prompt_form_section"
+    );
+    assert!(
+        !source.contains("rgb(0x"),
+        "naming prompt should not contain hardcoded hex rgb colors"
+    );
+    assert!(
+        !source.contains("PromptFooter::new("),
+        "naming prompt should not use PromptFooter"
+    );
+    eprintln!("{{\"audit\":\"minimal_chrome\",\"surface\":\"naming\",\"tracing_present\":true,\"shared_helpers\":true,\"status\":\"pass\"}}");
+}
