@@ -175,8 +175,8 @@ fn context_action_contract_count() {
 
     assert_eq!(
         context_actions.len(),
-        8,
-        "expected exactly 8 context actions, found {}: {:?}",
+        17,
+        "expected exactly 17 context actions, found {}: {:?}",
         context_actions.len(),
         context_actions.iter().map(|a| &a.id).collect::<Vec<_>>()
     );

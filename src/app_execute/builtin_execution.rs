@@ -23,6 +23,19 @@ const BUILTIN_DICTATION_MODEL_CANCEL: &str = "cancel";
 /// Choice value: user wants to hide the prompt while download continues.
 const BUILTIN_DICTATION_MODEL_HIDE: &str = "builtin/dictation-model-hide";
 
+/// Generate a stable semantic ID for a built-in prompt choice.
+///
+/// Format: `{prompt_id}:choice:{index}:{value_slug}`
+///
+/// `prompt_id` already contains the `builtin:` prefix (e.g. `builtin:select-microphone`).
+fn builtin_choice_semantic_id(prompt_id: &str, index: usize, value: &str) -> String {
+    crate::protocol::generate_semantic_id(
+        &format!("{prompt_id}:choice"),
+        index,
+        value,
+    )
+}
+
 /// Typed progress events sent from the blocking download thread to the
 /// async context for updating the in-prompt progress display.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -2572,10 +2585,14 @@ impl ScriptListApp {
                                 };
                                 Choice {
                                     name,
-                                    value,
+                                    value: value.clone(),
                                     description: Some(item.subtitle.clone()),
                                     key: None,
-                                    semantic_id: None,
+                                    semantic_id: Some(builtin_choice_semantic_id(
+                                        BUILTIN_MIC_SELECT_PROMPT_ID,
+                                        idx,
+                                        &value,
+                                    )),
                                 }
                             })
                             .collect();
@@ -2583,6 +2600,14 @@ impl ScriptListApp {
                         // Follow the canonical ShowMini pattern from prompt_handler
                         // (not open_builtin_filterable_view which targets MainFilter focus)
                         let choice_count = choices.len();
+                        tracing::info!(
+                            category = "AUTOMATION",
+                            prompt_id = BUILTIN_MIC_SELECT_PROMPT_ID,
+                            choice_count = choice_count,
+                            selected_index = start_index,
+                            semantic_ids_populated = choices.iter().all(|c| c.semantic_id.is_some()),
+                            "opened_builtin_microphone_prompt"
+                        );
                         self.opened_from_main_menu = true;
                         self.arg_input.clear();
                         self.arg_selected_index = start_index;
@@ -4723,14 +4748,18 @@ impl ScriptListApp {
                         value: BUILTIN_DICTATION_MODEL_DOWNLOAD.to_string(),
                         description: Some("Required for local dictation".to_string()),
                         key: None,
-                        semantic_id: None,
+                        semantic_id: Some(builtin_choice_semantic_id(
+                            BUILTIN_DICTATION_MODEL_PROMPT_ID, 0, BUILTIN_DICTATION_MODEL_DOWNLOAD,
+                        )),
                     },
                     Choice {
                         name: "Not now".to_string(),
                         value: BUILTIN_DICTATION_MODEL_CANCEL.to_string(),
                         description: Some("Leave dictation unchanged".to_string()),
                         key: None,
-                        semantic_id: None,
+                        semantic_id: Some(builtin_choice_semantic_id(
+                            BUILTIN_DICTATION_MODEL_PROMPT_ID, 1, BUILTIN_DICTATION_MODEL_CANCEL,
+                        )),
                     },
                 ],
             ),
@@ -4759,14 +4788,18 @@ impl ScriptListApp {
                                 "Stop now; retry resumes from the partial file".to_string(),
                             ),
                             key: None,
-                            semantic_id: None,
+                            semantic_id: Some(builtin_choice_semantic_id(
+                                BUILTIN_DICTATION_MODEL_PROMPT_ID, 0, BUILTIN_DICTATION_MODEL_CANCEL,
+                            )),
                         },
                         Choice {
                             name: "Hide".to_string(),
                             value: BUILTIN_DICTATION_MODEL_HIDE.to_string(),
                             description: Some("Download continues in background".to_string()),
                             key: None,
-                            semantic_id: None,
+                            semantic_id: Some(builtin_choice_semantic_id(
+                                BUILTIN_DICTATION_MODEL_PROMPT_ID, 1, BUILTIN_DICTATION_MODEL_HIDE,
+                            )),
                         },
                     ],
                 )
@@ -4779,7 +4812,9 @@ impl ScriptListApp {
                     value: BUILTIN_DICTATION_MODEL_HIDE.to_string(),
                     description: Some("Extraction continues in background".to_string()),
                     key: None,
-                    semantic_id: None,
+                    semantic_id: Some(builtin_choice_semantic_id(
+                        BUILTIN_DICTATION_MODEL_PROMPT_ID, 0, BUILTIN_DICTATION_MODEL_HIDE,
+                    )),
                 }],
             ),
             DictationModelStatus::DownloadFailed(ref error)
@@ -4796,14 +4831,18 @@ impl ScriptListApp {
                                 "Resume the Parakeet model download".to_string(),
                             ),
                             key: None,
-                            semantic_id: None,
+                            semantic_id: Some(builtin_choice_semantic_id(
+                                BUILTIN_DICTATION_MODEL_PROMPT_ID, 0, BUILTIN_DICTATION_MODEL_DOWNLOAD,
+                            )),
                         },
                         Choice {
                             name: "Done".to_string(),
                             value: BUILTIN_DICTATION_MODEL_HIDE.to_string(),
                             description: Some("Close this prompt".to_string()),
                             key: None,
-                            semantic_id: None,
+                            semantic_id: Some(builtin_choice_semantic_id(
+                                BUILTIN_DICTATION_MODEL_PROMPT_ID, 1, BUILTIN_DICTATION_MODEL_HIDE,
+                            )),
                         },
                     ],
                 )
@@ -4819,14 +4858,18 @@ impl ScriptListApp {
                             "Try the Parakeet model download again".to_string(),
                         ),
                         key: None,
-                        semantic_id: None,
+                        semantic_id: Some(builtin_choice_semantic_id(
+                            BUILTIN_DICTATION_MODEL_PROMPT_ID, 0, BUILTIN_DICTATION_MODEL_DOWNLOAD,
+                        )),
                     },
                     Choice {
                         name: "Not now".to_string(),
                         value: BUILTIN_DICTATION_MODEL_CANCEL.to_string(),
                         description: Some("Leave dictation unchanged".to_string()),
                         key: None,
-                        semantic_id: None,
+                        semantic_id: Some(builtin_choice_semantic_id(
+                            BUILTIN_DICTATION_MODEL_PROMPT_ID, 1, BUILTIN_DICTATION_MODEL_CANCEL,
+                        )),
                     },
                 ],
             ),
@@ -4839,7 +4882,9 @@ impl ScriptListApp {
                     value: BUILTIN_DICTATION_MODEL_HIDE.to_string(),
                     description: Some("Close this prompt".to_string()),
                     key: None,
-                    semantic_id: None,
+                    semantic_id: Some(builtin_choice_semantic_id(
+                        BUILTIN_DICTATION_MODEL_PROMPT_ID, 0, BUILTIN_DICTATION_MODEL_HIDE,
+                    )),
                 }],
             ),
         }

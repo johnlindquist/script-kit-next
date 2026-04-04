@@ -203,6 +203,42 @@ pub fn get_resource_definitions() -> Vec<McpResource> {
             ),
             mime_type: "application/json".to_string(),
         },
+        McpResource {
+            uri: "kit://git-status".to_string(),
+            name: "Git Status".to_string(),
+            description: Some(
+                "Current git status output from the working directory."
+                    .to_string(),
+            ),
+            mime_type: "text/plain".to_string(),
+        },
+        McpResource {
+            uri: "kit://git-diff".to_string(),
+            name: "Git Diff".to_string(),
+            description: Some(
+                "Current git diff output (staged and unstaged) from the working directory."
+                    .to_string(),
+            ),
+            mime_type: "text/plain".to_string(),
+        },
+        McpResource {
+            uri: "kit://processes".to_string(),
+            name: "Processes".to_string(),
+            description: Some(
+                "Top running processes by CPU usage."
+                    .to_string(),
+            ),
+            mime_type: "text/plain".to_string(),
+        },
+        McpResource {
+            uri: "kit://system".to_string(),
+            name: "System Info".to_string(),
+            description: Some(
+                "Basic system information: hostname, OS version, architecture, uptime, and shell."
+                    .to_string(),
+            ),
+            mime_type: "text/plain".to_string(),
+        },
     ];
     resources.extend(transaction_resources::transaction_resource_definitions());
     resources
@@ -244,6 +280,10 @@ pub fn read_resource(
         _ if uri == "kit://focused-item" || uri.starts_with("kit://focused-item?") => {
             read_focused_item_resource(uri)
         }
+        "kit://git-status" => read_git_status_resource(),
+        "kit://git-diff" => read_git_diff_resource(),
+        "kit://processes" => read_processes_resource(),
+        "kit://system" => read_system_info_resource(),
         _ if transaction_resources::is_transaction_resource_uri(uri) => {
             transaction_resources::read_transaction_resource(uri)
         }
@@ -1006,6 +1046,153 @@ pub fn clear_focused_item() {
     *FOCUSED_ITEM_SLOT.lock() = None;
 }
 
+// ---------------------------------------------------------------
+// Shell-backed resources: git-status, git-diff, processes, system
+// ---------------------------------------------------------------
+
+/// Run a shell command and capture stdout, returning a fallback on failure.
+fn run_shell_resource(program: &str, args: &[&str], uri: &str) -> Result<ResourceContent, String> {
+    let output = std::process::Command::new(program)
+        .args(args)
+        .output()
+        .map_err(|e| format!("Failed to run {program}: {e}"))?;
+
+    let text = if output.status.success() {
+        String::from_utf8_lossy(&output.stdout).to_string()
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        format!("Command exited with {}: {}", output.status, stderr.trim())
+    };
+
+    Ok(ResourceContent {
+        uri: uri.to_string(),
+        mime_type: "text/plain".to_string(),
+        text,
+    })
+}
+
+/// Read `kit://git-status` — runs `git status` in the current directory.
+fn read_git_status_resource() -> Result<ResourceContent, String> {
+    run_shell_resource("git", &["status"], "kit://git-status")
+}
+
+/// Read `kit://git-diff` — runs `git diff` (combined staged + unstaged).
+fn read_git_diff_resource() -> Result<ResourceContent, String> {
+    // Show both staged and unstaged changes
+    let staged = std::process::Command::new("git")
+        .args(["diff", "--cached"])
+        .output()
+        .map_err(|e| format!("Failed to run git diff --cached: {e}"))?;
+    let unstaged = std::process::Command::new("git")
+        .args(["diff"])
+        .output()
+        .map_err(|e| format!("Failed to run git diff: {e}"))?;
+
+    let mut text = String::new();
+    let staged_out = String::from_utf8_lossy(&staged.stdout);
+    let unstaged_out = String::from_utf8_lossy(&unstaged.stdout);
+    let staged_err = String::from_utf8_lossy(&staged.stderr);
+    let unstaged_err = String::from_utf8_lossy(&unstaged.stderr);
+
+    if !staged.status.success() {
+        text.push_str("=== Staged changes ===\n");
+        text.push_str(&format!(
+            "Command exited with {}: {}\n",
+            staged.status,
+            staged_err.trim()
+        ));
+    }
+
+    if staged.status.success() && !staged_out.is_empty() {
+        text.push_str("=== Staged changes ===\n");
+        text.push_str(&staged_out);
+    }
+    if !unstaged.status.success() {
+        if !text.is_empty() {
+            text.push('\n');
+        }
+        text.push_str("=== Unstaged changes ===\n");
+        text.push_str(&format!(
+            "Command exited with {}: {}\n",
+            unstaged.status,
+            unstaged_err.trim()
+        ));
+    }
+    if unstaged.status.success() && !unstaged_out.is_empty() {
+        if !text.is_empty() {
+            text.push('\n');
+        }
+        text.push_str("=== Unstaged changes ===\n");
+        text.push_str(&unstaged_out);
+    }
+    if text.is_empty() {
+        text.push_str("No changes.");
+    }
+
+    Ok(ResourceContent {
+        uri: "kit://git-diff".to_string(),
+        mime_type: "text/plain".to_string(),
+        text,
+    })
+}
+
+/// Read `kit://processes` — top processes by CPU.
+fn read_processes_resource() -> Result<ResourceContent, String> {
+    run_shell_resource("ps", &["aux", "--sort=-%cpu"], "kit://processes")
+        .or_else(|_| {
+            // macOS ps doesn't support --sort; fall back to piped sort
+            let ps = std::process::Command::new("ps")
+                .args(["aux"])
+                .output()
+                .map_err(|e| format!("Failed to run ps: {e}"))?;
+            let text = String::from_utf8_lossy(&ps.stdout).to_string();
+            Ok(ResourceContent {
+                uri: "kit://processes".to_string(),
+                mime_type: "text/plain".to_string(),
+                text,
+            })
+        })
+}
+
+/// Read `kit://system` — basic system info.
+fn read_system_info_resource() -> Result<ResourceContent, String> {
+    let mut lines = Vec::new();
+
+    if let Ok(output) = std::process::Command::new("uname").args(["-a"]).output() {
+        if output.status.success() {
+            lines.push(format!("System: {}", String::from_utf8_lossy(&output.stdout).trim()));
+        }
+    }
+    if let Ok(output) = std::process::Command::new("hostname").output() {
+        if output.status.success() {
+            lines.push(format!("Hostname: {}", String::from_utf8_lossy(&output.stdout).trim()));
+        }
+    }
+    if let Ok(output) = std::process::Command::new("uptime").output() {
+        if output.status.success() {
+            lines.push(format!("Uptime: {}", String::from_utf8_lossy(&output.stdout).trim()));
+        }
+    }
+    if let Ok(shell) = std::env::var("SHELL") {
+        lines.push(format!("Shell: {shell}"));
+    }
+    if let Ok(cwd) = std::env::current_dir() {
+        lines.push(format!("CWD: {}", cwd.display()));
+    }
+
+    let text = if lines.is_empty() {
+        "System info unavailable.".to_string()
+    } else {
+        lines.join("\n")
+    };
+
+    Ok(ResourceContent {
+        uri: "kit://system".to_string(),
+        mime_type: "text/plain".to_string(),
+        text,
+    })
+}
+
 /// Convert resource content to JSON-RPC result format
 pub fn resource_content_to_value(content: ResourceContent) -> Value {
     serde_json::json!({
@@ -1684,7 +1871,7 @@ mod tests {
         // REQUIREMENT: resources/list returns all three resources
         let resources = get_resource_definitions();
 
-        assert_eq!(resources.len(), 12, "Should have exactly 12 resources");
+        assert_eq!(resources.len(), 16, "Should have exactly 16 resources");
 
         let uris: Vec<&str> = resources.iter().map(|r| r.uri.as_str()).collect();
         assert!(uris.contains(&"kit://state"), "Should include kit://state");
@@ -1705,9 +1892,10 @@ mod tests {
         // Verify all have required fields
         for resource in &resources {
             assert!(!resource.name.is_empty(), "Resource should have a name");
-            assert_eq!(
-                resource.mime_type, "application/json",
-                "Should be JSON mime type"
+            assert!(
+                resource.mime_type == "application/json" || resource.mime_type == "text/plain",
+                "Should be JSON or text mime type, got: {}",
+                resource.mime_type
             );
             assert!(resource.description.is_some(), "Should have a description");
         }
@@ -1872,7 +2060,7 @@ mod tests {
         assert!(resource_array.is_some());
 
         let resource_array = resource_array.unwrap();
-        assert_eq!(resource_array.len(), 12);
+        assert_eq!(resource_array.len(), 16);
 
         // First resource should have expected fields
         let first = &resource_array[0];

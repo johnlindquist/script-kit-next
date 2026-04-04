@@ -12,6 +12,15 @@ pub enum ContextAttachmentKind {
     Browser,
     Window,
     Diagnostics,
+    Screenshot,
+    Clipboard,
+    FrontmostApp,
+    MenuBar,
+    RecentScripts,
+    GitStatus,
+    GitDiff,
+    Processes,
+    System,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -25,7 +34,7 @@ pub struct ContextAttachmentSpec {
     pub label: &'static str,
 }
 
-const CONTEXT_ATTACHMENT_SPECS: [ContextAttachmentSpec; 6] = [
+const CONTEXT_ATTACHMENT_SPECS: [ContextAttachmentSpec; 15] = [
     ContextAttachmentSpec {
         kind: ContextAttachmentKind::Current,
         action_id: "chat:add_current_context",
@@ -79,6 +88,87 @@ const CONTEXT_ATTACHMENT_SPECS: [ContextAttachmentSpec; 6] = [
         mention: Some("@diagnostics"),
         uri: "kit://context?diagnostics=1",
         label: "Context Diagnostics",
+    },
+    ContextAttachmentSpec {
+        kind: ContextAttachmentKind::Screenshot,
+        action_id: "chat:add_screenshot",
+        action_title: "Attach Screenshot",
+        slash_command: Some("/screenshot"),
+        mention: Some("@screenshot"),
+        uri: "kit://context?screenshot=1&selectedText=0&frontmostApp=0&menuBar=0&browserUrl=0&focusedWindow=0",
+        label: "Screenshot",
+    },
+    ContextAttachmentSpec {
+        kind: ContextAttachmentKind::Clipboard,
+        action_id: "chat:add_clipboard",
+        action_title: "Attach Clipboard History",
+        slash_command: Some("/clipboard"),
+        mention: Some("@clipboard"),
+        uri: "kit://clipboard-history",
+        label: "Clipboard",
+    },
+    ContextAttachmentSpec {
+        kind: ContextAttachmentKind::FrontmostApp,
+        action_id: "chat:add_frontmost_app",
+        action_title: "Attach Frontmost App",
+        slash_command: Some("/frontmost-app"),
+        mention: Some("@frontmost-app"),
+        uri: "kit://context?selectedText=0&frontmostApp=1&menuBar=0&browserUrl=0&focusedWindow=0",
+        label: "Frontmost App",
+    },
+    ContextAttachmentSpec {
+        kind: ContextAttachmentKind::MenuBar,
+        action_id: "chat:add_menu_bar",
+        action_title: "Attach Menu Bar",
+        slash_command: Some("/menu-bar"),
+        mention: Some("@menu-bar"),
+        uri: "kit://context?selectedText=0&frontmostApp=0&menuBar=1&browserUrl=0&focusedWindow=0",
+        label: "Menu Bar",
+    },
+    ContextAttachmentSpec {
+        kind: ContextAttachmentKind::RecentScripts,
+        action_id: "chat:add_recent_scripts",
+        action_title: "Attach Recent Scripts",
+        slash_command: Some("/recent-scripts"),
+        mention: Some("@recent-scripts"),
+        uri: "kit://scripts",
+        label: "Recent Scripts",
+    },
+    ContextAttachmentSpec {
+        kind: ContextAttachmentKind::GitStatus,
+        action_id: "chat:add_git_status",
+        action_title: "Attach Git Status",
+        slash_command: Some("/git-status"),
+        mention: Some("@git-status"),
+        uri: "kit://git-status",
+        label: "Git Status",
+    },
+    ContextAttachmentSpec {
+        kind: ContextAttachmentKind::GitDiff,
+        action_id: "chat:add_git_diff",
+        action_title: "Attach Git Diff",
+        slash_command: Some("/git-diff"),
+        mention: Some("@git-diff"),
+        uri: "kit://git-diff",
+        label: "Git Diff",
+    },
+    ContextAttachmentSpec {
+        kind: ContextAttachmentKind::Processes,
+        action_id: "chat:add_processes",
+        action_title: "Attach Running Processes",
+        slash_command: Some("/processes"),
+        mention: Some("@processes"),
+        uri: "kit://processes",
+        label: "Processes",
+    },
+    ContextAttachmentSpec {
+        kind: ContextAttachmentKind::System,
+        action_id: "chat:add_system",
+        action_title: "Attach System Info",
+        slash_command: Some("/system"),
+        mention: Some("@system"),
+        uri: "kit://system",
+        label: "System Info",
     },
 ];
 

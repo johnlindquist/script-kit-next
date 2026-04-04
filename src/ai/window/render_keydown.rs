@@ -376,7 +376,12 @@ impl AiApp {
                         self.close_context_picker(cx);
                     } else {
                         self.hide_all_dropdowns(cx);
-                        self.open_context_picker(String::new(), window, cx);
+                        self.open_context_picker(
+                            super::context_picker::types::ContextPickerTrigger::Mention,
+                            String::new(),
+                            window,
+                            cx,
+                        );
                     }
                     cx.stop_propagation();
                     return;

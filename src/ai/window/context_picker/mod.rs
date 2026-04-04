@@ -1,9 +1,9 @@
-//! Inline `@` context picker for the AI chat composer.
+//! Inline `@`/`/` context picker for the AI chat composer.
 //!
-//! Typing `@` in the composer opens a filtered list of context attachments
-//! seeded from the canonical `context_attachment_specs()` plus local files
-//! and folders. Accepting a row creates the matching `AiContextPart` and
-//! schedules a preflight update automatically.
+//! Typing `@` or `/` in the composer opens a filtered list of context
+//! attachments seeded from the canonical `context_attachment_specs()` plus
+//! local files and folders. Accepting a row creates the matching
+//! `AiContextPart` and schedules a preflight update automatically.
 
 pub mod types;
 
@@ -14,7 +14,9 @@ mod tests;
 use super::*;
 use crate::ai::context_contract::{context_attachment_specs, ContextAttachmentKind};
 use crate::ai::message_parts::AiContextPart;
-use types::{ContextPickerItem, ContextPickerItemKind, ContextPickerState};
+use types::{
+    ContextPickerItem, ContextPickerItemKind, ContextPickerState, ContextPickerTrigger,
+};
 
 /// Minimum query length before file/folder results are shown.
 /// Built-in items always show (they are few and high-value).
@@ -23,33 +25,121 @@ const FILE_SEARCH_MIN_QUERY_LEN: usize = 2;
 /// Maximum number of file/folder results to include.
 const FILE_RESULTS_LIMIT: usize = 10;
 
+/// Parsed trigger + query extracted from the composer input.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ContextTriggerQuery {
+    pub trigger: ContextPickerTrigger,
+    pub query: String,
+}
+
+/// Extract a trigger query from the composer text.
+///
+/// Looks for the last `@` or `/` that is not followed by whitespace.
+/// Returns `None` when there is no active trigger.
+pub(crate) fn extract_context_picker_query(input: &str) -> Option<ContextTriggerQuery> {
+    let trigger_pos = input.rfind(['@', '/'])?;
+    let trigger_char = input.as_bytes().get(trigger_pos).copied()?;
+
+    let trigger = match trigger_char {
+        b'@' => ContextPickerTrigger::Mention,
+        b'/' => ContextPickerTrigger::Slash,
+        _ => return None,
+    };
+
+    let tail = &input[trigger_pos + 1..];
+
+    // If there's a space right after the trigger, the mention/command is complete
+    if tail.starts_with(' ') {
+        return None;
+    }
+
+    // For `/`, only trigger at start-of-line or after whitespace
+    // (avoid triggering on file paths like `foo/bar`)
+    if trigger_char == b'/' && trigger_pos > 0 {
+        let before = input.as_bytes()[trigger_pos - 1];
+        if before != b' ' && before != b'\n' && before != b'\t' {
+            return None;
+        }
+    }
+
+    // Extract word after trigger (up to next space or end)
+    let query = match tail.find(char::is_whitespace) {
+        Some(end) => &tail[..end],
+        None => tail,
+    };
+
+    Some(ContextTriggerQuery {
+        trigger,
+        query: query.to_string(),
+    })
+}
+
+/// Fuzzy match query characters in order against a candidate string.
+///
+/// Returns the indices of matched characters in the candidate, or `None`
+/// if the query cannot be matched in order.
+pub(crate) fn match_query_chars(query: &str, candidate: &str) -> Option<Vec<usize>> {
+    if query.is_empty() {
+        return Some(Vec::new());
+    }
+    let candidate_chars: Vec<char> = candidate.chars().collect();
+    let mut hits = Vec::with_capacity(query.len());
+    let mut from = 0usize;
+    for needle in query.chars().map(|ch| ch.to_ascii_lowercase()) {
+        let mut found = None;
+        for (ix, ch) in candidate_chars.iter().enumerate().skip(from) {
+            if ch.to_ascii_lowercase() == needle {
+                found = Some(ix);
+                break;
+            }
+        }
+        let ix = found?;
+        hits.push(ix);
+        from = ix + 1;
+    }
+    Some(hits)
+}
+
+/// Hint chips for the empty state when no results match.
+pub(crate) fn empty_state_hints(trigger: ContextPickerTrigger) -> &'static [&'static str] {
+    match trigger {
+        ContextPickerTrigger::Mention => &["@context", "@selection", "@browser"],
+        ContextPickerTrigger::Slash => &["/context", "/selection", "/browser"],
+    }
+}
+
 impl AiApp {
     /// Open the context picker with an initial seed query.
-    ///
-    /// Called when the user types `@` in the composer. The query is the text
-    /// after the `@` character (may be empty on initial trigger).
     pub(super) fn open_context_picker(
         &mut self,
+        trigger: ContextPickerTrigger,
         seed_query: String,
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let items = build_picker_items(&seed_query);
+        let items = build_picker_items(trigger, &seed_query);
         tracing::info!(
             target: "ai",
+            ?trigger,
             query = %seed_query,
             item_count = items.len(),
             selected_index = 0,
             "ai_context_picker_opened"
         );
-        self.context_picker = Some(ContextPickerState::new(seed_query, items));
+        self.context_picker = Some(ContextPickerState::new(trigger, seed_query, items));
         cx.notify();
     }
 
     /// Update the picker query and re-rank results.
-    pub(super) fn update_context_picker_query(&mut self, query: String, cx: &mut Context<Self>) {
-        let items = build_picker_items(&query);
+    pub(super) fn update_context_picker_query(
+        &mut self,
+        trigger: ContextPickerTrigger,
+        query: String,
+        cx: &mut Context<Self>,
+    ) {
+        let items = build_picker_items(trigger, &query);
         if let Some(picker) = self.context_picker.as_mut() {
+            picker.trigger = trigger;
             picker.query = query.clone();
             picker.items = items;
             // Clamp selected_index to valid range
@@ -58,6 +148,7 @@ impl AiApp {
             }
             tracing::info!(
                 target: "ai",
+                ?trigger,
                 query = %query,
                 item_count = picker.items.len(),
                 selected_index = picker.selected_index,
@@ -70,13 +161,13 @@ impl AiApp {
     /// Accept the currently selected picker row.
     ///
     /// Creates the appropriate `AiContextPart`, adds it to pending parts,
-    /// closes the picker, and strips the `@query` prefix from the composer.
+    /// closes the picker, and strips the trigger+query from the composer.
     pub(super) fn accept_context_picker_selection(
         &mut self,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let (part, label, source) = {
+        let (part, label, source, trigger) = {
             let picker = match &self.context_picker {
                 Some(p) if !p.items.is_empty() => p,
                 _ => return,
@@ -98,18 +189,20 @@ impl AiApp {
             };
             let label = part.label().to_string();
             let source = part.source().to_string();
-            (part, label, source)
+            let trigger = picker.trigger;
+            (part, label, source, trigger)
         };
 
         tracing::info!(
             target: "ai",
+            ?trigger,
             label = %label,
             source = %source,
             "ai_context_picker_accepted"
         );
 
-        // Strip @query text from the composer input
-        self.strip_at_query_from_composer(window, cx);
+        // Strip trigger+query text from the composer input
+        self.strip_context_trigger_from_composer(trigger, window, cx);
 
         // Add the part (dedup + preflight handled internally)
         self.add_context_part(part, cx);
@@ -156,55 +249,76 @@ impl AiApp {
         self.context_picker.is_some()
     }
 
-    /// Strip the `@<query>` text from the current composer input.
-    ///
-    /// Finds the last `@` in the input and removes everything from it
-    /// to the current cursor position.
-    fn strip_at_query_from_composer(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    /// Strip the trigger character and its query from the current composer input.
+    fn strip_context_trigger_from_composer(
+        &mut self,
+        trigger: ContextPickerTrigger,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let needle = match trigger {
+            ContextPickerTrigger::Mention => '@',
+            ContextPickerTrigger::Slash => '/',
+        };
         let current_value = self.input_state.read(cx).value().to_string();
-        if let Some(at_pos) = current_value.rfind('@') {
-            let mut new_value = current_value[..at_pos].to_string();
-            // Preserve any text after the query (cursor might not be at end)
-            // For simplicity, we strip from `@` to end of current word
-            let after_at = &current_value[at_pos + 1..];
-            if let Some(space_pos) = after_at.find(char::is_whitespace) {
-                new_value.push_str(&after_at[space_pos..]);
+        if let Some(pos) = current_value.rfind(needle) {
+            let mut new_value = current_value[..pos].to_string();
+            let after_trigger = &current_value[pos + 1..];
+            if let Some(space_pos) = after_trigger.find(char::is_whitespace) {
+                new_value.push_str(&after_trigger[space_pos..]);
             }
             self.set_composer_value(new_value, window, cx);
         }
     }
 }
 
-/// Build the ranked list of picker items for a given query.
+/// Build the ranked list of picker items for a given trigger and query.
 ///
 /// Items are grouped: built-ins first, then files, then folders.
 /// Within each group, items are sorted by relevance score (descending),
 /// with ties broken by original order (stable sort).
-pub fn build_picker_items(query: &str) -> Vec<ContextPickerItem> {
+pub fn build_picker_items(trigger: ContextPickerTrigger, query: &str) -> Vec<ContextPickerItem> {
     let query_lower = query.to_lowercase();
     let mut items = Vec::new();
 
     // 1. Built-in items from canonical specs
     for spec in context_attachment_specs() {
-        let score = score_builtin(spec, &query_lower);
+        // In Slash mode, only include specs that have a slash_command
+        if trigger == ContextPickerTrigger::Slash && spec.slash_command.is_none() {
+            continue;
+        }
+
+        let (score, label_hits, meta_hits) = score_builtin_with_highlights(spec, &query_lower);
+
         if score > 0 || query_lower.is_empty() {
-            let subtitle: SharedString = spec
-                .mention
-                .or(spec.slash_command)
-                .unwrap_or(spec.action_title)
-                .into();
+            // Build meta: prefer slash_command, then mention, then action_title
+            let meta_str: &str = spec
+                .slash_command
+                .or(spec.mention)
+                .unwrap_or(spec.action_title);
+
             items.push(ContextPickerItem {
                 id: SharedString::from(format!("builtin:{:?}", spec.kind).to_lowercase()),
                 label: spec.label.into(),
-                subtitle,
+                meta: meta_str.into(),
                 kind: ContextPickerItemKind::BuiltIn(spec.kind),
                 score: if query_lower.is_empty() { 100 } else { score },
+                label_highlight_indices: if query_lower.is_empty() {
+                    Vec::new()
+                } else {
+                    label_hits
+                },
+                meta_highlight_indices: if query_lower.is_empty() {
+                    Vec::new()
+                } else {
+                    meta_hits
+                },
             });
         }
     }
 
-    // 2. File/folder results (only when query is long enough)
-    if query_lower.len() >= FILE_SEARCH_MIN_QUERY_LEN {
+    // 2. File/folder results (only when query is long enough, mention mode only)
+    if trigger == ContextPickerTrigger::Mention && query_lower.len() >= FILE_SEARCH_MIN_QUERY_LEN {
         if let Ok(cwd) = std::env::current_dir() {
             collect_file_items(&cwd, &query_lower, &mut items);
         }
@@ -220,16 +334,13 @@ pub fn build_picker_items(query: &str) -> Vec<ContextPickerItem> {
     items
 }
 
-/// Score a built-in spec against the user query.
-///
-/// Returns 0 if no match, higher values for better matches.
-/// Deterministic: same query always produces the same score.
-pub fn score_builtin(
+/// Score a built-in spec against the user query, returning (score, label_hits, meta_hits).
+fn score_builtin_with_highlights(
     spec: &crate::ai::context_contract::ContextAttachmentSpec,
     query: &str,
-) -> u32 {
+) -> (u32, Vec<usize>, Vec<usize>) {
     if query.is_empty() {
-        return 100;
+        return (100, Vec::new(), Vec::new());
     }
 
     let label_lower = spec.label.to_lowercase();
@@ -242,37 +353,73 @@ pub fn score_builtin(
         .map(|s| s.trim_start_matches('/').to_lowercase())
         .unwrap_or_default();
 
-    // Exact match on mention (e.g. "selection" for @selection)
+    let meta_str = spec
+        .slash_command
+        .or(spec.mention)
+        .unwrap_or(spec.action_title);
+    let meta_bare = meta_str.trim_start_matches(['@', '/']);
+
+    let mut best_score = 0u32;
+    let mut best_label_hits = Vec::new();
+    let mut best_meta_hits = Vec::new();
+
+    // Exact match on mention
     if mention_lower == query {
-        return 1000;
+        best_score = 1000;
+        best_label_hits = match_query_chars(query, spec.label).unwrap_or_default();
+        best_meta_hits = match_query_chars(query, meta_bare).unwrap_or_default();
     }
 
     // Prefix match on mention
-    if !mention_lower.is_empty() && mention_lower.starts_with(query) {
-        return 500 + (100 - query.len().min(99) as u32);
+    if best_score < 500 && !mention_lower.is_empty() && mention_lower.starts_with(query) {
+        let s = 500 + (100 - query.len().min(99) as u32);
+        if s > best_score {
+            best_score = s;
+            best_label_hits = match_query_chars(query, spec.label).unwrap_or_default();
+            best_meta_hits = match_query_chars(query, meta_bare).unwrap_or_default();
+        }
     }
 
     // Prefix match on label
-    if label_lower.starts_with(query) {
-        return 400;
+    if best_score < 400 && label_lower.starts_with(query) {
+        best_score = 400;
+        best_label_hits = match_query_chars(query, spec.label).unwrap_or_default();
+        best_meta_hits = match_query_chars(query, meta_bare).unwrap_or_default();
     }
 
     // Prefix match on slash command
-    if !slash_lower.is_empty() && slash_lower.starts_with(query) {
-        return 300;
+    if best_score < 300 && !slash_lower.is_empty() && slash_lower.starts_with(query) {
+        best_score = 300;
+        best_label_hits = match_query_chars(query, spec.label).unwrap_or_default();
+        best_meta_hits = match_query_chars(query, meta_bare).unwrap_or_default();
     }
 
     // Substring match on label
-    if label_lower.contains(query) {
-        return 200;
+    if best_score < 200 && label_lower.contains(query) {
+        best_score = 200;
+        best_label_hits = match_query_chars(query, spec.label).unwrap_or_default();
+        best_meta_hits = Vec::new();
     }
 
     // Substring match on mention or slash
-    if mention_lower.contains(query) || slash_lower.contains(query) {
-        return 100;
+    if best_score < 100 && (mention_lower.contains(query) || slash_lower.contains(query)) {
+        best_score = 100;
+        best_label_hits = match_query_chars(query, spec.label).unwrap_or_default();
+        best_meta_hits = match_query_chars(query, meta_bare).unwrap_or_default();
     }
 
-    0
+    (best_score, best_label_hits, best_meta_hits)
+}
+
+/// Score a built-in spec against the user query.
+///
+/// Returns 0 if no match, higher values for better matches.
+/// Deterministic: same query always produces the same score.
+pub fn score_builtin(
+    spec: &crate::ai::context_contract::ContextAttachmentSpec,
+    query: &str,
+) -> u32 {
+    score_builtin_with_highlights(spec, query).0
 }
 
 /// Collect file and folder items from the given directory matching the query.
@@ -311,14 +458,18 @@ fn collect_file_items(dir: &std::path::Path, query: &str, items: &mut Vec<Contex
             100
         };
 
+        let label_hits = match_query_chars(query, &name).unwrap_or_default();
+
         if is_dir {
             if folder_count < FILE_RESULTS_LIMIT / 2 {
                 items.push(ContextPickerItem {
                     id: SharedString::from(format!("folder:{}", path.display())),
                     label: name.into(),
-                    subtitle: path.to_string_lossy().to_string().into(),
+                    meta: path.to_string_lossy().to_string().into(),
                     kind: ContextPickerItemKind::Folder(path),
                     score,
+                    label_highlight_indices: label_hits,
+                    meta_highlight_indices: Vec::new(),
                 });
                 folder_count += 1;
             }
@@ -326,9 +477,11 @@ fn collect_file_items(dir: &std::path::Path, query: &str, items: &mut Vec<Contex
             items.push(ContextPickerItem {
                 id: SharedString::from(format!("file:{}", path.display())),
                 label: name.into(),
-                subtitle: path.to_string_lossy().to_string().into(),
+                meta: path.to_string_lossy().to_string().into(),
                 kind: ContextPickerItemKind::File(path),
                 score,
+                label_highlight_indices: label_hits,
+                meta_highlight_indices: Vec::new(),
             });
             file_count += 1;
         }

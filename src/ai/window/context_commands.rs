@@ -78,7 +78,7 @@ mod tests {
     }
 
     #[test]
-    fn test_slash_command_uri_mappings_are_valid_kit_context_uris() {
+    fn test_slash_command_uri_mappings_are_valid_kit_uris() {
         for spec in context_attachment_specs() {
             if let Some(slash) = spec.slash_command {
                 assert!(
@@ -86,8 +86,9 @@ mod tests {
                     "slash command {slash} should parse"
                 );
                 assert!(
-                    spec.uri.starts_with("kit://context"),
-                    "URI for {slash} should be a kit://context URI"
+                    spec.uri.starts_with("kit://"),
+                    "URI for {slash} should be a kit:// URI, got: {}",
+                    spec.uri
                 );
             }
         }

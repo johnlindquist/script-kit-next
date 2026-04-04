@@ -7860,7 +7860,7 @@ export type WaitCondition =
 export interface TransactionErrorData {
   code?: string;
   message: string;
-  details?: string;
+  suggestion?: string;
 }
 
 export interface WaitForOptions {
