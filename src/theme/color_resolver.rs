@@ -532,8 +532,7 @@ mod tests {
         assert_eq!(regular.primary_font(), "Menlo");
 
         // Theme-first always uses the theme's fonts
-        let theme_first =
-            TypographyResolver::new_theme_first(&theme, DesignVariant::RetroTerminal);
+        let theme_first = TypographyResolver::new_theme_first(&theme, DesignVariant::RetroTerminal);
         assert_eq!(
             theme_first.primary_font(),
             fonts.ui_family.as_str(),

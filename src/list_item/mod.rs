@@ -603,8 +603,8 @@ impl ListItemColors {
 /// Delegates to the shared hint_strip normalizer to prevent mapping drift.
 /// Preserves legacy `↩` output for plain-string callers by replacing `↵` → `↩`.
 pub fn format_shortcut_display(shortcut: &str) -> String {
-    let display = crate::components::hint_strip::compact_shortcut_display_string(shortcut)
-        .replace('↵', "↩");
+    let display =
+        crate::components::hint_strip::compact_shortcut_display_string(shortcut).replace('↵', "↩");
     crate::components::hint_strip::emit_shortcut_normalization_audit(
         "list_item_format",
         shortcut,
@@ -807,8 +807,7 @@ impl ListItem {
     /// Set the shortcut badge text (shown right-aligned)
     pub fn shortcut(mut self, s: impl Into<String>) -> Self {
         let shortcut = s.into();
-        let shortcut_tokens =
-            crate::components::hint_strip::shortcut_tokens_from_hint(&shortcut);
+        let shortcut_tokens = crate::components::hint_strip::shortcut_tokens_from_hint(&shortcut);
         self.shortcut_tokens = Some(shortcut_tokens);
         self.shortcut = Some(shortcut);
         self
@@ -1266,34 +1265,35 @@ impl RenderOnce for ListItem {
             self.shortcut_tokens.as_deref(),
         )
         .map(|cow| cow.into_owned());
-        let shortcut_element: AnyElement = if let Some(shortcut_tokens) = resolved_shortcut_tokens.as_ref() {
-            let show_shortcut =
-                should_show_search_shortcut(is_filtering, self.selected, hover_visible);
-            if show_shortcut {
-                crate::components::hint_strip::emit_shortcut_chrome_audit(
-                    "list_item",
-                    "compact-inline-whisper-all-rows",
-                );
-                let glyph_color = if is_filtering {
-                    rgba((colors.text_dimmed << 8) | ALPHA_HINT)
+        let shortcut_element: AnyElement =
+            if let Some(shortcut_tokens) = resolved_shortcut_tokens.as_ref() {
+                let show_shortcut =
+                    should_show_search_shortcut(is_filtering, self.selected, hover_visible);
+                if show_shortcut {
+                    crate::components::hint_strip::emit_shortcut_chrome_audit(
+                        "list_item",
+                        "compact-inline-whisper-all-rows",
+                    );
+                    let glyph_color = if is_filtering {
+                        rgba((colors.text_dimmed << 8) | ALPHA_HINT)
+                    } else {
+                        rgba((colors.text_muted << 8) | ALPHA_READABLE)
+                    };
+                    let chrome_color = rgba((colors.text_dimmed << 8) | 0xFF);
+                    crate::components::hint_strip::render_inline_shortcut_keys(
+                        shortcut_tokens.iter().map(String::as_str),
+                        crate::components::hint_strip::whisper_inline_shortcut_colors(
+                            glyph_color.into(),
+                            chrome_color.into(),
+                            !is_filtering,
+                        ),
+                    )
                 } else {
-                    rgba((colors.text_muted << 8) | ALPHA_READABLE)
-                };
-                let chrome_color = rgba((colors.text_dimmed << 8) | 0xFF);
-                crate::components::hint_strip::render_inline_shortcut_keys(
-                    shortcut_tokens.iter().map(String::as_str),
-                    crate::components::hint_strip::whisper_inline_shortcut_colors(
-                        glyph_color.into(),
-                        chrome_color.into(),
-                        !is_filtering,
-                    ),
-                )
+                    div().into_any_element()
+                }
             } else {
                 div().into_any_element()
-            }
-        } else {
-            div().into_any_element()
-        };
+            };
 
         // Determine background color based on selection/hover state
         // Priority: selected (full focus styling) > hovered (subtle feedback) > transparent
@@ -1335,77 +1335,76 @@ impl RenderOnce for ListItem {
         let has_leading_accessory = self.leading_accessory.is_some();
         let has_trailing_accessory = self.trailing_accessory.is_some();
         if let Some(leading) = self.leading_accessory {
-            inner_content = inner_content.child(
-                div().flex_shrink_0().child(leading),
-            );
+            inner_content = inner_content.child(div().flex_shrink_0().child(leading));
         }
 
         let trailing_accessory = self.trailing_accessory;
 
-        inner_content = inner_content
-            .child(item_content)
-            .child({
-                // Right-side accessories: [source hint] [type tag] [shortcut badge]
-                let mut accessories = div()
-                    .flex()
-                    .flex_row()
-                    .items_center()
-                    .flex_shrink_0()
-                    .gap(px(ITEM_ACCESSORIES_GAP));
+        inner_content = inner_content.child(item_content).child({
+            // Right-side accessories: [source hint] [type tag] [shortcut badge]
+            let mut accessories = div()
+                .flex()
+                .flex_row()
+                .items_center()
+                .flex_shrink_0()
+                .gap(px(ITEM_ACCESSORIES_GAP));
 
-                // Tool badge, source hint, and type tag use progressive disclosure.
-                // Search mode intentionally strips noisy metadata to keep rows calm.
-                let show_accessories = self.selected || hover_visible || is_filtering;
+            // Tool badge, source hint, and type tag use progressive disclosure.
+            // Search mode intentionally strips noisy metadata to keep rows calm.
+            let show_accessories = self.selected || hover_visible || is_filtering;
 
-                // Tool/language badge for scriptlets (e.g., "ts", "bash")
-                if show_accessories && !is_filtering {
-                    if let Some(ref badge) = self.tool_badge {
-                        let badge_bg = (colors.text_dimmed << 8) | ALPHA_TINT_MEDIUM;
-                        accessories = accessories.child(
-                            div()
-                                .text_size(px(TOOL_BADGE_FONT_SIZE))
-                                .font_family(FONT_MONO)
-                                .text_color(rgba((colors.text_dimmed << 8) | ALPHA_READABLE))
-                                .px(px(TOOL_BADGE_PADDING_X))
-                                .py(px(TOOL_BADGE_PADDING_Y))
-                                .rounded(px(TOOL_BADGE_RADIUS))
-                                .bg(rgba(badge_bg))
-                                .child(badge.clone()),
-                        );
-                    }
-                }
-
-                // Source/kit hint (e.g., "main", "cleanshot") - very subtle
-                if show_accessories && !is_filtering {
-                    if let Some(ref hint) = self.source_hint {
-                        accessories = accessories.child(
-                            div()
-                                .text_size(px(SOURCE_HINT_FONT_SIZE))
-                                .text_color(rgba((colors.text_dimmed << 8) | ALPHA_HINT))
-                                .child(hint.clone()),
-                        );
-                    }
-                }
-
-                // Type tag stays visible during search, but as quiet text instead of a pill badge.
-                if let Some(ref tag) = self.type_tag {
+            // Tool/language badge for scriptlets (e.g., "ts", "bash")
+            if show_accessories && !is_filtering {
+                if let Some(ref badge) = self.tool_badge {
+                    let badge_bg = (colors.text_dimmed << 8) | ALPHA_TINT_MEDIUM;
                     accessories = accessories.child(
                         div()
-                            .text_size(px(TYPE_TAG_FONT_SIZE))
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(rgba((tag.color << 8) | ALPHA_TYPE_LABEL))
-                            .child(tag.label),
+                            .text_size(px(TOOL_BADGE_FONT_SIZE))
+                            .font_family(FONT_MONO)
+                            .text_color(rgba((colors.text_dimmed << 8) | ALPHA_READABLE))
+                            .px(px(TOOL_BADGE_PADDING_X))
+                            .py(px(TOOL_BADGE_PADDING_Y))
+                            .rounded(px(TOOL_BADGE_RADIUS))
+                            .bg(rgba(badge_bg))
+                            .child(badge.clone()),
                     );
                 }
+            }
 
-                accessories = accessories.child(shortcut_element);
-                accessories
-            });
+            // Source/kit hint (e.g., "main", "cleanshot") - very subtle
+            if show_accessories && !is_filtering {
+                if let Some(ref hint) = self.source_hint {
+                    accessories = accessories.child(
+                        div()
+                            .text_size(px(SOURCE_HINT_FONT_SIZE))
+                            .text_color(rgba((colors.text_dimmed << 8) | ALPHA_HINT))
+                            .child(hint.clone()),
+                    );
+                }
+            }
+
+            // Type tag stays visible during search, but as quiet text instead of a pill badge.
+            if let Some(ref tag) = self.type_tag {
+                accessories = accessories.child(
+                    div()
+                        .text_size(px(TYPE_TAG_FONT_SIZE))
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(rgba((tag.color << 8) | ALPHA_TYPE_LABEL))
+                        .child(tag.label),
+                );
+            }
+
+            accessories = accessories.child(shortcut_element);
+            accessories
+        });
 
         // Trailing accessory slot (e.g., "Saved" status badge) — after standard accessories
         if let Some(trailing) = trailing_accessory {
             inner_content = inner_content.child(
-                div().flex_shrink_0().ml(px(ITEM_ACCESSORIES_GAP)).child(trailing),
+                div()
+                    .flex_shrink_0()
+                    .ml(px(ITEM_ACCESSORIES_GAP))
+                    .child(trailing),
             );
         }
 

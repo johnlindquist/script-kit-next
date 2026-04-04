@@ -583,6 +583,55 @@ impl ScriptListApp {
         theme::presets::filtered_preset_indices_cached(filter)
     }
 
+    /// Cached filtered indices for the theme chooser render path.
+    /// Returns an `Arc<Vec<usize>>` so it can be shared with click closures
+    /// without recomputation. Only rebuilds when the filter string changes.
+    fn cached_theme_chooser_filtered_indices(filter: &str) -> std::sync::Arc<Vec<usize>> {
+        use std::cell::RefCell;
+        thread_local! {
+            static LAST_FILTER: RefCell<Option<(String, std::sync::Arc<Vec<usize>>)>> =
+                RefCell::new(None);
+        }
+        LAST_FILTER.with(|slot| {
+            if let Some((cached_filter, cached_indices)) = slot.borrow().as_ref() {
+                if cached_filter == filter {
+                    return cached_indices.clone();
+                }
+            }
+            let built = std::sync::Arc::new(
+                theme::presets::filtered_preset_indices_cached(filter),
+            );
+            *slot.borrow_mut() = Some((filter.to_string(), built.clone()));
+            built
+        })
+    }
+
+    /// Cached original-theme preset classification for the theme chooser.
+    /// Only rebuilds when the `Arc<Theme>` pointer changes (i.e. a new theme
+    /// is set as the original). Avoids JSON-serialization-based comparison
+    /// on every render frame.
+    fn cached_theme_chooser_original_match(
+        theme: Option<&std::sync::Arc<crate::theme::Theme>>,
+    ) -> Option<theme::presets::PresetMatchResult> {
+        use std::cell::RefCell;
+        thread_local! {
+            static ORIGINAL_MATCH: RefCell<Option<(usize, theme::presets::PresetMatchResult)>> =
+                RefCell::new(None);
+        }
+        let theme = theme?;
+        let cache_key = std::sync::Arc::as_ptr(theme) as usize;
+        ORIGINAL_MATCH.with(|slot| {
+            if let Some((cached_key, cached_match)) = slot.borrow().as_ref() {
+                if *cached_key == cache_key {
+                    return Some(cached_match.clone());
+                }
+            }
+            let built = theme::presets::classify_theme_preset_match(theme.as_ref());
+            *slot.borrow_mut() = Some((cache_key, built.clone()));
+            Some(built)
+        })
+    }
+
     /// Unified helper for all chooser-local theme mutations.
     /// Updates self.theme, syncs gpui-component + native vibrancy, and notifies.
     fn apply_theme_chooser_theme(
@@ -925,10 +974,8 @@ impl ScriptListApp {
         let presets = theme::presets::presets_cached();
         let preview_colors = theme::presets::preset_preview_colors_cached();
         let first_light = theme::presets::first_light_theme_index();
-        let original_match = self
-            .theme_before_chooser
-            .as_ref()
-            .map(|t| theme::presets::classify_theme_preset_match(t));
+        let original_match =
+            Self::cached_theme_chooser_original_match(self.theme_before_chooser.as_ref());
         let original_index = original_match
             .as_ref()
             .map(|m| m.preset_index)
@@ -938,8 +985,8 @@ impl ScriptListApp {
             .map(|m| m.is_exact())
             .unwrap_or(false);
 
-        // Filter presets by name or description
-        let filtered_indices = Self::theme_chooser_filtered_indices(filter);
+        // Filter presets by name or description (cached by filter string)
+        let filtered_indices = Self::cached_theme_chooser_filtered_indices(filter);
         let filtered_count = filtered_indices.len();
         let filter_is_empty = filter.is_empty();
 
@@ -1171,7 +1218,7 @@ impl ScriptListApp {
         let orig_idx = original_index;
         let orig_exact = original_is_exact;
         let first_light_idx = first_light;
-        let filtered_indices_for_list = filtered_indices.clone();
+        let filtered_indices_for_list = std::sync::Arc::clone(&filtered_indices);
         let entity_handle_for_customize = entity_handle.clone();
         let accent_badge_border = rgba(chrome.accent_badge_border_rgba);
         let accent_badge_bg = rgba(chrome.accent_badge_bg_rgba);
@@ -1239,26 +1286,16 @@ impl ScriptListApp {
                             None
                         };
 
-                        // Click handler: select + preview via filtered index
+                        // Click handler: select + preview via captured Arc indices
                         let click_entity = entity_handle.clone();
+                        let click_indices = std::sync::Arc::clone(&filtered_indices_for_list);
                         let click_handler =
                             move |_event: &gpui::ClickEvent,
                                   _window: &mut Window,
                                   cx: &mut gpui::App| {
                                 if let Some(app) = click_entity.upgrade() {
+                                    let indices = std::sync::Arc::clone(&click_indices);
                                     app.update(cx, |this, cx| {
-                                        let current_filter = if let AppView::ThemeChooserView {
-                                            ref filter,
-                                            ..
-                                        } = this.current_view
-                                        {
-                                            filter.clone()
-                                        } else {
-                                            return;
-                                        };
-                                        let filtered =
-                                            Self::theme_chooser_filtered_indices(&current_filter);
-
                                         if let AppView::ThemeChooserView {
                                             ref mut selected_index,
                                             ..
@@ -1267,7 +1304,7 @@ impl ScriptListApp {
                                             *selected_index = ix;
                                         }
                                         this.preview_theme_chooser_preset(
-                                            &filtered,
+                                            &indices,
                                             ix,
                                             "theme_chooser_mouse_preview",
                                             cx,

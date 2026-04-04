@@ -670,11 +670,7 @@ fn light_preset_normalization_produces_visible_selection() {
         let opacity = theme.get_opacity();
         let bg = theme.colors.background.main;
 
-        let sel_bg = composite_alpha(
-            theme.colors.accent.selected_subtle,
-            opacity.selected,
-            bg,
-        );
+        let sel_bg = composite_alpha(theme.colors.accent.selected_subtle, opacity.selected, bg);
         let vis = contrast_ratio(sel_bg, bg);
 
         assert!(

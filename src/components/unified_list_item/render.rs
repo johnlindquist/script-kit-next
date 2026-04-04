@@ -325,24 +325,16 @@ fn render_trailing(
                 .text_color(hint_color)
                 .child(shortcut.clone()),
         ),
-        Some(TrailingContent::Hint(hint)) => Some(
-            div()
-                .text_xs()
-                .text_color(hint_color)
-                .child(hint.clone()),
-        ),
+        Some(TrailingContent::Hint(hint)) => {
+            Some(div().text_xs().text_color(hint_color).child(hint.clone()))
+        }
         Some(TrailingContent::Count(count)) => Some(
             div()
                 .text_xs()
                 .text_color(hint_color)
                 .child(format!("{}", count)),
         ),
-        Some(TrailingContent::Chevron) => Some(
-            div()
-                .text_xs()
-                .text_color(hint_color)
-                .child("→"),
-        ),
+        Some(TrailingContent::Chevron) => Some(div().text_xs().text_color(hint_color).child("→")),
         Some(TrailingContent::Checkmark) => {
             Some(div().text_sm().text_color(rgb(colors.accent)).child("✓"))
         }

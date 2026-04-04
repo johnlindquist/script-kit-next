@@ -72,7 +72,8 @@ pub fn audit_theme_contrast(theme: &Theme) -> Vec<ThemeContrastSample> {
 
     // Prompt/form proxy surfaces composited over main background
     let prompt_field_idle = composite_rgba_over(chrome.badge_bg_rgba, colors.background.main);
-    let prompt_field_focused = composite_rgba_over(chrome.input_active_rgba, colors.background.main);
+    let prompt_field_focused =
+        composite_rgba_over(chrome.input_active_rgba, colors.background.main);
     let prompt_checkbox_checked =
         composite_rgba_over(chrome.accent_badge_bg_rgba, colors.background.main);
 
@@ -168,12 +169,7 @@ pub fn audit_theme_contrast(theme: &Theme) -> Vec<ThemeContrastSample> {
             surface_dialog,
             4.5,
         ),
-        sample(
-            "surface.log.primary",
-            colors.text.primary,
-            surface_log,
-            4.5,
-        ),
+        sample("surface.log.primary", colors.text.primary, surface_log, 4.5),
         sample("badge.text", chrome.badge_text_hex, badge_bg, 3.0),
         // ── Prompt/form proxy surfaces ─────────────────────────
         sample(

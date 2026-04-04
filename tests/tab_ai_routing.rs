@@ -4520,11 +4520,15 @@ fn harness_submission_authoring_flow_emits_guidance_appended_log_with_all_marker
         "harness submission must emit tab_ai_artifact_authoring_guidance_appended log"
     );
     assert!(
-        fn_body.contains("includes_script_authoring_skill = appendix.markers.includes_script_authoring_skill"),
+        fn_body.contains(
+            "includes_script_authoring_skill = appendix.markers.includes_script_authoring_skill"
+        ),
         "guidance_appended log must include script_authoring_skill marker from appendix"
     );
     assert!(
-        fn_body.contains("includes_bun_build_verification = appendix.markers.includes_bun_build_verification"),
+        fn_body.contains(
+            "includes_bun_build_verification = appendix.markers.includes_bun_build_verification"
+        ),
         "guidance_appended log must include bun_build_verification marker from appendix"
     );
     assert!(

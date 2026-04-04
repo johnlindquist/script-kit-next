@@ -903,8 +903,7 @@ fn should_force_artifact_guidance_for_script_list_submit(
 // Verification-marker constants and detection
 // ---------------------------------------------------------------------------
 
-pub const SCRIPT_AUTHORING_SKILL_MARKER: &str =
-    "~/.scriptkit/skills/script-authoring/SKILL.md";
+pub const SCRIPT_AUTHORING_SKILL_MARKER: &str = "~/.scriptkit/skills/script-authoring/SKILL.md";
 pub const BUN_BUILD_VERIFICATION_MARKER: &str =
     "bun build ~/.scriptkit/kit/main/scripts/<name>.ts --target=bun --outfile ~/.scriptkit/tmp/test-scripts/<name>.verify.mjs";
 pub const BUN_EXECUTE_VERIFICATION_MARKER: &str =
@@ -967,8 +966,7 @@ static TAB_AI_CACHED_ARTIFACT_AUTHORING_GUIDANCE: LazyLock<TabAiCachedArtifactAu
         let markers = TabAiVerificationGuidanceMarkers::from_guidance(guidance);
         TabAiCachedArtifactAuthoringGuidance {
             guidance,
-            has_script_verification_gate_header: guidance
-                .contains(SCRIPT_VERIFICATION_GATE_HEADER),
+            has_script_verification_gate_header: guidance.contains(SCRIPT_VERIFICATION_GATE_HEADER),
             markers,
         }
     });
@@ -3151,10 +3149,7 @@ mod cleanup_contract_audits {
             super::build_tab_ai_acp_initial_input_for_prompt("ScriptList", "clipboard cleanup");
         assert!(input.guidance_appended);
         assert!(input.forced_by_script_list_submit);
-        assert_eq!(
-            input.artifact_kind,
-            Some(super::TabAiArtifactKind::Script)
-        );
+        assert_eq!(input.artifact_kind, Some(super::TabAiArtifactKind::Script));
         assert!(input.use_quick_terminal);
         assert!(input.includes_script_authoring_skill);
         assert!(input.includes_bun_build_verification);
@@ -3184,10 +3179,7 @@ mod cleanup_contract_audits {
         let input =
             super::build_tab_ai_acp_initial_input_for_prompt("ScriptList", "review PR agent");
         assert!(input.guidance_appended);
-        assert_eq!(
-            input.artifact_kind,
-            Some(super::TabAiArtifactKind::Agent)
-        );
+        assert_eq!(input.artifact_kind, Some(super::TabAiArtifactKind::Agent));
         assert!(
             !input.use_quick_terminal,
             "Agent artifacts must not route to quick terminal"

@@ -11,8 +11,8 @@
 
 use chrono::{DateTime, Utc};
 use gpui::{
-    div, prelude::*, px, rgb, rgba, Context, Div, FocusHandle, Focusable, Render,
-    SharedString, Window,
+    div, prelude::*, px, rgb, rgba, Context, Div, FocusHandle, Focusable, Render, SharedString,
+    Window,
 };
 use std::sync::Arc;
 

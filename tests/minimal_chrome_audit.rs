@@ -244,7 +244,9 @@ fn chat_prompt_has_chrome_audit_and_custom_footer_exception() {
         "chat prompt should declare the shared chrome audit surface tag"
     );
     // Chat owns its footer — verify no duplicate universal footer is forced in
-    let chat_fn_start = source.find("fn render_chat_prompt(").expect("chat fn exists");
+    let chat_fn_start = source
+        .find("fn render_chat_prompt(")
+        .expect("chat fn exists");
     let chat_fn_end = source[chat_fn_start..]
         .find("\n    fn ")
         .map(|ix| chat_fn_start + ix)
@@ -269,7 +271,9 @@ fn webcam_prompt_has_chrome_audit_and_no_redundant_chrome() {
         source.contains("PromptChromeAudit::exception("),
         "webcam prompt should emit the shared chrome audit exception"
     );
-    let webcam_fn_start = source.find("fn render_webcam_prompt(").expect("webcam fn exists");
+    let webcam_fn_start = source
+        .find("fn render_webcam_prompt(")
+        .expect("webcam fn exists");
     let webcam_fn_end = source[webcam_fn_start..]
         .find("\n    fn ")
         .map(|ix| webcam_fn_start + ix)

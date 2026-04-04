@@ -7,11 +7,11 @@
 
 use agent_client_protocol::{ContentBlock, ImageContent, TextContent};
 
-use crate::ai::{build_tab_ai_harness_context_block, TabAiContextBlob};
 use crate::ai::harness::{
     build_tab_ai_artifact_authoring_appendix_for_prompt, TabAiArtifactKind,
     TabAiHarnessSubmissionMode,
 };
+use crate::ai::{build_tab_ai_harness_context_block, TabAiContextBlob};
 
 /// Convert an existing `TabAiContextBlob` into a `Vec<ContentBlock>` with a
 /// single text block containing the canonical `Script Kit context` header.
@@ -97,11 +97,12 @@ pub(crate) fn build_tab_ai_acp_guidance_blocks_for_prompt(
     ))]
 }
 
-/// Legacy wrapper — prefer `build_tab_ai_acp_guidance_blocks_for_prompt`.
+/// Legacy wrapper — do not add new callers.
 ///
-/// This wrapper exists so any existing callers that do not pass a `prompt_type`
-/// can still compile.  It defaults to `"Unknown"` which means the deterministic
-/// `ScriptList` force path cannot trigger.
+/// This path cannot force the `ScriptList` verification contract because it has
+/// no `prompt_type`.  Migrate all callers to
+/// [`build_tab_ai_acp_guidance_blocks_for_prompt`].
+#[deprecated(note = "Use build_tab_ai_acp_guidance_blocks_for_prompt(prompt_type, intent)")]
 pub(crate) fn build_tab_ai_acp_guidance_blocks(intent: Option<&str>) -> Vec<ContentBlock> {
     let has_non_empty_intent = intent
         .map(str::trim)
@@ -109,11 +110,11 @@ pub(crate) fn build_tab_ai_acp_guidance_blocks(intent: Option<&str>) -> Vec<Cont
         .unwrap_or(false);
 
     if has_non_empty_intent {
-        tracing::warn!(
+        tracing::error!(
             event = "tab_ai_acp_guidance_blocks_legacy_call",
             reason = "missing_prompt_type",
-            "Use build_tab_ai_acp_guidance_blocks_for_prompt(prompt_type, intent) \
-             so ScriptList submit can force the Bun verification contract."
+            "Legacy ACP guidance wrapper was invoked with a non-empty intent. \
+             This path can miss the deterministic ScriptList verification contract."
         );
     }
 
@@ -219,6 +220,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn legacy_wrapper_still_works_for_authoring_intent() {
         let blocks = build_tab_ai_acp_guidance_blocks(Some("build a clipboard cleanup script"));
         assert_eq!(

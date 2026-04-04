@@ -58,14 +58,9 @@ impl Render for EnvPrompt {
                         .h(px(CURSOR_HEIGHT_LG))
                         .bg(rgb(accent_color)),
                 )
-                .child(
-                    div()
-                        .text_color(rgb(text_muted))
-                        .child(SharedString::from(env_input_placeholder(
-                            &self.key,
-                            self.exists_in_keyring,
-                        ))),
-                )
+                .child(div().text_color(rgb(text_muted)).child(SharedString::from(
+                    env_input_placeholder(&self.key, self.exists_in_keyring),
+                )))
         } else {
             div()
                 .w_full()
@@ -158,10 +153,7 @@ impl Render for EnvPrompt {
                     div()
                         .text_xs()
                         .text_color(rgb(success_color))
-                        .child(SharedString::from(format!(
-                            "Configured {}",
-                            modified_text
-                        ))),
+                        .child(SharedString::from(format!("Configured {}", modified_text))),
                 )
                 .child(
                     div()

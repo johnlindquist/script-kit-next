@@ -84,7 +84,6 @@ fn actions_dialog_default_style() -> ActionsDialogStyleFallback {
     }
 }
 
-
 /// Helper function to combine a hex color with an alpha value
 /// Delegates to DesignColors::hex_with_alpha for DRY
 #[inline]
@@ -1006,9 +1005,9 @@ impl ActionsDialog {
                 }
                 sdk_action_indices.push(protocol_index);
                 let shortcut = pa.shortcut.as_ref().map(|s| Self::format_shortcut_hint(s));
-                let shortcut_tokens = shortcut.as_ref().map(|s| {
-                    crate::components::hint_strip::shortcut_tokens_from_hint(s)
-                });
+                let shortcut_tokens = shortcut
+                    .as_ref()
+                    .map(|s| crate::components::hint_strip::shortcut_tokens_from_hint(s));
                 Some(Action {
                     id: pa.name.clone(),
                     title: pa.name.clone(),
