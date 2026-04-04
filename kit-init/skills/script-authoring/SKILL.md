@@ -46,10 +46,8 @@ export const metadata = {
 };
 
 const note = await arg("Quick note:");
-await Bun.write(
-  `${env.HOME}/notes/${Date.now()}.txt`,
-  note,
-);
+const filePath = home("notes", `${Date.now()}.txt`);
+await Bun.write(filePath, note);
 await notify("Note saved!");
 ```
 
@@ -104,8 +102,8 @@ export const metadata = {
   description: "Browse and open files",
 };
 
-const home = env.HOME || "~";
-const files = await $`find ${home}/Documents -maxdepth 2 -type f -name "*.md"`.text();
+const documentsDir = home("Documents");
+const files = await $`find ${documentsDir} -maxdepth 2 -type f -name "*.md"`.text();
 
 const file = await arg(
   "Open file",
@@ -148,9 +146,9 @@ category: ${category}
 Write your post here.
 `;
 
-const path = `${env.HOME}/blog/posts/${slug}.md`;
-await Bun.write(path, content);
-await notify(`Created: ${path}`);
+const filePath = home("blog", "posts", `${slug}.md`);
+await Bun.write(filePath, content);
+await notify(`Created: ${filePath}`);
 ```
 
 ## Verification
@@ -202,6 +200,12 @@ if (isVerify) {
 
 For UI-heavy requests, the Bun gate is still mandatory. If you also want to manually open Script Kit afterward, do that **after** the Bun gate — not instead of it.
 
+## Path Safety
+
+- Prefer `home(...)` for user-relative paths such as `Documents`, `Downloads`, and `.scriptkit`
+- Use `home(".scriptkit", "kit", "main", ...)` when you need the Script Kit workspace explicitly
+- Do not build user paths from `env.HOME`; it may be unset in generated scripts and can produce broken paths like `undefined/...`
+
 ### Sample Input and Expected Output
 
 - Sample file: `~/.scriptkit/kit/main/scripts/hello-world.ts`
@@ -223,3 +227,4 @@ For UI-heavy requests, the Bun gate is still mandatory. If you also want to manu
 - **Comment metadata**: Use `export const metadata = {...}`, not comment-based metadata
 - **Node.js APIs**: Use `Bun.file()` / `Bun.write()` / `` $`cmd` `` instead of `fs` / `child_process`
 - **Wrong directory**: Scripts must be in `kit/main/scripts/`, not `scripts/` or elsewhere
+- **Unsafe home paths**: Prefer `home(...)` over `env.HOME` for user-relative locations

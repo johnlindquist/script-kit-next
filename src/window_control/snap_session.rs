@@ -289,6 +289,31 @@ pub fn cancel_snap_session(session: &SnapSession) -> SnapSessionOutcome {
     SnapSessionOutcome::Cancelled
 }
 
+/// Prime a session from the first observed drag frame so the overlay is
+/// visible immediately instead of waiting for a second movement tick.
+pub fn prime_snap_session(session: &mut SnapSession, now: Instant) {
+    session.has_moved = true;
+    session.last_movement_time = Some(now);
+    session.phase = SnapSessionPhase::Tracking;
+    session.active_match =
+        best_snap_match(&session.last_window_bounds, &session.targets, MIN_OVERLAP_RATIO);
+
+    tracing::info!(
+        target: "script_kit::snap_session",
+        event = "snap_session_primed",
+        session_id = session.session_id,
+        window_id = session.window_id,
+        x = session.last_window_bounds.x,
+        y = session.last_window_bounds.y,
+        w = session.last_window_bounds.width,
+        h = session.last_window_bounds.height,
+        matched = session.active_match.is_some(),
+        matched_tile = session.active_match.map(|m| format!("{:?}", m.target.tile)),
+        overlap = session.active_match.map(|m| m.overlap_ratio),
+        "primed snap session from initial drag frame"
+    );
+}
+
 /// Finish a settled session: commit if there's an active match, otherwise cancel.
 pub fn finish_snap_session(session: &SnapSession) -> Result<SnapSessionOutcome> {
     if session.active_match.is_some() {
@@ -422,6 +447,22 @@ mod tests {
         let session = make_session();
         let outcome = finish_snap_session(&session).expect("cancel should not fail");
         assert!(matches!(outcome, SnapSessionOutcome::Cancelled));
+    }
+
+    #[test]
+    fn prime_session_marks_tracking_and_computes_current_match() {
+        let mut session = make_session();
+        session.last_window_bounds = Bounds::new(0, 24, 720, 876);
+        prime_snap_session(&mut session, Instant::now());
+
+        assert_eq!(session.phase, SnapSessionPhase::Tracking);
+        assert!(session.has_moved);
+        assert!(session.last_movement_time.is_some());
+
+        let active = session
+            .active_match
+            .expect("expected active match after priming");
+        assert_eq!(active.target.tile, TilePosition::LeftHalf);
     }
 
     #[test]

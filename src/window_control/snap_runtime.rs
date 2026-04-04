@@ -7,7 +7,7 @@ use gpui::{App, AsyncApp};
 use super::snap_overlay::{hide_snap_overlay, show_snap_overlay};
 use super::snap_session::{
     begin_snap_session, build_overlay_model, cancel_snap_session, finish_snap_session,
-    poll_window_bounds, tick_snap_session, update_session_display, SnapSession, SnapSessionPhase,
+    poll_window_bounds, prime_snap_session, tick_snap_session, update_session_display, SnapSession,
 };
 
 /// Polling interval for tracking the dragged window (~60 fps).
@@ -27,10 +27,28 @@ static ACTIVE_SNAP_RUNTIME: Mutex<Option<ActiveSnapRuntime>> = Mutex::new(None);
 // Public API
 // ---------------------------------------------------------------------------
 
+/// Check whether a snap runtime is currently active.
+pub fn is_snap_runtime_active() -> bool {
+    ACTIVE_SNAP_RUNTIME
+        .lock()
+        .map(|guard| guard.is_some())
+        .unwrap_or(false)
+}
+
 /// Start a live snap runtime: begin tracking the frontmost external window
 /// and render the desktop overlay.
 pub fn start_snap_runtime(cx: &mut App) -> Result<()> {
-    let session = begin_snap_session()?;
+    if is_snap_runtime_active() {
+        tracing::info!(
+            target: "script_kit::snap_runtime",
+            event = "snap_runtime_start_skipped_already_active",
+            "snap runtime already active"
+        );
+        return Ok(());
+    }
+
+    let mut session = begin_snap_session()?;
+    prime_snap_session(&mut session, Instant::now());
     show_snap_overlay(build_overlay_model(&session), cx)?;
 
     tracing::info!(
@@ -63,9 +81,8 @@ pub fn start_snap_runtime(cx: &mut App) -> Result<()> {
     Ok(())
 }
 
-/// Advance the runtime by one tick. Returns `false` when the runtime is done.
-///
-/// Called from the polling loop; also usable for testing.
+/// Advance the runtime by one tick. Returns `false` only when the runtime
+/// is no longer active (for example the tracked window disappeared).
 pub fn tick_snap_runtime(cx: &mut App) -> Result<bool> {
     let mut guard = ACTIVE_SNAP_RUNTIME
         .lock()
@@ -83,7 +100,6 @@ pub fn tick_snap_runtime(cx: &mut App) -> Result<bool> {
             "tracked window disappeared"
         );
         let _session = guard.take();
-        // Release the lock before calling into overlay (which may acquire its own lock).
         drop(guard);
         hide_snap_overlay(cx)?;
         return Ok(false);
@@ -93,25 +109,49 @@ pub fn tick_snap_runtime(cx: &mut App) -> Result<bool> {
     let phase = tick_snap_session(&mut runtime.session, current_bounds, Instant::now());
     let overlay_model = build_overlay_model(&runtime.session);
 
-    if phase == SnapSessionPhase::Settled {
-        let outcome = finish_snap_session(&runtime.session);
-        tracing::info!(
-            target: "script_kit::snap_runtime",
-            event = "snap_runtime_finished",
-            ?outcome,
-            "finished snap runtime"
-        );
-        guard.take();
-        drop(guard);
-        hide_snap_overlay(cx)?;
-        return Ok(false);
-    }
+    tracing::info!(
+        target: "script_kit::snap_runtime",
+        event = "snap_runtime_tick",
+        window_id = runtime.session.window_id,
+        ?phase,
+        matched = runtime.session.active_match.is_some(),
+        matched_tile = runtime
+            .session
+            .active_match
+            .map(|m| format!("{:?}", m.target.tile)),
+        "updated snap runtime"
+    );
 
     // Release lock before overlay update.
     drop(guard);
     show_snap_overlay(overlay_model, cx)?;
 
     Ok(true)
+}
+
+/// Finish the snap runtime on mouse-up. Commits when there is an active match,
+/// otherwise cancels cleanly.
+pub fn finish_snap_runtime(cx: &mut App) -> Result<()> {
+    let mut guard = ACTIVE_SNAP_RUNTIME
+        .lock()
+        .map_err(|e| anyhow::anyhow!("snap runtime lock poisoned: {e}"))?;
+
+    let Some(runtime) = guard.take() else {
+        return Ok(());
+    };
+
+    let outcome = finish_snap_session(&runtime.session)?;
+    tracing::info!(
+        target: "script_kit::snap_runtime",
+        event = "snap_runtime_finished",
+        ?outcome,
+        "finished snap runtime"
+    );
+
+    drop(guard);
+    hide_snap_overlay(cx)?;
+
+    Ok(())
 }
 
 /// Cancel the snap runtime without applying changes.

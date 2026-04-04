@@ -435,6 +435,30 @@ fn script_authoring_skill_requires_sk_verify_branch() {
 }
 
 #[test]
+fn launchpad_prefers_home_helper_over_env_home_examples() {
+    assert!(
+        LAUNCHPAD_SOURCE.contains("home("),
+        "START_HERE.md should teach the home(...) helper for user-relative paths"
+    );
+    assert!(
+        !LAUNCHPAD_SOURCE.contains("${env.HOME}"),
+        "START_HERE.md should not ship env.HOME path examples"
+    );
+}
+
+#[test]
+fn script_authoring_skill_calls_out_home_helper_path_safety() {
+    assert!(
+        SCRIPT_AUTHORING_SKILL_SOURCE.contains("Prefer `home(...)`"),
+        "SKILL.md should explicitly direct authors toward home(...)"
+    );
+    assert!(
+        !SCRIPT_AUTHORING_SKILL_SOURCE.contains("${env.HOME}"),
+        "SKILL.md should not ship env.HOME path examples"
+    );
+}
+
+#[test]
 fn harness_submission_builder_appends_guidance_for_script_list_submit() {
     // The harness submission builder must call the shared appendix builder
     // with the ScriptList force path, ensuring every PTY submission for a
