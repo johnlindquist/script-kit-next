@@ -211,7 +211,10 @@ fn context_picker_bro_query_ranks_browser() {
     let first_builtin = items
         .iter()
         .find(|i| matches!(i.kind, ContextPickerItemKind::BuiltIn(_)));
-    assert!(first_builtin.is_some(), "Query 'bro' should match at least one built-in");
+    assert!(
+        first_builtin.is_some(),
+        "Query 'bro' should match at least one built-in"
+    );
     match &first_builtin.unwrap().kind {
         ContextPickerItemKind::BuiltIn(kind) => {
             assert_eq!(
@@ -439,7 +442,10 @@ fn slash_mode_no_file_results() {
         .iter()
         .filter(|i| matches!(i.kind, ContextPickerItemKind::File(_)))
         .count();
-    assert_eq!(file_count, 0, "Slash mode should never include file results");
+    assert_eq!(
+        file_count, 0,
+        "Slash mode should never include file results"
+    );
 }
 
 // ── Tab/Enter acceptance regression (already wired, lock with test) ─────
@@ -605,10 +611,7 @@ fn context_picker_reveal_emits_structured_log() {
         reveal_body.contains("target: \"ai\""),
         "reveal must log to target \"ai\""
     );
-    assert!(
-        reveal_body.contains("reason"),
-        "reveal must log the reason"
-    );
+    assert!(reveal_body.contains("reason"), "reveal must log the reason");
     assert!(
         reveal_body.contains("selected_index"),
         "reveal must log the selected_index"
@@ -709,4 +712,258 @@ fn empty_state_hints_slash_mode() {
     let hints = super::empty_state_hints(ContextPickerTrigger::Slash);
     assert!(hints.len() >= 3);
     assert!(hints[0].starts_with('/'));
+}
+
+// ── Scroll-into-view and navigation edge cases ────────────────────────────
+
+#[test]
+fn context_picker_state_navigation_wrap_up_from_zero() {
+    let items = build_picker_items(ContextPickerTrigger::Mention, "");
+    let count = items.len();
+    assert!(count >= 2);
+
+    let mut state = ContextPickerState::new(ContextPickerTrigger::Mention, String::new(), items);
+    assert_eq!(state.selected_index, 0);
+
+    // Wrap up from 0 → last
+    state.selected_index = if state.selected_index == 0 {
+        state.items.len() - 1
+    } else {
+        state.selected_index - 1
+    };
+    assert_eq!(state.selected_index, count - 1, "Should wrap to last item");
+}
+
+#[test]
+fn context_picker_state_clamp_on_filter_shrink() {
+    let all_items = build_picker_items(ContextPickerTrigger::Mention, "");
+    let count = all_items.len();
+    assert!(count >= 3);
+
+    let mut state =
+        ContextPickerState::new(ContextPickerTrigger::Mention, String::new(), all_items);
+    state.selected_index = count - 1; // Select last item
+
+    // Filter to a smaller set
+    let filtered = build_picker_items(ContextPickerTrigger::Mention, "sel");
+    assert!(filtered.len() < count, "Filtered set should be smaller");
+    state.items = filtered;
+
+    // Clamp selected_index to valid range (same logic as update_context_picker_query)
+    if state.selected_index >= state.items.len() {
+        state.selected_index = state.items.len().saturating_sub(1);
+    }
+    assert!(
+        state.selected_index < state.items.len(),
+        "selected_index {} must be < items.len() {} after filter",
+        state.selected_index,
+        state.items.len(),
+    );
+}
+
+#[test]
+fn context_picker_state_clamp_on_empty_filter() {
+    let mut state = ContextPickerState::new(
+        ContextPickerTrigger::Mention,
+        String::new(),
+        build_picker_items(ContextPickerTrigger::Mention, ""),
+    );
+    state.selected_index = 5;
+
+    // Filter to no results
+    let empty = build_picker_items(ContextPickerTrigger::Mention, "zzzzzznothing");
+    state.items = empty;
+
+    if state.selected_index >= state.items.len() {
+        state.selected_index = state.items.len().saturating_sub(1);
+    }
+    assert_eq!(state.selected_index, 0, "Empty items should clamp to 0");
+}
+
+// ── Slash-mode ranking improvements ────────────────────────────────────
+
+#[test]
+fn slash_exact_command_scores_1000() {
+    // "context" is the slash command for Current Context (without the leading /)
+    let spec = ContextAttachmentKind::Current.spec();
+    let (score, _, _) =
+        super::score_builtin_with_highlights(spec, ContextPickerTrigger::Slash, "context");
+    assert_eq!(
+        score, 1000,
+        "Exact slash command match should score 1000 in slash mode"
+    );
+}
+
+#[test]
+fn slash_prefix_command_outranks_label_prefix() {
+    // Query "con" is a prefix of slash command "context" — should score 500+
+    let spec = ContextAttachmentKind::Current.spec();
+    let (slash_score, _, _) =
+        super::score_builtin_with_highlights(spec, ContextPickerTrigger::Slash, "con");
+    assert!(
+        slash_score >= 500,
+        "Slash prefix match should be tier 2 (500+), got {}",
+        slash_score,
+    );
+}
+
+#[test]
+fn slash_mode_exact_outranks_prefix() {
+    let spec = ContextAttachmentKind::Current.spec();
+    let (exact, _, _) =
+        super::score_builtin_with_highlights(spec, ContextPickerTrigger::Slash, "context");
+    let (prefix, _, _) =
+        super::score_builtin_with_highlights(spec, ContextPickerTrigger::Slash, "con");
+    assert!(
+        exact > prefix,
+        "Exact slash match ({}) should outrank prefix ({})",
+        exact,
+        prefix,
+    );
+}
+
+#[test]
+fn slash_sel_ranks_selection_high() {
+    let items = build_picker_items(ContextPickerTrigger::Slash, "sel");
+    let selection = items.iter().find(|i| {
+        matches!(
+            i.kind,
+            ContextPickerItemKind::BuiltIn(ContextAttachmentKind::Selection)
+        )
+    });
+    assert!(selection.is_some(), "Slash 'sel' should match Selection");
+    assert!(
+        selection.unwrap().score >= 500,
+        "Selection should be tier 2+ for slash 'sel', got {}",
+        selection.unwrap().score,
+    );
+}
+
+// ── Highlight index alignment for slash mode ───────────────────────────
+
+#[test]
+fn slash_mode_meta_highlights_align_with_slash_command() {
+    let items = build_picker_items(ContextPickerTrigger::Slash, "con");
+    let current = items
+        .iter()
+        .find(|i| {
+            matches!(
+                i.kind,
+                ContextPickerItemKind::BuiltIn(ContextAttachmentKind::Current)
+            )
+        })
+        .expect("Current Context should match 'con' in slash mode");
+
+    // Meta should be /context in slash mode
+    assert!(
+        current.meta.contains("context"),
+        "Slash mode meta should contain 'context', got: {}",
+        current.meta,
+    );
+
+    // meta_highlight_indices should point into the bare command text
+    assert!(
+        !current.meta_highlight_indices.is_empty(),
+        "Slash mode should produce meta highlight indices for 'con'"
+    );
+
+    // The bare command is "context" (7 chars); indices must be in range
+    let meta_bare = current.meta.trim_start_matches('/');
+    for &idx in &current.meta_highlight_indices {
+        assert!(
+            idx < meta_bare.len(),
+            "meta highlight index {} out of range for '{}' (len {})",
+            idx,
+            meta_bare,
+            meta_bare.len(),
+        );
+    }
+}
+
+#[test]
+fn mention_mode_meta_highlights_align_with_mention() {
+    let items = build_picker_items(ContextPickerTrigger::Mention, "sel");
+    let selection = items
+        .iter()
+        .find(|i| {
+            matches!(
+                i.kind,
+                ContextPickerItemKind::BuiltIn(ContextAttachmentKind::Selection)
+            )
+        })
+        .expect("Selection should match 'sel'");
+
+    // Meta should be @selection in mention mode
+    assert!(
+        selection.meta.starts_with('@'),
+        "Mention mode meta should start with @, got: {}",
+        selection.meta,
+    );
+
+    let meta_bare = selection.meta.trim_start_matches('@');
+    for &idx in &selection.meta_highlight_indices {
+        assert!(
+            idx < meta_bare.len(),
+            "meta highlight index {} out of range for '{}' (len {})",
+            idx,
+            meta_bare,
+            meta_bare.len(),
+        );
+    }
+}
+
+#[test]
+fn slash_and_mention_highlights_both_cover_query_length() {
+    // Both modes should produce highlight indices matching at least the query length
+    let query = "bro";
+
+    let slash_items = build_picker_items(ContextPickerTrigger::Slash, query);
+    let slash_browser = slash_items.iter().find(|i| {
+        matches!(
+            i.kind,
+            ContextPickerItemKind::BuiltIn(ContextAttachmentKind::Browser)
+        )
+    });
+
+    let mention_items = build_picker_items(ContextPickerTrigger::Mention, query);
+    let mention_browser = mention_items.iter().find(|i| {
+        matches!(
+            i.kind,
+            ContextPickerItemKind::BuiltIn(ContextAttachmentKind::Browser)
+        )
+    });
+
+    if let Some(item) = slash_browser {
+        assert!(
+            item.label_highlight_indices.len() >= query.len(),
+            "Slash Browser label highlights ({:?}) should cover query len {}",
+            item.label_highlight_indices,
+            query.len(),
+        );
+    }
+
+    if let Some(item) = mention_browser {
+        assert!(
+            item.label_highlight_indices.len() >= query.len(),
+            "Mention Browser label highlights ({:?}) should cover query len {}",
+            item.label_highlight_indices,
+            query.len(),
+        );
+    }
+}
+
+// ── Deterministic ranking across trigger modes ─────────────────────────
+
+#[test]
+fn slash_ranking_is_deterministic() {
+    let items_a = build_picker_items(ContextPickerTrigger::Slash, "con");
+    let items_b = build_picker_items(ContextPickerTrigger::Slash, "con");
+
+    assert_eq!(items_a.len(), items_b.len());
+    for (a, b) in items_a.iter().zip(items_b.iter()) {
+        assert_eq!(a.id, b.id, "Slash mode ranking must be deterministic");
+        assert_eq!(a.score, b.score);
+        assert_eq!(a.label_highlight_indices, b.label_highlight_indices);
+        assert_eq!(a.meta_highlight_indices, b.meta_highlight_indices);
+    }
 }

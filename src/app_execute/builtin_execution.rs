@@ -1486,6 +1486,23 @@ impl ScriptListApp {
         cx.notify();
     }
 
+    fn open_theme_chooser_view(&mut self, cx: &mut Context<Self>) {
+        self.theme_before_chooser = Some(self.theme.clone());
+        let start_index = theme::presets::find_current_preset_index(&self.theme);
+
+        self.open_builtin_filterable_view(
+            AppView::ThemeChooserView {
+                filter: String::new(),
+                selected_index: start_index,
+            },
+            "Search themes...",
+            cx,
+        );
+
+        self.theme_chooser_scroll_handle
+            .scroll_to_item(start_index, ScrollStrategy::Nearest);
+    }
+
     fn open_mini_main_window(&mut self, cx: &mut Context<Self>) {
         self.filter_text.clear();
         self.computed_filter_text.clear();
@@ -2522,17 +2539,7 @@ impl ScriptListApp {
                         Self::builtin_success(dctx, "configure_anthropic_api_key")
                     }
                     SettingsCommandType::ChooseTheme => {
-                        self.theme_before_chooser = Some(self.theme.clone());
-                        let start_index = theme::presets::find_current_preset_index(&self.theme);
-
-                        self.open_builtin_filterable_view(
-                            AppView::ThemeChooserView {
-                                filter: String::new(),
-                                selected_index: start_index,
-                            },
-                            "Search themes...",
-                            cx,
-                        );
+                        self.open_theme_chooser_view(cx);
 
                         Self::builtin_success(dctx, "choose_theme")
                     }

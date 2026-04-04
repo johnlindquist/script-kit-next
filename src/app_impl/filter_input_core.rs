@@ -129,6 +129,7 @@ impl ScriptListApp {
         self.file_search_display_indices.clear();
         self.file_search_current_dir = None;
         self.file_search_frozen_filter = None;
+        self.file_search_selection_mode = FileSearchSelectionMode::AutoFirst;
         if !preserve_sort_mode {
             self.file_search_sort_mode = crate::actions::FileSearchSortMode::default();
         }

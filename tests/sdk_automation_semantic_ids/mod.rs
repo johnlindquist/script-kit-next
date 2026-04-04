@@ -55,7 +55,11 @@ fn microphone_choice_with_semantic_id_roundtrips_serde() {
         value: MIC_DEFAULT_VALUE.to_string(),
         description: Some("Built-in Microphone".to_string()),
         key: None,
-        semantic_id: Some(expected_builtin_semantic_id(MIC_PROMPT_ID, 0, MIC_DEFAULT_VALUE)),
+        semantic_id: Some(expected_builtin_semantic_id(
+            MIC_PROMPT_ID,
+            0,
+            MIC_DEFAULT_VALUE,
+        )),
     };
     let json = serde_json::to_string(&choice).expect("serialize choice");
     let parsed: serde_json::Value = serde_json::from_str(&json).expect("parse json");
@@ -115,9 +119,11 @@ fn dictation_model_all_statuses_produce_non_empty_semantic_ids() {
         expected_builtin_semantic_id(DICTATION_PROMPT_ID, 0, DICTATION_CANCEL),
         expected_builtin_semantic_id(DICTATION_PROMPT_ID, 1, DICTATION_HIDE),
     ];
-    let extracting = vec![
-        expected_builtin_semantic_id(DICTATION_PROMPT_ID, 0, DICTATION_HIDE),
-    ];
+    let extracting = vec![expected_builtin_semantic_id(
+        DICTATION_PROMPT_ID,
+        0,
+        DICTATION_HIDE,
+    )];
     let cancelled = vec![
         expected_builtin_semantic_id(DICTATION_PROMPT_ID, 0, DICTATION_DOWNLOAD),
         expected_builtin_semantic_id(DICTATION_PROMPT_ID, 1, DICTATION_HIDE),
@@ -126,9 +132,11 @@ fn dictation_model_all_statuses_produce_non_empty_semantic_ids() {
         expected_builtin_semantic_id(DICTATION_PROMPT_ID, 0, DICTATION_DOWNLOAD),
         expected_builtin_semantic_id(DICTATION_PROMPT_ID, 1, DICTATION_CANCEL),
     ];
-    let available = vec![
-        expected_builtin_semantic_id(DICTATION_PROMPT_ID, 0, DICTATION_HIDE),
-    ];
+    let available = vec![expected_builtin_semantic_id(
+        DICTATION_PROMPT_ID,
+        0,
+        DICTATION_HIDE,
+    )];
 
     for (status_name, ids) in [
         ("not_downloaded", &not_downloaded),

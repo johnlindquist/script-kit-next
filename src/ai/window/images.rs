@@ -66,8 +66,7 @@ impl AiApp {
                 self.update_context_picker_query(tq.trigger, tq.query, cx);
             } else {
                 // Open the picker inline (Window is only needed when accepting)
-                let items =
-                    super::context_picker::build_picker_items(tq.trigger, &tq.query);
+                let items = super::context_picker::build_picker_items(tq.trigger, &tq.query);
                 tracing::info!(
                     target: "ai",
                     trigger = ?tq.trigger,
@@ -76,10 +75,9 @@ impl AiApp {
                     selected_index = 0,
                     "ai_context_picker_opened"
                 );
-                self.context_picker =
-                    Some(super::context_picker::types::ContextPickerState::new(
-                        tq.trigger, tq.query, items,
-                    ));
+                self.context_picker = Some(super::context_picker::types::ContextPickerState::new(
+                    tq.trigger, tq.query, items,
+                ));
                 cx.notify();
             }
         } else if self.is_context_picker_open() {

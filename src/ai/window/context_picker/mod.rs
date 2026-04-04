@@ -14,9 +14,7 @@ mod tests;
 use super::*;
 use crate::ai::context_contract::{context_attachment_specs, ContextAttachmentKind};
 use crate::ai::message_parts::AiContextPart;
-use types::{
-    ContextPickerItem, ContextPickerItemKind, ContextPickerState, ContextPickerTrigger,
-};
+use types::{ContextPickerItem, ContextPickerItemKind, ContextPickerState, ContextPickerTrigger};
 
 /// Minimum query length before file/folder results are shown.
 /// Built-in items always show (they are few and high-value).
@@ -133,18 +131,13 @@ impl AiApp {
         reason: &'static str,
         cx: &mut Context<Self>,
     ) {
-        let Some(target) = self
-            .context_picker
-            .as_ref()
-            .map(|p| p.selected_index)
-        else {
+        let Some(target) = self.context_picker.as_ref().map(|p| p.selected_index) else {
             return;
         };
         if self.context_picker_last_scrolled_index == Some(target) {
             return;
         }
-        self.context_picker_list_state
-            .scroll_to_reveal_item(target);
+        self.context_picker_list_state.scroll_to_reveal_item(target);
         self.context_picker_last_scrolled_index = Some(target);
         tracing::info!(
             target: "ai",
@@ -233,6 +226,11 @@ impl AiApp {
                     path: path.to_string_lossy().to_string(),
                     label: item.label.to_string(),
                 },
+                ContextPickerItemKind::SlashCommand(_) => {
+                    // SlashCommand items are ACP-only; the window picker
+                    // should never encounter them, but handle gracefully.
+                    return;
+                }
             };
             let label = part.label().to_string();
             let source = part.source().to_string();
@@ -444,55 +442,86 @@ fn score_builtin_with_highlights(
     let mut best_label_hits = Vec::new();
     let mut best_meta_hits = Vec::new();
 
-    // Exact match on mention
-    if mention_lower == query {
+    // Helper: compute both highlight vectors for the current query.
+    let compute_hits = |q: &str| -> (Vec<usize>, Vec<usize>) {
+        (
+            match_query_chars(q, spec.label).unwrap_or_default(),
+            match_query_chars(q, meta_bare).unwrap_or_default(),
+        )
+    };
+
+    // ── Tier 1 (1000): Exact match on mention or slash command ──
+    // In Slash mode, an exact slash-command match is equally strong;
+    // in Mention mode, an exact mention match leads.
+    if mention_lower == query || slash_lower == query {
         best_score = 1000;
-        best_label_hits = match_query_chars(query, spec.label).unwrap_or_default();
-        best_meta_hits = match_query_chars(query, meta_bare).unwrap_or_default();
+        (best_label_hits, best_meta_hits) = compute_hits(query);
     }
 
-    // Prefix match on mention
-    if best_score < 500 && !mention_lower.is_empty() && mention_lower.starts_with(query) {
-        let s = 500 + (100 - query.len().min(99) as u32);
-        if s > best_score {
-            best_score = s;
-            best_label_hits = match_query_chars(query, spec.label).unwrap_or_default();
-            best_meta_hits = match_query_chars(query, meta_bare).unwrap_or_default();
+    // ── Tier 2 (500+): Prefix match on trigger-primary identifier ──
+    // In Slash mode, slash-command prefix is promoted to the same tier as
+    // mention prefix; in Mention mode, mention prefix leads.
+    if best_score < 500 {
+        let primary_match = match trigger {
+            ContextPickerTrigger::Slash => {
+                !slash_lower.is_empty() && slash_lower.starts_with(query)
+            }
+            ContextPickerTrigger::Mention => {
+                !mention_lower.is_empty() && mention_lower.starts_with(query)
+            }
+        };
+        if primary_match {
+            let s = 500 + (100 - query.len().min(99) as u32);
+            if s > best_score {
+                best_score = s;
+                (best_label_hits, best_meta_hits) = compute_hits(query);
+            }
         }
     }
 
-    // Prefix match on label
+    // ── Tier 2b (500+): Prefix on the secondary identifier ──
+    // Mention prefix in slash mode, slash prefix in mention mode.
+    if best_score < 500 {
+        let secondary_match = match trigger {
+            ContextPickerTrigger::Slash => {
+                !mention_lower.is_empty() && mention_lower.starts_with(query)
+            }
+            ContextPickerTrigger::Mention => {
+                !slash_lower.is_empty() && slash_lower.starts_with(query)
+            }
+        };
+        if secondary_match {
+            let s = 500 + (100 - query.len().min(99) as u32);
+            if s > best_score {
+                best_score = s;
+                (best_label_hits, best_meta_hits) = compute_hits(query);
+            }
+        }
+    }
+
+    // ── Tier 3 (400): Prefix match on label ──
     if best_score < 400 && label_lower.starts_with(query) {
         best_score = 400;
-        best_label_hits = match_query_chars(query, spec.label).unwrap_or_default();
-        best_meta_hits = match_query_chars(query, meta_bare).unwrap_or_default();
+        (best_label_hits, best_meta_hits) = compute_hits(query);
     }
 
-    // Prefix match on slash command
-    if best_score < 300 && !slash_lower.is_empty() && slash_lower.starts_with(query) {
-        best_score = 300;
-        best_label_hits = match_query_chars(query, spec.label).unwrap_or_default();
-        best_meta_hits = match_query_chars(query, meta_bare).unwrap_or_default();
-    }
-
-    // Substring match on label
+    // ── Tier 4 (200): Substring match on label ──
     if best_score < 200 && label_lower.contains(query) {
         best_score = 200;
         best_label_hits = match_query_chars(query, spec.label).unwrap_or_default();
         best_meta_hits = Vec::new();
     }
 
-    // Substring match on mention or slash
+    // ── Tier 5 (100): Substring match on mention or slash ──
     if best_score < 100 && (mention_lower.contains(query) || slash_lower.contains(query)) {
         best_score = 100;
-        best_label_hits = match_query_chars(query, spec.label).unwrap_or_default();
-        best_meta_hits = match_query_chars(query, meta_bare).unwrap_or_default();
+        (best_label_hits, best_meta_hits) = compute_hits(query);
     }
 
     (best_score, best_label_hits, best_meta_hits)
 }
 
-/// Score a built-in spec against the user query.
+/// Score a built-in spec against the user query (mention mode).
 ///
 /// Returns 0 if no match, higher values for better matches.
 /// Deterministic: same query always produces the same score.
@@ -501,6 +530,18 @@ pub fn score_builtin(
     query: &str,
 ) -> u32 {
     score_builtin_with_highlights(spec, ContextPickerTrigger::Mention, query).0
+}
+
+/// Score a built-in spec against the user query with a specific trigger mode.
+///
+/// Returns `(score, label_highlight_indices, meta_highlight_indices)`.
+/// Use this to verify trigger-aware ranking in integration tests.
+pub fn score_builtin_with_trigger(
+    spec: &crate::ai::context_contract::ContextAttachmentSpec,
+    trigger: ContextPickerTrigger,
+    query: &str,
+) -> (u32, Vec<usize>, Vec<usize>) {
+    score_builtin_with_highlights(spec, trigger, query)
 }
 
 /// Collect file and folder items from the given directory matching the query.
@@ -577,7 +618,8 @@ fn collect_file_items(dir: &std::path::Path, query: &str, items: &mut Vec<Contex
 fn section_priority(kind: &ContextPickerItemKind) -> u8 {
     match kind {
         ContextPickerItemKind::BuiltIn(_) => 0,
-        ContextPickerItemKind::File(_) => 1,
-        ContextPickerItemKind::Folder(_) => 2,
+        ContextPickerItemKind::SlashCommand(_) => 1,
+        ContextPickerItemKind::File(_) => 2,
+        ContextPickerItemKind::Folder(_) => 3,
     }
 }

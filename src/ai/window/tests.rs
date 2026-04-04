@@ -2216,7 +2216,8 @@ fn test_picker_snapshot_is_serializable_and_consistent() {
     };
 
     let items = build_picker_items(ContextPickerTrigger::Mention, "sel");
-    let mut state = ContextPickerState::new(ContextPickerTrigger::Mention, "sel".to_string(), items);
+    let mut state =
+        ContextPickerState::new(ContextPickerTrigger::Mention, "sel".to_string(), items);
     state.selected_index = 0;
 
     let snapshot = state.snapshot();

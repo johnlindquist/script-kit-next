@@ -1,3 +1,9 @@
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum FileSearchSelectionMode {
+    AutoFirst,
+    UserLockedPath,
+}
+
 struct ScriptListApp {
     /// H1 Optimization: Arc-wrapped scripts for cheap cloning during filter operations
     scripts: Vec<std::sync::Arc<scripts::Script>>,
@@ -122,6 +128,9 @@ struct ScriptListApp {
     // This is computed once when results change or filter changes (not in render)
     // Vec of indices into cached_file_results, sorted by match quality
     file_search_display_indices: Vec<usize>,
+    // Whether file-search selection should stay pinned to the first visible row
+    // or follow the user's explicit selection across streamed updates.
+    file_search_selection_mode: FileSearchSelectionMode,
     // Right-side preview panel thumbnail state for selected image files.
     file_search_preview_thumbnail: FileSearchThumbnailPreviewState,
     // Actions popup overlay

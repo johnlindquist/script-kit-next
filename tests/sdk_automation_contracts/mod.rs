@@ -1,13 +1,13 @@
 //! Contract tests verifying that wait/batch error, trace, and SDK-reference
 //! contracts are normalized to the repo's structured diagnostics pattern.
 
+use script_kit_gpui::protocol::transaction_executor::{
+    execute_batch, execute_wait_for, TransactionStateProvider,
+};
 use script_kit_gpui::protocol::{
     BatchCommand, BatchOptions, Message, StateMatchSpec, TransactionError, TransactionErrorCode,
     TransactionTraceMode, UiStateSnapshot, WaitCondition, WaitDetailedCondition,
     WaitNamedCondition,
-};
-use script_kit_gpui::protocol::transaction_executor::{
-    execute_batch, execute_wait_for, TransactionStateProvider,
 };
 
 // ---------------------------------------------------------------------------
@@ -61,7 +61,11 @@ impl TransactionStateProvider for MockProvider {
     }
 
     fn select_by_value(&mut self, value: &str, _submit: bool) -> anyhow::Result<Option<String>> {
-        if self.visible_semantic_ids.iter().any(|id| id.contains(value)) {
+        if self
+            .visible_semantic_ids
+            .iter()
+            .any(|id| id.contains(value))
+        {
             self.selected_value = Some(value.to_string());
             Ok(Some(value.to_string()))
         } else {
@@ -330,7 +334,10 @@ fn wait_for_trace_on_failure_omits_trace_on_success() {
     .expect("execute");
 
     assert!(output.success);
-    assert!(output.trace.is_none(), "trace should be absent on success with onFailure mode");
+    assert!(
+        output.trace.is_none(),
+        "trace should be absent on success with onFailure mode"
+    );
 }
 
 // ============================================================
@@ -357,7 +364,10 @@ fn batch_selection_failure_returns_structured_error() {
 
     assert!(!output.success);
     assert_eq!(output.failed_at, Some(0));
-    let err = output.results[0].error.as_ref().expect("error on selection failure");
+    let err = output.results[0]
+        .error
+        .as_ref()
+        .expect("error on selection failure");
     assert_eq!(err.code, TransactionErrorCode::SelectionNotFound);
 }
 
@@ -436,7 +446,10 @@ fn batch_trace_on_failure_omits_trace_on_success() {
     .expect("execute");
 
     assert!(output.success);
-    assert!(output.trace.is_none(), "trace should be absent on success with onFailure mode");
+    assert!(
+        output.trace.is_none(),
+        "trace should be absent on success with onFailure mode"
+    );
 }
 
 // ============================================================
@@ -504,7 +517,9 @@ fn sdk_reference_wait_for_description_documents_error_codes() {
         .find(|f| f["name"] == "waitFor")
         .expect("waitFor in sdk-reference");
 
-    let desc = wait_for["description"].as_str().expect("description string");
+    let desc = wait_for["description"]
+        .as_str()
+        .expect("description string");
     assert!(
         desc.contains("wait_condition_timeout"),
         "waitFor description must document wait_condition_timeout code"

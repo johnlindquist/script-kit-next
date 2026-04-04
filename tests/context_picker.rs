@@ -4,8 +4,9 @@
 //! and the contract between picker items and `AiContextPart` creation.
 
 use script_kit_gpui::ai::{
-    build_picker_items, context_attachment_specs, score_builtin, AiContextPart,
-    ContextAttachmentKind, ContextPickerItemKind, ContextPickerState, ContextPickerTrigger,
+    build_picker_items, context_attachment_specs, score_builtin, score_builtin_with_trigger,
+    AiContextPart, ContextAttachmentKind, ContextPickerItemKind, ContextPickerState,
+    ContextPickerTrigger,
 };
 
 // ---------- Deterministic picker ranking ----------
@@ -329,4 +330,107 @@ fn new_entries_are_queryable() {
         )),
         "'notif' should match Notifications built-in"
     );
+}
+
+// ---------- Slash-mode ranking and highlight improvements ----------
+
+#[test]
+fn slash_exact_command_match_scores_highest() {
+    let spec = ContextAttachmentKind::Current.spec();
+    let (score, _, _) = score_builtin_with_trigger(spec, ContextPickerTrigger::Slash, "context");
+    assert_eq!(
+        score, 1000,
+        "Exact slash command match should score 1000"
+    );
+}
+
+#[test]
+fn slash_prefix_promoted_to_tier_2() {
+    let spec = ContextAttachmentKind::Current.spec();
+    let (score, _, _) = score_builtin_with_trigger(spec, ContextPickerTrigger::Slash, "con");
+    assert!(
+        score >= 500,
+        "Slash prefix should be tier 2 (500+), got {}",
+        score
+    );
+}
+
+#[test]
+fn slash_exact_outranks_slash_prefix() {
+    let spec = ContextAttachmentKind::Current.spec();
+    let (exact, _, _) = score_builtin_with_trigger(spec, ContextPickerTrigger::Slash, "context");
+    let (prefix, _, _) = score_builtin_with_trigger(spec, ContextPickerTrigger::Slash, "con");
+    assert!(
+        exact > prefix,
+        "Exact ({}) must outrank prefix ({})",
+        exact,
+        prefix
+    );
+}
+
+#[test]
+fn slash_mode_ranking_is_deterministic() {
+    let a = build_picker_items(ContextPickerTrigger::Slash, "con");
+    let b = build_picker_items(ContextPickerTrigger::Slash, "con");
+    assert_eq!(a.len(), b.len());
+    for (ia, ib) in a.iter().zip(b.iter()) {
+        assert_eq!(ia.id, ib.id);
+        assert_eq!(ia.score, ib.score);
+        assert_eq!(ia.label_highlight_indices, ib.label_highlight_indices);
+        assert_eq!(ia.meta_highlight_indices, ib.meta_highlight_indices);
+    }
+}
+
+#[test]
+fn slash_mode_highlights_align_with_meta_text() {
+    let items = build_picker_items(ContextPickerTrigger::Slash, "con");
+    let current = items
+        .iter()
+        .find(|i| {
+            matches!(
+                i.kind,
+                ContextPickerItemKind::BuiltIn(ContextAttachmentKind::Current)
+            )
+        })
+        .expect("/context should match 'con' in slash mode");
+
+    let meta_bare = current.meta.trim_start_matches('/');
+    for &idx in &current.meta_highlight_indices {
+        assert!(
+            idx < meta_bare.len(),
+            "meta highlight index {} out of range for '{}' (len {})",
+            idx,
+            meta_bare,
+            meta_bare.len()
+        );
+    }
+    assert!(
+        !current.meta_highlight_indices.is_empty(),
+        "Slash mode should produce meta highlights for 'con'"
+    );
+}
+
+#[test]
+fn mention_mode_highlights_align_with_meta_text() {
+    let items = build_picker_items(ContextPickerTrigger::Mention, "sel");
+    let selection = items
+        .iter()
+        .find(|i| {
+            matches!(
+                i.kind,
+                ContextPickerItemKind::BuiltIn(ContextAttachmentKind::Selection)
+            )
+        })
+        .expect("Selection should match 'sel'");
+
+    let meta_bare = selection.meta.trim_start_matches('@');
+    for &idx in &selection.meta_highlight_indices {
+        assert!(
+            idx < meta_bare.len(),
+            "meta highlight index {} out of range for '{}' (len {})",
+            idx,
+            meta_bare,
+            meta_bare.len()
+        );
+    }
 }
