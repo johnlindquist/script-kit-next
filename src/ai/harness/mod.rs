@@ -44,6 +44,95 @@ pub enum TabAiCaptureKind {
     BrowserTab,
 }
 
+// ---------------------------------------------------------------------------
+// Artifact kind
+// ---------------------------------------------------------------------------
+
+/// Resolved artifact classification for a Tab AI prompt invocation.
+///
+/// Drives `use_quick_terminal` routing: only `Script` variants get the Bun
+/// verification gate and quick-terminal surface.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum TabAiArtifactKind {
+    Script,
+    ExtensionBundle,
+    Agent,
+}
+
+impl TabAiArtifactKind {
+    pub(crate) const fn as_str(self) -> &'static str {
+        match self {
+            Self::Script => "script",
+            Self::ExtensionBundle => "extensionBundle",
+            Self::Agent => "agent",
+        }
+    }
+}
+
+/// Resolve an artifact kind from the prompt type, intent, and submission mode.
+///
+/// Returns `None` when the intent does not look like an artifact-creation
+/// request at all (e.g. "explain this selection").
+fn resolve_tab_ai_artifact_kind(
+    prompt_type: &str,
+    effective_intent: Option<&str>,
+    mode: TabAiHarnessSubmissionMode,
+) -> Option<TabAiArtifactKind> {
+    let normalized_intent = effective_intent
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(|value| collapse_inline_text(&value.to_ascii_lowercase()))?;
+
+    // Agent / MDFlow / prompt-file keywords → Agent
+    if ["agent", "mdflow", "prompt file"]
+        .iter()
+        .any(|needle| normalized_intent.contains(needle))
+    {
+        // ScriptList submit with an agent intent is still an Agent, not a Script.
+        return Some(TabAiArtifactKind::Agent);
+    }
+
+    // Extension-bundle / scriptlet keywords → ExtensionBundle
+    if [
+        "scriptlet",
+        "scriptlets",
+        "extension",
+        "extensions",
+        "bundle",
+        "bundles",
+        "snippet",
+        "snippets",
+        "text expansion",
+        "template",
+    ]
+    .iter()
+    .any(|needle| normalized_intent.contains(needle))
+    {
+        return Some(TabAiArtifactKind::ExtensionBundle);
+    }
+
+    // Forced ScriptList submit with non-empty intent → Script
+    if should_force_artifact_guidance_for_script_list_submit(
+        prompt_type,
+        Some(normalized_intent.as_str()),
+        mode,
+    ) {
+        return Some(TabAiArtifactKind::Script);
+    }
+
+    // Explicit "script" keyword or command-like artifact request → Script
+    if normalized_intent.contains("script")
+        || looks_like_command_like_artifact_request(&normalized_intent)
+        || COMMAND_LIKE_ARTIFACT_WORDS
+            .iter()
+            .any(|word| normalized_intent.ends_with(word))
+    {
+        return Some(TabAiArtifactKind::Script);
+    }
+
+    None
+}
+
 /// Schema version for `HarnessConfig` wire format.
 pub const TAB_AI_HARNESS_CONFIG_SCHEMA_VERSION: u32 = 1;
 
@@ -850,13 +939,12 @@ impl TabAiVerificationGuidanceMarkers {
 // ---------------------------------------------------------------------------
 
 /// Pre-computed metadata from the static guidance block.  Allocated once via
-/// `LazyLock` so marker detection and `use_quick_terminal` are never re-derived.
+/// `LazyLock` so marker detection is never re-derived.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct TabAiCachedArtifactAuthoringGuidance {
     guidance: &'static str,
     has_script_verification_gate_header: bool,
     markers: TabAiVerificationGuidanceMarkers,
-    use_quick_terminal: bool,
 }
 
 /// Fully resolved appendix for a single prompt invocation.
@@ -865,6 +953,7 @@ struct TabAiCachedArtifactAuthoringGuidance {
 /// input, and surface-preference selection all consume directly.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct TabAiArtifactAuthoringAppendix {
+    pub artifact_kind: Option<TabAiArtifactKind>,
     pub guidance: &'static str,
     pub forced_by_script_list_submit: bool,
     pub has_script_verification_gate_header: bool,
@@ -880,9 +969,6 @@ static TAB_AI_CACHED_ARTIFACT_AUTHORING_GUIDANCE: LazyLock<TabAiCachedArtifactAu
             guidance,
             has_script_verification_gate_header: guidance
                 .contains(SCRIPT_VERIFICATION_GATE_HEADER),
-            use_quick_terminal: markers.includes_script_authoring_skill
-                && markers.includes_bun_build_verification
-                && markers.includes_bun_execute_verification,
             markers,
         }
     });
@@ -905,13 +991,23 @@ fn resolve_tab_ai_artifact_authoring_appendix_for_prompt(
         return None;
     }
 
+    let artifact_kind = resolve_tab_ai_artifact_kind(prompt_type, effective_intent, mode);
     let cached = &*TAB_AI_CACHED_ARTIFACT_AUTHORING_GUIDANCE;
+
+    // use_quick_terminal is true only for Script artifacts whose cached
+    // guidance includes all three verification markers.
+    let use_quick_terminal = matches!(artifact_kind, Some(TabAiArtifactKind::Script))
+        && cached.markers.includes_script_authoring_skill
+        && cached.markers.includes_bun_build_verification
+        && cached.markers.includes_bun_execute_verification;
+
     Some(TabAiArtifactAuthoringAppendix {
+        artifact_kind,
         guidance: cached.guidance,
         forced_by_script_list_submit,
         has_script_verification_gate_header: cached.has_script_verification_gate_header,
         markers: cached.markers,
-        use_quick_terminal: cached.use_quick_terminal,
+        use_quick_terminal,
     })
 }
 
@@ -983,6 +1079,8 @@ pub(crate) struct TabAiAcpInitialInput {
     pub text: String,
     pub guidance_appended: bool,
     pub forced_by_script_list_submit: bool,
+    pub artifact_kind: Option<TabAiArtifactKind>,
+    pub use_quick_terminal: bool,
     pub includes_script_authoring_skill: bool,
     pub includes_bun_build_verification: bool,
     pub includes_bun_execute_verification: bool,
@@ -999,26 +1097,29 @@ pub(crate) fn build_tab_ai_acp_initial_input_for_prompt(
 ) -> TabAiAcpInitialInput {
     let intent = intent.trim();
 
-    if intent.is_empty() {
-        return TabAiAcpInitialInput {
+    let result = if intent.is_empty() {
+        TabAiAcpInitialInput {
             text: String::new(),
             guidance_appended: false,
             forced_by_script_list_submit: false,
+            artifact_kind: None,
+            use_quick_terminal: false,
             includes_script_authoring_skill: false,
             includes_bun_build_verification: false,
             includes_bun_execute_verification: false,
-        };
-    }
-
-    if let Some(appendix) = build_tab_ai_artifact_authoring_appendix_for_prompt(
+        }
+    } else if let Some(appendix) = build_tab_ai_artifact_authoring_appendix_for_prompt(
         prompt_type,
         Some(intent),
         TabAiHarnessSubmissionMode::Submit,
     ) {
+        let guidance = appendix.guidance;
         TabAiAcpInitialInput {
-            text: format!("{}\n\nUser intent:\n{intent}\n", appendix.guidance),
+            text: format!("{guidance}\n\nUser intent:\n{intent}\n"),
             guidance_appended: true,
             forced_by_script_list_submit: appendix.forced_by_script_list_submit,
+            artifact_kind: appendix.artifact_kind,
+            use_quick_terminal: appendix.use_quick_terminal,
             includes_script_authoring_skill: appendix.markers.includes_script_authoring_skill,
             includes_bun_build_verification: appendix.markers.includes_bun_build_verification,
             includes_bun_execute_verification: appendix.markers.includes_bun_execute_verification,
@@ -1028,11 +1129,31 @@ pub(crate) fn build_tab_ai_acp_initial_input_for_prompt(
             text: intent.to_string(),
             guidance_appended: false,
             forced_by_script_list_submit: false,
+            artifact_kind: None,
+            use_quick_terminal: false,
             includes_script_authoring_skill: false,
             includes_bun_build_verification: false,
             includes_bun_execute_verification: false,
         }
-    }
+    };
+
+    tracing::info!(
+        event = "tab_ai_acp_initial_input_built",
+        prompt_type,
+        guidance_appended = result.guidance_appended,
+        forced_by_script_list_submit = result.forced_by_script_list_submit,
+        artifact_kind = result
+            .artifact_kind
+            .map(TabAiArtifactKind::as_str)
+            .unwrap_or("unknown"),
+        use_quick_terminal = result.use_quick_terminal,
+        includes_script_authoring_skill = result.includes_script_authoring_skill,
+        includes_bun_build_verification = result.includes_bun_build_verification,
+        includes_bun_execute_verification = result.includes_bun_execute_verification,
+        text_len = result.text.len(),
+    );
+
+    result
 }
 
 /// Canonical one-shot authoring launchpad for harness mode.
@@ -1123,6 +1244,10 @@ pub fn build_tab_ai_harness_submission(
             event = "tab_ai_artifact_authoring_guidance_appended",
             script_authoring_skill_path = SCRIPT_AUTHORING_SKILL_MARKER,
             forced_by_script_list_submit = appendix.forced_by_script_list_submit,
+            artifact_kind = appendix
+                .artifact_kind
+                .map(TabAiArtifactKind::as_str)
+                .unwrap_or("unknown"),
             script_verification_gate_present = appendix.has_script_verification_gate_header,
             includes_script_authoring_skill = appendix.markers.includes_script_authoring_skill,
             includes_bun_build_verification = appendix.markers.includes_bun_build_verification,
@@ -3026,6 +3151,11 @@ mod cleanup_contract_audits {
             super::build_tab_ai_acp_initial_input_for_prompt("ScriptList", "clipboard cleanup");
         assert!(input.guidance_appended);
         assert!(input.forced_by_script_list_submit);
+        assert_eq!(
+            input.artifact_kind,
+            Some(super::TabAiArtifactKind::Script)
+        );
+        assert!(input.use_quick_terminal);
         assert!(input.includes_script_authoring_skill);
         assert!(input.includes_bun_build_verification);
         assert!(input.includes_bun_execute_verification);
@@ -3041,10 +3171,27 @@ mod cleanup_contract_audits {
             super::build_tab_ai_acp_initial_input_for_prompt("FileSearch", "rename this file");
         assert!(!input.guidance_appended);
         assert!(!input.forced_by_script_list_submit);
+        assert!(input.artifact_kind.is_none());
+        assert!(!input.use_quick_terminal);
         assert!(!input.includes_script_authoring_skill);
         assert!(!input.includes_bun_build_verification);
         assert!(!input.includes_bun_execute_verification);
         assert_eq!(input.text, "rename this file");
+    }
+
+    #[test]
+    fn acp_initial_input_agent_intent_does_not_use_quick_terminal() {
+        let input =
+            super::build_tab_ai_acp_initial_input_for_prompt("ScriptList", "review PR agent");
+        assert!(input.guidance_appended);
+        assert_eq!(
+            input.artifact_kind,
+            Some(super::TabAiArtifactKind::Agent)
+        );
+        assert!(
+            !input.use_quick_terminal,
+            "Agent artifacts must not route to quick terminal"
+        );
     }
 
     #[test]
@@ -3138,6 +3285,11 @@ mod cleanup_contract_audits {
         )
         .expect("ScriptList + Submit + non-empty intent must produce an appendix");
 
+        assert_eq!(
+            appendix.artifact_kind,
+            Some(super::TabAiArtifactKind::Script),
+            "ScriptList + Submit + terse intent must resolve to Script"
+        );
         assert!(appendix.use_quick_terminal);
         assert!(appendix.forced_by_script_list_submit);
         assert!(appendix.has_script_verification_gate_header);
@@ -3154,6 +3306,27 @@ mod cleanup_contract_audits {
                 .contains("SK_VERIFY=1 bun ~/.scriptkit/kit/main/scripts/<name>.ts"),
             "guidance must include the SK_VERIFY bun run command"
         );
+    }
+
+    #[test]
+    fn agent_intent_appendix_has_agent_kind_and_no_quick_terminal() {
+        let appendix = super::build_tab_ai_artifact_authoring_appendix_for_prompt(
+            "ScriptList",
+            Some("review PR agent"),
+            super::TabAiHarnessSubmissionMode::Submit,
+        )
+        .expect("ScriptList + Submit + agent intent must produce an appendix");
+
+        assert_eq!(
+            appendix.artifact_kind,
+            Some(super::TabAiArtifactKind::Agent),
+            "agent keyword must resolve to Agent kind"
+        );
+        assert!(
+            !appendix.use_quick_terminal,
+            "Agent artifacts must not route to quick terminal"
+        );
+        assert!(appendix.forced_by_script_list_submit);
     }
 
     #[test]

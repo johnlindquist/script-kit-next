@@ -4274,13 +4274,13 @@ fn begin_tab_ai_harness_entry_emits_surface_selected_log() {
 
 #[test]
 fn surface_preference_helper_requires_all_three_markers_for_quick_terminal() {
-    // tab_ai_surface_preference_for_prompt must AND all three marker flags
-    // to set use_quick_terminal = true.
+    // resolve_tab_ai_artifact_authoring_appendix_for_prompt must AND artifact_kind == Script
+    // with all three marker flags to set use_quick_terminal = true.
     assert!(
         HARNESS_SOURCE.contains(
-            "use_quick_terminal: markers.includes_script_authoring_skill\n            && markers.includes_bun_build_verification\n            && markers.includes_bun_execute_verification"
+            "let use_quick_terminal = matches!(artifact_kind, Some(TabAiArtifactKind::Script))\n        && cached.markers.includes_script_authoring_skill\n        && cached.markers.includes_bun_build_verification\n        && cached.markers.includes_bun_execute_verification;"
         ),
-        "use_quick_terminal must require all three verification markers"
+        "use_quick_terminal must require Script artifact_kind and all three verification markers"
     );
 }
 
