@@ -5,6 +5,41 @@
 
 use crate::utils::truncate_str_chars;
 
+fn is_noise_line(line: &str) -> bool {
+    let trimmed = line.trim();
+    if trimmed.is_empty() {
+        return true;
+    }
+
+    trimmed.starts_with("[BENCH]")
+        || trimmed.starts_with("[SDK]")
+        || trimmed.starts_with("[INFO]")
+        || trimmed.starts_with("Bun v")
+        || trimmed.contains("imports_complete")
+        || trimmed.contains("Script Kit SDK")
+}
+
+fn looks_like_actionable_error(line: &str) -> bool {
+    let trimmed = line.trim();
+    let lower = trimmed.to_lowercase();
+
+    trimmed.starts_with("Error:")
+        || trimmed.starts_with("TypeError:")
+        || trimmed.starts_with("ReferenceError:")
+        || trimmed.starts_with("SyntaxError:")
+        || trimmed.starts_with("RangeError:")
+        || trimmed.starts_with("URIError:")
+        || trimmed.starts_with("EvalError:")
+        || trimmed.starts_with("AggregateError:")
+        || trimmed.starts_with("error:")
+        || lower.contains("enoent")
+        || lower.contains("eacces")
+        || lower.contains("permission denied")
+        || lower.contains("no such file")
+        || lower.contains("not found")
+        || lower.contains("failed")
+}
+
 /// Parse stderr output to extract stack trace if present
 pub fn parse_stack_trace(stderr: &str) -> Option<String> {
     // Look for common stack trace patterns
@@ -53,30 +88,22 @@ pub fn parse_stack_trace(stderr: &str) -> Option<String> {
 pub fn extract_error_message(stderr: &str) -> String {
     let lines: Vec<&str> = stderr.lines().collect();
 
-    // Look for common error patterns
+    // Prefer actionable error lines over SDK/benchmark noise.
     for line in &lines {
         let trimmed = line.trim();
-
-        // Check for error type prefixes
-        if trimmed.starts_with("Error:")
-            || trimmed.starts_with("TypeError:")
-            || trimmed.starts_with("ReferenceError:")
-            || trimmed.starts_with("SyntaxError:")
-            || trimmed.starts_with("error:")
-        {
-            return trimmed.to_string();
+        if is_noise_line(trimmed) {
+            continue;
         }
 
-        // Check for bun-specific errors
-        if trimmed.contains("error:") && !trimmed.starts_with("at ") {
+        if looks_like_actionable_error(trimmed) {
             return trimmed.to_string();
         }
     }
 
-    // If no specific error found, return first non-empty line (truncated)
+    // If no explicit error line matched, return the first non-noise line.
     for line in &lines {
         let trimmed = line.trim();
-        if !trimmed.is_empty() {
+        if !trimmed.is_empty() && !is_noise_line(trimmed) {
             return if trimmed.chars().count() > 200 {
                 format!("{}...", truncate_str_chars(trimmed, 200))
             } else {
@@ -209,5 +236,20 @@ mod tests {
         assert!(message.ends_with("..."));
         assert_eq!(message.trim_end_matches("...").chars().count(), 200);
         assert!(std::str::from_utf8(message.as_bytes()).is_ok());
+    }
+
+    #[test]
+    fn test_extract_error_message_skips_sdk_noise_and_prefers_real_error() {
+        let stderr = "\
+[BENCH] [+   0ms] SDK: imports_complete
+[SDK] Script Kit SDK initialized
+Bun v1.2.20
+ENOENT: no such file or directory, open 'undefined/Downloads\\0'
+";
+
+        assert_eq!(
+            extract_error_message(stderr),
+            "ENOENT: no such file or directory, open 'undefined/Downloads\\0'"
+        );
     }
 }
