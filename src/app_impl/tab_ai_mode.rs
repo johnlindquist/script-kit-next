@@ -84,6 +84,40 @@ impl ScriptListApp {
         );
     }
 
+    /// Entry point that always routes to ACP chat, bypassing the surface
+    /// preference routing that may redirect to the quick terminal.
+    ///
+    /// Used by the Auto Submit fallback so it always opens the ACP chat
+    /// experience regardless of script-authoring detection heuristics.
+    pub(crate) fn open_tab_ai_acp_with_entry_intent(
+        &mut self,
+        entry_intent: Option<String>,
+        cx: &mut Context<Self>,
+    ) {
+        if self.tab_ai_save_offer_state.is_some() {
+            return;
+        }
+
+        // If a detached chat window exists, bring it to front instead
+        // of opening a new panel chat.
+        if crate::ai::acp::chat_window::is_chat_window_open() {
+            if let Err(e) = crate::ai::acp::chat_window::open_chat_window(cx) {
+                tracing::debug!(%e, "failed to focus detached chat window");
+            } else {
+                tracing::info!("tab_ai_focused_detached_window");
+                return;
+            }
+        }
+
+        self.begin_tab_ai_harness_entry(
+            entry_intent,
+            None,
+            crate::ai::TabAiCaptureKind::DefaultContext,
+            true,
+            cx,
+        );
+    }
+
     /// Entry point with explicit capture kind.
     ///
     /// Used by `SendScreenToAi`, `SendFocusedWindowToAi`, etc. so each
@@ -110,7 +144,7 @@ impl ScriptListApp {
             }
         }
 
-        self.begin_tab_ai_harness_entry(entry_intent, None, capture_kind, cx);
+        self.begin_tab_ai_harness_entry(entry_intent, None, capture_kind, false, cx);
     }
 
     /// Open the harness with a pre-computed quick-submit plan.
@@ -127,7 +161,7 @@ impl ScriptListApp {
         }
         let capture_kind = plan.capture_kind_enum();
         let intent = Some(plan.submission_intent().to_string());
-        self.begin_tab_ai_harness_entry(intent, Some(plan), capture_kind, cx);
+        self.begin_tab_ai_harness_entry(intent, Some(plan), capture_kind, false, cx);
     }
 
     /// Route raw text (from Auto Submit fallback or dictation) through the
@@ -232,6 +266,7 @@ impl ScriptListApp {
                 entry_intent,
                 Some(plan),
                 capture_kind,
+                false,
                 cx,
             );
             return;
@@ -542,6 +577,7 @@ impl ScriptListApp {
         entry_intent: Option<String>,
         quick_submit_plan: Option<crate::ai::TabAiQuickSubmitPlan>,
         capture_kind: crate::ai::TabAiCaptureKind,
+        force_acp_surface: bool,
         cx: &mut Context<Self>,
     ) {
         self.begin_tab_ai_harness_entry_from_source_view(
@@ -549,6 +585,7 @@ impl ScriptListApp {
             entry_intent,
             quick_submit_plan,
             capture_kind,
+            force_acp_surface,
             cx,
         );
     }
@@ -565,6 +602,7 @@ impl ScriptListApp {
         entry_intent: Option<String>,
         quick_submit_plan: Option<crate::ai::TabAiQuickSubmitPlan>,
         capture_kind: crate::ai::TabAiCaptureKind,
+        force_acp_surface: bool,
         cx: &mut Context<Self>,
     ) {
         let snapshot_started_at = std::time::Instant::now();
@@ -708,7 +746,7 @@ impl ScriptListApp {
             rx
         };
 
-        if surface_preference.use_quick_terminal {
+        if surface_preference.use_quick_terminal && !force_acp_surface {
             self.open_tab_ai_harness_terminal_from_request(request, capture_rx, cx);
         } else {
             self.open_tab_ai_acp_view_from_request_impl(request, capture_rx, focused_part, use_ask_anything_fallback, explicit_ambient_chip_label, cx);

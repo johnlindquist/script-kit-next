@@ -449,11 +449,13 @@ impl ScriptListApp {
                 }
                 FallbackResult::SendToAiHarness { query } => {
                     logging::log("FALLBACK", &format!("SendToAiHarness: {}", query));
-                    self.submit_to_current_or_new_tab_ai_harness_from_text(
-                        query,
-                        crate::ai::TabAiQuickSubmitSource::Fallback,
-                        cx,
-                    );
+                    let normalized = query.trim().to_string();
+                    let intent = if normalized.is_empty() {
+                        None
+                    } else {
+                        Some(normalized)
+                    };
+                    self.open_tab_ai_acp_with_entry_intent(intent, cx);
                 }
             },
             Err(e) => {

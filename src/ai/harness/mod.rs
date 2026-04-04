@@ -2511,7 +2511,7 @@ mod cleanup_contract_audits {
     }
 
     #[test]
-    fn selection_fallback_send_to_ai_opens_harness_with_query() {
+    fn selection_fallback_send_to_ai_opens_acp_chat() {
         let source = compact(include_str!("../../app_impl/selection_fallback.rs"));
 
         assert!(
@@ -2519,14 +2519,8 @@ mod cleanup_contract_audits {
             "selection fallback must handle the harness-native send-to-ai result"
         );
         assert!(
-            source.contains(&compact(
-                "self.submit_to_current_or_new_tab_ai_harness_from_text("
-            )),
-            "non-empty send-to-ai fallback queries must use the quick-submit planner"
-        );
-        assert!(
-            source.contains(&compact("TabAiQuickSubmitSource::Fallback")),
-            "send-to-ai fallback must tag source as Fallback"
+            source.contains(&compact("self.open_tab_ai_acp_with_entry_intent(")),
+            "send-to-ai fallback must route to ACP chat"
         );
     }
 
