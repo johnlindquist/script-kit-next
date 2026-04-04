@@ -12,6 +12,8 @@ use std::time::Duration;
 use anyhow::{anyhow, Result};
 use gpui::{App, AsyncApp};
 
+use super::ax::{get_window_position, get_window_size};
+use super::cache::get_cached_window;
 use super::query::{get_frontmost_window_of_previous_app, has_accessibility_permission};
 use super::snap_runtime::{finish_snap_runtime, is_snap_runtime_active, start_snap_runtime};
 use super::types::{Bounds, WindowInfo};
@@ -47,12 +49,17 @@ fn arm_state_for_window(window: &WindowInfo) -> DragArmState {
     }
 }
 
-fn should_start_runtime(armed: DragArmState, current: Option<&WindowInfo>) -> bool {
+fn poll_armed_window_bounds(window_id: u32) -> Option<Bounds> {
+    let window = get_cached_window(window_id)?;
+    let (x, y) = get_window_position(window.as_ptr()).ok()?;
+    let (width, height) = get_window_size(window.as_ptr()).ok()?;
+    Some(Bounds::new(x, y, width, height))
+}
+
+fn should_start_runtime(armed: DragArmState, current_bounds: Option<Bounds>) -> bool {
     matches!(
-        current,
-        Some(window)
-            if window.id == armed.window_id
-                && origin_changed(armed.bounds, window.bounds)
+        current_bounds,
+        Some(current_bounds) if origin_changed(armed.bounds, current_bounds)
     )
 }
 
@@ -86,9 +93,9 @@ fn handle_snap_monitor_event(event: SnapMonitorEvent, cx: &mut App) -> Result<()
                 return Ok(());
             };
 
-            let current = get_frontmost_window_of_previous_app()?;
+            let current_bounds = poll_armed_window_bounds(armed.window_id);
 
-            if should_start_runtime(armed, current.as_ref()) {
+            if should_start_runtime(armed, current_bounds) {
                 *DRAG_ARM_STATE
                     .lock()
                     .map_err(|e| anyhow!("snap monitor arm lock poisoned: {e}"))? = None;
@@ -99,7 +106,7 @@ fn handle_snap_monitor_event(event: SnapMonitorEvent, cx: &mut App) -> Result<()
                     "detected external window drag"
                 );
                 start_snap_runtime(cx)?;
-            } else if !matches!(current.as_ref(), Some(window) if window.id == armed.window_id) {
+            } else if current_bounds.is_none() {
                 *DRAG_ARM_STATE
                     .lock()
                     .map_err(|e| anyhow!("snap monitor arm lock poisoned: {e}"))? = None;
@@ -321,18 +328,16 @@ pub fn install_snap_drag_monitor(cx: &mut App) -> Result<()> {
 mod tests {
     use super::*;
 
-    fn make_window(id: u32, bounds: Bounds) -> WindowInfo {
-        WindowInfo::for_test(id, "TestApp".to_string(), "Window".to_string(), bounds, 123)
-    }
-
     #[test]
-    fn starts_when_same_window_origin_changes() {
+    fn starts_when_armed_window_origin_changes() {
         let armed = DragArmState {
             window_id: 7,
             bounds: Bounds::new(900, 100, 1200, 800),
         };
-        let current = make_window(7, Bounds::new(750, 100, 1200, 800));
-        assert!(should_start_runtime(armed, Some(&current)));
+        assert!(should_start_runtime(
+            armed,
+            Some(Bounds::new(750, 100, 1200, 800))
+        ));
     }
 
     #[test]
@@ -341,18 +346,22 @@ mod tests {
             window_id: 7,
             bounds: Bounds::new(900, 100, 1200, 800),
         };
-        let current = make_window(7, Bounds::new(900, 100, 1400, 800));
-        assert!(!should_start_runtime(armed, Some(&current)));
+        assert!(!should_start_runtime(
+            armed,
+            Some(Bounds::new(900, 100, 1400, 800))
+        ));
     }
 
     #[test]
-    fn does_not_start_for_different_window() {
+    fn does_not_start_without_origin_change() {
         let armed = DragArmState {
             window_id: 7,
             bounds: Bounds::new(900, 100, 1200, 800),
         };
-        let current = make_window(9, Bounds::new(750, 100, 1200, 800));
-        assert!(!should_start_runtime(armed, Some(&current)));
+        assert!(!should_start_runtime(
+            armed,
+            Some(Bounds::new(900, 100, 1200, 800))
+        ));
     }
 
     #[test]
