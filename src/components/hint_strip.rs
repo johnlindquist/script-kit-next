@@ -310,6 +310,46 @@ pub(crate) fn shortcut_tokens_from_hint(shortcut: &str) -> Vec<String> {
     vec![normalize_shortcut_part(trimmed)]
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+struct ShortcutNormalizationAudit {
+    surface: &'static str,
+    input: String,
+    output: String,
+}
+
+fn seen_shortcut_normalization_audits() -> &'static Mutex<HashSet<ShortcutNormalizationAudit>> {
+    static SEEN: OnceLock<Mutex<HashSet<ShortcutNormalizationAudit>>> = OnceLock::new();
+    SEEN.get_or_init(|| Mutex::new(HashSet::new()))
+}
+
+pub(crate) fn emit_shortcut_normalization_audit(
+    surface: &'static str,
+    input: &str,
+    output: &str,
+) {
+    let audit = ShortcutNormalizationAudit {
+        surface,
+        input: input.to_string(),
+        output: output.to_string(),
+    };
+    let mut seen = seen_shortcut_normalization_audits()
+        .lock()
+        .unwrap_or_else(|poison| poison.into_inner());
+    if seen.insert(audit.clone()) {
+        tracing::info!(
+            surface = surface,
+            input = %input,
+            output = %output,
+            "shortcut_normalized"
+        );
+    }
+}
+
+#[inline]
+pub(crate) fn compact_shortcut_display_string(shortcut: &str) -> String {
+    shortcut_tokens_from_hint(shortcut).join("")
+}
+
 fn canonical_shortcut_part(part: &str) -> String {
     match part.trim().to_lowercase().as_str() {
         "⌘" | "cmd" | "command" | "meta" | "super" => "cmd".to_string(),
