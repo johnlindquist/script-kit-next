@@ -7,13 +7,11 @@
 
 use agent_client_protocol::{ContentBlock, ImageContent, TextContent};
 
-use crate::ai::{
-    build_tab_ai_harness_context_block, should_include_artifact_authoring_guidance,
-    TabAiContextBlob,
+use crate::ai::{build_tab_ai_harness_context_block, TabAiContextBlob};
+use crate::ai::harness::{
+    build_tab_ai_artifact_authoring_appendix_for_prompt, TabAiArtifactKind,
+    TabAiHarnessSubmissionMode,
 };
-
-/// Compile-time embed of the artifact authoring guidance.
-const ACP_ARTIFACT_GUIDANCE: &str = include_str!("../../../kit-init/examples/START_HERE.md");
 
 /// Convert an existing `TabAiContextBlob` into a `Vec<ContentBlock>` with a
 /// single text block containing the canonical `Script Kit context` header.
@@ -49,16 +47,77 @@ pub(crate) fn build_tab_ai_acp_context_blocks(
     Ok(blocks)
 }
 
-/// Return guidance blocks only when the intent looks like an authoring request
-/// (e.g. "build a clipboard cleanup script").  Non-authoring intents (e.g.
-/// "explain this selection") receive no guidance blocks.
-pub(crate) fn build_tab_ai_acp_guidance_blocks(intent: Option<&str>) -> Vec<ContentBlock> {
-    if !should_include_artifact_authoring_guidance(intent) {
+/// Return guidance blocks for a prompt when the intent looks like an authoring
+/// request.  Delegates to the shared appendix builder so ACP and PTY paths
+/// emit identical verification contracts.
+pub(crate) fn build_tab_ai_acp_guidance_blocks_for_prompt(
+    prompt_type: &str,
+    intent: Option<&str>,
+) -> Vec<ContentBlock> {
+    let Some(intent) = intent.map(str::trim).filter(|value| !value.is_empty()) else {
+        tracing::debug!(
+            event = "tab_ai_acp_guidance_blocks_skipped",
+            prompt_type,
+            reason = "empty_intent",
+        );
         return Vec::new();
-    }
+    };
+
+    let Some(appendix) = build_tab_ai_artifact_authoring_appendix_for_prompt(
+        prompt_type,
+        Some(intent),
+        TabAiHarnessSubmissionMode::Submit,
+    ) else {
+        tracing::debug!(
+            event = "tab_ai_acp_guidance_blocks_skipped",
+            prompt_type,
+            reason = "not_authoring_intent",
+        );
+        return Vec::new();
+    };
+
+    tracing::info!(
+        event = "tab_ai_acp_guidance_blocks_built",
+        prompt_type,
+        forced_by_script_list_submit = appendix.forced_by_script_list_submit,
+        artifact_kind = appendix
+            .artifact_kind
+            .map(TabAiArtifactKind::as_str)
+            .unwrap_or("unknown"),
+        use_quick_terminal = appendix.use_quick_terminal,
+        script_verification_gate_present = appendix.has_script_verification_gate_header,
+        includes_script_authoring_skill = appendix.markers.includes_script_authoring_skill,
+        includes_bun_build_verification = appendix.markers.includes_bun_build_verification,
+        includes_bun_execute_verification = appendix.markers.includes_bun_execute_verification,
+        text_len = appendix.guidance.len(),
+    );
+
     vec![ContentBlock::Text(TextContent::new(
-        ACP_ARTIFACT_GUIDANCE.trim_end(),
+        appendix.guidance.trim_end(),
     ))]
+}
+
+/// Legacy wrapper — prefer `build_tab_ai_acp_guidance_blocks_for_prompt`.
+///
+/// This wrapper exists so any existing callers that do not pass a `prompt_type`
+/// can still compile.  It defaults to `"Unknown"` which means the deterministic
+/// `ScriptList` force path cannot trigger.
+pub(crate) fn build_tab_ai_acp_guidance_blocks(intent: Option<&str>) -> Vec<ContentBlock> {
+    let has_non_empty_intent = intent
+        .map(str::trim)
+        .map(|value| !value.is_empty())
+        .unwrap_or(false);
+
+    if has_non_empty_intent {
+        tracing::warn!(
+            event = "tab_ai_acp_guidance_blocks_legacy_call",
+            reason = "missing_prompt_type",
+            "Use build_tab_ai_acp_guidance_blocks_for_prompt(prompt_type, intent) \
+             so ScriptList submit can force the Bun verification contract."
+        );
+    }
+
+    build_tab_ai_acp_guidance_blocks_for_prompt("Unknown", intent)
 }
 
 #[cfg(test)]
@@ -114,15 +173,36 @@ mod tests {
     #[test]
     fn guidance_blocks_are_added_only_for_authoring_intents() {
         // Authoring intent → should include guidance
-        let authoring = build_tab_ai_acp_guidance_blocks(Some("build a clipboard cleanup script"));
+        let authoring = build_tab_ai_acp_guidance_blocks_for_prompt(
+            "ScriptList",
+            Some("build a clipboard cleanup script"),
+        );
         assert_eq!(
             authoring.len(),
             1,
             "authoring intent should produce one guidance block"
         );
+        // Must contain the shared verification contract, not the old static embed
+        match &authoring[0] {
+            ContentBlock::Text(text) => {
+                assert!(
+                    text.text.contains("MANDATORY SCRIPT VERIFICATION"),
+                    "guidance must include shared verification gate header"
+                );
+                assert!(
+                    text.text
+                        .contains("~/.scriptkit/skills/script-authoring/SKILL.md"),
+                    "guidance must reference the script-authoring skill"
+                );
+            }
+            other => panic!("expected text block, got {other:?}"),
+        }
 
         // Non-authoring intent → no guidance
-        let non_authoring = build_tab_ai_acp_guidance_blocks(Some("explain this selection"));
+        let non_authoring = build_tab_ai_acp_guidance_blocks_for_prompt(
+            "FileSearch",
+            Some("explain this selection"),
+        );
         assert!(
             non_authoring.is_empty(),
             "non-authoring intent should produce no guidance blocks"
@@ -131,10 +211,20 @@ mod tests {
 
     #[test]
     fn guidance_blocks_empty_for_none_intent() {
-        let blocks = build_tab_ai_acp_guidance_blocks(None);
+        let blocks = build_tab_ai_acp_guidance_blocks_for_prompt("ScriptList", None);
         assert!(
             blocks.is_empty(),
             "None intent should produce no guidance blocks"
+        );
+    }
+
+    #[test]
+    fn legacy_wrapper_still_works_for_authoring_intent() {
+        let blocks = build_tab_ai_acp_guidance_blocks(Some("build a clipboard cleanup script"));
+        assert_eq!(
+            blocks.len(),
+            1,
+            "legacy wrapper should still produce guidance for authoring intents"
         );
     }
 
