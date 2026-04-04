@@ -12,9 +12,9 @@ use anyhow::{Context, Result};
 use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 
 use agent_client_protocol::{
-    Agent, ClientCapabilities, ClientSideConnection, FileSystemCapabilities, Implementation,
-    InitializeRequest, ModelId, NewSessionRequest, PromptRequest, ProtocolVersion, SessionId,
-    SetSessionModelRequest,
+    Agent, AuthCapabilities, ClientCapabilities, ClientSideConnection, FileSystemCapabilities,
+    Implementation, InitializeRequest, ModelId, NewSessionRequest, PromptRequest, ProtocolVersion,
+    SessionId, SetSessionModelRequest,
 };
 
 use super::config::AcpAgentConfig;
@@ -128,15 +128,19 @@ impl AcpRuntime {
 
 /// Build the ACP initialize request with full capability advertisement.
 ///
-/// Advertises read + write filesystem access and terminal support.
+/// Advertises read + write filesystem access, terminal support, and
+/// terminal auth capability so agents can offer interactive login flows.
 pub(crate) fn build_initialize_request() -> InitializeRequest {
     InitializeRequest::new(ProtocolVersion::V1)
         .client_capabilities(
             ClientCapabilities::new()
-                .fs(FileSystemCapabilities::new()
-                    .read_text_file(true)
-                    .write_text_file(true))
-                .terminal(true),
+                .fs(
+                    FileSystemCapabilities::new()
+                        .read_text_file(true)
+                        .write_text_file(true),
+                )
+                .terminal(true)
+                .auth(AuthCapabilities::new().terminal(true)),
         )
         .client_info(
             Implementation::new("script-kit", env!("CARGO_PKG_VERSION")).title("Script Kit"),
@@ -227,10 +231,18 @@ async fn run_acp_event_loop(
         .embedded_context;
     let supports_image = init_response.agent_capabilities.prompt_capabilities.image;
 
+    let auth_methods: Vec<String> = init_response
+        .auth_methods
+        .iter()
+        .map(|method| method.id().0.to_string())
+        .collect();
+
     tracing::info!(
         agent = %agent.id,
         protocol_version = ?init_response.protocol_version,
         load_session = init_response.agent_capabilities.load_session,
+        auth_method_count = auth_methods.len(),
+        auth_methods = ?auth_methods,
         supports_embedded_context,
         supports_image,
         "acp_initialized"
@@ -307,10 +319,31 @@ async fn handle_prompt_turn(
     let acp_session_id = if let Some(binding) = sessions.get(&request.ui_thread_id) {
         binding.agent_session_id.clone()
     } else {
-        let session_response = connection
+        let session_result = connection
             .new_session(NewSessionRequest::new(&request.cwd))
-            .await
-            .context("ACP session/new failed")?;
+            .await;
+
+        let session_response = match session_result {
+            Ok(resp) => resp,
+            Err(error) => {
+                let error_text = error.to_string();
+                if error_text.contains("auth_required") {
+                    let _ = event_tx
+                        .send(AcpEvent::SetupRequired {
+                            reason: "auth_required".to_string(),
+                            auth_methods: Vec::new(),
+                        })
+                        .await;
+                    tracing::info!(
+                        target: "script_kit::tab_ai",
+                        event = "acp_auth_required",
+                        ui_thread = %request.ui_thread_id,
+                    );
+                    return Ok(());
+                }
+                return Err(error).context("ACP session/new failed");
+            }
+        };
 
         let acp_sid = session_response.session_id.0.to_string();
         tracing::info!(
@@ -468,6 +501,17 @@ mod tests {
         assert_eq!(
             value["clientCapabilities"]["terminal"],
             serde_json::json!(true)
+        );
+    }
+
+    #[test]
+    fn initialize_request_advertises_terminal_auth_capability() {
+        let init = build_initialize_request();
+        let value = serde_json::to_value(&init).expect("serialize init request");
+        assert_eq!(
+            value["clientCapabilities"]["auth"]["terminal"],
+            serde_json::json!(true),
+            "client must advertise terminal auth capability"
         );
     }
 

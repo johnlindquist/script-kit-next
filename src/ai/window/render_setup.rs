@@ -118,7 +118,7 @@ impl AiApp {
             // Open ACP agent catalog button
             .child(
                 div()
-                    .id("connect-claude-code-btn")
+                    .id("open-acp-catalog-btn")
                     .flex()
                     .items_center()
                     .justify_center()
@@ -135,8 +135,7 @@ impl AiApp {
                     })
                     .hover(|s| s.bg(cx.theme().muted.opacity(OPACITY_SELECTED)))
                     .on_click(cx.listener(|this, _event, window, cx| {
-                        info!("Claude Code button clicked in AI window");
-                        this.enable_claude_code(window, cx);
+                        this.open_acp_agents_catalog(window, cx);
                     }))
                     .child(
                         svg()
