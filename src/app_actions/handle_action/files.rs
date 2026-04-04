@@ -784,6 +784,15 @@ impl ScriptListApp {
                     "sort_modified_asc" => crate::actions::FileSearchSortMode::ModifiedAsc,
                     _ => unreachable!(),
                 };
+                tracing::info!(
+                    category = "FILE_SEARCH",
+                    event = "sort_action_selected",
+                    action = action_id,
+                    ?mode,
+                    selected_path = preferred_selected_path.as_deref().unwrap_or(""),
+                    cached_count = self.cached_file_results.len(),
+                    "Applying file-search sort action"
+                );
                 self.file_search_sort_mode = mode;
                 self.apply_file_search_sort_mode();
                 self.recompute_file_search_display_indices();
@@ -895,35 +904,53 @@ impl ScriptListApp {
         }
     }
 
+    /// Compare two file-search results according to the given sort mode.
+    ///
+    /// Directories always sort before files regardless of mode.
+    /// This is the single source of truth for file-search ordering.
+    fn compare_file_search_results_for_mode(
+        mode: crate::actions::FileSearchSortMode,
+        a: &crate::file_search::FileResult,
+        b: &crate::file_search::FileResult,
+    ) -> std::cmp::Ordering {
+        let a_is_dir = matches!(a.file_type, crate::file_search::FileType::Directory);
+        let b_is_dir = matches!(b.file_type, crate::file_search::FileType::Directory);
+        match (a_is_dir, b_is_dir) {
+            (true, false) => return std::cmp::Ordering::Less,
+            (false, true) => return std::cmp::Ordering::Greater,
+            _ => {}
+        }
+        match mode {
+            crate::actions::FileSearchSortMode::NameAsc => {
+                a.name.to_lowercase().cmp(&b.name.to_lowercase())
+            }
+            crate::actions::FileSearchSortMode::NameDesc => {
+                b.name.to_lowercase().cmp(&a.name.to_lowercase())
+            }
+            crate::actions::FileSearchSortMode::ModifiedDesc => {
+                b.modified
+                    .cmp(&a.modified)
+                    .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+            }
+            crate::actions::FileSearchSortMode::ModifiedAsc => {
+                a.modified
+                    .cmp(&b.modified)
+                    .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+            }
+        }
+    }
+
     /// Apply the current sort mode to cached file results.
     fn apply_file_search_sort_mode(&mut self) {
-        self.cached_file_results.sort_by(|a, b| {
-            let a_is_dir = matches!(a.file_type, crate::file_search::FileType::Directory);
-            let b_is_dir = matches!(b.file_type, crate::file_search::FileType::Directory);
-            // Directories always sort first
-            match (a_is_dir, b_is_dir) {
-                (true, false) => return std::cmp::Ordering::Less,
-                (false, true) => return std::cmp::Ordering::Greater,
-                _ => {}
-            }
-            match self.file_search_sort_mode {
-                crate::actions::FileSearchSortMode::NameAsc => {
-                    a.name.to_lowercase().cmp(&b.name.to_lowercase())
-                }
-                crate::actions::FileSearchSortMode::NameDesc => {
-                    b.name.to_lowercase().cmp(&a.name.to_lowercase())
-                }
-                crate::actions::FileSearchSortMode::ModifiedDesc => {
-                    b.modified.cmp(&a.modified).then_with(|| {
-                        a.name.to_lowercase().cmp(&b.name.to_lowercase())
-                    })
-                }
-                crate::actions::FileSearchSortMode::ModifiedAsc => {
-                    a.modified.cmp(&b.modified).then_with(|| {
-                        a.name.to_lowercase().cmp(&b.name.to_lowercase())
-                    })
-                }
-            }
-        });
+        let mode = self.file_search_sort_mode;
+        self.cached_file_results
+            .sort_by(|a, b| Self::compare_file_search_results_for_mode(mode, a, b));
+        tracing::info!(
+            category = "FILE_SEARCH",
+            event = "apply_file_search_sort_mode",
+            ?mode,
+            cached_count = self.cached_file_results.len(),
+            "Applied file-search sort mode to cached results"
+        );
     }
 }

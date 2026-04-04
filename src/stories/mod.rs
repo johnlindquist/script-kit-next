@@ -3,6 +3,7 @@
 //! This module contains all the story definitions for the storybook.
 //! Stories are manually registered in get_all_stories().
 
+mod at_mention_picker_variations;
 mod actions_mini_variations;
 mod actions_window_stories;
 mod arg_prompt_stories;
@@ -38,6 +39,7 @@ use crate::storybook::StoryEntry;
 use std::sync::LazyLock;
 
 // Re-export story types
+pub use at_mention_picker_variations::AtMentionPickerVariationsStory;
 pub use actions_mini_variations::ActionsMiniVariationsStory;
 pub use actions_window_stories::ActionsWindowStory;
 pub use arg_prompt_stories::ArgPromptStory;
@@ -106,6 +108,7 @@ static ALL_STORIES: LazyLock<Vec<StoryEntry>> = LazyLock::new(|| {
         StoryEntry::new(Box::new(PathPromptStory)),
         StoryEntry::new(Box::new(SelectPromptStory)),
         // AI Chat
+        StoryEntry::new(Box::new(AtMentionPickerVariationsStory)),
         StoryEntry::new(Box::new(SlashCommandMenuVariationsStory)),
     ]
 });
