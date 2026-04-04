@@ -1,8 +1,10 @@
 #![allow(dead_code)]
 
+use std::rc::Rc;
+
 use gpui::{
-    div, prelude::*, px, rgba, svg, AnyElement, App, FontWeight, IntoElement, RenderOnce,
-    SharedString, Styled, Window,
+    div, prelude::*, px, rgba, svg, AnyElement, App, ClickEvent, FontWeight, IntoElement,
+    RenderOnce, SharedString, Styled, Window,
 };
 
 use crate::ui::chrome::{
@@ -12,6 +14,13 @@ use crate::ui::chrome::{
 use crate::ui_foundation::HexColorExt;
 
 const HINT_STRIP_CONTENT_GAP: f32 = 8.0;
+
+/// Padding inside each clickable hint button.
+const HINT_BUTTON_PADDING_X: f32 = 4.0;
+const HINT_BUTTON_PADDING_Y: f32 = 2.0;
+
+/// Corner radius for hint button hover highlight.
+const HINT_BUTTON_RADIUS: f32 = 4.0;
 
 /// Size for keyboard glyph icons in the hint strip.
 /// Slightly larger than text_xs (12px) for visual clarity at hint opacity.
@@ -33,22 +42,58 @@ const KEYCAP_PADDING_Y: f32 = 1.0;
 const KEYCAP_RADIUS: f32 = 5.0;
 const KEYCAP_BG_OPACITY: f32 = 0.12;
 
+/// A click handler for a single hint button.
+pub(crate) type HintClickHandler = Rc<dyn Fn(&ClickEvent, &mut Window, &mut App)>;
+
 #[derive(IntoElement)]
 pub struct HintStrip {
     hints: Vec<SharedString>,
     leading: Option<AnyElement>,
+    /// Optional per-hint click handlers. When set, hints become clickable buttons
+    /// with ghost-bg hover feedback using the theme's hover token.
+    on_clicks: Vec<Option<HintClickHandler>>,
 }
 
 impl HintStrip {
     pub fn new(hints: impl IntoHints) -> Self {
+        let hints = hints.into_hints();
+        let len = hints.len();
         Self {
-            hints: hints.into_hints(),
+            hints,
             leading: None,
+            on_clicks: vec![None; len],
         }
     }
 
     pub fn leading(mut self, leading: impl IntoElement) -> Self {
         self.leading = Some(leading.into_any_element());
+        self
+    }
+
+    /// Attach a click handler to the hint at `index`.
+    /// When set, the hint renders as a clickable button with ghost-bg hover.
+    pub fn on_hint_click(
+        mut self,
+        index: usize,
+        handler: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    ) -> Self {
+        if index < self.on_clicks.len() {
+            self.on_clicks[index] = Some(Rc::new(handler));
+        }
+        self
+    }
+
+    /// Attach click handlers to all hints at once.
+    /// Each entry maps to the hint at the same index. `None` entries remain non-interactive.
+    pub fn on_hint_clicks(
+        mut self,
+        handlers: Vec<Option<impl Fn(&ClickEvent, &mut Window, &mut App) + 'static>>,
+    ) -> Self {
+        for (i, handler) in handlers.into_iter().enumerate() {
+            if i < self.on_clicks.len() {
+                self.on_clicks[i] = handler.map(|h| Rc::new(h) as HintClickHandler);
+            }
+        }
         self
     }
 }
@@ -248,7 +293,10 @@ fn render_hint_element_hsla(element: HintElement, color: gpui::Hsla) -> AnyEleme
 impl RenderOnce for HintStrip {
     fn render(self, _window: &mut Window, _cx: &mut App) -> impl IntoElement {
         let theme = crate::theme::get_cached_theme();
+        let chrome = crate::theme::AppChromeColors::from_theme(&theme);
         let text_rgba = text_color_with_opacity(theme.colors.text.primary, HINT_TEXT_OPACITY);
+        let hover_bg = rgba(chrome.hover_rgba);
+        let active_bg = rgba(chrome.selection_rgba);
 
         let mut row = div()
             .w_full()
@@ -271,9 +319,31 @@ impl RenderOnce for HintStrip {
             .items_center()
             .gap(px(HINT_STRIP_CONTENT_GAP));
 
-        for hint in &self.hints {
+        for (i, (hint, on_click)) in self
+            .hints
+            .iter()
+            .zip(self.on_clicks.into_iter())
+            .enumerate()
+        {
             let element = parse_hint(hint.as_ref());
-            hints_row = hints_row.child(render_hint_element(element, text_rgba));
+            let hint_content = render_hint_element(element, text_rgba);
+
+            if let Some(handler) = on_click {
+                // Clickable hint button with ghost-bg hover from theme tokens.
+                let button = div()
+                    .id(SharedString::from(format!("hint-btn-{i}")))
+                    .cursor_pointer()
+                    .px(px(HINT_BUTTON_PADDING_X))
+                    .py(px(HINT_BUTTON_PADDING_Y))
+                    .rounded(px(HINT_BUTTON_RADIUS))
+                    .hover(move |s| s.bg(hover_bg))
+                    .active(move |s| s.bg(active_bg))
+                    .on_click(move |event, window, cx| handler(event, window, cx))
+                    .child(hint_content);
+                hints_row = hints_row.child(button);
+            } else {
+                hints_row = hints_row.child(hint_content);
+            }
         }
 
         row.child(div().flex_1()).child(hints_row)
@@ -288,6 +358,7 @@ impl RenderOnce for HintStrip {
 ///
 /// Use this instead of rendering hint strings as plain text — it replaces Unicode
 /// keyboard glyphs (↵, ⌘, ⏎, ↩, Tab) with pixel-precise SVG icons.
+/// Hints are rendered as clickable buttons with ghost-bg hover.
 pub fn render_hint_icons(hints: &[&str], text_rgba: u32) -> AnyElement {
     render_hint_icons_hsla(hints, rgba(text_rgba).into())
 }
@@ -295,16 +366,77 @@ pub fn render_hint_icons(hints: &[&str], text_rgba: u32) -> AnyElement {
 /// Like [`render_hint_icons`] but accepts an HSLA color directly.
 ///
 /// Use this when the caller already has an `Hsla` (e.g. from `cx.theme()`).
+/// Hints are rendered as clickable buttons with ghost-bg hover.
 pub fn render_hint_icons_hsla(hints: &[&str], color: gpui::Hsla) -> AnyElement {
+    let theme = crate::theme::get_cached_theme();
+    let chrome = crate::theme::AppChromeColors::from_theme(&theme);
+    let hover_bg = rgba(chrome.hover_rgba);
+    let active_bg = rgba(chrome.selection_rgba);
+
     let mut row = div()
         .flex()
         .flex_row()
         .items_center()
         .gap(px(HINT_STRIP_CONTENT_GAP));
 
-    for hint in hints {
+    for (i, hint) in hints.iter().enumerate() {
         let element = parse_hint(hint);
-        row = row.child(render_hint_element_hsla(element, color));
+        let hint_content = render_hint_element_hsla(element, color);
+
+        let button = div()
+            .id(SharedString::from(format!("hint-icon-{i}")))
+            .cursor_pointer()
+            .px(px(HINT_BUTTON_PADDING_X))
+            .py(px(HINT_BUTTON_PADDING_Y))
+            .rounded(px(HINT_BUTTON_RADIUS))
+            .hover(move |s| s.bg(hover_bg))
+            .active(move |s| s.bg(active_bg))
+            .child(hint_content);
+        row = row.child(button);
+    }
+
+    row.into_any_element()
+}
+
+/// Render clickable hint icons with per-hint click handlers.
+///
+/// Each `(hint, handler)` pair renders as a clickable button. Use `None` for
+/// hints that should be visually interactive (hover) but have no click action.
+pub fn render_hint_icons_clickable(
+    hints: &[(&str, Option<HintClickHandler>)],
+    text_rgba: u32,
+) -> AnyElement {
+    let theme = crate::theme::get_cached_theme();
+    let chrome = crate::theme::AppChromeColors::from_theme(&theme);
+    let hover_bg = rgba(chrome.hover_rgba);
+    let active_bg = rgba(chrome.selection_rgba);
+    let color: gpui::Hsla = rgba(text_rgba).into();
+
+    let mut row = div()
+        .flex()
+        .flex_row()
+        .items_center()
+        .gap(px(HINT_STRIP_CONTENT_GAP));
+
+    for (i, (hint, handler)) in hints.iter().enumerate() {
+        let element = parse_hint(hint);
+        let hint_content = render_hint_element_hsla(element, color);
+
+        let mut button = div()
+            .id(SharedString::from(format!("hint-click-{i}")))
+            .cursor_pointer()
+            .px(px(HINT_BUTTON_PADDING_X))
+            .py(px(HINT_BUTTON_PADDING_Y))
+            .rounded(px(HINT_BUTTON_RADIUS))
+            .hover(move |s| s.bg(hover_bg))
+            .active(move |s| s.bg(active_bg))
+            .child(hint_content);
+
+        if let Some(handler) = handler.clone() {
+            button = button.on_click(move |event, window, cx| handler(event, window, cx));
+        }
+
+        row = row.child(button);
     }
 
     row.into_any_element()

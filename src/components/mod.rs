@@ -62,7 +62,7 @@ pub use focusable_prompt_wrapper::{
 #[allow(unused_imports)]
 pub use form_fields::{FormCheckbox, FormFieldColors, FormFieldState, FormTextArea, FormTextField};
 #[allow(unused_imports)]
-pub use hint_strip::{render_hint_icons, render_hint_icons_hsla, HintStrip};
+pub use hint_strip::{render_hint_icons, render_hint_icons_clickable, render_hint_icons_hsla, HintStrip};
 #[allow(unused_imports)]
 pub use inline_prompt_input::InlinePromptInput;
 #[allow(unused_imports)]
