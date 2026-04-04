@@ -12,8 +12,8 @@ use crate::components::{FocusablePrompt, FocusablePromptInterceptedKey};
 use crate::designs::{get_tokens, DesignVariant};
 use crate::logging;
 use crate::theme;
-use crate::theme::opacity::{OPACITY_GHOST, OPACITY_GHOST_SOFT};
-use crate::ui_foundation::{get_vibrancy_background, hex_to_rgba_with_opacity, is_key_enter};
+use crate::theme::ColorResolver;
+use crate::ui_foundation::{get_vibrancy_background, is_key_enter};
 
 use super::SubmitCallback;
 
@@ -120,20 +120,15 @@ impl Focusable for DropPrompt {
 impl Render for DropPrompt {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let tokens = get_tokens(self.design_variant);
-        let colors = tokens.colors();
         let spacing = tokens.spacing();
 
         // VIBRANCY: Use foundation helper - returns None when vibrancy enabled (let Root handle bg)
         let vibrancy_bg = get_vibrancy_background(&self.theme);
 
-        let (text_color, muted_color) = if self.design_variant == DesignVariant::Default {
-            (
-                rgb(self.theme.colors.text.secondary),
-                rgb(self.theme.colors.text.muted),
-            )
-        } else {
-            (rgb(colors.text_secondary), rgb(colors.text_muted))
-        };
+        let chrome = theme::AppChromeColors::from_theme(&self.theme);
+        let shell_colors = ColorResolver::new_for_shell(&self.theme, self.design_variant);
+        let text_color = rgb(shell_colors.primary_text_color());
+        let muted_color = rgb(shell_colors.empty_text_color());
 
         let placeholder = self
             .placeholder
@@ -145,19 +140,18 @@ impl Render for DropPrompt {
             .clone()
             .unwrap_or_else(|| "Drag and drop files to upload".to_string());
 
-        // Whisper chrome: ghost-opacity background at rest, gold accent when dragging
-        let drop_zone_bg = rgba(if self.is_drag_over {
-            hex_to_rgba_with_opacity(self.theme.colors.accent.selected_subtle, OPACITY_GHOST)
+        // Whisper chrome: use shared drop-target contract from AppChromeColors
+        let (drop_zone_bg, drop_zone_border) = if self.is_drag_over {
+            (
+                rgba(chrome.drop_target_active_bg_rgba),
+                rgba(chrome.drop_target_active_border_rgba),
+            )
         } else {
-            hex_to_rgba_with_opacity(self.theme.colors.background.search_box, OPACITY_GHOST_SOFT)
-        });
-        // Ghost border: barely visible at rest, gold emphasis when active
-        let drop_zone_border = rgba(if self.is_drag_over {
-            hex_to_rgba_with_opacity(self.theme.colors.accent.selected_subtle, OPACITY_GHOST)
-        } else {
-            hex_to_rgba_with_opacity(self.theme.colors.ui.border, OPACITY_GHOST)
-        });
-
+            (
+                rgba(chrome.drop_target_bg_rgba),
+                rgba(chrome.drop_target_border_rgba),
+            )
+        };
         let container = div()
             .id(gpui::ElementId::Name("window:drop".into()))
             .flex()

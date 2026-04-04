@@ -20,6 +20,10 @@ const THEME_ITEM_SWATCH_GAP_MIN: f32 = 2.0;
 const THEME_ITEM_SWATCH_GAP_MAX: f32 = 4.0;
 const THEME_LIST_VERTICAL_PADDING_MIN: f32 = 2.0;
 const THEME_LIST_VERTICAL_PADDING_MAX: f32 = 6.0;
+const THEME_ITEM_BADGE_HORIZONTAL_PADDING_MIN: f32 = 6.0;
+const THEME_ITEM_BADGE_HORIZONTAL_PADDING_MAX: f32 = 10.0;
+const THEME_ITEM_BADGE_VERTICAL_PADDING_MIN: f32 = 2.0;
+const THEME_ITEM_BADGE_VERTICAL_PADDING_MAX: f32 = 4.0;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct ThemeChooserRowLayout {
@@ -29,6 +33,8 @@ struct ThemeChooserRowLayout {
     text_gap: f32,
     swatch_gap: f32,
     list_vertical_padding: f32,
+    badge_horizontal_padding: f32,
+    badge_vertical_padding: f32,
 }
 
 /// Unified theme chooser preview sync: applies both gpui-component colors and
@@ -471,12 +477,6 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
     ) {
         self.theme = std::sync::Arc::new(next_theme);
-        let chrome = theme::AppChromeColors::from_theme(self.theme.as_ref());
-        tracing::debug!(
-            reason,
-            accent_hex = chrome.accent_hex,
-            "theme_chooser_theme_applied"
-        );
         sync_theme_chooser_preview(cx, &self.theme, reason);
         // Sync native vibrancy so the window material matches the theme
         let is_dark = self.theme.should_use_dark_vibrancy();
@@ -507,12 +507,6 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
     ) {
         self.theme = original;
-        let chrome = theme::AppChromeColors::from_theme(self.theme.as_ref());
-        tracing::debug!(
-            reason,
-            accent_hex = chrome.accent_hex,
-            "theme_chooser_theme_applied"
-        );
         sync_theme_chooser_preview(cx, &self.theme, reason);
         // Sync native vibrancy for the restored theme
         let is_dark = self.theme.should_use_dark_vibrancy();
@@ -809,6 +803,14 @@ impl ScriptListApp {
             THEME_LIST_VERTICAL_PADDING_MIN,
             THEME_LIST_VERTICAL_PADDING_MAX,
         );
+        let badge_horizontal_padding = spacing.item_padding_x.clamp(
+            THEME_ITEM_BADGE_HORIZONTAL_PADDING_MIN,
+            THEME_ITEM_BADGE_HORIZONTAL_PADDING_MAX,
+        );
+        let badge_vertical_padding = (spacing.gap_sm / 2.0).clamp(
+            THEME_ITEM_BADGE_VERTICAL_PADDING_MIN,
+            THEME_ITEM_BADGE_VERTICAL_PADDING_MAX,
+        );
         ThemeChooserRowLayout {
             item_height,
             horizontal_padding,
@@ -816,6 +818,8 @@ impl ScriptListApp {
             text_gap,
             swatch_gap,
             list_vertical_padding,
+            badge_horizontal_padding,
+            badge_vertical_padding,
         }
     }
 
@@ -1090,6 +1094,11 @@ impl ScriptListApp {
         let first_light_idx = first_light;
         let filtered_indices_for_list = filtered_indices.clone();
         let entity_handle_for_customize = entity_handle.clone();
+        let badge_h_pad = row_layout.badge_horizontal_padding;
+        let badge_v_pad = row_layout.badge_vertical_padding;
+        let accent_badge_border = rgba(chrome.accent_badge_border_rgba);
+        let accent_badge_bg = rgba(chrome.accent_badge_bg_rgba);
+        let accent_badge_text = rgb(chrome.accent_badge_text_hex);
 
         // ── Theme list ─────────────────────────────────────────────
         let list = uniform_list(
@@ -1122,16 +1131,21 @@ impl ScriptListApp {
                             .child(div().flex_1().bg(rgb(colors.secondary)))
                             .child(div().flex_1().bg(rgb(colors.border)));
 
-                        // Checkmark for original (saved) theme
+                        // Badge for original (saved) theme — uses shared chrome tokens
                         let indicator = if is_original {
                             div()
-                                .text_sm()
-                                .font_weight(gpui::FontWeight::BOLD)
-                                .text_color(rgb(accent_color))
-                                .w(px(16.0))
-                                .child("✓")
+                                .px(px(badge_h_pad))
+                                .py(px(badge_v_pad))
+                                .rounded(px(5.0))
+                                .border_1()
+                                .border_color(accent_badge_border)
+                                .bg(accent_badge_bg)
+                                .text_xs()
+                                .font_weight(gpui::FontWeight::MEDIUM)
+                                .text_color(accent_badge_text)
+                                .child("Saved")
                         } else {
-                            div().w(px(16.0))
+                            div().px(px(badge_h_pad)).py(px(badge_v_pad)).child("")
                         };
 
                         // Section label for light themes (only when unfiltered)

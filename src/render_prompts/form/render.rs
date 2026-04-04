@@ -6,7 +6,7 @@ impl ScriptListApp {
     ) -> AnyElement {
         crate::components::emit_prompt_chrome_audit(
             &crate::components::PromptChromeAudit::minimal_list(
-                "form_prompt",
+                "render_prompts::form",
                 self.has_nonempty_sdk_actions(),
             ),
         );
@@ -15,7 +15,6 @@ impl ScriptListApp {
         let design_colors = render_context.design_colors;
         let design_spacing = render_context.design_spacing;
         let design_typography = render_context.design_typography;
-        let design_visual = render_context.design_visual;
         let actions_dialog_top = render_context.actions_dialog_top;
         let actions_dialog_right = render_context.actions_dialog_right;
         let has_actions = self.has_nonempty_sdk_actions();
@@ -122,7 +121,7 @@ impl ScriptListApp {
         // Form fields have their own focus handles and on_key_down handlers.
         // We DO NOT track_focus on the container - the fields handle their own focus.
         // Enter/Escape/Tab are handled by the handle_key listener above.
-        crate::components::prompt_shell_container(design_visual.radius_lg, vibrancy_bg)
+        crate::components::prompt_shell_container(0.0, vibrancy_bg)
             .h(content_height)
             .text_color(rgb(design_colors.text_primary))
             .font_family(design_typography.font_family)

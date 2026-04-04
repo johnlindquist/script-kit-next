@@ -1,5 +1,6 @@
 use crate::ui_foundation::hex_to_rgba_with_opacity;
 
+use super::opacity::{OPACITY_GHOST, OPACITY_GHOST_SOFT};
 use super::Theme;
 
 /// Shared chrome contract for app surfaces, badges, selection, and hover.
@@ -35,6 +36,11 @@ pub(crate) struct AppChromeColors {
     pub accent_badge_bg_rgba: u32,
     pub accent_badge_border_rgba: u32,
     pub accent_badge_text_hex: u32,
+
+    pub drop_target_bg_rgba: u32,
+    pub drop_target_border_rgba: u32,
+    pub drop_target_active_bg_rgba: u32,
+    pub drop_target_active_border_rgba: u32,
 }
 
 /// Contrast-safe colors for semantic status chips (OK, Err, Warn, Info).
@@ -122,7 +128,21 @@ impl AppChromeColors {
                 colors.accent.selected,
                 opacity.selected,
             ),
-            accent_badge_text_hex: colors.accent.selected,
+            accent_badge_text_hex: colors.text.on_accent,
+
+            drop_target_bg_rgba: hex_to_rgba_with_opacity(
+                colors.background.search_box,
+                OPACITY_GHOST_SOFT,
+            ),
+            drop_target_border_rgba: hex_to_rgba_with_opacity(colors.ui.border, OPACITY_GHOST),
+            drop_target_active_bg_rgba: hex_to_rgba_with_opacity(
+                colors.accent.selected_subtle,
+                OPACITY_GHOST,
+            ),
+            drop_target_active_border_rgba: hex_to_rgba_with_opacity(
+                colors.accent.selected_subtle,
+                OPACITY_GHOST,
+            ),
         }
     }
 }
