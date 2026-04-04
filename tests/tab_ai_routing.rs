@@ -4546,24 +4546,19 @@ fn harness_submission_authoring_flow_emits_guidance_appended_log_with_all_marker
 fn non_authoring_harness_submission_omits_guidance_block() {
     // Runtime call: a non-authoring submission must NOT contain the guidance
     // block in its output, confirming the guidance_appended log is never hit.
-    let context = script_kit_gpui::ai::TabAiContextBlob {
-        schema_version: 2,
-        ui: script_kit_gpui::ai::TabAiUiSnapshot {
-            prompt_type: "FileSearch".into(),
-            input_text: Some("rename this file".into()),
-            focused_semantic_id: None,
-            selected_semantic_id: None,
-            visible_elements: vec![],
+    let context = script_kit_gpui::ai::TabAiContextBlob::from_parts(
+        script_kit_gpui::ai::TabAiUiSnapshot {
+            prompt_type: "FileSearch".to_string(),
+            input_text: Some("rename this file".to_string()),
+            ..Default::default()
         },
-        desktop: None,
-        targets: vec![],
-        clipboard_history: vec![],
-        prior_automations: script_kit_gpui::ai::TabAiMemoryResolution {
-            suggestions: vec![],
-            outcome: script_kit_gpui::ai::TabAiMemoryResolutionOutcome::NoPriorAutomations,
-        },
-        invocation_receipt: None,
-    };
+        Default::default(),
+        vec![],
+        None,
+        vec![],
+        vec![],
+        "2026-04-04T00:00:00Z".to_string(),
+    );
 
     let output = script_kit_gpui::ai::build_tab_ai_harness_submission(
         &context,
@@ -4591,24 +4586,19 @@ fn non_authoring_harness_submission_omits_guidance_block() {
 fn authoring_harness_submission_contains_verification_guidance() {
     // Runtime call: a ScriptList + Submit authoring submission must contain
     // the verification guidance block with all three markers present.
-    let context = script_kit_gpui::ai::TabAiContextBlob {
-        schema_version: 2,
-        ui: script_kit_gpui::ai::TabAiUiSnapshot {
-            prompt_type: "ScriptList".into(),
-            input_text: Some("clipboard cleanup".into()),
-            focused_semantic_id: None,
-            selected_semantic_id: None,
-            visible_elements: vec![],
+    let context = script_kit_gpui::ai::TabAiContextBlob::from_parts(
+        script_kit_gpui::ai::TabAiUiSnapshot {
+            prompt_type: "ScriptList".to_string(),
+            input_text: Some("clipboard cleanup".to_string()),
+            ..Default::default()
         },
-        desktop: None,
-        targets: vec![],
-        clipboard_history: vec![],
-        prior_automations: script_kit_gpui::ai::TabAiMemoryResolution {
-            suggestions: vec![],
-            outcome: script_kit_gpui::ai::TabAiMemoryResolutionOutcome::NoPriorAutomations,
-        },
-        invocation_receipt: None,
-    };
+        Default::default(),
+        vec![],
+        None,
+        vec![],
+        vec![],
+        "2026-04-04T00:00:00Z".to_string(),
+    );
 
     let output = script_kit_gpui::ai::build_tab_ai_harness_submission(
         &context,

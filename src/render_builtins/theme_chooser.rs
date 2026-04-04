@@ -5,37 +5,6 @@ use crate::theme::gpui_integration::{
 const THEME_LIST_PAGE_SIZE: usize = 5;
 const OPACITY_MATCH_TOLERANCE: f32 = 0.05;
 const FONT_SIZE_MATCH_TOLERANCE: f32 = 0.5;
-const LEGACY_THEME_ITEM_HEIGHT: f32 = 48.0;
-const THEME_ITEM_MIN_HEIGHT: f32 = 56.0;
-const THEME_ITEM_MAX_HEIGHT: f32 = 66.0;
-const THEME_ITEM_VERTICAL_PADDING_MIN: f32 = 6.0;
-const THEME_ITEM_VERTICAL_PADDING_MAX: f32 = 14.0;
-const THEME_ITEM_HORIZONTAL_PADDING_MIN: f32 = 14.0;
-const THEME_ITEM_HORIZONTAL_PADDING_MAX: f32 = 20.0;
-const THEME_ITEM_CONTENT_GAP_MIN: f32 = 10.0;
-const THEME_ITEM_CONTENT_GAP_MAX: f32 = 14.0;
-const THEME_ITEM_TEXT_GAP_MIN: f32 = 3.0;
-const THEME_ITEM_TEXT_GAP_MAX: f32 = 6.0;
-const THEME_ITEM_SWATCH_GAP_MIN: f32 = 2.0;
-const THEME_ITEM_SWATCH_GAP_MAX: f32 = 4.0;
-const THEME_LIST_VERTICAL_PADDING_MIN: f32 = 2.0;
-const THEME_LIST_VERTICAL_PADDING_MAX: f32 = 6.0;
-const THEME_ITEM_BADGE_HORIZONTAL_PADDING_MIN: f32 = 6.0;
-const THEME_ITEM_BADGE_HORIZONTAL_PADDING_MAX: f32 = 10.0;
-const THEME_ITEM_BADGE_VERTICAL_PADDING_MIN: f32 = 2.0;
-const THEME_ITEM_BADGE_VERTICAL_PADDING_MAX: f32 = 4.0;
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-struct ThemeChooserRowLayout {
-    item_height: f32,
-    horizontal_padding: f32,
-    content_gap: f32,
-    text_gap: f32,
-    swatch_gap: f32,
-    list_vertical_padding: f32,
-    badge_horizontal_padding: f32,
-    badge_vertical_padding: f32,
-}
 
 /// Unified theme chooser preview sync: applies both gpui-component colors and
 /// native vibrancy/material in one call, with a source tag for tracing.
@@ -780,49 +749,6 @@ impl ScriptListApp {
             .into_any_element()
     }
 
-    fn theme_chooser_row_layout(spacing: &designs::DesignSpacing) -> ThemeChooserRowLayout {
-        let vertical_padding = spacing.item_padding_y.clamp(
-            THEME_ITEM_VERTICAL_PADDING_MIN,
-            THEME_ITEM_VERTICAL_PADDING_MAX,
-        );
-        let item_height = (LEGACY_THEME_ITEM_HEIGHT + vertical_padding + spacing.gap_sm / 2.0)
-            .clamp(THEME_ITEM_MIN_HEIGHT, THEME_ITEM_MAX_HEIGHT);
-        let horizontal_padding = spacing.item_padding_x.clamp(
-            THEME_ITEM_HORIZONTAL_PADDING_MIN,
-            THEME_ITEM_HORIZONTAL_PADDING_MAX,
-        );
-        let content_gap = spacing
-            .icon_text_gap
-            .clamp(THEME_ITEM_CONTENT_GAP_MIN, THEME_ITEM_CONTENT_GAP_MAX);
-        let text_gap = spacing
-            .gap_sm
-            .clamp(THEME_ITEM_TEXT_GAP_MIN, THEME_ITEM_TEXT_GAP_MAX);
-        let swatch_gap =
-            (spacing.gap_sm / 2.0).clamp(THEME_ITEM_SWATCH_GAP_MIN, THEME_ITEM_SWATCH_GAP_MAX);
-        let list_vertical_padding = spacing.margin_sm.clamp(
-            THEME_LIST_VERTICAL_PADDING_MIN,
-            THEME_LIST_VERTICAL_PADDING_MAX,
-        );
-        let badge_horizontal_padding = spacing.item_padding_x.clamp(
-            THEME_ITEM_BADGE_HORIZONTAL_PADDING_MIN,
-            THEME_ITEM_BADGE_HORIZONTAL_PADDING_MAX,
-        );
-        let badge_vertical_padding = (spacing.gap_sm / 2.0).clamp(
-            THEME_ITEM_BADGE_VERTICAL_PADDING_MIN,
-            THEME_ITEM_BADGE_VERTICAL_PADDING_MAX,
-        );
-        ThemeChooserRowLayout {
-            item_height,
-            horizontal_padding,
-            content_gap,
-            text_gap,
-            swatch_gap,
-            list_vertical_padding,
-            badge_horizontal_padding,
-            badge_vertical_padding,
-        }
-    }
-
     /// Render the theme chooser with search, live preview, and preview panel
     pub(crate) fn render_theme_chooser(
         &mut self,
@@ -871,7 +797,6 @@ impl ScriptListApp {
             .map(|preset| preset.name)
             .unwrap_or("Theme Preview");
 
-        let row_layout = Self::theme_chooser_row_layout(&design_spacing);
         let entity_handle = cx.entity().downgrade();
 
         // ── Keyboard handler ───────────────────────────────────────
@@ -1094,13 +1019,12 @@ impl ScriptListApp {
         let first_light_idx = first_light;
         let filtered_indices_for_list = filtered_indices.clone();
         let entity_handle_for_customize = entity_handle.clone();
-        let badge_h_pad = row_layout.badge_horizontal_padding;
-        let badge_v_pad = row_layout.badge_vertical_padding;
         let accent_badge_border = rgba(chrome.accent_badge_border_rgba);
         let accent_badge_bg = rgba(chrome.accent_badge_bg_rgba);
         let accent_badge_text = rgb(chrome.accent_badge_text_hex);
+        let list_colors = crate::list_item::ListItemColors::from_theme(self.theme.as_ref());
 
-        // ── Theme list ─────────────────────────────────────────────
+        // ── Theme list (shared ListItem rows) ─────────────────────
         let list = uniform_list(
             "theme-chooser",
             filtered_count,
@@ -1131,51 +1055,33 @@ impl ScriptListApp {
                             .child(div().flex_1().bg(rgb(colors.secondary)))
                             .child(div().flex_1().bg(rgb(colors.border)));
 
-                        // Badge for original (saved) theme — uses shared chrome tokens
-                        let indicator = if is_original {
-                            div()
-                                .px(px(badge_h_pad))
-                                .py(px(badge_v_pad))
-                                .rounded(px(5.0))
-                                .border_1()
-                                .border_color(accent_badge_border)
-                                .bg(accent_badge_bg)
-                                .text_xs()
-                                .font_weight(gpui::FontWeight::MEDIUM)
-                                .text_color(accent_badge_text)
-                                .child("Saved")
-                        } else {
-                            div().px(px(badge_h_pad)).py(px(badge_v_pad)).child("")
-                        };
-
-                        // Section label for light themes (only when unfiltered)
-                        let section_label = if is_first_light {
+                        // "Saved" badge for original theme — trailing accessory
+                        let saved_badge = if is_original {
                             Some(
                                 div()
-                                    .w_full()
-                                    .pt(px(row_layout.list_vertical_padding + 2.0))
-                                    .pb(px(row_layout.list_vertical_padding))
-                                    .px(px(row_layout.horizontal_padding))
-                                    .border_color(divider_bg)
-                                    .border_t_1()
-                                    .child(
-                                        div()
-                                            .text_xs()
-                                            .text_color(rgb(text_dimmed))
-                                            .font_weight(gpui::FontWeight::SEMIBOLD)
-                                            .child("LIGHT"),
-                                    ),
+                                    .px(px(6.0))
+                                    .py(px(2.0))
+                                    .rounded(px(5.0))
+                                    .border_1()
+                                    .border_color(accent_badge_border)
+                                    .bg(accent_badge_bg)
+                                    .text_xs()
+                                    .font_weight(gpui::FontWeight::MEDIUM)
+                                    .text_color(accent_badge_text)
+                                    .child("Saved")
+                                    .into_any_element(),
                             )
                         } else {
                             None
                         };
 
-                        // Match main menu ListItem: full primary for selected,
-                        // quieted primary for unselected
-                        let name_color = if is_selected {
-                            rgb(text_primary)
+                        // Section label for light themes (only when unfiltered)
+                        let section_label = if is_first_light {
+                            Some(crate::list_item::render_section_header(
+                                "LIGHT", None, list_colors, false,
+                            ))
                         } else {
-                            rgba((text_primary << 8) | crate::list_item::ALPHA_NAME_QUIET)
+                            None
                         };
 
                         // Click handler: select + preview via filtered index
@@ -1186,7 +1092,6 @@ impl ScriptListApp {
                                   cx: &mut gpui::App| {
                                 if let Some(app) = click_entity.upgrade() {
                                     app.update(cx, |this, cx| {
-                                        // Recompute filtered indices from current filter
                                         let current_filter = if let AppView::ThemeChooserView {
                                             ref filter,
                                             ..
@@ -1216,56 +1121,20 @@ impl ScriptListApp {
                                 }
                             };
 
-                        // Build item row — match main menu ListItem rendering
-                        let text_col = div()
-                            .flex()
-                            .flex_col()
-                            .overflow_hidden()
-                            .gap(px(2.0))
-                            .child(
-                                div()
-                                    .text_size(px(crate::list_item::NAME_FONT_SIZE))
-                                    .line_height(px(crate::list_item::NAME_LINE_HEIGHT))
-                                    .when(is_selected, |d| {
-                                        d.font_weight(gpui::FontWeight::SEMIBOLD)
-                                    })
-                                    .text_color(name_color)
-                                    .child(name),
-                            )
-                            // Description revealed on focused row — use primary
-                            // text at reduced alpha for readability on selection bg
-                            .when(is_selected, |d| {
-                                d.child(
-                                    div()
-                                        .text_xs()
-                                        .text_color(rgba((text_primary << 8) | crate::list_item::ALPHA_DESC_SELECTED))
-                                        .child(desc),
-                                )
-                            });
+                        // Build shared ListItem row — matches main menu rendering
+                        let item = crate::list_item::ListItem::new(name, list_colors)
+                            .description(desc)
+                            .selected(is_selected)
+                            .with_accent_bar(true)
+                            .index(ix)
+                            .leading_accessory(color_bar)
+                            .trailing_accessory_opt(saved_badge);
 
                         let row = div()
                             .id(ix)
-                            .w_full()
-                            .h(px(row_layout.item_height))
-                            .px(px(row_layout.horizontal_padding))
-                            .flex()
-                            .flex_row()
-                            .items_center()
-                            .gap(px(row_layout.content_gap))
                             .cursor_pointer()
-                            .border_l(px(3.0))
-                            .when(is_selected, |d| {
-                                d.bg(theme_row_selected_bg)
-                                    .border_color(rgb(accent_color))
-                            })
-                            .when(!is_selected, |d| {
-                                d.border_color(gpui::transparent_black())
-                                    .hover(move |s| s.bg(theme_row_hover_bg))
-                            })
                             .on_click(click_handler)
-                            .child(indicator)
-                            .child(color_bar)
-                            .child(text_col);
+                            .child(item);
 
                         if let Some(label) = section_label {
                             div()
@@ -1972,7 +1841,7 @@ impl ScriptListApp {
                         div()
                             .w_1_2()
                             .h_full()
-                            .py(px(row_layout.list_vertical_padding))
+                            .py(px(4.0))
                             .child(
                                 div()
                                     .relative()
@@ -2089,40 +1958,21 @@ mod theme_chooser_filter_tests {
     }
 
     #[test]
-    fn test_theme_chooser_row_layout_increases_spacing_when_default_tokens_used() {
-        let layout = ScriptListApp::theme_chooser_row_layout(&designs::DesignSpacing::default());
-
-        assert_eq!(layout.item_height, 58.0);
-        assert_eq!(layout.horizontal_padding, 16.0);
-        assert_eq!(layout.content_gap, 10.0);
-        assert_eq!(layout.text_gap, 4.0);
-        assert_eq!(layout.swatch_gap, 2.0);
-        assert_eq!(layout.list_vertical_padding, 4.0);
-    }
-
-    #[test]
-    fn test_theme_chooser_row_layout_clamps_extreme_spacing_tokens() {
-        let spacing = designs::DesignSpacing {
-            padding_xs: 12.0,
-            padding_sm: 20.0,
-            gap_sm: 20.0,
-            margin_sm: 20.0,
-            item_padding_x: 40.0,
-            item_padding_y: 40.0,
-            icon_text_gap: 32.0,
-            ..designs::DesignSpacing::default()
-        };
-
-        let layout = ScriptListApp::theme_chooser_row_layout(&spacing);
-
-        assert_eq!(layout.item_height, THEME_ITEM_MAX_HEIGHT);
-        assert_eq!(layout.horizontal_padding, THEME_ITEM_HORIZONTAL_PADDING_MAX);
-        assert_eq!(layout.content_gap, THEME_ITEM_CONTENT_GAP_MAX);
-        assert_eq!(layout.text_gap, THEME_ITEM_TEXT_GAP_MAX);
-        assert_eq!(layout.swatch_gap, THEME_ITEM_SWATCH_GAP_MAX);
-        assert_eq!(
-            layout.list_vertical_padding,
-            THEME_LIST_VERTICAL_PADDING_MAX
+    fn test_theme_chooser_uses_shared_list_item_row() {
+        // The theme chooser now uses the shared ListItem component for preset rows,
+        // matching the main menu's accent bar, description reveal, and spacing.
+        let source = include_str!("theme_chooser.rs");
+        assert!(
+            source.contains("ListItem::new(name, list_colors)"),
+            "theme chooser preset rows should use the shared ListItem primitive"
+        );
+        assert!(
+            source.contains("leading_accessory(color_bar)"),
+            "theme chooser should pass color swatch as leading accessory"
+        );
+        assert!(
+            source.contains("trailing_accessory_opt(saved_badge)"),
+            "theme chooser should pass Saved badge as trailing accessory"
         );
     }
 }
