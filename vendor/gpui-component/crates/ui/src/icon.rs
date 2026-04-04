@@ -3602,7 +3602,9 @@ impl IconNamed for IconName {
             Self::SquareArrowUp => "icons/square-arrow-up.svg",
             Self::SquareAsterisk => "icons/square-asterisk.svg",
             Self::SquareBottomDashedScissors => "icons/square-bottom-dashed-scissors.svg",
-            Self::SquareCenterlineDashedHorizontal => "icons/square-centerline-dashed-horizontal.svg",
+            Self::SquareCenterlineDashedHorizontal => {
+                "icons/square-centerline-dashed-horizontal.svg"
+            }
             Self::SquareCenterlineDashedVertical => "icons/square-centerline-dashed-vertical.svg",
             Self::SquareChartGantt => "icons/square-chart-gantt.svg",
             Self::SquareCheckBig => "icons/square-check-big.svg",

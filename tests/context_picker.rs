@@ -338,10 +338,7 @@ fn new_entries_are_queryable() {
 fn slash_exact_command_match_scores_highest() {
     let spec = ContextAttachmentKind::Current.spec();
     let (score, _, _) = score_builtin_with_trigger(spec, ContextPickerTrigger::Slash, "context");
-    assert_eq!(
-        score, 1000,
-        "Exact slash command match should score 1000"
-    );
+    assert_eq!(score, 1000, "Exact slash command match should score 1000");
 }
 
 #[test]

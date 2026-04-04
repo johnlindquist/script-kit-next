@@ -534,7 +534,8 @@ fn mention_sel_has_meta_highlight_indices() {
 fn context_picker_render_uses_list_not_children() {
     let source = include_str!("render.rs");
     assert!(
-        source.contains("list(self.context_picker_list_state.clone()"),
+        source.contains("let picker_list = list(")
+            && source.contains("self.context_picker_list_state.clone()"),
         "Context picker must render through GPUI list state, not raw .children()"
     );
     assert!(
