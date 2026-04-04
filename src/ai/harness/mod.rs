@@ -787,6 +787,27 @@ pub fn should_include_artifact_authoring_guidance(intent: Option<&str>) -> bool 
         || looks_like_command_like_artifact_request(&intent)
 }
 
+/// Force authoring guidance for the ScriptList submit flow.
+///
+/// This covers terse generation queries like "clipboard cleanup" that do not
+/// contain explicit artifact words but still mean "create a Script Kit artifact".
+/// The current heuristic-based classifier remains as a fallback for other prompt
+/// types and submission modes.
+fn should_force_artifact_guidance_for_script_list_submit(
+    context: &crate::ai::TabAiContextBlob,
+    effective_intent: Option<&str>,
+    mode: TabAiHarnessSubmissionMode,
+) -> bool {
+    let has_non_empty_intent = effective_intent
+        .map(str::trim)
+        .map(|value| !value.is_empty())
+        .unwrap_or(false);
+
+    context.ui.prompt_type == "ScriptList"
+        && matches!(mode, TabAiHarnessSubmissionMode::Submit)
+        && has_non_empty_intent
+}
+
 /// Canonical one-shot authoring launchpad for harness mode.
 ///
 /// Keep `kit-init/examples/START_HERE.md` as the single source of truth.
@@ -834,10 +855,16 @@ pub fn build_tab_ai_harness_submission(
         .map(str::trim)
         .filter(|value| !value.is_empty());
 
-    if should_include_artifact_authoring_guidance(effective_intent) {
+    let forced_by_script_list_submit =
+        should_force_artifact_guidance_for_script_list_submit(context, effective_intent, mode);
+
+    if forced_by_script_list_submit
+        || should_include_artifact_authoring_guidance(effective_intent)
+    {
         let guidance = build_tab_ai_artifact_authoring_guidance_block();
         tracing::info!(
             event = "tab_ai_artifact_authoring_guidance_appended",
+            forced_by_script_list_submit,
             includes_script_authoring_skill = guidance
                 .contains("~/.scriptkit/skills/script-authoring/SKILL.md"),
             includes_bun_build_verification = guidance.contains(
@@ -1914,6 +1941,141 @@ mod tests {
         assert!(block.contains("~/.scriptkit/kit/main/scripts/clipboard-cleanup.ts"));
         assert!(block.contains("~/.scriptkit/kit/main/extensions/snippets.md"));
         assert!(block.contains("~/.scriptkit/kit/main/agents/review-pr.claude.md"));
+    }
+
+    // =========================================================================
+    // ScriptList submit forces artifact authoring guidance (no artifact words)
+    // =========================================================================
+
+    #[test]
+    fn script_list_submit_forces_authoring_guidance_without_artifact_words() {
+        let context = crate::ai::TabAiContextBlob::from_parts(
+            crate::ai::TabAiUiSnapshot {
+                prompt_type: "ScriptList".to_string(),
+                input_text: Some("clipboard cleanup".to_string()),
+                ..Default::default()
+            },
+            Default::default(),
+            vec![],
+            None,
+            vec![],
+            vec![],
+            "2026-04-04T00:00:00Z".to_string(),
+        );
+
+        let submission = build_tab_ai_harness_submission(
+            &context,
+            Some("clipboard cleanup"),
+            TabAiHarnessSubmissionMode::Submit,
+            None,
+            None,
+            &[],
+        )
+        .expect("submission");
+
+        assert!(submission.contains("--- Script Kit artifact authoring guidance ---"));
+        assert!(submission.contains("~/.scriptkit/skills/script-authoring/SKILL.md"));
+        assert!(submission.contains(
+            "bun build ~/.scriptkit/kit/main/scripts/<name>.ts --target=bun --outfile ~/.scriptkit/tmp/test-scripts/<name>.verify.mjs"
+        ));
+        assert!(
+            submission.contains("SK_VERIFY=1 bun ~/.scriptkit/kit/main/scripts/<name>.ts")
+        );
+    }
+
+    #[test]
+    fn script_list_paste_only_does_not_force_authoring_guidance() {
+        let context = crate::ai::TabAiContextBlob::from_parts(
+            crate::ai::TabAiUiSnapshot {
+                prompt_type: "ScriptList".to_string(),
+                input_text: Some("clipboard cleanup".to_string()),
+                ..Default::default()
+            },
+            Default::default(),
+            vec![],
+            None,
+            vec![],
+            vec![],
+            "2026-04-04T00:00:00Z".to_string(),
+        );
+
+        let submission = build_tab_ai_harness_submission(
+            &context,
+            Some("clipboard cleanup"),
+            TabAiHarnessSubmissionMode::PasteOnly,
+            None,
+            None,
+            &[],
+        )
+        .expect("submission");
+
+        assert!(
+            !submission.contains("--- Script Kit artifact authoring guidance ---"),
+            "PasteOnly must not force the authoring block for non-artifact intents"
+        );
+    }
+
+    #[test]
+    fn script_list_submit_with_empty_intent_does_not_force_authoring_guidance() {
+        let context = crate::ai::TabAiContextBlob::from_parts(
+            crate::ai::TabAiUiSnapshot {
+                prompt_type: "ScriptList".to_string(),
+                ..Default::default()
+            },
+            Default::default(),
+            vec![],
+            None,
+            vec![],
+            vec![],
+            "2026-04-04T00:00:00Z".to_string(),
+        );
+
+        let submission = build_tab_ai_harness_submission(
+            &context,
+            None,
+            TabAiHarnessSubmissionMode::Submit,
+            None,
+            None,
+            &[],
+        )
+        .expect("submission");
+
+        assert!(
+            !submission.contains("--- Script Kit artifact authoring guidance ---"),
+            "Submit with no intent must not force the authoring block"
+        );
+    }
+
+    #[test]
+    fn non_script_list_submit_does_not_force_authoring_guidance() {
+        let context = crate::ai::TabAiContextBlob::from_parts(
+            crate::ai::TabAiUiSnapshot {
+                prompt_type: "FileSearch".to_string(),
+                input_text: Some("clipboard cleanup".to_string()),
+                ..Default::default()
+            },
+            Default::default(),
+            vec![],
+            None,
+            vec![],
+            vec![],
+            "2026-04-04T00:00:00Z".to_string(),
+        );
+
+        let submission = build_tab_ai_harness_submission(
+            &context,
+            Some("clipboard cleanup"),
+            TabAiHarnessSubmissionMode::Submit,
+            None,
+            None,
+            &[],
+        )
+        .expect("submission");
+
+        assert!(
+            !submission.contains("--- Script Kit artifact authoring guidance ---"),
+            "Non-ScriptList prompt types must not force the authoring block"
+        );
     }
 }
 
