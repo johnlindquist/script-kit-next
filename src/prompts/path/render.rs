@@ -81,6 +81,7 @@ impl Render for PathPrompt {
             .flex()
             .flex_row()
             .items_center()
+            .gap(gpui::px(8.0))
             .child(
                 div()
                     .flex_1()
@@ -109,6 +110,13 @@ impl Render for PathPrompt {
                                 gpui::SharedString::from(filter_text)
                             }),
                     ),
+            )
+            .child(
+                div()
+                    .flex_shrink_0()
+                    .text_xs()
+                    .text_color(gpui::rgba((text_muted << 8) | 0x99))
+                    .child(format!("{filtered_count} items")),
             );
 
         // Content wrapper
@@ -121,21 +129,11 @@ impl Render for PathPrompt {
             .px(gpui::px(8.0))
             .child(list);
 
-        // Hint strip footer with contextual shortcuts
-        let hints: Vec<gpui::SharedString> = vec![
-            gpui::SharedString::from("↵ Select"),
-            gpui::SharedString::from("←→ Navigate"),
-            gpui::SharedString::from("⌘K Actions"),
-            gpui::SharedString::from("Esc Back"),
-        ];
-
-        let leading = Some(crate::components::render_hint_strip_leading_text(
-            format!("{filtered_count} items"),
-            text_primary,
-        ));
+        let hints = crate::components::universal_prompt_hints();
+        crate::components::emit_prompt_hint_audit("prompts::path", &hints);
 
         let container =
-            crate::components::render_minimal_list_prompt_scaffold(header, content, hints, leading)
+            crate::components::render_minimal_list_prompt_scaffold(header, content, hints, None)
                 .id(gpui::ElementId::Name("window:path".into()))
                 .text_color(gpui::rgb(text_primary));
 
