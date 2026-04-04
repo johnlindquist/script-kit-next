@@ -651,6 +651,7 @@ pub struct ListItem {
     name: SharedString,
     description: Option<String>,
     shortcut: Option<String>,
+    shortcut_tokens: Option<Vec<String>>,
     icon: Option<IconKind>,
     selected: bool,
     /// Whether this item is being hovered (subtle visual feedback, separate from selected)
@@ -717,6 +718,7 @@ impl ListItem {
             name: name_sanitized,
             description: None,
             shortcut: None,
+            shortcut_tokens: None,
             icon: None,
             selected: false,
             hovered: false,
@@ -781,12 +783,23 @@ impl ListItem {
 
     /// Set the shortcut badge text (shown right-aligned)
     pub fn shortcut(mut self, s: impl Into<String>) -> Self {
-        self.shortcut = Some(s.into());
+        let shortcut = s.into();
+        let shortcut_tokens =
+            crate::components::hint_strip::shortcut_tokens_from_hint(&shortcut);
+        self.shortcut_tokens = Some(shortcut_tokens);
+        self.shortcut = Some(shortcut);
         self
     }
 
     /// Set an optional shortcut (convenience for Option<String>)
     pub fn shortcut_opt(mut self, s: Option<String>) -> Self {
+        if let Some(ref shortcut) = s {
+            let shortcut_tokens =
+                crate::components::hint_strip::shortcut_tokens_from_hint(shortcut);
+            self.shortcut_tokens = Some(shortcut_tokens);
+        } else {
+            self.shortcut_tokens = None;
+        }
         self.shortcut = s;
         self
     }
@@ -1194,8 +1207,8 @@ impl RenderOnce for ListItem {
             }
         }
 
-        // Shortcut — compact inline glyphs via shared renderer
-        let shortcut_element: AnyElement = if let Some(sc) = self.shortcut {
+        // Shortcut — compact inline glyphs via shared renderer (tokens cached at construction)
+        let shortcut_element: AnyElement = if self.shortcut.is_some() {
             let show_shortcut =
                 should_show_search_shortcut(is_filtering, self.selected, hover_visible);
             if show_shortcut {
@@ -1203,22 +1216,24 @@ impl RenderOnce for ListItem {
                     "list_item",
                     "compact-inline-whisper",
                 );
-                let shortcut_tokens =
-                    crate::components::hint_strip::shortcut_tokens_from_hint(sc.as_str());
                 let glyph_color = if is_filtering {
                     rgba((colors.text_dimmed << 8) | ALPHA_HINT)
                 } else {
                     rgba((colors.text_muted << 8) | ALPHA_READABLE)
                 };
                 let chrome_color = rgba((colors.text_dimmed << 8) | 0xFF);
-                crate::components::hint_strip::render_inline_shortcut_keys(
-                    shortcut_tokens.iter().map(String::as_str),
-                    crate::components::hint_strip::whisper_inline_shortcut_colors(
-                        glyph_color.into(),
-                        chrome_color.into(),
-                        !is_filtering,
-                    ),
-                )
+                if let Some(shortcut_tokens) = self.shortcut_tokens.as_ref() {
+                    crate::components::hint_strip::render_inline_shortcut_keys(
+                        shortcut_tokens.iter().map(String::as_str),
+                        crate::components::hint_strip::whisper_inline_shortcut_colors(
+                            glyph_color.into(),
+                            chrome_color.into(),
+                            !is_filtering,
+                        ),
+                    )
+                } else {
+                    div().into_any_element()
+                }
             } else {
                 div().into_any_element()
             }

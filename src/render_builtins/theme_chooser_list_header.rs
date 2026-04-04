@@ -121,26 +121,13 @@
                                     }
                                     if let Some(&pidx) = filtered.get(ix) {
                                         if pidx < presets.len() {
-                                            let preset = &presets[pidx];
-
-                                            tracing::debug!(
-                                                target: "script_kit::theme_chooser",
-                                                event = "theme_chooser_select",
-                                                trigger = "mouse",
-                                                filtered_index = ix,
-                                                preset_index = pidx,
-                                                preset_id = %preset.id,
-                                                preset_name = %preset.name,
-                                                filtered_count = filtered.len(),
-                                            );
-
                                             this.theme_chooser_scroll_handle
                                                 .scroll_to_item(ix, ScrollStrategy::Nearest);
-                                            this.theme = std::sync::Arc::new(
-                                                preset.create_theme(),
+                                            this.apply_theme_chooser_theme(
+                                                presets[pidx].create_theme(),
+                                                "theme_chooser_select_mouse",
+                                                cx,
                                             );
-                                            theme::sync_gpui_component_theme(cx);
-                                            cx.notify();
                                         }
                                     }
                                 });

@@ -478,7 +478,24 @@ impl ScriptListApp {
             "theme_chooser_theme_applied"
         );
         sync_theme_chooser_preview(cx, &self.theme, reason);
+        // Sync native vibrancy so the window material matches the theme
+        let is_dark = self.theme.should_use_dark_vibrancy();
+        let material = self.theme.get_vibrancy().material;
+        platform::configure_window_vibrancy_material_for_appearance(is_dark, material);
         cx.notify();
+    }
+
+    /// Clone-and-mutate convenience: clones the current theme, applies a
+    /// mutation closure, then routes through the unified preview pipeline.
+    fn mutate_theme_chooser_theme(
+        &mut self,
+        reason: &'static str,
+        cx: &mut Context<Self>,
+        mutate: impl FnOnce(&mut crate::theme::Theme),
+    ) {
+        let mut next = (*self.theme).clone();
+        mutate(&mut next);
+        self.apply_theme_chooser_theme(next, reason, cx);
     }
 
     /// Restore a previously saved theme (escape/close paths).
@@ -497,6 +514,11 @@ impl ScriptListApp {
             "theme_chooser_theme_applied"
         );
         sync_theme_chooser_preview(cx, &self.theme, reason);
+        // Sync native vibrancy for the restored theme
+        let is_dark = self.theme.should_use_dark_vibrancy();
+        let material = self.theme.get_vibrancy().material;
+        platform::configure_window_vibrancy_material_for_appearance(is_dark, material);
+        cx.notify();
     }
 
     /// Shared helper: preview a preset by filtered index, using the cached theme.

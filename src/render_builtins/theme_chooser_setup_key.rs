@@ -83,8 +83,11 @@
                     if !this.clear_builtin_view_filter(cx) {
                         // No filter to clear — restore original theme and go back
                         if let Some(original) = this.theme_before_chooser.take() {
-                            this.theme = original;
-                            theme::sync_gpui_component_theme(cx);
+                            this.restore_theme_chooser_theme(
+                                original,
+                                "theme_chooser_restore_escape",
+                                cx,
+                            );
                         }
                         this.go_back_or_close(window, cx);
                     }
@@ -93,8 +96,11 @@
                 // Cmd+W: restore and close window
                 if has_cmd && key.eq_ignore_ascii_case("w") {
                     if let Some(original) = this.theme_before_chooser.take() {
-                        this.theme = original;
-                        theme::sync_gpui_component_theme(cx);
+                        this.restore_theme_chooser_theme(
+                            original,
+                            "theme_chooser_restore_cmd_w",
+                            cx,
+                        );
                     }
                     this.close_and_reset_window(cx);
                     return;
@@ -109,13 +115,17 @@
                         idx - 1
                     };
                     let (new_accent, _) = Self::ACCENT_PALETTE[new_idx];
-                    let mut modified = (*this.theme).clone();
-                    modified.colors.accent.selected = new_accent;
-                    modified.colors.text.on_accent =
-                        Self::accent_on_text_color(new_accent, modified.colors.background.main);
-                    this.theme = std::sync::Arc::new(modified);
-                    theme::sync_gpui_component_theme(cx);
-                    cx.notify();
+                    this.mutate_theme_chooser_theme(
+                        "theme_chooser_cycle_accent_prev",
+                        cx,
+                        |theme| {
+                            theme.colors.accent.selected = new_accent;
+                            theme.colors.text.on_accent = Self::accent_on_text_color(
+                                new_accent,
+                                theme.colors.background.main,
+                            );
+                        },
+                    );
                     return;
                 }
                 if has_cmd && (key == "]" || key.eq_ignore_ascii_case("bracketright")) {
@@ -123,95 +133,79 @@
                     let idx = Self::find_accent_palette_index(current).unwrap_or(0);
                     let new_idx = (idx + 1) % Self::ACCENT_PALETTE.len();
                     let (new_accent, _) = Self::ACCENT_PALETTE[new_idx];
-                    let mut modified = (*this.theme).clone();
-                    modified.colors.accent.selected = new_accent;
-                    modified.colors.text.on_accent =
-                        Self::accent_on_text_color(new_accent, modified.colors.background.main);
-                    this.theme = std::sync::Arc::new(modified);
-                    theme::sync_gpui_component_theme(cx);
-                    cx.notify();
+                    this.mutate_theme_chooser_theme(
+                        "theme_chooser_cycle_accent_next",
+                        cx,
+                        |theme| {
+                            theme.colors.accent.selected = new_accent;
+                            theme.colors.text.on_accent = Self::accent_on_text_color(
+                                new_accent,
+                                theme.colors.background.main,
+                            );
+                        },
+                    );
                     return;
                 }
-                // Cmd+- / Cmd+=: adjust opacity
+                // Cmd+- / Cmd+=: adjust opacity (whole-shell preset)
                 if has_cmd && key == "-" {
-                    let current_main = this
-                        .theme
-                        .get_opacity()
-                        .vibrancy_background
-                        .unwrap_or(0.85);
+                    let current_main = this.theme.get_opacity().main;
                     let idx = Self::find_opacity_preset_index(current_main);
                     if idx > 0 {
                         let target = Self::OPACITY_PRESETS[idx - 1].0;
-                        let mut modified = (*this.theme).clone();
-                        if let Some(ref mut op) = modified.opacity {
-                            op.vibrancy_background = Some(target);
-                        }
-                        this.theme = std::sync::Arc::new(modified);
-                        theme::sync_gpui_component_theme(cx);
-                        cx.notify();
+                        let modified =
+                            Self::apply_surface_opacity_preset(this.theme.as_ref(), target);
+                        this.apply_theme_chooser_theme(
+                            modified,
+                            "theme_chooser_opacity_prev",
+                            cx,
+                        );
                     }
                     return;
                 }
                 if has_cmd && (key == "=" || key == "+") {
-                    let current_main = this
-                        .theme
-                        .get_opacity()
-                        .vibrancy_background
-                        .unwrap_or(0.85);
+                    let current_main = this.theme.get_opacity().main;
                     let idx = Self::find_opacity_preset_index(current_main);
                     if idx < Self::OPACITY_PRESETS.len() - 1 {
                         let target = Self::OPACITY_PRESETS[idx + 1].0;
-                        let mut modified = (*this.theme).clone();
-                        if let Some(ref mut op) = modified.opacity {
-                            op.vibrancy_background = Some(target);
-                        }
-                        this.theme = std::sync::Arc::new(modified);
-                        theme::sync_gpui_component_theme(cx);
-                        cx.notify();
+                        let modified =
+                            Self::apply_surface_opacity_preset(this.theme.as_ref(), target);
+                        this.apply_theme_chooser_theme(
+                            modified,
+                            "theme_chooser_opacity_next",
+                            cx,
+                        );
                     }
                     return;
                 }
                 // Cmd+B: toggle vibrancy
                 if has_cmd && key.eq_ignore_ascii_case("b") {
-                    let mut modified = (*this.theme).clone();
-                    if let Some(ref mut vibrancy) = modified.vibrancy {
-                        vibrancy.enabled = !vibrancy.enabled;
-                    }
-                    this.theme = std::sync::Arc::new(modified);
-                    theme::sync_gpui_component_theme(cx);
-                    let is_dark = this.theme.should_use_dark_vibrancy();
-                    let material = this.theme.get_vibrancy().material;
-                    platform::configure_window_vibrancy_material_for_appearance(
-                        is_dark,
-                        material,
+                    this.mutate_theme_chooser_theme(
+                        "theme_chooser_toggle_vibrancy",
+                        cx,
+                        |theme| {
+                            let mut vibrancy = theme.get_vibrancy();
+                            vibrancy.enabled = !vibrancy.enabled;
+                            theme.vibrancy = Some(vibrancy);
+                        },
                     );
-                    cx.notify();
                     return;
                 }
                 // Cmd+M: cycle vibrancy material
                 if has_cmd && key.eq_ignore_ascii_case("m") {
-                    let current_material = this
-                        .theme
-                        .vibrancy
-                        .as_ref()
-                        .map(|v| v.material)
-                        .unwrap_or_default();
+                    let current_material = this.theme.get_vibrancy().material;
                     let idx = Self::find_vibrancy_material_index(current_material);
                     let new_idx = (idx + 1) % Self::VIBRANCY_MATERIALS.len();
                     let (new_material, _) = Self::VIBRANCY_MATERIALS[new_idx];
-                    let mut modified = (*this.theme).clone();
-                    if let Some(ref mut vibrancy) = modified.vibrancy {
-                        vibrancy.material = new_material;
-                    }
-                    this.theme = std::sync::Arc::new(modified);
-                    theme::sync_gpui_component_theme(cx);
-                    let is_dark = this.theme.should_use_dark_vibrancy();
-                    let material = this.theme.get_vibrancy().material;
-                    platform::configure_window_vibrancy_material_for_appearance(
-                        is_dark,
-                        material,
+                    this.mutate_theme_chooser_theme(
+                        "theme_chooser_cycle_material",
+                        cx,
+                        |theme| {
+                            let mut vibrancy = theme.get_vibrancy();
+                            vibrancy.enabled = true;
+                            vibrancy.material = new_material;
+                            theme.vibrancy = Some(vibrancy);
+                        },
                     );
-                    cx.notify();
                     return;
                 }
                 // Cmd+J: surprise me / remix
@@ -220,9 +214,7 @@
                         this.theme.as_ref(),
                         theme_chooser_remix_seed(),
                     );
-                    this.theme = std::sync::Arc::new(remixed);
-                    theme::sync_gpui_component_theme(cx);
-                    cx.notify();
+                    this.apply_theme_chooser_theme(remixed, "theme_chooser_remix", cx);
                     return;
                 }
                 // Cmd+R: reset customizations to selected preset defaults
@@ -241,10 +233,11 @@
                     {
                         if let Some(&pidx) = filtered.get(*selected_index) {
                             if pidx < presets.len() {
-                                this.theme =
-                                    std::sync::Arc::new(presets[pidx].create_theme());
-                                theme::sync_gpui_component_theme(cx);
-                                cx.notify();
+                                this.apply_theme_chooser_theme(
+                                    presets[pidx].create_theme(),
+                                    "theme_chooser_reset_preset",
+                                    cx,
+                                );
                             }
                         }
                     }
@@ -268,7 +261,6 @@
                     } else {
                         return;
                     };
-                let presets = theme::presets::presets_cached();
                 let filtered = Self::theme_chooser_filtered_indices(&current_filter);
                 let count = filtered.len();
                 if count == 0 {
@@ -306,14 +298,13 @@
                         }
                         _ => return,
                     }
-                    // Map to actual preset index and apply theme
-                    let preset_idx = filtered[*selected_index];
-                    let new_theme = std::sync::Arc::new(presets[preset_idx].create_theme());
-                    this.theme = new_theme;
-                    this.theme_chooser_scroll_handle
-                        .scroll_to_item(*selected_index, ScrollStrategy::Nearest);
-                    theme::sync_gpui_component_theme(cx);
-                    cx.notify();
+                    // Map to actual preset index and apply theme via pipeline
+                    this.preview_theme_chooser_preset(
+                        &filtered,
+                        *selected_index,
+                        "theme_chooser_select_keyboard",
+                        cx,
+                    );
                 }
             },
         );
