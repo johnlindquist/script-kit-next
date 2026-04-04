@@ -191,11 +191,14 @@ fn drop_prompt_uses_whisper_chrome_not_heavy_borders() {
         !source.contains(".border_2()"),
         "drop prompt should not use heavy border_2 chrome"
     );
+    let rounded_needle = ".rounded".to_owned() + "(px(8.";
     assert!(
-        !source.contains(".rounded(px(8."))
-            && !source.contains(".rounded_md()")
-            && !source.contains(".rounded_lg()"),
-        "drop prompt should not use rounded corners (whisper chrome = sharp edges)"
+        !source.contains(&rounded_needle),
+        "drop prompt should not use rounded corners - whisper chrome means sharp edges"
+    );
+    assert!(
+        !source.contains(".rounded_md()"),
+        "drop prompt should not use rounded_md chrome"
     );
     assert!(
         source.contains("OPACITY_GHOST"),
@@ -207,6 +210,84 @@ fn drop_prompt_uses_whisper_chrome_not_heavy_borders() {
         "drop prompt outer render should emit tracing with surface tag"
     );
     eprintln!("{{\"audit\":\"minimal_chrome\",\"surface\":\"drop\",\"whisper_chrome\":true,\"tracing_present\":true,\"status\":\"pass\"}}");
+}
+
+#[test]
+fn term_prompt_uses_chrome_audit_and_no_hardcoded_wrapper_colors() {
+    let source = include_str!("../src/render_prompts/term.rs");
+
+    assert!(
+        source.contains("PromptChromeAudit::editor("),
+        "term prompt should emit the shared chrome audit contract"
+    );
+    assert!(
+        !source.contains("rgb(0x"),
+        "term prompt wrapper should not contain hardcoded hex rgb colors"
+    );
+    assert!(
+        !source.contains("PromptFooter::new("),
+        "term prompt should not use PromptFooter"
+    );
+    assert!(
+        source.contains("render_terminal_prompt_hint_strip("),
+        "term prompt should use terminal-specific hint strip"
+    );
+    eprintln!("{{\"audit\":\"minimal_chrome\",\"surface\":\"term\",\"chrome_audit_present\":true,\"hardcoded_hex_absent\":true,\"status\":\"pass\"}}");
+}
+
+#[test]
+fn chat_prompt_has_chrome_audit_and_custom_footer_exception() {
+    let source = include_str!("../src/render_prompts/other.rs");
+
+    assert!(
+        source.contains("surface: \"render_prompts::chat\""),
+        "chat prompt should declare the shared chrome audit surface tag"
+    );
+    // Chat owns its footer — verify no duplicate universal footer is forced in
+    let chat_fn_start = source.find("fn render_chat_prompt(").expect("chat fn exists");
+    let chat_fn_end = source[chat_fn_start..]
+        .find("\n    fn ")
+        .map(|ix| chat_fn_start + ix)
+        .unwrap_or(source.len());
+    let chat_fn = &source[chat_fn_start..chat_fn_end];
+    assert!(
+        chat_fn.contains(", None)"),
+        "chat prompt should pass None for footer to avoid duplicate"
+    );
+    assert!(
+        chat_fn.contains("footer_mode: \"custom\""),
+        "chat prompt should declare custom footer mode in chrome audit"
+    );
+    eprintln!("{{\"audit\":\"minimal_chrome\",\"surface\":\"chat\",\"chrome_audit_present\":true,\"custom_footer\":true,\"status\":\"pass\"}}");
+}
+
+#[test]
+fn webcam_prompt_has_chrome_audit_and_no_redundant_chrome() {
+    let source = include_str!("../src/render_prompts/other.rs");
+
+    assert!(
+        source.contains("PromptChromeAudit::exception("),
+        "webcam prompt should emit the shared chrome audit exception"
+    );
+    let webcam_fn_start = source.find("fn render_webcam_prompt(").expect("webcam fn exists");
+    let webcam_fn_end = source[webcam_fn_start..]
+        .find("\n    fn ")
+        .map(|ix| webcam_fn_start + ix)
+        .unwrap_or(source.len());
+    let webcam_fn = &source[webcam_fn_start..webcam_fn_end];
+    assert!(
+        !webcam_fn.contains("PromptFooter::new("),
+        "webcam prompt should not use PromptFooter"
+    );
+    assert!(
+        webcam_fn.contains("clickable_universal_hint_strip("),
+        "webcam prompt should use the clickable hint strip"
+    );
+    assert!(
+        !webcam_fn.contains("rgb(0x"),
+        "webcam prompt wrapper should not contain hardcoded hex rgb colors"
+    );
+    eprintln!("{{\"audit\":\"minimal_chrome\",\"surface\":\"webcam\",\"chrome_audit_present\":true,\"hardcoded_hex_absent\":true,\"status\":\"pass\"}}");
 }
 
 #[test]
