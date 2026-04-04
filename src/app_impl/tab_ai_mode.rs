@@ -1000,23 +1000,80 @@ impl ScriptListApp {
             total_ms = open_started_at.elapsed().as_millis() as u64,
         );
 
+        // --- ACP agent catalog + preflight resolution ---
         let stage_started_at = std::time::Instant::now();
-        let agent = match crate::ai::acp::claude_code_agent_config_cached() {
-            Ok(agent) => agent,
+        let catalog = match crate::ai::acp::load_acp_agent_catalog_entries() {
+            Ok(entries) => entries,
             Err(error) => {
                 tracing::error!(
-                    event = "tab_ai_acp_config_failed",
+                    target: "script_kit::tab_ai",
+                    event = "acp_catalog_load_failed",
                     error = %error,
                 );
-                self.toast_manager.push(
-                    crate::components::toast::Toast::error(
-                        format!(
-                            "Failed to load Claude Code ACP config: {error}. \
-                             Check claudeCode settings in ~/.scriptkit/kit/config.ts"
-                        ),
-                        &self.theme,
-                    )
-                    .duration_ms(Some(TOAST_ERROR_MS)),
+                let setup = crate::ai::acp::AcpInlineSetupState {
+                    title: "Failed to load ACP catalog".into(),
+                    body: format!("{error}").into(),
+                    primary_action: crate::ai::acp::AcpSetupAction::OpenCatalog,
+                    secondary_action: Some(crate::ai::acp::AcpSetupAction::Retry),
+                    selected_agent: None,
+                };
+                let view_entity =
+                    cx.new(|cx| crate::ai::acp::AcpChatView::new_setup(setup, cx));
+                self.tab_ai_harness_return_view = Some(source_view.clone());
+                self.tab_ai_harness_return_focus_target =
+                    Some(self.tab_ai_return_focus_target());
+                self.current_view = AppView::AcpChatView {
+                    entity: view_entity,
+                };
+                self.focused_input = FocusedInput::None;
+                self.show_actions_popup = false;
+                self.actions_dialog = None;
+                self.pending_focus = Some(FocusTarget::ChatPrompt);
+                cx.notify();
+                return;
+            }
+        };
+
+        let acp_launch_resolution =
+            crate::ai::acp::resolve_default_acp_launch(&catalog, None);
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "acp_launch_resolution",
+            selected_agent_id = ?acp_launch_resolution.selected_agent_id(),
+            blocker = ?acp_launch_resolution.blocker,
+            stage_ms = stage_started_at.elapsed().as_millis() as u64,
+            total_ms = open_started_at.elapsed().as_millis() as u64,
+        );
+
+        if !acp_launch_resolution.is_ready() {
+            let setup =
+                crate::ai::acp::AcpInlineSetupState::from_resolution(&acp_launch_resolution);
+            let view_entity =
+                cx.new(|cx| crate::ai::acp::AcpChatView::new_setup(setup, cx));
+            self.tab_ai_harness_return_view = Some(source_view.clone());
+            self.tab_ai_harness_return_focus_target =
+                Some(self.tab_ai_return_focus_target());
+            self.current_view = AppView::AcpChatView {
+                entity: view_entity,
+            };
+            self.focused_input = FocusedInput::None;
+            self.show_actions_popup = false;
+            self.actions_dialog = None;
+            self.pending_focus = Some(FocusTarget::ChatPrompt);
+            cx.notify();
+            return;
+        }
+
+        let agent = match acp_launch_resolution
+            .selected_agent
+            .as_ref()
+            .and_then(|entry| entry.config.clone())
+        {
+            Some(config) => config,
+            None => {
+                tracing::error!(
+                    target: "script_kit::tab_ai",
+                    event = "acp_resolution_missing_config",
                 );
                 cx.notify();
                 return;
@@ -1025,7 +1082,8 @@ impl ScriptListApp {
         tracing::info!(
             target: "script_kit::tab_ai",
             event = "acp_open_stage",
-            stage = "claude_code_agent_config",
+            stage = "acp_agent_resolved",
+            agent_id = %agent.id,
             stage_ms = stage_started_at.elapsed().as_millis() as u64,
             total_ms = open_started_at.elapsed().as_millis() as u64,
         );
