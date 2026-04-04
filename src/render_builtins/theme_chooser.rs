@@ -1073,7 +1073,7 @@ impl ScriptListApp {
                     }
                     return;
                 }
-                // Enter: apply and close
+                // Enter: apply (persist) the current theme but stay in the chooser
                 if is_key_enter(key) {
                     this.theme_before_chooser = None;
                     match crate::theme::service::persist_theme_and_sync_all_windows(
@@ -1083,12 +1083,14 @@ impl ScriptListApp {
                     ) {
                         Ok(applied_theme) => {
                             this.theme = std::sync::Arc::new(applied_theme);
+                            // Snapshot the newly persisted theme so Escape won't revert it
+                            this.theme_before_chooser = Some(this.theme.clone());
                         }
                         Err(e) => {
                             logging::log("ERROR", &format!("Failed to save theme: {}", e));
                         }
                     }
-                    this.go_back_or_close(window, cx);
+                    cx.notify();
                     return;
                 }
 

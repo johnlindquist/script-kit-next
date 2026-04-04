@@ -3,11 +3,11 @@
     "id": "script-kit-dark",
     "name": "Script Kit Dark",
     "is_dark": true,
-    "bg": "#1E1E1E",
+    "bg": "#0F0F0F",
     "accent": "#FBBF24",
-    "text": "#FFFFFF",
+    "text": "#EEEEEE",
     "secondary": "#CCCCCC",
-    "border": "#464647"
+    "border": "#343434"
   },
   {
     "id": "dracula",
@@ -513,9 +513,9 @@
     "id": "script-kit-light",
     "name": "Script Kit Light",
     "is_dark": false,
-    "bg": "#FAFAFA",
-    "accent": "#0078D4",
-    "text": "#1A1A1A",
+    "bg": "#FFFFFF",
+    "accent": "#2F86D3",
+    "text": "#2C2C2C",
     "secondary": "#4A4A4A",
     "border": "#E0E0E0"
   },
