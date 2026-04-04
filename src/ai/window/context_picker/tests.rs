@@ -461,8 +461,8 @@ fn enter_and_tab_both_route_to_accept() {
 // ── V05 ranking and meta verification ──────────────────────────────────
 
 #[test]
-fn slash_con_ranks_context_before_context_full() {
-    let items = build_picker_items(ContextPickerTrigger::Slash, "con");
+fn slash_snap_ranks_snapshot_before_snapshot_full() {
+    let items = build_picker_items(ContextPickerTrigger::Slash, "snap");
     let context_pos = items.iter().position(|i| {
         matches!(
             i.kind,
@@ -477,11 +477,11 @@ fn slash_con_ranks_context_before_context_full() {
     });
     assert!(
         context_pos.is_some() && context_full_pos.is_some(),
-        "Both /context and /context-full should match 'con'"
+        "Both /snapshot and /snapshot-full should match 'snap'"
     );
     assert!(
         context_pos.unwrap() < context_full_pos.unwrap(),
-        "/context (pos {}) should rank before /context-full (pos {})",
+        "/snapshot (pos {}) should rank before /snapshot-full (pos {})",
         context_pos.unwrap(),
         context_full_pos.unwrap(),
     );
@@ -785,10 +785,10 @@ fn context_picker_state_clamp_on_empty_filter() {
 
 #[test]
 fn slash_exact_command_scores_1000() {
-    // "context" is the slash command for Current Context (without the leading /)
+    // "snapshot" is the canonical slash command for Current Context (without the leading /)
     let spec = ContextAttachmentKind::Current.spec();
     let (score, _, _) =
-        super::score_builtin_with_trigger(spec, ContextPickerTrigger::Slash, "context");
+        super::score_builtin_with_trigger(spec, ContextPickerTrigger::Slash, "snapshot");
     assert_eq!(
         score, 1000,
         "Exact slash command match should score 1000 in slash mode"
@@ -797,10 +797,10 @@ fn slash_exact_command_scores_1000() {
 
 #[test]
 fn slash_prefix_command_outranks_label_prefix() {
-    // Query "con" is a prefix of slash command "context" — should score 500+
+    // Query "snap" is a prefix of slash command "snapshot" — should score 500+
     let spec = ContextAttachmentKind::Current.spec();
     let (slash_score, _, _) =
-        super::score_builtin_with_trigger(spec, ContextPickerTrigger::Slash, "con");
+        super::score_builtin_with_trigger(spec, ContextPickerTrigger::Slash, "snap");
     assert!(
         slash_score >= 500,
         "Slash prefix match should be tier 2 (500+), got {}",
@@ -812,9 +812,9 @@ fn slash_prefix_command_outranks_label_prefix() {
 fn slash_mode_exact_outranks_prefix() {
     let spec = ContextAttachmentKind::Current.spec();
     let (exact, _, _) =
-        super::score_builtin_with_trigger(spec, ContextPickerTrigger::Slash, "context");
+        super::score_builtin_with_trigger(spec, ContextPickerTrigger::Slash, "snapshot");
     let (prefix, _, _) =
-        super::score_builtin_with_trigger(spec, ContextPickerTrigger::Slash, "con");
+        super::score_builtin_with_trigger(spec, ContextPickerTrigger::Slash, "snap");
     assert!(
         exact > prefix,
         "Exact slash match ({}) should outrank prefix ({})",
@@ -844,7 +844,7 @@ fn slash_sel_ranks_selection_high() {
 
 #[test]
 fn slash_mode_meta_highlights_align_with_slash_command() {
-    let items = build_picker_items(ContextPickerTrigger::Slash, "con");
+    let items = build_picker_items(ContextPickerTrigger::Slash, "snap");
     let current = items
         .iter()
         .find(|i| {
@@ -853,22 +853,22 @@ fn slash_mode_meta_highlights_align_with_slash_command() {
                 ContextPickerItemKind::BuiltIn(ContextAttachmentKind::Current)
             )
         })
-        .expect("Current Context should match 'con' in slash mode");
+        .expect("Current Context should match 'snap' in slash mode");
 
-    // Meta should be /context in slash mode
+    // Meta should be /snapshot in slash mode
     assert!(
-        current.meta.contains("context"),
-        "Slash mode meta should contain 'context', got: {}",
+        current.meta.contains("snapshot"),
+        "Slash mode meta should contain 'snapshot', got: {}",
         current.meta,
     );
 
     // meta_highlight_indices should point into the bare command text
     assert!(
         !current.meta_highlight_indices.is_empty(),
-        "Slash mode should produce meta highlight indices for 'con'"
+        "Slash mode should produce meta highlight indices for 'snap'"
     );
 
-    // The bare command is "context" (7 chars); indices must be in range
+    // The bare command is "snapshot" (8 chars); indices must be in range
     let meta_bare = current.meta.trim_start_matches('/');
     for &idx in &current.meta_highlight_indices {
         assert!(
@@ -1035,8 +1035,8 @@ fn fuzzy_nonexistent_query_still_filters() {
 
 #[test]
 fn slash_ranking_is_deterministic() {
-    let items_a = build_picker_items(ContextPickerTrigger::Slash, "con");
-    let items_b = build_picker_items(ContextPickerTrigger::Slash, "con");
+    let items_a = build_picker_items(ContextPickerTrigger::Slash, "snap");
+    let items_b = build_picker_items(ContextPickerTrigger::Slash, "snap");
 
     assert_eq!(items_a.len(), items_b.len());
     for (a, b) in items_a.iter().zip(items_b.iter()) {

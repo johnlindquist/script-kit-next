@@ -170,6 +170,12 @@ impl TextInputState {
         self.selection = new_selection;
     }
 
+    /// Place the caret at a specific character index, clamped to the text length.
+    pub fn set_cursor(&mut self, cursor: usize) {
+        let clamped = cursor.min(self.text.chars().count());
+        self.selection = TextSelection::caret(clamped);
+    }
+
     pub fn clear(&mut self) {
         if self.text.is_empty() && self.selection == TextSelection::caret(0) {
             return;

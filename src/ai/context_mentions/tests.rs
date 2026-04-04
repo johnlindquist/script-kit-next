@@ -50,7 +50,7 @@ fn parse_context_mentions_keeps_unknown_at_lines_as_content() {
 
 #[test]
 fn parse_context_mentions_allows_directive_only_messages() {
-    let parsed = parse_context_mentions("@context\n@selection");
+    let parsed = parse_context_mentions("@snapshot\n@selection");
 
     assert_eq!(parsed.cleaned_content, "");
     assert_eq!(parsed.parts.len(), 2);
@@ -58,7 +58,7 @@ fn parse_context_mentions_allows_directive_only_messages() {
 
 #[test]
 fn parse_context_mentions_handles_all_resource_directives() {
-    let input = "@context\n@context-full\n@selection\n@browser\n@window\n@diagnostics";
+    let input = "@snapshot\n@snapshot-full\n@selection\n@browser\n@window\n@diagnostics";
     let parsed = parse_context_mentions(input);
 
     assert_eq!(parsed.cleaned_content, "");
@@ -73,7 +73,8 @@ fn parse_context_mentions_handles_all_resource_directives() {
 
 #[test]
 fn parse_context_mentions_preserves_body_ordering() {
-    let parsed = parse_context_mentions("Line one.\n@context\nLine two.\n@selection\nLine three.");
+    let parsed =
+        parse_context_mentions("Line one.\n@snapshot\nLine two.\n@selection\nLine three.");
 
     assert_eq!(parsed.cleaned_content, "Line one.\nLine two.\nLine three.");
     assert_eq!(parsed.parts.len(), 2);
@@ -105,8 +106,18 @@ fn parse_context_mentions_has_parts_helper() {
     let empty = parse_context_mentions("Just text.");
     assert!(!empty.has_parts());
 
-    let with_parts = parse_context_mentions("@context\nText.");
+    let with_parts = parse_context_mentions("@snapshot\nText.");
     assert!(with_parts.has_parts());
+}
+
+#[test]
+fn parse_context_mentions_accepts_legacy_context_aliases() {
+    let parsed = parse_context_mentions("@context\n@context-full");
+
+    assert_eq!(parsed.cleaned_content, "");
+    assert_eq!(parsed.parts.len(), 2);
+    assert_eq!(parsed.parts[0].label(), "Current Context");
+    assert_eq!(parsed.parts[1].label(), "Current Context (Full)");
 }
 
 // ── @file: colon-prefix parsing ────────────────────────────────

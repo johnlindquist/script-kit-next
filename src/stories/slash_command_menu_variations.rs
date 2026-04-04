@@ -37,12 +37,12 @@ struct SlashItem {
 
 const ITEMS: &[SlashItem] = &[
     SlashItem {
-        command: "/context",
+        command: "/snapshot",
         label: "Current Context",
         description: "Attach desktop context",
     },
     SlashItem {
-        command: "/context-full",
+        command: "/snapshot-full",
         label: "Full Context",
         description: "Complete desktop snapshot",
     },
@@ -63,9 +63,9 @@ const ITEMS: &[SlashItem] = &[
     },
 ];
 
-const AC_TYPED: &str = "/con";
+const AC_TYPED: &str = "/snap";
 const AC_GHOST: &str = "text";
-const AC_QUERY: &str = "con";
+const AC_QUERY: &str = "snap";
 
 fn matches_query(item: &SlashItem, query: &str) -> bool {
     let q = query.to_lowercase();
@@ -179,7 +179,7 @@ impl Story for SlashCommandMenuVariationsStory {
                 .description("Label — desc on one line, desc even dimmer"),
             // ── Search ──
             StoryVariant::default_named("v14", "Gold Match")
-                .description("Query 'con' highlighted in gold within labels"),
+                .description("Query 'snap' highlighted in gold within labels"),
             StoryVariant::default_named("v15", "Bold Match")
                 .description("Matched chars bold, same color"),
             StoryVariant::default_named("v16", "Dimmed Non-Matches")
@@ -1176,7 +1176,7 @@ fn render_v19() -> AnyElement {
                         .flex()
                         .items_center()
                         .gap(px(3.))
-                        .child(hint_chip("/context", gold))
+                        .child(hint_chip("/snapshot", gold))
                         .child(hint_chip("/selection", gold))
                         .child(hint_chip("/browser", gold)),
                 ),

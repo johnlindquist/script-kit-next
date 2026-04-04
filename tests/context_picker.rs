@@ -337,14 +337,15 @@ fn new_entries_are_queryable() {
 #[test]
 fn slash_exact_command_match_scores_highest() {
     let spec = ContextAttachmentKind::Current.spec();
-    let (score, _, _) = score_builtin_with_trigger(spec, ContextPickerTrigger::Slash, "context");
+    let (score, _, _) =
+        score_builtin_with_trigger(spec, ContextPickerTrigger::Slash, "snapshot");
     assert_eq!(score, 1000, "Exact slash command match should score 1000");
 }
 
 #[test]
 fn slash_prefix_promoted_to_tier_2() {
     let spec = ContextAttachmentKind::Current.spec();
-    let (score, _, _) = score_builtin_with_trigger(spec, ContextPickerTrigger::Slash, "con");
+    let (score, _, _) = score_builtin_with_trigger(spec, ContextPickerTrigger::Slash, "snap");
     assert!(
         score >= 500,
         "Slash prefix should be tier 2 (500+), got {}",
@@ -355,8 +356,9 @@ fn slash_prefix_promoted_to_tier_2() {
 #[test]
 fn slash_exact_outranks_slash_prefix() {
     let spec = ContextAttachmentKind::Current.spec();
-    let (exact, _, _) = score_builtin_with_trigger(spec, ContextPickerTrigger::Slash, "context");
-    let (prefix, _, _) = score_builtin_with_trigger(spec, ContextPickerTrigger::Slash, "con");
+    let (exact, _, _) =
+        score_builtin_with_trigger(spec, ContextPickerTrigger::Slash, "snapshot");
+    let (prefix, _, _) = score_builtin_with_trigger(spec, ContextPickerTrigger::Slash, "snap");
     assert!(
         exact > prefix,
         "Exact ({}) must outrank prefix ({})",
@@ -367,8 +369,8 @@ fn slash_exact_outranks_slash_prefix() {
 
 #[test]
 fn slash_mode_ranking_is_deterministic() {
-    let a = build_picker_items(ContextPickerTrigger::Slash, "con");
-    let b = build_picker_items(ContextPickerTrigger::Slash, "con");
+    let a = build_picker_items(ContextPickerTrigger::Slash, "snap");
+    let b = build_picker_items(ContextPickerTrigger::Slash, "snap");
     assert_eq!(a.len(), b.len());
     for (ia, ib) in a.iter().zip(b.iter()) {
         assert_eq!(ia.id, ib.id);
@@ -380,7 +382,7 @@ fn slash_mode_ranking_is_deterministic() {
 
 #[test]
 fn slash_mode_highlights_align_with_meta_text() {
-    let items = build_picker_items(ContextPickerTrigger::Slash, "con");
+    let items = build_picker_items(ContextPickerTrigger::Slash, "snap");
     let current = items
         .iter()
         .find(|i| {
@@ -389,7 +391,7 @@ fn slash_mode_highlights_align_with_meta_text() {
                 ContextPickerItemKind::BuiltIn(ContextAttachmentKind::Current)
             )
         })
-        .expect("/context should match 'con' in slash mode");
+        .expect("/snapshot should match 'snap' in slash mode");
 
     let meta_bare = current.meta.trim_start_matches('/');
     for &idx in &current.meta_highlight_indices {
@@ -403,7 +405,7 @@ fn slash_mode_highlights_align_with_meta_text() {
     }
     assert!(
         !current.meta_highlight_indices.is_empty(),
-        "Slash mode should produce meta highlights for 'con'"
+        "Slash mode should produce meta highlights for 'snap'"
     );
 }
 
