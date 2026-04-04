@@ -1511,6 +1511,13 @@ impl AcpThread {
             super::AcpEvent::TurnFinished { .. } => {
                 self.set_status(AcpThreadStatus::Idle);
             }
+            super::AcpEvent::SetupRequired { reason, .. } => {
+                self.push_message(
+                    AcpThreadMessageRole::System,
+                    format!("Setup required: {reason}"),
+                );
+                self.set_status(AcpThreadStatus::Error);
+            }
             super::AcpEvent::Failed { error } => {
                 self.push_message(AcpThreadMessageRole::Error, error);
                 self.set_status(AcpThreadStatus::Error);

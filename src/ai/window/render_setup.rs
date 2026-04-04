@@ -115,7 +115,7 @@ impl AiApp {
                     .text_color(cx.theme().muted_foreground.opacity(OPACITY_ACCENT_MEDIUM))
                     .child("or"),
             )
-            // Connect to Claude Code button
+            // Open ACP agent catalog button
             .child(
                 div()
                     .id("connect-claude-code-btn")
@@ -152,7 +152,7 @@ impl AiApp {
                             .child("Open ACP Agent Catalog"),
                     ),
             )
-            // Claude Code setup feedback (shown when config saved but CLI not found)
+            // ACP setup feedback (shown when setup state changes)
             .when_some(self.claude_code_setup_feedback.clone(), |el, feedback| {
                 el.child(
                     div()
