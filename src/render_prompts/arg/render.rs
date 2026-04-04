@@ -244,6 +244,14 @@ impl ScriptListApp {
 
         let leading: Option<gpui::AnyElement> = None;
 
+        let filtered_choices_len = self.filtered_arg_choices().len();
+        tracing::info!(
+            surface = "render_prompts::arg",
+            filtered_choices = filtered_choices_len,
+            selected_index = self.arg_selected_index,
+            "prompt_surface_rendered"
+        );
+
         crate::components::emit_prompt_chrome_audit(
             &crate::components::PromptChromeAudit::minimal_list(
                 "render_prompts::arg",

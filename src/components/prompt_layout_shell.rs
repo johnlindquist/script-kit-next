@@ -1639,8 +1639,8 @@ mod prompt_layout_shell_tests {
             "path prompt entity should use the shared minimal list prompt scaffold"
         );
         assert!(
-            source.contains("render_hint_strip_leading_text("),
-            "path prompt entity should use hint strip leading text for item count"
+            source.contains("universal_prompt_hints()"),
+            "path prompt entity should use canonical three-key footer"
         );
         let legacy = ["PromptFooter", "::new("].concat();
         assert!(

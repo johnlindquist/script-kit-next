@@ -31,17 +31,10 @@ impl Render for FormTextField {
             );
         }
 
-        // Calculate border and background based on focus
-        let border_color = if is_focused {
-            rgb(colors.border_focused)
-        } else {
-            rgb(colors.border)
-        };
-        let bg_color = if is_focused {
-            rgba((colors.background_focused << 8) | 0xff)
-        } else {
-            rgba((colors.background << 8) | 0x80)
-        };
+        // Calculate border and background based on focus using shared whisper surface
+        let surface = colors.whisper_surface(is_focused);
+        let border_color = surface.border;
+        let bg_color = surface.background;
 
         let field_name = self.field.name.clone();
         let field_name_for_log = field_name.clone();

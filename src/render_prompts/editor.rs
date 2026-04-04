@@ -54,6 +54,12 @@ impl ScriptListApp {
         let actions_dialog_right = render_context.actions_dialog_right;
         let has_actions = self.has_nonempty_sdk_actions();
 
+        tracing::info!(
+            surface = "render_prompts::editor",
+            actions_open = self.show_actions_popup,
+            "prompt_surface_rendered"
+        );
+
         crate::components::emit_prompt_chrome_audit(
             &crate::components::PromptChromeAudit::editor(
                 "render_prompts::editor",

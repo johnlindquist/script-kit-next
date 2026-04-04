@@ -19,17 +19,10 @@ impl Render for FormTextArea {
         let rows = self.rows;
         let has_value = !self.value.is_empty();
 
-        // Calculate border and background based on focus
-        let border_color = if is_focused {
-            rgb(colors.border_focused)
-        } else {
-            rgb(colors.border)
-        };
-        let bg_color = if is_focused {
-            rgba((colors.background_focused << 8) | 0xff)
-        } else {
-            rgba((colors.background << 8) | 0x80)
-        };
+        // Calculate border and background based on focus using shared whisper surface
+        let surface = colors.whisper_surface(is_focused);
+        let border_color = surface.border;
+        let bg_color = surface.background;
 
         // Calculate height based on rows (1.5rem per row + 1rem padding)
         let height_rems = (rows as f32) * 1.5 + 1.0;

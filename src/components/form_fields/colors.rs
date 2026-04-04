@@ -71,6 +71,32 @@ impl FormFieldColors {
     }
 }
 
+/// Pre-computed whisper-chrome surface for form fields
+#[derive(Clone, Copy, Debug)]
+pub struct FormFieldSurface {
+    /// Background color with low alpha
+    pub background: gpui::Rgba,
+    /// Border color — accent on focus, ghost otherwise
+    pub border: gpui::Rgba,
+}
+
+impl FormFieldColors {
+    /// Compute a whisper-chrome surface for a form field.
+    /// Focused fields get slightly higher alpha; unfocused fields rest at ghost opacity.
+    pub fn whisper_surface(&self, focused: bool) -> FormFieldSurface {
+        let background_alpha: u32 = if focused { 0x1A } else { 0x10 };
+        let border_alpha: u32 = if focused { 0x66 } else { 0x22 };
+        FormFieldSurface {
+            background: gpui::rgba((self.background << 8) | background_alpha),
+            border: if focused {
+                gpui::rgb(self.border_focused)
+            } else {
+                gpui::rgba((self.border << 8) | border_alpha)
+            },
+        }
+    }
+}
+
 impl Default for FormFieldColors {
     fn default() -> Self {
         Self::from_theme(&crate::theme::Theme::default())

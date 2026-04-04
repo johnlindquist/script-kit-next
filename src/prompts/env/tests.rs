@@ -83,19 +83,25 @@ mod tests {
     }
 
     #[test]
-    fn env_prompt_uses_borderless_input_shell() {
+    fn env_prompt_uses_whisper_chrome_field_surface() {
         let source = include_str!("render.rs");
+        let render_fn_end = source.find("#[cfg(test)]").unwrap_or(source.len());
+        let render_code = &source[..render_fn_end];
         assert!(
-            source.contains("InlinePromptInput::new("),
-            "env render should use InlinePromptInput for borderless input"
+            !render_code.contains("InlinePromptInput::new("),
+            "env render should not use InlinePromptInput (migrated to whisper chrome field)"
         );
         assert!(
-            !source.contains(".border_1()"),
-            "env render should not use .border_1() on input card"
+            !render_code.contains(".size(px(64.))"),
+            "env render should not have a 64px hero icon tile"
         );
         assert!(
-            !source.contains(".rounded(px(12.))"),
-            "env render should not use .rounded(px(12.)) on input card"
+            render_code.contains("field_bg"),
+            "env render should use a whisper-chrome field background"
+        );
+        assert!(
+            render_code.contains("field_border"),
+            "env render should use a whisper-chrome field border"
         );
     }
 

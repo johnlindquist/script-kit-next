@@ -11,13 +11,12 @@
 
 use chrono::{DateTime, Utc};
 use gpui::{
-    div, prelude::*, px, rgb, rgba, svg, Context, Div, FocusHandle, Focusable, Render,
+    div, prelude::*, px, rgb, rgba, Context, Div, FocusHandle, Focusable, Render,
     SharedString, Window,
 };
 use std::sync::Arc;
 
 use crate::components::TextInputState;
-use crate::designs::icon_variations::IconName;
 use crate::designs::DesignVariant;
 use crate::logging;
 use crate::panel::{CURSOR_HEIGHT_LG, CURSOR_WIDTH};
