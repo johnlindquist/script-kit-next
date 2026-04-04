@@ -134,72 +134,6 @@ impl ScriptListApp {
         }
     }
 
-    fn render_theme_chooser_summary_chip(
-        label: impl Into<String>,
-        active: bool,
-        chrome: &theme::AppChromeColors,
-        text_on_accent: u32,
-    ) -> AnyElement {
-        let label = label.into();
-        div()
-            .px(px(8.0))
-            .py(px(4.0))
-            .rounded(px(6.0))
-            .text_xs()
-            .when(active, |d| {
-                d.bg(rgb(chrome.accent_hex))
-                    .text_color(rgb(text_on_accent))
-                    .font_weight(gpui::FontWeight::SEMIBOLD)
-            })
-            .when(!active, |d| {
-                d.bg(rgba(chrome.badge_bg_rgba))
-                    .border_1()
-                    .border_color(rgba(chrome.badge_border_rgba))
-                    .text_color(rgb(chrome.badge_text_hex))
-            })
-            .child(label)
-            .into_any_element()
-    }
-
-    fn render_theme_chooser_summary_strip(
-        summary: ThemeChooserMatchSummary,
-        selected_preset_name: &str,
-        chrome: &theme::AppChromeColors,
-        text_on_accent: u32,
-    ) -> AnyElement {
-        div()
-            .flex()
-            .flex_row()
-            .items_center()
-            .gap(px(6.0))
-            .flex_wrap()
-            .child(Self::render_theme_chooser_summary_chip(
-                format!("{}/{} shown", summary.visible_total, summary.catalog_total),
-                true,
-                chrome,
-                text_on_accent,
-            ))
-            .child(Self::render_theme_chooser_summary_chip(
-                format!("{} dark", summary.visible_dark),
-                false,
-                chrome,
-                text_on_accent,
-            ))
-            .child(Self::render_theme_chooser_summary_chip(
-                format!("{} light", summary.visible_light),
-                false,
-                chrome,
-                text_on_accent,
-            ))
-            .child(Self::render_theme_chooser_summary_chip(
-                selected_preset_name.to_string(),
-                false,
-                chrome,
-                text_on_accent,
-            ))
-            .into_any_element()
-    }
-
     fn render_theme_chooser_empty_state_body(
         &self,
         filter: &str,
@@ -928,12 +862,6 @@ impl ScriptListApp {
         let filter_is_empty = filter.is_empty();
 
         let summary = Self::theme_chooser_match_summary(&filtered_indices, presets);
-        let selected_preset_name_early = filtered_indices
-            .get(selected_index)
-            .and_then(|idx| presets.get(*idx))
-            .map(|preset| preset.name)
-            .unwrap_or("Theme Preview");
-
         let entity_handle = cx.entity().downgrade();
 
         // ── Keyboard handler ───────────────────────────────────────
@@ -1327,25 +1255,7 @@ impl ScriptListApp {
                             .focus_bordered(false),
                     ),
                 ),
-            )
-            .child(Self::render_theme_chooser_summary_strip(
-                summary,
-                selected_preset_name_early,
-                &chrome,
-                text_on_accent,
-            ))
-            // "DARK" section label only when unfiltered
-            .when(filter_is_empty, |d| {
-                d.child(
-                    div().w_full().child(
-                        div()
-                            .text_xs()
-                            .text_color(rgb(text_dimmed))
-                            .font_weight(gpui::FontWeight::SEMIBOLD)
-                            .child("DARK"),
-                    ),
-                )
-            });
+            );
 
         // ── Preview panel with customization controls ─────────────
         let current_opacity_main = self.theme.get_opacity().main;
@@ -1729,8 +1639,10 @@ impl ScriptListApp {
         let info_chip = chrome.semantic_chip_colors(self.theme.as_ref(), ui_info);
 
         let preview_panel = div()
+            .id("theme-chooser-preview-panel")
             .w_1_2()
             .h_full()
+            .min_h(px(0.0))
             .border_l_1()
             .border_color(divider_bg)
             .px(px(design_spacing.padding_lg))
@@ -1738,7 +1650,7 @@ impl ScriptListApp {
             .flex()
             .flex_col()
             .gap(px(preview_panel_gap))
-            .overflow_y_hidden()
+            .overflow_y_scroll()
             // ── Customize header with remix + reset buttons ─────────
             .child(
                 div()

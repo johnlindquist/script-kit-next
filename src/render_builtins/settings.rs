@@ -72,21 +72,7 @@ impl ScriptListApp {
                     action = "choose_theme",
                     "settings.action_executed"
                 );
-                self.theme_before_chooser = Some(self.theme.clone());
-                self.filter_text = String::new();
-                self.pending_filter_sync = true;
-                self.pending_placeholder = Some("Search themes...".to_string());
-                let start_index = theme::presets::find_current_preset_index(&self.theme);
-                self.current_view = AppView::ThemeChooserView {
-                    filter: String::new(),
-                    selected_index: start_index,
-                };
-                self.hovered_index = None;
-                self.opened_from_main_menu = true;
-                resize_to_view_sync(ViewType::ScriptList, 0);
-                self.pending_focus = Some(FocusTarget::MainFilter);
-                self.focused_input = FocusedInput::MainFilter;
-                cx.notify();
+                self.open_theme_chooser_view(cx);
             }
             SettingsAction::ConfigureVercelApiKey => {
                 tracing::info!(

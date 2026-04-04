@@ -112,10 +112,9 @@ impl Story for SlashCommandMenuVariationsStory {
         story_container()
             .child(
                 story_section("Dense Monoline — ~20px rows, text_xs, mono /cmd").children(
-                    variants
-                        .iter()
-                        .enumerate()
-                        .map(|(i, v)| story_item(&format!("{}. {}", i + 1, v.name), self.render_variant(v))),
+                    variants.iter().enumerate().map(|(i, v)| {
+                        story_item(&format!("{}. {}", i + 1, v.name), self.render_variant(v))
+                    }),
                 ),
             )
             .into_any_element()
@@ -161,19 +160,16 @@ impl Story for SlashCommandMenuVariationsStory {
                 .description("Slightly more room — 2px vertical padding per row"),
             StoryVariant::default_named("v05", "Dense + 3px Pad")
                 .description("3px vertical — still tight but more clickable"),
-
             // ── Bar variations ──
             StoryVariant::default_named("v06", "Bar 2×14")
                 .description("Taller gold bar: 2×14px instead of 2×10"),
-            StoryVariant::default_named("v07", "Bar 3×10")
-                .description("Wider gold bar: 3×10px"),
+            StoryVariant::default_named("v07", "Bar 3×10").description("Wider gold bar: 3×10px"),
             StoryVariant::default_named("v08", "Bar Flush Left")
                 .description("Bar touches left edge, full row height, no left pad"),
             StoryVariant::default_named("v09", "No Bar")
                 .description("No gold bar — text color promotion only"),
             StoryVariant::default_named("v10", "Gold Tint Row")
                 .description("Gold-tinted ghost bg instead of neutral"),
-
             // ── Command/label ──
             StoryVariant::default_named("v11", "Cmd in text_xs")
                 .description("/command in text_xs sans-serif instead of mono"),
@@ -181,7 +177,6 @@ impl Story for SlashCommandMenuVariationsStory {
                 .description("/context  Current Context — command first reading order"),
             StoryVariant::default_named("v13", "Label + Desc Inline")
                 .description("Label — desc on one line, desc even dimmer"),
-
             // ── Search ──
             StoryVariant::default_named("v14", "Gold Match")
                 .description("Query 'con' highlighted in gold within labels"),
@@ -189,13 +184,11 @@ impl Story for SlashCommandMenuVariationsStory {
                 .description("Matched chars bold, same color"),
             StoryVariant::default_named("v16", "Dimmed Non-Matches")
                 .description("Non-matching items at 0.15 opacity below matches"),
-
             // ── Keyboard ──
             StoryVariant::default_named("v17", "Tab Pill")
                 .description("Tab pill on selected row, right of /cmd"),
             StoryVariant::default_named("v18", "Footer Hints")
                 .description("↑↓ Tab Esc strip below dropdown"),
-
             // ── Edge ──
             StoryVariant::default_named("v19", "Empty: Chips")
                 .description("No matches — hint chips"),
@@ -218,19 +211,19 @@ fn shell() -> Div {
 }
 
 fn input_row(fg: Hsla, dim: Hsla, gold: Hsla) -> Div {
-    div()
-        .px(px(8.))
-        .py(px(6.))
-        .flex()
-        .items_center()
-        .child(
-            div()
-                .flex()
-                .items_center()
-                .child(div().text_xs().text_color(fg).child(AC_TYPED))
-                .child(div().text_xs().text_color(dim.opacity(0.30)).child(AC_GHOST))
-                .child(div().w(px(1.)).h(px(12.)).ml(px(1.)).bg(gold.opacity(0.6))),
-        )
+    div().px(px(8.)).py(px(6.)).flex().items_center().child(
+        div()
+            .flex()
+            .items_center()
+            .child(div().text_xs().text_color(fg).child(AC_TYPED))
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(dim.opacity(0.30))
+                    .child(AC_GHOST),
+            )
+            .child(div().w(px(1.)).h(px(12.)).ml(px(1.)).bg(gold.opacity(0.6))),
+    )
 }
 
 fn hair(fg: Hsla) -> Div {
@@ -319,7 +312,10 @@ fn render_v01() -> AnyElement {
     let fg = h(t.colors.text.primary);
     let dim = h(t.colors.text.dimmed);
     let gold = h(GOLD);
-    let matched: Vec<&SlashItem> = ITEMS.iter().filter(|i| matches_query(i, AC_QUERY)).collect();
+    let matched: Vec<&SlashItem> = ITEMS
+        .iter()
+        .filter(|i| matches_query(i, AC_QUERY))
+        .collect();
 
     div()
         .w(px(MENU_W))
@@ -344,7 +340,10 @@ fn render_v02() -> AnyElement {
     let fg = h(t.colors.text.primary);
     let dim = h(t.colors.text.dimmed);
     let gold = h(GOLD);
-    let matched: Vec<&SlashItem> = ITEMS.iter().filter(|i| matches_query(i, AC_QUERY)).collect();
+    let matched: Vec<&SlashItem> = ITEMS
+        .iter()
+        .filter(|i| matches_query(i, AC_QUERY))
+        .collect();
 
     shell()
         .child(input_row(fg, dim, gold))
@@ -369,19 +368,27 @@ fn render_v03() -> AnyElement {
     let fg = h(t.colors.text.primary);
     let dim = h(t.colors.text.dimmed);
     let gold = h(GOLD);
-    let matched: Vec<&SlashItem> = ITEMS.iter().filter(|i| matches_query(i, AC_QUERY)).collect();
+    let matched: Vec<&SlashItem> = ITEMS
+        .iter()
+        .filter(|i| matches_query(i, AC_QUERY))
+        .collect();
 
     shell()
         .child(input_row(fg, dim, gold))
         .child(hair(fg))
         .child(
-            div().py(px(1.)).flex().flex_col().children(
-                matched.iter().enumerate().map(|(i, item)| {
+            div()
+                .py(px(1.))
+                .flex()
+                .flex_col()
+                .children(matched.iter().enumerate().map(|(i, item)| {
                     let sel = i == 0;
-                    dense_row(item, sel, fg, dim, gold)
-                        .bg(if sel { fg.opacity(GHOST) } else { transparent_black() })
-                }),
-            ),
+                    dense_row(item, sel, fg, dim, gold).bg(if sel {
+                        fg.opacity(GHOST)
+                    } else {
+                        transparent_black()
+                    })
+                })),
         )
         .into_any_element()
 }
@@ -395,14 +402,20 @@ fn render_v04() -> AnyElement {
     let fg = h(t.colors.text.primary);
     let dim = h(t.colors.text.dimmed);
     let gold = h(GOLD);
-    let matched: Vec<&SlashItem> = ITEMS.iter().filter(|i| matches_query(i, AC_QUERY)).collect();
+    let matched: Vec<&SlashItem> = ITEMS
+        .iter()
+        .filter(|i| matches_query(i, AC_QUERY))
+        .collect();
 
     shell()
         .child(input_row(fg, dim, gold))
         .child(hair(fg))
         .child(
-            div().py(px(1.)).flex().flex_col().children(
-                matched.iter().enumerate().map(|(i, item)| {
+            div()
+                .py(px(1.))
+                .flex()
+                .flex_col()
+                .children(matched.iter().enumerate().map(|(i, item)| {
                     let sel = i == 0;
                     div()
                         .flex()
@@ -430,8 +443,7 @@ fn render_v04() -> AnyElement {
                                 .text_color(dim.opacity(0.30))
                                 .child(item.command),
                         )
-                }),
-            ),
+                })),
         )
         .into_any_element()
 }
@@ -445,14 +457,20 @@ fn render_v05() -> AnyElement {
     let fg = h(t.colors.text.primary);
     let dim = h(t.colors.text.dimmed);
     let gold = h(GOLD);
-    let matched: Vec<&SlashItem> = ITEMS.iter().filter(|i| matches_query(i, AC_QUERY)).collect();
+    let matched: Vec<&SlashItem> = ITEMS
+        .iter()
+        .filter(|i| matches_query(i, AC_QUERY))
+        .collect();
 
     shell()
         .child(input_row(fg, dim, gold))
         .child(hair(fg))
         .child(
-            div().py(px(1.)).flex().flex_col().children(
-                matched.iter().enumerate().map(|(i, item)| {
+            div()
+                .py(px(1.))
+                .flex()
+                .flex_col()
+                .children(matched.iter().enumerate().map(|(i, item)| {
                     let sel = i == 0;
                     div()
                         .flex()
@@ -460,7 +478,11 @@ fn render_v05() -> AnyElement {
                         .justify_between()
                         .px(px(6.))
                         .py(px(3.))
-                        .bg(if sel { fg.opacity(GHOST) } else { transparent_black() })
+                        .bg(if sel {
+                            fg.opacity(GHOST)
+                        } else {
+                            transparent_black()
+                        })
                         .child(
                             div()
                                 .flex()
@@ -481,8 +503,7 @@ fn render_v05() -> AnyElement {
                                 .text_color(dim.opacity(0.30))
                                 .child(item.command),
                         )
-                }),
-            ),
+                })),
         )
         .into_any_element()
 }
@@ -491,34 +512,60 @@ fn render_v05() -> AnyElement {
 // V06–V10: Bar variations
 // ═══════════════════════════════════════════════════════════════════════
 
-fn render_v06() -> AnyElement { render_bar_variant(2., 14.) }
-fn render_v07() -> AnyElement { render_bar_variant(3., 10.) }
+fn render_v06() -> AnyElement {
+    render_bar_variant(2., 14.)
+}
+fn render_v07() -> AnyElement {
+    render_bar_variant(3., 10.)
+}
 
 fn render_bar_variant(bar_w: f32, bar_h: f32) -> AnyElement {
     let t = get_cached_theme();
     let fg = h(t.colors.text.primary);
     let dim = h(t.colors.text.dimmed);
     let gold = h(GOLD);
-    let matched: Vec<&SlashItem> = ITEMS.iter().filter(|i| matches_query(i, AC_QUERY)).collect();
+    let matched: Vec<&SlashItem> = ITEMS
+        .iter()
+        .filter(|i| matches_query(i, AC_QUERY))
+        .collect();
 
     shell()
         .child(input_row(fg, dim, gold))
         .child(hair(fg))
         .child(
-            div().py(px(1.)).flex().flex_col().children(
-                matched.iter().enumerate().map(|(i, item)| {
+            div()
+                .py(px(1.))
+                .flex()
+                .flex_col()
+                .children(matched.iter().enumerate().map(|(i, item)| {
                     let sel = i == 0;
                     div()
-                        .flex().items_center().justify_between()
-                        .px(px(6.)).py(px(1.))
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .px(px(6.))
+                        .py(px(1.))
                         .child(
-                            div().flex().items_center().gap(px(4.))
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap(px(4.))
                                 .child(gbar(sel, gold, bar_w, bar_h))
-                                .child(div().text_xs().text_color(if sel { fg } else { dim }).child(item.label)),
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(if sel { fg } else { dim })
+                                        .child(item.label),
+                                ),
                         )
-                        .child(div().text_xs().font_family(FONT_MONO).text_color(dim.opacity(0.30)).child(item.command))
-                }),
-            ),
+                        .child(
+                            div()
+                                .text_xs()
+                                .font_family(FONT_MONO)
+                                .text_color(dim.opacity(0.30))
+                                .child(item.command),
+                        )
+                })),
         )
         .into_any_element()
 }
@@ -528,26 +575,48 @@ fn render_v08() -> AnyElement {
     let fg = h(t.colors.text.primary);
     let dim = h(t.colors.text.dimmed);
     let gold = h(GOLD);
-    let matched: Vec<&SlashItem> = ITEMS.iter().filter(|i| matches_query(i, AC_QUERY)).collect();
+    let matched: Vec<&SlashItem> = ITEMS
+        .iter()
+        .filter(|i| matches_query(i, AC_QUERY))
+        .collect();
 
     shell()
         .child(input_row(fg, dim, gold))
         .child(hair(fg))
         .child(
-            div().py(px(1.)).flex().flex_col().children(
-                matched.iter().enumerate().map(|(i, item)| {
+            div()
+                .py(px(1.))
+                .flex()
+                .flex_col()
+                .children(matched.iter().enumerate().map(|(i, item)| {
                     let sel = i == 0;
                     div()
-                        .flex().items_center().justify_between()
-                        .pr(px(6.)).py(px(1.))
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .pr(px(6.))
+                        .py(px(1.))
                         .child(
-                            div().flex().items_center().gap(px(6.))
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap(px(6.))
                                 .child(gbar(sel, gold, 2., 18.))
-                                .child(div().text_xs().text_color(if sel { fg } else { dim }).child(item.label)),
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(if sel { fg } else { dim })
+                                        .child(item.label),
+                                ),
                         )
-                        .child(div().text_xs().font_family(FONT_MONO).text_color(dim.opacity(0.30)).child(item.command))
-                }),
-            ),
+                        .child(
+                            div()
+                                .text_xs()
+                                .font_family(FONT_MONO)
+                                .text_color(dim.opacity(0.30))
+                                .child(item.command),
+                        )
+                })),
         )
         .into_any_element()
 }
@@ -557,27 +626,46 @@ fn render_v09() -> AnyElement {
     let fg = h(t.colors.text.primary);
     let dim = h(t.colors.text.dimmed);
     let gold = h(GOLD);
-    let matched: Vec<&SlashItem> = ITEMS.iter().filter(|i| matches_query(i, AC_QUERY)).collect();
+    let matched: Vec<&SlashItem> = ITEMS
+        .iter()
+        .filter(|i| matches_query(i, AC_QUERY))
+        .collect();
 
     shell()
         .child(input_row(fg, dim, gold))
         .child(hair(fg))
         .child(
-            div().py(px(1.)).flex().flex_col().children(
-                matched.iter().enumerate().map(|(i, item)| {
+            div()
+                .py(px(1.))
+                .flex()
+                .flex_col()
+                .children(matched.iter().enumerate().map(|(i, item)| {
                     let sel = i == 0;
                     div()
-                        .flex().items_center().justify_between()
-                        .px(px(8.)).py(px(1.))
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .px(px(8.))
+                        .py(px(1.))
                         .child(
-                            div().text_xs()
+                            div()
+                                .text_xs()
                                 .text_color(if sel { fg } else { dim })
-                                .font_weight(if sel { FontWeight::MEDIUM } else { FontWeight::NORMAL })
+                                .font_weight(if sel {
+                                    FontWeight::MEDIUM
+                                } else {
+                                    FontWeight::NORMAL
+                                })
                                 .child(item.label),
                         )
-                        .child(div().text_xs().font_family(FONT_MONO).text_color(dim.opacity(0.30)).child(item.command))
-                }),
-            ),
+                        .child(
+                            div()
+                                .text_xs()
+                                .font_family(FONT_MONO)
+                                .text_color(dim.opacity(0.30))
+                                .child(item.command),
+                        )
+                })),
         )
         .into_any_element()
 }
@@ -587,19 +675,27 @@ fn render_v10() -> AnyElement {
     let fg = h(t.colors.text.primary);
     let dim = h(t.colors.text.dimmed);
     let gold = h(GOLD);
-    let matched: Vec<&SlashItem> = ITEMS.iter().filter(|i| matches_query(i, AC_QUERY)).collect();
+    let matched: Vec<&SlashItem> = ITEMS
+        .iter()
+        .filter(|i| matches_query(i, AC_QUERY))
+        .collect();
 
     shell()
         .child(input_row(fg, dim, gold))
         .child(hair(fg))
         .child(
-            div().py(px(1.)).flex().flex_col().children(
-                matched.iter().enumerate().map(|(i, item)| {
+            div()
+                .py(px(1.))
+                .flex()
+                .flex_col()
+                .children(matched.iter().enumerate().map(|(i, item)| {
                     let sel = i == 0;
-                    dense_row(item, sel, fg, dim, gold)
-                        .bg(if sel { gold.opacity(GHOST_HI) } else { transparent_black() })
-                }),
-            ),
+                    dense_row(item, sel, fg, dim, gold).bg(if sel {
+                        gold.opacity(GHOST_HI)
+                    } else {
+                        transparent_black()
+                    })
+                })),
         )
         .into_any_element()
 }
@@ -613,26 +709,47 @@ fn render_v11() -> AnyElement {
     let fg = h(t.colors.text.primary);
     let dim = h(t.colors.text.dimmed);
     let gold = h(GOLD);
-    let matched: Vec<&SlashItem> = ITEMS.iter().filter(|i| matches_query(i, AC_QUERY)).collect();
+    let matched: Vec<&SlashItem> = ITEMS
+        .iter()
+        .filter(|i| matches_query(i, AC_QUERY))
+        .collect();
 
     shell()
         .child(input_row(fg, dim, gold))
         .child(hair(fg))
         .child(
-            div().py(px(1.)).flex().flex_col().children(
-                matched.iter().enumerate().map(|(i, item)| {
+            div()
+                .py(px(1.))
+                .flex()
+                .flex_col()
+                .children(matched.iter().enumerate().map(|(i, item)| {
                     let sel = i == 0;
                     div()
-                        .flex().items_center().justify_between()
-                        .px(px(6.)).py(px(1.))
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .px(px(6.))
+                        .py(px(1.))
                         .child(
-                            div().flex().items_center().gap(px(4.))
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap(px(4.))
                                 .child(gbar(sel, gold, 2., 10.))
-                                .child(div().text_xs().text_color(if sel { fg } else { dim }).child(item.label)),
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(if sel { fg } else { dim })
+                                        .child(item.label),
+                                ),
                         )
-                        .child(div().text_xs().text_color(dim.opacity(0.30)).child(item.command))
-                }),
-            ),
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(dim.opacity(0.30))
+                                .child(item.command),
+                        )
+                })),
         )
         .into_any_element()
 }
@@ -642,26 +759,43 @@ fn render_v12() -> AnyElement {
     let fg = h(t.colors.text.primary);
     let dim = h(t.colors.text.dimmed);
     let gold = h(GOLD);
-    let matched: Vec<&SlashItem> = ITEMS.iter().filter(|i| matches_query(i, AC_QUERY)).collect();
+    let matched: Vec<&SlashItem> = ITEMS
+        .iter()
+        .filter(|i| matches_query(i, AC_QUERY))
+        .collect();
 
     shell()
         .child(input_row(fg, dim, gold))
         .child(hair(fg))
         .child(
-            div().py(px(1.)).flex().flex_col().children(
-                matched.iter().enumerate().map(|(i, item)| {
+            div()
+                .py(px(1.))
+                .flex()
+                .flex_col()
+                .children(matched.iter().enumerate().map(|(i, item)| {
                     let sel = i == 0;
-                    div()
-                        .flex().items_center()
-                        .px(px(6.)).py(px(1.))
-                        .child(
-                            div().flex().items_center().gap(px(4.))
-                                .child(gbar(sel, gold, 2., 10.))
-                                .child(div().text_xs().font_family(FONT_MONO).text_color(dim.opacity(0.40)).w(px(90.)).child(item.command))
-                                .child(div().text_xs().text_color(if sel { fg } else { dim }).child(item.label)),
-                        )
-                }),
-            ),
+                    div().flex().items_center().px(px(6.)).py(px(1.)).child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap(px(4.))
+                            .child(gbar(sel, gold, 2., 10.))
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .font_family(FONT_MONO)
+                                    .text_color(dim.opacity(0.40))
+                                    .w(px(90.))
+                                    .child(item.command),
+                            )
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(if sel { fg } else { dim })
+                                    .child(item.label),
+                            ),
+                    )
+                })),
         )
         .into_any_element()
 }
@@ -671,26 +805,51 @@ fn render_v13() -> AnyElement {
     let fg = h(t.colors.text.primary);
     let dim = h(t.colors.text.dimmed);
     let gold = h(GOLD);
-    let matched: Vec<&SlashItem> = ITEMS.iter().filter(|i| matches_query(i, AC_QUERY)).collect();
+    let matched: Vec<&SlashItem> = ITEMS
+        .iter()
+        .filter(|i| matches_query(i, AC_QUERY))
+        .collect();
 
     shell()
         .child(input_row(fg, dim, gold))
         .child(hair(fg))
         .child(
-            div().py(px(1.)).flex().flex_col().children(
-                matched.iter().enumerate().map(|(i, item)| {
+            div()
+                .py(px(1.))
+                .flex()
+                .flex_col()
+                .children(matched.iter().enumerate().map(|(i, item)| {
                     let sel = i == 0;
                     div()
-                        .flex().items_center()
-                        .px(px(6.)).py(px(1.)).overflow_hidden()
+                        .flex()
+                        .items_center()
+                        .px(px(6.))
+                        .py(px(1.))
+                        .overflow_hidden()
                         .child(
-                            div().flex().items_center().gap(px(4.)).flex_1().overflow_hidden()
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap(px(4.))
+                                .flex_1()
+                                .overflow_hidden()
                                 .child(gbar(sel, gold, 2., 10.))
-                                .child(div().text_xs().text_color(if sel { fg } else { dim }).flex_shrink_0().child(item.label))
-                                .child(div().text_xs().text_color(dim.opacity(0.20)).text_ellipsis().child(format!("— {}", item.description))),
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(if sel { fg } else { dim })
+                                        .flex_shrink_0()
+                                        .child(item.label),
+                                )
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(dim.opacity(0.20))
+                                        .text_ellipsis()
+                                        .child(format!("— {}", item.description)),
+                                ),
                         )
-                }),
-            ),
+                })),
         )
         .into_any_element()
 }
@@ -704,33 +863,58 @@ fn render_v14() -> AnyElement {
     let fg = h(t.colors.text.primary);
     let dim = h(t.colors.text.dimmed);
     let gold = h(GOLD);
-    let matched: Vec<&SlashItem> = ITEMS.iter().filter(|i| matches_query(i, AC_QUERY)).collect();
+    let matched: Vec<&SlashItem> = ITEMS
+        .iter()
+        .filter(|i| matches_query(i, AC_QUERY))
+        .collect();
 
     shell()
         .child(input_row(fg, dim, gold))
         .child(hair(fg))
         .child(
-            div().py(px(1.)).flex().flex_col().children(
-                matched.iter().enumerate().map(|(i, item)| {
+            div()
+                .py(px(1.))
+                .flex()
+                .flex_col()
+                .children(matched.iter().enumerate().map(|(i, item)| {
                     let sel = i == 0;
                     let tc = if sel { fg } else { dim };
                     let (before, mid, after) = split_highlight(item.label, AC_QUERY);
                     div()
-                        .flex().items_center().justify_between()
-                        .px(px(6.)).py(px(1.))
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .px(px(6.))
+                        .py(px(1.))
                         .child(
-                            div().flex().items_center().gap(px(4.))
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap(px(4.))
                                 .child(gbar(sel, gold, 2., 10.))
                                 .child(
-                                    div().flex().items_center().text_xs()
+                                    div()
+                                        .flex()
+                                        .items_center()
+                                        .text_xs()
                                         .child(div().text_color(tc).child(before))
-                                        .child(div().text_color(gold).font_weight(FontWeight::SEMIBOLD).child(mid))
+                                        .child(
+                                            div()
+                                                .text_color(gold)
+                                                .font_weight(FontWeight::SEMIBOLD)
+                                                .child(mid),
+                                        )
                                         .child(div().text_color(tc).child(after)),
                                 ),
                         )
-                        .child(div().text_xs().font_family(FONT_MONO).text_color(dim.opacity(0.30)).child(item.command))
-                }),
-            ),
+                        .child(
+                            div()
+                                .text_xs()
+                                .font_family(FONT_MONO)
+                                .text_color(dim.opacity(0.30))
+                                .child(item.command),
+                        )
+                })),
         )
         .into_any_element()
 }
@@ -740,33 +924,58 @@ fn render_v15() -> AnyElement {
     let fg = h(t.colors.text.primary);
     let dim = h(t.colors.text.dimmed);
     let gold = h(GOLD);
-    let matched: Vec<&SlashItem> = ITEMS.iter().filter(|i| matches_query(i, AC_QUERY)).collect();
+    let matched: Vec<&SlashItem> = ITEMS
+        .iter()
+        .filter(|i| matches_query(i, AC_QUERY))
+        .collect();
 
     shell()
         .child(input_row(fg, dim, gold))
         .child(hair(fg))
         .child(
-            div().py(px(1.)).flex().flex_col().children(
-                matched.iter().enumerate().map(|(i, item)| {
+            div()
+                .py(px(1.))
+                .flex()
+                .flex_col()
+                .children(matched.iter().enumerate().map(|(i, item)| {
                     let sel = i == 0;
                     let tc = if sel { fg } else { dim };
                     let (before, mid, after) = split_highlight(item.label, AC_QUERY);
                     div()
-                        .flex().items_center().justify_between()
-                        .px(px(6.)).py(px(1.))
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .px(px(6.))
+                        .py(px(1.))
                         .child(
-                            div().flex().items_center().gap(px(4.))
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap(px(4.))
                                 .child(gbar(sel, gold, 2., 10.))
                                 .child(
-                                    div().flex().items_center().text_xs()
+                                    div()
+                                        .flex()
+                                        .items_center()
+                                        .text_xs()
                                         .child(div().text_color(tc).child(before))
-                                        .child(div().text_color(tc).font_weight(FontWeight::BOLD).child(mid))
+                                        .child(
+                                            div()
+                                                .text_color(tc)
+                                                .font_weight(FontWeight::BOLD)
+                                                .child(mid),
+                                        )
                                         .child(div().text_color(tc).child(after)),
                                 ),
                         )
-                        .child(div().text_xs().font_family(FONT_MONO).text_color(dim.opacity(0.30)).child(item.command))
-                }),
-            ),
+                        .child(
+                            div()
+                                .text_xs()
+                                .font_family(FONT_MONO)
+                                .text_color(dim.opacity(0.30))
+                                .child(item.command),
+                        )
+                })),
         )
         .into_any_element()
 }
@@ -781,22 +990,41 @@ fn render_v16() -> AnyElement {
         .child(input_row(fg, dim, gold))
         .child(hair(fg))
         .child(
-            div().py(px(1.)).flex().flex_col().children(
-                ITEMS.iter().enumerate().map(|(i, item)| {
+            div()
+                .py(px(1.))
+                .flex()
+                .flex_col()
+                .children(ITEMS.iter().enumerate().map(|(i, item)| {
                     let is_match = matches_query(item, AC_QUERY);
                     let sel = i == 0 && is_match;
                     let op = if is_match { 1.0 } else { 0.15 };
                     div()
-                        .flex().items_center().justify_between()
-                        .px(px(6.)).py(px(1.))
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .px(px(6.))
+                        .py(px(1.))
                         .child(
-                            div().flex().items_center().gap(px(4.))
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap(px(4.))
                                 .child(gbar(sel, gold, 2., 10.))
-                                .child(div().text_xs().text_color(if sel { fg } else { dim.opacity(op) }).child(item.label)),
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(if sel { fg } else { dim.opacity(op) })
+                                        .child(item.label),
+                                ),
                         )
-                        .child(div().text_xs().font_family(FONT_MONO).text_color(dim.opacity(0.30 * op)).child(item.command))
-                }),
-            ),
+                        .child(
+                            div()
+                                .text_xs()
+                                .font_family(FONT_MONO)
+                                .text_color(dim.opacity(0.30 * op))
+                                .child(item.command),
+                        )
+                })),
         )
         .into_any_element()
 }
@@ -810,30 +1038,55 @@ fn render_v17() -> AnyElement {
     let fg = h(t.colors.text.primary);
     let dim = h(t.colors.text.dimmed);
     let gold = h(GOLD);
-    let matched: Vec<&SlashItem> = ITEMS.iter().filter(|i| matches_query(i, AC_QUERY)).collect();
+    let matched: Vec<&SlashItem> = ITEMS
+        .iter()
+        .filter(|i| matches_query(i, AC_QUERY))
+        .collect();
 
     shell()
         .child(input_row(fg, dim, gold))
         .child(hair(fg))
         .child(
-            div().py(px(1.)).flex().flex_col().children(
-                matched.iter().enumerate().map(|(i, item)| {
+            div()
+                .py(px(1.))
+                .flex()
+                .flex_col()
+                .children(matched.iter().enumerate().map(|(i, item)| {
                     let sel = i == 0;
                     div()
-                        .flex().items_center().justify_between()
-                        .px(px(6.)).py(px(1.))
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .px(px(6.))
+                        .py(px(1.))
                         .child(
-                            div().flex().items_center().gap(px(4.))
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap(px(4.))
                                 .child(gbar(sel, gold, 2., 10.))
-                                .child(div().text_xs().text_color(if sel { fg } else { dim }).child(item.label)),
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(if sel { fg } else { dim })
+                                        .child(item.label),
+                                ),
                         )
                         .child(
-                            div().flex().items_center().gap(px(4.))
-                                .child(div().text_xs().font_family(FONT_MONO).text_color(dim.opacity(0.30)).child(item.command))
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap(px(4.))
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .font_family(FONT_MONO)
+                                        .text_color(dim.opacity(0.30))
+                                        .child(item.command),
+                                )
                                 .when(sel, |d| d.child(tab_pill(gold))),
                         )
-                }),
-            ),
+                })),
         )
         .into_any_element()
 }
@@ -843,22 +1096,43 @@ fn render_v18() -> AnyElement {
     let fg = h(t.colors.text.primary);
     let dim = h(t.colors.text.dimmed);
     let gold = h(GOLD);
-    let matched: Vec<&SlashItem> = ITEMS.iter().filter(|i| matches_query(i, AC_QUERY)).collect();
+    let matched: Vec<&SlashItem> = ITEMS
+        .iter()
+        .filter(|i| matches_query(i, AC_QUERY))
+        .collect();
 
     shell()
         .child(input_row(fg, dim, gold))
         .child(hair(fg))
         .child(
             div().py(px(1.)).flex().flex_col().children(
-                matched.iter().enumerate().map(|(i, item)| dense_row(item, i == 0, fg, dim, gold)),
+                matched
+                    .iter()
+                    .enumerate()
+                    .map(|(i, item)| dense_row(item, i == 0, fg, dim, gold)),
             ),
         )
         .child(hair(fg))
         .child(
-            div().px(px(6.)).py(px(2.)).flex().items_center().gap(px(10.))
+            div()
+                .px(px(6.))
+                .py(px(2.))
+                .flex()
+                .items_center()
+                .gap(px(10.))
                 .child(div().text_xs().text_color(dim.opacity(0.25)).child("↑↓"))
-                .child(div().text_xs().text_color(dim.opacity(0.25)).child("Tab select"))
-                .child(div().text_xs().text_color(dim.opacity(0.25)).child("Esc close")),
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(dim.opacity(0.25))
+                        .child("Tab select"),
+                )
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(dim.opacity(0.25))
+                        .child("Esc close"),
+                ),
         )
         .into_any_element()
 }
@@ -875,19 +1149,33 @@ fn render_v19() -> AnyElement {
 
     shell()
         .child(
-            div().px(px(8.)).py(px(6.)).flex().items_center()
-                .child(
-                    div().flex().items_center()
-                        .child(div().text_xs().text_color(fg).child("/xyz"))
-                        .child(div().w(px(1.)).h(px(12.)).ml(px(1.)).bg(gold.opacity(0.6))),
-                ),
+            div().px(px(8.)).py(px(6.)).flex().items_center().child(
+                div()
+                    .flex()
+                    .items_center()
+                    .child(div().text_xs().text_color(fg).child("/xyz"))
+                    .child(div().w(px(1.)).h(px(12.)).ml(px(1.)).bg(gold.opacity(0.6))),
+            ),
         )
         .child(hair(fg))
         .child(
-            div().py(px(6.)).px(px(8.)).flex().flex_col().gap(px(4.))
-                .child(div().text_xs().text_color(dim.opacity(MUTED_OP)).child("No matches"))
+            div()
+                .py(px(6.))
+                .px(px(8.))
+                .flex()
+                .flex_col()
+                .gap(px(4.))
                 .child(
-                    div().flex().items_center().gap(px(3.))
+                    div()
+                        .text_xs()
+                        .text_color(dim.opacity(MUTED_OP))
+                        .child("No matches"),
+                )
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(px(3.))
                         .child(hint_chip("/context", gold))
                         .child(hint_chip("/selection", gold))
                         .child(hint_chip("/browser", gold)),
@@ -905,27 +1193,49 @@ fn render_v20() -> AnyElement {
 
     shell()
         .child(
-            div().px(px(8.)).py(px(6.)).flex().items_center()
-                .child(
-                    div().flex().items_center()
-                        .child(div().text_xs().text_color(fg).child("/sel"))
-                        .child(div().text_xs().text_color(dim.opacity(0.30)).child("ection"))
-                        .child(div().w(px(1.)).h(px(12.)).ml(px(1.)).bg(gold.opacity(0.6))),
-                ),
+            div().px(px(8.)).py(px(6.)).flex().items_center().child(
+                div()
+                    .flex()
+                    .items_center()
+                    .child(div().text_xs().text_color(fg).child("/sel"))
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(dim.opacity(0.30))
+                            .child("ection"),
+                    )
+                    .child(div().w(px(1.)).h(px(12.)).ml(px(1.)).bg(gold.opacity(0.6))),
+            ),
         )
         .child(hair(fg))
         .child(
             div().py(px(1.)).flex().flex_col().child(
-                div().flex().items_center().justify_between()
-                    .px(px(6.)).py(px(1.))
+                div()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .px(px(6.))
+                    .py(px(1.))
                     .child(
-                        div().flex().items_center().gap(px(4.))
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap(px(4.))
                             .child(gbar(true, gold, 2., 10.))
                             .child(div().text_xs().text_color(fg).child(single.label)),
                     )
                     .child(
-                        div().flex().items_center().gap(px(4.))
-                            .child(div().text_xs().font_family(FONT_MONO).text_color(dim.opacity(0.30)).child(single.command))
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap(px(4.))
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .font_family(FONT_MONO)
+                                    .text_color(dim.opacity(0.30))
+                                    .child(single.command),
+                            )
                             .child(tab_pill(gold)),
                     ),
             ),
@@ -939,8 +1249,14 @@ fn render_v21() -> AnyElement {
     let dim = h(t.colors.text.dimmed);
     let gold = h(GOLD);
 
-    let snapshots: Vec<&SlashItem> = ITEMS[0..2].iter().filter(|i| matches_query(i, AC_QUERY)).collect();
-    let sources: Vec<&SlashItem> = ITEMS[2..].iter().filter(|i| matches_query(i, AC_QUERY)).collect();
+    let snapshots: Vec<&SlashItem> = ITEMS[0..2]
+        .iter()
+        .filter(|i| matches_query(i, AC_QUERY))
+        .collect();
+    let sources: Vec<&SlashItem> = ITEMS[2..]
+        .iter()
+        .filter(|i| matches_query(i, AC_QUERY))
+        .collect();
 
     let mut list = div().py(px(1.)).flex().flex_col();
     if !snapshots.is_empty() {

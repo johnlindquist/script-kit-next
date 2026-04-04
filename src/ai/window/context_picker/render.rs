@@ -1,8 +1,8 @@
 use super::super::*;
 use super::types::ContextPickerItemKind;
 use crate::ai::context_picker_row::{
-    render_dense_monoline_picker_row, render_highlighted_meta, render_highlighted_text, COMMAND_OPACITY,
-    GHOST, GOLD, HINT, MUTED_OP,
+    render_dense_monoline_picker_row, render_highlighted_meta, render_highlighted_text,
+    COMMAND_OPACITY, GHOST, GOLD, HINT, MUTED_OP,
 };
 use crate::list_item::FONT_MONO;
 use std::collections::HashSet;
@@ -37,37 +37,37 @@ impl AiApp {
         let entity = cx.entity().clone();
 
         let picker_list = list(self.context_picker_list_state.clone(), move |ix, _window, _cx| {
-            let item = match items.get(ix) {
-                Some(i) => i,
-                None => return div().into_any_element(),
-            };
-            let is_selected = ix == selected_index;
-            let label: SharedString = item.label.clone();
-            let meta: SharedString = item.meta.clone();
+                let item = match items.get(ix) {
+                    Some(i) => i,
+                    None => return div().into_any_element(),
+                };
+                let is_selected = ix == selected_index;
+                let label: SharedString = item.label.clone();
+                let meta: SharedString = item.meta.clone();
 
-            let entity_click = entity.clone();
+                let entity_click = entity.clone();
 
-            render_dense_monoline_picker_row(
-                SharedString::from(format!("ctx-picker-{}", ix)),
-                label,
-                meta,
-                &item.label_highlight_indices,
-                &item.meta_highlight_indices,
-                is_selected,
-                fg,
-                muted_fg,
-            )
-            .cursor_pointer()
-            .on_click(move |_, window, cx| {
-                entity_click.update(cx, |this, cx| {
-                    if let Some(picker) = this.context_picker.as_mut() {
-                        picker.selected_index = ix;
-                    }
-                    this.accept_context_picker_selection(window, cx);
-                });
+                render_dense_monoline_picker_row(
+                    SharedString::from(format!("ctx-picker-{}", ix)),
+                    label,
+                    meta,
+                    &item.label_highlight_indices,
+                    &item.meta_highlight_indices,
+                    is_selected,
+                    fg,
+                    muted_fg,
+                )
+                .cursor_pointer()
+                .on_click(move |_, window, cx| {
+                    entity_click.update(cx, |this, cx| {
+                        if let Some(picker) = this.context_picker.as_mut() {
+                            picker.selected_index = ix;
+                        }
+                        this.accept_context_picker_selection(window, cx);
+                    });
+                })
+                .into_any_element()
             })
-            .into_any_element()
-        })
         .with_sizing_behavior(ListSizingBehavior::Infer)
         .max_h(px(260.))
         .min_h(px(0.));

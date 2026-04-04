@@ -17,6 +17,9 @@ pub enum ContextPickerItemKind {
     File(std::path::PathBuf),
     /// A local folder attachment.
     Folder(std::path::PathBuf),
+    /// A Claude Code agent slash command (e.g. `/compact`, `/clear`).
+    /// Acceptance inserts the command text and optionally submits.
+    SlashCommand(String),
 }
 
 /// A single row in the context picker.
@@ -56,7 +59,11 @@ pub struct ContextPickerState {
 }
 
 impl ContextPickerState {
-    pub fn new(trigger: ContextPickerTrigger, query: String, items: Vec<ContextPickerItem>) -> Self {
+    pub fn new(
+        trigger: ContextPickerTrigger,
+        query: String,
+        items: Vec<ContextPickerItem>,
+    ) -> Self {
         Self {
             trigger,
             query,
@@ -82,6 +89,7 @@ impl ContextPickerState {
                         ContextPickerItemKind::BuiltIn(_) => "builtin",
                         ContextPickerItemKind::File(_) => "file",
                         ContextPickerItemKind::Folder(_) => "folder",
+                        ContextPickerItemKind::SlashCommand(_) => "slash_command",
                     },
                     score: item.score,
                 })

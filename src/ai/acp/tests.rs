@@ -383,3 +383,54 @@ fn acp_and_pty_views_coexist_in_app_view() {
     assert!(APP_VIEW_STATE_SOURCE.contains("AcpChatView"));
     assert!(APP_VIEW_STATE_SOURCE.contains("QuickTerminalView"));
 }
+
+// =========================================================================
+// Mention picker windowing — selected item always visible
+// =========================================================================
+
+/// Helper: call the private `mention_visible_range_for` and assert the
+/// selected index falls within the returned range.
+fn assert_selected_visible(selected: usize, item_count: usize) {
+    let range = super::view::AcpChatView::mention_visible_range_for(selected, item_count);
+    assert!(
+        range.contains(&selected),
+        "selected_index={selected} must be inside visible range {range:?} (item_count={item_count})",
+    );
+    assert!(
+        range.len() <= super::view::AcpChatView::MENTION_PICKER_MAX_VISIBLE,
+        "visible range len {} exceeds max {}",
+        range.len(),
+        super::view::AcpChatView::MENTION_PICKER_MAX_VISIBLE,
+    );
+}
+
+#[test]
+fn mention_picker_windowing_small_list() {
+    // Fewer items than max_visible → range is 0..item_count
+    for selected in 0..5 {
+        let range = super::view::AcpChatView::mention_visible_range_for(selected, 5);
+        assert_eq!(range, 0..5);
+    }
+}
+
+#[test]
+fn mention_picker_windowing_selected_always_visible() {
+    let item_count = 20;
+    for selected in 0..item_count {
+        assert_selected_visible(selected, item_count);
+    }
+}
+
+#[test]
+fn mention_picker_windowing_wrap_to_last() {
+    // Simulate pressing Up from index 0 → wrap to last
+    let item_count = 15;
+    let selected = item_count - 1;
+    assert_selected_visible(selected, item_count);
+}
+
+#[test]
+fn mention_picker_windowing_wrap_to_first() {
+    // Simulate pressing Down from last → wrap to 0
+    assert_selected_visible(0, 15);
+}

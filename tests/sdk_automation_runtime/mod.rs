@@ -2,13 +2,13 @@
 //! and `batch` automation APIs have correct protocol wire shapes, round-trip
 //! cleanly, and that the transaction executor produces the expected results.
 
+use script_kit_gpui::protocol::transaction_executor::{
+    execute_batch, execute_wait_for, TransactionStateProvider,
+};
 use script_kit_gpui::protocol::{
     BatchCommand, Message, StateMatchSpec, TransactionError, TransactionErrorCode,
     TransactionTraceMode, UiStateSnapshot, WaitCondition, WaitDetailedCondition,
     WaitNamedCondition,
-};
-use script_kit_gpui::protocol::transaction_executor::{
-    execute_batch, execute_wait_for, TransactionStateProvider,
 };
 
 // ---------------------------------------------------------------------------
@@ -62,7 +62,11 @@ impl TransactionStateProvider for MockProvider {
     }
 
     fn select_by_value(&mut self, value: &str, _submit: bool) -> anyhow::Result<Option<String>> {
-        if self.visible_semantic_ids.iter().any(|id| id.contains(value)) {
+        if self
+            .visible_semantic_ids
+            .iter()
+            .any(|id| id.contains(value))
+        {
             self.selected_value = Some(value.to_string());
             Ok(Some(value.to_string()))
         } else {
@@ -420,10 +424,7 @@ fn batch_force_submit_is_unsupported_in_executor() {
     // forceSubmit is unsupported in the test executor
     assert!(!output.success);
     assert_eq!(output.results.len(), 1);
-    let err = output.results[0]
-        .error
-        .as_ref()
-        .expect("should have error");
+    let err = output.results[0].error.as_ref().expect("should have error");
     assert_eq!(err.code, TransactionErrorCode::UnsupportedCommand);
 }
 

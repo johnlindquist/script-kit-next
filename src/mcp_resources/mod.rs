@@ -1137,20 +1137,19 @@ fn read_git_diff_resource() -> Result<ResourceContent, String> {
 
 /// Read `kit://processes` — top processes by CPU.
 fn read_processes_resource() -> Result<ResourceContent, String> {
-    run_shell_resource("ps", &["aux", "--sort=-%cpu"], "kit://processes")
-        .or_else(|_| {
-            // macOS ps doesn't support --sort; fall back to piped sort
-            let ps = std::process::Command::new("ps")
-                .args(["aux"])
-                .output()
-                .map_err(|e| format!("Failed to run ps: {e}"))?;
-            let text = String::from_utf8_lossy(&ps.stdout).to_string();
-            Ok(ResourceContent {
-                uri: "kit://processes".to_string(),
-                mime_type: "text/plain".to_string(),
-                text,
-            })
+    run_shell_resource("ps", &["aux", "--sort=-%cpu"], "kit://processes").or_else(|_| {
+        // macOS ps doesn't support --sort; fall back to piped sort
+        let ps = std::process::Command::new("ps")
+            .args(["aux"])
+            .output()
+            .map_err(|e| format!("Failed to run ps: {e}"))?;
+        let text = String::from_utf8_lossy(&ps.stdout).to_string();
+        Ok(ResourceContent {
+            uri: "kit://processes".to_string(),
+            mime_type: "text/plain".to_string(),
+            text,
         })
+    })
 }
 
 /// Read `kit://system` — basic system info.
@@ -1159,17 +1158,26 @@ fn read_system_info_resource() -> Result<ResourceContent, String> {
 
     if let Ok(output) = std::process::Command::new("uname").args(["-a"]).output() {
         if output.status.success() {
-            lines.push(format!("System: {}", String::from_utf8_lossy(&output.stdout).trim()));
+            lines.push(format!(
+                "System: {}",
+                String::from_utf8_lossy(&output.stdout).trim()
+            ));
         }
     }
     if let Ok(output) = std::process::Command::new("hostname").output() {
         if output.status.success() {
-            lines.push(format!("Hostname: {}", String::from_utf8_lossy(&output.stdout).trim()));
+            lines.push(format!(
+                "Hostname: {}",
+                String::from_utf8_lossy(&output.stdout).trim()
+            ));
         }
     }
     if let Ok(output) = std::process::Command::new("uptime").output() {
         if output.status.success() {
-            lines.push(format!("Uptime: {}", String::from_utf8_lossy(&output.stdout).trim()));
+            lines.push(format!(
+                "Uptime: {}",
+                String::from_utf8_lossy(&output.stdout).trim()
+            ));
         }
     }
     if let Ok(shell) = std::env::var("SHELL") {
