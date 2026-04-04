@@ -19,3 +19,6 @@ rustflags = [
 CARGO_INCREMENTAL = "1"
 CARGO_PROFILE_DEV_INCREMENTAL = "true"
 CARGO_PROFILE_TEST_INCREMENTAL = "true"
+
+[future-incompat-report]
+frequency = "never"

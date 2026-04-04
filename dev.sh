@@ -39,12 +39,18 @@ echo "   Copy for AI: cat ~/.scriptkit/logs/latest-session.jsonl | pbcopy"
 echo "   Press Ctrl+C to stop"
 echo ""
 
+# Only request clear-screen behavior in an interactive terminal that can support it.
+cargo_watch_args=()
+if [ -t 1 ] && [ -n "${TERM:-}" ] && [ "${TERM}" != "dumb" ]; then
+    cargo_watch_args+=(-c)
+fi
+
 # Run cargo watch with auto-rebuild
 # -x run: Execute 'cargo run' on file changes
 # -c: Clear screen between runs for cleaner output
 # -w: Only watch specific directories (disables auto-discovery)
 # -i: Ignore patterns that shouldn't trigger rebuilds
-cargo watch -c -x run \
+cargo watch "${cargo_watch_args[@]}" -x run \
     -w src/ \
     -w scripts/kit-sdk.ts \
     -w Cargo.toml \

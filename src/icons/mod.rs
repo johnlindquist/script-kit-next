@@ -47,7 +47,9 @@
 mod render;
 mod types;
 
+#[allow(unused_imports)]
 pub use render::{render_icon, render_image, IconView, ThemeColorProvider};
+#[allow(unused_imports)]
 pub use types::{
     lucide_from_str, ColorToken, EmbeddedIcon, IconColor, IconNamed, IconRef, IconSize, IconStyle,
     LucideIcon,

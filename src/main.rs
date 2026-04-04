@@ -1,4 +1,5 @@
 #![allow(unexpected_cfgs)]
+#![allow(dead_code)] // The binary pulls in shared modules that intentionally expose unused paths outside this target.
 #![cfg_attr(not(test), deny(clippy::unwrap_used, clippy::expect_used))]
 
 //! Binary entrypoint and GPUI application composition for Script Kit GPUI.

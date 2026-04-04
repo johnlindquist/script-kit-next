@@ -1,4 +1,5 @@
 #![cfg(target_os = "macos")]
+#![allow(unexpected_cfgs)] // Vendored upstream ObjC macros emit legacy cfgs that are noisy under current check-cfg rules.
 //! macOS platform implementation for GPUI.
 //!
 //! macOS screens have a y axis that goes up from the bottom of the screen and
