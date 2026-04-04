@@ -128,6 +128,7 @@ impl Render for ScriptListApp {
                 logging::log("FOCUS", "Main window regained focus - closing actions popup");
                 actions::close_actions_window(cx);
                 self.show_actions_popup = false;
+                self.actions_closed_at = Some(std::time::Instant::now());
                 self.actions_dialog = None;
                 self.mark_filter_resync_after_actions_if_needed();
                 self.pop_focus_overlay(cx);
@@ -499,6 +500,7 @@ impl Render for ScriptListApp {
                     logging::log("FOCUS", "Main window clicked - closing actions popup");
                     actions::close_actions_window(cx);
                     this.show_actions_popup = false;
+                    this.actions_closed_at = Some(std::time::Instant::now());
                     this.actions_dialog = None;
                     this.mark_filter_resync_after_actions_if_needed();
                     this.pop_focus_overlay(cx);
