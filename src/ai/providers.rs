@@ -2491,6 +2491,8 @@ impl ProviderRegistry {
                     context_window: Some(200_000),
                 },
             ],
+            install: None,
+            auth: None,
         };
 
         tracing::info!(
@@ -3054,6 +3056,8 @@ mod tests {
             args: vec![],
             env: std::collections::HashMap::new(),
             models: vec![],
+            install: None,
+            auth: None,
         };
         let mut registry = ProviderRegistry::new();
         registry.register(Arc::new(crate::ai::acp::AcpProvider::new(agent)));

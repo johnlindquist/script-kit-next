@@ -26,6 +26,8 @@ mod cf;
 mod display;
 mod ffi;
 mod query;
+mod snap;
+mod snap_session;
 mod tiling;
 mod types;
 
