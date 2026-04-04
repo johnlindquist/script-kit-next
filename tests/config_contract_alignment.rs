@@ -222,6 +222,33 @@ fn script_command_id_deeplink_roundtrip() {
 }
 
 #[test]
+fn config_surfaces_document_canonical_excluded_command_ids() {
+    let cli = include_str!("../scripts/config-cli.ts");
+    let sdk = include_str!("../scripts/kit-sdk.ts");
+
+    assert!(
+        cli.contains("\"builtin/quit-script-kit\""),
+        "config-cli.ts must use canonical builtin/quit-script-kit default"
+    );
+    assert!(
+        !cli.contains("\"builtin-quit-script-kit\""),
+        "config-cli.ts still contains dash-style builtin-quit-script-kit"
+    );
+    assert!(
+        sdk.contains("excludedCommands?: CommandId[];"),
+        "kit-sdk.ts must type SuggestedConfig.excludedCommands as CommandId[]"
+    );
+    assert!(
+        sdk.contains("\"builtin/quit-script-kit\""),
+        "kit-sdk.ts must document canonical builtin/quit-script-kit default"
+    );
+    assert!(
+        !sdk.contains("\"builtin-quit-script-kit\""),
+        "kit-sdk.ts still contains dash-style builtin-quit-script-kit"
+    );
+}
+
+#[test]
 fn canonical_builtin_command_id_handles_all_input_forms() {
     // Legacy dash-style
     assert_eq!(

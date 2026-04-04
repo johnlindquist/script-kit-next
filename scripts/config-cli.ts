@@ -25,9 +25,11 @@ import {
   parseCommandConfigPath,
   validateCommandConfigFieldValue,
   validateCommandConfigValue,
+  validateCommandIdList,
   validateCommandsConfig,
 } from './config-schema';
 import type {
+  CommandId,
   ConfigChange,
   ValidateConfigChangeResult,
 } from './config-schema';
@@ -81,7 +83,7 @@ interface SuggestedConfig {
   minScore?: number;
   halfLifeDays?: number;
   trackUsage?: boolean;
-  excludedCommands?: string[];
+  excludedCommands?: CommandId[];
 }
 
 interface WatcherConfig {
@@ -174,7 +176,7 @@ const DEFAULTS: Config & Record<string, unknown> = {
     minScore: 0.1,
     halfLifeDays: 7,
     trackUsage: true,
-    excludedCommands: ["builtin-quit-script-kit"],
+    excludedCommands: ["builtin/quit-script-kit"],
   },
   aiHotkeyEnabled: true,
   logsHotkeyEnabled: true,
@@ -394,8 +396,8 @@ const CONFIG_SCHEMA: ConfigOption[] = [
   },
   {
     key: "suggested.excludedCommands",
-    type: "string[]",
-    default: ["builtin-quit-script-kit"],
+    type: "CommandId[]",
+    default: ["builtin/quit-script-kit"],
     description: "Command IDs excluded from Suggested ranking"
   },
   // --- Watcher ---
@@ -700,6 +702,15 @@ function parseValue(value: string, key: string): unknown {
  * Validate a config value against constraints
  */
 function validateValue(key: string, value: unknown): { valid: boolean; error?: string } {
+  // Validate command-ID arrays before falling through to generic handling
+  if (key === "suggested.excludedCommands") {
+    const errors = validateCommandIdList(value, key);
+    return {
+      valid: errors.length === 0,
+      error: errors.length === 0 ? undefined : errors.map((e) => e.message).join("; "),
+    };
+  }
+
   const schema = CONFIG_SCHEMA.find(s => s.key === key);
   if (!schema) {
     return { valid: true }; // Unknown key - allow but warn
@@ -1116,29 +1127,40 @@ function validateConfigChange(change: ConfigChange): ValidateConfigChangeResult 
     return validateCommandsConfig(change.value);
   }
 
-  if (change.key.startsWith("commands.")) {
-    const parsedPath = parseCommandConfigPath(change.key);
-    if (!parsedPath) {
-      const commandId = change.key.slice("commands.".length).split(".")[0];
-      return {
-        valid: false,
-        errors: [{
-          path: change.key,
-          code: "invalidCommandId",
-          message: `Invalid command id: ${commandId}`,
-        }],
-        warnings: [],
-      };
-    }
-
-    const errors = parsedPath.fieldPath
+  const commandPath = parseCommandConfigPath(change.key);
+  if (commandPath) {
+    const errors = commandPath.fieldPath
       ? validateCommandConfigFieldValue(
-          parsedPath.fieldPath,
+          commandPath.fieldPath,
           change.value,
           change.key,
         )
       : validateCommandConfigValue(change.value, change.key);
 
+    return {
+      valid: errors.length === 0,
+      normalizedValue: errors.length === 0 ? change.value : undefined,
+      errors,
+      warnings: [],
+    };
+  }
+
+  // Reject unparseable commands.* paths (e.g. empty identifier like "commands.builtin/")
+  if (change.key.startsWith("commands.")) {
+    return {
+      valid: false,
+      errors: [{
+        path: change.key,
+        code: "invalidCommandPath",
+        message: `Invalid commands path: ${change.key}`,
+      }],
+      warnings: [],
+    };
+  }
+
+  // Validate command-ID arrays (e.g. suggested.excludedCommands)
+  if (change.key === "suggested.excludedCommands") {
+    const errors = validateCommandIdList(change.value, change.key);
     return {
       valid: errors.length === 0,
       normalizedValue: errors.length === 0 ? change.value : undefined,
@@ -1172,6 +1194,7 @@ async function cmdValidateChange(payload: string): Promise<void> {
     return;
   }
 
+  const commandPath = parseCommandConfigPath(change.key);
   const result = validateConfigChange(change);
 
   // Structured log to stderr (machine-readable)
@@ -1180,6 +1203,7 @@ async function cmdValidateChange(payload: string): Promise<void> {
     level: "info",
     msg: "config.validate_change",
     key: change.key,
+    commandPath,
     valid: result.valid,
     errorCount: result.errors.length,
     warningCount: result.warnings.length,
