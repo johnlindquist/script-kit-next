@@ -681,6 +681,7 @@ impl ScriptListApp {
                                     if let Some(app) = click_entity.upgrade() {
                                         let file_path = file_path.clone();
                                         app.update(cx, |this, cx| {
+                                            this.lock_file_search_selection_to_user_choice();
                                             if let AppView::FileSearchView {
                                                 selected_index, ..
                                             } = &mut this.current_view

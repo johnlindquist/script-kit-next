@@ -4,7 +4,7 @@ impl ScriptListApp {
         parse_directory_path: impl Fn(&str) -> Option<crate::file_search::ParsedDirPath>,
         is_directory_path: impl Fn(&str) -> bool,
         expand_path: impl Fn(&str) -> Option<String>,
-        list_directory: impl Fn(&str, usize) -> Vec<crate::file_search::FileResult>,
+        list_directory: impl Fn(&str, usize, bool) -> Vec<crate::file_search::FileResult>,
         search_files: impl Fn(&str, Option<&str>, usize) -> Vec<crate::file_search::FileResult>,
     ) -> Vec<crate::file_search::FileResult> {
         // Try structured parse first — handles ~/dev/fin → list ~/dev/
@@ -18,6 +18,7 @@ impl ScriptListApp {
             return list_directory(
                 &parsed.directory,
                 crate::file_search::DEFAULT_CACHE_LIMIT,
+                parsed.show_hidden,
             );
         }
 
@@ -31,7 +32,8 @@ impl ScriptListApp {
                 .map(|path| std::path::Path::new(path).is_dir())
                 .unwrap_or(false);
 
-            let directory_results = list_directory(query, crate::file_search::DEFAULT_CACHE_LIMIT);
+            let directory_results =
+                list_directory(query, crate::file_search::DEFAULT_CACHE_LIMIT, false);
             if directory_results.is_empty() && !is_real_dir {
                 tracing::info!(message = %"Path mode not a real directory; falling back to Spotlight search",
                 );
@@ -50,7 +52,7 @@ impl ScriptListApp {
             crate::file_search::parse_directory_path,
             crate::file_search::is_directory_path,
             crate::file_search::expand_path,
-            crate::file_search::list_directory,
+            crate::file_search::list_directory_with_options,
             crate::file_search::search_files,
         )
     }
@@ -687,7 +689,7 @@ mod utility_views_file_search_tests {
             |_| None, // parse_directory_path returns None
             |_| false,
             |_| None,
-            |_, _| panic!("list_directory should not be called for non-directory query"),
+            |_, _, _| panic!("list_directory should not be called for non-directory query"),
             |query, onlyin, limit| {
                 assert_eq!(query, "invoice");
                 assert!(onlyin.is_none());
@@ -708,12 +710,14 @@ mod utility_views_file_search_tests {
             |_| Some(ParsedDirPath {
                 directory: "~/dev/".to_string(),
                 filter: Some("fin".to_string()),
+                show_hidden: false,
             }),
             |_| true,
             |_| None,
-            |query, limit| {
+            |query, limit, show_hidden| {
                 assert_eq!(query, "~/dev/");
                 assert_eq!(limit, crate::file_search::DEFAULT_CACHE_LIMIT);
+                assert!(!show_hidden);
                 vec![test_file_result("parsed-dir-result")]
             },
             |_, _, _| {

@@ -76,10 +76,17 @@
                                         *selected_index = filtered_len - 1;
                                     }
 
+                                    let mut moved_selection = false;
                                     if is_up && *selected_index > 0 {
                                         *selected_index -= 1;
+                                        moved_selection = true;
                                     } else if is_down && *selected_index + 1 < filtered_len {
                                         *selected_index += 1;
+                                        moved_selection = true;
+                                    }
+
+                                    if moved_selection {
+                                        this.lock_file_search_selection_to_user_choice();
                                     }
 
                                     this.file_search_scroll_handle.scroll_to_item(
