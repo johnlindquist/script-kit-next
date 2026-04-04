@@ -1,12 +1,9 @@
-//! Slash Command Menu — Design Variations (Round 2)
+//! Slash Command Menu — Design Variations (Round 4)
 //!
-//! 21 variations exploring four themes the user selected:
-//! 1. Inline Autocomplete — ghost completion text in input
-//! 2. Search Highlight — gold highlight on query matches
-//! 3. Vibrancy — transparent bg, vibrancy bleed-through
-//! 4. Description Always Visible — two-line rows
+//! 21 variations focused on compact list rows. Each row must be ≤40px
+//! (matching COMPOSER_H) with text_base (16px) labels matching the input
+//! font. Ghost input + vibrancy + tight dropdown.
 //!
-//! Each variation mixes these themes at different intensities.
 //! Reference: `src/ai/window/context_picker/render.rs`
 
 use gpui::prelude::FluentBuilder;
@@ -15,17 +12,16 @@ use gpui::*;
 use crate::storybook::{story_container, story_item, story_section, Story, StoryVariant};
 use crate::theme::get_cached_theme;
 
-// ─── Layout constants ──────────────────────────────────────────────────
+// ─── Constants ─────────────────────────────────────────────────────────
 
 const MENU_W: f32 = 320.0;
+const ROW_H: f32 = 36.0; // ≤ COMPOSER_H (40px), room for text_base
 const GOLD: u32 = 0xfbbf24;
 
-// Impeccable opacity tiers
 const GHOST: f32 = 0.04;
 const GHOST_HI: f32 = 0.06;
 const HINT: f32 = 0.45;
 const MUTED_OP: f32 = 0.65;
-const PRESENT: f32 = 0.90;
 
 fn h(hex: u32) -> Hsla {
     Hsla::from(rgb(hex))
@@ -43,29 +39,56 @@ const ITEMS: &[SlashItem] = &[
     SlashItem {
         command: "/context",
         label: "Current Context",
-        description: "Attach minimal desktop context",
+        description: "Attach desktop context",
     },
     SlashItem {
         command: "/context-full",
         label: "Full Context",
-        description: "Attach complete desktop context",
+        description: "Complete desktop snapshot",
     },
     SlashItem {
         command: "/selection",
         label: "Selection",
-        description: "Attach selected text from frontmost app",
+        description: "Selected text from frontmost app",
     },
     SlashItem {
         command: "/browser",
         label: "Browser URL",
-        description: "Attach current browser URL",
+        description: "Current browser URL",
     },
     SlashItem {
         command: "/window",
         label: "Focused Window",
-        description: "Attach focused window title and bounds",
+        description: "Window title and bounds",
     },
 ];
+
+const AC_TYPED: &str = "/con";
+const AC_GHOST: &str = "text";
+const AC_QUERY: &str = "con";
+
+fn matches_query(item: &SlashItem, query: &str) -> bool {
+    let q = query.to_lowercase();
+    item.label.to_lowercase().contains(&q) || item.command.to_lowercase().contains(&q)
+}
+
+fn split_highlight(label: &str, query: &str) -> (SharedString, SharedString, SharedString) {
+    let lower = label.to_lowercase();
+    if let Some(start) = lower.find(&query.to_lowercase()) {
+        let end = start + query.len();
+        (
+            label[..start].to_string().into(),
+            label[start..end].to_string().into(),
+            label[end..].to_string().into(),
+        )
+    } else {
+        (
+            label.to_string().into(),
+            SharedString::default(),
+            SharedString::default(),
+        )
+    }
+}
 
 // ─── Story ─────────────────────────────────────────────────────────────
 
@@ -86,10 +109,9 @@ impl Story for SlashCommandMenuVariationsStory {
 
     fn render(&self) -> AnyElement {
         let variants = self.variants();
-
         story_container()
             .child(
-                story_section("All Variants — Inline / Search / Vibrancy / Descriptions").children(
+                story_section("Compact Rows — 36px max, text_base labels").children(
                     variants.iter().enumerate().map(|(i, v)| {
                         story_item(&format!("{}. {}", i + 1, v.name), self.render_variant(v))
                     }),
@@ -99,190 +121,140 @@ impl Story for SlashCommandMenuVariationsStory {
     }
 
     fn render_variant(&self, variant: &StoryVariant) -> AnyElement {
-        let id = variant.stable_id();
-        match id.as_str() {
-            "v01-vibrancy-desc" => render_v01(),
-            "v02-vibrancy-desc-gold-bar" => render_v02(),
-            "v03-vibrancy-desc-sections" => render_v03(),
-            "v04-vibrancy-desc-tab-badge" => render_v04(),
-            "v05-vibrancy-desc-compact" => render_v05(),
-            "v06-search-gold-highlight" => render_v06(),
-            "v07-search-underline" => render_v07(),
-            "v08-search-bold-match" => render_v08(),
-            "v09-search-desc-highlight" => render_v09(),
-            "v10-search-grouped" => render_v10(),
-            "v11-autocomplete-ghost" => render_v11(),
-            "v12-autocomplete-tab-pill" => render_v12(),
-            "v13-autocomplete-desc" => render_v13(),
-            "v14-autocomplete-dimmed-rest" => render_v14(),
-            "v15-autocomplete-inline-only" => render_v15(),
-            "v16-full-vibrancy-search-desc" => render_v16(),
-            "v17-full-autocomplete-search" => render_v17(),
-            "v18-full-all-four" => render_v18(),
-            "v19-empty-state-hints" => render_v19(),
-            "v20-empty-state-recent" => render_v20(),
-            "v21-full-all-four-dense" => render_v21(),
+        match variant.stable_id().as_str() {
+            "v01" => render_v01(),
+            "v02" => render_v02(),
+            "v03" => render_v03(),
+            "v04" => render_v04(),
+            "v05" => render_v05(),
+            "v06" => render_v06(),
+            "v07" => render_v07(),
+            "v08" => render_v08(),
+            "v09" => render_v09(),
+            "v10" => render_v10(),
+            "v11" => render_v11(),
+            "v12" => render_v12(),
+            "v13" => render_v13(),
+            "v14" => render_v14(),
+            "v15" => render_v15(),
+            "v16" => render_v16(),
+            "v17" => render_v17(),
+            "v18" => render_v18(),
+            "v19" => render_v19(),
+            "v20" => render_v20(),
+            "v21" => render_v21(),
             _ => render_v01(),
         }
     }
 
     fn variants(&self) -> Vec<StoryVariant> {
         vec![
-            // ── Theme 1: Vibrancy + Description Always ──
-            StoryVariant::default_named("v01-vibrancy-desc", "Vibrancy + Descriptions")
-                .description("Transparent bg, two-line rows always visible, gold bar on focus"),
-            StoryVariant::default_named(
-                "v02-vibrancy-desc-gold-bar",
-                "Vibrancy + Desc + Gold Fill",
-            )
-            .description("Same as V1 but selected row gets a subtle gold-tinted bg"),
-            StoryVariant::default_named("v03-vibrancy-desc-sections", "Vibrancy + Desc + Sections")
-                .description("Grouped sections (Snapshots/Sources), descriptions always, vibrancy"),
-            StoryVariant::default_named(
-                "v04-vibrancy-desc-tab-badge",
-                "Vibrancy + Desc + Tab Badge",
-            )
-            .description("Tab completion badge on selected row, descriptions visible"),
-            StoryVariant::default_named("v05-vibrancy-desc-compact", "Vibrancy + Desc Compact")
-                .description(
-                    "Tighter vertical rhythm, descriptions in hint opacity, no wasted space",
-                ),
-            // ── Theme 2: Search Highlight ──
-            StoryVariant::default_named("v06-search-gold-highlight", "Search: Gold Text Highlight")
-                .description("Query 'con' highlighted in gold within matching labels"),
-            StoryVariant::default_named("v07-search-underline", "Search: Gold Underline")
-                .description("Matching chars get gold underline instead of color change"),
-            StoryVariant::default_named("v08-search-bold-match", "Search: Bold Match")
-                .description("Matched portion rendered in semibold, rest stays normal weight"),
-            StoryVariant::default_named(
-                "v09-search-desc-highlight",
-                "Search: Highlight + Descriptions",
-            )
-            .description("Gold highlight in labels, descriptions always visible below"),
-            StoryVariant::default_named("v10-search-grouped", "Search: Highlight + Sections")
-                .description("Gold highlight with section headers, vibrancy bg"),
-            // ── Theme 3: Inline Autocomplete ──
-            StoryVariant::default_named("v11-autocomplete-ghost", "Autocomplete: Ghost Text")
-                .description("Input shows /con with ghost 'text' completion, menu below"),
-            StoryVariant::default_named(
-                "v12-autocomplete-tab-pill",
-                "Autocomplete: Ghost + Tab Pill",
-            )
-            .description("Ghost completion + Tab pill on selected row"),
-            StoryVariant::default_named(
-                "v13-autocomplete-desc",
-                "Autocomplete: Ghost + Descriptions",
-            )
-            .description("Ghost completion with descriptions always visible in menu"),
-            StoryVariant::default_named(
-                "v14-autocomplete-dimmed-rest",
-                "Autocomplete: Dimmed Non-Matches",
-            )
-            .description("Top match highlighted, non-matching items at ghost opacity"),
-            StoryVariant::default_named(
-                "v15-autocomplete-inline-only",
-                "Autocomplete: Inline Only",
-            )
-            .description("No dropdown at all — ghost text in input, cycle with Up/Down"),
-            // ── Theme 4: All Four Combined ──
-            StoryVariant::default_named(
-                "v16-full-vibrancy-search-desc",
-                "Full: Vibrancy + Search + Desc",
-            )
-            .description("Vibrancy bg, gold search highlights, descriptions always visible"),
-            StoryVariant::default_named(
-                "v17-full-autocomplete-search",
-                "Full: Autocomplete + Search",
-            )
-            .description("Ghost input completion + gold highlights in dropdown"),
-            StoryVariant::default_named("v18-full-all-four", "Full: All Four Themes")
-                .description("Ghost input + gold highlights + vibrancy + descriptions + Tab badge"),
-            StoryVariant::default_named("v19-empty-state-hints", "Empty: No Matches + Hints")
-                .description("Empty state with command hint chips when query has no results"),
-            StoryVariant::default_named("v20-empty-state-recent", "Empty: No Matches + Recents")
-                .description("Empty state showing recently used commands as suggestions"),
-            StoryVariant::default_named("v21-full-all-four-dense", "Full: All Four Dense")
-                .description(
-                    "All four themes in a dense, compact layout — maximum info, minimum space",
-                ),
+            // ── Row structure ──
+            StoryVariant::default_named("v01", "Baseline Compact")
+                .description("36px rows, text_base label, gold bar, /cmd right, ghost input above"),
+            StoryVariant::default_named("v02", "No Command Hint")
+                .description("Label only — no /command on the right, maximally clean"),
+            StoryVariant::default_named("v03", "Command Left of Label")
+                .description("/command shown in hint before the label, reading order"),
+            StoryVariant::default_named("v04", "Inline Desc After Dash")
+                .description("Label — desc on one line, both at text_base, desc dimmed"),
+            StoryVariant::default_named("v05", "Desc Below in xs")
+                .description("Two-line: text_base label + text_xs desc, still ≤40px"),
+            // ── Gold bar variations ──
+            StoryVariant::default_named("v06", "Thick Gold Bar")
+                .description("3px wide gold bar, taller, more prominent"),
+            StoryVariant::default_named("v07", "Gold Left Edge")
+                .description("Gold bar flush to container edge, no left padding"),
+            StoryVariant::default_named("v08", "Gold Tint Row")
+                .description("Selected row has warm gold ghost bg instead of neutral"),
+            StoryVariant::default_named("v09", "No Bar, Bold Label")
+                .description("No gold bar — selection via ghost bg + medium weight label"),
+            StoryVariant::default_named("v10", "Gold Underline")
+                .description("No left bar — gold underline beneath selected label instead"),
+            // ── Search highlight ──
+            StoryVariant::default_named("v11", "Gold Text Match")
+                .description("'con' highlighted in gold within labels"),
+            StoryVariant::default_named("v12", "Bold Match")
+                .description("Matched chars bold, same color as rest"),
+            StoryVariant::default_named("v13", "Gold Match + Desc")
+                .description("Gold highlight + desc below, still ≤40px"),
+            // ── Keyboard hints ──
+            StoryVariant::default_named("v14", "Tab Pill Right")
+                .description("Tab pill right-aligned on selected row"),
+            StoryVariant::default_named("v15", "Tab + Cmd Right")
+                .description("/command + Tab pill, compact spacing"),
+            StoryVariant::default_named("v16", "Footer Hints")
+                .description("↑↓ Tab Esc hint strip below dropdown"),
+            // ── Structure ──
+            StoryVariant::default_named("v17", "Section Headers")
+                .description("CONTEXT / SOURCES section labels between groups"),
+            StoryVariant::default_named("v18", "Result Count")
+                .description("'3 results' in the input row"),
+            // ── Edge states ──
+            StoryVariant::default_named("v19", "Empty: Chips")
+                .description("No matches — gold hint chips"),
+            StoryVariant::default_named("v20", "Single Match")
+                .description("One result — shown prominently with Tab pill"),
+            StoryVariant::default_named("v21", "Dimmed Non-Matches")
+                .description("Non-matching items visible but at ghost opacity"),
         ]
     }
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// Helpers
+// Shared helpers
 // ═══════════════════════════════════════════════════════════════════════
 
-fn gold_bar(selected: bool, gold: Hsla) -> Div {
-    div()
-        .w(px(2.))
-        .h(px(14.))
-        .rounded(px(1.))
-        .bg(if selected { gold } else { transparent_black() })
+fn shell() -> Div {
+    let theme = get_cached_theme();
+    let fg = h(theme.colors.text.primary);
+    div().w(px(MENU_W)).bg(fg.opacity(0.02)).flex().flex_col()
 }
 
-fn gold_bar_tall(selected: bool, gold: Hsla) -> Div {
-    div()
-        .w(px(2.))
-        .h(px(18.))
-        .rounded(px(1.))
-        .bg(if selected { gold } else { transparent_black() })
-}
-
-/// Splits `label` around the first occurrence of `query` (case-insensitive)
-/// and returns (before, matched, after) as SharedStrings.
-fn split_highlight(label: &str, query: &str) -> (SharedString, SharedString, SharedString) {
-    let lower = label.to_lowercase();
-    if let Some(start) = lower.find(&query.to_lowercase()) {
-        let end = start + query.len();
-        (
-            label[..start].to_string().into(),
-            label[start..end].to_string().into(),
-            label[end..].to_string().into(),
-        )
-    } else {
-        (
-            label.to_string().into(),
-            SharedString::default(),
-            SharedString::default(),
-        )
-    }
-}
-
-fn mock_input(typed: &str, ghost: &str, fg: Hsla, muted: Hsla, gold: Hsla) -> Div {
-    div().px(px(12.)).py(px(8.)).flex().items_center().child(
+fn input_bar(fg: Hsla, muted: Hsla, gold: Hsla) -> Div {
+    div().h(px(ROW_H)).px(px(12.)).flex().items_center().child(
         div()
             .flex()
             .items_center()
-            .child(div().text_sm().text_color(fg).child(typed.to_string()))
-            .child(
-                div()
-                    .text_sm()
-                    .text_color(muted.opacity(0.3))
-                    .child(ghost.to_string()),
-            )
+            .child(div().text_color(fg).child(AC_TYPED))
+            .child(div().text_color(muted.opacity(0.3)).child(AC_GHOST))
             .child(div().w(px(1.5)).h(px(16.)).ml(px(1.)).bg(gold.opacity(0.6))),
     )
 }
 
-fn hairline(fg: Hsla) -> Div {
+fn input_bar_with_right(fg: Hsla, muted: Hsla, gold: Hsla, right: Div) -> Div {
+    div()
+        .h(px(ROW_H))
+        .px(px(12.))
+        .flex()
+        .items_center()
+        .justify_between()
+        .child(
+            div()
+                .flex()
+                .items_center()
+                .child(div().text_color(fg).child(AC_TYPED))
+                .child(div().text_color(muted.opacity(0.3)).child(AC_GHOST))
+                .child(div().w(px(1.5)).h(px(16.)).ml(px(1.)).bg(gold.opacity(0.6))),
+        )
+        .child(right)
+}
+
+fn hair(fg: Hsla) -> Div {
     div().h(px(1.)).bg(fg.opacity(GHOST))
 }
 
-fn section_label(text: &str, muted: Hsla) -> Div {
+fn gbar(selected: bool, gold: Hsla, w: f32, ht: f32) -> Div {
     div()
-        .px(px(12.))
-        .pt(px(6.))
-        .pb(px(2.))
-        .text_xs()
-        .font_weight(FontWeight::SEMIBOLD)
-        .text_color(muted.opacity(HINT))
-        .child(text.to_string())
+        .w(px(w))
+        .h(px(ht))
+        .rounded(px(1.))
+        .bg(if selected { gold } else { transparent_black() })
 }
 
-fn tab_badge(gold: Hsla) -> Div {
+fn tab_pill(gold: Hsla) -> Div {
     div()
-        .px(px(5.))
+        .px(px(4.))
         .py(px(1.))
         .rounded(px(3.))
         .bg(gold.opacity(0.12))
@@ -303,341 +275,26 @@ fn hint_chip(text: &str, gold: Hsla) -> Div {
         .child(text.to_string())
 }
 
-fn vibrancy_shell() -> Div {
-    let theme = get_cached_theme();
-    let fg = h(theme.colors.text.primary);
+fn sect(text: &str, muted: Hsla) -> Div {
     div()
-        .w(px(MENU_W))
-        .bg(fg.opacity(0.02))
-        .py(px(3.))
+        .px(px(12.))
+        .h(px(24.))
         .flex()
-        .flex_col()
+        .items_center()
+        .text_xs()
+        .font_weight(FontWeight::SEMIBOLD)
+        .text_color(muted.opacity(HINT))
+        .child(text.to_string())
 }
 
-fn vibrancy_shell_no_pad() -> Div {
-    let theme = get_cached_theme();
-    let fg = h(theme.colors.text.primary);
-    div().w(px(MENU_W)).bg(fg.opacity(0.02)).flex().flex_col()
-}
-
-// ═══════════════════════════════════════════════════════════════════════
-// V01–V05: Vibrancy + Description Always
-// ═══════════════════════════════════════════════════════════════════════
-
-// V01: Pure vibrancy + descriptions always visible
-fn render_v01() -> AnyElement {
-    let theme = get_cached_theme();
-    let fg = h(theme.colors.text.primary);
-    let muted = h(theme.colors.text.dimmed);
-    let gold = h(GOLD);
-
-    vibrancy_shell()
-        .children(ITEMS.iter().enumerate().map(|(i, item)| {
-            let selected = i == 0;
-            div()
-                .flex()
-                .items_center()
-                .px(px(10.))
-                .py(px(5.))
-                .bg(if selected {
-                    fg.opacity(GHOST)
-                } else {
-                    transparent_black()
-                })
-                .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap(px(8.))
-                        .child(gold_bar_tall(selected, gold))
-                        .child(
-                            div()
-                                .flex()
-                                .flex_col()
-                                .overflow_hidden()
-                                .child(
-                                    div()
-                                        .text_sm()
-                                        .text_color(if selected {
-                                            fg
-                                        } else {
-                                            fg.opacity(MUTED_OP)
-                                        })
-                                        .text_ellipsis()
-                                        .child(item.label),
-                                )
-                                .child(
-                                    div()
-                                        .text_xs()
-                                        .text_color(if selected {
-                                            muted.opacity(MUTED_OP)
-                                        } else {
-                                            muted.opacity(0.35)
-                                        })
-                                        .text_ellipsis()
-                                        .child(item.description),
-                                ),
-                        ),
-                )
-        }))
-        .into_any_element()
-}
-
-// V02: Vibrancy + descriptions + gold-tinted fill on selection
-fn render_v02() -> AnyElement {
-    let theme = get_cached_theme();
-    let fg = h(theme.colors.text.primary);
-    let muted = h(theme.colors.text.dimmed);
-    let gold = h(GOLD);
-
-    vibrancy_shell()
-        .children(ITEMS.iter().enumerate().map(|(i, item)| {
-            let selected = i == 0;
-            div()
-                .flex()
-                .items_center()
-                .justify_between()
-                .px(px(10.))
-                .py(px(5.))
-                .bg(if selected {
-                    gold.opacity(GHOST_HI)
-                } else {
-                    transparent_black()
-                })
-                .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap(px(8.))
-                        .child(gold_bar_tall(selected, gold))
-                        .child(
-                            div()
-                                .flex()
-                                .flex_col()
-                                .overflow_hidden()
-                                .child(
-                                    div()
-                                        .text_sm()
-                                        .text_color(if selected {
-                                            fg
-                                        } else {
-                                            fg.opacity(MUTED_OP)
-                                        })
-                                        .text_ellipsis()
-                                        .child(item.label),
-                                )
-                                .child(
-                                    div()
-                                        .text_xs()
-                                        .text_color(if selected {
-                                            muted.opacity(MUTED_OP)
-                                        } else {
-                                            muted.opacity(0.35)
-                                        })
-                                        .text_ellipsis()
-                                        .child(item.description),
-                                ),
-                        ),
-                )
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(muted.opacity(if selected { HINT } else { 0.3 }))
-                        .child(item.command),
-                )
-        }))
-        .into_any_element()
-}
-
-// V03: Vibrancy + descriptions + section headers
-fn render_v03() -> AnyElement {
-    let theme = get_cached_theme();
-    let fg = h(theme.colors.text.primary);
-    let muted = h(theme.colors.text.dimmed);
-    let gold = h(GOLD);
-
-    vibrancy_shell()
-        .child(section_label("CONTEXT SNAPSHOTS", muted))
-        .children(
-            ITEMS[0..2]
-                .iter()
-                .enumerate()
-                .map(|(i, item)| desc_row(item, i == 0, fg, muted, gold, true)),
-        )
-        .child(div().h(px(4.)))
-        .child(section_label("TARGET SOURCES", muted))
-        .children(
-            ITEMS[2..]
-                .iter()
-                .map(|item| desc_row(item, false, fg, muted, gold, true)),
-        )
-        .into_any_element()
-}
-
-// V04: Vibrancy + descriptions + Tab badge
-fn render_v04() -> AnyElement {
-    let theme = get_cached_theme();
-    let fg = h(theme.colors.text.primary);
-    let muted = h(theme.colors.text.dimmed);
-    let gold = h(GOLD);
-
-    vibrancy_shell()
-        .children(ITEMS.iter().enumerate().map(|(i, item)| {
-            let selected = i == 0;
-            div()
-                .flex()
-                .items_center()
-                .justify_between()
-                .px(px(10.))
-                .py(px(5.))
-                .bg(if selected {
-                    fg.opacity(GHOST)
-                } else {
-                    transparent_black()
-                })
-                .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap(px(8.))
-                        .child(gold_bar_tall(selected, gold))
-                        .child(
-                            div()
-                                .flex()
-                                .flex_col()
-                                .overflow_hidden()
-                                .child(
-                                    div()
-                                        .text_sm()
-                                        .text_color(if selected {
-                                            fg
-                                        } else {
-                                            fg.opacity(MUTED_OP)
-                                        })
-                                        .text_ellipsis()
-                                        .child(item.label),
-                                )
-                                .child(
-                                    div()
-                                        .text_xs()
-                                        .text_color(if selected {
-                                            muted.opacity(MUTED_OP)
-                                        } else {
-                                            muted.opacity(0.35)
-                                        })
-                                        .text_ellipsis()
-                                        .child(item.description),
-                                ),
-                        ),
-                )
-                .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap(px(6.))
-                        .child(
-                            div()
-                                .text_xs()
-                                .text_color(muted.opacity(if selected { HINT } else { 0.3 }))
-                                .child(item.command),
-                        )
-                        .when(selected, |d| d.child(tab_badge(gold))),
-                )
-        }))
-        .into_any_element()
-}
-
-// V05: Vibrancy + descriptions compact — tighter rhythm
-fn render_v05() -> AnyElement {
-    let theme = get_cached_theme();
-    let fg = h(theme.colors.text.primary);
-    let muted = h(theme.colors.text.dimmed);
-    let gold = h(GOLD);
-
-    vibrancy_shell()
-        .children(ITEMS.iter().enumerate().map(|(i, item)| {
-            let selected = i == 0;
-            div()
-                .flex()
-                .items_center()
-                .justify_between()
-                .px(px(8.))
-                .py(px(3.))
-                .bg(if selected {
-                    fg.opacity(GHOST)
-                } else {
-                    transparent_black()
-                })
-                .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap(px(6.))
-                        .child(gold_bar(selected, gold))
-                        .child(
-                            div()
-                                .flex()
-                                .items_center()
-                                .gap(px(6.))
-                                .overflow_hidden()
-                                .child(
-                                    div()
-                                        .text_sm()
-                                        .text_color(if selected {
-                                            fg
-                                        } else {
-                                            fg.opacity(MUTED_OP)
-                                        })
-                                        .text_ellipsis()
-                                        .child(item.label),
-                                )
-                                .child(
-                                    div()
-                                        .text_xs()
-                                        .text_color(muted.opacity(if selected {
-                                            HINT
-                                        } else {
-                                            0.25
-                                        }))
-                                        .child("—"),
-                                )
-                                .child(
-                                    div()
-                                        .text_xs()
-                                        .text_color(muted.opacity(if selected {
-                                            HINT
-                                        } else {
-                                            0.25
-                                        }))
-                                        .text_ellipsis()
-                                        .child(item.description),
-                                ),
-                        ),
-                )
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(muted.opacity(if selected { HINT } else { 0.2 }))
-                        .child(item.command),
-                )
-        }))
-        .into_any_element()
-}
-
-fn desc_row(
-    item: &SlashItem,
-    selected: bool,
-    fg: Hsla,
-    muted: Hsla,
-    gold: Hsla,
-    show_cmd: bool,
-) -> Div {
+/// Standard compact row: 36px, text_base label, gold bar, optional right content
+fn row(item: &SlashItem, selected: bool, fg: Hsla, gold: Hsla) -> Div {
     div()
+        .h(px(ROW_H))
         .flex()
         .items_center()
         .justify_between()
         .px(px(10.))
-        .py(px(5.))
         .bg(if selected {
             fg.opacity(GHOST)
         } else {
@@ -648,366 +305,981 @@ fn desc_row(
                 .flex()
                 .items_center()
                 .gap(px(8.))
-                .child(gold_bar_tall(selected, gold))
+                .child(gbar(selected, gold, 2., 16.))
                 .child(
                     div()
+                        .text_color(if selected { fg } else { fg.opacity(MUTED_OP) })
+                        .text_ellipsis()
+                        .child(item.label),
+                ),
+        )
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// V01: Baseline — compact 36px rows, label + /cmd right
+// ═══════════════════════════════════════════════════════════════════════
+
+fn render_v01() -> AnyElement {
+    let theme = get_cached_theme();
+    let fg = h(theme.colors.text.primary);
+    let muted = h(theme.colors.text.dimmed);
+    let gold = h(GOLD);
+    let matched: Vec<&SlashItem> = ITEMS
+        .iter()
+        .filter(|i| matches_query(i, AC_QUERY))
+        .collect();
+
+    shell()
+        .child(input_bar(fg, muted, gold))
+        .child(hair(fg))
+        .child(
+            div()
+                .flex()
+                .flex_col()
+                .children(matched.iter().enumerate().map(|(i, item)| {
+                    row(item, i == 0, fg, gold).child(
+                        div()
+                            .text_xs()
+                            .text_color(muted.opacity(if i == 0 { HINT } else { 0.3 }))
+                            .child(item.command),
+                    )
+                })),
+        )
+        .into_any_element()
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// V02: No command hint — label only
+// ═══════════════════════════════════════════════════════════════════════
+
+fn render_v02() -> AnyElement {
+    let theme = get_cached_theme();
+    let fg = h(theme.colors.text.primary);
+    let muted = h(theme.colors.text.dimmed);
+    let gold = h(GOLD);
+    let matched: Vec<&SlashItem> = ITEMS
+        .iter()
+        .filter(|i| matches_query(i, AC_QUERY))
+        .collect();
+
+    shell()
+        .child(input_bar(fg, muted, gold))
+        .child(hair(fg))
+        .child(
+            div().flex().flex_col().children(
+                matched
+                    .iter()
+                    .enumerate()
+                    .map(|(i, item)| row(item, i == 0, fg, gold)),
+            ),
+        )
+        .into_any_element()
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// V03: Command before label — "/context  Current Context"
+// ═══════════════════════════════════════════════════════════════════════
+
+fn render_v03() -> AnyElement {
+    let theme = get_cached_theme();
+    let fg = h(theme.colors.text.primary);
+    let muted = h(theme.colors.text.dimmed);
+    let gold = h(GOLD);
+    let matched: Vec<&SlashItem> = ITEMS
+        .iter()
+        .filter(|i| matches_query(i, AC_QUERY))
+        .collect();
+
+    shell()
+        .child(input_bar(fg, muted, gold))
+        .child(hair(fg))
+        .child(
+            div()
+                .flex()
+                .flex_col()
+                .children(matched.iter().enumerate().map(|(i, item)| {
+                    let selected = i == 0;
+                    div()
+                        .h(px(ROW_H))
                         .flex()
-                        .flex_col()
-                        .overflow_hidden()
+                        .items_center()
+                        .px(px(10.))
+                        .bg(if selected {
+                            fg.opacity(GHOST)
+                        } else {
+                            transparent_black()
+                        })
                         .child(
                             div()
-                                .text_sm()
+                                .flex()
+                                .items_center()
+                                .gap(px(8.))
+                                .child(gbar(selected, gold, 2., 16.))
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(muted.opacity(if selected {
+                                            HINT
+                                        } else {
+                                            0.3
+                                        }))
+                                        .w(px(80.))
+                                        .text_ellipsis()
+                                        .child(item.command),
+                                )
+                                .child(
+                                    div()
+                                        .text_color(if selected {
+                                            fg
+                                        } else {
+                                            fg.opacity(MUTED_OP)
+                                        })
+                                        .text_ellipsis()
+                                        .child(item.label),
+                                ),
+                        )
+                })),
+        )
+        .into_any_element()
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// V04: Inline desc after dash — "Current Context — Attach desktop context"
+// ═══════════════════════════════════════════════════════════════════════
+
+fn render_v04() -> AnyElement {
+    let theme = get_cached_theme();
+    let fg = h(theme.colors.text.primary);
+    let muted = h(theme.colors.text.dimmed);
+    let gold = h(GOLD);
+    let matched: Vec<&SlashItem> = ITEMS
+        .iter()
+        .filter(|i| matches_query(i, AC_QUERY))
+        .collect();
+
+    shell()
+        .child(input_bar(fg, muted, gold))
+        .child(hair(fg))
+        .child(
+            div()
+                .flex()
+                .flex_col()
+                .children(matched.iter().enumerate().map(|(i, item)| {
+                    let selected = i == 0;
+                    div()
+                        .h(px(ROW_H))
+                        .flex()
+                        .items_center()
+                        .px(px(10.))
+                        .overflow_hidden()
+                        .bg(if selected {
+                            fg.opacity(GHOST)
+                        } else {
+                            transparent_black()
+                        })
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap(px(8.))
+                                .flex_1()
+                                .overflow_hidden()
+                                .child(gbar(selected, gold, 2., 16.))
+                                .child(
+                                    div()
+                                        .text_color(if selected {
+                                            fg
+                                        } else {
+                                            fg.opacity(MUTED_OP)
+                                        })
+                                        .flex_shrink_0()
+                                        .child(item.label),
+                                )
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(muted.opacity(if selected {
+                                            0.4
+                                        } else {
+                                            0.25
+                                        }))
+                                        .child("—"),
+                                )
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(muted.opacity(if selected {
+                                            0.4
+                                        } else {
+                                            0.25
+                                        }))
+                                        .text_ellipsis()
+                                        .child(item.description),
+                                ),
+                        )
+                })),
+        )
+        .into_any_element()
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// V05: Two-line — text_base label + text_xs desc, ≤40px
+// ═══════════════════════════════════════════════════════════════════════
+
+fn render_v05() -> AnyElement {
+    let theme = get_cached_theme();
+    let fg = h(theme.colors.text.primary);
+    let muted = h(theme.colors.text.dimmed);
+    let gold = h(GOLD);
+    let matched: Vec<&SlashItem> = ITEMS
+        .iter()
+        .filter(|i| matches_query(i, AC_QUERY))
+        .collect();
+
+    shell()
+        .child(input_bar(fg, muted, gold))
+        .child(hair(fg))
+        .child(
+            div()
+                .flex()
+                .flex_col()
+                .children(matched.iter().enumerate().map(|(i, item)| {
+                    let selected = i == 0;
+                    div()
+                        .max_h(px(40.))
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .px(px(10.))
+                        .py(px(4.))
+                        .bg(if selected {
+                            fg.opacity(GHOST)
+                        } else {
+                            transparent_black()
+                        })
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap(px(8.))
+                                .child(gbar(selected, gold, 2., 18.))
+                                .child(
+                                    div()
+                                        .flex()
+                                        .flex_col()
+                                        .overflow_hidden()
+                                        .child(
+                                            div()
+                                                .text_color(if selected {
+                                                    fg
+                                                } else {
+                                                    fg.opacity(MUTED_OP)
+                                                })
+                                                .text_ellipsis()
+                                                .line_height(px(18.))
+                                                .child(item.label),
+                                        )
+                                        .child(
+                                            div()
+                                                .text_xs()
+                                                .text_color(muted.opacity(if selected {
+                                                    HINT
+                                                } else {
+                                                    0.3
+                                                }))
+                                                .text_ellipsis()
+                                                .line_height(px(14.))
+                                                .child(item.description),
+                                        ),
+                                ),
+                        )
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(muted.opacity(if selected { HINT } else { 0.25 }))
+                                .child(item.command),
+                        )
+                })),
+        )
+        .into_any_element()
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// V06: Thick gold bar — 3px × 20px
+// ═══════════════════════════════════════════════════════════════════════
+
+fn render_v06() -> AnyElement {
+    let theme = get_cached_theme();
+    let fg = h(theme.colors.text.primary);
+    let muted = h(theme.colors.text.dimmed);
+    let gold = h(GOLD);
+    let matched: Vec<&SlashItem> = ITEMS
+        .iter()
+        .filter(|i| matches_query(i, AC_QUERY))
+        .collect();
+
+    shell()
+        .child(input_bar(fg, muted, gold))
+        .child(hair(fg))
+        .child(
+            div()
+                .flex()
+                .flex_col()
+                .children(matched.iter().enumerate().map(|(i, item)| {
+                    let selected = i == 0;
+                    div()
+                        .h(px(ROW_H))
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .px(px(10.))
+                        .bg(if selected {
+                            fg.opacity(GHOST)
+                        } else {
+                            transparent_black()
+                        })
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap(px(8.))
+                                .child(gbar(selected, gold, 3., 20.))
+                                .child(
+                                    div()
+                                        .text_color(if selected {
+                                            fg
+                                        } else {
+                                            fg.opacity(MUTED_OP)
+                                        })
+                                        .text_ellipsis()
+                                        .child(item.label),
+                                ),
+                        )
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(muted.opacity(if selected { HINT } else { 0.3 }))
+                                .child(item.command),
+                        )
+                })),
+        )
+        .into_any_element()
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// V07: Gold bar flush left — no padding before bar
+// ═══════════════════════════════════════════════════════════════════════
+
+fn render_v07() -> AnyElement {
+    let theme = get_cached_theme();
+    let fg = h(theme.colors.text.primary);
+    let muted = h(theme.colors.text.dimmed);
+    let gold = h(GOLD);
+    let matched: Vec<&SlashItem> = ITEMS
+        .iter()
+        .filter(|i| matches_query(i, AC_QUERY))
+        .collect();
+
+    shell()
+        .child(input_bar(fg, muted, gold))
+        .child(hair(fg))
+        .child(
+            div()
+                .flex()
+                .flex_col()
+                .children(matched.iter().enumerate().map(|(i, item)| {
+                    let selected = i == 0;
+                    div()
+                        .h(px(ROW_H))
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .pr(px(10.))
+                        .bg(if selected {
+                            fg.opacity(GHOST)
+                        } else {
+                            transparent_black()
+                        })
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap(px(10.))
+                                .child(gbar(selected, gold, 2., ROW_H))
+                                .child(
+                                    div()
+                                        .text_color(if selected {
+                                            fg
+                                        } else {
+                                            fg.opacity(MUTED_OP)
+                                        })
+                                        .text_ellipsis()
+                                        .child(item.label),
+                                ),
+                        )
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(muted.opacity(if selected { HINT } else { 0.3 }))
+                                .child(item.command),
+                        )
+                })),
+        )
+        .into_any_element()
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// V08: Gold tint bg — warm ghost on selected
+// ═══════════════════════════════════════════════════════════════════════
+
+fn render_v08() -> AnyElement {
+    let theme = get_cached_theme();
+    let fg = h(theme.colors.text.primary);
+    let muted = h(theme.colors.text.dimmed);
+    let gold = h(GOLD);
+    let matched: Vec<&SlashItem> = ITEMS
+        .iter()
+        .filter(|i| matches_query(i, AC_QUERY))
+        .collect();
+
+    shell()
+        .child(input_bar(fg, muted, gold))
+        .child(hair(fg))
+        .child(
+            div()
+                .flex()
+                .flex_col()
+                .children(matched.iter().enumerate().map(|(i, item)| {
+                    let selected = i == 0;
+                    div()
+                        .h(px(ROW_H))
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .px(px(10.))
+                        .bg(if selected {
+                            gold.opacity(GHOST_HI)
+                        } else {
+                            transparent_black()
+                        })
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap(px(8.))
+                                .child(gbar(selected, gold, 2., 16.))
+                                .child(
+                                    div()
+                                        .text_color(if selected {
+                                            fg
+                                        } else {
+                                            fg.opacity(MUTED_OP)
+                                        })
+                                        .text_ellipsis()
+                                        .child(item.label),
+                                ),
+                        )
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(muted.opacity(if selected { HINT } else { 0.3 }))
+                                .child(item.command),
+                        )
+                })),
+        )
+        .into_any_element()
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// V09: No bar — ghost bg + medium weight label
+// ═══════════════════════════════════════════════════════════════════════
+
+fn render_v09() -> AnyElement {
+    let theme = get_cached_theme();
+    let fg = h(theme.colors.text.primary);
+    let muted = h(theme.colors.text.dimmed);
+    let gold = h(GOLD);
+    let matched: Vec<&SlashItem> = ITEMS
+        .iter()
+        .filter(|i| matches_query(i, AC_QUERY))
+        .collect();
+
+    shell()
+        .child(input_bar(fg, muted, gold))
+        .child(hair(fg))
+        .child(
+            div()
+                .flex()
+                .flex_col()
+                .children(matched.iter().enumerate().map(|(i, item)| {
+                    let selected = i == 0;
+                    div()
+                        .h(px(ROW_H))
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .px(px(12.))
+                        .bg(if selected {
+                            fg.opacity(GHOST)
+                        } else {
+                            transparent_black()
+                        })
+                        .child(
+                            div()
                                 .text_color(if selected { fg } else { fg.opacity(MUTED_OP) })
+                                .font_weight(if selected {
+                                    FontWeight::MEDIUM
+                                } else {
+                                    FontWeight::NORMAL
+                                })
                                 .text_ellipsis()
                                 .child(item.label),
                         )
                         .child(
                             div()
                                 .text_xs()
-                                .text_color(if selected {
-                                    muted.opacity(MUTED_OP)
-                                } else {
-                                    muted.opacity(0.35)
-                                })
+                                .text_color(muted.opacity(if selected { HINT } else { 0.3 }))
+                                .child(item.command),
+                        )
+                })),
+        )
+        .into_any_element()
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// V10: Gold underline — no left bar, underline on selected label
+// ═══════════════════════════════════════════════════════════════════════
+
+fn render_v10() -> AnyElement {
+    let theme = get_cached_theme();
+    let fg = h(theme.colors.text.primary);
+    let muted = h(theme.colors.text.dimmed);
+    let gold = h(GOLD);
+    let matched: Vec<&SlashItem> = ITEMS
+        .iter()
+        .filter(|i| matches_query(i, AC_QUERY))
+        .collect();
+
+    shell()
+        .child(input_bar(fg, muted, gold))
+        .child(hair(fg))
+        .child(
+            div()
+                .flex()
+                .flex_col()
+                .children(matched.iter().enumerate().map(|(i, item)| {
+                    let selected = i == 0;
+                    div()
+                        .h(px(ROW_H))
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .px(px(12.))
+                        .bg(if selected {
+                            fg.opacity(GHOST)
+                        } else {
+                            transparent_black()
+                        })
+                        .child(
+                            div()
+                                .text_color(if selected { fg } else { fg.opacity(MUTED_OP) })
                                 .text_ellipsis()
-                                .child(item.description),
-                        ),
-                ),
+                                .when(selected, |d| d.border_b_1().border_color(gold))
+                                .child(item.label),
+                        )
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(muted.opacity(if selected { HINT } else { 0.3 }))
+                                .child(item.command),
+                        )
+                })),
         )
-        .when(show_cmd, |d| {
-            d.child(
-                div()
-                    .text_xs()
-                    .text_color(muted.opacity(if selected { HINT } else { 0.3 }))
-                    .child(item.command.to_string()),
-            )
-        })
-}
-
-// ═══════════════════════════════════════════════════════════════════════
-// V06–V10: Search Highlight
-// ═══════════════════════════════════════════════════════════════════════
-
-const SEARCH_QUERY: &str = "con";
-
-fn matches_query(item: &SlashItem, query: &str) -> bool {
-    let q = query.to_lowercase();
-    item.label.to_lowercase().contains(&q) || item.command.to_lowercase().contains(&q)
-}
-
-/// Render label with gold-highlighted match spans
-fn highlighted_label(label: &str, query: &str, fg: Hsla, gold: Hsla, selected: bool) -> Div {
-    let (before, matched, after) = split_highlight(label, query);
-    div()
-        .flex()
-        .items_center()
-        .text_sm()
-        .child(
-            div()
-                .text_color(if selected { fg } else { fg.opacity(MUTED_OP) })
-                .child(before),
-        )
-        .child(
-            div()
-                .text_color(gold)
-                .font_weight(FontWeight::SEMIBOLD)
-                .child(matched),
-        )
-        .child(
-            div()
-                .text_color(if selected { fg } else { fg.opacity(MUTED_OP) })
-                .child(after),
-        )
-}
-
-// V06: Gold text highlight on query match
-fn render_v06() -> AnyElement {
-    let theme = get_cached_theme();
-    let fg = h(theme.colors.text.primary);
-    let muted = h(theme.colors.text.dimmed);
-    let gold = h(GOLD);
-
-    let matched: Vec<&SlashItem> = ITEMS
-        .iter()
-        .filter(|i| matches_query(i, SEARCH_QUERY))
-        .collect();
-
-    vibrancy_shell()
-        .child(
-            div()
-                .px(px(12.))
-                .py(px(4.))
-                .flex()
-                .items_center()
-                .gap(px(6.))
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(muted.opacity(HINT))
-                        .child("Filter:"),
-                )
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(gold)
-                        .font_weight(FontWeight::MEDIUM)
-                        .child(format!("/{SEARCH_QUERY}")),
-                ),
-        )
-        .children(matched.iter().enumerate().map(|(i, item)| {
-            let selected = i == 0;
-            div()
-                .flex()
-                .items_center()
-                .justify_between()
-                .px(px(10.))
-                .py(px(5.))
-                .bg(if selected {
-                    fg.opacity(GHOST)
-                } else {
-                    transparent_black()
-                })
-                .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap(px(8.))
-                        .child(gold_bar(selected, gold))
-                        .child(highlighted_label(
-                            item.label,
-                            SEARCH_QUERY,
-                            fg,
-                            gold,
-                            selected,
-                        )),
-                )
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(muted.opacity(if selected { HINT } else { 0.3 }))
-                        .child(item.command),
-                )
-        }))
         .into_any_element()
 }
 
-// V07: Gold underline on matched chars instead of color change
-fn render_v07() -> AnyElement {
+// ═══════════════════════════════════════════════════════════════════════
+// V11: Gold text highlight on query match
+// ═══════════════════════════════════════════════════════════════════════
+
+fn render_v11() -> AnyElement {
     let theme = get_cached_theme();
     let fg = h(theme.colors.text.primary);
     let muted = h(theme.colors.text.dimmed);
     let gold = h(GOLD);
-
     let matched: Vec<&SlashItem> = ITEMS
         .iter()
-        .filter(|i| matches_query(i, SEARCH_QUERY))
+        .filter(|i| matches_query(i, AC_QUERY))
         .collect();
 
-    vibrancy_shell()
-        .children(matched.iter().enumerate().map(|(i, item)| {
-            let selected = i == 0;
-            let (before, match_text, after) = split_highlight(item.label, SEARCH_QUERY);
+    shell()
+        .child(input_bar(fg, muted, gold))
+        .child(hair(fg))
+        .child(
             div()
                 .flex()
-                .items_center()
-                .justify_between()
-                .px(px(10.))
-                .py(px(5.))
-                .bg(if selected {
-                    fg.opacity(GHOST)
-                } else {
-                    transparent_black()
-                })
-                .child(
+                .flex_col()
+                .children(matched.iter().enumerate().map(|(i, item)| {
+                    let selected = i == 0;
+                    let text_color = if selected { fg } else { fg.opacity(MUTED_OP) };
+                    let (before, mid, after) = split_highlight(item.label, AC_QUERY);
                     div()
+                        .h(px(ROW_H))
                         .flex()
                         .items_center()
-                        .gap(px(8.))
-                        .child(gold_bar(selected, gold))
+                        .justify_between()
+                        .px(px(10.))
+                        .bg(if selected {
+                            fg.opacity(GHOST)
+                        } else {
+                            transparent_black()
+                        })
                         .child(
                             div()
                                 .flex()
                                 .items_center()
-                                .text_sm()
+                                .gap(px(8.))
+                                .child(gbar(selected, gold, 2., 16.))
                                 .child(
                                     div()
-                                        .text_color(if selected {
-                                            fg
-                                        } else {
-                                            fg.opacity(MUTED_OP)
-                                        })
-                                        .child(before),
-                                )
-                                .child(
-                                    div()
-                                        .text_color(if selected {
-                                            fg
-                                        } else {
-                                            fg.opacity(MUTED_OP)
-                                        })
-                                        .border_b_1()
-                                        .border_color(gold)
-                                        .child(match_text),
-                                )
-                                .child(
-                                    div()
-                                        .text_color(if selected {
-                                            fg
-                                        } else {
-                                            fg.opacity(MUTED_OP)
-                                        })
-                                        .child(after),
+                                        .flex()
+                                        .items_center()
+                                        .child(div().text_color(text_color).child(before))
+                                        .child(
+                                            div()
+                                                .text_color(gold)
+                                                .font_weight(FontWeight::SEMIBOLD)
+                                                .child(mid),
+                                        )
+                                        .child(div().text_color(text_color).child(after)),
                                 ),
-                        ),
-                )
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(muted.opacity(if selected { HINT } else { 0.3 }))
-                        .child(item.command),
-                )
-        }))
+                        )
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(muted.opacity(if selected { HINT } else { 0.3 }))
+                                .child(item.command),
+                        )
+                })),
+        )
         .into_any_element()
 }
 
-// V08: Bold match text, same color
-fn render_v08() -> AnyElement {
+// ═══════════════════════════════════════════════════════════════════════
+// V12: Bold match — same color, heavier weight
+// ═══════════════════════════════════════════════════════════════════════
+
+fn render_v12() -> AnyElement {
     let theme = get_cached_theme();
     let fg = h(theme.colors.text.primary);
     let muted = h(theme.colors.text.dimmed);
     let gold = h(GOLD);
-
     let matched: Vec<&SlashItem> = ITEMS
         .iter()
-        .filter(|i| matches_query(i, SEARCH_QUERY))
+        .filter(|i| matches_query(i, AC_QUERY))
         .collect();
 
-    vibrancy_shell()
-        .children(matched.iter().enumerate().map(|(i, item)| {
-            let selected = i == 0;
-            let (before, match_text, after) = split_highlight(item.label, SEARCH_QUERY);
-            let text_color = if selected { fg } else { fg.opacity(MUTED_OP) };
+    shell()
+        .child(input_bar(fg, muted, gold))
+        .child(hair(fg))
+        .child(
             div()
                 .flex()
-                .items_center()
-                .justify_between()
-                .px(px(10.))
-                .py(px(5.))
-                .bg(if selected {
-                    fg.opacity(GHOST)
-                } else {
-                    transparent_black()
-                })
-                .child(
+                .flex_col()
+                .children(matched.iter().enumerate().map(|(i, item)| {
+                    let selected = i == 0;
+                    let text_color = if selected { fg } else { fg.opacity(MUTED_OP) };
+                    let (before, mid, after) = split_highlight(item.label, AC_QUERY);
                     div()
+                        .h(px(ROW_H))
                         .flex()
                         .items_center()
-                        .gap(px(8.))
-                        .child(gold_bar(selected, gold))
+                        .justify_between()
+                        .px(px(10.))
+                        .bg(if selected {
+                            fg.opacity(GHOST)
+                        } else {
+                            transparent_black()
+                        })
                         .child(
                             div()
                                 .flex()
                                 .items_center()
-                                .text_sm()
+                                .gap(px(8.))
+                                .child(gbar(selected, gold, 2., 16.))
                                 .child(
                                     div()
-                                        .text_color(text_color)
-                                        .font_weight(FontWeight::NORMAL)
-                                        .child(before),
-                                )
-                                .child(
-                                    div()
-                                        .text_color(text_color)
-                                        .font_weight(FontWeight::BOLD)
-                                        .child(match_text),
-                                )
-                                .child(
-                                    div()
-                                        .text_color(text_color)
-                                        .font_weight(FontWeight::NORMAL)
-                                        .child(after),
+                                        .flex()
+                                        .items_center()
+                                        .child(div().text_color(text_color).child(before))
+                                        .child(
+                                            div()
+                                                .text_color(text_color)
+                                                .font_weight(FontWeight::BOLD)
+                                                .child(mid),
+                                        )
+                                        .child(div().text_color(text_color).child(after)),
                                 ),
-                        ),
-                )
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(muted.opacity(if selected { HINT } else { 0.3 }))
-                        .child(item.command),
-                )
-        }))
+                        )
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(muted.opacity(if selected { HINT } else { 0.3 }))
+                                .child(item.command),
+                        )
+                })),
+        )
         .into_any_element()
 }
 
-// V09: Gold highlight + descriptions always visible
-fn render_v09() -> AnyElement {
+// ═══════════════════════════════════════════════════════════════════════
+// V13: Gold match highlight + desc below (≤40px)
+// ═══════════════════════════════════════════════════════════════════════
+
+fn render_v13() -> AnyElement {
     let theme = get_cached_theme();
     let fg = h(theme.colors.text.primary);
     let muted = h(theme.colors.text.dimmed);
     let gold = h(GOLD);
-
     let matched: Vec<&SlashItem> = ITEMS
         .iter()
-        .filter(|i| matches_query(i, SEARCH_QUERY))
+        .filter(|i| matches_query(i, AC_QUERY))
         .collect();
 
-    vibrancy_shell()
-        .children(matched.iter().enumerate().map(|(i, item)| {
-            let selected = i == 0;
+    shell()
+        .child(input_bar(fg, muted, gold))
+        .child(hair(fg))
+        .child(
             div()
                 .flex()
-                .items_center()
-                .justify_between()
-                .px(px(10.))
-                .py(px(5.))
-                .bg(if selected {
-                    fg.opacity(GHOST)
-                } else {
-                    transparent_black()
-                })
-                .child(
+                .flex_col()
+                .children(matched.iter().enumerate().map(|(i, item)| {
+                    let selected = i == 0;
+                    let text_color = if selected { fg } else { fg.opacity(MUTED_OP) };
+                    let (before, mid, after) = split_highlight(item.label, AC_QUERY);
                     div()
+                        .max_h(px(40.))
                         .flex()
                         .items_center()
-                        .gap(px(8.))
-                        .child(gold_bar_tall(selected, gold))
+                        .justify_between()
+                        .px(px(10.))
+                        .py(px(4.))
+                        .bg(if selected {
+                            fg.opacity(GHOST)
+                        } else {
+                            transparent_black()
+                        })
                         .child(
                             div()
                                 .flex()
-                                .flex_col()
-                                .overflow_hidden()
-                                .child(highlighted_label(
-                                    item.label,
-                                    SEARCH_QUERY,
-                                    fg,
-                                    gold,
-                                    selected,
-                                ))
+                                .items_center()
+                                .gap(px(8.))
+                                .child(gbar(selected, gold, 2., 18.))
                                 .child(
+                                    div()
+                                        .flex()
+                                        .flex_col()
+                                        .overflow_hidden()
+                                        .child(
+                                            div()
+                                                .flex()
+                                                .items_center()
+                                                .line_height(px(18.))
+                                                .child(div().text_color(text_color).child(before))
+                                                .child(
+                                                    div()
+                                                        .text_color(gold)
+                                                        .font_weight(FontWeight::SEMIBOLD)
+                                                        .child(mid),
+                                                )
+                                                .child(div().text_color(text_color).child(after)),
+                                        )
+                                        .child(
+                                            div()
+                                                .text_xs()
+                                                .text_color(muted.opacity(if selected {
+                                                    HINT
+                                                } else {
+                                                    0.3
+                                                }))
+                                                .text_ellipsis()
+                                                .line_height(px(14.))
+                                                .child(item.description),
+                                        ),
+                                ),
+                        )
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(muted.opacity(if selected { HINT } else { 0.25 }))
+                                .child(item.command),
+                        )
+                })),
+        )
+        .into_any_element()
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// V14: Tab pill right-aligned on selected
+// ═══════════════════════════════════════════════════════════════════════
+
+fn render_v14() -> AnyElement {
+    let theme = get_cached_theme();
+    let fg = h(theme.colors.text.primary);
+    let muted = h(theme.colors.text.dimmed);
+    let gold = h(GOLD);
+    let matched: Vec<&SlashItem> = ITEMS
+        .iter()
+        .filter(|i| matches_query(i, AC_QUERY))
+        .collect();
+
+    shell()
+        .child(input_bar(fg, muted, gold))
+        .child(hair(fg))
+        .child(
+            div()
+                .flex()
+                .flex_col()
+                .children(matched.iter().enumerate().map(|(i, item)| {
+                    let selected = i == 0;
+                    row(item, selected, fg, gold).child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap(px(6.))
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(muted.opacity(if selected { HINT } else { 0.3 }))
+                                    .child(item.command),
+                            )
+                            .when(selected, |d| d.child(tab_pill(gold))),
+                    )
+                })),
+        )
+        .into_any_element()
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// V15: Tab + /cmd, compact
+// ═══════════════════════════════════════════════════════════════════════
+
+fn render_v15() -> AnyElement {
+    let theme = get_cached_theme();
+    let fg = h(theme.colors.text.primary);
+    let muted = h(theme.colors.text.dimmed);
+    let gold = h(GOLD);
+    let matched: Vec<&SlashItem> = ITEMS
+        .iter()
+        .filter(|i| matches_query(i, AC_QUERY))
+        .collect();
+
+    shell()
+        .child(input_bar(fg, muted, gold))
+        .child(hair(fg))
+        .child(
+            div()
+                .flex()
+                .flex_col()
+                .children(matched.iter().enumerate().map(|(i, item)| {
+                    let selected = i == 0;
+                    row(item, selected, fg, gold).child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap(px(4.))
+                            .when(selected, |d| {
+                                d.child(tab_pill(gold)).child(
+                                    div()
+                                        .px(px(4.))
+                                        .py(px(1.))
+                                        .rounded(px(3.))
+                                        .bg(fg.opacity(GHOST_HI))
+                                        .text_xs()
+                                        .text_color(muted.opacity(HINT))
+                                        .font_weight(FontWeight::MEDIUM)
+                                        .child("↵"),
+                                )
+                            })
+                            .when(!selected, |d| {
+                                d.child(
                                     div()
                                         .text_xs()
-                                        .text_color(if selected {
-                                            muted.opacity(MUTED_OP)
-                                        } else {
-                                            muted.opacity(0.35)
-                                        })
-                                        .text_ellipsis()
-                                        .child(item.description),
-                                ),
-                        ),
+                                        .text_color(muted.opacity(0.3))
+                                        .child(item.command.to_string()),
+                                )
+                            }),
+                    )
+                })),
+        )
+        .into_any_element()
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// V16: Footer hint strip
+// ═══════════════════════════════════════════════════════════════════════
+
+fn render_v16() -> AnyElement {
+    let theme = get_cached_theme();
+    let fg = h(theme.colors.text.primary);
+    let muted = h(theme.colors.text.dimmed);
+    let gold = h(GOLD);
+    let matched: Vec<&SlashItem> = ITEMS
+        .iter()
+        .filter(|i| matches_query(i, AC_QUERY))
+        .collect();
+
+    shell()
+        .child(input_bar(fg, muted, gold))
+        .child(hair(fg))
+        .child(
+            div()
+                .flex()
+                .flex_col()
+                .children(matched.iter().enumerate().map(|(i, item)| {
+                    row(item, i == 0, fg, gold).child(
+                        div()
+                            .text_xs()
+                            .text_color(muted.opacity(if i == 0 { HINT } else { 0.3 }))
+                            .child(item.command),
+                    )
+                })),
+        )
+        .child(hair(fg))
+        .child(
+            div()
+                .h(px(24.))
+                .px(px(12.))
+                .flex()
+                .items_center()
+                .gap(px(12.))
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(muted.opacity(0.3))
+                        .child("↑↓ navigate"),
                 )
                 .child(
                     div()
                         .text_xs()
-                        .text_color(muted.opacity(if selected { HINT } else { 0.3 }))
-                        .child(item.command),
+                        .text_color(muted.opacity(0.3))
+                        .child("Tab complete"),
                 )
-        }))
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(muted.opacity(0.3))
+                        .child("Esc close"),
+                ),
+        )
         .into_any_element()
 }
 
-// V10: Gold highlight + sections
-fn render_v10() -> AnyElement {
+// ═══════════════════════════════════════════════════════════════════════
+// V17: Section headers
+// ═══════════════════════════════════════════════════════════════════════
+
+fn render_v17() -> AnyElement {
     let theme = get_cached_theme();
     let fg = h(theme.colors.text.primary);
     let muted = h(theme.colors.text.dimmed);
@@ -1015,677 +1287,121 @@ fn render_v10() -> AnyElement {
 
     let snapshots: Vec<&SlashItem> = ITEMS[0..2]
         .iter()
-        .filter(|i| matches_query(i, SEARCH_QUERY))
+        .filter(|i| matches_query(i, AC_QUERY))
         .collect();
     let sources: Vec<&SlashItem> = ITEMS[2..]
         .iter()
-        .filter(|i| matches_query(i, SEARCH_QUERY))
+        .filter(|i| matches_query(i, AC_QUERY))
         .collect();
 
-    let mut shell = vibrancy_shell();
-
+    let mut list = div().flex().flex_col();
     if !snapshots.is_empty() {
-        shell = shell.child(section_label("CONTEXT SNAPSHOTS", muted));
+        list = list.child(sect("CONTEXT", muted));
         for (i, item) in snapshots.iter().enumerate() {
-            let selected = i == 0;
-            shell = shell.child(
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .px(px(10.))
-                    .py(px(5.))
-                    .bg(if selected {
-                        fg.opacity(GHOST)
-                    } else {
-                        transparent_black()
-                    })
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap(px(8.))
-                            .child(gold_bar(selected, gold))
-                            .child(highlighted_label(
-                                item.label,
-                                SEARCH_QUERY,
-                                fg,
-                                gold,
-                                selected,
-                            )),
-                    )
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(muted.opacity(if selected { HINT } else { 0.3 }))
-                            .child(item.command),
-                    ),
+            list = list.child(
+                row(item, i == 0, fg, gold).child(
+                    div()
+                        .text_xs()
+                        .text_color(muted.opacity(if i == 0 { HINT } else { 0.3 }))
+                        .child(item.command.to_string()),
+                ),
             );
         }
     }
-
     if !sources.is_empty() {
-        shell = shell.child(div().h(px(4.)));
-        shell = shell.child(section_label("TARGET SOURCES", muted));
+        list = list.child(sect("SOURCES", muted));
         for item in &sources {
-            shell = shell.child(
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .px(px(10.))
-                    .py(px(5.))
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap(px(8.))
-                            .child(gold_bar(false, gold))
-                            .child(highlighted_label(item.label, SEARCH_QUERY, fg, gold, false)),
-                    )
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(muted.opacity(0.3))
-                            .child(item.command),
-                    ),
+            list = list.child(
+                row(item, false, fg, gold).child(
+                    div()
+                        .text_xs()
+                        .text_color(muted.opacity(0.3))
+                        .child(item.command.to_string()),
+                ),
             );
         }
     }
 
-    shell.into_any_element()
-}
-
-// ═══════════════════════════════════════════════════════════════════════
-// V11–V15: Inline Autocomplete
-// ═══════════════════════════════════════════════════════════════════════
-
-const AC_TYPED: &str = "/con";
-const AC_GHOST: &str = "text";
-const AC_QUERY: &str = "con";
-
-// V11: Ghost completion text in input + dropdown
-fn render_v11() -> AnyElement {
-    let theme = get_cached_theme();
-    let fg = h(theme.colors.text.primary);
-    let muted = h(theme.colors.text.dimmed);
-    let gold = h(GOLD);
-
-    let matched: Vec<&SlashItem> = ITEMS
-        .iter()
-        .filter(|i| matches_query(i, AC_QUERY))
-        .collect();
-
-    vibrancy_shell_no_pad()
-        .child(mock_input(AC_TYPED, AC_GHOST, fg, muted, gold))
-        .child(hairline(fg))
-        .child(
-            div()
-                .py(px(3.))
-                .flex()
-                .flex_col()
-                .children(matched.iter().enumerate().map(|(i, item)| {
-                    let selected = i == 0;
-                    div()
-                        .flex()
-                        .items_center()
-                        .justify_between()
-                        .px(px(10.))
-                        .py(px(5.))
-                        .bg(if selected {
-                            fg.opacity(GHOST)
-                        } else {
-                            transparent_black()
-                        })
-                        .child(
-                            div()
-                                .flex()
-                                .items_center()
-                                .gap(px(8.))
-                                .child(gold_bar(selected, gold))
-                                .child(
-                                    div()
-                                        .text_sm()
-                                        .text_color(if selected {
-                                            fg
-                                        } else {
-                                            fg.opacity(MUTED_OP)
-                                        })
-                                        .child(item.label),
-                                ),
-                        )
-                        .child(
-                            div()
-                                .text_xs()
-                                .text_color(muted.opacity(if selected { HINT } else { 0.3 }))
-                                .child(item.command),
-                        )
-                })),
-        )
-        .into_any_element()
-}
-
-// V12: Ghost completion + Tab pill on selected
-fn render_v12() -> AnyElement {
-    let theme = get_cached_theme();
-    let fg = h(theme.colors.text.primary);
-    let muted = h(theme.colors.text.dimmed);
-    let gold = h(GOLD);
-
-    let matched: Vec<&SlashItem> = ITEMS
-        .iter()
-        .filter(|i| matches_query(i, AC_QUERY))
-        .collect();
-
-    vibrancy_shell_no_pad()
-        .child(mock_input(AC_TYPED, AC_GHOST, fg, muted, gold))
-        .child(hairline(fg))
-        .child(
-            div()
-                .py(px(3.))
-                .flex()
-                .flex_col()
-                .children(matched.iter().enumerate().map(|(i, item)| {
-                    let selected = i == 0;
-                    div()
-                        .flex()
-                        .items_center()
-                        .justify_between()
-                        .px(px(10.))
-                        .py(px(5.))
-                        .bg(if selected {
-                            fg.opacity(GHOST)
-                        } else {
-                            transparent_black()
-                        })
-                        .child(
-                            div()
-                                .flex()
-                                .items_center()
-                                .gap(px(8.))
-                                .child(gold_bar(selected, gold))
-                                .child(
-                                    div()
-                                        .text_sm()
-                                        .text_color(if selected {
-                                            fg
-                                        } else {
-                                            fg.opacity(MUTED_OP)
-                                        })
-                                        .child(item.label),
-                                ),
-                        )
-                        .child(
-                            div()
-                                .flex()
-                                .items_center()
-                                .gap(px(6.))
-                                .child(
-                                    div()
-                                        .text_xs()
-                                        .text_color(muted.opacity(if selected {
-                                            HINT
-                                        } else {
-                                            0.3
-                                        }))
-                                        .child(item.command),
-                                )
-                                .when(selected, |d| d.child(tab_badge(gold))),
-                        )
-                })),
-        )
-        .into_any_element()
-}
-
-// V13: Ghost completion + descriptions always visible
-fn render_v13() -> AnyElement {
-    let theme = get_cached_theme();
-    let fg = h(theme.colors.text.primary);
-    let muted = h(theme.colors.text.dimmed);
-    let gold = h(GOLD);
-
-    let matched: Vec<&SlashItem> = ITEMS
-        .iter()
-        .filter(|i| matches_query(i, AC_QUERY))
-        .collect();
-
-    vibrancy_shell_no_pad()
-        .child(mock_input(AC_TYPED, AC_GHOST, fg, muted, gold))
-        .child(hairline(fg))
-        .child(
-            div()
-                .py(px(3.))
-                .flex()
-                .flex_col()
-                .children(matched.iter().enumerate().map(|(i, item)| {
-                    let selected = i == 0;
-                    div()
-                        .flex()
-                        .items_center()
-                        .justify_between()
-                        .px(px(10.))
-                        .py(px(5.))
-                        .bg(if selected {
-                            fg.opacity(GHOST)
-                        } else {
-                            transparent_black()
-                        })
-                        .child(
-                            div()
-                                .flex()
-                                .items_center()
-                                .gap(px(8.))
-                                .child(gold_bar_tall(selected, gold))
-                                .child(
-                                    div()
-                                        .flex()
-                                        .flex_col()
-                                        .overflow_hidden()
-                                        .child(
-                                            div()
-                                                .text_sm()
-                                                .text_color(if selected {
-                                                    fg
-                                                } else {
-                                                    fg.opacity(MUTED_OP)
-                                                })
-                                                .text_ellipsis()
-                                                .child(item.label),
-                                        )
-                                        .child(
-                                            div()
-                                                .text_xs()
-                                                .text_color(if selected {
-                                                    muted.opacity(MUTED_OP)
-                                                } else {
-                                                    muted.opacity(0.35)
-                                                })
-                                                .text_ellipsis()
-                                                .child(item.description),
-                                        ),
-                                ),
-                        )
-                        .child(
-                            div()
-                                .text_xs()
-                                .text_color(muted.opacity(if selected { HINT } else { 0.3 }))
-                                .child(item.command),
-                        )
-                })),
-        )
-        .into_any_element()
-}
-
-// V14: Ghost completion + non-matching items dimmed to ghost
-fn render_v14() -> AnyElement {
-    let theme = get_cached_theme();
-    let fg = h(theme.colors.text.primary);
-    let muted = h(theme.colors.text.dimmed);
-    let gold = h(GOLD);
-
-    vibrancy_shell_no_pad()
-        .child(mock_input(AC_TYPED, AC_GHOST, fg, muted, gold))
-        .child(hairline(fg))
-        .child(
-            div()
-                .py(px(3.))
-                .flex()
-                .flex_col()
-                .children(ITEMS.iter().enumerate().map(|(i, item)| {
-                    let is_match = matches_query(item, AC_QUERY);
-                    let selected = i == 0 && is_match;
-                    let row_opacity = if is_match { 1.0 } else { 0.25 };
-                    div()
-                        .flex()
-                        .items_center()
-                        .justify_between()
-                        .px(px(10.))
-                        .py(px(if is_match { 5. } else { 3. }))
-                        .bg(if selected {
-                            fg.opacity(GHOST)
-                        } else {
-                            transparent_black()
-                        })
-                        .child(
-                            div()
-                                .flex()
-                                .items_center()
-                                .gap(px(8.))
-                                .child(gold_bar(selected, gold))
-                                .child(
-                                    div()
-                                        .text_sm()
-                                        .text_color(fg.opacity(if selected {
-                                            PRESENT
-                                        } else {
-                                            row_opacity * MUTED_OP
-                                        }))
-                                        .child(item.label),
-                                ),
-                        )
-                        .child(
-                            div()
-                                .text_xs()
-                                .text_color(muted.opacity(row_opacity * 0.3))
-                                .child(item.command),
-                        )
-                })),
-        )
-        .into_any_element()
-}
-
-// V15: Inline only — no dropdown, ghost text in input, Up/Down hint
-fn render_v15() -> AnyElement {
-    let theme = get_cached_theme();
-    let fg = h(theme.colors.text.primary);
-    let muted = h(theme.colors.text.dimmed);
-    let gold = h(GOLD);
-
-    div()
-        .w(px(MENU_W))
-        .bg(fg.opacity(0.02))
-        .flex()
-        .flex_col()
-        // Input with ghost completion
-        .child(
-            div()
-                .px(px(12.))
-                .py(px(10.))
-                .flex()
-                .items_center()
-                .justify_between()
-                .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .child(div().text_sm().text_color(fg).child("/con"))
-                        .child(div().text_sm().text_color(muted.opacity(0.3)).child("text"))
-                        .child(div().w(px(1.5)).h(px(16.)).ml(px(1.)).bg(gold.opacity(0.6))),
-                )
-                .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap(px(8.))
-                        .child(
-                            div()
-                                .text_xs()
-                                .text_color(muted.opacity(0.3))
-                                .child("↑↓ cycle"),
-                        )
-                        .child(tab_badge(gold)),
-                ),
-        )
-        // Description of current selection
-        .child(hairline(fg))
-        .child(
-            div().px(px(12.)).py(px(6.)).child(
-                div()
-                    .text_xs()
-                    .text_color(muted.opacity(HINT))
-                    .child("Attach minimal desktop context"),
-            ),
-        )
+    shell()
+        .child(input_bar(fg, muted, gold))
+        .child(hair(fg))
+        .child(list)
         .into_any_element()
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// V16–V21: Combined Themes
+// V18: Result count in input row
 // ═══════════════════════════════════════════════════════════════════════
 
-// V16: Vibrancy + search highlight + descriptions
-fn render_v16() -> AnyElement {
-    let theme = get_cached_theme();
-    let fg = h(theme.colors.text.primary);
-    let muted = h(theme.colors.text.dimmed);
-    let gold = h(GOLD);
-
-    let matched: Vec<&SlashItem> = ITEMS
-        .iter()
-        .filter(|i| matches_query(i, SEARCH_QUERY))
-        .collect();
-
-    vibrancy_shell()
-        .child(
-            div()
-                .px(px(12.))
-                .py(px(3.))
-                .flex()
-                .items_center()
-                .gap(px(6.))
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(muted.opacity(0.35))
-                        .child("Showing results for"),
-                )
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(gold)
-                        .child(format!("/{SEARCH_QUERY}")),
-                ),
-        )
-        .children(matched.iter().enumerate().map(|(i, item)| {
-            let selected = i == 0;
-            div()
-                .flex()
-                .items_center()
-                .justify_between()
-                .px(px(10.))
-                .py(px(5.))
-                .bg(if selected {
-                    fg.opacity(GHOST)
-                } else {
-                    transparent_black()
-                })
-                .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap(px(8.))
-                        .child(gold_bar_tall(selected, gold))
-                        .child(
-                            div()
-                                .flex()
-                                .flex_col()
-                                .overflow_hidden()
-                                .child(highlighted_label(
-                                    item.label,
-                                    SEARCH_QUERY,
-                                    fg,
-                                    gold,
-                                    selected,
-                                ))
-                                .child(
-                                    div()
-                                        .text_xs()
-                                        .text_color(if selected {
-                                            muted.opacity(MUTED_OP)
-                                        } else {
-                                            muted.opacity(0.35)
-                                        })
-                                        .text_ellipsis()
-                                        .child(item.description),
-                                ),
-                        ),
-                )
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(muted.opacity(if selected { HINT } else { 0.3 }))
-                        .child(item.command),
-                )
-        }))
-        .into_any_element()
-}
-
-// V17: Autocomplete + search highlight
-fn render_v17() -> AnyElement {
-    let theme = get_cached_theme();
-    let fg = h(theme.colors.text.primary);
-    let muted = h(theme.colors.text.dimmed);
-    let gold = h(GOLD);
-
-    let matched: Vec<&SlashItem> = ITEMS
-        .iter()
-        .filter(|i| matches_query(i, AC_QUERY))
-        .collect();
-
-    vibrancy_shell_no_pad()
-        .child(mock_input(AC_TYPED, AC_GHOST, fg, muted, gold))
-        .child(hairline(fg))
-        .child(
-            div()
-                .py(px(3.))
-                .flex()
-                .flex_col()
-                .children(matched.iter().enumerate().map(|(i, item)| {
-                    let selected = i == 0;
-                    div()
-                        .flex()
-                        .items_center()
-                        .justify_between()
-                        .px(px(10.))
-                        .py(px(5.))
-                        .bg(if selected {
-                            fg.opacity(GHOST)
-                        } else {
-                            transparent_black()
-                        })
-                        .child(
-                            div()
-                                .flex()
-                                .items_center()
-                                .gap(px(8.))
-                                .child(gold_bar(selected, gold))
-                                .child(highlighted_label(item.label, AC_QUERY, fg, gold, selected)),
-                        )
-                        .child(
-                            div()
-                                .flex()
-                                .items_center()
-                                .gap(px(6.))
-                                .child(
-                                    div()
-                                        .text_xs()
-                                        .text_color(muted.opacity(if selected {
-                                            HINT
-                                        } else {
-                                            0.3
-                                        }))
-                                        .child(item.command),
-                                )
-                                .when(selected, |d| d.child(tab_badge(gold))),
-                        )
-                })),
-        )
-        .into_any_element()
-}
-
-// V18: All four — autocomplete + highlight + vibrancy + descriptions + Tab
 fn render_v18() -> AnyElement {
     let theme = get_cached_theme();
     let fg = h(theme.colors.text.primary);
     let muted = h(theme.colors.text.dimmed);
     let gold = h(GOLD);
-
     let matched: Vec<&SlashItem> = ITEMS
         .iter()
         .filter(|i| matches_query(i, AC_QUERY))
         .collect();
 
-    vibrancy_shell_no_pad()
-        .child(mock_input(AC_TYPED, AC_GHOST, fg, muted, gold))
-        .child(hairline(fg))
+    shell()
+        .child(input_bar_with_right(
+            fg,
+            muted,
+            gold,
+            div()
+                .text_xs()
+                .text_color(muted.opacity(0.35))
+                .child(format!("{} results", matched.len())),
+        ))
+        .child(hair(fg))
         .child(
             div()
-                .py(px(3.))
                 .flex()
                 .flex_col()
                 .children(matched.iter().enumerate().map(|(i, item)| {
-                    let selected = i == 0;
-                    div()
-                        .flex()
-                        .items_center()
-                        .justify_between()
-                        .px(px(10.))
-                        .py(px(5.))
-                        .bg(if selected {
-                            fg.opacity(GHOST)
-                        } else {
-                            transparent_black()
-                        })
-                        .child(
-                            div()
-                                .flex()
-                                .items_center()
-                                .gap(px(8.))
-                                .child(gold_bar_tall(selected, gold))
-                                .child(
-                                    div()
-                                        .flex()
-                                        .flex_col()
-                                        .overflow_hidden()
-                                        .child(highlighted_label(
-                                            item.label, AC_QUERY, fg, gold, selected,
-                                        ))
-                                        .child(
-                                            div()
-                                                .text_xs()
-                                                .text_color(if selected {
-                                                    muted.opacity(MUTED_OP)
-                                                } else {
-                                                    muted.opacity(0.35)
-                                                })
-                                                .text_ellipsis()
-                                                .child(item.description),
-                                        ),
-                                ),
-                        )
-                        .child(
-                            div()
-                                .flex()
-                                .items_center()
-                                .gap(px(6.))
-                                .child(
-                                    div()
-                                        .text_xs()
-                                        .text_color(muted.opacity(if selected {
-                                            HINT
-                                        } else {
-                                            0.3
-                                        }))
-                                        .child(item.command),
-                                )
-                                .when(selected, |d| d.child(tab_badge(gold))),
-                        )
+                    row(item, i == 0, fg, gold).child(
+                        div()
+                            .text_xs()
+                            .text_color(muted.opacity(if i == 0 { HINT } else { 0.3 }))
+                            .child(item.command),
+                    )
                 })),
         )
         .into_any_element()
 }
 
-// V19: Empty state with command hint chips
+// ═══════════════════════════════════════════════════════════════════════
+// V19: Empty state — hint chips
+// ═══════════════════════════════════════════════════════════════════════
+
 fn render_v19() -> AnyElement {
     let theme = get_cached_theme();
     let fg = h(theme.colors.text.primary);
     let muted = h(theme.colors.text.dimmed);
     let gold = h(GOLD);
 
-    vibrancy_shell_no_pad()
-        .child(mock_input("/xyz", "", fg, muted, gold))
-        .child(hairline(fg))
+    shell()
+        .child(
+            div().h(px(ROW_H)).px(px(12.)).flex().items_center().child(
+                div()
+                    .flex()
+                    .items_center()
+                    .child(div().text_color(fg).child("/xyz"))
+                    .child(div().w(px(1.5)).h(px(16.)).ml(px(1.)).bg(gold.opacity(0.6))),
+            ),
+        )
+        .child(hair(fg))
         .child(
             div()
-                .py(px(16.))
-                .px(px(16.))
+                .py(px(12.))
+                .px(px(12.))
                 .flex()
                 .flex_col()
                 .items_center()
-                .gap(px(8.))
+                .gap(px(6.))
                 .child(
                     div()
-                        .text_sm()
+                        .text_xs()
                         .text_color(muted.opacity(MUTED_OP))
                         .child("No matching commands"),
                 )
@@ -1693,142 +1409,85 @@ fn render_v19() -> AnyElement {
                     div()
                         .flex()
                         .items_center()
-                        .gap(px(6.))
+                        .gap(px(4.))
                         .child(div().text_xs().text_color(muted.opacity(HINT)).child("Try"))
                         .child(hint_chip("/context", gold))
                         .child(hint_chip("/selection", gold))
                         .child(hint_chip("/browser", gold)),
-                )
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(muted.opacity(0.35))
-                        .child("or type @ to attach files"),
                 ),
         )
         .into_any_element()
 }
 
-// V20: Empty state with recently used commands
+// ═══════════════════════════════════════════════════════════════════════
+// V20: Single match — prominent with Tab
+// ═══════════════════════════════════════════════════════════════════════
+
 fn render_v20() -> AnyElement {
     let theme = get_cached_theme();
     let fg = h(theme.colors.text.primary);
     let muted = h(theme.colors.text.dimmed);
     let gold = h(GOLD);
+    let single = &ITEMS[2]; // "Selection"
 
-    vibrancy_shell_no_pad()
-        .child(mock_input("/xyz", "", fg, muted, gold))
-        .child(hairline(fg))
+    shell()
         .child(
-            div()
-                .py(px(8.))
-                .flex()
-                .flex_col()
-                .child(
-                    div()
-                        .px(px(12.))
-                        .py(px(4.))
-                        .text_xs()
-                        .text_color(muted.opacity(HINT))
-                        .child("No matches — recently used:"),
-                )
-                // Recent items shown at muted opacity
-                .children(ITEMS[0..3].iter().map(|item| {
-                    div()
-                        .flex()
-                        .items_center()
-                        .justify_between()
-                        .px(px(10.))
-                        .py(px(4.))
-                        .child(
-                            div()
-                                .flex()
-                                .items_center()
-                                .gap(px(8.))
-                                .child(gold_bar(false, gold))
-                                .child(
-                                    div()
-                                        .flex()
-                                        .flex_col()
-                                        .overflow_hidden()
-                                        .child(
-                                            div()
-                                                .text_sm()
-                                                .text_color(fg.opacity(HINT))
-                                                .text_ellipsis()
-                                                .child(item.label),
-                                        )
-                                        .child(
-                                            div()
-                                                .text_xs()
-                                                .text_color(muted.opacity(0.3))
-                                                .text_ellipsis()
-                                                .child(item.description),
-                                        ),
-                                ),
-                        )
-                        .child(
-                            div()
-                                .text_xs()
-                                .text_color(muted.opacity(0.25))
-                                .child(item.command),
-                        )
-                })),
+            div().h(px(ROW_H)).px(px(12.)).flex().items_center().child(
+                div()
+                    .flex()
+                    .items_center()
+                    .child(div().text_color(fg).child("/sel"))
+                    .child(div().text_color(muted.opacity(0.3)).child("ection"))
+                    .child(div().w(px(1.5)).h(px(16.)).ml(px(1.)).bg(gold.opacity(0.6))),
+            ),
+        )
+        .child(hair(fg))
+        .child(
+            row(single, true, fg, gold).child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(6.))
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(muted.opacity(HINT))
+                            .child(single.command),
+                    )
+                    .child(tab_pill(gold)),
+            ),
         )
         .into_any_element()
 }
 
-// V21: All four themes, dense compact layout
+// ═══════════════════════════════════════════════════════════════════════
+// V21: Dimmed non-matches below matches
+// ═══════════════════════════════════════════════════════════════════════
+
 fn render_v21() -> AnyElement {
     let theme = get_cached_theme();
     let fg = h(theme.colors.text.primary);
     let muted = h(theme.colors.text.dimmed);
     let gold = h(GOLD);
 
-    let matched: Vec<&SlashItem> = ITEMS
-        .iter()
-        .filter(|i| matches_query(i, AC_QUERY))
-        .collect();
-
-    vibrancy_shell_no_pad()
-        // Compact input
+    shell()
+        .child(input_bar(fg, muted, gold))
+        .child(hair(fg))
         .child(
             div()
-                .px(px(10.))
-                .py(px(6.))
-                .flex()
-                .items_center()
-                .justify_between()
-                .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .child(div().text_xs().text_color(fg).child("/con"))
-                        .child(div().text_xs().text_color(muted.opacity(0.3)).child("text"))
-                        .child(div().w(px(1.)).h(px(12.)).ml(px(1.)).bg(gold.opacity(0.6))),
-                )
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(muted.opacity(0.25))
-                        .child(format!("{} results", matched.len())),
-                ),
-        )
-        .child(hairline(fg))
-        // Dense rows
-        .child(
-            div()
-                .py(px(2.))
                 .flex()
                 .flex_col()
-                .children(matched.iter().enumerate().map(|(i, item)| {
-                    let selected = i == 0;
+                .children(ITEMS.iter().enumerate().map(|(i, item)| {
+                    let is_match = matches_query(item, AC_QUERY);
+                    let selected = i == 0 && is_match;
+                    let dim = if is_match { 1.0 } else { 0.25 };
+
                     div()
+                        .h(px(ROW_H))
                         .flex()
                         .items_center()
                         .justify_between()
-                        .px(px(8.))
-                        .py(px(3.))
+                        .px(px(10.))
                         .bg(if selected {
                             fg.opacity(GHOST)
                         } else {
@@ -1838,63 +1497,24 @@ fn render_v21() -> AnyElement {
                             div()
                                 .flex()
                                 .items_center()
-                                .gap(px(6.))
-                                .child(
-                                    div().w(px(1.5)).h(px(12.)).rounded(px(1.)).bg(if selected {
-                                        gold
-                                    } else {
-                                        transparent_black()
-                                    }),
-                                )
+                                .gap(px(8.))
+                                .child(gbar(selected, gold, 2., 16.))
                                 .child(
                                     div()
-                                        .flex()
-                                        .flex_col()
-                                        .overflow_hidden()
-                                        .child(highlighted_label(
-                                            item.label, AC_QUERY, fg, gold, selected,
-                                        ))
-                                        .child(
-                                            div()
-                                                .text_xs()
-                                                .text_color(if selected {
-                                                    muted.opacity(HINT)
-                                                } else {
-                                                    muted.opacity(0.25)
-                                                })
-                                                .text_ellipsis()
-                                                .child(item.description),
-                                        ),
+                                        .text_color(if selected {
+                                            fg
+                                        } else {
+                                            fg.opacity(MUTED_OP * dim)
+                                        })
+                                        .text_ellipsis()
+                                        .child(item.label),
                                 ),
                         )
                         .child(
                             div()
-                                .flex()
-                                .items_center()
-                                .gap(px(4.))
-                                .child(
-                                    div()
-                                        .text_xs()
-                                        .text_color(muted.opacity(if selected {
-                                            0.35
-                                        } else {
-                                            0.2
-                                        }))
-                                        .child(item.command),
-                                )
-                                .when(selected, |d| {
-                                    d.child(
-                                        div()
-                                            .px(px(4.))
-                                            .py(px(0.))
-                                            .rounded(px(2.))
-                                            .bg(gold.opacity(0.10))
-                                            .text_xs()
-                                            .text_color(gold.opacity(0.7))
-                                            .font_weight(FontWeight::MEDIUM)
-                                            .child("⇥"),
-                                    )
-                                }),
+                                .text_xs()
+                                .text_color(muted.opacity(0.3 * dim))
+                                .child(item.command),
                         )
                 })),
         )
