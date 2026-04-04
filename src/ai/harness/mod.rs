@@ -814,11 +814,11 @@ fn should_force_artifact_guidance_for_script_list_submit(
 // Verification-marker constants and detection
 // ---------------------------------------------------------------------------
 
-pub(crate) const SCRIPT_AUTHORING_SKILL_MARKER: &str =
+pub const SCRIPT_AUTHORING_SKILL_MARKER: &str =
     "~/.scriptkit/skills/script-authoring/SKILL.md";
-pub(crate) const BUN_BUILD_VERIFICATION_MARKER: &str =
+pub const BUN_BUILD_VERIFICATION_MARKER: &str =
     "bun build ~/.scriptkit/kit/main/scripts/<name>.ts --target=bun --outfile ~/.scriptkit/tmp/test-scripts/<name>.verify.mjs";
-pub(crate) const BUN_EXECUTE_VERIFICATION_MARKER: &str =
+pub const BUN_EXECUTE_VERIFICATION_MARKER: &str =
     "SK_VERIFY=1 bun ~/.scriptkit/kit/main/scripts/<name>.ts";
 pub(crate) const BUN_VERIFICATION_SUCCESS_CRITERIA: &str =
     "Confirm the stdout, written file, or other observable result from the script in ~/.scriptkit/kit/main/scripts/ matches the user's request.";
@@ -845,19 +845,51 @@ impl TabAiVerificationGuidanceMarkers {
     }
 }
 
-/// Build the artifact-authoring guidance appendix for a Tab AI submission.
-///
-/// Returns `Some((guidance_block, forced_by_script_list_submit))` when guidance
-/// should be appended — either because the intent heuristic matched or because
-/// the deterministic ScriptList + Submit + non-empty-intent path forced it.
-///
-/// This is the single-sourced entry point consumed by both the PTY submission
-/// builder and the ACP initial-input path.
-pub(crate) fn build_tab_ai_artifact_authoring_appendix_for_prompt(
+// ---------------------------------------------------------------------------
+// Cached structured artifact-authoring appendix resolver
+// ---------------------------------------------------------------------------
+
+/// Pre-computed metadata from the static guidance block.  Allocated once via
+/// `LazyLock` so marker detection and `use_quick_terminal` are never re-derived.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct TabAiCachedArtifactAuthoringGuidance {
+    guidance: &'static str,
+    has_script_verification_gate_header: bool,
+    markers: TabAiVerificationGuidanceMarkers,
+    use_quick_terminal: bool,
+}
+
+/// Fully resolved appendix for a single prompt invocation.  Consumers read
+/// fields directly instead of re-parsing the guidance string.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct TabAiResolvedArtifactAuthoringAppendix {
+    guidance: &'static str,
+    forced_by_script_list_submit: bool,
+    has_script_verification_gate_header: bool,
+    markers: TabAiVerificationGuidanceMarkers,
+    use_quick_terminal: bool,
+}
+
+static TAB_AI_CACHED_ARTIFACT_AUTHORING_GUIDANCE: LazyLock<TabAiCachedArtifactAuthoringGuidance> =
+    LazyLock::new(|| {
+        let guidance = build_tab_ai_artifact_authoring_guidance_block();
+        let markers = TabAiVerificationGuidanceMarkers::from_guidance(guidance);
+        TabAiCachedArtifactAuthoringGuidance {
+            guidance,
+            has_script_verification_gate_header: guidance
+                .contains(SCRIPT_VERIFICATION_GATE_HEADER),
+            use_quick_terminal: markers.includes_script_authoring_skill
+                && markers.includes_bun_build_verification
+                && markers.includes_bun_execute_verification,
+            markers,
+        }
+    });
+
+fn resolve_tab_ai_artifact_authoring_appendix_for_prompt(
     prompt_type: &str,
     effective_intent: Option<&str>,
     mode: TabAiHarnessSubmissionMode,
-) -> Option<(&'static str, bool)> {
+) -> Option<TabAiResolvedArtifactAuthoringAppendix> {
     let effective_intent = effective_intent
         .map(str::trim)
         .filter(|value| !value.is_empty());
@@ -865,15 +897,38 @@ pub(crate) fn build_tab_ai_artifact_authoring_appendix_for_prompt(
     let forced_by_script_list_submit =
         should_force_artifact_guidance_for_script_list_submit(prompt_type, effective_intent, mode);
 
-    if forced_by_script_list_submit || should_include_artifact_authoring_guidance(effective_intent)
+    if !(forced_by_script_list_submit
+        || should_include_artifact_authoring_guidance(effective_intent))
     {
-        Some((
-            build_tab_ai_artifact_authoring_guidance_block(),
-            forced_by_script_list_submit,
-        ))
-    } else {
-        None
+        return None;
     }
+
+    let cached = &*TAB_AI_CACHED_ARTIFACT_AUTHORING_GUIDANCE;
+    Some(TabAiResolvedArtifactAuthoringAppendix {
+        guidance: cached.guidance,
+        forced_by_script_list_submit,
+        has_script_verification_gate_header: cached.has_script_verification_gate_header,
+        markers: cached.markers,
+        use_quick_terminal: cached.use_quick_terminal,
+    })
+}
+
+/// Build the artifact-authoring guidance appendix for a Tab AI submission.
+///
+/// Returns `Some((guidance_block, forced_by_script_list_submit))` when guidance
+/// should be appended — either because the intent heuristic matched or because
+/// the deterministic ScriptList + Submit + non-empty-intent path forced it.
+///
+/// This is the single-sourced entry point consumed by both the PTY submission
+/// builder and the ACP initial-input path.  Delegates to the cached structured
+/// resolver internally.
+pub(crate) fn build_tab_ai_artifact_authoring_appendix_for_prompt(
+    prompt_type: &str,
+    effective_intent: Option<&str>,
+    mode: TabAiHarnessSubmissionMode,
+) -> Option<(&'static str, bool)> {
+    resolve_tab_ai_artifact_authoring_appendix_for_prompt(prompt_type, effective_intent, mode)
+        .map(|appendix| (appendix.guidance, appendix.forced_by_script_list_submit))
 }
 
 // ---------------------------------------------------------------------------
@@ -885,7 +940,7 @@ pub(crate) fn build_tab_ai_artifact_authoring_appendix_for_prompt(
 /// All marker flags are computed from the shared appendix builder output so
 /// detection cannot drift between surfaces.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct TabAiSurfacePreference {
+pub struct TabAiSurfacePreference {
     pub use_quick_terminal: bool,
     pub includes_script_authoring_skill: bool,
     pub includes_bun_build_verification: bool,
@@ -897,13 +952,13 @@ pub(crate) struct TabAiSurfacePreference {
 /// Returns `use_quick_terminal = true` only when the guidance includes the
 /// script-authoring marker AND both Bun verification markers.  When no
 /// appendix is produced, all flags are `false`.
-pub(crate) fn tab_ai_surface_preference_for_prompt(
+pub fn tab_ai_surface_preference_for_prompt(
     prompt_type: &str,
     effective_intent: Option<&str>,
     mode: TabAiHarnessSubmissionMode,
 ) -> TabAiSurfacePreference {
-    let Some((guidance, _forced_by_script_list_submit)) =
-        build_tab_ai_artifact_authoring_appendix_for_prompt(prompt_type, effective_intent, mode)
+    let Some(appendix) =
+        resolve_tab_ai_artifact_authoring_appendix_for_prompt(prompt_type, effective_intent, mode)
     else {
         return TabAiSurfacePreference {
             use_quick_terminal: false,
@@ -913,14 +968,11 @@ pub(crate) fn tab_ai_surface_preference_for_prompt(
         };
     };
 
-    let markers = TabAiVerificationGuidanceMarkers::from_guidance(guidance);
     TabAiSurfacePreference {
-        use_quick_terminal: markers.includes_script_authoring_skill
-            && markers.includes_bun_build_verification
-            && markers.includes_bun_execute_verification,
-        includes_script_authoring_skill: markers.includes_script_authoring_skill,
-        includes_bun_build_verification: markers.includes_bun_build_verification,
-        includes_bun_execute_verification: markers.includes_bun_execute_verification,
+        use_quick_terminal: appendix.use_quick_terminal,
+        includes_script_authoring_skill: appendix.markers.includes_script_authoring_skill,
+        includes_bun_build_verification: appendix.markers.includes_bun_build_verification,
+        includes_bun_execute_verification: appendix.markers.includes_bun_execute_verification,
     }
 }
 
@@ -962,21 +1014,18 @@ pub(crate) fn build_tab_ai_acp_initial_input_for_prompt(
         };
     }
 
-    if let Some((guidance, forced_by_script_list_submit)) =
-        build_tab_ai_artifact_authoring_appendix_for_prompt(
-            prompt_type,
-            Some(intent),
-            TabAiHarnessSubmissionMode::Submit,
-        )
-    {
-        let markers = TabAiVerificationGuidanceMarkers::from_guidance(guidance);
+    if let Some(appendix) = resolve_tab_ai_artifact_authoring_appendix_for_prompt(
+        prompt_type,
+        Some(intent),
+        TabAiHarnessSubmissionMode::Submit,
+    ) {
         TabAiAcpInitialInput {
-            text: format!("{guidance}\n\nUser intent:\n{intent}\n"),
+            text: format!("{}\n\nUser intent:\n{intent}\n", appendix.guidance),
             guidance_appended: true,
-            forced_by_script_list_submit,
-            includes_script_authoring_skill: markers.includes_script_authoring_skill,
-            includes_bun_build_verification: markers.includes_bun_build_verification,
-            includes_bun_execute_verification: markers.includes_bun_execute_verification,
+            forced_by_script_list_submit: appendix.forced_by_script_list_submit,
+            includes_script_authoring_skill: appendix.markers.includes_script_authoring_skill,
+            includes_bun_build_verification: appendix.markers.includes_bun_build_verification,
+            includes_bun_execute_verification: appendix.markers.includes_bun_execute_verification,
         }
     } else {
         TabAiAcpInitialInput {
@@ -1068,24 +1117,22 @@ pub fn build_tab_ai_harness_submission(
         .map(str::trim)
         .filter(|value| !value.is_empty());
 
-    if let Some((guidance, forced_by_script_list_submit)) =
-        build_tab_ai_artifact_authoring_appendix_for_prompt(
-            &context.ui.prompt_type,
-            effective_intent,
-            mode,
-        )
-    {
-        let markers = TabAiVerificationGuidanceMarkers::from_guidance(guidance);
+    if let Some(appendix) = resolve_tab_ai_artifact_authoring_appendix_for_prompt(
+        &context.ui.prompt_type,
+        effective_intent,
+        mode,
+    ) {
         tracing::info!(
             event = "tab_ai_artifact_authoring_guidance_appended",
-            forced_by_script_list_submit,
-            script_verification_gate_present = guidance.contains(SCRIPT_VERIFICATION_GATE_HEADER),
-            includes_script_authoring_skill = markers.includes_script_authoring_skill,
-            includes_bun_build_verification = markers.includes_bun_build_verification,
-            includes_bun_execute_verification = markers.includes_bun_execute_verification,
+            forced_by_script_list_submit = appendix.forced_by_script_list_submit,
+            script_verification_gate_present = appendix.has_script_verification_gate_header,
+            includes_script_authoring_skill = appendix.markers.includes_script_authoring_skill,
+            includes_bun_build_verification = appendix.markers.includes_bun_build_verification,
+            includes_bun_execute_verification = appendix.markers.includes_bun_execute_verification,
+            use_quick_terminal = appendix.use_quick_terminal,
         );
         output.push_str("\n\n");
-        output.push_str(guidance);
+        output.push_str(appendix.guidance);
     }
 
     match effective_intent {

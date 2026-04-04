@@ -612,6 +612,22 @@ pub fn format_shortcut_display(shortcut: &str) -> String {
     );
     display
 }
+/// Resolve shortcut tokens for render, preferring pre-cached tokens.
+/// Falls back to on-demand parsing when tokens are missing. This helper runs
+/// in the render path, so it must stay side-effect free.
+fn list_item_shortcut_tokens_for_render<'a>(
+    shortcut: Option<&'a str>,
+    shortcut_tokens: Option<&'a [String]>,
+) -> Option<std::borrow::Cow<'a, [String]>> {
+    if let Some(tokens) = shortcut_tokens {
+        return Some(std::borrow::Cow::Borrowed(tokens));
+    }
+    let shortcut = shortcut?;
+    Some(std::borrow::Cow::Owned(
+        crate::components::hint_strip::shortcut_tokens_from_hint(shortcut),
+    ))
+}
+
 /// Search rows keep shortcuts only on the actively focused row to avoid right-side noise.
 pub(crate) fn should_show_search_shortcut(
     is_filtering: bool,
@@ -679,6 +695,13 @@ pub struct ListItem {
     /// Tool/language badge for scriptlets (e.g., "ts", "bash", "paste")
     /// Shown as a subtle monospace badge in the accessories area
     tool_badge: Option<String>,
+    /// Generic leading accessory element rendered between the icon and the text content.
+    /// Use for domain-specific visuals (e.g., color swatch strips) without coupling
+    /// the shared row primitive to any particular consumer.
+    leading_accessory: Option<AnyElement>,
+    /// Generic trailing accessory element appended after the standard accessories area.
+    /// Use for domain-specific badges or indicators (e.g., "Saved" status badges).
+    trailing_accessory: Option<AnyElement>,
 }
 /// Type tag displayed as subtle colored text on list items during search
 #[derive(Clone, Debug)]
@@ -732,6 +755,8 @@ impl ListItem {
             type_tag: None,
             source_hint: None,
             tool_badge: None,
+            leading_accessory: None,
+            trailing_accessory: None,
         }
     }
 
@@ -921,6 +946,36 @@ impl ListItem {
     /// Set the tool/language badge from an option
     pub fn tool_badge_opt(mut self, badge: Option<String>) -> Self {
         self.tool_badge = badge;
+        self
+    }
+
+    /// Set a leading accessory element rendered between the icon and the text content.
+    ///
+    /// This is a generic slot for domain-specific visuals (e.g., color swatch strips
+    /// in a theme chooser). The element is rendered as-is with flex_shrink_0.
+    pub fn leading_accessory(mut self, element: impl IntoElement) -> Self {
+        self.leading_accessory = Some(element.into_any_element());
+        self
+    }
+
+    /// Set an optional leading accessory element.
+    pub fn leading_accessory_opt(mut self, element: Option<AnyElement>) -> Self {
+        self.leading_accessory = element;
+        self
+    }
+
+    /// Set a trailing accessory element appended after the standard accessories area.
+    ///
+    /// This is a generic slot for domain-specific badges or indicators (e.g., "Saved"
+    /// status badges in a theme chooser). The element is rendered as-is with flex_shrink_0.
+    pub fn trailing_accessory(mut self, element: impl IntoElement) -> Self {
+        self.trailing_accessory = Some(element.into_any_element());
+        self
+    }
+
+    /// Set an optional trailing accessory element.
+    pub fn trailing_accessory_opt(mut self, element: Option<AnyElement>) -> Self {
+        self.trailing_accessory = element;
         self
     }
 }
@@ -1208,7 +1263,12 @@ impl RenderOnce for ListItem {
         }
 
         // Shortcut — compact inline glyphs via shared renderer (tokens cached at construction)
-        let shortcut_element: AnyElement = if self.shortcut.is_some() {
+        let resolved_shortcut_tokens = list_item_shortcut_tokens_for_render(
+            self.shortcut.as_deref(),
+            self.shortcut_tokens.as_deref(),
+        )
+        .map(|cow| cow.into_owned());
+        let shortcut_element: AnyElement = if let Some(shortcut_tokens) = resolved_shortcut_tokens.as_ref() {
             let show_shortcut =
                 should_show_search_shortcut(is_filtering, self.selected, hover_visible);
             if show_shortcut {
@@ -1222,18 +1282,14 @@ impl RenderOnce for ListItem {
                     rgba((colors.text_muted << 8) | ALPHA_READABLE)
                 };
                 let chrome_color = rgba((colors.text_dimmed << 8) | 0xFF);
-                if let Some(shortcut_tokens) = self.shortcut_tokens.as_ref() {
-                    crate::components::hint_strip::render_inline_shortcut_keys(
-                        shortcut_tokens.iter().map(String::as_str),
-                        crate::components::hint_strip::whisper_inline_shortcut_colors(
-                            glyph_color.into(),
-                            chrome_color.into(),
-                            !is_filtering,
-                        ),
-                    )
-                } else {
-                    div().into_any_element()
-                }
+                crate::components::hint_strip::render_inline_shortcut_keys(
+                    shortcut_tokens.iter().map(String::as_str),
+                    crate::components::hint_strip::whisper_inline_shortcut_colors(
+                        glyph_color.into(),
+                        chrome_color.into(),
+                        !is_filtering,
+                    ),
+                )
             } else {
                 div().into_any_element()
             }
@@ -1275,7 +1331,20 @@ impl RenderOnce for ListItem {
             .flex_row()
             .items_center()
             .gap(px(ITEM_ICON_TEXT_GAP))
-            .child(icon_element)
+            .child(icon_element);
+
+        // Leading accessory slot (e.g., color swatch strip) — between icon and text
+        let has_leading_accessory = self.leading_accessory.is_some();
+        let has_trailing_accessory = self.trailing_accessory.is_some();
+        if let Some(leading) = self.leading_accessory {
+            inner_content = inner_content.child(
+                div().flex_shrink_0().child(leading),
+            );
+        }
+
+        let trailing_accessory = self.trailing_accessory;
+
+        inner_content = inner_content
             .child(item_content)
             .child({
                 // Right-side accessories: [source hint] [type tag] [shortcut badge]
@@ -1334,6 +1403,23 @@ impl RenderOnce for ListItem {
                 accessories = accessories.child(shortcut_element);
                 accessories
             });
+
+        // Trailing accessory slot (e.g., "Saved" status badge) — after standard accessories
+        if let Some(trailing) = trailing_accessory {
+            inner_content = inner_content.child(
+                div().flex_shrink_0().ml(px(ITEM_ACCESSORIES_GAP)).child(trailing),
+            );
+        }
+
+        // Emit chooser-row contract trace when accessory slots are used
+        if has_leading_accessory || has_trailing_accessory {
+            tracing::trace!(
+                leading = has_leading_accessory,
+                trailing = has_trailing_accessory,
+                index = item_index,
+                "list_item_accessory_contract"
+            );
+        }
 
         if !self.selected {
             inner_content = inner_content.hover(move |s| s.bg(hover_bg));

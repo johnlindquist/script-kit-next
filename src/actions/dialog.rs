@@ -104,6 +104,20 @@ pub(crate) fn action_subtitle_for_display(_action: &Action) -> Option<&str> {
 ///
 /// We key off stable action IDs first, then fall back to title prefixes for
 /// dynamic or SDK-defined destructive actions.
+///
+/// Resolve shortcut tokens for render, preferring the pre-cached
+/// `shortcut_tokens`. Falls back to on-demand parsing when tokens are missing.
+/// This helper runs in the render path, so it must stay side-effect free.
+fn action_shortcut_tokens_for_render(action: &Action) -> Option<std::borrow::Cow<'_, [String]>> {
+    if let Some(tokens) = action.shortcut_tokens.as_deref() {
+        return Some(std::borrow::Cow::Borrowed(tokens));
+    }
+    let shortcut = action.shortcut.as_deref()?;
+    Some(std::borrow::Cow::Owned(
+        crate::components::hint_strip::shortcut_tokens_from_hint(shortcut),
+    ))
+}
+
 pub(crate) fn is_destructive_action(action: &Action) -> bool {
     let id = action.id.as_str();
 
@@ -2203,22 +2217,7 @@ impl Render for ActionsDialog {
 
                                         // Right side: keyboard shortcuts as compact inline glyphs
                                         if style.shortcut_visible {
-                                            if let Some(shortcut_tokens) = action.shortcut_tokens.as_ref() {
-                                                content = content.child(
-                                                    crate::components::hint_strip::render_inline_shortcut_keys(
-                                                        shortcut_tokens.iter().map(String::as_str),
-                                                        crate::components::hint_strip::whisper_inline_shortcut_colors(
-                                                            shortcut_glyph_color.into(),
-                                                            shortcut_chrome_color.into(),
-                                                            true,
-                                                        ),
-                                                    ),
-                                                );
-                                            } else if let Some(ref shortcut) = action.shortcut {
-                                                let shortcut_tokens =
-                                                    crate::components::hint_strip::shortcut_tokens_from_hint(
-                                                        shortcut,
-                                                    );
+                                            if let Some(shortcut_tokens) = action_shortcut_tokens_for_render(action) {
                                                 content = content.child(
                                                     crate::components::hint_strip::render_inline_shortcut_keys(
                                                         shortcut_tokens.iter().map(String::as_str),
