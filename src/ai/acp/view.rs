@@ -1607,7 +1607,7 @@ impl AcpChatView {
             .filter_map(part_to_inline_token)
             .collect();
 
-        let ranges: Vec<TextHighlightRange> = parse_inline_context_mentions(text)
+        parse_inline_context_mentions(text)
             .into_iter()
             .filter(|mention| attached_tokens.contains(&mention.token))
             .map(|mention| TextHighlightRange {
@@ -1615,16 +1615,7 @@ impl AcpChatView {
                 end: mention.range.end,
                 color: accent_color,
             })
-            .collect();
-
-        tracing::info!(
-            target: "script_kit::tab_ai",
-            event = "acp_inline_mentions_highlighted",
-            highlight_count = ranges.len(),
-            attached_token_count = attached_tokens.len(),
-        );
-
-        ranges
+            .collect()
     }
 
     /// Synchronise `pending_context_parts` from the live inline `@mention`
@@ -1750,16 +1741,6 @@ impl AcpChatView {
         let anchor_left =
             Self::ACP_INPUT_PADDING_X + Self::measure_acp_input_prefix_width(window, prefix);
         let clamped_left = Self::clamp_mention_picker_left(anchor_left, picker_width, window_width);
-
-        tracing::info!(
-            target: "script_kit::tab_ai",
-            event = "acp_mention_anchor_computed",
-            trigger_char = session.trigger_range.start,
-            anchor_left,
-            clamped_left,
-            picker_width,
-        );
-
         (clamped_left, picker_width)
     }
 
@@ -1864,13 +1845,6 @@ impl AcpChatView {
                 "@file:/tmp/demo.txt",
             ]
         };
-
-        tracing::info!(
-            target: "script_kit::tab_ai",
-            event = "acp_mention_empty_state_shown",
-            trigger = if is_slash { "slash" } else { "mention" },
-            hint_count = hints.len(),
-        );
 
         let mut chips: Vec<gpui::AnyElement> = Vec::new();
         for hint in hints {
