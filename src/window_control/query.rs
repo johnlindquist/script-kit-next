@@ -207,7 +207,8 @@ pub fn get_menu_bar_owner_pid() -> Result<i32> {
             bail!("Invalid process identifier for menu bar owner");
         }
 
-        // Log for debugging
+        // Log for debugging only: this can be polled at high frequency by the
+        // snap monitor and should not appear in normal AI log mode.
         let name: *mut Object = msg_send![menu_owner, localizedName];
         let name_str = if !name.is_null() {
             let utf8: *const i8 = msg_send![name, UTF8String];
@@ -220,7 +221,7 @@ pub fn get_menu_bar_owner_pid() -> Result<i32> {
             "unknown"
         };
 
-        info!(pid, app_name = name_str, "Got menu bar owner");
+        debug!(pid, app_name = name_str, "Got menu bar owner");
         Ok(pid)
     }
 }
@@ -322,7 +323,7 @@ pub fn get_frontmost_window_of_previous_app() -> Result<Option<WindowInfo>> {
                 Some(window_ref as usize),
             );
 
-            info!(
+            debug!(
                 window_id = window_info.id,
                 app = %app_name,
                 title = %title,
