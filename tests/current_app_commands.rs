@@ -27,8 +27,8 @@ fn do_in_current_app_builtin_is_registered() {
     let entries = builtins::get_builtin_entries(&BuiltInConfig::default());
     let entry = entries
         .iter()
-        .find(|e| e.id == "builtin-do-in-current-app")
-        .expect("builtin-do-in-current-app must be in the registry");
+        .find(|e| e.id == "builtin/do-in-current-app")
+        .expect("builtin/do-in-current-app must be in the registry");
 
     assert_eq!(
         entry.feature,
@@ -37,15 +37,15 @@ fn do_in_current_app_builtin_is_registered() {
 
     let do_pos = entries
         .iter()
-        .position(|e| e.id == "builtin-do-in-current-app")
+        .position(|e| e.id == "builtin/do-in-current-app")
         .unwrap();
     let turn_pos = entries
         .iter()
-        .position(|e| e.id == "builtin-turn-this-into-a-command")
+        .position(|e| e.id == "builtin/turn-this-into-a-command")
         .unwrap();
     assert!(
         do_pos < turn_pos,
-        "builtin-do-in-current-app should appear before builtin-turn-this-into-a-command"
+        "builtin/do-in-current-app should appear before builtin-turn-this-into-a-command"
     );
 }
 
@@ -55,8 +55,8 @@ fn current_app_commands_builtin_is_no_longer_registered() {
     assert!(
         entries
             .iter()
-            .all(|e| e.id != "builtin-current-app-commands"),
-        "builtin-current-app-commands should no longer be in the registry"
+            .all(|e| e.id != "builtin/current-app-commands"),
+        "builtin/current-app-commands should no longer be in the registry"
     );
 }
 
@@ -65,8 +65,8 @@ fn trace_current_app_intent_builtin_is_registered() {
     let entries = builtins::get_builtin_entries(&BuiltInConfig::default());
     let entry = entries
         .iter()
-        .find(|e| e.id == "builtin-trace-current-app-intent")
-        .expect("builtin-trace-current-app-intent must be in the registry");
+        .find(|e| e.id == "builtin/trace-current-app-intent")
+        .expect("builtin/trace-current-app-intent must be in the registry");
 
     assert_eq!(
         entry.feature,
@@ -324,8 +324,8 @@ fn generate_script_from_current_app_builtin_is_registered() {
     let entries = builtins::get_builtin_entries(&BuiltInConfig::default());
     let entry = entries
         .iter()
-        .find(|e| e.id == "builtin-generate-script-from-current-app")
-        .expect("builtin-generate-script-from-current-app must be in the registry");
+        .find(|e| e.id == "builtin/generate-script-from-current-app")
+        .expect("builtin/generate-script-from-current-app must be in the registry");
 
     assert_eq!(
         entry.feature,
@@ -622,8 +622,8 @@ fn turn_this_into_a_command_builtin_is_registered() {
     let entries = builtins::get_builtin_entries(&BuiltInConfig::default());
     let entry = entries
         .iter()
-        .find(|e| e.id == "builtin-turn-this-into-a-command")
-        .expect("builtin-turn-this-into-a-command must be in the registry");
+        .find(|e| e.id == "builtin/turn-this-into-a-command")
+        .expect("builtin/turn-this-into-a-command must be in the registry");
 
     assert_eq!(
         entry.feature,
@@ -632,11 +632,11 @@ fn turn_this_into_a_command_builtin_is_registered() {
 
     let do_pos = entries
         .iter()
-        .position(|e| e.id == "builtin-do-in-current-app")
+        .position(|e| e.id == "builtin/do-in-current-app")
         .unwrap();
     let turn_pos = entries
         .iter()
-        .position(|e| e.id == "builtin-turn-this-into-a-command")
+        .position(|e| e.id == "builtin/turn-this-into-a-command")
         .unwrap();
     assert!(
         do_pos < turn_pos,
@@ -1143,8 +1143,8 @@ fn rank_of(entries: &[builtins::BuiltInEntry], query: &str, target_id: &str) -> 
 fn do_in_current_app_outranks_generate_script_from_current_app_for_intent_queries() {
     let entries = builtins::get_builtin_entries(&BuiltInConfig::default());
 
-    let do_in_id = "builtin-do-in-current-app";
-    let gen_app_id = "builtin-generate-script-from-current-app";
+    let do_in_id = "builtin/do-in-current-app";
+    let gen_app_id = "builtin/generate-script-from-current-app";
 
     // For intent-oriented queries, DoInCurrentApp (recipe-backed) must
     // outrank GenerateScriptFromCurrentApp (weaker raw-prompt path).
@@ -1199,7 +1199,7 @@ fn do_in_current_app_matches_all_generation_keywords() {
     ];
 
     for keyword in &generation_keywords {
-        let pos = rank_of(&entries, keyword, "builtin-do-in-current-app");
+        let pos = rank_of(&entries, keyword, "builtin/do-in-current-app");
         assert!(
             pos.is_some(),
             "DoInCurrentApp must match keyword '{keyword}'"
@@ -1214,7 +1214,7 @@ fn do_in_current_app_matches_context_and_selection_keywords() {
     // These keywords previously only matched GenerateScriptFromCurrentApp.
     // After promotion, DoInCurrentApp must also match them.
     for query in &["context", "browser", "selection"] {
-        let pos = rank_of(&entries, query, "builtin-do-in-current-app");
+        let pos = rank_of(&entries, query, "builtin/do-in-current-app");
         assert!(pos.is_some(), "DoInCurrentApp must match keyword '{query}'");
     }
 }
@@ -1227,7 +1227,7 @@ fn unrelated_builtins_ranking_stable_after_promotion() {
     let matches = script_kit_gpui::scripts::fuzzy_search_builtins(&entries, "clipboard");
     assert!(!matches.is_empty(), "clipboard query must return results");
     assert_eq!(
-        matches[0].entry.id, "builtin-clipboard-history",
+        matches[0].entry.id, "builtin/clipboard-history",
         "Clipboard History must still be the top result for 'clipboard'"
     );
 
@@ -1235,7 +1235,7 @@ fn unrelated_builtins_ranking_stable_after_promotion() {
     let matches = script_kit_gpui::scripts::fuzzy_search_builtins(&entries, "scratch");
     assert!(!matches.is_empty(), "scratch query must return results");
     assert_eq!(
-        matches[0].entry.id, "builtin-scratch-pad",
+        matches[0].entry.id, "builtin/scratch-pad",
         "Scratch Pad must still be the top result for 'scratch'"
     );
 }

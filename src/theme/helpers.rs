@@ -42,6 +42,26 @@ pub fn accent_color_name(color: u32) -> &'static str {
         .unwrap_or("Custom")
 }
 
+/// WCAG 2.1 contrast ratio between two sRGB hex colors.
+pub fn contrast_ratio(foreground: u32, background: u32) -> f32 {
+    let l1 = relative_luminance_srgb(foreground);
+    let l2 = relative_luminance_srgb(background);
+    let lighter = l1.max(l2);
+    let darker = l1.min(l2);
+    (lighter + 0.05) / (darker + 0.05)
+}
+
+/// Choose the more readable text color (dark or light) for a given background.
+pub fn best_readable_text_hex(background: u32) -> u32 {
+    let ink = 0x111111;
+    let paper = 0xFFFFFF;
+    if contrast_ratio(paper, background) >= contrast_ratio(ink, background) {
+        paper
+    } else {
+        ink
+    }
+}
+
 impl ColorScheme {
     /// Extract only the colors needed for list item rendering
     ///

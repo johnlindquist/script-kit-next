@@ -28,7 +28,7 @@ mod types;
 pub(crate) mod validation;
 
 // Re-export shared chrome contract for app surfaces
-pub(crate) use chrome::AppChromeColors;
+pub(crate) use chrome::{AppChromeColors, SemanticChipColors};
 
 // Re-export types used externally
 pub(crate) use types::relative_luminance_srgb;
@@ -36,8 +36,8 @@ pub use types::{ColorScheme, FontConfig, Theme, VibrancyMaterial};
 
 // Re-export helper types for lightweight color extraction
 pub use helpers::{
-    accent_color_name, hover_overlay_bg, modal_overlay_bg, ListItemColors, PromptColors,
-    ACCENT_PALETTE,
+    accent_color_name, best_readable_text_hex, contrast_ratio, hover_overlay_bg, modal_overlay_bg,
+    ListItemColors, PromptColors, ACCENT_PALETTE,
 };
 
 // Re-export color resolver for unified color access
@@ -60,6 +60,9 @@ const _: fn(u32) -> f32 = relative_luminance_srgb;
 const _: fn() -> &'static [presets::ThemePreset] = presets::presets_cached;
 const _: fn() -> &'static [presets::PresetPreviewColors] = presets::preset_preview_colors_cached;
 const _: usize = core::mem::size_of::<ListItemColors>();
+const _: fn(u32, u32) -> f32 = contrast_ratio;
+const _: fn(u32) -> u32 = best_readable_text_hex;
+const _: usize = core::mem::size_of::<SemanticChipColors>();
 
 #[cfg(test)]
 #[path = "lightweight_colors_test.rs"]

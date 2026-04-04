@@ -1306,8 +1306,8 @@ fn dictation_hotkey_never_shows_main_window() {
     let execution_src = std::fs::read_to_string("src/app_impl/execution_scripts.rs")
         .expect("read execution_scripts.rs");
     assert!(
-        execution_src.contains("\"builtin-dictation\""),
-        "builtin-dictation must be listed in NO_MAIN_WINDOW_BUILTINS"
+        execution_src.contains("\"builtin/dictation\""),
+        "builtin/dictation must be listed in NO_MAIN_WINDOW_BUILTINS"
     );
 
     for (label, path) in [
@@ -1402,7 +1402,7 @@ fn dictation_focus_settle_matches_reference_contract() {
 #[test]
 fn dictation_hotkey_routes_through_builtin_toggle_flow() {
     // Verify both entry-point files have a dictation hotkey listener that
-    // routes through execute_by_command_id_or_path("builtin-dictation"),
+    // routes through execute_by_command_id_or_path("builtin/dictation"),
     // ensuring one toggle path instead of a duplicate dictation implementation.
     for (label, path) in [
         (
@@ -1418,7 +1418,7 @@ fn dictation_hotkey_routes_through_builtin_toggle_flow() {
             "{label} must consume the dictation hotkey channel"
         );
         assert!(
-            src.contains("builtin-dictation"),
+            src.contains("builtin/dictation"),
             "{label} must route dictation hotkey through builtin-dictation command"
         );
         // Must NOT contain a second toggle_dictation call — only the builtin path owns that.

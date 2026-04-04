@@ -127,6 +127,268 @@ impl ScriptListApp {
     }
 
 
+    /// Three-item footer hint strip for the theme chooser
+    fn theme_chooser_hint_items() -> Vec<gpui::SharedString> {
+        vec![
+            gpui::SharedString::from("↵ Apply"),
+            gpui::SharedString::from("Esc Back"),
+            gpui::SharedString::from("⌘R Reset"),
+        ]
+    }
+
+    /// Apply a surface opacity preset to all shell surfaces together,
+    /// so the preview and the real app behave identically.
+    fn apply_surface_opacity_preset(
+        theme: &crate::theme::Theme,
+        value: f32,
+    ) -> crate::theme::Theme {
+        let mut next = theme.clone();
+        let mut opacity = next.get_opacity();
+        opacity.main = value;
+        opacity.title_bar = value;
+        opacity.search_box = (value + 0.06).min(1.0);
+        opacity.log_panel = value;
+        opacity.dialog = value;
+        opacity.input = (value + 0.04).min(1.0);
+        opacity.panel = value;
+        opacity.input_inactive = (value + 0.02).min(1.0);
+        opacity.input_active = (value + 0.08).min(1.0);
+        opacity.vibrancy_background = Some(value);
+        tracing::debug!(
+            preset = value,
+            main = opacity.main,
+            title_bar = opacity.title_bar,
+            search_box = opacity.search_box,
+            panel = opacity.panel,
+            input = opacity.input,
+            "theme_chooser_surface_opacity_applied"
+        );
+        next.opacity = Some(opacity);
+        next
+    }
+
+    /// Render a contrast-safe semantic status chip
+    fn render_theme_chooser_semantic_chip(
+        label: &'static str,
+        colors: theme::SemanticChipColors,
+    ) -> gpui::AnyElement {
+        div()
+            .px(px(8.0))
+            .py(px(3.0))
+            .rounded(px(5.0))
+            .border_1()
+            .border_color(rgba(colors.border_rgba))
+            .bg(rgba(colors.bg_rgba))
+            .text_xs()
+            .font_weight(gpui::FontWeight::MEDIUM)
+            .text_color(rgb(colors.text_hex))
+            .child(label)
+            .into_any_element()
+    }
+
+    /// Render a keycap badge for the live preview
+    fn render_theme_chooser_preview_keycap(
+        label: &'static str,
+        chrome: &theme::AppChromeColors,
+    ) -> gpui::AnyElement {
+        div()
+            .px(px(6.0))
+            .py(px(2.0))
+            .rounded(px(5.0))
+            .bg(rgba(chrome.badge_bg_rgba))
+            .border_1()
+            .border_color(rgba(chrome.badge_border_rgba))
+            .text_xs()
+            .font_weight(gpui::FontWeight::MEDIUM)
+            .text_color(rgb(chrome.badge_text_hex))
+            .child(label)
+            .into_any_element()
+    }
+
+    /// Render a launcher-style live preview that matches the main menu shell
+    fn render_theme_chooser_live_preview(
+        &self,
+        preset_name: &str,
+        accent_name: &str,
+        chrome: &theme::AppChromeColors,
+    ) -> gpui::AnyElement {
+        let quiet_name_rgba =
+            rgba((chrome.text_primary_hex << 8) | crate::list_item::ALPHA_NAME_QUIET);
+        let selected_desc_rgba =
+            rgba((chrome.text_primary_hex << 8) | crate::list_item::ALPHA_DESC_SELECTED);
+        let hint_rgba = (chrome.text_dimmed_hex << 8) | 0xA6;
+
+        tracing::debug!(
+            preset_name,
+            accent_name,
+            accent_hex = chrome.accent_hex,
+            "theme_chooser_live_preview_built"
+        );
+
+        div()
+            .w_full()
+            .flex()
+            .flex_col()
+            .gap(px(10.0))
+            // Header: preset name + accent + keycaps
+            .child(
+                div()
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .justify_between()
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap(px(2.0))
+                            .child(
+                                div()
+                                    .text_sm()
+                                    .font_weight(gpui::FontWeight::SEMIBOLD)
+                                    .text_color(rgb(chrome.text_primary_hex))
+                                    .child(preset_name.to_string()),
+                            )
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(rgb(chrome.text_muted_hex))
+                                    .child(format!(
+                                        "{accent_name} accent · live launcher preview"
+                                    )),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .flex_row()
+                            .gap(px(6.0))
+                            .child(Self::render_theme_chooser_preview_keycap("⌘R", chrome))
+                            .child(Self::render_theme_chooser_preview_keycap(
+                                "⌘[ ]", chrome,
+                            )),
+                    ),
+            )
+            // Mini launcher shell
+            .child(
+                div()
+                    .w_full()
+                    .rounded(px(8.0))
+                    .overflow_hidden()
+                    // Search row
+                    .child(
+                        div()
+                            .px(px(12.0))
+                            .py(px(10.0))
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .gap(px(8.0))
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .text_xs()
+                                    .text_color(rgb(chrome.text_muted_hex))
+                                    .child("Search scripts..."),
+                            )
+                            .child(Self::render_theme_chooser_preview_keycap("Tab", chrome)),
+                    )
+                    // Divider
+                    .child(div().mx(px(12.0)).h(px(1.0)).bg(rgba(chrome.divider_rgba)))
+                    // List rows
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            // Selected item with gold bar + description
+                            .child(
+                                div()
+                                    .px(px(12.0))
+                                    .py(px(10.0))
+                                    .bg(rgba(chrome.selection_rgba))
+                                    .border_l(px(3.0))
+                                    .border_color(rgb(chrome.accent_hex))
+                                    .flex()
+                                    .flex_col()
+                                    .gap(px(2.0))
+                                    .child(
+                                        div()
+                                            .text_sm()
+                                            .font_weight(gpui::FontWeight::SEMIBOLD)
+                                            .text_color(rgb(chrome.text_primary_hex))
+                                            .child("Selected Item"),
+                                    )
+                                    .child(
+                                        div()
+                                            .text_xs()
+                                            .text_color(selected_desc_rgba)
+                                            .child(
+                                                "Description appears only on the focused row",
+                                            ),
+                                    ),
+                            )
+                            // Regular item with right-aligned shortcut
+                            .child(
+                                div()
+                                    .px(px(12.0))
+                                    .py(px(10.0))
+                                    .flex()
+                                    .flex_row()
+                                    .items_center()
+                                    .justify_between()
+                                    .child(
+                                        div()
+                                            .text_sm()
+                                            .text_color(quiet_name_rgba)
+                                            .child("Regular Item"),
+                                    )
+                                    .child(
+                                        div()
+                                            .text_xs()
+                                            .text_color(rgb(chrome.text_dimmed_hex))
+                                            .child("⌘P"),
+                                    ),
+                            )
+                            // Another item with type tag
+                            .child(
+                                div()
+                                    .px(px(12.0))
+                                    .py(px(10.0))
+                                    .flex()
+                                    .flex_row()
+                                    .items_center()
+                                    .justify_between()
+                                    .child(
+                                        div()
+                                            .text_sm()
+                                            .text_color(quiet_name_rgba)
+                                            .child("Another Item"),
+                                    )
+                                    .child(
+                                        div()
+                                            .text_xs()
+                                            .text_color(rgb(chrome.text_dimmed_hex))
+                                            .child("ts"),
+                                    ),
+                            ),
+                    )
+                    // Footer divider + hints
+                    .child(div().mx(px(12.0)).h(px(1.0)).bg(rgba(chrome.divider_rgba)))
+                    .child(
+                        div()
+                            .px(px(12.0))
+                            .py(px(8.0))
+                            .flex()
+                            .justify_end()
+                            .child(crate::components::render_hint_icons(
+                                &["↵ Apply", "Esc Back", "⌘R Reset"],
+                                hint_rgba,
+                            )),
+                    ),
+            )
+            .into_any_element()
+    }
+
     fn theme_chooser_row_layout(spacing: &designs::DesignSpacing) -> ThemeChooserRowLayout {
         let vertical_padding = spacing.item_padding_y.clamp(
             THEME_ITEM_VERTICAL_PADDING_MIN,
@@ -183,10 +445,7 @@ impl ScriptListApp {
         let ui_error = self.theme.colors.ui.error;
         let ui_warning = self.theme.colors.ui.warning;
         let ui_info = self.theme.colors.ui.info;
-        let window_surface_bg = rgba(chrome.window_surface_rgba);
-        let search_surface_bg = rgba(chrome.input_surface_rgba);
         let divider_bg = rgba(chrome.divider_rgba);
-        let border_bg = rgba(chrome.border_rgba);
         let badge_border_bg = rgba(chrome.badge_border_rgba);
         let theme_row_selected_bg = rgba(chrome.selection_rgba);
         let theme_row_hover_bg = rgba(chrome.hover_rgba);
@@ -203,29 +462,6 @@ impl ScriptListApp {
         let filtered_indices = Self::theme_chooser_filtered_indices(filter);
         let filtered_count = filtered_indices.len();
         let filter_is_empty = filter.is_empty();
-
-        // Terminal colors for preview panel
-        let terminal = &self.theme.colors.terminal;
-        let term_colors = [
-            terminal.red,
-            terminal.green,
-            terminal.yellow,
-            terminal.blue,
-            terminal.magenta,
-            terminal.cyan,
-            terminal.white,
-            terminal.black,
-        ];
-        let term_bright = [
-            terminal.bright_red,
-            terminal.bright_green,
-            terminal.bright_yellow,
-            terminal.bright_blue,
-            terminal.bright_magenta,
-            terminal.bright_cyan,
-            terminal.bright_white,
-            terminal.bright_black,
-        ];
 
         let row_layout = Self::theme_chooser_row_layout(&design_spacing);
         let entity_handle = cx.entity().downgrade();
@@ -294,20 +530,13 @@ impl ScriptListApp {
                     cx.notify();
                     return;
                 }
-                // Cmd+- / Cmd+=: adjust opacity
+                // Cmd+- / Cmd+=: adjust surface opacity (all shell surfaces together)
                 if has_cmd && key == "-" {
-                    let current_main = this
-                        .theme
-                        .get_opacity()
-                        .vibrancy_background
-                        .unwrap_or(0.85);
+                    let current_main = this.theme.get_opacity().main;
                     let idx = Self::find_opacity_preset_index(current_main);
                     if idx > 0 {
                         let target = Self::OPACITY_PRESETS[idx - 1].0;
-                        let mut modified = (*this.theme).clone();
-                        if let Some(ref mut op) = modified.opacity {
-                            op.vibrancy_background = Some(target);
-                        }
+                        let modified = Self::apply_surface_opacity_preset(this.theme.as_ref(), target);
                         this.theme = std::sync::Arc::new(modified);
                         sync_theme_chooser_preview(cx, &this.theme, "theme_chooser_opacity_decrease");
                         cx.notify();
@@ -315,18 +544,11 @@ impl ScriptListApp {
                     return;
                 }
                 if has_cmd && (key == "=" || key == "+") {
-                    let current_main = this
-                        .theme
-                        .get_opacity()
-                        .vibrancy_background
-                        .unwrap_or(0.85);
+                    let current_main = this.theme.get_opacity().main;
                     let idx = Self::find_opacity_preset_index(current_main);
                     if idx < Self::OPACITY_PRESETS.len() - 1 {
                         let target = Self::OPACITY_PRESETS[idx + 1].0;
-                        let mut modified = (*this.theme).clone();
-                        if let Some(ref mut op) = modified.opacity {
-                            op.vibrancy_background = Some(target);
-                        }
+                        let modified = Self::apply_surface_opacity_preset(this.theme.as_ref(), target);
                         this.theme = std::sync::Arc::new(modified);
                         sync_theme_chooser_preview(cx, &this.theme, "theme_chooser_opacity_increase");
                         cx.notify();
@@ -702,7 +924,7 @@ impl ScriptListApp {
             });
 
         // ── Preview panel with customization controls ─────────────
-        let current_opacity_main = self.theme.get_opacity().vibrancy_background.unwrap_or(0.85);
+        let current_opacity_main = self.theme.get_opacity().main;
         let vibrancy_enabled = self
             .theme
             .vibrancy
@@ -803,10 +1025,7 @@ impl ScriptListApp {
                               cx: &mut gpui::App| {
                             if let Some(app) = click_entity.upgrade() {
                                 app.update(cx, |this, cx| {
-                                    let mut modified = (*this.theme).clone();
-                                    if let Some(ref mut op) = modified.opacity {
-                                        op.vibrancy_background = Some(value);
-                                    }
+                                    let modified = Self::apply_surface_opacity_preset(this.theme.as_ref(), value);
                                     this.theme = std::sync::Arc::new(modified);
                                     sync_theme_chooser_preview(cx, &this.theme, "theme_chooser_opacity_click");
                                     cx.notify();
@@ -1047,334 +1266,184 @@ impl ScriptListApp {
 
         let accent_name = Self::accent_color_name(accent_color);
 
-        let preview_panel =
-            div()
-                .w_1_2()
-                .h_full()
-                .border_l_1()
-                .border_color(divider_bg)
-                .px(px(design_spacing.padding_lg))
-                .py(px(design_spacing.padding_md))
-                .flex()
-                .flex_col()
-                .gap(px(10.0))
-                .overflow_y_hidden()
-                // ── Customize section ──────────────────────────────────
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(rgb(text_dimmed))
-                        .font_weight(gpui::FontWeight::SEMIBOLD)
-                        .child("CUSTOMIZE"),
-                )
-                // Accent color row (with name)
-                .child(
-                    div()
-                        .flex()
-                        .flex_col()
-                        .gap(px(4.0))
-                        .child(
+        // Resolve selected preset name for live preview header
+        let selected_preset_name = filtered_indices
+            .get(selected_index)
+            .and_then(|idx| presets.get(*idx))
+            .map(|preset| preset.name)
+            .unwrap_or("Theme Preview");
+
+        // Resolve contrast-safe semantic chip colors
+        let success_chip = chrome.semantic_chip_colors(self.theme.as_ref(), ui_success);
+        let error_chip = chrome.semantic_chip_colors(self.theme.as_ref(), ui_error);
+        let warning_chip = chrome.semantic_chip_colors(self.theme.as_ref(), ui_warning);
+        let info_chip = chrome.semantic_chip_colors(self.theme.as_ref(), ui_info);
+
+        let preview_panel = div()
+            .w_1_2()
+            .h_full()
+            .border_l_1()
+            .border_color(divider_bg)
+            .px(px(design_spacing.padding_lg))
+            .py(px(design_spacing.padding_md))
+            .flex()
+            .flex_col()
+            .gap(px(10.0))
+            .overflow_y_hidden()
+            // ── Customize header with reset button ────────────────
+            .child(
+                div()
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .justify_between()
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(rgb(text_dimmed))
+                            .font_weight(gpui::FontWeight::SEMIBOLD)
+                            .child("CUSTOMIZE"),
+                    )
+                    .child(reset_button),
+            )
+            // Accent color row (with name)
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap(px(4.0))
+                    .child(
+                        div()
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .gap(px(6.0))
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(rgb(text_muted))
+                                    .child("Accent Color"),
+                            )
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(rgb(accent_color))
+                                    .font_weight(gpui::FontWeight::SEMIBOLD)
+                                    .child(accent_name.to_string()),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .flex_row()
+                            .gap(px(4.0))
+                            .flex_wrap()
+                            .children(accent_swatches),
+                    ),
+            )
+            // Surface opacity row
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap(px(4.0))
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(rgb(text_muted))
+                            .child(format!(
+                                "Surface Opacity  {:.0}%",
+                                current_opacity_main * 100.0
+                            )),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .flex_row()
+                            .gap(px(2.0))
+                            .flex_wrap()
+                            .children(opacity_buttons),
+                    ),
+            )
+            // Vibrancy toggle + material row
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap(px(4.0))
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(rgb(text_muted))
+                            .child("Vibrancy Blur"),
+                    )
+                    .child(vibrancy_toggle)
+                    .when(vibrancy_enabled, |d| {
+                        d.child(
                             div()
                                 .flex()
-                                .flex_row()
-                                .items_center()
-                                .gap(px(6.0))
+                                .flex_col()
+                                .gap(px(4.0))
+                                .mt(px(4.0))
                                 .child(
                                     div()
                                         .text_xs()
                                         .text_color(rgb(text_muted))
-                                        .child("Accent Color"),
+                                        .child("Material"),
                                 )
                                 .child(
                                     div()
-                                        .text_xs()
-                                        .text_color(rgb(accent_color))
-                                        .font_weight(gpui::FontWeight::SEMIBOLD)
-                                        .child(accent_name.to_string()),
+                                        .flex()
+                                        .flex_row()
+                                        .gap(px(3.0))
+                                        .flex_wrap()
+                                        .children(material_buttons),
                                 ),
                         )
-                        .child(
-                            div()
-                                .flex()
-                                .flex_row()
-                                .gap(px(4.0))
-                                .flex_wrap()
-                                .children(accent_swatches),
-                        ),
-                )
-                // Opacity row (10 steps)
-                .child(
-                    div()
-                        .flex()
-                        .flex_col()
-                        .gap(px(4.0))
-                        .child(div().text_xs().text_color(rgb(text_muted)).child(format!(
-                            "Window Opacity  {:.0}%",
-                            current_opacity_main * 100.0
-                        )))
-                        .child(
-                            div()
-                                .flex()
-                                .flex_row()
-                                .gap(px(2.0))
-                                .flex_wrap()
-                                .children(opacity_buttons),
-                        ),
-                )
-                // Vibrancy toggle + material row
-                .child(
-                    div()
-                        .flex()
-                        .flex_col()
-                        .gap(px(4.0))
-                        .child(
-                            div()
-                                .text_xs()
-                                .text_color(rgb(text_muted))
-                                .child("Vibrancy Blur"),
-                        )
-                        .child(vibrancy_toggle)
-                        .when(vibrancy_enabled, |d| {
-                            d.child(
-                                div()
-                                    .flex()
-                                    .flex_col()
-                                    .gap(px(4.0))
-                                    .mt(px(4.0))
-                                    .child(
-                                        div()
-                                            .text_xs()
-                                            .text_color(rgb(text_muted))
-                                            .child("Material"),
-                                    )
-                                    .child(
-                                        div()
-                                            .flex()
-                                            .flex_row()
-                                            .gap(px(3.0))
-                                            .flex_wrap()
-                                            .children(material_buttons),
-                                    ),
-                            )
-                        }),
-                )
-                // Font size row
-                .child(
-                    div()
-                        .flex()
-                        .flex_col()
-                        .gap(px(4.0))
-                        .child(
-                            div()
-                                .text_xs()
-                                .text_color(rgb(text_muted))
-                                .child(format!("UI Font Size  {:.0}px", current_ui_font_size)),
-                        )
-                        .child(
-                            div()
-                                .flex()
-                                .flex_row()
-                                .gap(px(4.0))
-                                .children(font_size_buttons),
-                        ),
-                )
-                // Reset button
-                .child(reset_button)
-                // ── Preview section (spacing-only separation per spec) ──
-                .child(
-                    div()
-                        .w_full()
-                        .mt(px(8.0))
-                        .child(
-                            div()
-                                .text_xs()
-                                .text_color(rgb(text_dimmed))
-                                .font_weight(gpui::FontWeight::SEMIBOLD)
-                                .child("PREVIEW"),
-                        ),
-                )
-                // Mock search box
-                .child(
-                    div()
-                        .w_full()
-                        .h(px(28.0))
-                        .rounded(px(6.0))
-                        .bg(search_surface_bg)
-                        .border_1()
-                        .border_color(border_bg)
-                        .px(px(10.0))
-                        .flex()
-                        .flex_row()
-                        .items_center()
-                        .child(
-                            div()
-                                .text_xs()
-                                .text_color(rgb(text_muted))
-                                .child("Search scripts..."),
-                        ),
-                )
-                // Mock list items — launcher-style: subtle selection bg + accent bar
-                .child(
-                    div()
-                        .w_full()
-                        .rounded(px(6.0))
-                        .border_1()
-                        .border_color(border_bg)
-                        .overflow_hidden()
-                        .flex()
-                        .flex_col()
-                        .child(
-                            div()
-                                .w_full()
-                                .h(px(28.0))
-                                .bg(theme_row_selected_bg)
-                                .border_l(px(3.0))
-                                .border_color(rgb(accent_color))
-                                .px(px(10.0))
-                                .flex()
-                                .flex_row()
-                                .items_center()
-                                .child(
-                                    div()
-                                        .text_xs()
-                                        .font_weight(gpui::FontWeight::SEMIBOLD)
-                                        .text_color(rgb(text_primary))
-                                        .child("Selected Item"),
-                                ),
-                        )
-                        .child(
-                            div()
-                                .w_full()
-                                .h(px(28.0))
-                                .bg(window_surface_bg)
-                                .px(px(10.0))
-                                .flex()
-                                .flex_row()
-                                .items_center()
-                                .child(
-                                    div()
-                                        .text_xs()
-                                        .text_color(rgba(
-                                            (text_primary << 8) | crate::list_item::ALPHA_NAME_QUIET,
-                                        ))
-                                        .child("Regular Item"),
-                                ),
-                        )
-                        .child(
-                            div()
-                                .w_full()
-                                .h(px(28.0))
-                                .bg(window_surface_bg)
-                                .px(px(10.0))
-                                .flex()
-                                .flex_row()
-                                .items_center()
-                                .child(
-                                    div()
-                                        .text_xs()
-                                        .text_color(rgb(text_secondary))
-                                        .child("Another Item"),
-                                ),
-                        ),
-                )
-                // Terminal + semantic colors
-                .child(
-                    div()
-                        .flex()
-                        .flex_col()
-                        .gap(px(4.0))
-                        .child(
-                            div()
-                                .text_xs()
-                                .text_color(rgb(text_dimmed))
-                                .font_weight(gpui::FontWeight::SEMIBOLD)
-                                .child("TERMINAL"),
-                        )
-                        .child(div().flex().flex_row().gap(px(2.0)).children(
-                            term_colors.iter().map(|&c| {
-                                div().w(px(16.0)).h(px(12.0)).rounded(px(2.0)).bg(rgb(c))
-                            }),
-                        ))
-                        .child(div().flex().flex_row().gap(px(2.0)).children(
-                            term_bright.iter().map(|&c| {
-                                div().w(px(16.0)).h(px(12.0)).rounded(px(2.0)).bg(rgb(c))
-                            }),
-                        )),
-                )
-                // Semantic colors
-                .child(
-                    div()
-                        .flex()
-                        .flex_row()
-                        .gap(px(8.0))
-                        .child(
-                            div()
-                                .flex()
-                                .flex_row()
-                                .items_center()
-                                .gap(px(3.0))
-                                .child(
-                                    div()
-                                        .w(px(7.0))
-                                        .h(px(7.0))
-                                        .rounded(px(4.0))
-                                        .bg(rgb(ui_success)),
-                                )
-                                .child(div().text_xs().text_color(rgb(ui_success)).child("OK")),
-                        )
-                        .child(
-                            div()
-                                .flex()
-                                .flex_row()
-                                .items_center()
-                                .gap(px(3.0))
-                                .child(
-                                    div()
-                                        .w(px(7.0))
-                                        .h(px(7.0))
-                                        .rounded(px(4.0))
-                                        .bg(rgb(ui_error)),
-                                )
-                                .child(div().text_xs().text_color(rgb(ui_error)).child("Err")),
-                        )
-                        .child(
-                            div()
-                                .flex()
-                                .flex_row()
-                                .items_center()
-                                .gap(px(3.0))
-                                .child(
-                                    div()
-                                        .w(px(7.0))
-                                        .h(px(7.0))
-                                        .rounded(px(4.0))
-                                        .bg(rgb(ui_warning)),
-                                )
-                                .child(div().text_xs().text_color(rgb(ui_warning)).child("Warn")),
-                        )
-                        .child(
-                            div()
-                                .flex()
-                                .flex_row()
-                                .items_center()
-                                .gap(px(3.0))
-                                .child(
-                                    div()
-                                        .w(px(7.0))
-                                        .h(px(7.0))
-                                        .rounded(px(4.0))
-                                        .bg(rgb(ui_info)),
-                                )
-                                .child(div().text_xs().text_color(rgb(ui_info)).child("Info")),
-                        ),
-                );
+                    }),
+            )
+            // Font size row
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap(px(4.0))
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(rgb(text_muted))
+                            .child(format!("UI Font Size  {:.0}px", current_ui_font_size)),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .flex_row()
+                            .gap(px(4.0))
+                            .children(font_size_buttons),
+                    ),
+            )
+            // ── Semantic status chips ─────────────────────────────
+            .child(
+                div()
+                    .flex()
+                    .flex_row()
+                    .gap(px(8.0))
+                    .child(Self::render_theme_chooser_semantic_chip("OK", success_chip))
+                    .child(Self::render_theme_chooser_semantic_chip("Err", error_chip))
+                    .child(Self::render_theme_chooser_semantic_chip("Warn", warning_chip))
+                    .child(Self::render_theme_chooser_semantic_chip("Info", info_chip)),
+            )
+            // ── Launcher-style live preview (spacing-only separation per spec) ──
+            .child(div().h(px(1.0)).bg(divider_bg))
+            .child(self.render_theme_chooser_live_preview(
+                selected_preset_name,
+                accent_name,
+                &chrome,
+            ));
 
         // ── Footer: canonical three-key hint strip per .impeccable.md ──
         let footer = crate::components::prompt_layout_shell::render_simple_hint_strip(
-            vec![
-                gpui::SharedString::from("↵ Apply"),
-                gpui::SharedString::from("Esc Back"),
-            ],
+            Self::theme_chooser_hint_items(),
             None,
         );
 
@@ -1447,7 +1516,7 @@ impl ScriptListApp {
 #[cfg(test)]
 mod theme_chooser_chrome_audit {
     #[test]
-    fn theme_chooser_uses_truthful_two_item_footer() {
+    fn theme_chooser_uses_truthful_three_item_footer() {
         let source = include_str!("theme_chooser.rs");
         assert!(
             !source.contains("universal_prompt_hints()"),
@@ -1464,6 +1533,10 @@ mod theme_chooser_chrome_audit {
         assert!(
             source.contains(r#"SharedString::from("Esc Back")"#),
             "theme_chooser should use 'Esc Back' footer label"
+        );
+        assert!(
+            source.contains(r#"SharedString::from("⌘R Reset")"#),
+            "theme_chooser should use '⌘R Reset' footer label"
         );
         assert!(
             !source.contains("⌘K Actions"),

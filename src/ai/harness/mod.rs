@@ -840,6 +840,75 @@ pub(crate) fn build_tab_ai_artifact_authoring_appendix_for_prompt(
     }
 }
 
+// ---------------------------------------------------------------------------
+// ACP initial-input builder (single-sourced)
+// ---------------------------------------------------------------------------
+
+/// Structured result from building ACP initial input, carrying telemetry
+/// fields that record which verification markers were present.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct TabAiAcpInitialInput {
+    pub text: String,
+    pub guidance_appended: bool,
+    pub forced_by_script_list_submit: bool,
+    pub includes_script_authoring_skill: bool,
+    pub includes_bun_build_verification: bool,
+    pub includes_bun_execute_verification: bool,
+}
+
+/// Build the ACP initial input for a given prompt type and intent.
+///
+/// This is the single-sourced formatter that both the PTY and ACP paths
+/// consume, ensuring the mandatory Bun verification guidance cannot drift
+/// between the two surfaces.
+pub(crate) fn build_tab_ai_acp_initial_input_for_prompt(
+    prompt_type: &str,
+    intent: &str,
+) -> TabAiAcpInitialInput {
+    let intent = intent.trim();
+
+    if intent.is_empty() {
+        return TabAiAcpInitialInput {
+            text: String::new(),
+            guidance_appended: false,
+            forced_by_script_list_submit: false,
+            includes_script_authoring_skill: false,
+            includes_bun_build_verification: false,
+            includes_bun_execute_verification: false,
+        };
+    }
+
+    if let Some((guidance, forced_by_script_list_submit)) =
+        build_tab_ai_artifact_authoring_appendix_for_prompt(
+            prompt_type,
+            Some(intent),
+            TabAiHarnessSubmissionMode::Submit,
+        )
+    {
+        TabAiAcpInitialInput {
+            text: format!("{guidance}\n\nUser intent:\n{intent}\n"),
+            guidance_appended: true,
+            forced_by_script_list_submit,
+            includes_script_authoring_skill: guidance
+                .contains("~/.scriptkit/skills/script-authoring/SKILL.md"),
+            includes_bun_build_verification: guidance.contains(
+                "bun build ~/.scriptkit/kit/main/scripts/<name>.ts --target=bun --outfile ~/.scriptkit/tmp/test-scripts/<name>.verify.mjs",
+            ),
+            includes_bun_execute_verification: guidance
+                .contains("SK_VERIFY=1 bun ~/.scriptkit/kit/main/scripts/<name>.ts"),
+        }
+    } else {
+        TabAiAcpInitialInput {
+            text: intent.to_string(),
+            guidance_appended: false,
+            forced_by_script_list_submit: false,
+            includes_script_authoring_skill: false,
+            includes_bun_build_verification: false,
+            includes_bun_execute_verification: false,
+        }
+    }
+}
+
 /// Canonical one-shot authoring launchpad for harness mode.
 ///
 /// Keep `kit-init/examples/START_HERE.md` as the single source of truth.
@@ -2685,11 +2754,11 @@ mod cleanup_contract_audits {
         let registration_section = &fn_body[..fn_end];
 
         for legacy_id in [
-            "builtin-open-ai-chat",
-            "builtin-mini-ai-chat",
-            "builtin-new-conversation",
-            "builtin-clear-conversation",
-            "builtin-send-screen-area-to-ai",
+            "builtin/open-ai-chat",
+            "builtin/mini-ai-chat",
+            "builtin/new-conversation",
+            "builtin/clear-conversation",
+            "builtin/send-screen-area-to-ai",
         ] {
             let quoted = format!("\"{}\"", legacy_id);
             assert!(
@@ -2699,13 +2768,13 @@ mod cleanup_contract_audits {
         }
 
         for kept_id in [
-            "builtin-generate-script-with-ai",
-            "builtin-generate-script-from-current-app",
-            "builtin-send-screen-to-ai",
-            "builtin-send-selected-text-to-ai",
-            "builtin-send-browser-tab-to-ai",
-            "builtin-new-script",
-            "builtin-new-extension",
+            "builtin/generate-script-with-ai",
+            "builtin/generate-script-from-current-app",
+            "builtin/send-screen-to-ai",
+            "builtin/send-selected-text-to-ai",
+            "builtin/send-browser-tab-to-ai",
+            "builtin/new-script",
+            "builtin/new-extension",
         ] {
             let quoted = format!("\"{}\"", kept_id);
             assert!(
@@ -2725,11 +2794,11 @@ mod cleanup_contract_audits {
         let registration_section = &fn_body[..fn_end];
 
         assert!(
-            registration_section.contains("\"builtin-send-focused-window-to-ai\""),
+            registration_section.contains("\"builtin/send-focused-window-to-ai\""),
             "SendFocusedWindowToAi must use the canonical focused-window builtin id",
         );
         assert!(
-            !registration_section.contains("\"builtin-send-window-to-ai\""),
+            !registration_section.contains("\"builtin/send-window-to-ai\""),
             "legacy short focused-window builtin id must not remain in the main builtin list",
         );
     }

@@ -334,15 +334,15 @@ fn destructive_builtins_are_gated_by_confirmation_defaults() {
     let defaults = read("src/config/defaults.rs");
 
     let expected_destructive = [
-        "builtin-shut-down",
-        "builtin-restart",
-        "builtin-log-out",
-        "builtin-empty-trash",
-        "builtin-sleep",
-        "builtin-quit-script-kit",
-        "builtin-force-quit",
-        "builtin-stop-all-processes",
-        "builtin-clear-suggested",
+        "builtin/shut-down",
+        "builtin/restart",
+        "builtin/log-out",
+        "builtin/empty-trash",
+        "builtin/sleep",
+        "builtin/quit-script-kit",
+        "builtin/force-quit",
+        "builtin/stop-all-processes",
+        "builtin/clear-suggested",
     ];
 
     for cmd in &expected_destructive {

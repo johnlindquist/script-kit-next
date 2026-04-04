@@ -6,7 +6,7 @@ fn create_test_builtins() -> Vec<BuiltInEntry> {
     use crate::builtins::{BuiltInFeature, BuiltInGroup};
     vec![
         BuiltInEntry {
-            id: "builtin-clipboard-history".to_string(),
+            id: "builtin/clipboard-history".to_string(),
             name: "Clipboard History".to_string(),
             description: "View and manage your clipboard history".to_string(),
             keywords: vec![
@@ -20,7 +20,7 @@ fn create_test_builtins() -> Vec<BuiltInEntry> {
             group: BuiltInGroup::Core,
         },
         BuiltInEntry {
-            id: "builtin-app-launcher".to_string(),
+            id: "builtin/app-launcher".to_string(),
             name: "App Launcher".to_string(),
             description: "Search and launch installed applications".to_string(),
             keywords: vec![
@@ -119,7 +119,7 @@ fn test_fuzzy_search_builtins_name_priority_over_keywords() {
 
     let builtins = vec![
         BuiltInEntry {
-            id: "builtin-lock-screen".to_string(),
+            id: "builtin/lock-screen".to_string(),
             name: "Lock Screen".to_string(),
             description: "Lock the screen".to_string(),
             keywords: vec![
@@ -132,7 +132,7 @@ fn test_fuzzy_search_builtins_name_priority_over_keywords() {
             group: BuiltInGroup::Core,
         },
         BuiltInEntry {
-            id: "builtin-scratch-pad".to_string(),
+            id: "builtin/scratch-pad".to_string(),
             name: "Scratch Pad".to_string(),
             description: "Quick editor for notes".to_string(),
             keywords: vec![

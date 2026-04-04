@@ -766,34 +766,27 @@ impl ScriptListApp {
         let effective_intent = Self::tab_ai_effective_submission_intent(&request);
         let auto_submit = effective_intent.is_some();
 
-        // Prepend artifact-authoring guidance when the shared helper fires,
-        // so the ACP initial_input carries the same verification contract as
-        // the PTY submission path.
+        // Build ACP initial input via the shared helper, ensuring the same
+        // verification contract as the PTY submission path.
         let acp_initial_input = effective_intent.clone().map(|intent| {
-            if let Some((guidance, forced_by_script_list_submit)) =
-                crate::ai::harness::build_tab_ai_artifact_authoring_appendix_for_prompt(
+            let initial_input =
+                crate::ai::harness::build_tab_ai_acp_initial_input_for_prompt(
                     &request.ui_snapshot.prompt_type,
-                    Some(intent.as_str()),
-                    crate::ai::TabAiHarnessSubmissionMode::Submit,
-                )
-            {
-                tracing::info!(
-                    target: "script_kit::tab_ai",
-                    event = "tab_ai_acp_artifact_authoring_guidance_appended",
-                    forced_by_script_list_submit,
-                    prompt_type = %request.ui_snapshot.prompt_type,
-                    includes_script_authoring_skill = guidance
-                        .contains("~/.scriptkit/skills/script-authoring/SKILL.md"),
-                    includes_bun_build_verification = guidance.contains(
-                        "bun build ~/.scriptkit/kit/main/scripts/<name>.ts --target=bun --outfile ~/.scriptkit/tmp/test-scripts/<name>.verify.mjs"
-                    ),
-                    includes_bun_execute_verification = guidance
-                        .contains("SK_VERIFY=1 bun ~/.scriptkit/kit/main/scripts/<name>.ts"),
+                    &intent,
                 );
-                format!("{guidance}\n\nUser intent:\n{intent}\n")
-            } else {
-                intent
-            }
+
+            tracing::info!(
+                target: "script_kit::tab_ai",
+                event = "tab_ai_acp_initial_input_built",
+                prompt_type = %request.ui_snapshot.prompt_type,
+                guidance_appended = initial_input.guidance_appended,
+                forced_by_script_list_submit = initial_input.forced_by_script_list_submit,
+                includes_script_authoring_skill = initial_input.includes_script_authoring_skill,
+                includes_bun_build_verification = initial_input.includes_bun_build_verification,
+                includes_bun_execute_verification = initial_input.includes_bun_execute_verification,
+            );
+
+            initial_input.text
         });
 
         tracing::info!(

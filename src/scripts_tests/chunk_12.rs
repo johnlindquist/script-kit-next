@@ -204,7 +204,7 @@ fn test_get_grouped_results_default_suggestions_for_new_users() {
     // Create builtins that match some of the DEFAULT_SUGGESTED_ITEMS
     let builtins = vec![
         BuiltInEntry {
-            id: "builtin-ai-chat".to_string(),
+            id: "builtin/ai-chat".to_string(),
             name: "AI Chat".to_string(),
             description: "Chat with AI assistants".to_string(),
             keywords: vec!["ai".to_string(), "chat".to_string()],
@@ -213,7 +213,7 @@ fn test_get_grouped_results_default_suggestions_for_new_users() {
             group: BuiltInGroup::Core,
         },
         BuiltInEntry {
-            id: "builtin-notes".to_string(),
+            id: "builtin/notes".to_string(),
             name: "Notes".to_string(),
             description: "Quick notes".to_string(),
             keywords: vec!["notes".to_string()],
@@ -222,7 +222,7 @@ fn test_get_grouped_results_default_suggestions_for_new_users() {
             group: BuiltInGroup::Core,
         },
         BuiltInEntry {
-            id: "builtin-clipboard-history".to_string(),
+            id: "builtin/clipboard-history".to_string(),
             name: "Clipboard History".to_string(),
             description: "View clipboard history".to_string(),
             keywords: vec!["clipboard".to_string()],
@@ -231,7 +231,7 @@ fn test_get_grouped_results_default_suggestions_for_new_users() {
             group: BuiltInGroup::Core,
         },
         BuiltInEntry {
-            id: "builtin-other".to_string(),
+            id: "builtin/other".to_string(),
             name: "Some Other Command".to_string(),
             description: "Not in defaults".to_string(),
             keywords: vec!["other".to_string()],
@@ -294,7 +294,7 @@ fn test_get_grouped_results_no_default_suggestions_when_frecency_exists() {
 
     let builtins = vec![
         BuiltInEntry {
-            id: "builtin-ai-chat".to_string(),
+            id: "builtin/ai-chat".to_string(),
             name: "AI Chat".to_string(),
             description: "Chat with AI assistants".to_string(),
             keywords: vec!["ai".to_string()],
@@ -303,7 +303,7 @@ fn test_get_grouped_results_no_default_suggestions_when_frecency_exists() {
             group: BuiltInGroup::Core,
         },
         BuiltInEntry {
-            id: "builtin-notes".to_string(),
+            id: "builtin/notes".to_string(),
             name: "Notes".to_string(),
             description: "Quick notes".to_string(),
             keywords: vec!["notes".to_string()],
@@ -324,7 +324,7 @@ fn test_get_grouped_results_no_default_suggestions_when_frecency_exists() {
         uuid::Uuid::new_v4()
     ));
     let mut frecency_store = FrecencyStore::with_path(temp_path.clone());
-    frecency_store.record_use("builtin:builtin-notes"); // Record usage for Notes
+    frecency_store.record_use("builtin:builtin/notes"); // Record usage for Notes
 
     let (grouped, results) = get_grouped_results(
         &scripts,

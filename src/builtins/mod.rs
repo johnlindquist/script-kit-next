@@ -337,7 +337,7 @@ impl BuiltInEntry {
         feature: BuiltInFeature,
     ) -> Self {
         BuiltInEntry {
-            id: id.into(),
+            id: crate::config::canonical_builtin_command_id(&id.into()),
             name: name.into(),
             description: description.into(),
             keywords: keywords.into_iter().map(String::from).collect(),
@@ -357,7 +357,7 @@ impl BuiltInEntry {
         icon: impl Into<String>,
     ) -> Self {
         BuiltInEntry {
-            id: id.into(),
+            id: crate::config::canonical_builtin_command_id(&id.into()),
             name: name.into(),
             description: description.into(),
             keywords: keywords.into_iter().map(String::from).collect(),
@@ -368,6 +368,9 @@ impl BuiltInEntry {
     }
 
     /// Create a new built-in entry with icon and group
+    ///
+    /// Note: Unlike `new()` and `new_with_icon()`, this does NOT canonicalize the ID
+    /// because it is used for non-builtin groups (e.g., MenuBar) with their own ID schemes.
     #[allow(dead_code)]
     pub fn new_with_group(
         id: impl Into<String>,
@@ -428,7 +431,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
     {
         if config.clipboard_history {
             entries.push(BuiltInEntry::new_with_icon(
-                "builtin-clipboard-history",
+                "builtin/clipboard-history",
                 "Clipboard History",
                 "Open clipboard history to view, search, and reuse copied items",
                 vec!["clipboard", "history", "paste", "copy"],
@@ -438,7 +441,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             debug!("Added Clipboard History built-in entry");
 
             entries.push(BuiltInEntry::new_with_icon(
-                "builtin-paste-sequentially",
+                "builtin/paste-sequentially",
                 "Paste Sequentially",
                 "Paste multiple clipboard items one at a time in sequence",
                 vec!["paste", "sequential", "clipboard", "batch", "paseq"],
@@ -456,7 +459,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
 
         if config.window_switcher {
             entries.push(BuiltInEntry::new_with_icon(
-                "builtin-window-switcher",
+                "builtin/window-switcher",
                 "Window Switcher",
                 "Open window switcher to focus, tile, and manage open windows",
                 vec!["window", "switch", "tile", "focus", "manage", "switcher"],
@@ -468,7 +471,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
 
         // AI Harness is always available — opens the instant harness terminal
         entries.push(BuiltInEntry::new_with_icon(
-            "builtin-ai-chat",
+            "builtin/ai-chat",
             "Open AI Harness",
             "Open the instant AI harness terminal with fresh context",
             vec![
@@ -487,7 +490,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         debug!("Added AI Harness built-in entry");
 
         entries.push(BuiltInEntry::new_with_icon(
-            "builtin-favorites",
+            "builtin/favorites",
             "Favorites",
             "Open your starred scripts and shortcuts",
             vec![
@@ -505,7 +508,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
 
         // Notes is always available (Open Notes absorbs legacy "Notes" entry keywords)
         entries.push(BuiltInEntry::new_with_icon(
-            "builtin-emoji-picker",
+            "builtin/emoji-picker",
             "Emoji Picker",
             "Pick an emoji from the built-in list and copy it to the clipboard",
             vec!["emoji", "picker", "symbols", "unicode", "copy", "clipboard"],
@@ -518,7 +521,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         #[cfg(debug_assertions)]
         {
             entries.push(BuiltInEntry::new_with_icon(
-                "builtin-design-gallery",
+                "builtin/design-gallery",
                 "Design Gallery",
                 "Open the design gallery to browse separator styles and icon variations",
                 vec![
@@ -537,7 +540,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
 
             // Test Confirmation entry for testing confirmation UI
             entries.push(BuiltInEntry::new_with_icon(
-                "builtin-test-confirmation",
+                "builtin/test-confirmation",
                 "Test Confirmation",
                 "Open the confirmation dialog test tool (dev only)",
                 vec!["test", "confirmation", "dev", "debug"],
@@ -551,7 +554,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         #[cfg(feature = "storybook")]
         {
             entries.push(BuiltInEntry::new_with_icon(
-                "builtin-design-explorer",
+                "builtin/design-explorer",
                 "Design Explorer",
                 "Open the in-app explorer to compare story variants and adopt a winner",
                 vec![
@@ -579,7 +582,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
 
         // Power management
         entries.push(BuiltInEntry::new_with_icon(
-            "builtin-empty-trash",
+            "builtin/empty-trash",
             "Empty Trash",
             "Empty the macOS Trash",
             vec!["empty", "trash", "delete", "clean"],
@@ -588,7 +591,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
-            "builtin-lock-screen",
+            "builtin/lock-screen",
             "Lock Screen",
             "Lock the screen",
             vec!["lock", "screen", "security"],
@@ -597,7 +600,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
-            "builtin-sleep",
+            "builtin/sleep",
             "Sleep",
             "Put the system to sleep",
             vec!["sleep", "suspend", "power"],
@@ -606,7 +609,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
-            "builtin-restart",
+            "builtin/restart",
             "Restart",
             "Restart the system",
             vec!["restart", "reboot", "power"],
@@ -615,7 +618,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
-            "builtin-shut-down",
+            "builtin/shut-down",
             "Shut Down",
             "Shut down the system",
             vec!["shut", "down", "shutdown", "power", "off"],
@@ -624,7 +627,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
-            "builtin-log-out",
+            "builtin/log-out",
             "Log Out",
             "Log out the current user",
             vec!["log", "out", "logout", "user"],
@@ -634,7 +637,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
 
         // UI controls
         entries.push(BuiltInEntry::new_with_icon(
-            "builtin-toggle-dark-mode",
+            "builtin/toggle-dark-mode",
             "Toggle Dark Mode",
             "Switch between light and dark appearance",
             vec!["dark", "mode", "light", "appearance", "theme", "toggle"],
@@ -643,7 +646,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
-            "builtin-show-desktop",
+            "builtin/show-desktop",
             "Show Desktop",
             "Hide all windows to reveal the desktop",
             vec!["show", "desktop", "hide", "windows"],
@@ -652,7 +655,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
-            "builtin-mission-control",
+            "builtin/mission-control",
             "Mission Control",
             "Show all windows and desktops",
             vec!["mission", "control", "expose", "spaces", "windows"],
@@ -661,7 +664,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
-            "builtin-launchpad",
+            "builtin/launchpad",
             "Launchpad",
             "Open Launchpad to show all applications",
             vec!["launchpad", "apps", "applications"],
@@ -670,7 +673,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
-            "builtin-force-quit",
+            "builtin/force-quit",
             "Force Quit Apps",
             "Select and force quit running applications",
             vec![
@@ -688,7 +691,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
 
         // Volume controls (preset levels)
         entries.push(BuiltInEntry::new_with_icon(
-            "builtin-volume-0",
+            "builtin/volume-0",
             "Volume 0%",
             "Set system volume to 0% (mute)",
             vec!["volume", "mute", "0", "percent", "zero", "off"],
@@ -697,7 +700,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
-            "builtin-volume-25",
+            "builtin/volume-25",
             "Volume 25%",
             "Set system volume to 25%",
             vec!["volume", "25", "percent", "low", "quiet"],
@@ -706,7 +709,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
-            "builtin-volume-50",
+            "builtin/volume-50",
             "Volume 50%",
             "Set system volume to 50%",
             vec!["volume", "50", "percent", "half", "medium"],
@@ -715,7 +718,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
-            "builtin-volume-75",
+            "builtin/volume-75",
             "Volume 75%",
             "Set system volume to 75%",
             vec!["volume", "75", "percent", "high", "loud"],
@@ -724,7 +727,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
-            "builtin-volume-100",
+            "builtin/volume-100",
             "Volume 100%",
             "Set system volume to 100% (max)",
             vec!["volume", "100", "percent", "max", "full"],
@@ -733,7 +736,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
-            "builtin-volume-mute",
+            "builtin/volume-mute",
             "Toggle Mute",
             "Toggle system audio mute on or off",
             vec!["mute", "unmute", "volume", "sound", "audio", "toggle"],
@@ -743,7 +746,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
 
         // App control
         entries.push(BuiltInEntry::new_with_icon(
-            "builtin-quit-script-kit",
+            "builtin/quit-script-kit",
             "Quit Script Kit",
             "Quit the Script Kit application",
             vec!["quit", "exit", "close", "script", "kit", "app"],
@@ -753,7 +756,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
 
         // System utilities
         entries.push(BuiltInEntry::new_with_icon(
-            "builtin-toggle-dnd",
+            "builtin/toggle-dnd",
             "Toggle Do Not Disturb",
             "Toggle Focus / Do Not Disturb mode on or off",
             vec![
@@ -770,7 +773,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
-            "builtin-screen-saver",
+            "builtin/screen-saver",
             "Start Screen Saver",
             "Activate the screen saver",
             vec!["screen", "saver", "screensaver"],
@@ -780,7 +783,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
 
         // System Preferences
         entries.push(BuiltInEntry::new_with_icon(
-            "builtin-system-preferences",
+            "builtin/system-preferences",
             "Open System Settings",
             "Open System Settings (System Preferences)",
             vec!["system", "settings", "preferences", "prefs"],
@@ -789,7 +792,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
-            "builtin-privacy-settings",
+            "builtin/privacy-settings",
             "Privacy & Security Settings",
             "Open Privacy & Security settings",
             vec!["privacy", "security", "settings"],
@@ -798,7 +801,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
-            "builtin-display-settings",
+            "builtin/display-settings",
             "Display Settings",
             "Open Display settings",
             vec!["display", "monitor", "screen", "resolution", "settings"],
@@ -807,7 +810,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
-            "builtin-sound-settings",
+            "builtin/sound-settings",
             "Sound Settings",
             "Open Sound settings",
             vec!["sound", "audio", "volume", "settings"],
@@ -816,7 +819,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
-            "builtin-network-settings",
+            "builtin/network-settings",
             "Network Settings",
             "Open Network settings",
             vec!["network", "wifi", "ethernet", "internet", "settings"],
@@ -825,7 +828,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
-            "builtin-keyboard-settings",
+            "builtin/keyboard-settings",
             "Keyboard Settings",
             "Open Keyboard settings",
             vec!["keyboard", "shortcuts", "input", "settings"],
@@ -834,7 +837,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
-            "builtin-bluetooth-settings",
+            "builtin/bluetooth-settings",
             "Bluetooth Settings",
             "Open Bluetooth settings",
             vec!["bluetooth", "wireless", "settings"],
@@ -843,7 +846,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
-            "builtin-notifications-settings",
+            "builtin/notifications-settings",
             "Notification Settings",
             "Open Notifications settings",
             vec!["notifications", "alerts", "banners", "settings"],
@@ -863,7 +866,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         // =========================================================================
 
         entries.push(BuiltInEntry::new_with_icon(
-            "builtin-open-notes",
+            "builtin/open-notes",
             "Open Notes",
             "Open the Notes window",
             vec![
@@ -890,7 +893,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         // note creation / search have distinct execution paths.
 
         entries.push(BuiltInEntry::new_with_icon(
-            "builtin-quick-capture",
+            "builtin/quick-capture",
             "Quick Capture",
             "Capture a new note without opening the full Notes window",
             vec!["quick", "capture", "note", "fast"],
@@ -906,7 +909,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         // are no longer registered — all AI entry points route to the harness terminal.
 
         entries.push(BuiltInEntry::new_with_icon(
-            "builtin-generate-script-with-ai",
+            "builtin/generate-script-with-ai",
             GENERATE_SCRIPT_WITH_AI_LABEL,
             "Open the AI harness to generate a Script Kit script from your prompt text",
             vec![
@@ -924,7 +927,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
-            "builtin-generate-script-from-current-app",
+            "builtin/generate-script-from-current-app",
             GENERATE_SCRIPT_FROM_CURRENT_APP_LABEL,
             "Generate a Script Kit script using the frontmost app's menu, selection, and browser context",
             vec![
@@ -945,7 +948,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
-            "builtin-send-screen-to-ai",
+            "builtin/send-screen-to-ai",
             "Send Screen to AI",
             "Capture the full screen and send it to the AI harness",
             vec![
@@ -962,7 +965,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
-            "builtin-send-focused-window-to-ai",
+            "builtin/send-focused-window-to-ai",
             "Send Focused Window to AI",
             "Capture the focused window and send it to the AI harness",
             vec![
@@ -979,7 +982,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
-            "builtin-send-selected-text-to-ai",
+            "builtin/send-selected-text-to-ai",
             "Send Selected Text to AI",
             "Send the currently selected text to the AI harness",
             vec![
@@ -996,7 +999,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
-            "builtin-send-browser-tab-to-ai",
+            "builtin/send-browser-tab-to-ai",
             "Send Focused Browser Tab to AI",
             "Send the current browser tab URL to the AI harness",
             vec![
@@ -1011,7 +1014,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         #[cfg(debug_assertions)]
         {
             entries.push(BuiltInEntry::new_with_icon(
-                "builtin-create-ai-preset",
+                "builtin/create-ai-preset",
                 "Create AI Preset",
                 "Create a reusable AI preset with name, system prompt, and model",
                 vec!["create", "ai", "preset", "template", "save", "new"],
@@ -1020,7 +1023,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             ));
 
             entries.push(BuiltInEntry::new_with_icon(
-                "builtin-import-ai-presets",
+                "builtin/import-ai-presets",
                 "Import AI Presets",
                 "Import AI presets from a JSON file via file picker",
                 vec!["import", "ai", "preset", "template", "file", "load"],
@@ -1029,7 +1032,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             ));
 
             entries.push(BuiltInEntry::new_with_icon(
-                "builtin-export-ai-presets",
+                "builtin/export-ai-presets",
                 "Export AI Presets",
                 "Export AI presets to a JSON file via file picker",
                 vec![
@@ -1040,7 +1043,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             ));
 
             entries.push(BuiltInEntry::new_with_icon(
-                "builtin-search-ai-presets",
+                "builtin/search-ai-presets",
                 "Search AI Presets",
                 "Search and browse saved AI presets to start a new chat",
                 vec!["search", "ai", "preset", "template", "browse", "find"],
@@ -1054,7 +1057,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         // =========================================================================
 
         entries.push(BuiltInEntry::new_with_icon(
-            "builtin-new-script",
+            "builtin/new-script",
             "New Script (Template)",
             "Create a new Script Kit script from a guided starter template",
             vec![
@@ -1072,7 +1075,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
-            "builtin-new-extension",
+            "builtin/new-extension",
             "New Scriptlet Bundle",
             "Create a new extension bundle with YAML frontmatter and scriptlet examples",
             vec![
@@ -1094,7 +1097,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         // =========================================================================
 
         entries.push(BuiltInEntry::new_with_icon(
-            "builtin-check-permissions",
+            "builtin/check-permissions",
             "Check Permissions",
             "Run a check for all required macOS permissions",
             vec!["check", "permissions", "accessibility", "privacy"],
@@ -1103,7 +1106,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
-            "builtin-request-accessibility",
+            "builtin/request-accessibility",
             "Request Accessibility Permission",
             "Request accessibility permission for Script Kit in System Settings",
             vec!["request", "accessibility", "permission"],
@@ -1112,7 +1115,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
-            "builtin-accessibility-settings",
+            "builtin/accessibility-settings",
             "Open Accessibility Settings",
             "Open Accessibility settings in System Preferences",
             vec!["accessibility", "settings", "permission", "open"],
@@ -1125,7 +1128,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         // =========================================================================
 
         entries.push(BuiltInEntry::new_with_icon(
-            "builtin-clear-suggested",
+            "builtin/clear-suggested",
             "Clear Suggested",
             "Clear all items from Suggested / Recently Used",
             vec![
@@ -1148,7 +1151,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         // Settings Hub
         // =========================================================================
         entries.push(BuiltInEntry::new_with_icon(
-            "builtin-settings",
+            "builtin/settings",
             "Settings",
             "Open settings to configure API keys, themes, window positions, and more",
             vec![
@@ -1169,7 +1172,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         // Only show reset if there are custom positions
         if crate::window_state::has_custom_positions() {
             entries.push(BuiltInEntry::new_with_icon(
-                "builtin-reset-window-positions",
+                "builtin/reset-window-positions",
                 "Reset Window Positions",
                 "Restore all windows to default positions",
                 vec![
@@ -1182,7 +1185,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
 
         // API Key Configuration
         entries.push(BuiltInEntry::new_with_icon(
-            "builtin-configure-vercel-api",
+            "builtin/configure-vercel-api",
             "Configure Vercel AI Gateway",
             "Open setup for the Vercel AI Gateway API key used by AI Chat",
             vec![
@@ -1201,7 +1204,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
-            "builtin-configure-openai-api",
+            "builtin/configure-openai-api",
             "Configure OpenAI API Key",
             "Open setup for the OpenAI API key used by AI Chat",
             vec![
@@ -1220,7 +1223,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
-            "builtin-configure-anthropic-api",
+            "builtin/configure-anthropic-api",
             "Configure Anthropic API Key",
             "Open setup for the Anthropic API key used by AI Chat",
             vec![
@@ -1239,7 +1242,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
-            "builtin-choose-theme",
+            "builtin/choose-theme",
             "Choose Theme",
             "Open the theme picker and apply a color theme with live preview",
             vec!["theme", "appearance", "color", "dark", "light", "scheme"],
@@ -1248,7 +1251,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
-            "builtin-select-microphone",
+            "builtin/select-microphone",
             "Select Microphone",
             "Choose which microphone to use for dictation",
             vec![
@@ -1269,7 +1272,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         // =========================================================================
 
         entries.push(BuiltInEntry::new_with_icon(
-            "builtin-scratch-pad",
+            "builtin/scratch-pad",
             "Scratch Pad",
             "Open a scratch pad editor for notes and code (auto-saves to disk)",
             vec![
@@ -1288,7 +1291,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
-            "builtin-mini-main-window",
+            "builtin/mini-main-window",
             "Mini Main Window",
             "Open a compact launcher with the same search and actions",
             vec![
@@ -1306,7 +1309,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
-            "builtin-quick-terminal",
+            "builtin/quick-terminal",
             "Quick Terminal",
             "Open a quick terminal for running shell commands",
             vec![
@@ -1317,7 +1320,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
-            "builtin-claude-code",
+            "builtin/claude-code",
             "Claude Code",
             "Open Claude Code in the harness terminal surface used by Tab AI",
             vec![
@@ -1335,7 +1338,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
-            "builtin-process-manager",
+            "builtin/process-manager",
             "Process Manager",
             "Inspect running scripts and copy their process details",
             vec![
@@ -1346,7 +1349,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
-            "builtin-stop-all-processes",
+            "builtin/stop-all-processes",
             "Stop All Running Scripts",
             "Terminate every active Script Kit child process",
             vec![
@@ -1363,7 +1366,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
-            "builtin-do-in-current-app",
+            "builtin/do-in-current-app",
             crate::menu_bar::current_app_commands::DO_IN_CURRENT_APP_LABEL,
             "Browse, search, and run menu bar commands from the frontmost app; if no direct command exists, Script Kit generates a script",
             vec![
@@ -1401,7 +1404,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
-            "builtin-turn-this-into-a-command",
+            "builtin/turn-this-into-a-command",
             crate::menu_bar::current_app_commands::TURN_THIS_INTO_A_COMMAND_LABEL,
             "Describe what you want in the frontmost app; Script Kit captures a reusable automation recipe and opens script generation",
             vec![
@@ -1424,7 +1427,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
-            "builtin-inspect-current-context",
+            "builtin/inspect-current-context",
             "Inspect Current Context",
             "Capture a deterministic JSON snapshot of what Script Kit can currently see and copy it to the clipboard",
             vec![
@@ -1445,7 +1448,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
-            "builtin-trace-current-app-intent",
+            "builtin/trace-current-app-intent",
             "Trace Current App Intent",
             "Dry-run a current-app request and copy a machine-readable JSON trace showing normalized input, candidate commands, route selection, and script prompt preview without executing anything",
             vec![
@@ -1471,7 +1474,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
-            "builtin-verify-current-app-recipe",
+            "builtin/verify-current-app-recipe",
             crate::menu_bar::current_app_commands::VERIFY_CURRENT_APP_RECIPE_LABEL,
             "Read a currentAppCommand recipe JSON from the clipboard, re-capture the frontmost app, and copy a machine-readable drift report",
             vec![
@@ -1493,7 +1496,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
-            "builtin-replay-current-app-recipe",
+            "builtin/replay-current-app-recipe",
             crate::menu_bar::current_app_commands::REPLAY_CURRENT_APP_RECIPE_LABEL,
             "Read a currentAppCommand recipe JSON from the clipboard, verify it against live context, and replay the resolved action only when it still matches",
             vec![
@@ -1521,7 +1524,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         #[cfg(debug_assertions)]
         {
             entries.push(BuiltInEntry::new_with_icon(
-                "builtin-browse-kit-store",
+                "builtin/browse-kit-store",
                 "Browse Kit Store",
                 "Browse available kits from the Kit Store",
                 vec!["kit", "store", "browse", "search", "discover", "extensions"],
@@ -1530,7 +1533,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             ));
 
             entries.push(BuiltInEntry::new_with_icon(
-                "builtin-manage-installed-kits",
+                "builtin/manage-installed-kits",
                 "Manage Installed Kits",
                 "View and manage kits already installed from the Kit Store",
                 vec![
@@ -1546,7 +1549,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             ));
 
             entries.push(BuiltInEntry::new_with_icon(
-                "builtin-update-all-kits",
+                "builtin/update-all-kits",
                 "Update All Kits",
                 "Update every installed kit to the latest version",
                 vec![
@@ -1568,7 +1571,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         // =========================================================================
 
         entries.push(BuiltInEntry::new_with_icon(
-            "builtin-file-search",
+            "builtin/file-search",
             "Search Files",
             "Browse directories, search files, and open results",
             vec![
@@ -1588,7 +1591,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
-            "builtin-webcam",
+            "builtin/webcam",
             "Webcam",
             "Open the webcam prompt and capture a photo",
             vec!["webcam", "camera", "capture", "photo", "image"],
@@ -1597,7 +1600,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
-            "builtin-dictation",
+            "builtin/dictation",
             "Dictation",
             "Voice dictation — speak and paste transcribed text",
             vec![
@@ -1613,7 +1616,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
-            "builtin-dictation-to-ai",
+            "builtin/dictation-to-ai",
             "Dictate to AI",
             "Voice dictation — speak and submit to AI harness",
             vec![
@@ -1891,7 +1894,7 @@ mod tests {
         assert!(entries.len() >= 5); // At minimum the core built-ins should exist
 
         // Check clipboard history entry
-        let clipboard = entries.iter().find(|e| e.id == "builtin-clipboard-history");
+        let clipboard = entries.iter().find(|e| e.id == "builtin/clipboard-history");
         assert!(clipboard.is_some());
         let clipboard = clipboard.unwrap();
         assert_eq!(clipboard.name, "Clipboard History");
@@ -1904,7 +1907,7 @@ mod tests {
         // Check paste sequentially entry
         let paste_sequentially = entries
             .iter()
-            .find(|e| e.id == "builtin-paste-sequentially");
+            .find(|e| e.id == "builtin/paste-sequentially");
         assert!(paste_sequentially.is_some());
         let paste_sequentially = paste_sequentially.unwrap();
         assert_eq!(paste_sequentially.name, "Paste Sequentially");
@@ -1923,7 +1926,7 @@ mod tests {
         assert!(paste_sequentially.keywords.contains(&"paseq".to_string()));
 
         // Check window switcher entry
-        let window_switcher = entries.iter().find(|e| e.id == "builtin-window-switcher");
+        let window_switcher = entries.iter().find(|e| e.id == "builtin/window-switcher");
         assert!(window_switcher.is_some());
         let window_switcher = window_switcher.unwrap();
         assert_eq!(window_switcher.name, "Window Switcher");
@@ -1936,7 +1939,7 @@ mod tests {
         assert!(window_switcher.keywords.contains(&"switcher".to_string()));
 
         // Check AI harness entry
-        let ai_chat = entries.iter().find(|e| e.id == "builtin-ai-chat");
+        let ai_chat = entries.iter().find(|e| e.id == "builtin/ai-chat");
         assert!(ai_chat.is_some());
         let ai_chat = ai_chat.unwrap();
         assert_eq!(ai_chat.name, "Open AI Harness");
@@ -1947,7 +1950,7 @@ mod tests {
         assert!(ai_chat.keywords.contains(&"gpt".to_string()));
 
         // Check Emoji Picker entry
-        let emoji_picker = entries.iter().find(|e| e.id == "builtin-emoji-picker");
+        let emoji_picker = entries.iter().find(|e| e.id == "builtin/emoji-picker");
         assert!(emoji_picker.is_some());
         let emoji_picker = emoji_picker.unwrap();
         assert_eq!(emoji_picker.name, "Emoji Picker");
@@ -1967,14 +1970,14 @@ mod tests {
         let entries = get_builtin_entries(&config);
 
         // Check that core entries exist (plus all the new command entries)
-        assert!(entries.iter().any(|e| e.id == "builtin-clipboard-history"));
-        assert!(entries.iter().any(|e| e.id == "builtin-paste-sequentially"));
-        assert!(entries.iter().any(|e| e.id == "builtin-ai-chat"));
-        assert!(entries.iter().any(|e| e.id == "builtin-open-notes"));
-        assert!(entries.iter().any(|e| e.id == "builtin-design-gallery"));
+        assert!(entries.iter().any(|e| e.id == "builtin/clipboard-history"));
+        assert!(entries.iter().any(|e| e.id == "builtin/paste-sequentially"));
+        assert!(entries.iter().any(|e| e.id == "builtin/ai-chat"));
+        assert!(entries.iter().any(|e| e.id == "builtin/open-notes"));
+        assert!(entries.iter().any(|e| e.id == "builtin/design-gallery"));
 
         // Window switcher should NOT be present
-        assert!(!entries.iter().any(|e| e.id == "builtin-window-switcher"));
+        assert!(!entries.iter().any(|e| e.id == "builtin/window-switcher"));
     }
     #[test]
     fn test_get_builtin_entries_app_launcher_only() {
@@ -1987,13 +1990,13 @@ mod tests {
 
         // App launcher no longer creates a built-in entry (apps appear in main search)
         // But AI Chat, Notes and Design Gallery are always enabled (plus new command entries)
-        assert!(entries.iter().any(|e| e.id == "builtin-ai-chat"));
-        assert!(entries.iter().any(|e| e.id == "builtin-open-notes"));
-        assert!(entries.iter().any(|e| e.id == "builtin-design-gallery"));
+        assert!(entries.iter().any(|e| e.id == "builtin/ai-chat"));
+        assert!(entries.iter().any(|e| e.id == "builtin/open-notes"));
+        assert!(entries.iter().any(|e| e.id == "builtin/design-gallery"));
 
         // Clipboard history should NOT be present
-        assert!(!entries.iter().any(|e| e.id == "builtin-clipboard-history"));
-        assert!(!entries.iter().any(|e| e.id == "builtin-paste-sequentially"));
+        assert!(!entries.iter().any(|e| e.id == "builtin/clipboard-history"));
+        assert!(!entries.iter().any(|e| e.id == "builtin/paste-sequentially"));
     }
     #[test]
     fn test_get_builtin_entries_none_enabled() {
@@ -2005,14 +2008,14 @@ mod tests {
         let entries = get_builtin_entries(&config);
 
         // AI Chat, Notes, and Design Gallery are always enabled (plus new command entries)
-        assert!(entries.iter().any(|e| e.id == "builtin-ai-chat"));
-        assert!(entries.iter().any(|e| e.id == "builtin-open-notes"));
-        assert!(entries.iter().any(|e| e.id == "builtin-design-gallery"));
+        assert!(entries.iter().any(|e| e.id == "builtin/ai-chat"));
+        assert!(entries.iter().any(|e| e.id == "builtin/open-notes"));
+        assert!(entries.iter().any(|e| e.id == "builtin/design-gallery"));
 
         // Clipboard history and window switcher should NOT be present
-        assert!(!entries.iter().any(|e| e.id == "builtin-clipboard-history"));
-        assert!(!entries.iter().any(|e| e.id == "builtin-paste-sequentially"));
-        assert!(!entries.iter().any(|e| e.id == "builtin-window-switcher"));
+        assert!(!entries.iter().any(|e| e.id == "builtin/clipboard-history"));
+        assert!(!entries.iter().any(|e| e.id == "builtin/paste-sequentially"));
+        assert!(!entries.iter().any(|e| e.id == "builtin/window-switcher"));
     }
     #[test]
     fn test_get_builtin_entries_window_switcher_only() {
@@ -2024,22 +2027,22 @@ mod tests {
         let entries = get_builtin_entries(&config);
 
         // Window switcher + AI Chat + Notes + Design Gallery (always enabled, plus new command entries)
-        assert!(entries.iter().any(|e| e.id == "builtin-window-switcher"));
-        assert!(entries.iter().any(|e| e.id == "builtin-ai-chat"));
-        assert!(entries.iter().any(|e| e.id == "builtin-open-notes"));
-        assert!(entries.iter().any(|e| e.id == "builtin-design-gallery"));
+        assert!(entries.iter().any(|e| e.id == "builtin/window-switcher"));
+        assert!(entries.iter().any(|e| e.id == "builtin/ai-chat"));
+        assert!(entries.iter().any(|e| e.id == "builtin/open-notes"));
+        assert!(entries.iter().any(|e| e.id == "builtin/design-gallery"));
 
         // Verify window switcher has correct properties
         let window_switcher = entries
             .iter()
-            .find(|e| e.id == "builtin-window-switcher")
+            .find(|e| e.id == "builtin/window-switcher")
             .unwrap();
         assert_eq!(window_switcher.feature, BuiltInFeature::WindowSwitcher);
         assert_eq!(window_switcher.icon, Some("🪟".to_string()));
 
         // Clipboard history should NOT be present
-        assert!(!entries.iter().any(|e| e.id == "builtin-clipboard-history"));
-        assert!(!entries.iter().any(|e| e.id == "builtin-paste-sequentially"));
+        assert!(!entries.iter().any(|e| e.id == "builtin/clipboard-history"));
+        assert!(!entries.iter().any(|e| e.id == "builtin/paste-sequentially"));
     }
     #[test]
     fn test_builtin_feature_equality() {
@@ -2109,7 +2112,7 @@ mod tests {
             BuiltInFeature::ClipboardHistory,
         );
 
-        assert_eq!(entry.id, "test-id");
+        assert_eq!(entry.id, "builtin/test-id");
         assert_eq!(entry.name, "Test Entry");
         assert_eq!(entry.description, "Test description");
         assert_eq!(
@@ -2130,7 +2133,7 @@ mod tests {
             "📋",
         );
 
-        assert_eq!(entry.id, "test-id");
+        assert_eq!(entry.id, "builtin/test-id");
         assert_eq!(entry.name, "Test Entry");
         assert_eq!(entry.icon, Some("📋".to_string()));
     }
@@ -2172,14 +2175,14 @@ mod tests {
         let entries = get_builtin_entries(&config);
 
         // Check that system action entries exist
-        assert!(entries.iter().any(|e| e.id == "builtin-empty-trash"));
-        assert!(entries.iter().any(|e| e.id == "builtin-lock-screen"));
-        assert!(entries.iter().any(|e| e.id == "builtin-toggle-dark-mode"));
+        assert!(entries.iter().any(|e| e.id == "builtin/empty-trash"));
+        assert!(entries.iter().any(|e| e.id == "builtin/lock-screen"));
+        assert!(entries.iter().any(|e| e.id == "builtin/toggle-dark-mode"));
         // Volume presets
-        assert!(entries.iter().any(|e| e.id == "builtin-volume-0"));
-        assert!(entries.iter().any(|e| e.id == "builtin-volume-50"));
-        assert!(entries.iter().any(|e| e.id == "builtin-volume-100"));
-        assert!(entries.iter().any(|e| e.id == "builtin-system-preferences"));
+        assert!(entries.iter().any(|e| e.id == "builtin/volume-0"));
+        assert!(entries.iter().any(|e| e.id == "builtin/volume-50"));
+        assert!(entries.iter().any(|e| e.id == "builtin/volume-100"));
+        assert!(entries.iter().any(|e| e.id == "builtin/system-preferences"));
     }
     // NOTE: test_window_action_entries_exist removed - window actions now in extension
 
@@ -2189,21 +2192,21 @@ mod tests {
         let entries = get_builtin_entries(&config);
 
         // Open Notes absorbs New Note and Search Notes (same execution path).
-        assert!(entries.iter().any(|e| e.id == "builtin-open-notes"));
+        assert!(entries.iter().any(|e| e.id == "builtin/open-notes"));
         assert!(
-            !entries.iter().any(|e| e.id == "builtin-new-note"),
-            "builtin-new-note collapsed into builtin-open-notes"
+            !entries.iter().any(|e| e.id == "builtin/new-note"),
+            "builtin/new-note collapsed into builtin-open-notes"
         );
         assert!(
-            !entries.iter().any(|e| e.id == "builtin-search-notes"),
-            "builtin-search-notes collapsed into builtin-open-notes"
+            !entries.iter().any(|e| e.id == "builtin/search-notes"),
+            "builtin/search-notes collapsed into builtin-open-notes"
         );
-        assert!(entries.iter().any(|e| e.id == "builtin-quick-capture"));
+        assert!(entries.iter().any(|e| e.id == "builtin/quick-capture"));
 
         // Verify Open Notes absorbed the keywords from the collapsed entries
         let open_notes = entries
             .iter()
-            .find(|e| e.id == "builtin-open-notes")
+            .find(|e| e.id == "builtin/open-notes")
             .unwrap();
         assert!(open_notes.keywords.contains(&"new".to_string()));
         assert!(open_notes.keywords.contains(&"create".to_string()));
@@ -2215,8 +2218,8 @@ mod tests {
         let config = BuiltInConfig::default();
         let entries = get_builtin_entries(&config);
 
-        let open_notes = entries.iter().find(|e| e.id == "builtin-open-notes");
-        assert!(open_notes.is_some(), "builtin-open-notes should exist");
+        let open_notes = entries.iter().find(|e| e.id == "builtin/open-notes");
+        assert!(open_notes.is_some(), "builtin/open-notes should exist");
         assert_eq!(
             open_notes.unwrap().feature,
             BuiltInFeature::NotesCommand(NotesCommandType::OpenNotes)
@@ -2224,27 +2227,27 @@ mod tests {
 
         // Legacy AI window commands (OpenAi, MiniAi, NewConversation) are no longer registered.
         assert!(
-            entries.iter().find(|e| e.id == "builtin-open-ai").is_none(),
-            "builtin-open-ai should be removed (routes to harness now)"
+            entries.iter().find(|e| e.id == "builtin/open-ai").is_none(),
+            "builtin/open-ai should be removed (routes to harness now)"
         );
         assert!(
-            entries.iter().find(|e| e.id == "builtin-mini-ai").is_none(),
-            "builtin-mini-ai should be removed (routes to harness now)"
+            entries.iter().find(|e| e.id == "builtin/mini-ai").is_none(),
+            "builtin/mini-ai should be removed (routes to harness now)"
         );
         assert!(
             entries
                 .iter()
-                .find(|e| e.id == "builtin-new-conversation")
+                .find(|e| e.id == "builtin/new-conversation")
                 .is_none(),
-            "builtin-new-conversation should be removed (routes to harness now)"
+            "builtin/new-conversation should be removed (routes to harness now)"
         );
 
         let generate_script = entries
             .iter()
-            .find(|e| e.id == "builtin-generate-script-with-ai");
+            .find(|e| e.id == "builtin/generate-script-with-ai");
         assert!(
             generate_script.is_some(),
-            "builtin-generate-script-with-ai should still exist (routes to harness)"
+            "builtin/generate-script-with-ai should still exist (routes to harness)"
         );
         let generate_script = generate_script.unwrap();
         assert_eq!(
@@ -2258,13 +2261,13 @@ mod tests {
         let entries = get_builtin_entries(&config);
 
         let stub_ids = [
-            "builtin-browse-kit-store",
-            "builtin-manage-installed-kits",
-            "builtin-update-all-kits",
-            "builtin-create-ai-preset",
-            "builtin-import-ai-presets",
-            "builtin-export-ai-presets",
-            "builtin-search-ai-presets",
+            "builtin/browse-kit-store",
+            "builtin/manage-installed-kits",
+            "builtin/update-all-kits",
+            "builtin/create-ai-preset",
+            "builtin/import-ai-presets",
+            "builtin/export-ai-presets",
+            "builtin/search-ai-presets",
         ];
 
         #[cfg(debug_assertions)]
@@ -2293,8 +2296,8 @@ mod tests {
         let config = BuiltInConfig::default();
         let entries = get_builtin_entries(&config);
 
-        let favorites = entries.iter().find(|e| e.id == "builtin-favorites");
-        assert!(favorites.is_some(), "builtin-favorites should exist");
+        let favorites = entries.iter().find(|e| e.id == "builtin/favorites");
+        assert!(favorites.is_some(), "builtin/favorites should exist");
 
         let favorites = favorites.unwrap();
         assert_eq!(favorites.name, "Favorites");
@@ -2313,8 +2316,8 @@ mod tests {
         let entries = get_builtin_entries(&config);
 
         // Check that script command entries exist
-        assert!(entries.iter().any(|e| e.id == "builtin-new-script"));
-        assert!(entries.iter().any(|e| e.id == "builtin-new-extension"));
+        assert!(entries.iter().any(|e| e.id == "builtin/new-script"));
+        assert!(entries.iter().any(|e| e.id == "builtin/new-extension"));
     }
     #[test]
     fn test_new_creation_commands_are_discoverable() {
@@ -2323,8 +2326,8 @@ mod tests {
 
         let new_script = entries
             .iter()
-            .find(|e| e.id == "builtin-new-script")
-            .expect("builtin-new-script should exist");
+            .find(|e| e.id == "builtin/new-script")
+            .expect("builtin/new-script should exist");
         assert!(
             new_script.name.to_lowercase().contains("new"),
             "New Script entry name should prominently include 'new'"
@@ -2346,8 +2349,8 @@ mod tests {
 
         let new_extension = entries
             .iter()
-            .find(|e| e.id == "builtin-new-extension")
-            .expect("builtin-new-extension should exist");
+            .find(|e| e.id == "builtin/new-extension")
+            .expect("builtin/new-extension should exist");
         assert!(
             new_extension
                 .keywords
@@ -2369,13 +2372,13 @@ mod tests {
         let entries = get_builtin_entries(&config);
 
         // Check that permission command entries exist
-        assert!(entries.iter().any(|e| e.id == "builtin-check-permissions"));
+        assert!(entries.iter().any(|e| e.id == "builtin/check-permissions"));
         assert!(entries
             .iter()
-            .any(|e| e.id == "builtin-request-accessibility"));
+            .any(|e| e.id == "builtin/request-accessibility"));
         assert!(entries
             .iter()
-            .any(|e| e.id == "builtin-accessibility-settings"));
+            .any(|e| e.id == "builtin/accessibility-settings"));
     }
     #[test]
     fn test_system_action_type_equality() {
@@ -2405,7 +2408,7 @@ mod tests {
         let entries = get_builtin_entries(&config);
 
         // Check that FileSearch entry exists
-        let file_search = entries.iter().find(|e| e.id == "builtin-file-search");
+        let file_search = entries.iter().find(|e| e.id == "builtin/file-search");
         assert!(
             file_search.is_some(),
             "FileSearch builtin should exist in the main menu"
@@ -2425,7 +2428,7 @@ mod tests {
         let config = BuiltInConfig::default();
         let entries = get_builtin_entries(&config);
 
-        let process_manager = entries.iter().find(|e| e.id == "builtin-process-manager");
+        let process_manager = entries.iter().find(|e| e.id == "builtin/process-manager");
         assert!(
             process_manager.is_some(),
             "Process Manager builtin should exist in the main menu"
@@ -2446,7 +2449,7 @@ mod tests {
         let config = BuiltInConfig::default();
         let entries = get_builtin_entries(&config);
 
-        let mini_main_window = entries.iter().find(|e| e.id == "builtin-mini-main-window");
+        let mini_main_window = entries.iter().find(|e| e.id == "builtin/mini-main-window");
         assert!(
             mini_main_window.is_some(),
             "Mini Main Window builtin should exist in the main menu"
@@ -2470,7 +2473,7 @@ mod tests {
 
         let stop_all = entries
             .iter()
-            .find(|e| e.id == "builtin-stop-all-processes");
+            .find(|e| e.id == "builtin/stop-all-processes");
         assert!(
             stop_all.is_some(),
             "Stop all running scripts builtin should exist in the main menu"
@@ -2492,13 +2495,13 @@ mod tests {
 
         let notes = entries
             .iter()
-            .find(|e| e.id == "builtin-open-notes")
+            .find(|e| e.id == "builtin/open-notes")
             .unwrap();
         assert_eq!(notes.description, "Open the Notes window");
 
         let quick_capture = entries
             .iter()
-            .find(|e| e.id == "builtin-quick-capture")
+            .find(|e| e.id == "builtin/quick-capture")
             .unwrap();
         assert_eq!(
             quick_capture.description,
@@ -2507,14 +2510,14 @@ mod tests {
 
         let file_search = entries
             .iter()
-            .find(|e| e.id == "builtin-file-search")
+            .find(|e| e.id == "builtin/file-search")
             .unwrap();
         assert_eq!(
             file_search.description,
             "Browse directories, search files, and open results"
         );
 
-        let webcam = entries.iter().find(|e| e.id == "builtin-webcam").unwrap();
+        let webcam = entries.iter().find(|e| e.id == "builtin/webcam").unwrap();
         assert_eq!(
             webcam.description,
             "Open the webcam prompt and capture a photo"
@@ -2610,7 +2613,7 @@ mod tests {
 
         let invalid_ids: Vec<&str> = entries
             .iter()
-            .filter(|entry| !entry.id.starts_with("builtin-"))
+            .filter(|entry| !entry.id.starts_with("builtin/"))
             .map(|entry| entry.id.as_str())
             .collect();
         let missing_descriptions: Vec<&str> = entries
@@ -2647,10 +2650,10 @@ mod tests {
         let entries = get_builtin_entries(&BuiltInConfig::default());
         let found = entries
             .iter()
-            .find(|e| e.id == "builtin-current-app-commands");
+            .find(|e| e.id == "builtin/current-app-commands");
         assert!(
             found.is_none(),
-            "builtin-current-app-commands should no longer be registered (collapsed into Do in Current App)"
+            "builtin/current-app-commands should no longer be registered (collapsed into Do in Current App)"
         );
     }
 
@@ -2659,8 +2662,8 @@ mod tests {
         let entries = get_builtin_entries(&BuiltInConfig::default());
         let entry = entries
             .iter()
-            .find(|e| e.id == "builtin-do-in-current-app")
-            .expect("builtin-do-in-current-app must be registered");
+            .find(|e| e.id == "builtin/do-in-current-app")
+            .expect("builtin/do-in-current-app must be registered");
         assert!(
             entry.keywords.contains(&"commands".to_string()),
             "Do in Current App should include 'commands' keyword from collapsed entry"
@@ -2714,7 +2717,7 @@ mod tests {
     #[test]
     fn leaf_name_core_builtin_returns_full_name() {
         let entry = BuiltInEntry::new_with_icon(
-            "builtin-clipboard-history",
+            "builtin/clipboard-history",
             "Clipboard History",
             "View and paste from clipboard",
             vec!["clipboard"],
@@ -2967,8 +2970,8 @@ mod tests {
 
         let entry = entries
             .iter()
-            .find(|e| e.id == "builtin-generate-script-from-current-app")
-            .expect("builtin-generate-script-from-current-app must exist");
+            .find(|e| e.id == "builtin/generate-script-from-current-app")
+            .expect("builtin/generate-script-from-current-app must exist");
 
         assert_eq!(entry.name, "Generate Script from Current App");
         assert_eq!(
@@ -2988,10 +2991,10 @@ mod tests {
 
         // Legacy AI window commands must not be registered
         for legacy_id in [
-            "builtin-open-ai-chat",
-            "builtin-mini-ai-chat",
-            "builtin-new-conversation",
-            "builtin-clear-conversation",
+            "builtin/open-ai-chat",
+            "builtin/mini-ai-chat",
+            "builtin/new-conversation",
+            "builtin/clear-conversation",
         ] {
             assert!(
                 !ids.contains(&legacy_id),
@@ -3001,15 +3004,15 @@ mod tests {
 
         // Harness-first AI entries must remain registered
         for expected_id in [
-            "builtin-ai-chat",
-            "builtin-generate-script-with-ai",
-            "builtin-generate-script-from-current-app",
-            "builtin-send-screen-to-ai",
-            "builtin-send-focused-window-to-ai",
-            "builtin-send-selected-text-to-ai",
-            "builtin-send-browser-tab-to-ai",
-            "builtin-new-script",
-            "builtin-new-extension",
+            "builtin/ai-chat",
+            "builtin/generate-script-with-ai",
+            "builtin/generate-script-from-current-app",
+            "builtin/send-screen-to-ai",
+            "builtin/send-focused-window-to-ai",
+            "builtin/send-selected-text-to-ai",
+            "builtin/send-browser-tab-to-ai",
+            "builtin/new-script",
+            "builtin/new-extension",
         ] {
             assert!(
                 ids.contains(&expected_id),
@@ -3019,7 +3022,7 @@ mod tests {
 
         // Preview-only screen-area AI entry should be hidden until real region context works
         assert!(
-            !ids.contains(&"builtin-send-screen-area-to-ai"),
+            !ids.contains(&"builtin/send-screen-area-to-ai"),
             "hide the preview-only screen-area AI entry until it can attach real region context"
         );
     }

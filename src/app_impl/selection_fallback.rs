@@ -73,15 +73,16 @@ impl ScriptListApp {
         // O(1) lookup in registry
         if let Some(command_id) = self.alias_registry.get(&alias_lower) {
             // Check for builtin/{id} command IDs
-            if let Some(builtin_id) = command_id.strip_prefix("builtin/") {
+            if command_id.starts_with("builtin/") {
                 let config = crate::config::BuiltInConfig::default();
                 if let Some(entry) = builtins::get_builtin_entries(&config)
                     .into_iter()
-                    .find(|e| e.id == builtin_id)
+                    .find(|e| e.id == *command_id)
                 {
-                    logging::log(
-                        "ALIAS",
-                        &format!("Found builtin match: '{}' -> '{}'", alias, entry.name),
+                    tracing::info!(
+                        alias = %alias,
+                        command_id = %command_id,
+                        "alias_builtin_match_resolved"
                     );
                     return Some(AliasMatch::BuiltIn(std::sync::Arc::new(entry)));
                 }

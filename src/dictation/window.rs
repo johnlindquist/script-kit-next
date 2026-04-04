@@ -238,20 +238,25 @@ fn install_global_escape_monitor() {
 
     let block = block::ConcreteBlock::new(move |event: id| {
         // SAFETY: `event` is a valid NSEvent passed by AppKit.
-        // keyCode 53 = Escape on all macOS keyboard layouts.
+        // keyCode 53 = Escape, keyCode 36 = Return/Enter.
         let key_code: u16 = unsafe { msg_send![event, keyCode] };
-        if key_code != 53 {
-            return;
+        match key_code {
+            53 => {
+                tracing::info!(
+                    category = "DICTATION",
+                    "Global key monitor: Escape pressed in external app"
+                );
+                ESCAPE_REQUESTED.store(true, std::sync::atomic::Ordering::SeqCst);
+            }
+            36 => {
+                tracing::info!(
+                    category = "DICTATION",
+                    "Global key monitor: Enter pressed in external app"
+                );
+                ENTER_REQUESTED.store(true, std::sync::atomic::Ordering::SeqCst);
+            }
+            _ => {}
         }
-
-        tracing::info!(
-            category = "DICTATION",
-            "Global escape monitor: Escape pressed in external app"
-        );
-
-        // Set the flag — the 16ms overlay pump will pick it up on the next
-        // tick and process it inside GPUI context.
-        ESCAPE_REQUESTED.store(true, std::sync::atomic::Ordering::SeqCst);
     });
     let block = block.copy();
 
@@ -306,10 +311,14 @@ fn remove_global_escape_monitor() {
 #[cfg(not(target_os = "macos"))]
 fn remove_global_escape_monitor() {}
 
-/// Flag: the global escape monitor detected an Escape press that the overlay
-/// needs to process. Checked by `process_global_escape_if_requested` inside
+/// Flag: the global key monitor detected an Escape press that the overlay
+/// needs to process. Checked by `process_global_keys_if_requested` inside
 /// GPUI context on every pump tick.
 static ESCAPE_REQUESTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Flag: the global key monitor detected an Enter press while in Confirming
+/// phase. Enter in Confirming = abort the session.
+static ENTER_REQUESTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 // ---------------------------------------------------------------------------
 // Confirming-phase copy constants (single source of truth)
@@ -516,14 +525,27 @@ impl DictationOverlay {
         tracing::info!(category = "DICTATION", "Overlay closed from within entity");
     }
 
-    /// Check whether the global escape monitor flagged an Escape press and
-    /// process it.  Called from the overlay pump tick (every 16ms) so the
+    /// Check whether the global key monitor flagged an Escape or Enter press
+    /// and process it.  Called from the overlay pump tick (every 16ms) so the
     /// action runs inside GPUI context with full `&mut self` access.
-    pub fn process_global_escape_if_requested(
+    pub fn process_global_keys_if_requested(
         &mut self,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        // Enter is only meaningful in the Confirming phase (= abort session).
+        let enter = ENTER_REQUESTED.swap(false, std::sync::atomic::Ordering::SeqCst);
+        if enter && self.state.phase == DictationSessionPhase::Confirming {
+            tracing::info!(
+                category = "DICTATION",
+                "Processing global Enter request in Confirming phase — aborting"
+            );
+            self.abort_overlay_session(window, cx);
+            // Clear any pending escape too — we've already acted.
+            ESCAPE_REQUESTED.store(false, std::sync::atomic::Ordering::SeqCst);
+            return;
+        }
+
         if !ESCAPE_REQUESTED.swap(false, std::sync::atomic::Ordering::SeqCst) {
             return;
         }
@@ -1331,7 +1353,7 @@ pub fn update_dictation_overlay(state: DictationOverlayState, cx: &mut App) -> a
     let _ = handle.update(cx, |view, window, cx| {
         // Check for global escape before applying state — the escape may
         // close the overlay, in which case set_state is a no-op.
-        view.process_global_escape_if_requested(window, cx);
+        view.process_global_keys_if_requested(window, cx);
         view.set_state(state, window, cx);
     });
 

@@ -2066,10 +2066,10 @@ fn legacy_ai_window_builtins_removed_from_registration() {
     let registration_section = &fn_body[..fn_end];
 
     for legacy_id in [
-        "builtin-open-ai-chat",
-        "builtin-mini-ai-chat",
-        "builtin-new-conversation",
-        "builtin-clear-conversation",
+        "builtin/open-ai-chat",
+        "builtin/mini-ai-chat",
+        "builtin/new-conversation",
+        "builtin/clear-conversation",
     ] {
         assert!(
             !registration_section.contains(legacy_id),
@@ -2082,20 +2082,20 @@ fn legacy_ai_window_builtins_removed_from_registration() {
 fn generate_script_and_send_builtins_still_registered() {
     // These builtins remain registered (but route to harness now).
     assert!(
-        BUILTINS_SOURCE.contains("\"builtin-generate-script-with-ai\""),
-        "builtin-generate-script-with-ai should still be registered"
+        BUILTINS_SOURCE.contains("\"builtin/generate-script-with-ai\""),
+        "builtin/generate-script-with-ai should still be registered"
     );
     assert!(
-        BUILTINS_SOURCE.contains("\"builtin-generate-script-from-current-app\""),
-        "builtin-generate-script-from-current-app should still be registered"
+        BUILTINS_SOURCE.contains("\"builtin/generate-script-from-current-app\""),
+        "builtin/generate-script-from-current-app should still be registered"
     );
     assert!(
-        BUILTINS_SOURCE.contains("\"builtin-send-screen-to-ai\""),
-        "builtin-send-screen-to-ai should still be registered"
+        BUILTINS_SOURCE.contains("\"builtin/send-screen-to-ai\""),
+        "builtin/send-screen-to-ai should still be registered"
     );
     assert!(
-        BUILTINS_SOURCE.contains("\"builtin-send-selected-text-to-ai\""),
-        "builtin-send-selected-text-to-ai should still be registered"
+        BUILTINS_SOURCE.contains("\"builtin/send-selected-text-to-ai\""),
+        "builtin/send-selected-text-to-ai should still be registered"
     );
 }
 
@@ -2314,7 +2314,7 @@ fn builtin_ai_chat_does_not_open_legacy_ai_window() {
 fn builtin_ai_chat_entry_reflects_harness_label() {
     assert!(
         BUILTINS_SOURCE.contains("\"Open AI Harness\""),
-        "builtin-ai-chat entry must use the harness label, not the legacy AI Chat label"
+        "builtin/ai-chat entry must use the harness label, not the legacy AI Chat label"
     );
 }
 
@@ -2973,8 +2973,8 @@ fn send_screen_area_not_registered_in_builtin_entries() {
     let registration_section = &fn_body[..fn_end];
 
     assert!(
-        !registration_section.contains("\"builtin-send-screen-area-to-ai\""),
-        "builtin-send-screen-area-to-ai must not be registered until harness attachment exists",
+        !registration_section.contains("\"builtin/send-screen-area-to-ai\""),
+        "builtin/send-screen-area-to-ai must not be registered until harness attachment exists",
     );
 }
 
@@ -3124,11 +3124,11 @@ fn legacy_ai_window_entries_stay_removed_while_manual_paths_stay_present() {
     // Legacy window-style AI builtins must NOT be registered.
     // Match quoted string literals to avoid false positives from comments.
     for legacy_id in [
-        "builtin-open-ai-chat",
-        "builtin-mini-ai-chat",
-        "builtin-new-conversation",
-        "builtin-clear-conversation",
-        "builtin-send-screen-area-to-ai",
+        "builtin/open-ai-chat",
+        "builtin/mini-ai-chat",
+        "builtin/new-conversation",
+        "builtin/clear-conversation",
+        "builtin/send-screen-area-to-ai",
     ] {
         let quoted = format!("\"{}\"", legacy_id);
         assert!(
@@ -3139,13 +3139,13 @@ fn legacy_ai_window_entries_stay_removed_while_manual_paths_stay_present() {
 
     // Harness-first AI entries and manual creation paths must remain registered.
     for kept_id in [
-        "builtin-generate-script-with-ai",
-        "builtin-generate-script-from-current-app",
-        "builtin-send-screen-to-ai",
-        "builtin-send-selected-text-to-ai",
-        "builtin-send-browser-tab-to-ai",
-        "builtin-new-script",
-        "builtin-new-extension",
+        "builtin/generate-script-with-ai",
+        "builtin/generate-script-from-current-app",
+        "builtin/send-screen-to-ai",
+        "builtin/send-selected-text-to-ai",
+        "builtin/send-browser-tab-to-ai",
+        "builtin/new-script",
+        "builtin/new-extension",
     ] {
         let quoted = format!("\"{}\"", kept_id);
         assert!(
@@ -4105,10 +4105,7 @@ fn search_query_and_input_targets_prevent_ambient_capture() {
 // =========================================================================
 
 #[test]
-fn acp_path_calls_shared_artifact_authoring_appendix_builder() {
-    // The ACP view opener must call the same shared appendix builder used by
-    // the PTY submission path, ensuring both surfaces carry identical
-    // verification guidance.
+fn acp_path_emits_initial_input_builder_telemetry() {
     let acp_fn_start = TAB_AI_MODE_SOURCE
         .find("fn open_tab_ai_acp_view_from_request_impl(")
         .expect("open_tab_ai_acp_view_from_request_impl must exist");
@@ -4119,25 +4116,16 @@ fn acp_path_calls_shared_artifact_authoring_appendix_builder() {
     let acp_fn_body = &acp_fn_body[..next_fn];
 
     assert!(
-        acp_fn_body.contains("build_tab_ai_artifact_authoring_appendix_for_prompt"),
-        "ACP path must call the same shared appendix builder as the PTY path"
+        acp_fn_body.contains("event = \"tab_ai_acp_initial_input_built\""),
+        "ACP path must emit the shared initial-input telemetry event"
     );
-}
-
-#[test]
-fn acp_path_logs_verification_contract_telemetry() {
-    let acp_fn_start = TAB_AI_MODE_SOURCE
-        .find("fn open_tab_ai_acp_view_from_request_impl(")
-        .expect("open_tab_ai_acp_view_from_request_impl must exist");
-    let acp_fn_body = &TAB_AI_MODE_SOURCE[acp_fn_start..];
-    let next_fn = acp_fn_body[1..]
-        .find("\n    fn ")
-        .unwrap_or(acp_fn_body.len());
-    let acp_fn_body = &acp_fn_body[..next_fn];
-
     assert!(
-        acp_fn_body.contains("tab_ai_acp_artifact_authoring_guidance_appended"),
-        "ACP path must emit the artifact authoring guidance telemetry event"
+        acp_fn_body.contains("guidance_appended"),
+        "ACP telemetry must record whether artifact guidance was appended"
+    );
+    assert!(
+        acp_fn_body.contains("forced_by_script_list_submit"),
+        "ACP telemetry must record whether ScriptList submit forced guidance"
     );
     assert!(
         acp_fn_body.contains("includes_script_authoring_skill"),
@@ -4154,9 +4142,7 @@ fn acp_path_logs_verification_contract_telemetry() {
 }
 
 #[test]
-fn acp_path_formats_guidance_before_user_intent() {
-    // When guidance is appended, it must come before the "User intent:" line
-    // so the agent sees verification rules before the task description.
+fn acp_path_uses_shared_initial_input_builder() {
     let acp_fn_start = TAB_AI_MODE_SOURCE
         .find("fn open_tab_ai_acp_view_from_request_impl(")
         .expect("open_tab_ai_acp_view_from_request_impl must exist");
@@ -4166,29 +4152,25 @@ fn acp_path_formats_guidance_before_user_intent() {
         .unwrap_or(acp_fn_body.len());
     let acp_fn_body = &acp_fn_body[..next_fn];
 
-    // The format string must place guidance before "User intent:"
     assert!(
-        acp_fn_body.contains(r#"format!("{guidance}\n\nUser intent:\n{intent}\n")"#),
-        "ACP path must format guidance before the User intent line"
+        acp_fn_body.contains("build_tab_ai_acp_initial_input_for_prompt"),
+        "ACP path must delegate initial-input formatting to the shared helper"
     );
 }
 
 #[test]
-fn acp_path_passes_submit_mode_to_appendix_builder() {
-    // The ACP path must pass Submit mode (not PasteOnly) to the appendix
-    // builder, since ACP always auto-submits when there is an effective intent.
-    let acp_fn_start = TAB_AI_MODE_SOURCE
-        .find("fn open_tab_ai_acp_view_from_request_impl(")
-        .expect("open_tab_ai_acp_view_from_request_impl must exist");
-    let acp_fn_body = &TAB_AI_MODE_SOURCE[acp_fn_start..];
-    let next_fn = acp_fn_body[1..]
-        .find("\n    fn ")
-        .unwrap_or(acp_fn_body.len());
-    let acp_fn_body = &acp_fn_body[..next_fn];
-
+fn harness_source_builds_acp_initial_input_with_guidance_before_user_intent() {
     assert!(
-        acp_fn_body.contains("TabAiHarnessSubmissionMode::Submit"),
-        "ACP path must pass Submit mode to the shared appendix builder"
+        HARNESS_SOURCE.contains("pub(crate) fn build_tab_ai_acp_initial_input_for_prompt("),
+        "harness module must define the shared ACP initial-input builder"
+    );
+    assert!(
+        HARNESS_SOURCE.contains(r#"format!("{guidance}\n\nUser intent:\n{intent}\n")"#),
+        "shared ACP initial-input builder must place guidance before the User intent line"
+    );
+    assert!(
+        HARNESS_SOURCE.contains("TabAiHarnessSubmissionMode::Submit"),
+        "shared ACP initial-input builder must always use Submit mode"
     );
 }
 

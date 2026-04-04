@@ -924,7 +924,7 @@ impl ScriptListApp {
                         // is_script=false: no editable file, hide "Edit Script" etc.
                         // Look up shortcut and alias from overrides for dynamic action menu
                         // Uses cached versions to avoid file I/O on every render
-                        let command_id = format!("builtin/{}", &m.entry.id);
+                        let command_id = m.entry.id.clone();
                         let shortcut_overrides = crate::shortcuts::get_cached_shortcut_overrides();
                         let alias_overrides = crate::aliases::get_cached_alias_overrides();
                         let shortcut = shortcut_overrides.get(&command_id).map(|s| s.to_string());

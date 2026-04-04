@@ -1441,15 +1441,15 @@ fn test_process_limits_clone() {
 #[test]
 fn test_default_confirmation_commands_constant() {
     // Verify the constant contains expected dangerous commands
-    assert!(DEFAULT_CONFIRMATION_COMMANDS.contains(&"builtin-shut-down"));
-    assert!(DEFAULT_CONFIRMATION_COMMANDS.contains(&"builtin-restart"));
-    assert!(DEFAULT_CONFIRMATION_COMMANDS.contains(&"builtin-log-out"));
-    assert!(DEFAULT_CONFIRMATION_COMMANDS.contains(&"builtin-empty-trash"));
-    assert!(DEFAULT_CONFIRMATION_COMMANDS.contains(&"builtin-sleep"));
-    assert!(DEFAULT_CONFIRMATION_COMMANDS.contains(&"builtin-force-quit"));
-    assert!(DEFAULT_CONFIRMATION_COMMANDS.contains(&"builtin-stop-all-processes"));
-    assert!(DEFAULT_CONFIRMATION_COMMANDS.contains(&"builtin-clear-suggested"));
-    assert!(DEFAULT_CONFIRMATION_COMMANDS.contains(&"builtin-test-confirmation"));
+    assert!(DEFAULT_CONFIRMATION_COMMANDS.contains(&"builtin/shut-down"));
+    assert!(DEFAULT_CONFIRMATION_COMMANDS.contains(&"builtin/restart"));
+    assert!(DEFAULT_CONFIRMATION_COMMANDS.contains(&"builtin/log-out"));
+    assert!(DEFAULT_CONFIRMATION_COMMANDS.contains(&"builtin/empty-trash"));
+    assert!(DEFAULT_CONFIRMATION_COMMANDS.contains(&"builtin/sleep"));
+    assert!(DEFAULT_CONFIRMATION_COMMANDS.contains(&"builtin/force-quit"));
+    assert!(DEFAULT_CONFIRMATION_COMMANDS.contains(&"builtin/stop-all-processes"));
+    assert!(DEFAULT_CONFIRMATION_COMMANDS.contains(&"builtin/clear-suggested"));
+    assert!(DEFAULT_CONFIRMATION_COMMANDS.contains(&"builtin/test-confirmation"));
 }
 
 #[test]
@@ -1457,15 +1457,15 @@ fn test_requires_confirmation_default_commands() {
     // Default commands should require confirmation
     let config = Config::default();
 
-    assert!(config.requires_confirmation("builtin-shut-down"));
-    assert!(config.requires_confirmation("builtin-restart"));
-    assert!(config.requires_confirmation("builtin-log-out"));
-    assert!(config.requires_confirmation("builtin-empty-trash"));
-    assert!(config.requires_confirmation("builtin-sleep"));
-    assert!(config.requires_confirmation("builtin-force-quit"));
-    assert!(config.requires_confirmation("builtin-stop-all-processes"));
-    assert!(config.requires_confirmation("builtin-clear-suggested"));
-    assert!(config.requires_confirmation("builtin-test-confirmation"));
+    assert!(config.requires_confirmation("builtin/shut-down"));
+    assert!(config.requires_confirmation("builtin/restart"));
+    assert!(config.requires_confirmation("builtin/log-out"));
+    assert!(config.requires_confirmation("builtin/empty-trash"));
+    assert!(config.requires_confirmation("builtin/sleep"));
+    assert!(config.requires_confirmation("builtin/force-quit"));
+    assert!(config.requires_confirmation("builtin/stop-all-processes"));
+    assert!(config.requires_confirmation("builtin/clear-suggested"));
+    assert!(config.requires_confirmation("builtin/test-confirmation"));
 }
 
 #[test]
@@ -1473,8 +1473,8 @@ fn test_requires_confirmation_non_dangerous_commands() {
     // Non-dangerous commands should NOT require confirmation
     let config = Config::default();
 
-    assert!(!config.requires_confirmation("builtin-clipboard-history"));
-    assert!(!config.requires_confirmation("builtin-app-launcher"));
+    assert!(!config.requires_confirmation("builtin/clipboard-history"));
+    assert!(!config.requires_confirmation("builtin/app-launcher"));
     assert!(!config.requires_confirmation("script/hello-world"));
     assert!(!config.requires_confirmation("app/com.apple.Safari"));
 }
@@ -1484,7 +1484,7 @@ fn test_requires_confirmation_user_override_disable() {
     // User can disable confirmation for a default dangerous command
     let mut commands = HashMap::new();
     commands.insert(
-        "builtin-shut-down".to_string(),
+        "builtin/shut-down".to_string(),
         CommandConfig {
             shortcut: None,
             hidden: None,
@@ -1521,9 +1521,9 @@ fn test_requires_confirmation_user_override_disable() {
     };
 
     // Should NOT require confirmation because user disabled it
-    assert!(!config.requires_confirmation("builtin-shut-down"));
+    assert!(!config.requires_confirmation("builtin/shut-down"));
     // Other default commands still require it
-    assert!(config.requires_confirmation("builtin-restart"));
+    assert!(config.requires_confirmation("builtin/restart"));
 }
 
 #[test]
@@ -1623,7 +1623,7 @@ fn test_config_deserialization_with_confirmation_required() {
             "key": "Semicolon"
         },
         "commands": {
-            "builtin-shut-down": {
+            "builtin/shut-down": {
                 "confirmationRequired": false
             },
             "script/my-script": {
@@ -1635,11 +1635,11 @@ fn test_config_deserialization_with_confirmation_required() {
     let config: Config = serde_json::from_str(json).unwrap();
 
     // User disabled confirmation for shut-down
-    assert!(!config.requires_confirmation("builtin-shut-down"));
+    assert!(!config.requires_confirmation("builtin/shut-down"));
     // User enabled confirmation for custom script
     assert!(config.requires_confirmation("script/my-script"));
     // Other default commands still require it
-    assert!(config.requires_confirmation("builtin-restart"));
+    assert!(config.requires_confirmation("builtin/restart"));
 }
 
 #[test]
@@ -1648,7 +1648,7 @@ fn test_requires_confirmation_with_partial_command_config() {
     // Should fall back to defaults
     let mut commands = HashMap::new();
     commands.insert(
-        "builtin-shut-down".to_string(),
+        "builtin/shut-down".to_string(),
         CommandConfig {
             shortcut: Some(HotkeyConfig {
                 modifiers: vec!["meta".to_string()],
@@ -1688,5 +1688,155 @@ fn test_requires_confirmation_with_partial_command_config() {
     };
 
     // Should still require confirmation (falls back to default)
-    assert!(config.requires_confirmation("builtin-shut-down"));
+    assert!(config.requires_confirmation("builtin/shut-down"));
+}
+
+// ============================================
+// Command ID module tests
+// ============================================
+
+#[test]
+fn canonical_builtin_command_id_normalizes_legacy_and_canonical_inputs() {
+    use crate::config::canonical_builtin_command_id;
+
+    // Legacy dash-style → canonical slash-style
+    assert_eq!(
+        canonical_builtin_command_id("builtin-clipboard-history"),
+        "builtin/clipboard-history"
+    );
+    // Bare identifier → canonical
+    assert_eq!(
+        canonical_builtin_command_id("clipboard-history"),
+        "builtin/clipboard-history"
+    );
+    // Already canonical → unchanged
+    assert_eq!(
+        canonical_builtin_command_id("builtin/clipboard-history"),
+        "builtin/clipboard-history"
+    );
+}
+
+#[test]
+fn parse_command_id_accepts_all_categories() {
+    use crate::config::{parse_command_id, CommandCategory};
+
+    let (cat, id) = parse_command_id("builtin/clipboard-history").unwrap();
+    assert_eq!(cat, CommandCategory::Builtin);
+    assert_eq!(id, "clipboard-history");
+
+    let (cat, id) = parse_command_id("app/com.apple.Safari").unwrap();
+    assert_eq!(cat, CommandCategory::App);
+    assert_eq!(id, "com.apple.Safari");
+
+    let (cat, id) = parse_command_id("script/hello-world").unwrap();
+    assert_eq!(cat, CommandCategory::Script);
+    assert_eq!(id, "hello-world");
+
+    let (cat, id) = parse_command_id("scriptlet/my-snippet").unwrap();
+    assert_eq!(cat, CommandCategory::Scriptlet);
+    assert_eq!(id, "my-snippet");
+}
+
+#[test]
+fn parse_command_id_rejects_invalid_formats() {
+    use crate::config::parse_command_id;
+
+    // No slash
+    assert!(parse_command_id("builtin-clipboard-history").is_err());
+    // Unknown category
+    assert!(parse_command_id("foo/bar").is_err());
+    // Empty identifier
+    assert!(parse_command_id("builtin/").is_err());
+    // No category
+    assert!(parse_command_id("/clipboard-history").is_err());
+}
+
+#[test]
+fn is_valid_command_id_accepts_supported_prefixes() {
+    use crate::config::is_valid_command_id;
+
+    assert!(is_valid_command_id("builtin/clipboard-history"));
+    assert!(is_valid_command_id("app/com.apple.Safari"));
+    assert!(is_valid_command_id("script/hello-world"));
+    assert!(is_valid_command_id("scriptlet/my-snippet"));
+}
+
+#[test]
+fn is_valid_command_id_rejects_unsupported_prefixes() {
+    use crate::config::is_valid_command_id;
+
+    assert!(!is_valid_command_id("builtin-clipboard-history"));
+    assert!(!is_valid_command_id("foo/bar"));
+}
+
+#[test]
+fn build_command_id_constructs_canonical_ids() {
+    use crate::config::{build_command_id, CommandCategory};
+
+    assert_eq!(
+        build_command_id(CommandCategory::Builtin, "clipboard-history").unwrap(),
+        "builtin/clipboard-history"
+    );
+    assert_eq!(
+        build_command_id(CommandCategory::App, "com.apple.Safari").unwrap(),
+        "app/com.apple.Safari"
+    );
+    assert!(build_command_id(CommandCategory::Script, "").is_err());
+}
+
+#[test]
+fn command_id_deeplink_roundtrip() {
+    use crate::config::{command_id_from_deeplink, command_id_to_deeplink};
+
+    let deeplink = command_id_to_deeplink("builtin/clipboard-history").unwrap();
+    assert_eq!(
+        deeplink,
+        "scriptkit://commands/builtin/clipboard-history"
+    );
+
+    let parsed = command_id_from_deeplink(&deeplink).unwrap();
+    assert_eq!(parsed, "builtin/clipboard-history");
+}
+
+#[test]
+fn command_id_to_deeplink_uses_scriptkit_scheme() {
+    use crate::config::command_id_to_deeplink;
+
+    let deeplink = command_id_to_deeplink("builtin/test").unwrap();
+    assert!(
+        deeplink.starts_with("scriptkit://"),
+        "Deeplink should use scriptkit:// scheme, got: {}",
+        deeplink
+    );
+    assert!(
+        !deeplink.starts_with("kit://"),
+        "Deeplink should NOT use kit:// scheme, got: {}",
+        deeplink
+    );
+}
+
+#[test]
+fn command_id_from_deeplink_rejects_invalid() {
+    use crate::config::command_id_from_deeplink;
+
+    assert!(command_id_from_deeplink("kit://commands/builtin/test").is_err());
+    assert!(command_id_from_deeplink("https://example.com").is_err());
+}
+
+#[test]
+fn normalize_builtin_identifier_strips_prefixes() {
+    use crate::config::normalize_builtin_identifier;
+
+    assert_eq!(
+        normalize_builtin_identifier("builtin-clipboard-history"),
+        "clipboard-history"
+    );
+    assert_eq!(
+        normalize_builtin_identifier("builtin/clipboard-history"),
+        "clipboard-history"
+    );
+    assert_eq!(
+        normalize_builtin_identifier("clipboard-history"),
+        "clipboard-history"
+    );
 }
