@@ -9,7 +9,9 @@
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 
-use crate::storybook::{story_container, story_divider, story_item, story_section, Story, StoryVariant};
+use crate::storybook::{
+    story_container, story_divider, story_item, story_section, Story, StoryVariant,
+};
 use crate::theme::get_cached_theme;
 use crate::theme::opacity::{OPACITY_BORDER, OPACITY_HOVER, OPACITY_SELECTED, OPACITY_TEXT_MUTED};
 
@@ -41,11 +43,36 @@ struct SlashItem {
 }
 
 const ITEMS: &[SlashItem] = &[
-    SlashItem { command: "/context", label: "Current Context", description: "Attach minimal desktop context", icon_char: "◎" },
-    SlashItem { command: "/context-full", label: "Full Context", description: "Attach complete desktop context", icon_char: "◉" },
-    SlashItem { command: "/selection", label: "Selection", description: "Attach selected text", icon_char: "▋" },
-    SlashItem { command: "/browser", label: "Browser URL", description: "Attach current browser URL", icon_char: "◆" },
-    SlashItem { command: "/window", label: "Focused Window", description: "Attach focused window info", icon_char: "▢" },
+    SlashItem {
+        command: "/context",
+        label: "Current Context",
+        description: "Attach minimal desktop context",
+        icon_char: "◎",
+    },
+    SlashItem {
+        command: "/context-full",
+        label: "Full Context",
+        description: "Attach complete desktop context",
+        icon_char: "◉",
+    },
+    SlashItem {
+        command: "/selection",
+        label: "Selection",
+        description: "Attach selected text",
+        icon_char: "▋",
+    },
+    SlashItem {
+        command: "/browser",
+        label: "Browser URL",
+        description: "Attach current browser URL",
+        icon_char: "◆",
+    },
+    SlashItem {
+        command: "/window",
+        label: "Focused Window",
+        description: "Attach focused window info",
+        icon_char: "▢",
+    },
 ];
 
 // ─── Story ─────────────────────────────────────────────────────────────
@@ -69,16 +96,11 @@ impl Story for SlashCommandMenuVariationsStory {
         let variants = self.variants();
 
         story_container()
-            .child(
-                story_section("All Variants — '/' Typed").children(
-                    variants.iter().enumerate().map(|(i, v)| {
-                        story_item(
-                            &format!("{}. {}", i + 1, v.name),
-                            self.render_variant(v),
-                        )
-                    }),
-                ),
-            )
+            .child(story_section("All Variants — '/' Typed").children(
+                variants.iter().enumerate().map(|(i, v)| {
+                    story_item(&format!("{}. {}", i + 1, v.name), self.render_variant(v))
+                }),
+            ))
             .into_any_element()
     }
 
@@ -159,14 +181,47 @@ fn render_current() -> AnyElement {
         .children(ITEMS.iter().enumerate().map(|(i, item)| {
             let selected = i == 0;
             div()
-                .flex().items_center().gap(px(8.)).px(px(12.)).py(px(4.))
+                .flex()
+                .items_center()
+                .gap(px(8.))
+                .px(px(12.))
+                .py(px(4.))
                 .rounded(px(6.))
-                .bg(if selected { accent.opacity(OPACITY_SELECTED) } else { transparent_black() })
-                .child(div().size(px(ICON_SZ)).flex().items_center().justify_center()
-                    .text_xs().text_color(accent).child(item.icon_char))
-                .child(div().flex().flex_col().overflow_hidden()
-                    .child(div().text_sm().text_color(fg).text_ellipsis().child(item.label))
-                    .child(div().text_xs().text_color(muted).text_ellipsis().child(item.description)))
+                .bg(if selected {
+                    accent.opacity(OPACITY_SELECTED)
+                } else {
+                    transparent_black()
+                })
+                .child(
+                    div()
+                        .size(px(ICON_SZ))
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .text_xs()
+                        .text_color(accent)
+                        .child(item.icon_char),
+                )
+                .child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .overflow_hidden()
+                        .child(
+                            div()
+                                .text_sm()
+                                .text_color(fg)
+                                .text_ellipsis()
+                                .child(item.label),
+                        )
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(muted)
+                                .text_ellipsis()
+                                .child(item.description),
+                        ),
+                )
         }))
         .into_any_element()
 }
@@ -183,18 +238,50 @@ fn render_compact_tags() -> AnyElement {
         .children(ITEMS.iter().enumerate().map(|(i, item)| {
             let selected = i == 0;
             div()
-                .flex().items_center().justify_between().px(px(12.)).py(px(6.))
+                .flex()
+                .items_center()
+                .justify_between()
+                .px(px(12.))
+                .py(px(6.))
                 .rounded(px(4.))
-                .bg(if selected { accent.opacity(OPACITY_HOVER) } else { transparent_black() })
-                .child(div().flex().items_center().gap(px(8.))
-                    .child(div().size(px(ICON_SZ)).flex().items_center().justify_center()
-                        .text_xs().text_color(if selected { fg } else { muted }).child(item.icon_char))
-                    .child(div().text_sm().text_color(if selected { fg } else { muted.opacity(0.85) })
-                        .child(item.label)))
-                .child(div().text_xs().font_weight(FontWeight::MEDIUM)
-                    .text_color(muted.opacity(OPACITY_TEXT_MUTED))
-                    .px(px(6.)).py(px(2.)).rounded(px(3.))
-                    .bg(border.opacity(0.3)).child(item.command))
+                .bg(if selected {
+                    accent.opacity(OPACITY_HOVER)
+                } else {
+                    transparent_black()
+                })
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(px(8.))
+                        .child(
+                            div()
+                                .size(px(ICON_SZ))
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .text_xs()
+                                .text_color(if selected { fg } else { muted })
+                                .child(item.icon_char),
+                        )
+                        .child(
+                            div()
+                                .text_sm()
+                                .text_color(if selected { fg } else { muted.opacity(0.85) })
+                                .child(item.label),
+                        ),
+                )
+                .child(
+                    div()
+                        .text_xs()
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(muted.opacity(OPACITY_TEXT_MUTED))
+                        .px(px(6.))
+                        .py(px(2.))
+                        .rounded(px(3.))
+                        .bg(border.opacity(0.3))
+                        .child(item.command),
+                )
         }))
         .into_any_element()
 }
@@ -212,21 +299,55 @@ fn render_gold_accent() -> AnyElement {
         .children(ITEMS.iter().enumerate().map(|(i, item)| {
             let selected = i == 0;
             div()
-                .flex().items_center().gap(px(8.)).px(px(12.)).py(px(5.))
-                .bg(if selected { gold.opacity(0.06) } else { transparent_black() })
-                .child(div().w(px(2.)).h(px(18.)).rounded(px(1.))
-                    .bg(if selected { gold } else { transparent_black() }))
-                .child(div().flex().flex_1().flex_col().overflow_hidden()
-                    .child(div().text_sm()
-                        .text_color(if selected { fg } else { muted.opacity(0.85) })
-                        .font_weight(if selected { FontWeight::MEDIUM } else { FontWeight::NORMAL })
-                        .text_ellipsis().child(item.label))
-                    .when(selected, |d| d.child(div().text_xs()
-                        .text_color(muted.opacity(OPACITY_TEXT_MUTED)).text_ellipsis()
-                        .child(item.description))))
-                .child(div().text_xs()
-                    .text_color(muted.opacity(if selected { 0.5 } else { 0.35 }))
-                    .child(item.command))
+                .flex()
+                .items_center()
+                .gap(px(8.))
+                .px(px(12.))
+                .py(px(5.))
+                .bg(if selected {
+                    gold.opacity(0.06)
+                } else {
+                    transparent_black()
+                })
+                .child(div().w(px(2.)).h(px(18.)).rounded(px(1.)).bg(if selected {
+                    gold
+                } else {
+                    transparent_black()
+                }))
+                .child(
+                    div()
+                        .flex()
+                        .flex_1()
+                        .flex_col()
+                        .overflow_hidden()
+                        .child(
+                            div()
+                                .text_sm()
+                                .text_color(if selected { fg } else { muted.opacity(0.85) })
+                                .font_weight(if selected {
+                                    FontWeight::MEDIUM
+                                } else {
+                                    FontWeight::NORMAL
+                                })
+                                .text_ellipsis()
+                                .child(item.label),
+                        )
+                        .when(selected, |d| {
+                            d.child(
+                                div()
+                                    .text_xs()
+                                    .text_color(muted.opacity(OPACITY_TEXT_MUTED))
+                                    .text_ellipsis()
+                                    .child(item.description),
+                            )
+                        }),
+                )
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(muted.opacity(if selected { 0.5 } else { 0.35 }))
+                        .child(item.command),
+                )
         }))
         .into_any_element()
 }
@@ -241,31 +362,70 @@ fn render_grouped_sections() -> AnyElement {
 
     menu_shell(bg, border)
         .child(section_header("Context Snapshots", muted))
-        .children(ITEMS[0..2].iter().enumerate().map(|(i, item)| {
-            grouped_row(item, i == 0, fg, muted, accent)
-        }))
+        .children(
+            ITEMS[0..2]
+                .iter()
+                .enumerate()
+                .map(|(i, item)| grouped_row(item, i == 0, fg, muted, accent)),
+        )
         .child(div().h(px(8.)))
         .child(section_header("Target Sources", muted))
-        .children(ITEMS[2..].iter().map(|item| {
-            grouped_row(item, false, fg, muted, accent)
-        }))
+        .children(
+            ITEMS[2..]
+                .iter()
+                .map(|item| grouped_row(item, false, fg, muted, accent)),
+        )
         .into_any_element()
 }
 
 fn grouped_row(item: &SlashItem, selected: bool, fg: Hsla, muted: Hsla, accent: Hsla) -> Div {
     div()
-        .flex().items_center().gap(px(10.)).px(px(14.)).py(px(5.)).mx(px(4.))
+        .flex()
+        .items_center()
+        .gap(px(10.))
+        .px(px(14.))
+        .py(px(5.))
+        .mx(px(4.))
         .rounded(px(6.))
-        .bg(if selected { accent.opacity(OPACITY_HOVER) } else { transparent_black() })
-        .child(div().size(px(20.)).flex().items_center().justify_center()
-            .rounded(px(4.))
-            .bg(if selected { accent.opacity(0.15) } else { muted.opacity(0.08) })
-            .text_xs().text_color(if selected { accent } else { muted })
-            .child(item.icon_char))
-        .child(div().flex().flex_1().flex_col()
-            .child(div().text_sm().text_color(if selected { fg } else { muted.opacity(0.85) })
-                .child(item.label))
-            .child(div().text_xs().text_color(muted.opacity(0.5)).child(item.description)))
+        .bg(if selected {
+            accent.opacity(OPACITY_HOVER)
+        } else {
+            transparent_black()
+        })
+        .child(
+            div()
+                .size(px(20.))
+                .flex()
+                .items_center()
+                .justify_center()
+                .rounded(px(4.))
+                .bg(if selected {
+                    accent.opacity(0.15)
+                } else {
+                    muted.opacity(0.08)
+                })
+                .text_xs()
+                .text_color(if selected { accent } else { muted })
+                .child(item.icon_char),
+        )
+        .child(
+            div()
+                .flex()
+                .flex_1()
+                .flex_col()
+                .child(
+                    div()
+                        .text_sm()
+                        .text_color(if selected { fg } else { muted.opacity(0.85) })
+                        .child(item.label),
+                )
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(muted.opacity(0.5))
+                        .child(item.description),
+                ),
+        )
 }
 
 fn render_raycast_polish() -> AnyElement {
@@ -276,32 +436,97 @@ fn render_raycast_polish() -> AnyElement {
     let border = h(theme.colors.ui.border);
     let gold = h(GOLD);
 
-    div().w(px(MENU_W)).max_h(px(MENU_MAX_H)).overflow_hidden()
-        .rounded(px(10.)).border_1().border_color(border.opacity(OPACITY_BORDER * 0.7))
-        .bg(bg).py(px(6.)).flex().flex_col()
-        .child(div().px(px(14.)).py(px(4.)).text_xs().text_color(muted.opacity(0.4)).child("Commands"))
+    div()
+        .w(px(MENU_W))
+        .max_h(px(MENU_MAX_H))
+        .overflow_hidden()
+        .rounded(px(10.))
+        .border_1()
+        .border_color(border.opacity(OPACITY_BORDER * 0.7))
+        .bg(bg)
+        .py(px(6.))
+        .flex()
+        .flex_col()
+        .child(
+            div()
+                .px(px(14.))
+                .py(px(4.))
+                .text_xs()
+                .text_color(muted.opacity(0.4))
+                .child("Commands"),
+        )
         .children(ITEMS.iter().enumerate().map(|(i, item)| {
             let selected = i == 0;
-            div().flex().items_center().gap(px(10.)).px(px(10.)).py(px(6.)).mx(px(6.))
+            div()
+                .flex()
+                .items_center()
+                .gap(px(10.))
+                .px(px(10.))
+                .py(px(6.))
+                .mx(px(6.))
                 .rounded(px(8.))
-                .bg(if selected { gold.opacity(0.08) } else { transparent_black() })
-                .child(div().w(px(2.5)).h(px(20.)).rounded(px(1.5))
-                    .bg(if selected { gold } else { transparent_black() }))
-                .child(div().size(px(22.)).flex().items_center().justify_center()
-                    .rounded(px(6.))
-                    .bg(if selected { gold.opacity(0.12) } else { muted.opacity(0.06) })
-                    .text_xs().text_color(if selected { gold } else { muted.opacity(0.6) })
-                    .child(item.icon_char))
-                .child(div().flex().flex_1().flex_col().overflow_hidden()
-                    .child(div().text_sm()
-                        .font_weight(if selected { FontWeight::MEDIUM } else { FontWeight::NORMAL })
-                        .text_color(if selected { fg } else { muted.opacity(0.8) })
-                        .text_ellipsis().child(item.label))
-                    .when(selected, |d| d.child(div().text_xs()
-                        .text_color(muted.opacity(0.5)).text_ellipsis().child(item.description))))
-                .child(div().text_xs()
-                    .text_color(muted.opacity(if selected { 0.45 } else { 0.3 }))
-                    .child(item.command))
+                .bg(if selected {
+                    gold.opacity(0.08)
+                } else {
+                    transparent_black()
+                })
+                .child(
+                    div()
+                        .w(px(2.5))
+                        .h(px(20.))
+                        .rounded(px(1.5))
+                        .bg(if selected { gold } else { transparent_black() }),
+                )
+                .child(
+                    div()
+                        .size(px(22.))
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .rounded(px(6.))
+                        .bg(if selected {
+                            gold.opacity(0.12)
+                        } else {
+                            muted.opacity(0.06)
+                        })
+                        .text_xs()
+                        .text_color(if selected { gold } else { muted.opacity(0.6) })
+                        .child(item.icon_char),
+                )
+                .child(
+                    div()
+                        .flex()
+                        .flex_1()
+                        .flex_col()
+                        .overflow_hidden()
+                        .child(
+                            div()
+                                .text_sm()
+                                .font_weight(if selected {
+                                    FontWeight::MEDIUM
+                                } else {
+                                    FontWeight::NORMAL
+                                })
+                                .text_color(if selected { fg } else { muted.opacity(0.8) })
+                                .text_ellipsis()
+                                .child(item.label),
+                        )
+                        .when(selected, |d| {
+                            d.child(
+                                div()
+                                    .text_xs()
+                                    .text_color(muted.opacity(0.5))
+                                    .text_ellipsis()
+                                    .child(item.description),
+                            )
+                        }),
+                )
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(muted.opacity(if selected { 0.45 } else { 0.3 }))
+                        .child(item.command),
+                )
         }))
         .into_any_element()
 }
@@ -320,21 +545,49 @@ fn render_whisper_bare() -> AnyElement {
     let muted = h(theme.colors.text.dimmed);
     let gold = h(GOLD);
 
-    div().w(px(MENU_W)).bg(bg).py(px(4.)).flex().flex_col()
+    div()
+        .w(px(MENU_W))
+        .bg(bg)
+        .py(px(4.))
+        .flex()
+        .flex_col()
         .children(ITEMS.iter().enumerate().map(|(i, item)| {
             let selected = i == 0;
             div()
-                .flex().items_center().gap(px(8.)).px(px(10.)).py(px(5.))
-                .bg(if selected { gold.opacity(GHOST) } else { transparent_black() })
-                .child(div().w(px(2.)).h(px(16.)).rounded(px(1.))
-                    .bg(if selected { gold } else { transparent_black() }))
-                .child(div().flex().flex_1().overflow_hidden()
-                    .child(div().text_sm()
-                        .text_color(if selected { fg.opacity(PRESENT) } else { muted.opacity(HINT) })
-                        .text_ellipsis().child(item.label)))
-                .child(div().text_xs()
-                    .text_color(muted.opacity(if selected { HINT } else { 0.3 }))
-                    .child(item.command))
+                .flex()
+                .items_center()
+                .gap(px(8.))
+                .px(px(10.))
+                .py(px(5.))
+                .bg(if selected {
+                    gold.opacity(GHOST)
+                } else {
+                    transparent_black()
+                })
+                .child(div().w(px(2.)).h(px(16.)).rounded(px(1.)).bg(if selected {
+                    gold
+                } else {
+                    transparent_black()
+                }))
+                .child(
+                    div().flex().flex_1().overflow_hidden().child(
+                        div()
+                            .text_sm()
+                            .text_color(if selected {
+                                fg.opacity(PRESENT)
+                            } else {
+                                muted.opacity(HINT)
+                            })
+                            .text_ellipsis()
+                            .child(item.label),
+                    ),
+                )
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(muted.opacity(if selected { HINT } else { 0.3 }))
+                        .child(item.command),
+                )
         }))
         .into_any_element()
 }
@@ -349,19 +602,48 @@ fn render_ghost_float() -> AnyElement {
     let muted = h(theme.colors.text.dimmed);
     let gold = h(GOLD);
 
-    div().w(px(MENU_W)).bg(bg.opacity(0.85)).py(px(2.)).flex().flex_col()
+    div()
+        .w(px(MENU_W))
+        .bg(bg.opacity(0.85))
+        .py(px(2.))
+        .flex()
+        .flex_col()
         .children(ITEMS.iter().enumerate().map(|(i, item)| {
             let selected = i == 0;
             div()
-                .flex().items_center().px(px(12.)).py(px(6.))
-                .bg(if selected { fg.opacity(GHOST_HI) } else { transparent_black() })
-                .child(div().w(px(2.)).h(px(14.)).rounded(px(1.))
-                    .bg(if selected { gold } else { transparent_black() }))
-                .child(div().ml(px(8.)).flex().flex_1().overflow_hidden()
-                    .child(div().text_sm()
-                        .text_color(if selected { fg } else { muted.opacity(MUTED_OP) })
-                        .text_ellipsis().child(item.label)))
-                .child(div().text_xs().text_color(muted.opacity(0.35)).child(item.command))
+                .flex()
+                .items_center()
+                .px(px(12.))
+                .py(px(6.))
+                .bg(if selected {
+                    fg.opacity(GHOST_HI)
+                } else {
+                    transparent_black()
+                })
+                .child(div().w(px(2.)).h(px(14.)).rounded(px(1.)).bg(if selected {
+                    gold
+                } else {
+                    transparent_black()
+                }))
+                .child(
+                    div().ml(px(8.)).flex().flex_1().overflow_hidden().child(
+                        div()
+                            .text_sm()
+                            .text_color(if selected {
+                                fg
+                            } else {
+                                muted.opacity(MUTED_OP)
+                            })
+                            .text_ellipsis()
+                            .child(item.label),
+                    ),
+                )
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(muted.opacity(0.35))
+                        .child(item.command),
+                )
         }))
         .into_any_element()
 }
@@ -377,23 +659,61 @@ fn render_hairline_flush() -> AnyElement {
     let border = h(theme.colors.ui.border);
     let gold = h(GOLD);
 
-    div().w(px(MENU_W)).bg(bg).py(px(2.)).flex().flex_col()
-        .border_1().border_color(border.opacity(GHOST_HI))
+    div()
+        .w(px(MENU_W))
+        .bg(bg)
+        .py(px(2.))
+        .flex()
+        .flex_col()
+        .border_1()
+        .border_color(border.opacity(GHOST_HI))
         .children(ITEMS.iter().enumerate().map(|(i, item)| {
             let selected = i == 0;
             div()
-                .flex().items_center().py(px(4.)).pr(px(12.))
+                .flex()
+                .items_center()
+                .py(px(4.))
+                .pr(px(12.))
                 // Gold bar flush to left wall
-                .child(div().w(px(2.)).h(px(16.)).ml(px(0.))
-                    .bg(if selected { gold } else { transparent_black() }))
-                .child(div().ml(px(10.)).flex().flex_1().flex_col().overflow_hidden()
-                    .child(div().text_sm()
-                        .text_color(if selected { fg } else { muted.opacity(MUTED_OP) })
-                        .text_ellipsis().child(item.label))
-                    .when(selected, |d| d.child(div().text_xs()
-                        .text_color(muted.opacity(HINT)).text_ellipsis()
-                        .child(item.description))))
-                .child(div().text_xs().text_color(muted.opacity(0.3)).child(item.command))
+                .child(div().w(px(2.)).h(px(16.)).ml(px(0.)).bg(if selected {
+                    gold
+                } else {
+                    transparent_black()
+                }))
+                .child(
+                    div()
+                        .ml(px(10.))
+                        .flex()
+                        .flex_1()
+                        .flex_col()
+                        .overflow_hidden()
+                        .child(
+                            div()
+                                .text_sm()
+                                .text_color(if selected {
+                                    fg
+                                } else {
+                                    muted.opacity(MUTED_OP)
+                                })
+                                .text_ellipsis()
+                                .child(item.label),
+                        )
+                        .when(selected, |d| {
+                            d.child(
+                                div()
+                                    .text_xs()
+                                    .text_color(muted.opacity(HINT))
+                                    .text_ellipsis()
+                                    .child(item.description),
+                            )
+                        }),
+                )
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(muted.opacity(0.3))
+                        .child(item.command),
+                )
         }))
         .into_any_element()
 }
@@ -408,16 +728,31 @@ fn render_gold_only() -> AnyElement {
     let muted = h(theme.colors.text.dimmed);
     let gold = h(GOLD);
 
-    div().w(px(MENU_W)).bg(bg).py(px(4.)).flex().flex_col()
+    div()
+        .w(px(MENU_W))
+        .bg(bg)
+        .py(px(4.))
+        .flex()
+        .flex_col()
         .children(ITEMS.iter().enumerate().map(|(i, item)| {
             let selected = i == 0;
             div()
-                .flex().items_center().px(px(8.)).py(px(5.))
-                .child(div().w(px(2.)).h(px(16.)).rounded(px(1.))
-                    .bg(if selected { gold } else { transparent_black() }))
-                .child(div().ml(px(10.)).text_sm()
-                    .text_color(if selected { fg } else { muted.opacity(HINT) })
-                    .child(item.label))
+                .flex()
+                .items_center()
+                .px(px(8.))
+                .py(px(5.))
+                .child(div().w(px(2.)).h(px(16.)).rounded(px(1.)).bg(if selected {
+                    gold
+                } else {
+                    transparent_black()
+                }))
+                .child(
+                    div()
+                        .ml(px(10.))
+                        .text_sm()
+                        .text_color(if selected { fg } else { muted.opacity(HINT) })
+                        .child(item.label),
+                )
         }))
         .into_any_element()
 }
@@ -432,21 +767,52 @@ fn render_monoline_hint() -> AnyElement {
     let muted = h(theme.colors.text.dimmed);
     let gold = h(GOLD);
 
-    div().w(px(MENU_W)).bg(bg).py(px(4.)).flex().flex_col()
+    div()
+        .w(px(MENU_W))
+        .bg(bg)
+        .py(px(4.))
+        .flex()
+        .flex_col()
         .children(ITEMS.iter().enumerate().map(|(i, item)| {
             let selected = i == 0;
             div()
-                .flex().items_center().justify_between().px(px(10.)).py(px(5.))
-                .bg(if selected { gold.opacity(GHOST) } else { transparent_black() })
-                .child(div().flex().items_center().gap(px(8.))
-                    .child(div().w(px(2.)).h(px(14.)).rounded(px(1.))
-                        .bg(if selected { gold } else { transparent_black() }))
-                    .child(div().text_sm()
-                        .text_color(if selected { fg } else { muted.opacity(MUTED_OP) })
-                        .child(item.label)))
-                .child(div().text_xs()
-                    .text_color(muted.opacity(if selected { HINT } else { 0.3 }))
-                    .child(item.command))
+                .flex()
+                .items_center()
+                .justify_between()
+                .px(px(10.))
+                .py(px(5.))
+                .bg(if selected {
+                    gold.opacity(GHOST)
+                } else {
+                    transparent_black()
+                })
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(px(8.))
+                        .child(div().w(px(2.)).h(px(14.)).rounded(px(1.)).bg(if selected {
+                            gold
+                        } else {
+                            transparent_black()
+                        }))
+                        .child(
+                            div()
+                                .text_sm()
+                                .text_color(if selected {
+                                    fg
+                                } else {
+                                    muted.opacity(MUTED_OP)
+                                })
+                                .child(item.label),
+                        ),
+                )
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(muted.opacity(if selected { HINT } else { 0.3 }))
+                        .child(item.command),
+                )
         }))
         .into_any_element()
 }
@@ -461,17 +827,36 @@ fn render_dot_separator() -> AnyElement {
     let muted = h(theme.colors.text.dimmed);
     let gold = h(GOLD);
 
-    div().w(px(MENU_W)).bg(bg).py(px(4.)).flex().flex_col()
+    div()
+        .w(px(MENU_W))
+        .bg(bg)
+        .py(px(4.))
+        .flex()
+        .flex_col()
         .children(ITEMS.iter().enumerate().map(|(i, item)| {
             let selected = i == 0;
             let label_text: SharedString = format!("{}  ·  {}", item.label, item.command).into();
             div()
-                .flex().items_center().px(px(10.)).py(px(5.))
-                .child(div().w(px(2.)).h(px(14.)).rounded(px(1.))
-                    .bg(if selected { gold } else { transparent_black() }))
-                .child(div().ml(px(8.)).text_sm()
-                    .text_color(if selected { fg.opacity(PRESENT) } else { muted.opacity(HINT) })
-                    .child(label_text))
+                .flex()
+                .items_center()
+                .px(px(10.))
+                .py(px(5.))
+                .child(div().w(px(2.)).h(px(14.)).rounded(px(1.)).bg(if selected {
+                    gold
+                } else {
+                    transparent_black()
+                }))
+                .child(
+                    div()
+                        .ml(px(8.))
+                        .text_sm()
+                        .text_color(if selected {
+                            fg.opacity(PRESENT)
+                        } else {
+                            muted.opacity(HINT)
+                        })
+                        .child(label_text),
+                )
         }))
         .into_any_element()
 }
@@ -485,22 +870,59 @@ fn render_vibrancy_panel() -> AnyElement {
     let muted = h(theme.colors.text.dimmed);
     let gold = h(GOLD);
 
-    div().w(px(MENU_W)).bg(fg.opacity(0.02)).py(px(4.)).flex().flex_col()
+    div()
+        .w(px(MENU_W))
+        .bg(fg.opacity(0.02))
+        .py(px(4.))
+        .flex()
+        .flex_col()
         .children(ITEMS.iter().enumerate().map(|(i, item)| {
             let selected = i == 0;
             div()
-                .flex().items_center().px(px(10.)).py(px(6.))
-                .bg(if selected { fg.opacity(GHOST) } else { transparent_black() })
-                .child(div().w(px(2.)).h(px(16.)).rounded(px(1.))
-                    .bg(if selected { gold } else { transparent_black() }))
-                .child(div().ml(px(8.)).flex().flex_1().flex_col().overflow_hidden()
-                    .child(div().text_sm()
-                        .text_color(if selected { fg } else { fg.opacity(MUTED_OP) })
-                        .text_ellipsis().child(item.label))
-                    .when(selected, |d| d.child(div().text_xs()
-                        .text_color(muted.opacity(HINT)).text_ellipsis()
-                        .child(item.description))))
-                .child(div().text_xs().text_color(muted.opacity(0.3)).child(item.command))
+                .flex()
+                .items_center()
+                .px(px(10.))
+                .py(px(6.))
+                .bg(if selected {
+                    fg.opacity(GHOST)
+                } else {
+                    transparent_black()
+                })
+                .child(div().w(px(2.)).h(px(16.)).rounded(px(1.)).bg(if selected {
+                    gold
+                } else {
+                    transparent_black()
+                }))
+                .child(
+                    div()
+                        .ml(px(8.))
+                        .flex()
+                        .flex_1()
+                        .flex_col()
+                        .overflow_hidden()
+                        .child(
+                            div()
+                                .text_sm()
+                                .text_color(if selected { fg } else { fg.opacity(MUTED_OP) })
+                                .text_ellipsis()
+                                .child(item.label),
+                        )
+                        .when(selected, |d| {
+                            d.child(
+                                div()
+                                    .text_xs()
+                                    .text_color(muted.opacity(HINT))
+                                    .text_ellipsis()
+                                    .child(item.description),
+                            )
+                        }),
+                )
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(muted.opacity(0.3))
+                        .child(item.command),
+                )
         }))
         .into_any_element()
 }
@@ -515,19 +937,47 @@ fn render_ultra_dense() -> AnyElement {
     let muted = h(theme.colors.text.dimmed);
     let gold = h(GOLD);
 
-    div().w(px(MENU_W)).bg(bg).py(px(2.)).flex().flex_col()
+    div()
+        .w(px(MENU_W))
+        .bg(bg)
+        .py(px(2.))
+        .flex()
+        .flex_col()
         .children(ITEMS.iter().enumerate().map(|(i, item)| {
             let selected = i == 0;
             div()
-                .flex().items_center().justify_between().px(px(8.)).py(px(2.))
-                .child(div().flex().items_center().gap(px(6.))
-                    .child(div().w(px(1.5)).h(px(10.))
-                        .bg(if selected { gold } else { transparent_black() }))
-                    .child(div().text_xs()
-                        .text_color(if selected { fg } else { muted.opacity(MUTED_OP) })
-                        .child(item.label)))
-                .child(div().text_xs()
-                    .text_color(muted.opacity(0.3)).child(item.command))
+                .flex()
+                .items_center()
+                .justify_between()
+                .px(px(8.))
+                .py(px(2.))
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(px(6.))
+                        .child(div().w(px(1.5)).h(px(10.)).bg(if selected {
+                            gold
+                        } else {
+                            transparent_black()
+                        }))
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(if selected {
+                                    fg
+                                } else {
+                                    muted.opacity(MUTED_OP)
+                                })
+                                .child(item.label),
+                        ),
+                )
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(muted.opacity(0.3))
+                        .child(item.command),
+                )
         }))
         .into_any_element()
 }
@@ -543,28 +993,73 @@ fn render_list_anatomy() -> AnyElement {
     let muted = h(theme.colors.text.dimmed);
     let gold = h(GOLD);
 
-    div().w(px(MENU_W)).bg(bg).py(px(4.)).flex().flex_col()
+    div()
+        .w(px(MENU_W))
+        .bg(bg)
+        .py(px(4.))
+        .flex()
+        .flex_col()
         .children(ITEMS.iter().enumerate().map(|(i, item)| {
             let selected = i == 0;
             div()
-                .flex().items_center().px(px(8.)).py(px(5.))
-                .bg(if selected { fg.opacity(GHOST) } else { transparent_black() })
+                .flex()
+                .items_center()
+                .px(px(8.))
+                .py(px(5.))
+                .bg(if selected {
+                    fg.opacity(GHOST)
+                } else {
+                    transparent_black()
+                })
                 // Gold left bar
-                .child(div().w(px(2.)).h(px(18.)).rounded(px(1.))
-                    .bg(if selected { gold } else { transparent_black() }))
+                .child(div().w(px(2.)).h(px(18.)).rounded(px(1.)).bg(if selected {
+                    gold
+                } else {
+                    transparent_black()
+                }))
                 // Text column
-                .child(div().ml(px(10.)).flex().flex_1().flex_col().overflow_hidden()
-                    // Name: present opacity when focused, hint when not
-                    .child(div().text_sm()
-                        .text_color(if selected { fg.opacity(PRESENT) } else { fg.opacity(HINT) })
-                        .font_weight(if selected { FontWeight::MEDIUM } else { FontWeight::NORMAL })
-                        .text_ellipsis().child(item.label))
-                    // Description: muted, only on focus
-                    .when(selected, |d| d.child(div().text_xs()
-                        .text_color(muted.opacity(MUTED_OP)).text_ellipsis()
-                        .child(item.description))))
+                .child(
+                    div()
+                        .ml(px(10.))
+                        .flex()
+                        .flex_1()
+                        .flex_col()
+                        .overflow_hidden()
+                        // Name: present opacity when focused, hint when not
+                        .child(
+                            div()
+                                .text_sm()
+                                .text_color(if selected {
+                                    fg.opacity(PRESENT)
+                                } else {
+                                    fg.opacity(HINT)
+                                })
+                                .font_weight(if selected {
+                                    FontWeight::MEDIUM
+                                } else {
+                                    FontWeight::NORMAL
+                                })
+                                .text_ellipsis()
+                                .child(item.label),
+                        )
+                        // Description: muted, only on focus
+                        .when(selected, |d| {
+                            d.child(
+                                div()
+                                    .text_xs()
+                                    .text_color(muted.opacity(MUTED_OP))
+                                    .text_ellipsis()
+                                    .child(item.description),
+                            )
+                        }),
+                )
                 // Right metadata: hint opacity
-                .child(div().text_xs().text_color(muted.opacity(HINT)).child(item.command))
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(muted.opacity(HINT))
+                        .child(item.command),
+                )
         }))
         .into_any_element()
 }
@@ -580,23 +1075,50 @@ fn render_vibrancy_monoline() -> AnyElement {
     let gold = h(GOLD);
 
     // Near-transparent — vibrancy shows through
-    div().w(px(MENU_W)).bg(fg.opacity(0.02)).py(px(3.)).flex().flex_col()
+    div()
+        .w(px(MENU_W))
+        .bg(fg.opacity(0.02))
+        .py(px(3.))
+        .flex()
+        .flex_col()
         .children(ITEMS.iter().enumerate().map(|(i, item)| {
             let selected = i == 0;
             div()
-                .flex().items_center().justify_between().px(px(10.)).py(px(5.))
-                .bg(if selected { fg.opacity(GHOST) } else { transparent_black() })
+                .flex()
+                .items_center()
+                .justify_between()
+                .px(px(10.))
+                .py(px(5.))
+                .bg(if selected {
+                    fg.opacity(GHOST)
+                } else {
+                    transparent_black()
+                })
                 // Gold bar
-                .child(div().flex().items_center().gap(px(8.))
-                    .child(div().w(px(2.)).h(px(14.)).rounded(px(1.))
-                        .bg(if selected { gold } else { transparent_black() }))
-                    .child(div().text_sm()
-                        .text_color(if selected { fg } else { fg.opacity(MUTED_OP) })
-                        .child(item.label)))
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(px(8.))
+                        .child(div().w(px(2.)).h(px(14.)).rounded(px(1.)).bg(if selected {
+                            gold
+                        } else {
+                            transparent_black()
+                        }))
+                        .child(
+                            div()
+                                .text_sm()
+                                .text_color(if selected { fg } else { fg.opacity(MUTED_OP) })
+                                .child(item.label),
+                        ),
+                )
                 // /command hint right-aligned
-                .child(div().text_xs()
-                    .text_color(muted.opacity(if selected { HINT } else { 0.3 }))
-                    .child(item.command))
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(muted.opacity(if selected { HINT } else { 0.3 }))
+                        .child(item.command),
+                )
         }))
         .into_any_element()
 }
@@ -605,15 +1127,25 @@ fn render_vibrancy_monoline() -> AnyElement {
 
 fn menu_shell(bg: Hsla, border: Hsla) -> Div {
     div()
-        .w(px(MENU_W)).max_h(px(MENU_MAX_H)).overflow_hidden()
-        .rounded(px(8.)).border_1().border_color(border.opacity(OPACITY_BORDER))
-        .bg(bg).py(px(4.)).flex().flex_col()
+        .w(px(MENU_W))
+        .max_h(px(MENU_MAX_H))
+        .overflow_hidden()
+        .rounded(px(8.))
+        .border_1()
+        .border_color(border.opacity(OPACITY_BORDER))
+        .bg(bg)
+        .py(px(4.))
+        .flex()
+        .flex_col()
 }
 
 fn section_header(title: &str, muted: Hsla) -> Div {
     div()
-        .px(px(12.)).pt(px(6.)).pb(px(2.))
-        .text_xs().font_weight(FontWeight::SEMIBOLD)
+        .px(px(12.))
+        .pt(px(6.))
+        .pb(px(2.))
+        .text_xs()
+        .font_weight(FontWeight::SEMIBOLD)
         .text_color(muted.opacity(OPACITY_TEXT_MUTED))
         .child(title.to_string())
 }

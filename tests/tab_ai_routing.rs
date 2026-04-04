@@ -4195,9 +4195,7 @@ fn extract_begin_tab_ai_harness_entry_body() -> &'static str {
         .find("fn begin_tab_ai_harness_entry(")
         .expect("begin_tab_ai_harness_entry must exist");
     let fn_body = &TAB_AI_MODE_SOURCE[fn_start..];
-    let next_fn = fn_body[1..]
-        .find("\n    fn ")
-        .unwrap_or(fn_body.len());
+    let next_fn = fn_body[1..].find("\n    fn ").unwrap_or(fn_body.len());
     &fn_body[..next_fn]
 }
 
@@ -4253,11 +4251,15 @@ fn begin_tab_ai_harness_entry_emits_surface_selected_log() {
         "reason log field must resolve to script_verification_required or default_acp"
     );
     assert!(
-        fn_body.contains("includes_script_authoring_skill = surface_preference.includes_script_authoring_skill"),
+        fn_body.contains(
+            "includes_script_authoring_skill = surface_preference.includes_script_authoring_skill"
+        ),
         "surface_selected log must include script_authoring_skill marker"
     );
     assert!(
-        fn_body.contains("includes_bun_build_verification = surface_preference.includes_bun_build_verification"),
+        fn_body.contains(
+            "includes_bun_build_verification = surface_preference.includes_bun_build_verification"
+        ),
         "surface_selected log must include bun_build_verification marker"
     );
     assert!(
@@ -4287,9 +4289,7 @@ fn script_list_submit_forces_artifact_guidance() {
     // The deterministic ScriptList + Submit + non-empty-intent path must
     // force artifact guidance, which carries the verification markers.
     assert!(
-        HARNESS_SOURCE.contains(
-            r#"prompt_type == "ScriptList""#
-        ),
+        HARNESS_SOURCE.contains(r#"prompt_type == "ScriptList""#),
         "should_force_artifact_guidance must check for ScriptList prompt type"
     );
     assert!(
@@ -4317,7 +4317,9 @@ fn surface_preference_non_authoring_returns_all_false() {
 #[test]
 fn harness_guidance_contains_mandatory_script_verification_header() {
     assert!(
-        HARNESS_SOURCE.contains(r#"const SCRIPT_VERIFICATION_GATE_HEADER: &str = "MANDATORY SCRIPT VERIFICATION""#),
+        HARNESS_SOURCE.contains(
+            r#"const SCRIPT_VERIFICATION_GATE_HEADER: &str = "MANDATORY SCRIPT VERIFICATION""#
+        ),
         "harness must define MANDATORY SCRIPT VERIFICATION header constant"
     );
     // The header constant must be used in the gate builder
@@ -4340,9 +4342,7 @@ fn harness_guidance_contains_bun_build_verification_marker() {
 #[test]
 fn harness_guidance_contains_sk_verify_execution_marker() {
     assert!(
-        HARNESS_SOURCE.contains(
-            "SK_VERIFY=1 bun ~/.scriptkit/kit/main/scripts/<name>.ts"
-        ),
+        HARNESS_SOURCE.contains("SK_VERIFY=1 bun ~/.scriptkit/kit/main/scripts/<name>.ts"),
         "harness must define the SK_VERIFY=1 bun execution command"
     );
 }

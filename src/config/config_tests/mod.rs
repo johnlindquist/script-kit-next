@@ -1789,10 +1789,7 @@ fn command_id_deeplink_roundtrip() {
     use crate::config::{command_id_from_deeplink, command_id_to_deeplink};
 
     let deeplink = command_id_to_deeplink("builtin/clipboard-history").unwrap();
-    assert_eq!(
-        deeplink,
-        "scriptkit://commands/builtin/clipboard-history"
-    );
+    assert_eq!(deeplink, "scriptkit://commands/builtin/clipboard-history");
 
     let parsed = command_id_from_deeplink(&deeplink).unwrap();
     assert_eq!(parsed, "builtin/clipboard-history");

@@ -55,15 +55,42 @@ impl Story for HintButtonVariationsStory {
         story_container()
             .child(
                 story_section("Clickable Footer Hint Buttons — hover each to compare")
-                    .child(variation_row("1. Current + cursor only", mock_window(c, render_variation(c, 1))))
-                    .child(variation_row("2. Ghost bg hover", mock_window(c, render_variation(c, 2))))
-                    .child(variation_row("3. Brighter text hover", mock_window(c, render_variation(c, 3))))
-                    .child(variation_row("4. Ghost bg + brighter text", mock_window(c, render_variation(c, 4))))
-                    .child(variation_row("5. Underline hover", mock_window(c, render_variation(c, 5))))
-                    .child(variation_row("6. Keycap badge hover", mock_window(c, render_variation(c, 6))))
-                    .child(variation_row("7. Opacity press feedback", mock_window(c, render_variation(c, 7))))
-                    .child(variation_row("8. Pill bg hover", mock_window(c, render_variation(c, 8))))
-                    .child(variation_row("9. Border hover", mock_window(c, render_variation(c, 9)))),
+                    .child(variation_row(
+                        "1. Current + cursor only",
+                        mock_window(c, render_variation(c, 1)),
+                    ))
+                    .child(variation_row(
+                        "2. Ghost bg hover",
+                        mock_window(c, render_variation(c, 2)),
+                    ))
+                    .child(variation_row(
+                        "3. Brighter text hover",
+                        mock_window(c, render_variation(c, 3)),
+                    ))
+                    .child(variation_row(
+                        "4. Ghost bg + brighter text",
+                        mock_window(c, render_variation(c, 4)),
+                    ))
+                    .child(variation_row(
+                        "5. Underline hover",
+                        mock_window(c, render_variation(c, 5)),
+                    ))
+                    .child(variation_row(
+                        "6. Keycap badge hover",
+                        mock_window(c, render_variation(c, 6)),
+                    ))
+                    .child(variation_row(
+                        "7. Opacity press feedback",
+                        mock_window(c, render_variation(c, 7)),
+                    ))
+                    .child(variation_row(
+                        "8. Pill bg hover",
+                        mock_window(c, render_variation(c, 8)),
+                    ))
+                    .child(variation_row(
+                        "9. Border hover",
+                        mock_window(c, render_variation(c, 9)),
+                    )),
             )
             .into_any()
     }
@@ -146,17 +173,12 @@ fn mock_window(c: Colors, footer: impl IntoElement) -> AnyElement {
         .border_color(rgba((c.border << 8) | 0x30))
         .overflow_hidden()
         .child(
-            div()
-                .flex_1()
-                .flex()
-                .items_center()
-                .justify_center()
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(rgba(text_rgba(c.text_primary, 0.20)))
-                        .child("(hover the buttons below)"),
-                ),
+            div().flex_1().flex().items_center().justify_center().child(
+                div()
+                    .text_xs()
+                    .text_color(rgba(text_rgba(c.text_primary, 0.20)))
+                    .child("(hover the buttons below)"),
+            ),
         )
         .child(footer)
         .into_any()
@@ -330,7 +352,11 @@ fn render_variation(c: Colors, num: usize) -> impl IntoElement {
                 .opacity(0.45)
                 .hover(|s| s.opacity(0.85))
                 .active(|s| s.opacity(0.70))
-                .child(render_base_hint(def, rgba(text_rgba(c.text_primary, 1.0)).into(), keycap_bg))
+                .child(render_base_hint(
+                    def,
+                    rgba(text_rgba(c.text_primary, 1.0)).into(),
+                    keycap_bg,
+                ))
                 .into_any_element(),
 
             // 4. Ghost bg + brighter text
@@ -343,7 +369,11 @@ fn render_variation(c: Colors, num: usize) -> impl IntoElement {
                 .opacity(0.45)
                 .hover(move |s| s.bg(ghost_bg).opacity(0.85))
                 .active(move |s| s.bg(active_bg).opacity(0.70))
-                .child(render_base_hint(def, rgba(text_rgba(c.text_primary, 1.0)).into(), keycap_bg))
+                .child(render_base_hint(
+                    def,
+                    rgba(text_rgba(c.text_primary, 1.0)).into(),
+                    keycap_bg,
+                ))
                 .into_any_element(),
 
             // 5. Underline hover
@@ -358,8 +388,14 @@ fn render_variation(c: Colors, num: usize) -> impl IntoElement {
                 .into_any_element(),
 
             // 6. Keycap badge hover — icon portion gets stronger bg on hover
-            6 => render_keycap_hint(def, hint_color, keycap_bg, hover_keycap_bg, &format!("v6-{i}"))
-                .into_any_element(),
+            6 => render_keycap_hint(
+                def,
+                hint_color,
+                keycap_bg,
+                hover_keycap_bg,
+                &format!("v6-{i}"),
+            )
+            .into_any_element(),
 
             // 7. Opacity press feedback
             7 => div()
@@ -368,7 +404,11 @@ fn render_variation(c: Colors, num: usize) -> impl IntoElement {
                 .opacity(0.45)
                 .hover(|s| s.opacity(0.65))
                 .active(|s| s.opacity(0.35))
-                .child(render_base_hint(def, rgba(text_rgba(c.text_primary, 1.0)).into(), keycap_bg))
+                .child(render_base_hint(
+                    def,
+                    rgba(text_rgba(c.text_primary, 1.0)).into(),
+                    keycap_bg,
+                ))
                 .into_any_element(),
 
             // 8. Pill bg hover

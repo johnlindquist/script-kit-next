@@ -105,12 +105,7 @@ pub fn audit_theme_contrast(theme: &Theme) -> Vec<ThemeContrastSample> {
             colors.accent.selected,
             4.5,
         ),
-        sample(
-            "selection.primary",
-            colors.text.primary,
-            selection_bg,
-            4.5,
-        ),
+        sample("selection.primary", colors.text.primary, selection_bg, 4.5),
         // ── Border visibility ───────────────────────────────────
         sample(
             "border.on_window",
@@ -179,7 +174,10 @@ mod tests {
     fn default_light_theme_passes_all_contrast_checks() {
         let theme = Theme::light_default();
         let (passing, total) = theme_contrast_score(&theme);
-        assert_eq!(passing, total, "light default should pass all contrast checks");
+        assert_eq!(
+            passing, total,
+            "light default should pass all contrast checks"
+        );
     }
 
     #[test]

@@ -1228,39 +1228,45 @@ impl RenderOnce for ListItem {
             }
         }
 
-        // Shortcut badge (if present) - right-aligned with kbd-style rendering
-        // Uses macOS-native modifier symbols (⌘, ⇧, ⌥, ⌃) for a native feel
-        let shortcut_element = if let Some(sc) = self.shortcut {
+        // Shortcut — compact inline glyphs via shared renderer
+        let shortcut_element: AnyElement = if let Some(sc) = self.shortcut {
             let show_shortcut =
                 should_show_search_shortcut(is_filtering, self.selected, hover_visible);
             if show_shortcut {
-                let display_text = format_shortcut_display(&sc);
-                if is_filtering {
-                    div()
-                        .text_size(px(SEARCH_SHORTCUT_FONT_SIZE))
-                        .font_family(FONT_MONO)
-                        .text_color(rgba((colors.text_dimmed << 8) | ALPHA_HINT))
-                        .child(display_text)
+                crate::components::hint_strip::emit_shortcut_chrome_audit(
+                    "list_item",
+                    "compact-inline",
+                );
+                let shortcut_tokens =
+                    crate::components::hint_strip::shortcut_tokens_from_hint(sc.as_str());
+                let glyph_color = if is_filtering {
+                    rgba((colors.text_dimmed << 8) | ALPHA_HINT)
                 } else {
-                    let badge_border = (colors.text_dimmed << 8) | ALPHA_BORDER;
-                    div()
-                        .text_size(px(BADGE_FONT_SIZE))
-                        .font_family(FONT_MONO)
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(rgba((colors.text_muted << 8) | ALPHA_READABLE))
-                        .px(px(BADGE_PADDING_X))
-                        .py(px(BADGE_PADDING_Y))
-                        .rounded(px(BADGE_RADIUS))
-                        .bg(rgba((colors.text_dimmed << 8) | ALPHA_TINT_LIGHT))
-                        .border_1()
-                        .border_color(rgba(badge_border))
-                        .child(display_text)
-                }
+                    rgba((colors.text_muted << 8) | ALPHA_READABLE)
+                };
+                let keycap_bg = if is_filtering {
+                    rgba((colors.text_dimmed << 8) | 0x10)
+                } else {
+                    rgba((colors.text_dimmed << 8) | 0x18)
+                };
+                let keycap_border = if is_filtering {
+                    None
+                } else {
+                    Some(rgba((colors.text_dimmed << 8) | 0x28).into())
+                };
+                crate::components::hint_strip::render_inline_shortcut_keys(
+                    shortcut_tokens.iter().map(String::as_str),
+                    crate::components::hint_strip::InlineShortcutColors {
+                        glyph: glyph_color.into(),
+                        keycap_bg: keycap_bg.into(),
+                        keycap_border,
+                    },
+                )
             } else {
-                div()
+                div().into_any_element()
             }
         } else {
-            div()
+            div().into_any_element()
         };
 
         // Determine background color based on selection/hover state

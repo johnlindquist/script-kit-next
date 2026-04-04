@@ -6,10 +6,8 @@ pub(super) use crate::components::overlay_modal::{
 };
 
 /// Shortcut-recorder-specific layout constants
-pub(super) const KEY_DISPLAY_HEIGHT: f32 = 52.0;
+pub(super) const KEY_DISPLAY_HEIGHT: f32 = 48.0;
 pub(super) const KEY_DISPLAY_PADDING: f32 = 12.0;
-pub(super) const KEYCAP_SIZE: f32 = 36.0;
-pub(super) const KEYCAP_GAP: f32 = 6.0;
 
 /// Backdrop alpha values specific to shortcut recorder
 pub(super) const OVERLAY_BACKDROP_ALPHA: u8 = 0x80;

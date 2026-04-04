@@ -623,8 +623,7 @@ impl PresetsCache {
                 border: theme.colors.ui.border,
             });
             preset_search_blobs.push(build_preset_search_blob(preset));
-            preset_index_by_bg_accent
-                .insert(preset_bg_accent_key(bg_main, accent_selected), index);
+            preset_index_by_bg_accent.insert(preset_bg_accent_key(bg_main, accent_selected), index);
             preset_themes.push(theme);
         }
 
