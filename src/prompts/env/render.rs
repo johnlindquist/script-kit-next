@@ -40,9 +40,9 @@ impl Render for EnvPrompt {
             .unwrap_or_else(|| env_default_description(&self.key, self.exists_in_keyring))
             .into();
 
-        // Whisper-chrome field surface
-        let field_bg = rgba((text_muted << 8) | 0x1A);
-        let field_border = rgba((text_muted << 8) | 0x33);
+        // Whisper-chrome field surface — use shared chrome tokens, not hand-packed alpha
+        let field_bg = rgba(chrome.input_surface_rgba);
+        let field_border = rgba(chrome.badge_border_rgba);
 
         // Input body: cursor + placeholder when empty, masked/text with cursor when filled
         let input_body = if input_is_empty {

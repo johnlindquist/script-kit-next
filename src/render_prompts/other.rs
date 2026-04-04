@@ -228,21 +228,28 @@ impl ScriptListApp {
         entity: Entity<prompts::ChatPrompt>,
         cx: &mut Context<Self>,
     ) -> AnyElement {
+        tracing::info!(
+            surface = "render_prompts::chat",
+            footer_mode = "hint_strip",
+            footer_owner = "chat_prompt_internal",
+            "prompt_surface_rendered"
+        );
+
         crate::components::emit_prompt_chrome_audit(&crate::components::PromptChromeAudit {
             surface: "render_prompts::chat",
             layout_mode: "mini",
             input_mode: "bare",
             divider_mode: "none",
-            footer_mode: "custom",
+            footer_mode: "hint_strip",
             header_padding_x: crate::ui::chrome::HEADER_PADDING_X as u16,
             header_padding_y: crate::ui::chrome::HEADER_PADDING_Y as u16,
-            hint_count: 0,
-            has_leading_status: false,
+            hint_count: 3,
+            has_leading_status: true,
             has_actions: self.has_nonempty_sdk_actions(),
-            exception_reason: Some("chat_prompt_owns_footer"),
+            exception_reason: Some("chat_prompt_renders_hint_strip_internally"),
         });
 
-        // Chat renders its own footer (mini hint strip or rich interactive footer),
+        // Chat renders its own hint-strip footer internally,
         // so pass None to avoid a duplicate footer in the shell.
         let shell_radius = self.other_prompt_shell_radius();
         let handle_key = cx.listener(Self::other_prompt_shell_handle_key_chat);
@@ -605,19 +612,23 @@ mod other_prompt_source_tests {
     }
 
     #[test]
-    fn chat_prompt_wrapper_does_not_claim_universal_footer_hints() {
+    fn chat_prompt_wrapper_reports_hint_strip_footer() {
         let body = fn_source("render_chat_prompt");
         assert!(
-            !body.contains("emit_prompt_hint_audit("),
-            "chat wrapper should not emit a universal hint audit when chat owns its footer"
+            body.contains("footer_mode: \"hint_strip\""),
+            "chat wrapper should report hint_strip footer mode in chrome audit"
         );
         assert!(
-            body.contains("footer_mode: \"custom\""),
-            "chat wrapper should emit a truthful chrome audit for a custom footer"
+            body.contains("hint_count: 3"),
+            "chat wrapper should report 3 hint keys"
         );
         assert!(
-            body.contains("exception_reason: Some(\"chat_prompt_owns_footer\")"),
-            "chat wrapper should document why it does not attach the shared footer"
+            body.contains("has_leading_status: true"),
+            "chat wrapper should report leading status text"
+        );
+        assert!(
+            body.contains("exception_reason: Some(\"chat_prompt_renders_hint_strip_internally\")"),
+            "chat wrapper should document why it renders the hint strip internally"
         );
     }
 }

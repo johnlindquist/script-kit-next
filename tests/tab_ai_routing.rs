@@ -4189,11 +4189,14 @@ fn harness_source_contains_launchpad_include() {
 // Regression: surface selection routes script-authoring to QuickTerminalView
 // =========================================================================
 
-/// Helper: extract begin_tab_ai_harness_entry function body from source.
+/// Helper: extract the inner `begin_tab_ai_harness_entry_from_source_view`
+/// function body from source.  The thin `begin_tab_ai_harness_entry` wrapper
+/// delegates to this inner function, which contains the surface-preference
+/// computation, routing branch, and structured log.
 fn extract_begin_tab_ai_harness_entry_body() -> &'static str {
     let fn_start = TAB_AI_MODE_SOURCE
-        .find("fn begin_tab_ai_harness_entry(")
-        .expect("begin_tab_ai_harness_entry must exist");
+        .find("fn begin_tab_ai_harness_entry_from_source_view(")
+        .expect("begin_tab_ai_harness_entry_from_source_view must exist");
     let fn_body = &TAB_AI_MODE_SOURCE[fn_start..];
     let next_fn = fn_body[1..].find("\n    fn ").unwrap_or(fn_body.len());
     &fn_body[..next_fn]

@@ -524,6 +524,43 @@ mod list_item_colors_tests {
         assert_eq!(ALPHA_DIVIDER, crate::ui_foundation::ALPHA_DIVIDER as u32);
     }
 }
+
+#[cfg(test)]
+mod row_shortcut_policy_tests {
+    use super::{should_show_row_shortcut, should_show_search_shortcut, RowShortcutVisibilityPolicy};
+
+    #[test]
+    fn selected_only_shows_shortcut_on_focused_row() {
+        let p = RowShortcutVisibilityPolicy::SelectedOnly;
+        assert!(should_show_row_shortcut(p, true, false));
+        assert!(should_show_row_shortcut(p, true, true));
+    }
+
+    #[test]
+    fn selected_only_hides_shortcut_on_unfocused_row() {
+        let p = RowShortcutVisibilityPolicy::SelectedOnly;
+        assert!(!should_show_row_shortcut(p, false, false));
+        assert!(!should_show_row_shortcut(p, false, true));
+    }
+
+    #[test]
+    fn all_rows_always_shows_shortcut() {
+        let p = RowShortcutVisibilityPolicy::AllRows;
+        assert!(should_show_row_shortcut(p, true, false));
+        assert!(should_show_row_shortcut(p, true, true));
+        assert!(should_show_row_shortcut(p, false, false));
+        assert!(should_show_row_shortcut(p, false, true));
+    }
+
+    #[test]
+    fn search_shortcut_delegates_to_selected_only() {
+        // Dense launcher rows use SelectedOnly — only selected rows show shortcuts.
+        assert!(should_show_search_shortcut(true, true, false));
+        assert!(!should_show_search_shortcut(true, false, false));
+        assert!(!should_show_search_shortcut(false, false, false));
+    }
+}
+
 impl ListItemColors {
     /// Create from theme reference
     pub fn from_theme(theme: &crate::theme::Theme) -> Self {
@@ -628,14 +665,40 @@ fn list_item_shortcut_tokens_for_render<'a>(
     ))
 }
 
-/// Search/list rows keep metadata visible at hint opacity even when unfocused.
+/// Explicit policy for when row shortcut chrome is visible.
+///
+/// Dense launcher-style lists use `SelectedOnly` so shortcuts appear only on
+/// the focused row (quiet chrome). Discovery surfaces like the actions dialog
+/// use `AllRows` so every row exposes its shortcut at hint opacity.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum RowShortcutVisibilityPolicy {
+    /// Shortcuts visible only on the selected (focused) row.
+    SelectedOnly,
+    /// Shortcuts visible on every row at hint opacity.
+    AllRows,
+}
+
+/// Resolve whether a row should render its shortcut chrome.
+#[inline]
+pub(crate) fn should_show_row_shortcut(
+    policy: RowShortcutVisibilityPolicy,
+    selected: bool,
+    _hovered: bool,
+) -> bool {
+    match policy {
+        RowShortcutVisibilityPolicy::SelectedOnly => selected,
+        RowShortcutVisibilityPolicy::AllRows => true,
+    }
+}
+
+/// Dense launcher rows keep shortcut chrome on the focused row only.
 /// Focus controls description reveal, not metadata discoverability.
 pub(crate) fn should_show_search_shortcut(
     _is_filtering: bool,
-    _selected: bool,
+    selected: bool,
     _hovered: bool,
 ) -> bool {
-    true
+    should_show_row_shortcut(RowShortcutVisibilityPolicy::SelectedOnly, selected, false)
 }
 /// Search rows keep descriptions only when they add context for the current focus or match.
 pub(crate) fn should_show_search_description(

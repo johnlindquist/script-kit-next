@@ -536,8 +536,10 @@ mod chat_footer_hint_strip_tests {
             CHAT_RENDER_CORE_SOURCE.contains("footer_status_text()"),
             "Full-mode footer should use the status text helper"
         );
+        // Split the needle to avoid self-matching via include_str!
+        let needle = format!("{}::new", "PromptFooter");
         assert!(
-            !CHAT_RENDER_CORE_SOURCE.contains("PromptFooter::new"),
+            !CHAT_RENDER_CORE_SOURCE.contains(&needle),
             "Chat should no longer use PromptFooter component"
         );
     }

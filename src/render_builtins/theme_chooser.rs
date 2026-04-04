@@ -804,25 +804,6 @@ impl ScriptListApp {
             .into_any_element()
     }
 
-    /// Render a keycap badge for the live preview
-    fn render_theme_chooser_preview_keycap(
-        label: &'static str,
-        chrome: &theme::AppChromeColors,
-    ) -> gpui::AnyElement {
-        div()
-            .px(px(6.0))
-            .py(px(2.0))
-            .rounded(px(5.0))
-            .bg(rgba(chrome.badge_bg_rgba))
-            .border_1()
-            .border_color(rgba(chrome.badge_border_rgba))
-            .text_xs()
-            .font_weight(gpui::FontWeight::MEDIUM)
-            .text_color(rgb(chrome.badge_text_hex))
-            .child(label)
-            .into_any_element()
-    }
-
     /// Render a launcher-style live preview that matches the main menu shell
     fn render_theme_chooser_list_item_preview_rows(&self) -> gpui::AnyElement {
         let list_colors = crate::list_item::ListItemColors::from_theme(self.theme.as_ref());
@@ -836,10 +817,7 @@ impl ScriptListApp {
                     .selected(true)
                     .with_accent_bar(true),
             )
-            .child(
-                crate::list_item::ListItem::new("Regular Item", list_colors)
-                    .shortcut("cmd+p"),
-            )
+            .child(crate::list_item::ListItem::new("Regular Item", list_colors))
             .child(
                 crate::list_item::ListItem::new("Another Item", list_colors)
                     .tool_badge("ts"),
@@ -853,95 +831,54 @@ impl ScriptListApp {
         accent_name: &str,
         chrome: &theme::AppChromeColors,
     ) -> gpui::AnyElement {
-        let hint_rgba = (chrome.text_dimmed_hex << 8) | 0xA6;
-
-        div()
+        let header = div()
             .w_full()
             .flex()
-            .flex_col()
-            .gap(px(10.0))
-            // Header: preset name + accent + keycaps
+            .flex_row()
+            .items_center()
             .child(
                 div()
+                    .flex_1()
                     .flex()
-                    .flex_row()
-                    .items_center()
-                    .justify_between()
+                    .flex_col()
+                    .gap(px(2.0))
                     .child(
                         div()
-                            .flex()
-                            .flex_col()
-                            .gap(px(2.0))
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .font_weight(gpui::FontWeight::SEMIBOLD)
-                                    .text_color(rgb(chrome.text_primary_hex))
-                                    .child(preset_name.to_string()),
-                            )
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .text_color(rgb(chrome.text_muted_hex))
-                                    .child(format!(
-                                        "{accent_name} accent · live launcher preview"
-                                    )),
-                            ),
+                            .text_sm()
+                            .font_weight(gpui::FontWeight::SEMIBOLD)
+                            .text_color(rgb(chrome.text_primary_hex))
+                            .child(preset_name.to_string()),
                     )
                     .child(
                         div()
-                            .flex()
-                            .flex_row()
-                            .gap(px(6.0))
-                            .child(Self::render_theme_chooser_preview_keycap("⌘R", chrome))
-                            .child(Self::render_theme_chooser_preview_keycap(
-                                "⌘[ ]", chrome,
+                            .text_xs()
+                            .text_color(rgb(chrome.text_muted_hex))
+                            .child(format!(
+                                "{accent_name} accent · live launcher preview"
                             )),
                     ),
-            )
-            // Mini launcher shell
-            .child(
-                div()
-                    .w_full()
-                    .rounded(px(8.0))
-                    .overflow_hidden()
-                    // Search row
-                    .child(
-                        div()
-                            .px(px(12.0))
-                            .py(px(10.0))
-                            .flex()
-                            .flex_row()
-                            .items_center()
-                            .gap(px(8.0))
-                            .child(
-                                div()
-                                    .flex_1()
-                                    .text_xs()
-                                    .text_color(rgb(chrome.text_muted_hex))
-                                    .child("Search scripts..."),
-                            )
-                            .child(Self::render_theme_chooser_preview_keycap("Tab", chrome)),
-                    )
-                    // Divider
-                    .child(div().mx(px(12.0)).h(px(1.0)).bg(rgba(chrome.divider_rgba)))
-                    // List rows — real ListItem components for pixel-perfect alignment
-                    .child(self.render_theme_chooser_list_item_preview_rows())
-                    // Footer divider + hints
-                    .child(div().mx(px(12.0)).h(px(1.0)).bg(rgba(chrome.divider_rgba)))
-                    .child(
-                        div()
-                            .px(px(12.0))
-                            .py(px(8.0))
-                            .flex()
-                            .justify_end()
-                            .child(crate::components::render_hint_icons(
-                                &["↵ Apply", "Esc Back", "⌘R Reset"],
-                                hint_rgba,
-                            )),
-                    ),
-            )
-            .into_any_element()
+            );
+
+        let content = div()
+            .flex()
+            .flex_col()
+            .flex_1()
+            .min_h(px(0.0))
+            .w_full()
+            .child(self.render_theme_chooser_list_item_preview_rows());
+
+        // Use the shared minimal-list prompt shell so the preview inherits the
+        // same spacing, divider, and footer contract as real launcher surfaces.
+        crate::components::render_minimal_list_prompt_shell(
+            8.0,
+            crate::ui_foundation::get_vibrancy_background(self.theme.as_ref()),
+            header,
+            content,
+            Self::theme_chooser_hint_items(),
+            None,
+        )
+        .text_color(rgb(chrome.text_primary_hex))
+        .into_any_element()
     }
 
     /// Render the theme chooser with search, live preview, and preview panel
@@ -2082,8 +2019,8 @@ mod theme_chooser_chrome_audit {
             "theme_chooser should use 'Esc Back' footer label"
         );
         assert!(
-            source.contains(r#"SharedString::from("⌘R Reset")"#),
-            "theme_chooser should use '⌘R Reset' footer label"
+            source.contains(r#"SharedString::from("⌘J Remix")"#),
+            "theme_chooser should use '⌘J Remix' footer label"
         );
         assert!(
             !source.contains("⌘K Actions"),
@@ -2120,6 +2057,19 @@ mod theme_chooser_chrome_audit {
             source.matches(&legacy).count(),
             0,
             "theme_chooser should not use PromptFooter"
+        );
+    }
+
+    #[test]
+    fn theme_chooser_live_preview_uses_shared_shell() {
+        let source = include_str!("theme_chooser.rs");
+        assert!(
+            source.contains("render_minimal_list_prompt_shell("),
+            "theme_chooser live preview should use the shared minimal-list prompt shell"
+        );
+        assert!(
+            !source.contains("render_theme_chooser_preview_keycap"),
+            "bespoke preview keycap helper should be removed"
         );
     }
 }
