@@ -19,8 +19,18 @@ impl ScriptListApp {
         let actions_dialog_right = render_context.actions_dialog_right;
         let has_actions = self.has_nonempty_sdk_actions();
 
-        // Get prompt ID from entity
-        let prompt_id = entity.read(cx).id.clone();
+        // Get prompt ID and field count from entity for tracing
+        let (prompt_id, field_count) = {
+            let form_state = entity.read(cx);
+            (form_state.id.clone(), form_state.fields.len())
+        };
+
+        tracing::info!(
+            surface = "render_prompts::form",
+            prompt_id = %prompt_id,
+            field_count,
+            "prompt_surface_rendered"
+        );
 
         // Clone entity for closures
         let entity_for_submit = entity.clone();

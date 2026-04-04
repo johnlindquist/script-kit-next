@@ -132,6 +132,13 @@ impl Render for PathPrompt {
         let hints = crate::components::universal_prompt_hints();
         crate::components::emit_prompt_hint_audit("prompts::path", &hints);
 
+        tracing::info!(
+            surface = "prompts::path",
+            filtered_count,
+            footer_mode = "universal",
+            "prompt_surface_rendered"
+        );
+
         let container =
             crate::components::render_minimal_list_prompt_scaffold(header, content, hints, None)
                 .id(gpui::ElementId::Name("window:path".into()))

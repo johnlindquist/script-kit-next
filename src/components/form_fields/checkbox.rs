@@ -87,18 +87,15 @@ impl Render for FormCheckbox {
             .clone()
             .unwrap_or_else(|| self.field.name.clone());
 
-        // Calculate border based on focus
-        let border_color = if is_focused {
-            rgb(colors.border_focused)
-        } else {
-            rgb(colors.border)
-        };
+        // Calculate border and background based on focus using shared whisper surface
+        let surface = colors.whisper_surface(is_focused);
+        let border_color = surface.border;
 
         // Checkbox box styling
         let box_bg = if checked {
-            rgb(colors.checkbox_checked)
+            rgba((colors.checkbox_checked << 8) | 0x66)
         } else {
-            rgba((colors.background << 8) | 0x80)
+            surface.background
         };
 
         let field_name = self.field.name.clone();
@@ -139,11 +136,7 @@ impl Render for FormCheckbox {
             );
         }
 
-        let bg_color = if is_focused {
-            rgba((colors.background_focused << 8) | 0xee)
-        } else {
-            rgba((colors.background << 8) | 0xcc)
-        };
+        let bg_color = surface.background;
 
         let focus_handle_for_click = self.focus_handle.clone();
 

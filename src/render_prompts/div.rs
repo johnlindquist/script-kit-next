@@ -20,6 +20,8 @@ impl ScriptListApp {
         let actions_dialog_right = render_context.actions_dialog_right;
         let has_actions = self.has_nonempty_sdk_actions();
 
+        tracing::info!(surface = "render_prompts::div", "prompt_surface_rendered");
+
         // Key handler for Cmd+K actions toggle (at parent level to intercept before DivPrompt)
         let has_actions_for_handler = has_actions;
         let handle_key = cx.listener(
