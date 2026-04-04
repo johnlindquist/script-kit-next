@@ -40,7 +40,8 @@ pub(crate) use catalog::{
 };
 pub(crate) use config::{
     claude_code_agent_config_cached, load_acp_agent_catalog_entries, load_acp_agent_configs,
-    prewarm_agent_config, AcpAgentConfig,
+    load_preferred_acp_agent_id, persist_preferred_acp_agent_id, prewarm_agent_config,
+    AcpAgentConfig,
 };
 #[allow(deprecated)]
 pub(crate) use context::{

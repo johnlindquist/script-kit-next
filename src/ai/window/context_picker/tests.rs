@@ -1,5 +1,8 @@
 use super::types::{ContextPickerItemKind, ContextPickerState, ContextPickerTrigger};
-use super::{build_picker_items, extract_context_picker_query, match_query_chars, score_builtin};
+use super::{
+    build_picker_items, build_slash_picker_items, extract_context_picker_query, match_query_chars,
+    score_builtin,
+};
 use crate::ai::context_contract::{context_attachment_specs, ContextAttachmentKind};
 
 #[test]
@@ -402,42 +405,25 @@ fn extract_bare_slash_at_start() {
 // ── Slash-mode filtering tests ──────────────────────────────────────────
 
 #[test]
-fn slash_mode_only_includes_specs_with_slash_command() {
-    let items = build_picker_items(ContextPickerTrigger::Slash, "");
-    for item in &items {
-        if let ContextPickerItemKind::BuiltIn(kind) = &item.kind {
-            let spec = kind.spec();
-            assert!(
-                spec.slash_command.is_some(),
-                "Slash mode should only include specs with slash_command, but got {:?}",
-                kind,
-            );
-        }
-    }
+fn slash_mode_only_includes_agent_slash_commands() {
+    let items = build_slash_picker_items("", ["compact", "clear", "help"]);
+    assert!(!items.is_empty(), "Slash mode should include provided commands");
+    assert!(items.iter().all(|item| matches!(item.kind, ContextPickerItemKind::SlashCommand(_))));
 }
 
 #[test]
-fn slash_mode_bro_ranks_browser_first() {
-    let items = build_picker_items(ContextPickerTrigger::Slash, "bro");
-    let first_builtin = items
-        .iter()
-        .find(|i| matches!(i.kind, ContextPickerItemKind::BuiltIn(_)));
-    assert!(first_builtin.is_some(), "Slash 'bro' should match Browser");
-    match &first_builtin.unwrap().kind {
-        ContextPickerItemKind::BuiltIn(kind) => {
-            assert_eq!(
-                *kind,
-                ContextAttachmentKind::Browser,
-                "Slash 'bro' should rank Browser first"
-            );
-        }
-        other => panic!("Expected BuiltIn(Browser), got {:?}", other),
+fn slash_mode_compact_matches_agent_command() {
+    let items = build_slash_picker_items("com", ["compact", "clear", "help"]);
+    let first = items.first().expect("Slash 'com' should match compact");
+    match &first.kind {
+        ContextPickerItemKind::SlashCommand(command) => assert_eq!(command, "compact"),
+        other => panic!("Expected SlashCommand(compact), got {:?}", other),
     }
 }
 
 #[test]
 fn slash_mode_no_file_results() {
-    let items = build_picker_items(ContextPickerTrigger::Slash, "src");
+    let items = build_slash_picker_items("src", ["compact", "clear", "help"]);
     let file_count = items
         .iter()
         .filter(|i| matches!(i.kind, ContextPickerItemKind::File(_)))
@@ -461,30 +447,13 @@ fn enter_and_tab_both_route_to_accept() {
 // ── V05 ranking and meta verification ──────────────────────────────────
 
 #[test]
-fn slash_snap_ranks_snapshot_before_snapshot_full() {
-    let items = build_picker_items(ContextPickerTrigger::Slash, "snap");
-    let context_pos = items.iter().position(|i| {
-        matches!(
-            i.kind,
-            ContextPickerItemKind::BuiltIn(ContextAttachmentKind::Current)
-        )
-    });
-    let context_full_pos = items.iter().position(|i| {
-        matches!(
-            i.kind,
-            ContextPickerItemKind::BuiltIn(ContextAttachmentKind::Full)
-        )
-    });
-    assert!(
-        context_pos.is_some() && context_full_pos.is_some(),
-        "Both /snapshot and /snapshot-full should match 'snap'"
-    );
-    assert!(
-        context_pos.unwrap() < context_full_pos.unwrap(),
-        "/snapshot (pos {}) should rank before /snapshot-full (pos {})",
-        context_pos.unwrap(),
-        context_full_pos.unwrap(),
-    );
+fn slash_commands_rank_prefix_matches_before_fuzzy_matches() {
+    let items = build_slash_picker_items("cle", ["compact", "clear", "help"]);
+    let first = items.first().expect("Slash query should return clear");
+    match &first.kind {
+        ContextPickerItemKind::SlashCommand(command) => assert_eq!(command, "clear"),
+        other => panic!("Expected SlashCommand(clear), got {:?}", other),
+    }
 }
 
 #[test]
@@ -784,100 +753,41 @@ fn context_picker_state_clamp_on_empty_filter() {
 // ── Slash-mode ranking improvements ────────────────────────────────────
 
 #[test]
-fn slash_exact_command_scores_1000() {
-    // "snapshot" is the canonical slash command for Current Context (without the leading /)
-    let spec = ContextAttachmentKind::Current.spec();
-    let (score, _, _) =
-        super::score_builtin_with_trigger(spec, ContextPickerTrigger::Slash, "snapshot");
-    assert_eq!(
-        score, 1000,
-        "Exact slash command match should score 1000 in slash mode"
-    );
+fn slash_mode_empty_without_agent_commands() {
+    let items = build_slash_picker_items("any", std::iter::empty::<&str>());
+    assert!(items.is_empty(), "Slash mode should not surface context attachments");
 }
 
 #[test]
-fn slash_prefix_command_outranks_label_prefix() {
-    // Query "snap" is a prefix of slash command "snapshot" — should score 500+
-    let spec = ContextAttachmentKind::Current.spec();
-    let (slash_score, _, _) =
-        super::score_builtin_with_trigger(spec, ContextPickerTrigger::Slash, "snap");
+fn slash_sel_does_not_surface_selection_context() {
+    let items = build_slash_picker_items("sel", ["compact", "clear", "help"]);
     assert!(
-        slash_score >= 500,
-        "Slash prefix match should be tier 2 (500+), got {}",
-        slash_score,
+        items.iter().all(|item| !matches!(item.kind, ContextPickerItemKind::BuiltIn(_))),
+        "Slash mode should never return context attachments"
     );
 }
-
-#[test]
-fn slash_mode_exact_outranks_prefix() {
-    let spec = ContextAttachmentKind::Current.spec();
-    let (exact, _, _) =
-        super::score_builtin_with_trigger(spec, ContextPickerTrigger::Slash, "snapshot");
-    let (prefix, _, _) =
-        super::score_builtin_with_trigger(spec, ContextPickerTrigger::Slash, "snap");
-    assert!(
-        exact > prefix,
-        "Exact slash match ({}) should outrank prefix ({})",
-        exact,
-        prefix,
-    );
-}
-
-#[test]
-fn slash_sel_ranks_selection_high() {
-    let items = build_picker_items(ContextPickerTrigger::Slash, "sel");
-    let selection = items.iter().find(|i| {
-        matches!(
-            i.kind,
-            ContextPickerItemKind::BuiltIn(ContextAttachmentKind::Selection)
-        )
-    });
-    assert!(selection.is_some(), "Slash 'sel' should match Selection");
-    assert!(
-        selection.unwrap().score >= 500,
-        "Selection should be tier 2+ for slash 'sel', got {}",
-        selection.unwrap().score,
-    );
-}
-
-// ── Highlight index alignment for slash mode ───────────────────────────
 
 #[test]
 fn slash_mode_meta_highlights_align_with_slash_command() {
-    let items = build_picker_items(ContextPickerTrigger::Slash, "snap");
-    let current = items
+    let items = build_slash_picker_items("com", ["compact", "clear", "help"]);
+    let compact = items
         .iter()
-        .find(|i| {
-            matches!(
-                i.kind,
-                ContextPickerItemKind::BuiltIn(ContextAttachmentKind::Current)
-            )
-        })
-        .expect("Current Context should match 'snap' in slash mode");
+        .find(|i| matches!(&i.kind, ContextPickerItemKind::SlashCommand(command) if command == "compact"))
+        .expect("compact should match 'com' in slash mode");
 
-    // Meta should be /snapshot in slash mode
     assert!(
-        current.meta.contains("snapshot"),
-        "Slash mode meta should contain 'snapshot', got: {}",
-        current.meta,
+        compact.meta.contains("compact"),
+        "Slash mode meta should contain 'compact', got: {}",
+        compact.meta,
+    );
+    assert!(
+        !compact.meta_highlight_indices.is_empty(),
+        "Slash mode should produce meta highlight indices for 'com'"
     );
 
-    // meta_highlight_indices should point into the bare command text
-    assert!(
-        !current.meta_highlight_indices.is_empty(),
-        "Slash mode should produce meta highlight indices for 'snap'"
-    );
-
-    // The bare command is "snapshot" (8 chars); indices must be in range
-    let meta_bare = current.meta.trim_start_matches('/');
-    for &idx in &current.meta_highlight_indices {
-        assert!(
-            idx < meta_bare.len(),
-            "meta highlight index {} out of range for '{}' (len {})",
-            idx,
-            meta_bare,
-            meta_bare.len(),
-        );
+    let meta_bare = compact.meta.trim_start_matches('/');
+    for &idx in &compact.meta_highlight_indices {
+        assert!(idx < meta_bare.len());
     }
 }
 
@@ -915,18 +825,14 @@ fn mention_mode_meta_highlights_align_with_mention() {
 
 #[test]
 fn slash_and_mention_highlights_both_cover_query_length() {
-    // Both modes should produce highlight indices matching at least the query length
-    let query = "bro";
-
-    let slash_items = build_picker_items(ContextPickerTrigger::Slash, query);
-    let slash_browser = slash_items.iter().find(|i| {
-        matches!(
-            i.kind,
-            ContextPickerItemKind::BuiltIn(ContextAttachmentKind::Browser)
-        )
+    let mention_query = "bro";
+    let slash_query = "com";
+    let slash_items = build_slash_picker_items(slash_query, ["compact", "clear", "help"]);
+    let slash_compact = slash_items.iter().find(|i| {
+        matches!(&i.kind, ContextPickerItemKind::SlashCommand(command) if command == "compact")
     });
 
-    let mention_items = build_picker_items(ContextPickerTrigger::Mention, query);
+    let mention_items = build_picker_items(ContextPickerTrigger::Mention, mention_query);
     let mention_browser = mention_items.iter().find(|i| {
         matches!(
             i.kind,
@@ -934,21 +840,21 @@ fn slash_and_mention_highlights_both_cover_query_length() {
         )
     });
 
-    if let Some(item) = slash_browser {
+    if let Some(item) = slash_compact {
         assert!(
-            item.label_highlight_indices.len() >= query.len(),
-            "Slash Browser label highlights ({:?}) should cover query len {}",
+            item.label_highlight_indices.len() >= slash_query.len(),
+            "Slash compact label highlights ({:?}) should cover query len {}",
             item.label_highlight_indices,
-            query.len(),
+            slash_query.len(),
         );
     }
 
     if let Some(item) = mention_browser {
         assert!(
-            item.label_highlight_indices.len() >= query.len(),
+            item.label_highlight_indices.len() >= mention_query.len(),
             "Mention Browser label highlights ({:?}) should cover query len {}",
             item.label_highlight_indices,
-            query.len(),
+            mention_query.len(),
         );
     }
 }
@@ -1035,8 +941,8 @@ fn fuzzy_nonexistent_query_still_filters() {
 
 #[test]
 fn slash_ranking_is_deterministic() {
-    let items_a = build_picker_items(ContextPickerTrigger::Slash, "snap");
-    let items_b = build_picker_items(ContextPickerTrigger::Slash, "snap");
+    let items_a = build_slash_picker_items("com", ["compact", "clear", "help"]);
+    let items_b = build_slash_picker_items("com", ["compact", "clear", "help"]);
 
     assert_eq!(items_a.len(), items_b.len());
     for (a, b) in items_a.iter().zip(items_b.iter()) {

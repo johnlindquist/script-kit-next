@@ -96,6 +96,13 @@ pub(crate) fn parse_inline_context_mentions(text: &str) -> Vec<InlineContextMent
         };
 
         if let Some(part) = part {
+            tracing::info!(
+                target: "ai",
+                event = "inline_context_token_resolved",
+                token = %token,
+                source = %part.source(),
+                label = %part.label(),
+            );
             out.push(InlineContextMention {
                 range: start..i,
                 token,

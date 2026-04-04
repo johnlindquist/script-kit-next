@@ -1,12 +1,34 @@
 # Script Kit GPUI
 
-Rust (GPUI app shell) + TypeScript (bun script runner) + SDK. Backwards-compatible rewrite of Script Kit.
+Rust (GPUI app shell) + TypeScript (bun script runner) + SDK.
 
 ## Scope Rules
 
 - Do ONLY what is explicitly requested. No unrequested changes, refactors, or "improvements."
 - If you notice something worth improving, mention it at the end — do not implement it.
 - Stay within the boundaries of the task. A docs request is not a code change.
+
+## Wiki Workflow
+
+The repo wiki in `wiki/` is part of the agent workflow for this project. Future coding agents should use it as the first-stop project knowledge base, then verify against source as needed.
+
+### When to read the wiki
+- Start with `wiki/index.md` to find the relevant pages for the task.
+- Read `wiki/CLAUDE.md` before creating, editing, or re-ingesting wiki content.
+- For architecture, protocol, AI, context, design, or workflow questions, consult the relevant `wiki/pages/*.md` page before re-deriving the answer from scratch.
+- Treat the wiki as a high-signal map of the codebase, not a replacement for reading source files when making risky changes.
+
+### How to use the wiki
+- Prefer the wiki to orient quickly, then read the cited source files before editing code.
+- When a wiki page and source disagree, trust the source of truth in the repository and update the wiki if the task includes documentation/wiki maintenance.
+- When adding new project knowledge that should persist across sessions, update the wiki if requested or if the task is explicitly about docs/wiki maintenance.
+
+### Wiki guardrails
+- Never edit files under `wiki/raw/`.
+- Preserve the ownership model in `wiki/CLAUDE.md`:
+  - Ingest owns frontmatter, `## Key Files`, `## Source Documents`, `## Related Pages`, `wiki/index.md`, and `wiki/log.md`.
+  - Page authors own the summary paragraph(s), `## Key Facts`, and optional sections after `## Related Pages`.
+- Re-ingest with `bun scripts/wiki/ingest.ts --root . --snapshot <git-sha> --config wiki/sources.json` instead of hand-editing snapshot copies under `wiki/raw/`.
 
 ## Verification Gate (Mandatory)
 

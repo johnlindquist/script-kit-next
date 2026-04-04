@@ -1034,11 +1034,13 @@ impl ScriptListApp {
             }
         };
 
+        let preferred_agent_id = crate::ai::acp::load_preferred_acp_agent_id();
         let acp_launch_resolution =
-            crate::ai::acp::resolve_default_acp_launch(&catalog, None);
+            crate::ai::acp::resolve_default_acp_launch(&catalog, preferred_agent_id.as_deref());
         tracing::info!(
             target: "script_kit::tab_ai",
             event = "acp_launch_resolution",
+            preferred_agent_id = ?preferred_agent_id,
             selected_agent_id = ?acp_launch_resolution.selected_agent_id(),
             blocker = ?acp_launch_resolution.blocker,
             stage_ms = stage_started_at.elapsed().as_millis() as u64,
@@ -1142,6 +1144,7 @@ impl ScriptListApp {
                     cwd,
                     initial_input: acp_initial_input.clone(),
                     display_name: agent_display_name.into(),
+                    selected_agent: acp_launch_resolution.selected_agent.clone(),
                     available_models: agent_models,
                     selected_model_id: default_model_id,
                 },
@@ -1154,6 +1157,10 @@ impl ScriptListApp {
             stage = "acp_thread_new",
             stage_ms = stage_started_at.elapsed().as_millis() as u64,
             total_ms = open_started_at.elapsed().as_millis() as u64,
+        );
+
+        crate::ai::acp::persist_preferred_acp_agent_id(
+            acp_launch_resolution.selected_agent_id().map(str::to_string),
         );
 
         let stage_started_at = std::time::Instant::now();

@@ -235,6 +235,22 @@ fn thought_deltas_separate_from_assistant_deltas() {
 }
 
 #[test]
+fn runtime_setup_required_arms_recovery_state() {
+    let mut thread = AcpThread::test_new(vec![], None);
+
+    thread.apply_event_test(AcpEvent::SetupRequired {
+        reason: "auth_required".into(),
+        auth_methods: vec!["oauth".into()],
+    });
+
+    let setup = thread
+        .setup_state()
+        .expect("runtime setup required should arm recovery state");
+    assert_eq!(setup.title, "Authentication required");
+    assert_eq!(thread.status, AcpThreadStatus::Error);
+}
+
+#[test]
 fn plan_visible_to_view_without_message_creation() {
     let mut thread = AcpThread::test_new(vec![], None);
 

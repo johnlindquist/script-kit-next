@@ -743,11 +743,10 @@ pub fn build_picker_items(trigger: ContextPickerTrigger, query: &str) -> Vec<Con
     items
 }
 
-/// Build a ranked list of picker items for slash mode, including both
-/// built-in context attachments and agent slash commands.
+/// Build a ranked list of picker items for slash mode using only agent slash
+/// commands.
 ///
-/// This is the single entry point for ACP slash-mode item construction,
-/// replacing the previous ACP-only `append_agent_slash_commands` method.
+/// Slash mode is command-only. Context attachments belong behind `@`.
 pub fn build_slash_picker_items<'a, I>(query: &str, agent_commands: I) -> Vec<ContextPickerItem>
 where
     I: IntoIterator<Item = &'a str>,
@@ -755,15 +754,8 @@ where
     let query_lower = query.to_lowercase();
     let command_names: Vec<&str> = agent_commands.into_iter().collect();
     let command_count = command_names.len();
-    let mut items =
-        Vec::with_capacity(builtin_picker_seeds().len() + FILE_RESULTS_LIMIT + command_count);
+    let mut items = Vec::with_capacity(command_count);
 
-    extend_builtin_picker_items(
-        ContextPickerTrigger::Slash,
-        query,
-        &query_lower,
-        &mut items,
-    );
     extend_agent_slash_command_items(&query_lower, command_names, &mut items);
     sort_picker_items(&mut items);
 

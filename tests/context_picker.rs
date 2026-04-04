@@ -4,7 +4,7 @@
 //! and the contract between picker items and `AiContextPart` creation.
 
 use script_kit_gpui::ai::{
-    build_picker_items, context_attachment_specs, score_builtin, score_builtin_with_trigger,
+    build_picker_items, build_slash_picker_items, context_attachment_specs, score_builtin,
     AiContextPart, ContextAttachmentKind, ContextPickerItemKind, ContextPickerState,
     ContextPickerTrigger,
 };
@@ -335,42 +335,18 @@ fn new_entries_are_queryable() {
 // ---------- Slash-mode ranking and highlight improvements ----------
 
 #[test]
-fn slash_exact_command_match_scores_highest() {
-    let spec = ContextAttachmentKind::Current.spec();
-    let (score, _, _) =
-        score_builtin_with_trigger(spec, ContextPickerTrigger::Slash, "snapshot");
-    assert_eq!(score, 1000, "Exact slash command match should score 1000");
-}
-
-#[test]
-fn slash_prefix_promoted_to_tier_2() {
-    let spec = ContextAttachmentKind::Current.spec();
-    let (score, _, _) = score_builtin_with_trigger(spec, ContextPickerTrigger::Slash, "snap");
+fn slash_mode_stays_command_only() {
+    let items = build_slash_picker_items("sel", ["compact", "clear", "help"]);
     assert!(
-        score >= 500,
-        "Slash prefix should be tier 2 (500+), got {}",
-        score
-    );
-}
-
-#[test]
-fn slash_exact_outranks_slash_prefix() {
-    let spec = ContextAttachmentKind::Current.spec();
-    let (exact, _, _) =
-        score_builtin_with_trigger(spec, ContextPickerTrigger::Slash, "snapshot");
-    let (prefix, _, _) = score_builtin_with_trigger(spec, ContextPickerTrigger::Slash, "snap");
-    assert!(
-        exact > prefix,
-        "Exact ({}) must outrank prefix ({})",
-        exact,
-        prefix
+        items.iter().all(|item| matches!(item.kind, ContextPickerItemKind::SlashCommand(_))),
+        "Slash mode should only return slash commands"
     );
 }
 
 #[test]
 fn slash_mode_ranking_is_deterministic() {
-    let a = build_picker_items(ContextPickerTrigger::Slash, "snap");
-    let b = build_picker_items(ContextPickerTrigger::Slash, "snap");
+    let a = build_slash_picker_items("com", ["compact", "clear", "help"]);
+    let b = build_slash_picker_items("com", ["compact", "clear", "help"]);
     assert_eq!(a.len(), b.len());
     for (ia, ib) in a.iter().zip(b.iter()) {
         assert_eq!(ia.id, ib.id);
@@ -382,16 +358,11 @@ fn slash_mode_ranking_is_deterministic() {
 
 #[test]
 fn slash_mode_highlights_align_with_meta_text() {
-    let items = build_picker_items(ContextPickerTrigger::Slash, "snap");
+    let items = build_slash_picker_items("com", ["compact", "clear", "help"]);
     let current = items
         .iter()
-        .find(|i| {
-            matches!(
-                i.kind,
-                ContextPickerItemKind::BuiltIn(ContextAttachmentKind::Current)
-            )
-        })
-        .expect("/snapshot should match 'snap' in slash mode");
+        .find(|i| matches!(&i.kind, ContextPickerItemKind::SlashCommand(command) if command == "compact"))
+        .expect("/compact should match 'com' in slash mode");
 
     let meta_bare = current.meta.trim_start_matches('/');
     for &idx in &current.meta_highlight_indices {
@@ -405,7 +376,7 @@ fn slash_mode_highlights_align_with_meta_text() {
     }
     assert!(
         !current.meta_highlight_indices.is_empty(),
-        "Slash mode should produce meta highlights for 'snap'"
+        "Slash mode should produce meta highlights for 'com'"
     );
 }
 

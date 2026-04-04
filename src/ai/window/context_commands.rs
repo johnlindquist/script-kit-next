@@ -63,7 +63,7 @@ mod tests {
     #[test]
     fn test_parse_with_whitespace() {
         assert_eq!(
-            parse_context_slash_command("  /snapshot  "),
+            parse_context_slash_command("  /context  "),
             Some(ContextAttachmentKind::Current),
             "Leading/trailing whitespace should be trimmed"
         );

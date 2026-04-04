@@ -3,9 +3,7 @@ use crate::ai::message_parts::AiContextPart;
 pub(crate) const CONTEXT_SECTION: &str = "Context";
 pub(crate) const CLEAR_CONTEXT_ACTION_ID: &str = "chat:clear_context";
 pub(crate) const CLEAR_CONTEXT_ACTION_TITLE: &str = "Clear Context";
-const CURRENT_SNAPSHOT_SLASH_ALIASES: &[&str] = &["/context"];
 const CURRENT_SNAPSHOT_MENTION_ALIASES: &[&str] = &["@context"];
-const FULL_SNAPSHOT_SLASH_ALIASES: &[&str] = &["/context-full"];
 const FULL_SNAPSHOT_MENTION_ALIASES: &[&str] = &["@context-full"];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -48,9 +46,9 @@ const CONTEXT_ATTACHMENT_SPECS: [ContextAttachmentSpec; 18] = [
         kind: ContextAttachmentKind::Current,
         action_id: "chat:add_current_context",
         action_title: "Attach Current Snapshot",
-        slash_command: Some("/snapshot"),
+        slash_command: Some("/context"),
         mention: Some("@snapshot"),
-        slash_aliases: CURRENT_SNAPSHOT_SLASH_ALIASES,
+        slash_aliases: &[],
         mention_aliases: CURRENT_SNAPSHOT_MENTION_ALIASES,
         uri: "kit://context?profile=minimal",
         label: "Current Context",
@@ -59,9 +57,9 @@ const CONTEXT_ATTACHMENT_SPECS: [ContextAttachmentSpec; 18] = [
         kind: ContextAttachmentKind::Full,
         action_id: "chat:add_context_full",
         action_title: "Attach Full Snapshot",
-        slash_command: Some("/snapshot-full"),
+        slash_command: Some("/context-full"),
         mention: Some("@snapshot-full"),
-        slash_aliases: FULL_SNAPSHOT_SLASH_ALIASES,
+        slash_aliases: &[],
         mention_aliases: FULL_SNAPSHOT_MENTION_ALIASES,
         uri: "kit://context",
         label: "Current Context (Full)",

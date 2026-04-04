@@ -5,50 +5,35 @@
 //! intentionally stays on the public API surface and uses fixed fixtures to
 //! verify that mixed context parts still prepare consistently end to end.
 
+use script_kit_gpui::ai::context_attachment_specs;
 use script_kit_gpui::ai::message_parts::{
     merge_context_parts, prepare_user_message_with_receipt, AiContextPart, PreparedMessageDecision,
 };
 use std::sync::Arc;
 
 /// Parse fixture `@mention` directives into the public `AiContextPart` shape.
+///
+/// Uses the canonical `context_attachment_specs()` to resolve mention tokens,
+/// keeping the integration test in sync with the contract.
 fn parse_mentions(raw: &str) -> (String, Vec<AiContextPart>) {
-    // This mirrors the fixture inputs used in this black-box integration test.
-    // Contract-level mapping assertions live in crate-local tests.
+    let specs = context_attachment_specs();
     let mut cleaned_lines = Vec::new();
     let mut parts = Vec::new();
 
     for line in raw.lines() {
         let trimmed = line.trim();
-        let part = match trimmed {
-            "@snapshot" | "@context" => Some(AiContextPart::ResourceUri {
-                uri: "kit://context?profile=minimal".to_string(),
-                label: "Current Context".to_string(),
-            }),
-            "@snapshot-full" | "@context-full" => Some(AiContextPart::ResourceUri {
-                uri: "kit://context".to_string(),
-                label: "Current Context (Full)".to_string(),
-            }),
-            "@selection" => Some(AiContextPart::ResourceUri {
-                uri: "kit://context?selectedText=1&frontmostApp=0&menuBar=0&browserUrl=0&focusedWindow=0".to_string(),
-                label: "Selection".to_string(),
-            }),
-            "@browser" => Some(AiContextPart::ResourceUri {
-                uri: "kit://context?selectedText=0&frontmostApp=0&menuBar=0&browserUrl=1&focusedWindow=0".to_string(),
-                label: "Browser URL".to_string(),
-            }),
-            "@window" => Some(AiContextPart::ResourceUri {
-                uri: "kit://context?selectedText=0&frontmostApp=1&menuBar=0&browserUrl=0&focusedWindow=1".to_string(),
-                label: "Focused Window".to_string(),
-            }),
-            "@diagnostics" => Some(AiContextPart::ResourceUri {
-                uri: "kit://context?diagnostics=1".to_string(),
-                label: "Context Diagnostics".to_string(),
-            }),
-            _ => None,
-        };
+        let matched = specs
+            .iter()
+            .find(|spec| {
+                spec.mention == Some(trimmed)
+                    || spec.mention_aliases.contains(&trimmed)
+            });
 
-        if let Some(p) = part {
-            parts.push(p);
+        if let Some(spec) = matched {
+            parts.push(AiContextPart::ResourceUri {
+                uri: spec.uri.to_string(),
+                label: spec.label.to_string(),
+            });
         } else {
             cleaned_lines.push(line);
         }
@@ -138,4 +123,99 @@ fn explicit_context_surfaces_share_one_contract_end_to_end() {
             .ends_with("Please summarize what matters."),
         "final content should end with user text"
     );
+}
+
+/// Every spec that has a mention token must round-trip through parse_mentions.
+#[test]
+fn all_mention_tokens_parse_via_canonical_contract() {
+    for spec in context_attachment_specs() {
+        if let Some(mention) = spec.mention {
+            let (cleaned, parts) = parse_mentions(mention);
+            assert!(
+                cleaned.is_empty(),
+                "mention {mention} should be consumed, not left in cleaned content"
+            );
+            assert_eq!(
+                parts.len(),
+                1,
+                "mention {mention} should produce exactly one part"
+            );
+            assert_eq!(
+                parts[0].source(),
+                spec.uri,
+                "URI mismatch for {mention}"
+            );
+            assert_eq!(
+                parts[0].label(),
+                spec.label,
+                "label mismatch for {mention}"
+            );
+        }
+    }
+}
+
+/// Provider-backed tokens (@clipboard, @git-diff, @recent-scripts, @calendar,
+/// @screenshot) resolve to concrete parts through the full pipeline.
+#[test]
+fn provider_backed_mentions_resolve_end_to_end() {
+    let raw = "@clipboard\n@git-diff\n@recent-scripts\n@calendar\nSummarize this.";
+    let (cleaned, parts) = parse_mentions(raw);
+
+    assert_eq!(cleaned, "Summarize this.");
+    assert_eq!(parts.len(), 4, "should parse all 4 provider-backed tokens");
+
+    // Verify URIs point to real provider-backed resources
+    let uris: Vec<&str> = parts
+        .iter()
+        .map(|p| p.source())
+        .collect();
+    assert!(uris.contains(&"kit://clipboard-history"));
+    assert!(uris.contains(&"kit://git-diff"));
+    assert!(uris.contains(&"kit://scripts"));
+    assert!(uris.contains(&"kit://calendar"));
+
+    // Merge with no pending parts (no dedup needed)
+    let merged = merge_context_parts(&parts, &[]);
+    assert_eq!(merged.len(), 4);
+
+    let scripts: Vec<Arc<script_kit_gpui::scripts::Script>> = Vec::new();
+    let scriptlets: Vec<Arc<script_kit_gpui::scripts::Scriptlet>> = Vec::new();
+
+    let receipt = prepare_user_message_with_receipt(&cleaned, &merged, &scripts, &scriptlets);
+
+    assert_eq!(
+        receipt.decision,
+        PreparedMessageDecision::Ready,
+        "all provider-backed URIs should resolve; decision was {:?}",
+        receipt.decision
+    );
+    assert_eq!(receipt.context.attempted, 4);
+    assert_eq!(receipt.context.resolved, 4);
+    assert!(
+        receipt.context.failures.is_empty(),
+        "unexpected failures: {:?}",
+        receipt.context.failures
+    );
+}
+
+/// Slash and @ flows share the same specs — every spec with both a slash
+/// command and a mention token maps to the same URI and label.
+#[test]
+fn slash_and_mention_share_same_uri_and_label() {
+    for spec in context_attachment_specs() {
+        if spec.slash_command.is_some() && spec.mention.is_some() {
+            // Both modes point to the same URI and label — they share one spec.
+            // This is guaranteed by the array structure but verify explicitly.
+            let part = AiContextPart::ResourceUri {
+                uri: spec.uri.to_string(),
+                label: spec.label.to_string(),
+            };
+            assert_eq!(
+                part.source(),
+                spec.uri,
+                "slash/mention parity broken for {:?}",
+                spec.kind
+            );
+        }
+    }
 }

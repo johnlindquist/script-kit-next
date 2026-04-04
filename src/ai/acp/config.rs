@@ -374,11 +374,7 @@ pub(crate) fn load_acp_agent_catalog_entries(
                 super::catalog::AcpAgentConfigState::Valid
             };
 
-            let source = if agent.id == "claude-code" {
-                super::catalog::AcpAgentSource::LegacyClaudeCode
-            } else {
-                super::catalog::AcpAgentSource::ScriptKitCatalog
-            };
+            let source = classify_agent_source(&agent.id);
 
             let install_hint = agent.install.as_ref().map(|spec| {
                 if spec.args.is_empty() {
@@ -391,6 +387,17 @@ pub(crate) fn load_acp_agent_catalog_entries(
                     ))
                 }
             });
+
+            tracing::info!(
+                target: "script_kit::tab_ai",
+                event = "acp_agent_catalog_entry_built",
+                id = %agent.id,
+                display_name = %agent.display_name,
+                source = ?source,
+                install_state = ?install_state,
+                auth_state = ?super::catalog::AcpAgentAuthState::Unknown,
+                config_state = ?config_state,
+            );
 
             super::catalog::AcpAgentCatalogEntry {
                 id: agent.id.clone().into(),
@@ -416,6 +423,49 @@ pub(crate) fn load_acp_agent_catalog_entries(
     );
 
     Ok(entries)
+}
+
+/// Classify an agent by its well-known ID into a catalog source.
+fn classify_agent_source(agent_id: &str) -> super::catalog::AcpAgentSource {
+    match agent_id {
+        "claude-code" => super::catalog::AcpAgentSource::LegacyClaudeCode,
+        "opencode" | "codex-acp" => super::catalog::AcpAgentSource::BuiltIn,
+        _ => super::catalog::AcpAgentSource::ScriptKitCatalog,
+    }
+}
+
+/// Load the persisted preferred ACP agent ID from user preferences.
+pub(crate) fn load_preferred_acp_agent_id() -> Option<String> {
+    crate::config::load_user_preferences()
+        .ai
+        .selected_acp_agent_id
+}
+
+/// Persist the preferred ACP agent ID to `settings.json` on a background thread.
+///
+/// Logs success or failure structured events for observability.
+pub(crate) fn persist_preferred_acp_agent_id(agent_id: Option<String>) {
+    std::thread::Builder::new()
+        .name("acp-save-agent".into())
+        .spawn(move || {
+            let mut prefs = crate::config::load_user_preferences();
+            prefs.ai.selected_acp_agent_id = agent_id.clone();
+            if let Err(error) = crate::config::save_user_preferences(&prefs) {
+                tracing::warn!(
+                    target: "script_kit::tab_ai",
+                    event = "acp_agent_selection_persist_failed",
+                    error = %error,
+                    ?agent_id,
+                );
+            } else {
+                tracing::info!(
+                    target: "script_kit::tab_ai",
+                    event = "acp_agent_selection_persisted",
+                    ?agent_id,
+                );
+            }
+        })
+        .ok();
 }
 
 #[cfg(test)]
