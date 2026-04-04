@@ -289,19 +289,19 @@ impl ScriptListApp {
             .collect()
     }
 
-    /// Sort directory listing results: directories first, then alphabetically
+    /// Sort cached directory results using the active file-search sort mode.
+    ///
+    /// This wrapper keeps directory-refresh callers aligned with
+    /// `compare_file_search_results_for_mode`.
     pub fn sort_directory_results(&mut self) {
-        // Sort the cached results in place
-        self.cached_file_results.sort_by(|a, b| {
-            let a_is_dir = matches!(a.file_type, crate::file_search::FileType::Directory);
-            let b_is_dir = matches!(b.file_type, crate::file_search::FileType::Directory);
-
-            match (a_is_dir, b_is_dir) {
-                (true, false) => std::cmp::Ordering::Less,
-                (false, true) => std::cmp::Ordering::Greater,
-                _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
-            }
-        });
+        tracing::info!(
+            category = "FILE_SEARCH",
+            event = "sort_directory_results_delegate",
+            ?self.file_search_sort_mode,
+            cached_count = self.cached_file_results.len(),
+            "Delegating directory result sorting to apply_file_search_sort_mode"
+        );
+        self.apply_file_search_sort_mode();
     }
 
     /// Recompute file_search_display_indices based on current filter pattern
