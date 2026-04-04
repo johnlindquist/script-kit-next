@@ -18,17 +18,10 @@ impl Render for PathPrompt {
         // Use ListItemColors for consistent theming - always use theme
         let list_colors = ListItemColors::from_theme(&self.theme);
 
-        // Clone values needed for the closure
-        let filtered_count = self.filtered_entries.len();
+        // Clone cached render rows (Arc clone — no per-render allocation)
+        let render_rows = self.render_rows.clone();
+        let filtered_count = render_rows.len();
         let selected_index = self.selected_index;
-
-        // TODO(codex-audit): This Vec snapshot is rebuilt to move data into the list closure.
-        // Consider Arc-backed list data to avoid per-render allocation/copy churn.
-        let entries_for_list: Vec<(String, bool)> = self
-            .filtered_entries
-            .iter()
-            .map(|e| (e.name.clone(), e.is_dir))
-            .collect();
 
         // Build list items using ListItem component for consistent styling
         let list = uniform_list(
@@ -37,24 +30,20 @@ impl Render for PathPrompt {
             move |visible_range: std::ops::Range<usize>, _window, _cx| {
                 visible_range
                     .map(|ix| {
-                        let (name, is_dir) = &entries_for_list[ix];
+                        let entry = &render_rows[ix];
                         let is_selected = ix == selected_index;
 
                         // Choose icon based on entry type
-                        let icon = if *is_dir {
+                        let icon = if entry.is_dir {
                             IconKind::Emoji("📁".to_string())
                         } else {
                             IconKind::Emoji("📄".to_string())
                         };
 
-                        // No description needed - folder icon 📁 is sufficient
-                        let description: Option<String> = None;
-
                         // Use ListItem component for consistent styling with main menu
-                        ListItem::new(name.clone(), list_colors)
+                        ListItem::new(entry.name.clone(), list_colors)
                             .index(ix)
                             .icon_kind(icon)
-                            .description_opt(description)
                             .selected(is_selected)
                             .with_accent_bar(true)
                             .into_any_element()

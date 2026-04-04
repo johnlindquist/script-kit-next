@@ -40,20 +40,6 @@ pub(super) fn visual_row_state_for_input_modality(
     }
 }
 
-pub(super) fn resolve_row_bg_rgba(
-    row_state: SelectRowState,
-    focused_bg_rgba: u32,
-    hovered_bg_rgba: u32,
-) -> u32 {
-    if row_state.is_focused || row_state.is_selected {
-        focused_bg_rgba
-    } else if row_state.is_hovered {
-        hovered_bg_rgba
-    } else {
-        0x00000000
-    }
-}
-
 pub(super) fn extract_choice_icon_hint(description: Option<&str>) -> Option<&str> {
     description.and_then(|raw| {
         raw.split(['•', '|', '\n'])
@@ -117,10 +103,6 @@ impl Render for SelectPrompt {
 
         let text_color = rgb(chrome.text_secondary_hex);
         let muted_color = rgb(chrome.text_muted_hex);
-        let accent_bar_color = rgb(chrome.accent_hex);
-        let focused_row_bg_rgba = chrome.selection_rgba;
-        let hovered_row_bg_rgba = chrome.hover_rgba;
-        let hovered_row_bg = rgba(hovered_row_bg_rgba);
 
         let placeholder = self
             .placeholder
@@ -184,11 +166,8 @@ impl Render for SelectPrompt {
                           visible_range: std::ops::Range<usize>,
                           window,
                           cx| {
-                        let item_colors = UnifiedListItemColors {
-                            selected_opacity: 0.0,
-                            hover_opacity: 0.0,
-                            ..UnifiedListItemColors::from_theme(&this.theme)
-                        };
+                        let item_colors =
+                            UnifiedListItemColors::from_theme(&this.theme);
                         let last_input_was_keyboard = window.last_input_was_keyboard();
                         let mut rows = Vec::with_capacity(visible_range.len());
 
@@ -245,11 +224,6 @@ impl Render for SelectPrompt {
                                                     ))
                                                 },
                                             );
-                                        let row_bg = rgba(resolve_row_bg_rgba(
-                                            visual_row_state,
-                                            focused_row_bg_rgba,
-                                            hovered_row_bg_rgba,
-                                        ));
                                         let hover_handler = cx.listener(
                                             move |this: &mut SelectPrompt,
                                                   hovered: &bool,
@@ -267,17 +241,13 @@ impl Render for SelectPrompt {
                                             },
                                         );
 
-                                        let mut row = div()
+                                        // UnifiedListItem owns row chrome. Keep the ghost
+                                        // selected background for focused or selected rows,
+                                        // but reserve the accent bar for the focused row so
+                                        // multi-select does not imply active focus everywhere.
+                                        let row = div()
                                             .id(display_idx)
                                             .w_full()
-                                            .h(px(LIST_ITEM_HEIGHT))
-                                            .bg(row_bg)
-                                            .border_l(px(3.0))
-                                            .border_color(if is_focused {
-                                                accent_bar_color
-                                            } else {
-                                                gpui::rgba(0x00000000)
-                                            })
                                             .cursor_pointer()
                                             .on_hover(hover_handler)
                                             .child(
@@ -289,17 +259,14 @@ impl Render for SelectPrompt {
                                                 .leading_opt(leading)
                                                 .trailing_opt(trailing)
                                                 .state(ItemState {
-                                                    is_selected,
+                                                    is_selected: is_focused || is_selected,
                                                     is_hovered,
                                                     is_disabled: false,
                                                 })
                                                 .density(Density::Comfortable)
+                                                .with_accent_bar(is_focused)
                                                 .colors(item_colors),
                                             );
-
-                                        if !is_focused && !is_selected {
-                                            row = row.hover(move |s| s.bg(hovered_row_bg));
-                                        }
 
                                         rows.push(row);
                                     }
@@ -316,7 +283,6 @@ impl Render for SelectPrompt {
             .track_scroll(&self.list_scroll_handle)
             .into_any_element()
         };
-
         let content = div()
             .id(gpui::ElementId::Name("list:select-choices".into()))
             .flex()
@@ -387,7 +353,22 @@ impl Render for SelectPrompt {
 
 #[cfg(test)]
 mod tests {
-    use super::{resolve_row_bg_rgba, visual_row_state_for_input_modality, SelectRowState};
+    use super::{visual_row_state_for_input_modality, SelectRowState};
+
+    /// Row background resolution — test-only helper retained for unit test coverage.
+    fn resolve_row_bg_rgba(
+        row_state: SelectRowState,
+        focused_bg_rgba: u32,
+        hovered_bg_rgba: u32,
+    ) -> u32 {
+        if row_state.is_focused || row_state.is_selected {
+            focused_bg_rgba
+        } else if row_state.is_hovered {
+            hovered_bg_rgba
+        } else {
+            0x00000000
+        }
+    }
 
     #[test]
     fn test_resolve_row_bg_rgba_uses_focused_accent_for_selected_row() {

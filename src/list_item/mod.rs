@@ -628,14 +628,14 @@ fn list_item_shortcut_tokens_for_render<'a>(
     ))
 }
 
-/// Row shortcuts stay hidden until a row is focused or hovered.
-/// This keeps the right edge quiet across both browse and search states.
+/// Search/list rows keep metadata visible at hint opacity even when unfocused.
+/// Focus controls description reveal, not metadata discoverability.
 pub(crate) fn should_show_search_shortcut(
     _is_filtering: bool,
-    selected: bool,
-    hovered: bool,
+    _selected: bool,
+    _hovered: bool,
 ) -> bool {
-    selected || hovered
+    true
 }
 /// Search rows keep descriptions only when they add context for the current focus or match.
 pub(crate) fn should_show_search_description(
@@ -1272,7 +1272,7 @@ impl RenderOnce for ListItem {
             if show_shortcut {
                 crate::components::hint_strip::emit_shortcut_chrome_audit(
                     "list_item",
-                    "compact-inline-whisper-focused-only",
+                    "compact-inline-whisper-all-rows",
                 );
                 let glyph_color = if is_filtering {
                     rgba((colors.text_dimmed << 8) | ALPHA_HINT)

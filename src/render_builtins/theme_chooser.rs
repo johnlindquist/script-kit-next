@@ -371,6 +371,152 @@ impl ScriptListApp {
             .into_any_element()
     }
 
+    fn render_theme_chooser_prompt_lab(
+        &self,
+        chrome: &theme::AppChromeColors,
+    ) -> AnyElement {
+        div()
+            .flex()
+            .flex_col()
+            .gap(px(6.0))
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(rgb(chrome.text_muted_hex))
+                    .child("Prompt Lab"),
+            )
+            .child(
+                div()
+                    .px(px(10.0))
+                    .py(px(10.0))
+                    .rounded(px(10.0))
+                    .border_1()
+                    .border_color(rgba(chrome.divider_rgba))
+                    .bg(rgba(chrome.panel_surface_rgba))
+                    .flex()
+                    .flex_col()
+                    .gap(px(8.0))
+                    .child(Self::render_theme_chooser_prompt_lab_field(
+                        "Project Name",
+                        "Ship theme polish",
+                        chrome.badge_bg_rgba,
+                        chrome.badge_border_rgba,
+                        chrome.text_primary_hex,
+                        chrome.text_secondary_hex,
+                    ))
+                    .child(Self::render_theme_chooser_prompt_lab_field(
+                        "Focused Field",
+                        "Dark / Light / Auto",
+                        chrome.input_active_rgba,
+                        chrome.border_rgba,
+                        chrome.text_primary_hex,
+                        chrome.text_secondary_hex,
+                    ))
+                    .child(Self::render_theme_chooser_prompt_lab_checkbox(
+                        "Use vibrancy blur",
+                        false,
+                        chrome,
+                    ))
+                    .child(Self::render_theme_chooser_prompt_lab_checkbox(
+                        "Enable dark mode",
+                        true,
+                        chrome,
+                    )),
+            )
+            .into_any_element()
+    }
+
+    fn render_theme_chooser_prompt_lab_field(
+        label: &'static str,
+        value: &'static str,
+        surface_rgba: u32,
+        border_rgba: u32,
+        text_hex: u32,
+        secondary_text_hex: u32,
+    ) -> AnyElement {
+        div()
+            .flex()
+            .flex_col()
+            .gap(px(4.0))
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(rgb(secondary_text_hex))
+                    .child(label),
+            )
+            .child(
+                div()
+                    .h(px(30.0))
+                    .px(px(10.0))
+                    .rounded(px(8.0))
+                    .border_1()
+                    .border_color(rgba(border_rgba))
+                    .bg(rgba(surface_rgba))
+                    .flex()
+                    .items_center()
+                    .child(
+                        div()
+                            .text_sm()
+                            .text_color(rgb(text_hex))
+                            .child(value),
+                    ),
+            )
+            .into_any_element()
+    }
+
+    fn render_theme_chooser_prompt_lab_checkbox(
+        label: &'static str,
+        checked: bool,
+        chrome: &theme::AppChromeColors,
+    ) -> AnyElement {
+        let box_bg = if checked {
+            chrome.accent_badge_bg_rgba
+        } else {
+            chrome.badge_bg_rgba
+        };
+        let box_border = if checked {
+            chrome.accent_badge_border_rgba
+        } else {
+            chrome.badge_border_rgba
+        };
+        let box_text = if checked {
+            chrome.accent_badge_text_hex
+        } else {
+            chrome.text_secondary_hex
+        };
+
+        div()
+            .flex()
+            .flex_row()
+            .items_center()
+            .gap(px(8.0))
+            .child(
+                div()
+                    .w(px(16.0))
+                    .h(px(16.0))
+                    .rounded(px(4.0))
+                    .border_1()
+                    .border_color(rgba(box_border))
+                    .bg(rgba(box_bg))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(rgb(box_text))
+                            .child(if checked { "\u{2713}" } else { "" }),
+                    ),
+            )
+            .child(
+                div()
+                    .text_sm()
+                    .text_color(rgb(chrome.text_primary_hex))
+                    .child(label),
+            )
+            .into_any_element()
+    }
+
     fn render_theme_chooser_contrast_row(
         sample: &ThemeChooserContrastRow,
         chrome: &theme::AppChromeColors,
@@ -1175,20 +1321,28 @@ impl ScriptListApp {
             .h(px(1.0))
             .bg(divider_bg);
 
+        let header_padding_x = design_spacing.padding_lg;
+        let header_padding_top = design_spacing.padding_sm;
+        let header_padding_bottom = design_spacing.padding_sm;
+        let header_gap = design_spacing.gap_md;
+        let preview_panel_gap = design_spacing.padding_sm;
+        let preview_section_gap = design_spacing.padding_sm;
+        let search_input_height = design_typography.font_size_xl + 12.0;
+
         let header = div()
             .w_full()
-            .px(px(design_spacing.padding_lg))
-            .pt(px(design_spacing.padding_md))
-            .pb(px(6.0))
+            .px(px(header_padding_x))
+            .pt(px(header_padding_top))
+            .pb(px(header_padding_bottom))
             .flex()
             .flex_col()
-            .gap(px(8.0))
+            .gap(px(header_gap))
             .child(
                 div().flex().flex_row().items_center().child(
                     div().flex_1().flex().flex_row().items_center().child(
                         Input::new(&self.gpui_input_state)
                             .w_full()
-                            .h(px(28.0))
+                            .h(px(search_input_height))
                             .px(px(0.0))
                             .py(px(0.0))
                             .with_size(Size::Size(px(design_typography.font_size_xl)))
@@ -1607,7 +1761,7 @@ impl ScriptListApp {
             .py(px(design_spacing.padding_md))
             .flex()
             .flex_col()
-            .gap(px(10.0))
+            .gap(px(preview_panel_gap))
             .overflow_y_hidden()
             // ── Customize header with remix + reset buttons ─────────
             .child(
@@ -1638,7 +1792,7 @@ impl ScriptListApp {
                 div()
                     .flex()
                     .flex_col()
-                    .gap(px(4.0))
+                    .gap(px(preview_section_gap))
                     .child(
                         div()
                             .flex()
@@ -1663,7 +1817,7 @@ impl ScriptListApp {
                         div()
                             .flex()
                             .flex_row()
-                            .gap(px(4.0))
+                            .gap(px(preview_section_gap))
                             .flex_wrap()
                             .children(accent_swatches),
                     ),
@@ -1673,7 +1827,7 @@ impl ScriptListApp {
                 div()
                     .flex()
                     .flex_col()
-                    .gap(px(4.0))
+                    .gap(px(preview_section_gap))
                     .child(
                         div()
                             .text_xs()
@@ -1697,7 +1851,7 @@ impl ScriptListApp {
                 div()
                     .flex()
                     .flex_col()
-                    .gap(px(4.0))
+                    .gap(px(preview_section_gap))
                     .child(
                         div()
                             .text_xs()
@@ -1710,8 +1864,8 @@ impl ScriptListApp {
                             div()
                                 .flex()
                                 .flex_col()
-                                .gap(px(4.0))
-                                .mt(px(4.0))
+                                .gap(px(preview_section_gap))
+                                .mt(px(preview_section_gap))
                                 .child(
                                     div()
                                         .text_xs()
@@ -1734,7 +1888,7 @@ impl ScriptListApp {
                 div()
                     .flex()
                     .flex_col()
-                    .gap(px(4.0))
+                    .gap(px(preview_section_gap))
                     .child(
                         div()
                             .text_xs()
@@ -1745,7 +1899,7 @@ impl ScriptListApp {
                         div()
                             .flex()
                             .flex_row()
-                            .gap(px(4.0))
+                            .gap(px(preview_section_gap))
                             .children(font_size_buttons),
                     ),
             )
@@ -1762,6 +1916,8 @@ impl ScriptListApp {
             )
             // ── Surface Lab ─────────────────────────────────────────
             .child(self.render_theme_chooser_surface_lab(&chrome))
+            // ── Prompt Lab ─────────────────────────────────────────
+            .child(self.render_theme_chooser_prompt_lab(&chrome))
             // ── Contrast audit ──────────────────────────────────────
             .child({
                 let contrast_snapshot = cached_theme_chooser_contrast_snapshot(&self.theme);
@@ -1769,7 +1925,7 @@ impl ScriptListApp {
                 div()
                     .flex()
                     .flex_col()
-                    .gap(px(4.0))
+                    .gap(px(preview_section_gap))
                     .child(
                         div()
                             .text_xs()

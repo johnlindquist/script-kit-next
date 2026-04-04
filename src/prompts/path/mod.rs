@@ -29,6 +29,6 @@ mod render;
 mod types;
 
 pub use types::{
-    CloseActionsCallback, PathEntry, PathInfo, PathPrompt, PathPromptEvent, ShowActionsCallback,
-    SubmitCallback,
+    CloseActionsCallback, PathEntry, PathEntryRenderRow, PathInfo, PathPrompt, PathPromptEvent,
+    ShowActionsCallback, SubmitCallback,
 };

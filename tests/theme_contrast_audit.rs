@@ -13,10 +13,12 @@ use script_kit_gpui::theme::{
 #[test]
 fn default_light_theme_passes_all_contrast_checks() {
     let theme = Theme::light_default();
-    let (passing, total) = theme_contrast_score(&theme);
-    assert_eq!(
-        passing, total,
-        "default light theme must pass all {total} contrast checks, but only {passing} passed"
+    let samples = audit_theme_contrast(&theme);
+    let failing: Vec<_> = samples.iter().filter(|sample| !sample.passes()).collect();
+    assert!(
+        failing.is_empty(),
+        "default light theme must pass all contrast checks, failing samples: {:?}",
+        failing
     );
 }
 
@@ -39,8 +41,8 @@ fn audit_returns_expected_sample_count() {
     let samples = audit_theme_contrast(&theme);
     assert_eq!(
         samples.len(),
-        14,
-        "audit should return 14 surface pairing samples"
+        25,
+        "audit should return 25 surface pairing samples"
     );
 }
 

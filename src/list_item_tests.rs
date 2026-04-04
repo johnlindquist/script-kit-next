@@ -49,22 +49,14 @@ mod tests {
     }
 
     #[test]
-    fn test_should_show_search_shortcut_only_for_selected_or_hovered_rows() {
-        assert!(!should_show_search_shortcut(
-            true,  // is_filtering
-            false, // selected
-            false  // hovered
-        ));
-        assert!(should_show_search_shortcut(
-            true, // is_filtering
-            true, // selected
-            false
-        ));
-        assert!(should_show_search_shortcut(
-            true,  // is_filtering
-            false, // selected
-            true   // hovered
-        ));
+    fn test_should_show_search_shortcut_always_visible() {
+        // Shortcuts stay visible at hint opacity on all rows regardless of focus/hover.
+        // Focus controls description reveal, not metadata discoverability.
+        assert!(should_show_search_shortcut(true, false, false));
+        assert!(should_show_search_shortcut(true, true, false));
+        assert!(should_show_search_shortcut(true, false, true));
+        assert!(should_show_search_shortcut(false, false, false));
+        assert!(should_show_search_shortcut(true, true, true));
     }
 
     #[test]
