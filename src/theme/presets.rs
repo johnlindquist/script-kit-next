@@ -736,10 +736,7 @@ pub fn classify_theme_preset_match(theme: &Theme) -> PresetMatchResult {
             PresetMatchKind::Modified
         };
 
-        PresetMatchResult {
-            preset_index,
-            kind,
-        }
+        PresetMatchResult { preset_index, kind }
     } else {
         // No key match — fully custom theme. Fall back to index 0.
         PresetMatchResult {

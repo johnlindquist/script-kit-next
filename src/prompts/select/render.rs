@@ -166,8 +166,7 @@ impl Render for SelectPrompt {
                           visible_range: std::ops::Range<usize>,
                           window,
                           cx| {
-                        let item_colors =
-                            UnifiedListItemColors::from_theme(&this.theme);
+                        let item_colors = UnifiedListItemColors::from_theme(&this.theme);
                         let last_input_was_keyboard = window.last_input_was_keyboard();
                         let mut rows = Vec::with_capacity(visible_range.len());
 

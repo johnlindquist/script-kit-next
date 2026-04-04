@@ -1,81 +1,29 @@
 use super::*;
-use crate::components::prompt_footer::{
-    PromptFooter, PromptFooterConfig, PROMPT_FOOTER_BUTTON_ACTIVE_OPACITY,
-    PROMPT_FOOTER_BUTTON_HOVER_OPACITY,
-};
 use crate::ui::chrome::{alpha_from_opacity, DIVIDER_HEIGHT, DIVIDER_OPACITY};
 
-#[derive(Clone, Copy)]
-enum ChatFooterButtonAction {
-    StopStreaming,
-    ContinueInChat,
-    SaveAndRun,
-    ToggleActionsPanel,
-}
-
-impl ChatFooterButtonAction {
-    fn run(self, prompt: &mut ChatPrompt, cx: &mut Context<ChatPrompt>) {
-        match self {
-            Self::StopStreaming => {
-                if prompt.is_streaming() {
-                    prompt.stop_streaming(cx);
-                }
-            }
-            Self::ContinueInChat => prompt.handle_continue_in_chat(cx),
-            Self::SaveAndRun => {
-                prompt.handle_script_generation_action(ScriptGenerationAction::SaveAndRun, cx)
-            }
-            Self::ToggleActionsPanel => prompt.toggle_actions_menu(cx),
-        }
-    }
-}
-
 impl ChatPrompt {
-    fn render_script_generation_footer_button(
-        &self,
-        id: &'static str,
-        label: &'static str,
-        shortcut: Option<&'static str>,
-        action: ScriptGenerationAction,
-        footer_colors: PromptFooterColors,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
-        let button_font_size = (self.theme.get_fonts().ui_size - 2.0).max(10.0);
-        let hover_bg =
-            rgba((footer_colors.background << 8) | (PROMPT_FOOTER_BUTTON_HOVER_OPACITY as u32));
-        let active_bg =
-            rgba((footer_colors.background << 8) | (PROMPT_FOOTER_BUTTON_ACTIVE_OPACITY as u32));
+    fn footer_status_text(&self) -> gpui::SharedString {
+        let mut parts: Vec<String> = Vec::new();
 
-        div()
-            .id(id)
-            .flex()
-            .flex_row()
-            .items_center()
-            .gap(px(6.0))
-            .px(px(8.0))
-            .py(px(2.0))
-            .rounded(px(4.0))
-            .cursor_pointer()
-            .hover(move |d| d.bg(hover_bg))
-            .active(move |d| d.bg(active_bg))
-            .child(
-                div()
-                    .text_size(px(button_font_size))
-                    .text_color(rgb(footer_colors.accent))
-                    .child(label),
-            )
-            .when_some(shortcut, |d, shortcut| {
-                d.child(
-                    div()
-                        .text_size(px(button_font_size))
-                        .text_color(rgb(footer_colors.text_muted))
-                        .child(shortcut),
-                )
-            })
-            .on_click(cx.listener(move |this, _event, _window, cx| {
-                this.handle_script_generation_action(action, cx);
-            }))
-            .into_any_element()
+        if self.is_streaming() {
+            parts.push("Streaming".to_string());
+        } else if self.script_generation_mode {
+            parts.push("Script mode".to_string());
+        }
+
+        parts.push(
+            self.model
+                .as_ref()
+                .map(|model| model.to_string())
+                .unwrap_or_else(|| "Select Model".to_string()),
+        );
+        parts.push("Shift+Enter newline".to_string());
+
+        if let Some(status) = &self.script_generation_status {
+            parts.push(status.to_string());
+        }
+
+        gpui::SharedString::from(parts.join(" · "))
     }
 
     fn render_mini_hint_strip(&self) -> impl IntoElement {
@@ -84,142 +32,34 @@ impl ChatPrompt {
         crate::components::render_simple_hint_strip(hints, None)
     }
 
-    fn render_rich_footer(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let footer_colors = PromptFooterColors::from_theme(&self.theme);
-        let model_text = self.model.clone().unwrap_or_else(|| "Select Model".into());
-        let has_assistant = self.has_assistant_turn();
-        let (primary_action, primary_label, primary_shortcut) = if self.is_streaming() {
-            (ChatFooterButtonAction::StopStreaming, "Stop", "Esc")
-        } else if self.script_generation_mode {
-            (ChatFooterButtonAction::SaveAndRun, "Save and Run", "⌘↵")
-        } else if has_assistant {
-            (
-                ChatFooterButtonAction::ContinueInChat,
-                "Continue in AI Chat",
-                "⌘↵",
-            )
-        } else {
-            (ChatFooterButtonAction::ToggleActionsPanel, "Actions", "⌘K")
-        };
-
-        let helper_text = format!("{model_text} · Shift+Enter newline");
-        let footer_config = PromptFooterConfig::new()
-            .primary_label(primary_label)
-            .primary_shortcut(primary_shortcut)
-            .secondary_label("Actions")
-            .secondary_shortcut("⌘K")
-            .helper_text(helper_text)
-            .show_logo(false)
-            .show_info_label(false);
-
-        let primary_handle = cx.entity().downgrade();
-        let secondary_handle = cx.entity().downgrade();
-
-        PromptFooter::new(footer_config, footer_colors)
-            .left_slot_opt(self.render_script_generation_footer_actions(cx))
-            .on_primary_click(Box::new(move |_event, _window, cx| {
-                if let Some(entity) = primary_handle.upgrade() {
-                    entity.update(cx, |this, cx| {
-                        primary_action.run(this, cx);
-                    });
-                }
-            }))
-            .on_secondary_click(Box::new(move |_event, _window, cx| {
-                if let Some(entity) = secondary_handle.upgrade() {
-                    entity.update(cx, |this, cx| {
-                        ChatFooterButtonAction::ToggleActionsPanel.run(this, cx);
-                    });
-                }
-            }))
-    }
-
-    fn render_footer(&self, cx: &mut Context<Self>) -> AnyElement {
+    fn render_footer(&self, _cx: &mut Context<Self>) -> AnyElement {
         if self.mini_mode {
-            self.render_mini_hint_strip().into_any_element()
-        } else {
-            self.render_rich_footer(cx).into_any_element()
-        }
-    }
-
-    fn render_script_generation_footer_actions(
-        &self,
-        cx: &mut Context<Self>,
-    ) -> Option<AnyElement> {
-        let show_actions = self.should_show_script_generation_actions();
-        let status_message = self.script_generation_status.clone();
-
-        if !show_actions && status_message.is_none() {
-            return None;
+            return self.render_mini_hint_strip().into_any_element();
         }
 
-        let theme_colors = &self.theme.colors;
-        let footer_colors = PromptFooterColors::from_theme(&self.theme);
+        let hints = crate::components::universal_prompt_hints();
+        let helper_text = self.footer_status_text();
 
-        let mut action_container = div()
-            .id("chat-script-generation-footer-actions")
-            .flex()
-            .flex_row()
-            .items_center()
-            .gap(px(2.0))
-            .min_w(px(0.0));
+        tracing::info!(
+            target: "script_kit::prompt_chrome",
+            surface = "prompts::chat",
+            footer_mode = "hint_strip",
+            helper_text = %helper_text,
+            is_streaming = self.is_streaming(),
+            script_generation_mode = self.script_generation_mode,
+            "chat_footer_built"
+        );
 
-        if show_actions {
-            action_container = action_container
-                .child(self.render_script_generation_footer_button(
-                    "chat-script-generation-save",
-                    "Save",
-                    None,
-                    ScriptGenerationAction::Save,
-                    footer_colors,
-                    cx,
-                ))
-                .child(self.render_script_generation_footer_button(
-                    "chat-script-generation-run",
-                    "Run",
-                    None,
-                    ScriptGenerationAction::Run,
-                    footer_colors,
-                    cx,
-                ));
-        }
+        crate::components::emit_prompt_hint_audit("prompts::chat", &hints);
 
-        if let Some(status) = status_message {
-            let status_color = if self.script_generation_status_is_error {
-                theme_colors.ui.error
-            } else {
-                theme_colors.ui.success
-            };
-
-            action_container = action_container.child(
-                div()
-                    .id("chat-script-generation-status")
-                    .text_xs()
-                    .font_weight(gpui::FontWeight::MEDIUM)
-                    .text_color(rgb(status_color))
-                    .max_w(px(180.0))
-                    .overflow_hidden()
-                    .text_ellipsis()
-                    .whitespace_nowrap()
-                    .child(status),
-            );
-        }
-
-        Some(
-            div()
-                .flex()
-                .flex_row()
-                .items_center()
-                .min_w(px(0.0))
-                .child(
-                    div()
-                        .w(px(1.0))
-                        .h(px(16.0))
-                        .mx(px(4.0))
-                        .bg(rgba((footer_colors.border << 8) | 0x40)),
-                )
-                .child(action_container)
-                .into_any_element(),
+        crate::components::render_simple_hint_strip(
+            hints,
+            Some(crate::components::render_hint_strip_leading_text(
+                helper_text,
+                self.theme.colors.text.primary,
+            )),
         )
+        .into_any_element()
     }
 }
 
@@ -659,18 +499,14 @@ impl Render for ChatPrompt {
 }
 
 #[cfg(test)]
-mod chat_footer_button_click_handler_tests {
+mod chat_footer_hint_strip_tests {
     const CHAT_RENDER_CORE_SOURCE: &str = include_str!("render_core.rs");
 
     #[test]
-    fn test_chat_footer_branches_on_mini_mode() {
+    fn test_chat_footer_uses_hint_strip_for_both_modes() {
         assert!(
             CHAT_RENDER_CORE_SOURCE.contains("render_mini_hint_strip"),
             "Chat should have a mini hint strip renderer"
-        );
-        assert!(
-            CHAT_RENDER_CORE_SOURCE.contains("render_rich_footer"),
-            "Chat should have a rich footer renderer"
         );
         assert!(
             CHAT_RENDER_CORE_SOURCE.contains("if self.mini_mode"),
@@ -678,23 +514,31 @@ mod chat_footer_button_click_handler_tests {
         );
         assert!(
             CHAT_RENDER_CORE_SOURCE.contains("universal_prompt_hints()"),
-            "Mini hint strip should use the shared universal prompt hints"
+            "Both modes should use the shared universal prompt hints"
         );
         assert!(
             CHAT_RENDER_CORE_SOURCE.contains("render_simple_hint_strip("),
-            "Mini hint strip should delegate to the shared hint strip renderer"
+            "Both modes should delegate to the shared hint strip renderer"
         );
         assert!(
             CHAT_RENDER_CORE_SOURCE.contains("emit_prompt_hint_audit(\"prompts::chat::mini\""),
             "Mini hint strip should emit a prompt hint audit"
         );
         assert!(
-            CHAT_RENDER_CORE_SOURCE.contains("PromptFooter::new"),
-            "Rich footer should use PromptFooter component"
+            CHAT_RENDER_CORE_SOURCE.contains("emit_prompt_hint_audit(\"prompts::chat\""),
+            "Full-mode hint strip should emit a prompt hint audit"
         );
         assert!(
-            !CHAT_RENDER_CORE_SOURCE.contains("\"↵ Send  ·  ⌘K Actions  ·  Esc Back\""),
-            "Mini hint strip should not hardcode footer strings"
+            CHAT_RENDER_CORE_SOURCE.contains("render_hint_strip_leading_text("),
+            "Full-mode footer should include leading status text"
+        );
+        assert!(
+            CHAT_RENDER_CORE_SOURCE.contains("footer_status_text()"),
+            "Full-mode footer should use the status text helper"
+        );
+        assert!(
+            !CHAT_RENDER_CORE_SOURCE.contains("PromptFooter::new"),
+            "Chat should no longer use PromptFooter component"
         );
     }
 }

@@ -7,8 +7,8 @@
 //! - Submit selected items
 
 use gpui::{
-    div, prelude::*, px, rgb, uniform_list, AnyElement, Context, FocusHandle, Focusable,
-    Render, ScrollStrategy, SharedString, UniformListScrollHandle, Window,
+    div, prelude::*, px, rgb, uniform_list, AnyElement, Context, FocusHandle, Focusable, Render,
+    ScrollStrategy, SharedString, UniformListScrollHandle, Window,
 };
 use std::collections::HashSet;
 use std::ops::Range;

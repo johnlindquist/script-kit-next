@@ -44,45 +44,24 @@ impl ChatPrompt {
                 input_content.child(div().text_color(placeholder_text_color).child(placeholder));
         }
 
-        let mut field = div()
+        let chrome = crate::theme::AppChromeColors::from_theme(&self.theme);
+        let field_bg = if self.mini_mode {
+            None
+        } else if is_focused {
+            Some(rgba(chrome.input_active_rgba))
+        } else {
+            Some(rgba(chrome.input_surface_rgba))
+        };
+
+        div()
             .id("chat-input-field")
             .w_full()
             .min_h(px(28.0))
             .flex()
             .flex_row()
-            .items_center();
-
-        if self.mini_mode {
-            // Mini mode: no inner padding — outer input_area handles spacing
-            // to match the mini main window's bare input feel
-        } else {
-            // Full mode: card-style input with rounded corners, bg, and border.
-            let input_bg_alpha = if is_focused {
-                CHAT_LAYOUT_INPUT_BG_FOCUSED_ALPHA
-            } else {
-                CHAT_LAYOUT_INPUT_BG_IDLE_ALPHA
-            };
-            let input_border = if is_focused {
-                theme_colors.accent.selected
-            } else {
-                theme_colors.ui.border
-            };
-            let input_border_alpha = if is_focused {
-                CHAT_LAYOUT_INPUT_BORDER_FOCUSED_ALPHA
-            } else {
-                CHAT_LAYOUT_INPUT_BORDER_IDLE_ALPHA
-            };
-
-            field = field
-                .rounded(px(8.0))
-                .bg(rgba(
-                    (theme_colors.background.search_box << 8) | input_bg_alpha,
-                ))
-                .border_1()
-                .border_color(rgba((input_border << 8) | input_border_alpha));
-        }
-
-        field.child(input_content)
+            .items_center()
+            .when_some(field_bg, |d, bg| d.bg(bg))
+            .child(input_content)
     }
 
     /// Render the header with back button and title

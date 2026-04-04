@@ -322,11 +322,7 @@ fn seen_shortcut_normalization_audits() -> &'static Mutex<HashSet<ShortcutNormal
     SEEN.get_or_init(|| Mutex::new(HashSet::new()))
 }
 
-pub(crate) fn emit_shortcut_normalization_audit(
-    surface: &'static str,
-    input: &str,
-    output: &str,
-) {
+pub(crate) fn emit_shortcut_normalization_audit(surface: &'static str, input: &str, output: &str) {
     let audit = ShortcutNormalizationAudit {
         surface,
         input: input.to_string(),

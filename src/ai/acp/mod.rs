@@ -30,6 +30,7 @@ mod tests;
 
 pub(crate) use client::{AcpConnection, AcpRuntime};
 pub(crate) use config::{claude_code_agent_config_cached, prewarm_agent_config, AcpAgentConfig};
+#[allow(deprecated)]
 pub(crate) use context::{
     build_tab_ai_acp_context_blocks, build_tab_ai_acp_guidance_blocks,
     build_tab_ai_acp_guidance_blocks_for_prompt,

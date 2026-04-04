@@ -334,7 +334,6 @@ fn render_action_row(
     row.into_any_element()
 }
 
-
 // ─── Tests ────────────────────────────────────────────────────────────
 
 #[cfg(test)]
