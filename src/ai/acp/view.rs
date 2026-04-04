@@ -27,7 +27,7 @@ use super::thread::{
 use super::{AcpApprovalOption, AcpApprovalPreview, AcpApprovalPreviewKind, AcpApprovalRequest};
 
 use crate::ai::message_parts::AiContextPart;
-use crate::ai::window::context_picker::build_picker_items;
+use crate::ai::window::context_picker::{build_picker_items, build_slash_picker_items};
 use crate::ai::window::context_picker::types::{
     ContextPickerItem, ContextPickerItemKind, ContextPickerTrigger,
 };
@@ -47,21 +47,6 @@ struct AcpMentionSession {
 
 /// Click handler type for collapsible block toggle.
 type ToggleHandler = Box<dyn Fn(&gpui::ClickEvent, &mut Window, &mut App) + 'static>;
-
-/// Simple fuzzy match: all characters in `query` appear in `target` in order.
-fn fuzzy_match(query: &str, target: &str) -> bool {
-    let mut target_chars = target.chars();
-    for qc in query.chars() {
-        loop {
-            match target_chars.next() {
-                Some(tc) if tc == qc => break,
-                Some(_) => continue,
-                None => return false,
-            }
-        }
-    }
-    true
-}
 
 /// Parse the `description` field from YAML frontmatter in a SKILL.md file.
 fn parse_skill_description(content: &str) -> Option<String> {
@@ -1508,12 +1493,24 @@ impl AcpChatView {
 
         self.mention_session = match Self::find_active_trigger(&text, cursor) {
             Some((trigger, trigger_range, query)) => {
-                let mut items = build_picker_items(trigger, &query);
-
-                // For slash mode, also include Claude Code agent commands.
-                if trigger == ContextPickerTrigger::Slash {
-                    self.append_agent_slash_commands(&query, &available_commands, &mut items);
-                }
+                let items = match trigger {
+                    ContextPickerTrigger::Mention => build_picker_items(trigger, &query),
+                    ContextPickerTrigger::Slash => {
+                        if available_commands.is_empty() {
+                            build_slash_picker_items(
+                                &query,
+                                self.cached_slash_commands
+                                    .iter()
+                                    .map(|(name, _)| name.as_str()),
+                            )
+                        } else {
+                            build_slash_picker_items(
+                                &query,
+                                available_commands.iter().map(String::as_str),
+                            )
+                        }
+                    }
+                };
 
                 let selected_index = if items.is_empty() {
                     0
@@ -1589,20 +1586,34 @@ impl AcpChatView {
 
     /// Accept the currently selected picker row.
     ///
-    /// For `@` mentions: replaces the trigger+query inline and attaches the
-    /// corresponding `AiContextPart`.
-    /// For `/` commands: replaces the entire input with the command and
-    /// optionally submits (Enter accepts + submits, Tab accepts without submit).
+    /// Both Enter and Tab autocomplete the focused picker row. Literal slash
+    /// commands are inserted into the composer; slash-picked context items
+    /// attach a pending context part and remove the typed `/query` token.
     fn accept_mention_selection(&mut self, cx: &mut Context<Self>) {
         self.accept_mention_selection_impl(false, cx);
     }
 
-    /// Accept the currently selected picker row, submitting if `submit` is true.
+    /// Replace a char-range in the given text with `replacement`.
+    fn replace_text_in_char_range(
+        text: &str,
+        char_range: std::ops::Range<usize>,
+        replacement: &str,
+    ) -> String {
+        let start_byte = Self::char_to_byte_offset(text, char_range.start);
+        let end_byte = Self::char_to_byte_offset(text, char_range.end);
+        let mut out =
+            String::with_capacity(text.len() - (end_byte - start_byte) + replacement.len());
+        out.push_str(&text[..start_byte]);
+        out.push_str(replacement);
+        out.push_str(&text[end_byte..]);
+        out
+    }
+
+    /// Accept the currently selected picker row, optionally submitting literal
+    /// slash commands after insertion.
     ///
-    /// For `@` mentions the `submit` flag is ignored — mentions always insert
-    /// inline text and attach a context part without submitting.
-    /// For `/` commands `submit=true` inserts the command text and submits;
-    /// `submit=false` (Tab) inserts the command text without submitting.
+    /// `submit` only applies to literal slash commands such as `/compact`.
+    /// Context attachments picked from slash mode never auto-submit.
     fn accept_mention_selection_impl(&mut self, submit: bool, cx: &mut Context<Self>) {
         use crate::ai::context_mentions::part_to_inline_token;
 
@@ -1615,9 +1626,6 @@ impl AcpChatView {
             None => return,
         };
 
-        let is_slash_builtin = session.trigger == ContextPickerTrigger::Slash
-            && matches!(item.kind, ContextPickerItemKind::BuiltIn(_));
-
         tracing::info!(
             target: "script_kit::tab_ai",
             event = "acp_picker_item_accepted",
@@ -1627,35 +1635,36 @@ impl AcpChatView {
             item_label = %item.label,
         );
 
-        // ── Slash trigger: explicit agent commands insert /command text ──
-        if session.trigger == ContextPickerTrigger::Slash && !is_slash_builtin {
-            let command_text = match &item.kind {
-                ContextPickerItemKind::SlashCommand(command) => format!("/{command} "),
-                _ => format!("{} ", item.meta),
-            };
-            self.live_thread().update(cx, |thread, cx| {
-                thread.input.set_text(command_text);
-                if submit {
-                    let _ = thread.submit_input(cx);
-                } else {
-                    cx.notify();
-                }
-            });
-            cx.notify();
-            return;
+        // ── Literal ACP slash commands stay in the composer as `/command ` text ──
+        if session.trigger == ContextPickerTrigger::Slash {
+            if let ContextPickerItemKind::SlashCommand(command) = &item.kind {
+                let command_text = format!("/{command} ");
+                tracing::info!(
+                    target: "script_kit::tab_ai",
+                    event = "acp_picker_literal_slash_inserted",
+                    command = %command,
+                    submit,
+                );
+                self.live_thread().update(cx, |thread, cx| {
+                    thread.input.set_text(command_text);
+                    if submit {
+                        let _ = thread.submit_input(cx);
+                    } else {
+                        cx.notify();
+                    }
+                });
+                cx.notify();
+                return;
+            }
         }
 
-        // ── Mention trigger, plus slash-builtins: attach context part inline ──
-        let (part, mention_text) = match &item.kind {
-            ContextPickerItemKind::BuiltIn(kind) => {
-                let spec = kind.spec();
-                let mention = if session.trigger == ContextPickerTrigger::Slash {
-                    spec.slash_command.or(spec.mention).unwrap_or("/context")
-                } else {
-                    spec.mention.unwrap_or("@context")
-                };
-                (kind.part(), mention.to_string())
-            }
+        // ── Build context part; decide if inline-mention sync applies ──
+        let (part, inline_text, allow_inline_sync) = match &item.kind {
+            ContextPickerItemKind::BuiltIn(kind) => (
+                kind.part(),
+                kind.spec().mention.unwrap_or("@context").to_string(),
+                session.trigger == ContextPickerTrigger::Mention,
+            ),
             ContextPickerItemKind::File(path) | ContextPickerItemKind::Folder(path) => {
                 let path_text = path.to_string_lossy().to_string();
                 (
@@ -1664,38 +1673,52 @@ impl AcpChatView {
                         label: item.label.to_string(),
                     },
                     format!("@file:{path_text}"),
+                    session.trigger == ContextPickerTrigger::Mention,
                 )
             }
-            ContextPickerItemKind::SlashCommand(_) => {
-                // SlashCommand items are handled above as literal commands.
-                return;
-            }
+            ContextPickerItemKind::SlashCommand(_) => return,
         };
 
         let current_text = self.live_thread().read(cx).input.text().to_string();
-        let trigger_start_byte =
-            Self::char_to_byte_offset(&current_text, session.trigger_range.start);
-        let trigger_end_byte = Self::char_to_byte_offset(&current_text, session.trigger_range.end);
-        let replacement = format!("{mention_text} ");
-        let mut next_text = String::with_capacity(
-            current_text.len() - (trigger_end_byte - trigger_start_byte) + replacement.len(),
+
+        // For @-mention triggers: replace trigger+query with the inline
+        // mention text and run inline sync.
+        // For /-slash context items: remove the `/query` token entirely
+        // and attach the context part without inline mention bookkeeping.
+        let replacement = if allow_inline_sync {
+            format!("{inline_text} ")
+        } else {
+            String::new()
+        };
+
+        let next_text = Self::replace_text_in_char_range(
+            &current_text,
+            session.trigger_range.clone(),
+            &replacement,
         );
-        next_text.push_str(&current_text[..trigger_start_byte]);
-        next_text.push_str(&replacement);
-        next_text.push_str(&current_text[trigger_end_byte..]);
 
         self.live_thread().update(cx, |thread, cx| {
-            // Move cursor to end first so set_text clamps to the full
-            // new length (replacement is always >= original range).
             thread.input.move_to_end(false);
             thread.input.set_text(next_text);
             thread.add_context_part(part.clone(), cx);
+            cx.notify();
         });
-        if let Some(token) = part_to_inline_token(&part) {
-            self.inline_owned_context_tokens.insert(token);
+
+        if allow_inline_sync {
+            if let Some(token) = part_to_inline_token(&part) {
+                self.inline_owned_context_tokens.insert(token);
+            }
+            self.sync_inline_mentions(cx);
+        } else {
+            tracing::info!(
+                target: "script_kit::tab_ai",
+                event = "acp_picker_context_attached_from_slash",
+                item_id = %item.id,
+                item_label = %item.label,
+                source = %part.source(),
+            );
+            cx.notify();
         }
-        self.sync_inline_mentions(cx);
-        cx.notify();
     }
 
     /// Return highlight ranges for inline `@mentions` that are **actually
@@ -1801,6 +1824,15 @@ impl AcpChatView {
     /// Keep the picker inset from the right edge so it never clips.
     const ACP_MENTION_PICKER_EDGE_GUTTER: f32 = 12.0;
 
+    /// Top padding used by the ACP composer input row.
+    const ACP_INPUT_PADDING_Y: f32 = 10.0;
+
+    /// Effective visual line height of the ACP composer text.
+    const ACP_INPUT_LINE_HEIGHT: f32 = 22.0;
+
+    /// Gap between the active mention line and the picker.
+    const ACP_MENTION_PICKER_OFFSET_Y: f32 = 4.0;
+
     /// Composer text size used for the inline ACP input.
     const ACP_INPUT_FONT_SIZE: f32 = 17.0;
 
@@ -1834,20 +1866,70 @@ impl AcpChatView {
             .as_f32()
     }
 
-    fn mention_picker_left_for_session(
+    /// Returns the maximum text wrapping width for the ACP composer.
+    fn composer_wrap_width_for_window(window_width: f32) -> f32 {
+        (window_width - (Self::ACP_INPUT_PADDING_X * 2.0)).max(1.0)
+    }
+
+    /// Returns the ACP composer cursor position `(x, y)` after rendering `text`,
+    /// accounting for explicit newlines and simple visual wrapping.
+    fn measure_acp_input_cursor_position(window: &Window, text: &str) -> (f32, f32) {
+        if text.is_empty() {
+            return (0.0, 0.0);
+        }
+        let window_width = window.window_bounds().get_bounds().size.width.as_f32();
+        let wrap_width = Self::composer_wrap_width_for_window(window_width);
+        let logical_lines: Vec<&str> = text.split('\n').collect();
+        let mut visual_row = 0usize;
+        let mut cursor_x = 0.0f32;
+        for (ix, logical_line) in logical_lines.iter().enumerate() {
+            let width = Self::measure_acp_input_prefix_width(window, logical_line);
+            let wraps = if logical_line.is_empty() {
+                1usize
+            } else {
+                (width / wrap_width).floor() as usize + 1
+            };
+            if ix + 1 == logical_lines.len() {
+                visual_row += wraps.saturating_sub(1);
+                cursor_x = if logical_line.is_empty() {
+                    0.0
+                } else {
+                    width % wrap_width
+                };
+            } else {
+                visual_row += wraps;
+            }
+        }
+        (cursor_x, visual_row as f32 * Self::ACP_INPUT_LINE_HEIGHT)
+    }
+
+    /// Returns `(left, top, width)` for the mention picker, anchored to the
+    /// trigger character position in the ACP composer, including wrapping.
+    fn mention_picker_anchor_for_session(
         &self,
         session: &AcpMentionSession,
         input_text: &str,
         window: &Window,
-    ) -> (f32, f32) {
+    ) -> (f32, f32, f32) {
         let window_width = window.window_bounds().get_bounds().size.width.as_f32();
         let picker_width = Self::mention_picker_width_for_window(window_width);
         let trigger_start_byte = Self::char_to_byte_offset(input_text, session.trigger_range.start);
         let prefix = &input_text[..trigger_start_byte];
-        let anchor_left =
-            Self::ACP_INPUT_PADDING_X + Self::measure_acp_input_prefix_width(window, prefix);
-        let clamped_left = Self::clamp_mention_picker_left(anchor_left, picker_width, window_width);
-        (clamped_left, picker_width)
+        let trigger_text = match session.trigger {
+            ContextPickerTrigger::Mention => "@",
+            ContextPickerTrigger::Slash => "/",
+        };
+        let trigger_width = Self::measure_acp_input_prefix_width(window, trigger_text);
+        let (after_trigger_x, after_trigger_y) =
+            Self::measure_acp_input_cursor_position(window, &format!("{prefix}{trigger_text}"));
+        let unclamped_left =
+            Self::ACP_INPUT_PADDING_X + (after_trigger_x - trigger_width).max(0.0);
+        let left = Self::clamp_mention_picker_left(unclamped_left, picker_width, window_width);
+        let top = Self::ACP_INPUT_PADDING_Y
+            + after_trigger_y
+            + Self::ACP_INPUT_LINE_HEIGHT
+            + Self::ACP_MENTION_PICKER_OFFSET_Y;
+        (left, top, picker_width)
     }
 
     /// Compute the visible range of items around a selected index.
@@ -2018,91 +2100,6 @@ impl AcpChatView {
         "compact", "clear", "bug", "help", "init", "login", "logout", "status", "cost", "doctor",
         "review", "memory",
     ];
-
-    /// Append agent slash commands (Claude Code `/compact`, `/clear`, etc.)
-    /// to the picker items list. These are scored and filtered by `query`.
-    fn append_agent_slash_commands(
-        &self,
-        query: &str,
-        agent_commands: &[String],
-        items: &mut Vec<ContextPickerItem>,
-    ) {
-        use crate::ai::window::context_picker::{
-            match_query_chars, match_query_chars_in_display_meta,
-        };
-
-        let commands: Vec<&str> = if agent_commands.is_empty() {
-            self.cached_slash_commands
-                .iter()
-                .map(|(name, _)| name.as_str())
-                .collect()
-        } else {
-            agent_commands.iter().map(|s| s.as_str()).collect()
-        };
-
-        let query_lower = query.to_lowercase();
-
-        for name in commands {
-            let name_lower = name.to_lowercase();
-            let score = if query_lower.is_empty() {
-                50 // Show all when no query, lower priority than built-in context items
-            } else if name_lower.starts_with(&query_lower) {
-                90 // Prefix match
-            } else if name_lower.contains(&query_lower) {
-                50 // Substring match
-            } else if fuzzy_match(&query_lower, &name_lower) {
-                10 // Fuzzy match
-            } else {
-                continue; // No match
-            };
-
-            let label_hits = if query_lower.is_empty() {
-                Vec::new()
-            } else {
-                match_query_chars(&query_lower, name).unwrap_or_default()
-            };
-            let meta_str = format!("/{name}");
-            let meta_hits = if query_lower.is_empty() {
-                Vec::new()
-            } else {
-                match_query_chars_in_display_meta(&query_lower, &meta_str).unwrap_or_default()
-            };
-
-            tracing::debug!(
-                target: "script_kit::tab_ai",
-                event = "acp_slash_command_ranked",
-                command = %name,
-                score,
-                label_hits = ?label_hits,
-                meta_hits = ?meta_hits,
-            );
-
-            items.push(ContextPickerItem {
-                id: SharedString::from(format!("slash-cmd:{name}")),
-                label: SharedString::from(name.to_string()),
-                meta: SharedString::from(meta_str),
-                kind: ContextPickerItemKind::SlashCommand(name.to_string()),
-                score,
-                label_highlight_indices: label_hits,
-                meta_highlight_indices: meta_hits,
-            });
-        }
-
-        // Re-sort: built-in context items first, then slash commands, by score
-        items.sort_by(|a, b| {
-            let pa = match &a.kind {
-                ContextPickerItemKind::BuiltIn(_) => 0,
-                ContextPickerItemKind::SlashCommand(_) => 1,
-                _ => 2,
-            };
-            let pb = match &b.kind {
-                ContextPickerItemKind::BuiltIn(_) => 0,
-                ContextPickerItemKind::SlashCommand(_) => 1,
-                _ => 2,
-            };
-            pa.cmp(&pb).then(b.score.cmp(&a.score))
-        });
-    }
 
     // ── Key handling ──────────────────────────────────────────────
 
@@ -2530,8 +2527,9 @@ impl AcpChatView {
                 return;
             }
             if crate::ui_foundation::is_key_enter(key) || crate::ui_foundation::is_key_tab(key) {
-                // Both Enter and Tab accept/autocomplete the focused picker item
-                // without submitting the message.
+                // Both Enter and Tab autocomplete the focused picker item.
+                // Submitting the ACP message still requires a later Enter after
+                // the picker closes.
                 self.accept_mention_selection_impl(false, cx);
                 cx.stop_propagation();
                 return;
@@ -2795,25 +2793,22 @@ impl Render for AcpChatView {
             })
             // ── Unified picker (@ mentions + / commands) ─────────
             .when_some(self.mention_session.clone(), |d, session| {
-                let (picker_left, picker_width) =
-                    self.mention_picker_left_for_session(&session, &input_text, window);
-                if session.items.is_empty() {
-                    d.child(
-                        div()
-                            .w_full()
-                            .pl(px(picker_left))
-                            .pb(px(4.0))
-                            .child(self.render_mention_empty_state(picker_width, cx)),
-                    )
+                let (picker_left, picker_top, picker_width) =
+                    self.mention_picker_anchor_for_session(&session, &input_text, window);
+                let picker = if session.items.is_empty() {
+                    self.render_mention_empty_state(picker_width, cx)
                 } else {
-                    d.child(
-                        div()
-                            .w_full()
-                            .pl(px(picker_left))
-                            .pb(px(4.0))
-                            .child(self.render_mention_picker(&session, picker_width, cx)),
-                    )
-                }
+                    self.render_mention_picker(&session, picker_width, cx)
+                };
+                d.child(
+                    div()
+                        .id("acp-mention-picker-layer")
+                        .absolute()
+                        .left(px(picker_left))
+                        .top(px(picker_top))
+                        .w(px(picker_width))
+                        .child(picker),
+                )
             })
             // ── History picker (below input, replaces message list) ──
             .when_some(
