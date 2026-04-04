@@ -1687,6 +1687,10 @@ impl Focusable for ActionsDialog {
 impl Render for ActionsDialog {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let style = actions_dialog_default_style();
+        crate::components::hint_strip::emit_shortcut_chrome_audit(
+            "actions_dialog",
+            "compact-inline",
+        );
 
         // Get design tokens for the current design variant
         let tokens = get_tokens(self.design_variant);
@@ -2245,7 +2249,7 @@ impl Render for ActionsDialog {
                                             .justify_between()
                                             .child(left_side);
 
-                                        // Right side: keyboard shortcuts as keycaps
+                                        // Right side: keyboard shortcuts as compact inline glyphs
                                         if style.shortcut_visible {
                                             if let Some(ref shortcut) = action.shortcut {
                                                 if actions_dialog_uses_inline_shortcuts(&style) {
@@ -2261,36 +2265,20 @@ impl Render for ActionsDialog {
                                                     }
                                                     content = content.child(shortcut_label);
                                                 } else {
-                                                    let keycaps =
-                                                        ActionsDialog::parse_shortcut_keycaps(
+                                                    let shortcut_tokens =
+                                                        crate::components::hint_strip::shortcut_tokens_from_hint(
                                                             shortcut,
                                                         );
-                                                    let mut keycap_row = div()
-                                                        .flex()
-                                                        .flex_row()
-                                                        .items_center()
-                                                        .gap(px(3.));
-
-                                                    for keycap in keycaps {
-                                                        keycap_row = keycap_row.child(
-                                                            div()
-                                                                .min_w(px(14.0))
-                                                                .h(px(18.0))
-                                                                .px(px(4.))
-                                                                .flex()
-                                                                .items_center()
-                                                                .justify_center()
-                                                                .bg(keycap_bg)
-                                                                .border_1()
-                                                                .border_color(keycap_border)
-                                                                .rounded(px(3.))
-                                                                .text_xs()
-                                                                .text_color(shortcut_color)
-                                                                .child(keycap),
-                                                        );
-                                                    }
-
-                                                    content = content.child(keycap_row);
+                                                    content = content.child(
+                                                        crate::components::hint_strip::render_inline_shortcut_keys(
+                                                            shortcut_tokens.iter().map(String::as_str),
+                                                            crate::components::hint_strip::InlineShortcutColors {
+                                                                glyph: shortcut_color.into(),
+                                                                keycap_bg: keycap_bg.into(),
+                                                                keycap_border: Some(keycap_border.into()),
+                                                            },
+                                                        ),
+                                                    );
                                                 }
                                             }
                                         }

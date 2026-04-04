@@ -330,16 +330,19 @@ fn render_action_row(
     } else {
         row = row.child(title_el.child(action.title.clone()));
 
-        // Shortcut badge (non-inline)
+        // Shortcut badge (non-inline) — compact inline glyphs
         if style.shortcut_visible {
             if let Some(ref shortcut) = action.shortcut {
-                let mut shortcut_el = div()
-                    .text_size(px(11.))
-                    .text_color(theme.colors.text.dimmed.with_opacity(0.4));
-                if style.mono_font {
-                    shortcut_el = shortcut_el.font_family(mono.clone());
-                }
-                row = row.child(shortcut_el.child(shortcut.clone()));
+                let shortcut_tokens =
+                    crate::components::hint_strip::shortcut_tokens_from_hint(shortcut.as_ref());
+                row = row.child(crate::components::hint_strip::render_inline_shortcut_keys(
+                    shortcut_tokens.iter().map(String::as_str),
+                    crate::components::hint_strip::InlineShortcutColors {
+                        glyph: theme.colors.text.dimmed.to_rgb().into(),
+                        keycap_bg: theme.colors.text.dimmed.with_opacity(0.08).into(),
+                        keycap_border: Some(theme.colors.ui.border.with_opacity(0.18).into()),
+                    },
+                ));
             }
         }
     }
