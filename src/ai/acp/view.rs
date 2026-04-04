@@ -1394,46 +1394,8 @@ impl AcpChatView {
         text: &str,
         cursor: usize,
     ) -> Option<(ContextPickerTrigger, std::ops::Range<usize>, String)> {
-        if cursor > text.chars().count() {
-            return None;
-        }
-        let cursor_byte = Self::char_to_byte_offset(text, cursor);
-        let before_cursor = &text[..cursor_byte];
-
-        // Find the last `@` or `/` before the cursor.
-        let (trigger_byte, trigger) = {
-            let at_pos = before_cursor.rfind('@');
-            let slash_pos = before_cursor.rfind('/');
-            match (at_pos, slash_pos) {
-                (Some(a), Some(s)) if s > a => (s, ContextPickerTrigger::Slash),
-                (Some(a), _) => (a, ContextPickerTrigger::Mention),
-                (None, Some(s)) => (s, ContextPickerTrigger::Slash),
-                (None, None) => return None,
-            }
-        };
-
-        let trigger_char_idx = text[..trigger_byte].chars().count();
-
-        // Trigger must be at start of text or preceded by whitespace / punctuation
-        if trigger_byte > 0 {
-            let prev = text.as_bytes()[trigger_byte - 1];
-            if prev.is_ascii_alphanumeric() || prev == b'_' {
-                return None;
-            }
-        }
-
-        let between = &before_cursor[trigger_byte + 1..];
-        let trigger_char = if trigger == ContextPickerTrigger::Mention {
-            '@'
-        } else {
-            '/'
-        };
-        // Reject if there's another trigger char or whitespace inside the query
-        if between.contains(trigger_char) || between.chars().any(char::is_whitespace) {
-            return None;
-        }
-
-        Some((trigger, trigger_char_idx..cursor, between.to_string()))
+        crate::ai::window::context_picker::extract_context_picker_query_before_cursor(text, cursor)
+            .map(|m| (m.trigger, m.char_range, m.query))
     }
 
     /// Re-derive the mention session from current input state.
@@ -1487,7 +1449,48 @@ impl AcpChatView {
             }
             None => None,
         };
+        self.log_mention_visible_range("refresh");
         cx.notify();
+    }
+
+    /// Log the visible window range for observability.
+    fn log_mention_visible_range(&self, reason: &'static str) {
+        let Some(session) = self.mention_session.as_ref() else {
+            return;
+        };
+        let visible = Self::mention_visible_range(session);
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "acp_mention_visible_range",
+            reason,
+            selected_index = session.selected_index,
+            item_count = session.items.len(),
+            visible_start = visible.start,
+            visible_end = visible.end,
+        );
+    }
+
+    /// Apply a hint chip token by writing it into the composer and running
+    /// it through the normal picker acceptance path.
+    fn apply_picker_hint_token(&mut self, token: &str, cx: &mut Context<Self>) {
+        self.thread.update(cx, |thread, cx| {
+            thread.input.set_text(token.to_string());
+            cx.notify();
+        });
+        self.refresh_mention_session(cx);
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "acp_picker_hint_applied",
+            token,
+            has_session = self.mention_session.is_some(),
+        );
+        if self.mention_session.is_some() {
+            self.accept_mention_selection_impl(false, cx);
+        } else {
+            self.sync_inline_mentions(cx);
+            self.mention_session = None;
+            cx.notify();
+        }
     }
 
     /// Accept the currently selected picker row.
@@ -1520,6 +1523,15 @@ impl AcpChatView {
 
         let is_slash_builtin = session.trigger == ContextPickerTrigger::Slash
             && matches!(item.kind, ContextPickerItemKind::BuiltIn(_));
+
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "acp_picker_item_accepted",
+            trigger = ?session.trigger,
+            submit,
+            item_id = %item.id,
+            item_label = %item.label,
+        );
 
         // ── Slash trigger: explicit agent commands insert /command text ──
         if session.trigger == ContextPickerTrigger::Slash && !is_slash_builtin {
@@ -1829,27 +1841,18 @@ impl AcpChatView {
         let cached_theme = theme::get_cached_theme();
         let fg: gpui::Hsla = rgb(cached_theme.colors.text.primary).into();
         let muted_fg: gpui::Hsla = rgb(cached_theme.colors.text.muted).into();
-        let is_slash = self
+        let trigger = self
             .mention_session
             .as_ref()
-            .is_some_and(|s| s.trigger == ContextPickerTrigger::Slash);
-        let hints: &[&str] = if is_slash {
-            &["/compact", "/clear", "/help"]
-        } else {
-            &[
-                "@screenshot",
-                "@clipboard",
-                "@git-diff",
-                "@recent-scripts",
-                "@calendar",
-                "@file:/tmp/demo.txt",
-            ]
-        };
+            .map(|s| s.trigger)
+            .unwrap_or(ContextPickerTrigger::Mention);
+        let is_slash = trigger == ContextPickerTrigger::Slash;
+        let hints = crate::ai::window::context_picker::empty_state_hints(trigger);
 
         let mut chips: Vec<gpui::AnyElement> = Vec::new();
         for hint in hints {
             let hint_str = SharedString::from(*hint);
-            let hint_for_click = hint_str.clone();
+            let token = hint.to_string();
             chips.push(
                 div()
                     .id(SharedString::from(format!("mention-hint-{hint}")))
@@ -1860,25 +1863,7 @@ impl AcpChatView {
                     .hover(|el| el.bg(fg.opacity(0.08)))
                     .cursor_pointer()
                     .on_click(cx.listener(move |this, _, _window, cx| {
-                        let is_slash_hint = hint_for_click.starts_with('/');
-                        if is_slash_hint {
-                            // Slash hints: insert and submit
-                            this.thread.update(cx, |thread, cx| {
-                                let cmd_text = format!("{} ", hint_for_click);
-                                thread.input.set_text(cmd_text);
-                                let _ = thread.submit_input(cx);
-                            });
-                        } else {
-                            // Mention hints: insert and refresh
-                            this.thread.update(cx, |thread, cx| {
-                                thread.input.set_text(hint_for_click.to_string());
-                                cx.notify();
-                            });
-                            this.refresh_mention_session(cx);
-                            this.sync_inline_mentions(cx);
-                        }
-                        this.mention_session = None;
-                        cx.notify();
+                        this.apply_picker_hint_token(&token, cx);
                     }))
                     .child(
                         div()
@@ -1926,7 +1911,9 @@ impl AcpChatView {
     /// Append agent slash commands (Claude Code `/compact`, `/clear`, etc.)
     /// to the picker items list. These are scored and filtered by `query`.
     fn append_agent_slash_commands(&self, query: &str, items: &mut Vec<ContextPickerItem>) {
-        use crate::ai::window::context_picker::match_query_chars;
+        use crate::ai::window::context_picker::{
+            match_query_chars, match_query_chars_in_display_meta,
+        };
 
         // Collect agent-provided commands, falling back to cached defaults + skills.
         let agent_commands: Vec<String> = {
@@ -1968,8 +1955,17 @@ impl AcpChatView {
             let meta_hits = if query_lower.is_empty() {
                 Vec::new()
             } else {
-                match_query_chars(&query_lower, name).unwrap_or_default()
+                match_query_chars_in_display_meta(&query_lower, &meta_str).unwrap_or_default()
             };
+
+            tracing::debug!(
+                target: "script_kit::tab_ai",
+                event = "acp_slash_command_ranked",
+                command = %name,
+                score,
+                label_hits = ?label_hits,
+                meta_hits = ?meta_hits,
+            );
 
             items.push(ContextPickerItem {
                 id: SharedString::from(format!("slash-cmd:{name}")),
@@ -2336,6 +2332,7 @@ impl AcpChatView {
                         );
                     }
                 }
+                self.log_mention_visible_range("keyboard_prev");
                 cx.notify();
                 cx.stop_propagation();
                 return;
@@ -2353,18 +2350,14 @@ impl AcpChatView {
                         );
                     }
                 }
+                self.log_mention_visible_range("keyboard_next");
                 cx.notify();
                 cx.stop_propagation();
                 return;
             }
-            if crate::ui_foundation::is_key_enter(key) {
-                // Enter accepts + submits for slash commands, just accepts for mentions.
-                self.accept_mention_selection_impl(true, cx);
-                cx.stop_propagation();
-                return;
-            }
-            if crate::ui_foundation::is_key_tab(key) {
-                // Tab always accepts without submitting.
+            if crate::ui_foundation::is_key_enter(key) || crate::ui_foundation::is_key_tab(key) {
+                // Both Enter and Tab accept/autocomplete the focused picker item
+                // without submitting the message.
                 self.accept_mention_selection_impl(false, cx);
                 cx.stop_propagation();
                 return;
@@ -2504,13 +2497,14 @@ impl Render for AcpChatView {
                         div()
                             .flex_1()
                             .flex()
-                            .flex_row()
-                            .items_center()
-                            .h(px(22.0))
+                            .flex_col()
+                            .justify_center()
+                            .min_h(px(22.0))
                             // Empirical: px(17) here renders identically to px(16) in
                             // the main menu input.  The 1px offset is a GPUI layout quirk —
                             // both paths target the same visual size (design_typography.font_size_lg).
                             .text_size(px(17.0))
+                            .line_height(px(22.0))
                             .text_color(if input_text.is_empty() {
                                 rgb(theme.colors.text.muted)
                             } else {
@@ -2539,6 +2533,7 @@ impl Render for AcpChatView {
                                 render_text_input_cursor_selection(TextInputRenderConfig {
                                     cursor: input_cursor,
                                     selection: Some(input_selection),
+                                    multiline: true,
                                     cursor_visible,
                                     cursor_color: theme.colors.accent.selected,
                                     text_color: theme.colors.text.primary,

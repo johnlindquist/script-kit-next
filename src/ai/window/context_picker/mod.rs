@@ -30,45 +30,99 @@ pub(crate) struct ContextTriggerQuery {
     pub query: String,
 }
 
-/// Extract a trigger query from the composer text.
-///
-/// Looks for the last `@` or `/` that is not followed by whitespace.
-/// Returns `None` when there is no active trigger.
-pub(crate) fn extract_context_picker_query(input: &str) -> Option<ContextTriggerQuery> {
-    let trigger_pos = input.rfind(['@', '/'])?;
-    let trigger_char = input.as_bytes().get(trigger_pos).copied()?;
+/// Cursor-aware trigger extraction result with char range.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ContextTriggerQueryAtCursor {
+    pub trigger: ContextPickerTrigger,
+    pub char_range: std::ops::Range<usize>,
+    pub query: String,
+}
 
-    let trigger = match trigger_char {
+fn char_to_byte_offset(text: &str, char_idx: usize) -> usize {
+    text.char_indices()
+        .nth(char_idx)
+        .map(|(ix, _)| ix)
+        .unwrap_or(text.len())
+}
+
+/// Extract a trigger query from the composer text at a specific cursor position.
+///
+/// Shared implementation used by both the AI window picker and ACP.
+/// Returns `None` when there is no active trigger before the cursor.
+pub(crate) fn extract_context_picker_query_before_cursor(
+    input: &str,
+    cursor: usize,
+) -> Option<ContextTriggerQueryAtCursor> {
+    if cursor > input.chars().count() {
+        return None;
+    }
+
+    let cursor_byte = char_to_byte_offset(input, cursor);
+    let before_cursor = &input[..cursor_byte];
+
+    let trigger_pos = before_cursor.rfind(['@', '/'])?;
+    let trigger_byte = before_cursor.as_bytes().get(trigger_pos).copied()?;
+
+    let trigger = match trigger_byte {
         b'@' => ContextPickerTrigger::Mention,
         b'/' => ContextPickerTrigger::Slash,
         _ => return None,
     };
 
-    let tail = &input[trigger_pos + 1..];
-
-    // If there's a space right after the trigger, the mention/command is complete
-    if tail.starts_with(' ') {
-        return None;
-    }
-
-    // For `/`, only trigger at start-of-line or after whitespace
-    // (avoid triggering on file paths like `foo/bar`)
-    if trigger_char == b'/' && trigger_pos > 0 {
-        let before = input.as_bytes()[trigger_pos - 1];
-        if before != b' ' && before != b'\n' && before != b'\t' {
-            return None;
+    // Trigger must be at start of text or preceded by appropriate chars
+    if trigger_pos > 0 {
+        let prev = before_cursor.as_bytes()[trigger_pos - 1];
+        match trigger_byte {
+            // `@` requires non-alnum/underscore before it (reject `me@home`)
+            b'@' if prev.is_ascii_alphanumeric() || prev == b'_' => return None,
+            // `/` requires whitespace before it (reject `foo/bar`)
+            b'/' if prev != b' ' && prev != b'\n' && prev != b'\t' => return None,
+            _ => {}
         }
     }
 
-    // Extract word after trigger (up to next space or end)
-    let query = match tail.find(char::is_whitespace) {
-        Some(end) => &tail[..end],
-        None => tail,
-    };
+    let query = &before_cursor[trigger_pos + 1..];
 
-    Some(ContextTriggerQuery {
+    // Reject if whitespace immediately follows trigger
+    if query.starts_with(' ') || query.starts_with('\n') || query.starts_with('\t') {
+        return None;
+    }
+
+    // Reject if query contains another trigger char or any whitespace
+    let trigger_char = match trigger {
+        ContextPickerTrigger::Mention => '@',
+        ContextPickerTrigger::Slash => '/',
+    };
+    if query.contains(trigger_char) || query.chars().any(char::is_whitespace) {
+        return None;
+    }
+
+    let trigger_char_idx = before_cursor[..trigger_pos].chars().count();
+
+    tracing::debug!(
+        target: "ai",
+        ?trigger,
+        cursor,
+        trigger_char_idx,
+        query = %query,
+        "context_picker_trigger_extracted"
+    );
+
+    Some(ContextTriggerQueryAtCursor {
         trigger,
+        char_range: trigger_char_idx..cursor,
         query: query.to_string(),
+    })
+}
+
+/// Extract a trigger query from the composer text (end-of-string cursor).
+///
+/// Thin wrapper around `extract_context_picker_query_before_cursor`.
+pub(crate) fn extract_context_picker_query(input: &str) -> Option<ContextTriggerQuery> {
+    let result = extract_context_picker_query_before_cursor(input, input.chars().count())?;
+    Some(ContextTriggerQuery {
+        trigger: result.trigger,
+        query: result.query,
     })
 }
 
@@ -96,6 +150,25 @@ pub(crate) fn match_query_chars(query: &str, candidate: &str) -> Option<Vec<usiz
         from = ix + 1;
     }
     Some(hits)
+}
+
+/// Match query characters against rendered meta text, offsetting indices
+/// past any leading `@` or `/` prefix so highlights land on the matched
+/// characters rather than the trigger symbol.
+pub(crate) fn match_query_chars_in_display_meta(
+    query: &str,
+    display_meta: &str,
+) -> Option<Vec<usize>> {
+    if query.is_empty() {
+        return Some(Vec::new());
+    }
+    let prefix_len = display_meta
+        .chars()
+        .take_while(|ch| *ch == '@' || *ch == '/')
+        .count();
+    let bare = display_meta.trim_start_matches(['@', '/']);
+    let hits = match_query_chars(query, bare)?;
+    Some(hits.into_iter().map(|ix| ix + prefix_len).collect())
 }
 
 /// Hint chips for the empty state when no results match.
@@ -436,17 +509,17 @@ fn score_builtin_with_highlights(
             .or(spec.mention)
             .unwrap_or(spec.action_title),
     };
-    let meta_bare = display_meta.trim_start_matches(['@', '/']);
-
     let mut best_score = 0u32;
     let mut best_label_hits = Vec::new();
     let mut best_meta_hits = Vec::new();
 
     // Helper: compute both highlight vectors for the current query.
+    // Uses match_query_chars_in_display_meta so indices account for
+    // leading `@`/`/` prefix in the displayed meta string.
     let compute_hits = |q: &str| -> (Vec<usize>, Vec<usize>) {
         (
             match_query_chars(q, spec.label).unwrap_or_default(),
-            match_query_chars(q, meta_bare).unwrap_or_default(),
+            match_query_chars_in_display_meta(q, display_meta).unwrap_or_default(),
         )
     };
 

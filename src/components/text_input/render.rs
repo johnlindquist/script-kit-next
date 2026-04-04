@@ -28,6 +28,7 @@ pub(crate) struct TextInputRenderConfig<'a> {
     pub cursor: usize,
     pub selection: Option<TextSelection>,
     pub window: Option<(usize, usize)>,
+    pub multiline: bool,
     pub cursor_visible: bool,
     pub cursor_width: f32,
     pub cursor_height: f32,
@@ -57,6 +58,7 @@ impl<'a> TextInputRenderConfig<'a> {
             cursor: 0,
             selection: None,
             window: None,
+            multiline: false,
             cursor_visible: true,
             cursor_width: CURSOR_WIDTH,
             cursor_height: CURSOR_HEIGHT_LG,
@@ -94,6 +96,10 @@ struct ComputedTextInputSegments {
 }
 
 pub(crate) fn render_text_input_cursor_selection(config: TextInputRenderConfig<'_>) -> Div {
+    if config.multiline {
+        return render_multiline_text_input_cursor_selection(&config);
+    }
+
     let segments = compute_text_input_segments(&config);
     let mut content = div()
         .flex()
@@ -172,6 +178,189 @@ pub(crate) fn render_text_input_cursor_selection(config: TextInputRenderConfig<'
 
     content
 }
+
+fn render_multiline_text_input_cursor_selection(config: &TextInputRenderConfig<'_>) -> Div {
+    let chars: Vec<char> = config.text.chars().collect();
+    let text_len = chars.len();
+    let cursor = config.cursor.min(text_len);
+    let selection_range = config.selection.and_then(|selection| {
+        let (start, end) = selection.range();
+        let start = start.min(text_len);
+        let end = end.min(text_len);
+        (start < end).then_some((start, end))
+    });
+    let line_height = config
+        .container_height
+        .unwrap_or(config.cursor_height + (config.cursor_margin_y * 2.0))
+        .max(config.cursor_height);
+
+    let mut content = div()
+        .flex()
+        .flex_col()
+        .items_start()
+        .w_full()
+        .min_h(px(line_height))
+        .text_color(rgb(config.text_color))
+        .line_height(px(line_height));
+
+    let mut line = div()
+        .flex()
+        .flex_row()
+        .flex_wrap()
+        .items_start()
+        .w_full()
+        .min_h(px(line_height))
+        .line_height(px(line_height));
+
+    let mut line_start = 0;
+    while line_start < text_len {
+        let mut line_end = line_start;
+        while line_end < text_len && chars[line_end] != '\n' {
+            line_end += 1;
+        }
+
+        line = render_multiline_line(
+            line,
+            &chars[line_start..line_end],
+            line_start,
+            cursor,
+            selection_range,
+            config,
+        );
+
+        if line_end == text_len {
+            break;
+        }
+
+        if selection_range.is_none() && cursor == line_end {
+            line = line.child(render_cursor(config));
+        }
+
+        content = content.child(line);
+        line = div()
+            .flex()
+            .flex_row()
+            .flex_wrap()
+            .items_start()
+            .w_full()
+            .min_h(px(line_height))
+            .line_height(px(line_height));
+        line_start = line_end + 1;
+    }
+
+    if line_start == text_len {
+        if selection_range.is_none() && cursor == text_len {
+            line = line.child(render_cursor(config));
+        }
+        return content.child(line);
+    }
+
+    if selection_range.is_none() && cursor == text_len {
+        line = line.child(render_cursor(config));
+    }
+
+    content.child(line)
+}
+
+fn render_multiline_line(
+    mut line: Div,
+    line_chars: &[char],
+    line_start: usize,
+    cursor: usize,
+    selection_range: Option<(usize, usize)>,
+    config: &TextInputRenderConfig<'_>,
+) -> Div {
+    for token in tokenize_multiline_line(line_chars, line_start) {
+        if token.can_wrap_inside {
+            for (offset, ch) in token.text.chars().enumerate() {
+                let char_index = token.start + offset;
+                if selection_range.is_none() && char_index == cursor {
+                    line = line.child(render_cursor(config));
+                }
+
+                line = line.child(render_multiline_char(ch, char_index, selection_range, config));
+            }
+            continue;
+        }
+
+        let mut token_node = div().flex().flex_row().items_start();
+        for (offset, ch) in token.text.chars().enumerate() {
+            let char_index = token.start + offset;
+            if selection_range.is_none() && char_index == cursor {
+                token_node = token_node.child(render_cursor(config));
+            }
+
+            token_node =
+                token_node.child(render_multiline_char(ch, char_index, selection_range, config));
+        }
+
+        line = line.child(token_node);
+    }
+
+    line
+}
+
+#[derive(Debug, PartialEq, Eq)]
+struct MultilineToken {
+    text: String,
+    start: usize,
+    end: usize,
+    can_wrap_inside: bool,
+}
+
+fn tokenize_multiline_line(chars: &[char], line_start: usize) -> Vec<MultilineToken> {
+    const LONG_WORD_WRAP_THRESHOLD: usize = 24;
+
+    let mut tokens = Vec::new();
+    let mut idx = 0;
+    while idx < chars.len() {
+        let token_start = idx;
+        let is_whitespace = chars[idx].is_whitespace();
+        while idx < chars.len() && chars[idx].is_whitespace() == is_whitespace {
+            idx += 1;
+        }
+
+        let text: String = chars[token_start..idx].iter().collect();
+        let len = text.chars().count();
+        tokens.push(MultilineToken {
+            text,
+            start: line_start + token_start,
+            end: line_start + idx,
+            can_wrap_inside: !is_whitespace && len > LONG_WORD_WRAP_THRESHOLD,
+        });
+    }
+
+    tokens
+}
+
+fn render_multiline_char(
+    ch: char,
+    char_index: usize,
+    selection_range: Option<(usize, usize)>,
+    config: &TextInputRenderConfig<'_>,
+) -> Div {
+    let color = color_for_char(config.highlight_ranges, char_index).unwrap_or(config.text_color);
+    let text = format_segment(&ch.to_string(), config.transform);
+    let mut node = div().text_color(rgb(color)).child(text);
+
+    if let Some((start, end)) = selection_range {
+        if (start..end).contains(&char_index) {
+            node = node
+                .bg(rgba((config.selection_color << 8) | config.selection_alpha))
+                .text_color(rgb(config.selection_text_color));
+        }
+    }
+
+    node
+}
+
+fn color_for_char(highlights: &[TextHighlightRange], char_index: usize) -> Option<u32> {
+    highlights
+        .iter()
+        .find(|range| (range.start..range.end).contains(&char_index))
+        .map(|range| range.color)
+}
+
 fn render_cursor(config: &TextInputRenderConfig<'_>) -> Div {
     let mut cursor = div().w(px(config.cursor_width)).h(px(config.cursor_height));
     if config.cursor_margin_y > 0.0 {
@@ -337,7 +526,10 @@ fn clamped_window(window: Option<(usize, usize)>, text_len: usize) -> (usize, us
 
 #[cfg(test)]
 mod tests {
-    use super::{compute_text_input_segments, TextInputRenderConfig};
+    use super::{
+        color_for_char, compute_text_input_segments, render_multiline_text_input_cursor_selection,
+        tokenize_multiline_line, MultilineToken, TextHighlightRange, TextInputRenderConfig,
+    };
     use crate::components::TextSelection;
 
     fn render_config_for(text: &str) -> TextInputRenderConfig<'_> {
@@ -418,5 +610,76 @@ mod tests {
         assert_eq!(segments.after, "fgh");
         assert!(segments.show_leading_indicator);
         assert!(segments.show_trailing_indicator);
+    }
+
+    #[test]
+    fn test_default_for_prompt_is_single_line_by_default() {
+        let config = TextInputRenderConfig::default_for_prompt("hello");
+
+        assert!(!config.multiline);
+    }
+
+    #[test]
+    fn test_color_for_char_returns_matching_highlight_color() {
+        let highlights = [TextHighlightRange {
+            start: 2,
+            end: 4,
+            color: 0xFBBF24,
+        }];
+
+        assert_eq!(color_for_char(&highlights, 1), None);
+        assert_eq!(color_for_char(&highlights, 2), Some(0xFBBF24));
+        assert_eq!(color_for_char(&highlights, 3), Some(0xFBBF24));
+        assert_eq!(color_for_char(&highlights, 4), None);
+    }
+
+    #[test]
+    fn test_multiline_renderer_accepts_newlines() {
+        let mut config = render_config_for("hello\nworld");
+        config.multiline = true;
+        config.cursor = 5;
+
+        let _ = render_multiline_text_input_cursor_selection(&config);
+    }
+
+    #[test]
+    fn test_tokenize_multiline_line_preserves_words_and_spaces() {
+        let chars: Vec<char> = "hello   world".chars().collect();
+
+        let tokens = tokenize_multiline_line(&chars, 10);
+
+        assert_eq!(
+            tokens,
+            vec![
+                MultilineToken {
+                    text: "hello".to_string(),
+                    start: 10,
+                    end: 15,
+                    can_wrap_inside: false,
+                },
+                MultilineToken {
+                    text: "   ".to_string(),
+                    start: 15,
+                    end: 18,
+                    can_wrap_inside: false,
+                },
+                MultilineToken {
+                    text: "world".to_string(),
+                    start: 18,
+                    end: 23,
+                    can_wrap_inside: false,
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn test_tokenize_multiline_line_marks_long_words_for_fallback_wrapping() {
+        let chars: Vec<char> = "supercalifragilisticexpialidocious".chars().collect();
+
+        let tokens = tokenize_multiline_line(&chars, 0);
+
+        assert_eq!(tokens.len(), 1);
+        assert!(tokens[0].can_wrap_inside);
     }
 }
