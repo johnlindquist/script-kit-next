@@ -1,4 +1,4 @@
-use gpui::{div, prelude::*, px, rgb, rgba, IntoElement};
+use gpui::{div, prelude::*, px, rgb, rgba, FontWeight, IntoElement};
 
 use super::types::{KEY_DISPLAY_HEIGHT, KEY_DISPLAY_PADDING};
 use super::ShortcutRecorder;
@@ -29,28 +29,29 @@ impl ShortcutRecorder {
         }
     }
 
-    /// Render the live shortcut preview inside a whisper-opacity shell.
-    /// The shell is barely visible so the inline glyphs lead visually.
+    /// Render the live shortcut preview as inline glyphs without a boxed shell.
+    /// The surrounding modal provides visual framing; the preview area stays quiet.
     pub(super) fn render_key_display(&self) -> impl IntoElement {
         let colors = self.colors;
         let keycaps = self.get_display_keycaps();
 
         crate::components::hint_strip::emit_shortcut_chrome_audit(
             "shortcut_recorder_key_display",
-            "whisper-inline-shell",
+            "compact-inline-unboxed",
         );
 
         let content = if keycaps.is_empty() {
             div()
-                .text_sm()
-                .text_color(rgb(colors.text_muted))
-                .child("Press any key combination...")
+                .text_xs()
+                .font_weight(FontWeight::MEDIUM)
+                .text_color(rgba((colors.text_muted << 8) | 0x9C))
+                .child("Press any key combination\u{2026}")
                 .into_any_element()
         } else {
             crate::components::hint_strip::render_inline_shortcut_keys(
                 keycaps.iter().map(String::as_str),
                 crate::components::hint_strip::whisper_inline_shortcut_colors(
-                    rgba((colors.text_primary << 8) | 0xC8).into(),
+                    rgba((colors.text_primary << 8) | 0xB8).into(),
                     rgba((colors.border << 8) | 0xFF).into(),
                     true,
                 ),
@@ -64,10 +65,6 @@ impl ShortcutRecorder {
             .flex()
             .items_center()
             .justify_center()
-            .bg(rgba((colors.key_display_bg << 8) | 0x10))
-            .rounded(px(8.))
-            .border_1()
-            .border_color(rgba((colors.border << 8) | 0x14))
             .child(content)
     }
 
