@@ -21,6 +21,9 @@ pub enum ContextAttachmentKind {
     GitDiff,
     Processes,
     System,
+    Dictation,
+    Calendar,
+    Notifications,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -34,7 +37,7 @@ pub struct ContextAttachmentSpec {
     pub label: &'static str,
 }
 
-const CONTEXT_ATTACHMENT_SPECS: [ContextAttachmentSpec; 15] = [
+const CONTEXT_ATTACHMENT_SPECS: [ContextAttachmentSpec; 18] = [
     ContextAttachmentSpec {
         kind: ContextAttachmentKind::Current,
         action_id: "chat:add_current_context",
@@ -169,6 +172,33 @@ const CONTEXT_ATTACHMENT_SPECS: [ContextAttachmentSpec; 15] = [
         mention: Some("@system"),
         uri: "kit://system",
         label: "System Info",
+    },
+    ContextAttachmentSpec {
+        kind: ContextAttachmentKind::Dictation,
+        action_id: "chat:add_dictation",
+        action_title: "Attach Dictation",
+        slash_command: Some("/dictation"),
+        mention: Some("@dictation"),
+        uri: "kit://dictation",
+        label: "Dictation",
+    },
+    ContextAttachmentSpec {
+        kind: ContextAttachmentKind::Calendar,
+        action_id: "chat:add_calendar",
+        action_title: "Attach Calendar Events",
+        slash_command: Some("/calendar"),
+        mention: Some("@calendar"),
+        uri: "kit://calendar",
+        label: "Calendar",
+    },
+    ContextAttachmentSpec {
+        kind: ContextAttachmentKind::Notifications,
+        action_id: "chat:add_notifications",
+        action_title: "Attach Notifications",
+        slash_command: Some("/notifications"),
+        mention: Some("@notifications"),
+        uri: "kit://notifications",
+        label: "Notifications",
     },
 ];
 

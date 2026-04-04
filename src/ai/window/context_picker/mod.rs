@@ -167,6 +167,7 @@ impl AiApp {
         tracing::info!(
             target: "ai",
             ?trigger,
+            layout = "dense_monoline_shared",
             item_count = items.len(),
             selected_index = 0,
             "ai_context_picker_opened"
@@ -334,14 +335,22 @@ pub fn build_picker_items(trigger: ContextPickerTrigger, query: &str) -> Vec<Con
             continue;
         }
 
-        let (score, label_hits, meta_hits) = score_builtin_with_highlights(spec, &query_lower);
+        let (score, label_hits, meta_hits) =
+            score_builtin_with_highlights(spec, trigger, &query_lower);
 
         if score > 0 || query_lower.is_empty() {
-            // Build meta: prefer slash_command, then mention, then action_title
-            let meta_str: &str = spec
-                .slash_command
-                .or(spec.mention)
-                .unwrap_or(spec.action_title);
+            // Build meta: trigger-aware — mention mode prefers @mention,
+            // slash mode prefers /command.
+            let meta_str: &str = match trigger {
+                ContextPickerTrigger::Mention => spec
+                    .mention
+                    .or(spec.slash_command)
+                    .unwrap_or(spec.action_title),
+                ContextPickerTrigger::Slash => spec
+                    .slash_command
+                    .or(spec.mention)
+                    .unwrap_or(spec.action_title),
+            };
 
             items.push(ContextPickerItem {
                 id: SharedString::from(format!("builtin:{:?}", spec.kind).to_lowercase()),
@@ -394,8 +403,13 @@ pub fn build_picker_items(trigger: ContextPickerTrigger, query: &str) -> Vec<Con
 }
 
 /// Score a built-in spec against the user query, returning (score, label_hits, meta_hits).
+///
+/// The `trigger` parameter determines which meta string is used for highlight
+/// computation so that the returned `meta_hits` indices align with the
+/// trigger-aware meta displayed in the picker row.
 fn score_builtin_with_highlights(
     spec: &crate::ai::context_contract::ContextAttachmentSpec,
+    trigger: ContextPickerTrigger,
     query: &str,
 ) -> (u32, Vec<usize>, Vec<usize>) {
     if query.is_empty() {
@@ -412,11 +426,19 @@ fn score_builtin_with_highlights(
         .map(|s| s.trim_start_matches('/').to_lowercase())
         .unwrap_or_default();
 
-    let meta_str = spec
-        .slash_command
-        .or(spec.mention)
-        .unwrap_or(spec.action_title);
-    let meta_bare = meta_str.trim_start_matches(['@', '/']);
+    // Use trigger-aware meta for highlight computation so indices
+    // match what the picker row actually displays.
+    let display_meta: &str = match trigger {
+        ContextPickerTrigger::Mention => spec
+            .mention
+            .or(spec.slash_command)
+            .unwrap_or(spec.action_title),
+        ContextPickerTrigger::Slash => spec
+            .slash_command
+            .or(spec.mention)
+            .unwrap_or(spec.action_title),
+    };
+    let meta_bare = display_meta.trim_start_matches(['@', '/']);
 
     let mut best_score = 0u32;
     let mut best_label_hits = Vec::new();
@@ -478,7 +500,7 @@ pub fn score_builtin(
     spec: &crate::ai::context_contract::ContextAttachmentSpec,
     query: &str,
 ) -> u32 {
-    score_builtin_with_highlights(spec, query).0
+    score_builtin_with_highlights(spec, ContextPickerTrigger::Mention, query).0
 }
 
 /// Collect file and folder items from the given directory matching the query.
@@ -519,12 +541,16 @@ fn collect_file_items(dir: &std::path::Path, query: &str, items: &mut Vec<Contex
 
         let label_hits = match_query_chars(query, &name).unwrap_or_default();
 
+        // Use @file: prefix for meta so mention-mode rows display
+        // the canonical inline token form.
+        let meta = format!("@file:{}", path.display());
+
         if is_dir {
             if folder_count < FILE_RESULTS_LIMIT / 2 {
                 items.push(ContextPickerItem {
                     id: SharedString::from(format!("folder:{}", path.display())),
                     label: name.into(),
-                    meta: path.to_string_lossy().to_string().into(),
+                    meta: meta.into(),
                     kind: ContextPickerItemKind::Folder(path),
                     score,
                     label_highlight_indices: label_hits,
@@ -536,7 +562,7 @@ fn collect_file_items(dir: &std::path::Path, query: &str, items: &mut Vec<Contex
             items.push(ContextPickerItem {
                 id: SharedString::from(format!("file:{}", path.display())),
                 label: name.into(),
-                meta: path.to_string_lossy().to_string().into(),
+                meta: meta.into(),
                 kind: ContextPickerItemKind::File(path),
                 score,
                 label_highlight_indices: label_hits,

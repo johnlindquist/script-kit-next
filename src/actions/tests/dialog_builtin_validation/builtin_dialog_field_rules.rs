@@ -577,7 +577,7 @@ mod from_dialog_builtin_action_validation_tests_11 {
     #[test]
     fn cat13_ai_command_bar_has_12_actions() {
         let actions = get_ai_command_bar_actions();
-        assert_eq!(actions.len(), 32);
+        assert_eq!(actions.len(), 35);
     }
 
     #[test]
@@ -2237,7 +2237,7 @@ mod from_dialog_builtin_action_validation_tests_12 {
     
         #[test]
         fn cat06_ai_total_12_actions() {
-            assert_eq!(get_ai_command_bar_actions().len(), 32);
+            assert_eq!(get_ai_command_bar_actions().len(), 35);
         }
 
 
@@ -9402,7 +9402,7 @@ mod from_dialog_builtin_action_validation_tests_15 {
     
         #[test]
         fn cat24_ai_total_13() {
-            assert_eq!(get_ai_command_bar_actions().len(), 32);
+            assert_eq!(get_ai_command_bar_actions().len(), 35);
         }
     
         #[test]
@@ -15057,7 +15057,7 @@ mod from_dialog_builtin_action_validation_tests_18 {
         #[test]
         fn cat27_total_ai_actions_is_12() {
             let actions = get_ai_command_bar_actions();
-            assert_eq!(actions.len(), 32);
+            assert_eq!(actions.len(), 35);
         }
     
         // =========================================================================

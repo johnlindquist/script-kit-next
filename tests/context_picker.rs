@@ -5,15 +5,15 @@
 
 use script_kit_gpui::ai::{
     build_picker_items, context_attachment_specs, score_builtin, AiContextPart,
-    ContextAttachmentKind, ContextPickerItemKind, ContextPickerState,
+    ContextAttachmentKind, ContextPickerItemKind, ContextPickerState, ContextPickerTrigger,
 };
 
 // ---------- Deterministic picker ranking ----------
 
 #[test]
 fn picker_ranking_is_deterministic_across_calls() {
-    let items_a = build_picker_items("con");
-    let items_b = build_picker_items("con");
+    let items_a = build_picker_items(ContextPickerTrigger::Mention, "con");
+    let items_b = build_picker_items(ContextPickerTrigger::Mention, "con");
 
     assert_eq!(
         items_a.len(),
@@ -29,7 +29,7 @@ fn picker_ranking_is_deterministic_across_calls() {
 
 #[test]
 fn empty_query_returns_all_builtins_deterministically() {
-    let items = build_picker_items("");
+    let items = build_picker_items(ContextPickerTrigger::Mention, "");
     let specs = context_attachment_specs();
 
     let builtin_count = items
@@ -57,7 +57,7 @@ fn empty_query_returns_all_builtins_deterministically() {
 
 #[test]
 fn sel_query_ranks_selection_first() {
-    let items = build_picker_items("sel");
+    let items = build_picker_items(ContextPickerTrigger::Mention, "sel");
     assert!(!items.is_empty(), "'sel' should match at least Selection");
 
     match &items[0].kind {
@@ -74,7 +74,7 @@ fn sel_query_ranks_selection_first() {
 
 #[test]
 fn nonexistent_query_returns_no_builtins() {
-    let items = build_picker_items("zzzznonexistent");
+    let items = build_picker_items(ContextPickerTrigger::Mention, "zzzznonexistent");
     let builtin_count = items
         .iter()
         .filter(|i| matches!(i.kind, ContextPickerItemKind::BuiltIn(_)))
@@ -87,7 +87,7 @@ fn nonexistent_query_returns_no_builtins() {
 
 #[test]
 fn diag_query_matches_diagnostics() {
-    let items = build_picker_items("diag");
+    let items = build_picker_items(ContextPickerTrigger::Mention, "diag");
     let has_diag = items.iter().any(|i| {
         matches!(
             i.kind,
@@ -99,7 +99,7 @@ fn diag_query_matches_diagnostics() {
 
 #[test]
 fn browser_query_matches_browser() {
-    let items = build_picker_items("brow");
+    let items = build_picker_items(ContextPickerTrigger::Mention, "brow");
     let has_browser = items.iter().any(|i| {
         matches!(
             i.kind,
@@ -113,7 +113,7 @@ fn browser_query_matches_browser() {
 
 #[test]
 fn builtins_grouped_before_files_and_folders() {
-    let items = build_picker_items("con");
+    let items = build_picker_items(ContextPickerTrigger::Mention, "con");
     let mut seen_non_builtin = false;
     for item in &items {
         match &item.kind {
@@ -175,7 +175,7 @@ fn prefix_on_label_scores_higher_than_substring() {
 
 #[test]
 fn builtin_selection_item_produces_correct_context_part() {
-    let items = build_picker_items("selection");
+    let items = build_picker_items(ContextPickerTrigger::Mention, "selection");
     let selection_item = items
         .iter()
         .find(|i| {
@@ -202,7 +202,7 @@ fn builtin_selection_item_produces_correct_context_part() {
 
 #[test]
 fn all_builtin_items_produce_resource_uri_parts() {
-    let items = build_picker_items("");
+    let items = build_picker_items(ContextPickerTrigger::Mention, "");
     for item in &items {
         if let ContextPickerItemKind::BuiltIn(kind) = &item.kind {
             let part = kind.part();
@@ -228,11 +228,11 @@ fn all_builtin_items_produce_resource_uri_parts() {
 
 #[test]
 fn picker_state_navigation_wraps_around() {
-    let items = build_picker_items("");
+    let items = build_picker_items(ContextPickerTrigger::Mention, "");
     let count = items.len();
     assert!(count >= 2, "Need at least 2 items for navigation test");
 
-    let mut state = ContextPickerState::new(String::new(), items);
+    let mut state = ContextPickerState::new(ContextPickerTrigger::Mention, String::new(), items);
     assert_eq!(state.selected_index, 0);
 
     // Move to last
@@ -255,6 +255,18 @@ fn every_context_attachment_kind_has_a_spec() {
         ContextAttachmentKind::Browser,
         ContextAttachmentKind::Window,
         ContextAttachmentKind::Diagnostics,
+        ContextAttachmentKind::Screenshot,
+        ContextAttachmentKind::Clipboard,
+        ContextAttachmentKind::FrontmostApp,
+        ContextAttachmentKind::MenuBar,
+        ContextAttachmentKind::RecentScripts,
+        ContextAttachmentKind::GitStatus,
+        ContextAttachmentKind::GitDiff,
+        ContextAttachmentKind::Processes,
+        ContextAttachmentKind::System,
+        ContextAttachmentKind::Dictation,
+        ContextAttachmentKind::Calendar,
+        ContextAttachmentKind::Notifications,
     ];
 
     for kind in &kinds {
@@ -272,4 +284,49 @@ fn every_context_attachment_kind_has_a_spec() {
             kind
         );
     }
+}
+
+// ---------- New catalog entries ----------
+
+#[test]
+fn catalog_has_at_least_15_entries() {
+    let specs = context_attachment_specs();
+    assert!(
+        specs.len() >= 15,
+        "Catalog should have at least 15 entries, got {}",
+        specs.len()
+    );
+}
+
+#[test]
+fn new_entries_are_queryable() {
+    // @dictation
+    let items = build_picker_items(ContextPickerTrigger::Mention, "dictation");
+    assert!(
+        items.iter().any(|i| matches!(
+            i.kind,
+            ContextPickerItemKind::BuiltIn(ContextAttachmentKind::Dictation)
+        )),
+        "'dictation' should match Dictation built-in"
+    );
+
+    // @calendar
+    let items = build_picker_items(ContextPickerTrigger::Mention, "calendar");
+    assert!(
+        items.iter().any(|i| matches!(
+            i.kind,
+            ContextPickerItemKind::BuiltIn(ContextAttachmentKind::Calendar)
+        )),
+        "'calendar' should match Calendar built-in"
+    );
+
+    // @notifications
+    let items = build_picker_items(ContextPickerTrigger::Mention, "notif");
+    assert!(
+        items.iter().any(|i| matches!(
+            i.kind,
+            ContextPickerItemKind::BuiltIn(ContextAttachmentKind::Notifications)
+        )),
+        "'notif' should match Notifications built-in"
+    );
 }

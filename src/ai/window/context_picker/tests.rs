@@ -482,7 +482,7 @@ fn slash_con_ranks_context_before_context_full() {
 }
 
 #[test]
-fn mention_sel_shows_slash_selection_as_meta() {
+fn mention_sel_shows_mention_selection_as_meta() {
     let items = build_picker_items(ContextPickerTrigger::Mention, "sel");
     let selection = items
         .iter()
@@ -495,8 +495,8 @@ fn mention_sel_shows_slash_selection_as_meta() {
         .expect("Selection should be in results for 'sel'");
     assert_eq!(
         selection.meta.as_ref(),
-        "/selection",
-        "Selection meta should be the slash command '/selection'"
+        "@selection",
+        "Selection meta in mention mode should be the mention '@selection'"
     );
     assert!(
         !selection.label_highlight_indices.is_empty(),
@@ -518,7 +518,7 @@ fn mention_sel_has_meta_highlight_indices() {
         .expect("Selection should be in results");
     assert!(
         !selection.meta_highlight_indices.is_empty(),
-        "Selection meta should have highlight indices for 'sel' in '/selection'"
+        "Selection meta should have highlight indices for 'sel' in '@selection'"
     );
 }
 

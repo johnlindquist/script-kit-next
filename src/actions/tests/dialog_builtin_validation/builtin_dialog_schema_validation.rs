@@ -419,7 +419,7 @@ mod from_dialog_builtin_action_validation_tests {
     
     #[test]
     fn ai_command_bar_action_count_is_exactly_twelve() {
-        assert_eq!(get_ai_command_bar_actions().len(), 32);
+        assert_eq!(get_ai_command_bar_actions().len(), 35);
     }
     
     // =========================================================================
@@ -5616,11 +5616,11 @@ mod from_dialog_builtin_action_validation_tests_3 {
     }
     
     #[test]
-    fn ai_command_bar_has_exactly_32_actions() {
+    fn ai_command_bar_has_exactly_35_actions() {
         let count = get_ai_command_bar_actions().len();
         assert_eq!(
-            count, 32,
-            "AI command bar should have exactly 32 actions, got {}",
+            count, 35,
+            "AI command bar should have exactly 35 actions, got {}",
             count
         );
     }
@@ -8455,7 +8455,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
         #[test]
         fn ai_command_bar_total_is_12() {
             let actions = get_ai_command_bar_actions();
-            assert_eq!(actions.len(), 32);
+            assert_eq!(actions.len(), 35);
         }
     
         #[test]
@@ -11913,7 +11913,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
         #[test]
         fn ai_command_bar_has_exactly_12_actions() {
             let actions = get_ai_command_bar_actions();
-            assert_eq!(actions.len(), 32);
+            assert_eq!(actions.len(), 35);
         }
 
         #[test]
@@ -13556,7 +13556,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
         #[test]
         fn ai_command_bar_exactly_12_actions() {
             let actions = get_ai_command_bar_actions();
-            assert_eq!(actions.len(), 32);
+            assert_eq!(actions.len(), 35);
         }
     
         #[test]
@@ -17624,7 +17624,7 @@ mod from_dialog_builtin_action_validation_tests_9 {
         #[test]
         fn ai_command_bar_has_exactly_32_actions() {
             let actions = get_ai_command_bar_actions();
-            assert_eq!(actions.len(), 32, "AI command bar should have 32 actions");
+            assert_eq!(actions.len(), 35, "AI command bar should have 35 actions");
         }
     
         #[test]

@@ -13,6 +13,18 @@ impl ParsedContextMentions {
     }
 }
 
+/// A single inline `@mention` token found in text, with its character range
+/// and the resolved `AiContextPart`.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct InlineContextMention {
+    /// Character-level range of the token in the source text.
+    pub(crate) range: std::ops::Range<usize>,
+    /// The raw token text (e.g. `@browser`, `@file:/tmp/demo.rs`).
+    pub(crate) token: String,
+    /// The resolved context part for this mention.
+    pub(crate) part: AiContextPart,
+}
+
 pub(crate) fn parse_context_mentions(raw_content: &str) -> ParsedContextMentions {
     let mut cleaned_lines = Vec::new();
     let mut parts = Vec::new();
@@ -50,6 +62,68 @@ pub(crate) fn parse_context_mentions(raw_content: &str) -> ParsedContextMentions
     }
 }
 
+/// Scan `text` for inline `@mention` tokens and resolve each to an
+/// `AiContextPart`. Supports built-in mentions (`@browser`, `@git-status`,
+/// etc.) and file mentions (`@file:/path`).
+pub(crate) fn parse_inline_context_mentions(text: &str) -> Vec<InlineContextMention> {
+    let chars: Vec<char> = text.chars().collect();
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < chars.len() {
+        if chars[i] != '@' {
+            i += 1;
+            continue;
+        }
+        // `@` must be at start or preceded by whitespace/punctuation
+        if i > 0 && (chars[i - 1].is_alphanumeric() || chars[i - 1] == '_') {
+            i += 1;
+            continue;
+        }
+
+        let start = i;
+        i += 1; // skip '@'
+        while i < chars.len() && !chars[i].is_whitespace() {
+            i += 1;
+        }
+        let token: String = chars[start..i].iter().collect();
+
+        let part = if let Some(kind) =
+            crate::ai::context_contract::ContextAttachmentKind::from_mention_line(&token)
+        {
+            Some(kind.part())
+        } else {
+            parse_file_mention(&token)
+        };
+
+        if let Some(part) = part {
+            out.push(InlineContextMention {
+                range: start..i,
+                token,
+                part,
+            });
+        }
+    }
+    out
+}
+
+/// Convert an `AiContextPart` back to its canonical inline `@token` form.
+///
+/// Returns `None` for parts that have no inline mention representation
+/// (e.g. `FocusedTarget`, `AmbientContext`).
+pub(crate) fn part_to_inline_token(part: &AiContextPart) -> Option<String> {
+    match part {
+        AiContextPart::ResourceUri { uri, .. } => {
+            crate::ai::context_contract::context_attachment_specs()
+                .iter()
+                .find(|spec| spec.uri == uri.as_str())
+                .and_then(|spec| spec.mention)
+                .map(ToString::to_string)
+        }
+        AiContextPart::FilePath { path, .. } => Some(format!("@file:{path}")),
+        _ => None,
+    }
+}
+
 fn parse_context_mention_line(line: &str) -> Option<AiContextPart> {
     let trimmed = line.trim();
 
@@ -64,7 +138,8 @@ fn parse_context_mention_line(line: &str) -> Option<AiContextPart> {
 
 fn parse_file_mention(trimmed: &str) -> Option<AiContextPart> {
     let path = trimmed
-        .strip_prefix("@file ")
+        .strip_prefix("@file:")
+        .or_else(|| trimmed.strip_prefix("@file "))
         .or_else(|| trimmed.strip_prefix("@file\t"))?
         .trim();
 

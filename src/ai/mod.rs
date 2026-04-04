@@ -32,6 +32,7 @@ pub(crate) mod context_contract;
 #[cfg(test)]
 mod context_contract_integration_tests;
 pub(crate) mod context_mentions;
+pub(crate) mod context_picker_row;
 pub(crate) mod current_app_automation_memory;
 pub(crate) mod harness;
 pub mod message_parts;
@@ -137,6 +138,7 @@ pub use self::window::context_picker::types::{
     ContextPickerItem, ContextPickerItemKind, ContextPickerItemSnapshot, ContextPickerSection,
     ContextPickerSnapshot, ContextPickerState,
 };
+pub use self::window::context_picker::types::ContextPickerTrigger;
 pub use self::window::context_picker::{build_picker_items, score_builtin};
 pub use self::window::context_preflight::{
     estimate_tokens_from_text, preflight_state_from_receipt, status_from_decision,
