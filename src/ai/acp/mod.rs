@@ -25,6 +25,7 @@ pub(crate) mod history;
 pub(crate) mod permission_broker;
 pub(crate) mod preflight;
 pub(crate) mod provider;
+pub(crate) mod setup_state;
 pub(crate) mod thread;
 pub(crate) mod types;
 pub(crate) mod view;
@@ -60,4 +61,5 @@ pub(crate) use thread::{
     AcpContextBootstrapState, AcpThread, AcpThreadInit, AcpThreadMessage, AcpThreadStatus,
     AcpToolCallState,
 };
-pub(crate) use view::AcpChatView;
+pub(crate) use setup_state::{AcpInlineSetupState, AcpSetupAction};
+pub(crate) use view::{AcpChatSession, AcpChatView};

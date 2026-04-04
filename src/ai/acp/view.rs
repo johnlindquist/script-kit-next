@@ -84,9 +84,19 @@ fn parse_skill_description(content: &str) -> Option<String> {
     None
 }
 
+/// Session mode for the ACP chat view.
+#[derive(Clone)]
+pub(crate) enum AcpChatSession {
+    /// Live conversation with an ACP agent thread.
+    Live(Entity<AcpThread>),
+    /// Inline setup card — no launchable agent exists.
+    Setup(Box<super::setup_state::AcpInlineSetupState>),
+}
+
 /// GPUI view entity wrapping an `AcpThread` for the Tab AI surface.
 pub(crate) struct AcpChatView {
-    pub(crate) thread: Entity<AcpThread>,
+    /// The ACP session — either a live thread or inline setup state.
+    pub(crate) session: AcpChatSession,
     focus_handle: FocusHandle,
     /// Virtualized variable-height message list state.
     pub(crate) list_state: ListState,
@@ -127,6 +137,31 @@ impl AcpChatView {
             .nth(char_idx)
             .map(|(byte_idx, _)| byte_idx)
             .unwrap_or(text.len())
+    }
+
+    /// Access the live thread entity, if in live mode.
+    pub(crate) fn thread(&self) -> Option<Entity<AcpThread>> {
+        match &self.session {
+            AcpChatSession::Live(t) => Some(t.clone()),
+            AcpChatSession::Setup(_) => None,
+        }
+    }
+
+    /// Whether this view is in setup mode (no live thread).
+    pub(crate) fn is_setup_mode(&self) -> bool {
+        matches!(self.session, AcpChatSession::Setup(_))
+    }
+
+    /// Internal accessor returning a reference to the live thread entity.
+    ///
+    /// Only called from code paths guarded by `render()` and `handle_key_down()`
+    /// early-returns in setup mode.
+    #[inline]
+    pub(crate) fn live_thread(&self) -> &Entity<AcpThread> {
+        match &self.session {
+            AcpChatSession::Live(t) => t,
+            AcpChatSession::Setup(_) => unreachable!("live_thread called in setup mode"),
+        }
     }
 
     pub(crate) fn new(thread: Entity<AcpThread>, cx: &mut Context<Self>) -> Self {
@@ -202,7 +237,7 @@ impl AcpChatView {
         });
 
         Self {
-            thread,
+            session: AcpChatSession::Live(thread),
             focus_handle: cx.focus_handle(),
             list_state,
             permission_index: 0,
@@ -216,6 +251,40 @@ impl AcpChatView {
             search_state: None,
             cached_slash_commands: Vec::new(),
             _slash_discovery_task: slash_task,
+            mention_session: None,
+            inline_owned_context_tokens: HashSet::new(),
+        }
+    }
+
+    /// Create an `AcpChatView` in **setup mode** — no live thread, just an
+    /// inline setup card describing the blocker and available recovery actions.
+    pub(crate) fn new_setup(
+        state: super::setup_state::AcpInlineSetupState,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "acp_setup_surface_rendered",
+            title = %state.title,
+        );
+        let list_state = ListState::new(0, ListAlignment::Bottom, px(200.0));
+        let noop_blink = cx.spawn(async move |_this, _cx| {});
+        let noop_slash = cx.spawn(async move |_this, _cx| {});
+        Self {
+            session: AcpChatSession::Setup(Box::new(state)),
+            focus_handle: cx.focus_handle(),
+            list_state,
+            permission_index: 0,
+            collapsed_ids: HashSet::new(),
+            last_message_count: 0,
+            cursor_visible: false,
+            _blink_task: noop_blink,
+            history_menu: None,
+            attach_menu_open: false,
+            model_selector_open: false,
+            search_state: None,
+            cached_slash_commands: Vec::new(),
+            _slash_discovery_task: noop_slash,
             mention_session: None,
             inline_owned_context_tokens: HashSet::new(),
         }
@@ -272,8 +341,13 @@ impl AcpChatView {
     /// cycle the highlighted option; otherwise just swallow the key so
     /// the global interceptors do not re-open a fresh ACP chat.
     pub(crate) fn handle_tab_key(&mut self, has_shift: bool, cx: &mut Context<Self>) -> bool {
+        if self.is_setup_mode() {
+            cx.notify();
+            return true;
+        }
+
         let option_count = self
-            .thread
+            .live_thread()
             .read(cx)
             .pending_permission
             .as_ref()
@@ -308,7 +382,7 @@ impl AcpChatView {
 
     fn approve_permission(&mut self, option_id: Option<String>, cx: &mut Context<Self>) {
         self.permission_index = 0;
-        self.thread.update(cx, |thread, cx| {
+        self.live_thread().update(cx, |thread, cx| {
             thread.approve_pending_permission(option_id, cx);
         });
     }
@@ -413,7 +487,7 @@ impl AcpChatView {
     }
 
     pub(crate) fn set_input(&mut self, value: String, cx: &mut Context<Self>) {
-        self.thread
+        self.live_thread()
             .update(cx, |thread, cx| thread.set_input(value, cx));
     }
 
@@ -432,7 +506,7 @@ impl AcpChatView {
         use crate::ai::context_mentions::{parse_inline_context_mentions, part_to_inline_token};
 
         let (parts, input_text) = {
-            let thread = self.thread.read(cx);
+            let thread = self.live_thread().read(cx);
             (
                 thread.pending_context_parts().to_vec(),
                 thread.input.text().to_string(),
@@ -527,7 +601,7 @@ impl AcpChatView {
                                     .rounded(px(999.0))
                             })
                             .on_click(cx.listener(move |this, _, _window, cx| {
-                                this.thread.update(cx, |thread, cx| {
+                                this.live_thread().update(cx, |thread, cx| {
                                     thread.remove_context_part(remove_idx, cx);
                                 });
                             }))
@@ -550,7 +624,7 @@ impl AcpChatView {
     /// Hidden when there is no note or when the note is empty.
     fn render_context_bootstrap_note(&self, cx: &mut Context<Self>) -> gpui::AnyElement {
         let (state, note) = {
-            let thread = self.thread.read(cx);
+            let thread = self.live_thread().read(cx);
             (
                 thread.context_bootstrap_state(),
                 thread.context_bootstrap_note().map(|v| v.to_string()),
@@ -1125,7 +1199,7 @@ impl AcpChatView {
                                 if let Some(clipboard) = cx.read_from_clipboard() {
                                     if let Some(text) = clipboard.text() {
                                         if !text.is_empty() {
-                                            this.thread.update(cx, |thread, cx| {
+                                            this.live_thread().update(cx, |thread, cx| {
                                                 thread.input.insert_str(&text);
                                                 cx.notify();
                                             });
@@ -1160,7 +1234,7 @@ impl AcpChatView {
                             .hover(|d| d.bg(rgba((theme.colors.text.primary << 8) | 0x0C)))
                             .on_click(cx.listener(|this, _event, _window, cx| {
                                 // Insert a hint about the screenshot path
-                                this.thread.update(cx, |thread, cx| {
+                                this.live_thread().update(cx, |thread, cx| {
                                     thread.input.insert_str("What's on my screen? ");
                                     cx.notify();
                                 });
@@ -1188,7 +1262,7 @@ impl AcpChatView {
 
     fn render_model_selector(&self, cx: &mut Context<Self>) -> gpui::AnyElement {
         let theme = theme::get_cached_theme();
-        let thread = self.thread.read(cx);
+        let thread = self.live_thread().read(cx);
         let models = thread.available_models().to_vec();
         let selected_id = thread.selected_model_id().map(|s| s.to_string());
 
@@ -1226,7 +1300,7 @@ impl AcpChatView {
                     .hover(|d| d.bg(rgba((text_primary << 8) | 0x0C)))
                     .when(is_selected, |d| d.bg(rgba((accent << 8) | 0x10)))
                     .on_click(cx.listener(move |this, _event, _window, cx| {
-                        this.thread.update(cx, |thread, cx| {
+                        this.live_thread().update(cx, |thread, cx| {
                             thread.select_model(&model_id, cx);
                         });
                         this.model_selector_open = false;
@@ -1254,7 +1328,7 @@ impl AcpChatView {
 
     fn render_toolbar(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = theme::get_cached_theme();
-        let is_streaming = matches!(self.thread.read(cx).status, AcpThreadStatus::Streaming);
+        let is_streaming = matches!(self.live_thread().read(cx).status, AcpThreadStatus::Streaming);
 
         // Hint strip opacity: match main menu's OPACITY_TEXT_MUTED (0.65)
         let hint_text_hex = theme.colors.text.primary;
@@ -1307,7 +1381,7 @@ impl AcpChatView {
                     // Model selector button
                     .child({
                         let model_display =
-                            self.thread.read(cx).selected_model_display().to_string();
+                            self.live_thread().read(cx).selected_model_display().to_string();
                         let is_open = self.model_selector_open;
                         let chevron = if is_open { "\u{25B4}" } else { "\u{25BE}" }; // ▴ / ▾
                         div()
@@ -1378,13 +1452,13 @@ impl AcpChatView {
             btn = btn
                 .cursor_pointer()
                 .on_click(cx.listener(|this, _event, _window, cx| {
-                    let _ = this.thread.update(cx, |thread, cx| thread.submit_input(cx));
+                    let _ = this.live_thread().update(cx, |thread, cx| thread.submit_input(cx));
                 }));
         } else if is_streaming {
             btn = btn
                 .cursor_pointer()
                 .on_click(cx.listener(|this, _event, _window, cx| {
-                    this.thread
+                    this.live_thread()
                         .update(cx, |thread, cx| thread.cancel_streaming(cx));
                 }));
         }
@@ -1418,7 +1492,7 @@ impl AcpChatView {
     /// Called after every input mutation and cursor movement.
     fn refresh_mention_session(&mut self, cx: &mut Context<Self>) {
         let (text, cursor, available_commands) = {
-            let thread = self.thread.read(cx);
+            let thread = self.live_thread().read(cx);
             (
                 thread.input.text().to_string(),
                 thread.input.cursor(),
@@ -1493,7 +1567,7 @@ impl AcpChatView {
     /// Apply a hint chip token by writing it into the composer and running
     /// it through the normal picker acceptance path.
     fn apply_picker_hint_token(&mut self, token: &str, cx: &mut Context<Self>) {
-        self.thread.update(cx, |thread, cx| {
+        self.live_thread().update(cx, |thread, cx| {
             thread.input.set_text(token.to_string());
             cx.notify();
         });
@@ -1559,7 +1633,7 @@ impl AcpChatView {
                 ContextPickerItemKind::SlashCommand(command) => format!("/{command} "),
                 _ => format!("{} ", item.meta),
             };
-            self.thread.update(cx, |thread, cx| {
+            self.live_thread().update(cx, |thread, cx| {
                 thread.input.set_text(command_text);
                 if submit {
                     let _ = thread.submit_input(cx);
@@ -1598,7 +1672,7 @@ impl AcpChatView {
             }
         };
 
-        let current_text = self.thread.read(cx).input.text().to_string();
+        let current_text = self.live_thread().read(cx).input.text().to_string();
         let trigger_start_byte =
             Self::char_to_byte_offset(&current_text, session.trigger_range.start);
         let trigger_end_byte = Self::char_to_byte_offset(&current_text, session.trigger_range.end);
@@ -1610,7 +1684,7 @@ impl AcpChatView {
         next_text.push_str(&replacement);
         next_text.push_str(&current_text[trigger_end_byte..]);
 
-        self.thread.update(cx, |thread, cx| {
+        self.live_thread().update(cx, |thread, cx| {
             // Move cursor to end first so set_text clamps to the full
             // new length (replacement is always >= original range).
             thread.input.move_to_end(false);
@@ -1656,7 +1730,7 @@ impl AcpChatView {
     fn sync_inline_mentions(&mut self, cx: &mut Context<Self>) {
         use crate::ai::context_mentions::{parse_inline_context_mentions, part_to_inline_token};
 
-        let text = self.thread.read(cx).input.text().to_string();
+        let text = self.live_thread().read(cx).input.text().to_string();
         let parsed = parse_inline_context_mentions(&text);
 
         let desired_parts: Vec<AiContextPart> = parsed.iter().map(|m| m.part.clone()).collect();
@@ -1666,7 +1740,7 @@ impl AcpChatView {
             .collect();
         let mut new_inline_owned_tokens = HashSet::new();
 
-        self.thread.update(cx, |thread, cx| {
+        self.live_thread().update(cx, |thread, cx| {
             // Remove stale inline parts (iterate in reverse to keep indices stable).
             let stale_indices: Vec<usize> = thread
                 .pending_context_parts()
@@ -1893,7 +1967,8 @@ impl AcpChatView {
                         if close_after_apply {
                             this.apply_picker_hint_token(&hint_insertion, cx);
                         } else {
-                            this.thread.update(cx, |thread, cx| {
+                            let live_t = this.live_thread().clone();
+                            live_t.update(cx, |thread, cx| {
                                 thread.input.set_text(hint_insertion.clone());
                                 cx.notify();
                             });
@@ -1946,17 +2021,16 @@ impl AcpChatView {
 
     /// Append agent slash commands (Claude Code `/compact`, `/clear`, etc.)
     /// to the picker items list. These are scored and filtered by `query`.
-    fn append_agent_slash_commands(&self, query: &str, items: &mut Vec<ContextPickerItem>) {
+    fn append_agent_slash_commands(
+        &self,
+        query: &str,
+        agent_commands: &[String],
+        items: &mut Vec<ContextPickerItem>,
+    ) {
         use crate::ai::window::context_picker::{
             match_query_chars, match_query_chars_in_display_meta,
         };
 
-        // Collect agent-provided commands, falling back to cached defaults + skills.
-        let agent_commands: Vec<String> = {
-            // Note: we can't read self.thread here since this is called inside
-            // a closure that already borrows self. Use cached_slash_commands.
-            Vec::new()
-        };
         let commands: Vec<&str> = if agent_commands.is_empty() {
             self.cached_slash_commands
                 .iter()
@@ -2032,12 +2106,70 @@ impl AcpChatView {
 
     // ── Key handling ──────────────────────────────────────────────
 
+    /// Render the inline setup card for setup mode.
+    fn render_setup_card(
+        &self,
+        state: &super::setup_state::AcpInlineSetupState,
+    ) -> gpui::AnyElement {
+        let theme = theme::get_cached_theme();
+        let action_hint: &str = match state.primary_action {
+            super::setup_state::AcpSetupAction::Retry => "Press Tab to retry",
+            super::setup_state::AcpSetupAction::Install => {
+                "Install the agent, then press Tab to retry"
+            }
+            super::setup_state::AcpSetupAction::Authenticate => {
+                "Authenticate, then press Tab to retry"
+            }
+            super::setup_state::AcpSetupAction::OpenCatalog => {
+                "Edit ~/.scriptkit/acp/agents.json, then press Tab to retry"
+            }
+            super::setup_state::AcpSetupAction::SelectAgent => "Select a different agent",
+        };
+
+        div()
+            .id("acp-inline-setup")
+            .size_full()
+            .flex()
+            .flex_col()
+            .items_center()
+            .justify_center()
+            .gap(px(16.0))
+            .track_focus(&self.focus_handle)
+            .child(
+                div()
+                    .text_xl()
+                    .text_color(rgb(theme.colors.text.primary))
+                    .child(state.title.clone()),
+            )
+            .child(
+                div()
+                    .text_sm()
+                    .text_color(rgb(theme.colors.text.muted))
+                    .max_w(px(400.0))
+                    .text_center()
+                    .child(state.body.clone()),
+            )
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(rgb(theme.colors.text.muted))
+                    .child(action_hint),
+            )
+            .into_any_element()
+    }
+
     fn handle_key_down(&mut self, event: &gpui::KeyDownEvent, cx: &mut Context<Self>) {
+        // Setup mode: only propagate keys, no thread interaction.
+        if self.is_setup_mode() {
+            cx.propagate();
+            return;
+        }
+
         // Reset cursor blink on any key press.
         self.cursor_visible = true;
 
         // ── Permission overlay intercept ─────────────────────────
-        let pending_permission = self.thread.read(cx).pending_permission.clone();
+        let pending_permission = self.live_thread().read(cx).pending_permission.clone();
         if let Some(ref request) = pending_permission {
             if self.handle_permission_key_down(event, request, cx) {
                 cx.stop_propagation();
@@ -2096,6 +2228,11 @@ impl AcpChatView {
         }
 
         // ── Search intercept (when search bar is open) ──────
+        let search_messages = if self.search_state.is_some() {
+            Some(self.live_thread().read(cx).messages.clone())
+        } else {
+            None
+        };
         if let Some((ref mut query, ref mut match_idx)) = self.search_state {
             if crate::ui_foundation::is_key_escape(key) {
                 self.search_state = None;
@@ -2107,24 +2244,25 @@ impl AcpChatView {
                 // Enter = next match, Shift+Enter = previous match.
                 if !query.is_empty() {
                     let ql = query.to_lowercase();
-                    let messages = &self.thread.read(cx).messages;
-                    let match_indices: Vec<usize> = messages
-                        .iter()
-                        .enumerate()
-                        .filter(|(_, m)| m.body.to_lowercase().contains(&ql))
-                        .map(|(i, _)| i)
-                        .collect();
-                    if !match_indices.is_empty() {
-                        let total = match_indices.len();
-                        if modifiers.shift {
-                            // Previous match (wrap backward).
-                            *match_idx = (*match_idx + total - 1) % total;
-                        } else {
-                            // Next match (wrap forward).
-                            *match_idx = (*match_idx + 1) % total;
+                    if let Some(messages) = search_messages.as_ref() {
+                        let match_indices: Vec<usize> = messages
+                            .iter()
+                            .enumerate()
+                            .filter(|(_, m)| m.body.to_lowercase().contains(&ql))
+                            .map(|(i, _)| i)
+                            .collect();
+                        if !match_indices.is_empty() {
+                            let total = match_indices.len();
+                            if modifiers.shift {
+                                // Previous match (wrap backward).
+                                *match_idx = (*match_idx + total - 1) % total;
+                            } else {
+                                // Next match (wrap forward).
+                                *match_idx = (*match_idx + 1) % total;
+                            }
+                            self.list_state
+                                .scroll_to_reveal_item(match_indices[*match_idx]);
                         }
-                        self.list_state
-                            .scroll_to_reveal_item(match_indices[*match_idx]);
                     }
                 }
                 cx.notify();
@@ -2165,9 +2303,9 @@ impl AcpChatView {
 
         // ── Cmd+. → cancel streaming (standard macOS cancel) ──────
         if modifiers.platform && key == "." {
-            let is_streaming = matches!(self.thread.read(cx).status, AcpThreadStatus::Streaming);
+            let is_streaming = matches!(self.live_thread().read(cx).status, AcpThreadStatus::Streaming);
             if is_streaming {
-                self.thread
+                self.live_thread()
                     .update(cx, |thread, cx| thread.cancel_streaming(cx));
             }
             cx.stop_propagation();
@@ -2176,7 +2314,7 @@ impl AcpChatView {
 
         // ── Cmd+Up/Down → jump between user turns ──────────────
         if modifiers.platform && crate::ui_foundation::is_key_up(key) {
-            let messages = &self.thread.read(cx).messages;
+            let messages = &self.live_thread().read(cx).messages;
             let current_top = self.list_state.logical_scroll_top().item_ix;
             // Find the user message before the current scroll position
             if let Some(target) = messages[..current_top.saturating_sub(1)]
@@ -2190,7 +2328,7 @@ impl AcpChatView {
             return;
         }
         if modifiers.platform && crate::ui_foundation::is_key_down(key) {
-            let messages = &self.thread.read(cx).messages;
+            let messages = &self.live_thread().read(cx).messages;
             let current_top = self.list_state.logical_scroll_top().item_ix;
             // Find the user message after the current scroll position
             let search_start = (current_top + 1).min(messages.len());
@@ -2214,7 +2352,7 @@ impl AcpChatView {
             {
                 // Close picker and clear the "/" prefix
                 self.mention_session = None;
-                self.thread.update(cx, |thread, cx| {
+                self.live_thread().update(cx, |thread, cx| {
                     let text = thread.input.text().to_string();
                     if text.starts_with('/') {
                         thread.input.set_text(String::new());
@@ -2223,7 +2361,7 @@ impl AcpChatView {
                 });
             } else {
                 // Open picker by inserting "/" into input
-                self.thread.update(cx, |thread, cx| {
+                self.live_thread().update(cx, |thread, cx| {
                     thread.input.set_text("/".to_string());
                     cx.notify();
                 });
@@ -2237,7 +2375,7 @@ impl AcpChatView {
         // ── Cmd+Shift+C → copy last response to clipboard ──────
         if modifiers.platform && modifiers.shift && key.eq_ignore_ascii_case("c") {
             let last = self
-                .thread
+                .live_thread()
                 .read(cx)
                 .messages
                 .iter()
@@ -2253,7 +2391,7 @@ impl AcpChatView {
 
         // ── Cmd+N / Cmd+L → new conversation (clear messages, keep session) ──
         if modifiers.platform && (key.eq_ignore_ascii_case("n") || key.eq_ignore_ascii_case("l")) {
-            self.thread.update(cx, |thread, cx| {
+            self.live_thread().update(cx, |thread, cx| {
                 thread.clear_messages(cx);
             });
             self.collapsed_ids.clear();
@@ -2309,12 +2447,12 @@ impl AcpChatView {
                 if let Some(entry) = selected {
                     // Try to load full conversation; fall back to inserting first message
                     if let Some(conv) = super::history::load_conversation(&entry.session_id) {
-                        self.thread.update(cx, |thread, cx| {
+                        self.live_thread().update(cx, |thread, cx| {
                             thread.load_saved_messages(&conv.messages, cx);
                         });
                         self.collapsed_ids.clear();
                     } else {
-                        self.thread.update(cx, |thread, cx| {
+                        self.live_thread().update(cx, |thread, cx| {
                             thread.input.set_text(entry.first_message.clone());
                             cx.notify();
                         });
@@ -2410,7 +2548,7 @@ impl AcpChatView {
 
         // Shift+Enter inserts a newline.
         if crate::ui_foundation::is_key_enter(key) && modifiers.shift {
-            self.thread.update(cx, |thread, cx| {
+            self.live_thread().update(cx, |thread, cx| {
                 thread.input.insert_char('\n');
                 cx.notify();
             });
@@ -2428,7 +2566,7 @@ impl AcpChatView {
         // Enter submits.
         if crate::ui_foundation::is_key_enter(key) && !modifiers.shift {
             self.mention_session = None;
-            let _ = self.thread.update(cx, |thread, cx| thread.submit_input(cx));
+            let _ = self.live_thread().update(cx, |thread, cx| thread.submit_input(cx));
             cx.stop_propagation();
             return;
         }
@@ -2437,7 +2575,7 @@ impl AcpChatView {
         // handle_key requires T: Render, so we extract input, mutate it here,
         // then write it back.
         let key_char = event.keystroke.key_char.as_deref();
-        let mut input_snapshot = self.thread.read(cx).input.clone();
+        let mut input_snapshot = self.live_thread().read(cx).input.clone();
         let handled = input_snapshot.handle_key(
             key,
             key_char,
@@ -2448,7 +2586,7 @@ impl AcpChatView {
         );
 
         if handled {
-            self.thread.update(cx, |thread, cx| {
+            self.live_thread().update(cx, |thread, cx| {
                 thread.input = input_snapshot;
                 cx.notify();
             });
@@ -2469,7 +2607,12 @@ impl Focusable for AcpChatView {
 
 impl Render for AcpChatView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let thread = self.thread.read(cx);
+        // Setup mode: render the inline setup card instead of the chat.
+        if let AcpChatSession::Setup(ref state) = self.session {
+            return self.render_setup_card(state.as_ref()).into_any_element();
+        }
+
+        let thread = self.live_thread().read(cx);
         let status = thread.status;
         let is_empty = thread.messages.is_empty();
         let input_text = thread.input.text().to_string();
@@ -2934,6 +3077,7 @@ impl Render for AcpChatView {
                     cx,
                 ))
             })
+            .into_any_element()
     }
 }
 

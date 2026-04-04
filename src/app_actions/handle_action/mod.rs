@@ -611,14 +611,23 @@ impl ScriptListApp {
         match action_id {
             "acp_copy_last_response" => {
                 let entity = entity.clone();
-                let last_response = entity.read(cx).thread.read(cx).messages.iter().rev().find(
-                    |msg| {
-                        matches!(
-                            msg.role,
-                            crate::ai::acp::thread::AcpThreadMessageRole::Assistant
-                        )
-                    },
-                ).map(|msg| msg.body.to_string());
+                let last_response = {
+                    let view = entity.read(cx);
+                    view.thread().and_then(|thread| {
+                        thread
+                            .read(cx)
+                            .messages
+                            .iter()
+                            .rev()
+                            .find(|msg| {
+                                matches!(
+                                    msg.role,
+                                    crate::ai::acp::thread::AcpThreadMessageRole::Assistant
+                                )
+                            })
+                            .map(|msg| msg.body.to_string())
+                    })
+                };
 
                 if let Some(text) = last_response {
                     cx.write_to_clipboard(gpui::ClipboardItem::new_string(text));
@@ -634,9 +643,11 @@ impl ScriptListApp {
                 // Clear messages but keep the session alive
                 let entity = entity.clone();
                 entity.update(cx, |chat, cx| {
-                    chat.thread.update(cx, |thread, cx| {
-                        thread.clear_messages(cx);
-                    });
+                    if let Some(thread) = chat.thread() {
+                        thread.update(cx, |thread, cx| {
+                            thread.clear_messages(cx);
+                        });
+                    }
                     chat.collapsed_ids.clear();
                     cx.notify();
                 });
@@ -649,14 +660,23 @@ impl ScriptListApp {
                 DispatchOutcome::success()
             }
             "acp_paste_to_frontmost" => {
-                let last_response = entity.read(cx).thread.read(cx).messages.iter().rev().find(
-                    |msg| {
-                        matches!(
-                            msg.role,
-                            crate::ai::acp::thread::AcpThreadMessageRole::Assistant
-                        )
-                    },
-                ).map(|msg| msg.body.to_string());
+                let last_response = {
+                    let view = entity.read(cx);
+                    view.thread().and_then(|thread| {
+                        thread
+                            .read(cx)
+                            .messages
+                            .iter()
+                            .rev()
+                            .find(|msg| {
+                                matches!(
+                                    msg.role,
+                                    crate::ai::acp::thread::AcpThreadMessageRole::Assistant
+                                )
+                            })
+                            .map(|msg| msg.body.to_string())
+                    })
+                };
 
                 if let Some(text) = last_response {
                     // Hide the window so the frontmost app regains focus
@@ -680,36 +700,41 @@ impl ScriptListApp {
             }
             "acp_copy_all_code" => {
                 let entity = entity.clone();
-                let messages = &entity.read(cx).thread.read(cx).messages;
+                let messages = {
+                    let view = entity.read(cx);
+                    view.thread().map(|thread| thread.read(cx).messages.clone())
+                };
                 let mut all_code = String::new();
-                for msg in messages {
-                    if matches!(
-                        msg.role,
-                        crate::ai::acp::thread::AcpThreadMessageRole::Assistant
-                    ) {
-                        // Extract all code blocks from this message
-                        let mut in_block = false;
-                        let mut current = String::new();
-                        for line in msg.body.lines() {
-                            if line.trim_start().starts_with("```") {
-                                if in_block {
-                                    if !current.is_empty() {
-                                        if !all_code.is_empty() {
-                                            all_code.push_str("\n\n");
+                if let Some(messages) = messages {
+                    for msg in &messages {
+                        if matches!(
+                            msg.role,
+                            crate::ai::acp::thread::AcpThreadMessageRole::Assistant
+                        ) {
+                            // Extract all code blocks from this message
+                            let mut in_block = false;
+                            let mut current = String::new();
+                            for line in msg.body.lines() {
+                                if line.trim_start().starts_with("```") {
+                                    if in_block {
+                                        if !current.is_empty() {
+                                            if !all_code.is_empty() {
+                                                all_code.push_str("\n\n");
+                                            }
+                                            all_code.push_str(&current);
                                         }
-                                        all_code.push_str(&current);
+                                        current.clear();
+                                        in_block = false;
+                                    } else {
+                                        in_block = true;
+                                        current.clear();
                                     }
-                                    current.clear();
-                                    in_block = false;
-                                } else {
-                                    in_block = true;
-                                    current.clear();
+                                } else if in_block {
+                                    if !current.is_empty() {
+                                        current.push('\n');
+                                    }
+                                    current.push_str(line);
                                 }
-                            } else if in_block {
-                                if !current.is_empty() {
-                                    current.push('\n');
-                                }
-                                current.push_str(line);
                             }
                         }
                     }
@@ -727,27 +752,32 @@ impl ScriptListApp {
             }
             "acp_retry_last" => {
                 let entity = entity.clone();
-                let last_user_msg = entity
-                    .read(cx)
-                    .thread
-                    .read(cx)
-                    .messages
-                    .iter()
-                    .rev()
-                    .find(|m| {
-                        matches!(
-                            m.role,
-                            crate::ai::acp::thread::AcpThreadMessageRole::User
-                        )
+                let last_user_msg = {
+                    let view = entity.read(cx);
+                    view.thread().and_then(|thread| {
+                        thread
+                            .read(cx)
+                            .messages
+                            .iter()
+                            .rev()
+                            .find(|m| {
+                                matches!(
+                                    m.role,
+                                    crate::ai::acp::thread::AcpThreadMessageRole::User
+                                )
+                            })
+                            .map(|m| m.body.to_string())
                     })
-                    .map(|m| m.body.to_string());
+                };
 
                 if let Some(text) = last_user_msg {
                     entity.update(cx, |chat, cx| {
-                        chat.thread.update(cx, |thread, cx| {
-                            thread.set_input(text, cx);
-                            let _ = thread.submit_input(cx);
-                        });
+                        if let Some(thread) = chat.thread() {
+                            thread.update(cx, |thread, cx| {
+                                thread.set_input(text, cx);
+                                let _ = thread.submit_input(cx);
+                            });
+                        }
                     });
                     DispatchOutcome::success()
                 } else {
@@ -758,20 +788,23 @@ impl ScriptListApp {
             }
             "acp_save_as_script" => {
                 let entity = entity.clone();
-                let last_response = entity
-                    .read(cx)
-                    .thread
-                    .read(cx)
-                    .messages
-                    .iter()
-                    .rev()
-                    .find(|m| {
-                        matches!(
-                            m.role,
-                            crate::ai::acp::thread::AcpThreadMessageRole::Assistant
-                        )
+                let last_response = {
+                    let view = entity.read(cx);
+                    view.thread().and_then(|thread| {
+                        thread
+                            .read(cx)
+                            .messages
+                            .iter()
+                            .rev()
+                            .find(|m| {
+                                matches!(
+                                    m.role,
+                                    crate::ai::acp::thread::AcpThreadMessageRole::Assistant
+                                )
+                            })
+                            .map(|m| m.body.to_string())
                     })
-                    .map(|m| m.body.to_string());
+                };
 
                 if let Some(text) = last_response {
                     let block = extract_last_code_block_with_lang(&text);
@@ -834,20 +867,23 @@ impl ScriptListApp {
             }
             "acp_run_last_code" => {
                 let entity = entity.clone();
-                let last_response = entity
-                    .read(cx)
-                    .thread
-                    .read(cx)
-                    .messages
-                    .iter()
-                    .rev()
-                    .find(|m| {
-                        matches!(
-                            m.role,
-                            crate::ai::acp::thread::AcpThreadMessageRole::Assistant
-                        )
+                let last_response = {
+                    let view = entity.read(cx);
+                    view.thread().and_then(|thread| {
+                        thread
+                            .read(cx)
+                            .messages
+                            .iter()
+                            .rev()
+                            .find(|m| {
+                                matches!(
+                                    m.role,
+                                    crate::ai::acp::thread::AcpThreadMessageRole::Assistant
+                                )
+                            })
+                            .map(|m| m.body.to_string())
                     })
-                    .map(|m| m.body.to_string());
+                };
 
                 if let Some(text) = last_response {
                     if let Some(block) = extract_last_code_block_with_lang(&text) {
@@ -889,12 +925,11 @@ impl ScriptListApp {
                         let cmd = cmd.to_string();
 
                         // Show "running..." message immediately
-                        let thread = entity.read(cx).thread.clone();
+                        let Some(thread) = entity.read(cx).thread() else {
+                            return DispatchOutcome::not_handled();
+                        };
                         thread.update(cx, |t, cx| {
-                            t.push_system_message(
-                                format!("Running `{name}`..."),
-                                cx,
-                            );
+                            t.push_system_message(format!("Running `{name}`..."), cx);
                         });
 
                         // Spawn async execution to avoid blocking the UI
@@ -962,30 +997,40 @@ impl ScriptListApp {
             }
             "acp_export_markdown" => {
                 let entity = entity.clone();
-                let messages = &entity.read(cx).thread.read(cx).messages;
-                let mut md = String::from("# AI Chat Conversation\n\n");
-                for msg in messages {
-                    let role_label = match msg.role {
-                        crate::ai::acp::thread::AcpThreadMessageRole::User => "**You**",
-                        crate::ai::acp::thread::AcpThreadMessageRole::Assistant => "**Claude Code**",
-                        crate::ai::acp::thread::AcpThreadMessageRole::Thought => "**Thinking**",
-                        crate::ai::acp::thread::AcpThreadMessageRole::Tool => "**Tool**",
-                        crate::ai::acp::thread::AcpThreadMessageRole::System => "**System**",
-                        crate::ai::acp::thread::AcpThreadMessageRole::Error => "**Error**",
-                    };
-                    md.push_str(&format!("{role_label}\n\n{}\n\n---\n\n", msg.body));
+                let messages = {
+                    let view = entity.read(cx);
+                    view.thread().map(|thread| thread.read(cx).messages.clone())
+                };
+                if let Some(messages) = messages {
+                    let mut md = String::from("# AI Chat Conversation\n\n");
+                    for msg in &messages {
+                        let role_label = match msg.role {
+                            crate::ai::acp::thread::AcpThreadMessageRole::User => "**You**",
+                            crate::ai::acp::thread::AcpThreadMessageRole::Assistant => "**Claude Code**",
+                            crate::ai::acp::thread::AcpThreadMessageRole::Thought => "**Thinking**",
+                            crate::ai::acp::thread::AcpThreadMessageRole::Tool => "**Tool**",
+                            crate::ai::acp::thread::AcpThreadMessageRole::System => "**System**",
+                            crate::ai::acp::thread::AcpThreadMessageRole::Error => "**Error**",
+                        };
+                        md.push_str(&format!("{role_label}\n\n{}\n\n---\n\n", msg.body));
+                    }
+                    cx.write_to_clipboard(gpui::ClipboardItem::new_string(md));
+                    let mut outcome = DispatchOutcome::success();
+                    outcome.user_message =
+                        Some("Conversation copied as markdown".to_string());
+                    outcome
+                } else {
+                    DispatchOutcome::not_handled()
                 }
-                cx.write_to_clipboard(gpui::ClipboardItem::new_string(md));
-                let mut outcome = DispatchOutcome::success();
-                outcome.user_message =
-                    Some("Conversation copied as markdown".to_string());
-                outcome
             }
             "acp_save_as_note" => {
                 let entity = entity.clone();
-                let messages = &entity.read(cx).thread.read(cx).messages;
+                let messages = {
+                    let view = entity.read(cx);
+                    view.thread().map(|thread| thread.read(cx).messages.clone())
+                };
                 let mut md = String::from("# AI Chat Conversation\n\n");
-                for msg in messages {
+                for msg in messages.unwrap_or_default() {
                     let role_label = match msg.role {
                         crate::ai::acp::thread::AcpThreadMessageRole::User => "**You**",
                         crate::ai::acp::thread::AcpThreadMessageRole::Assistant => "**Assistant**",
@@ -1079,20 +1124,21 @@ impl ScriptListApp {
                 let entity = entity.clone();
                 entity.update(cx, |chat, cx| {
                     // Add all collapsible message IDs to collapsed_ids (which means expanded)
-                    let ids: Vec<u64> = chat
-                        .thread
-                        .read(cx)
-                        .messages
-                        .iter()
-                        .filter(|m| {
-                            matches!(
-                                m.role,
-                                crate::ai::acp::thread::AcpThreadMessageRole::Thought
-                                    | crate::ai::acp::thread::AcpThreadMessageRole::Tool
-                            )
-                        })
-                        .map(|m| m.id)
-                        .collect();
+                    let ids: Vec<u64> = chat.thread().map_or_else(Vec::new, |thread| {
+                        thread
+                            .read(cx)
+                            .messages
+                            .iter()
+                            .filter(|m| {
+                                matches!(
+                                    m.role,
+                                    crate::ai::acp::thread::AcpThreadMessageRole::Thought
+                                        | crate::ai::acp::thread::AcpThreadMessageRole::Tool
+                                )
+                            })
+                            .map(|m| m.id)
+                            .collect()
+                    });
                     for id in ids {
                         chat.collapsed_ids.insert(id);
                     }
@@ -1109,7 +1155,9 @@ impl ScriptListApp {
                 DispatchOutcome::success()
             }
             "acp_detach_window" => {
-                let thread = entity.read(cx).thread.clone();
+                let Some(thread) = entity.read(cx).thread() else {
+                    return DispatchOutcome::not_handled();
+                };
                 let inherit_bounds = match window.window_bounds() {
                     gpui::WindowBounds::Windowed(bounds) => Some(bounds),
                     _ => Some(window.bounds()),

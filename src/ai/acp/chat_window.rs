@@ -432,52 +432,68 @@ fn dispatch_detached_action(entity_weak: &WeakEntity<AcpChatView>, action_id: &s
     match action_id {
         "acp_copy_last_response" => {
             if let Some(entity) = entity_weak.upgrade() {
-                let messages = &entity.read(cx).thread.read(cx).messages;
-                if let Some(last_assistant) = messages
-                    .iter()
-                    .rev()
-                    .find(|m| matches!(m.role, super::thread::AcpThreadMessageRole::Assistant))
-                {
-                    cx.write_to_clipboard(gpui::ClipboardItem::new_string(
-                        last_assistant.body.to_string(),
-                    ));
+                let maybe_last = {
+                    let view = entity.read(cx);
+                    view.thread().and_then(|thread| {
+                        thread
+                            .read(cx)
+                            .messages
+                            .iter()
+                            .rev()
+                            .find(|m| matches!(m.role, super::thread::AcpThreadMessageRole::Assistant))
+                            .map(|m| m.body.to_string())
+                    })
+                };
+                if let Some(last_assistant) = maybe_last {
+                    cx.write_to_clipboard(gpui::ClipboardItem::new_string(last_assistant));
                     tracing::info!(event = "detached_action_copy_last_response");
                 }
             }
         }
         "acp_export_markdown" => {
             if let Some(entity) = entity_weak.upgrade() {
-                let messages = &entity.read(cx).thread.read(cx).messages;
-                let mut md = String::from("# AI Chat Conversation\n\n");
-                for msg in messages {
-                    let role_label = match msg.role {
-                        super::thread::AcpThreadMessageRole::User => "**You**",
-                        super::thread::AcpThreadMessageRole::Assistant => "**Claude Code**",
-                        super::thread::AcpThreadMessageRole::Thought => "**Thinking**",
-                        super::thread::AcpThreadMessageRole::Tool => "**Tool**",
-                        super::thread::AcpThreadMessageRole::System => "**System**",
-                        super::thread::AcpThreadMessageRole::Error => "**Error**",
-                    };
-                    md.push_str(&format!("{role_label}\n\n{}\n\n---\n\n", msg.body));
+                let maybe_markdown = {
+                    let view = entity.read(cx);
+                    view.thread().map(|thread| {
+                        let messages = thread.read(cx).messages.clone();
+                        let mut md = String::from("# AI Chat Conversation\n\n");
+                        for msg in &messages {
+                            let role_label = match msg.role {
+                                super::thread::AcpThreadMessageRole::User => "**You**",
+                                super::thread::AcpThreadMessageRole::Assistant => "**Claude Code**",
+                                super::thread::AcpThreadMessageRole::Thought => "**Thinking**",
+                                super::thread::AcpThreadMessageRole::Tool => "**Tool**",
+                                super::thread::AcpThreadMessageRole::System => "**System**",
+                                super::thread::AcpThreadMessageRole::Error => "**Error**",
+                            };
+                            md.push_str(&format!("{role_label}\n\n{}\n\n---\n\n", msg.body));
+                        }
+                        md
+                    })
+                };
+                if let Some(md) = maybe_markdown {
+                    cx.write_to_clipboard(gpui::ClipboardItem::new_string(md));
+                    tracing::info!(event = "detached_action_export_markdown");
                 }
-                cx.write_to_clipboard(gpui::ClipboardItem::new_string(md));
-                tracing::info!(event = "detached_action_export_markdown");
             }
         }
         "acp_retry_last" => {
             if let Some(entity) = entity_weak.upgrade() {
-                let last_user_msg = entity
-                    .read(cx)
-                    .thread
-                    .read(cx)
-                    .messages
-                    .iter()
-                    .rev()
-                    .find(|m| matches!(m.role, super::thread::AcpThreadMessageRole::User))
-                    .map(|m| m.body.to_string());
+                let last_user_msg = {
+                    let view = entity.read(cx);
+                    view.thread().and_then(|thread| {
+                        thread
+                            .read(cx)
+                            .messages
+                            .iter()
+                            .rev()
+                            .find(|m| matches!(m.role, super::thread::AcpThreadMessageRole::User))
+                            .map(|m| m.body.to_string())
+                    })
+                };
                 if let Some(text) = last_user_msg {
-                    entity.update(cx, |_chat, cx| {
-                        _chat.thread.update(cx, |thread, cx| {
+                    entity.update(cx, |chat, cx| {
+                        chat.live_thread().update(cx, |thread, cx| {
                             thread.set_input(text, cx);
                             let _ = thread.submit_input(cx);
                         });
@@ -489,7 +505,7 @@ fn dispatch_detached_action(entity_weak: &WeakEntity<AcpChatView>, action_id: &s
         "acp_new_conversation" => {
             if let Some(entity) = entity_weak.upgrade() {
                 entity.update(cx, |chat, cx| {
-                    chat.thread.update(cx, |thread, cx| {
+                    chat.live_thread().update(cx, |thread, cx| {
                         thread.clear_messages(cx);
                     });
                     chat.collapsed_ids.clear();
@@ -551,7 +567,7 @@ fn dispatch_detached_action(entity_weak: &WeakEntity<AcpChatView>, action_id: &s
             if let Some(entity) = entity_weak.upgrade() {
                 entity.update(cx, |chat, cx| {
                     let ids: Vec<u64> = chat
-                        .thread
+                        .live_thread()
                         .read(cx)
                         .messages
                         .iter()

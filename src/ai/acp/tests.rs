@@ -434,3 +434,111 @@ fn mention_picker_windowing_wrap_to_first() {
     // Simulate pressing Down from last → wrap to 0
     assert_selected_visible(0, 15);
 }
+
+// =========================================================================
+// 5. ACP preflight and setup mode — source code contracts
+// =========================================================================
+
+#[test]
+fn tab_ai_mode_uses_catalog_loader_not_claude_only_loader() {
+    assert!(
+        TAB_AI_MODE_SOURCE.contains("load_acp_agent_catalog_entries"),
+        "tab_ai_mode must use the catalog loader, not Claude-only config"
+    );
+    assert!(
+        TAB_AI_MODE_SOURCE.contains("resolve_default_acp_launch"),
+        "tab_ai_mode must use preflight resolution"
+    );
+}
+
+#[test]
+fn tab_ai_mode_routes_to_setup_mode_when_blocked() {
+    assert!(
+        TAB_AI_MODE_SOURCE.contains("AcpChatView::new_setup"),
+        "tab_ai_mode must create setup-mode view when agent is blocked"
+    );
+    assert!(
+        TAB_AI_MODE_SOURCE.contains("acp_launch_resolution"),
+        "tab_ai_mode must log launch resolution event"
+    );
+}
+
+#[test]
+fn acp_view_supports_setup_constructor() {
+    const ACP_VIEW_SOURCE: &str = include_str!("view.rs");
+    assert!(
+        ACP_VIEW_SOURCE.contains("fn new_setup"),
+        "AcpChatView must have a new_setup constructor"
+    );
+    assert!(
+        ACP_VIEW_SOURCE.contains("AcpChatSession::Setup"),
+        "AcpChatView must support Setup session state"
+    );
+}
+
+#[test]
+fn acp_view_thread_accessor_returns_option() {
+    const ACP_VIEW_SOURCE: &str = include_str!("view.rs");
+    assert!(
+        ACP_VIEW_SOURCE.contains("fn thread(&self) -> Option<Entity<AcpThread>>"),
+        "AcpChatView must have a thread() method returning Option"
+    );
+}
+
+#[test]
+fn setup_state_from_resolution_covers_all_blockers() {
+    use super::preflight::{AcpLaunchBlocker, AcpLaunchResolution};
+    use super::setup_state::{AcpInlineSetupState, AcpSetupAction};
+
+    let blockers = [
+        AcpLaunchBlocker::NoAgentsAvailable,
+        AcpLaunchBlocker::AgentNotInstalled,
+        AcpLaunchBlocker::AuthenticationRequired,
+        AcpLaunchBlocker::AgentMisconfigured,
+        AcpLaunchBlocker::UnsupportedAgent,
+    ];
+
+    for blocker in &blockers {
+        let resolution = AcpLaunchResolution {
+            selected_agent: None,
+            blocker: Some(blocker.clone()),
+        };
+        let state = AcpInlineSetupState::from_resolution(&resolution);
+        assert!(
+            !state.title.is_empty(),
+            "setup state title must be non-empty for {:?}",
+            blocker
+        );
+        assert!(
+            !state.body.is_empty(),
+            "setup state body must be non-empty for {:?}",
+            blocker
+        );
+    }
+}
+
+#[test]
+fn events_have_setup_required_variant() {
+    const EVENTS_SOURCE: &str = include_str!("events.rs");
+    assert!(
+        EVENTS_SOURCE.contains("SetupRequired"),
+        "AcpEvent must have a SetupRequired variant"
+    );
+}
+
+#[test]
+fn ai_setup_surface_no_longer_mentions_claude_only_copy() {
+    const SETUP_RENDER_SOURCE: &str = include_str!("../../ai/window/render_setup.rs");
+    assert!(
+        SETUP_RENDER_SOURCE.contains("ACP Agent Required"),
+        "setup card title must say ACP Agent Required"
+    );
+    assert!(
+        SETUP_RENDER_SOURCE.contains("Open ACP Agent Catalog"),
+        "setup card must offer Open ACP Agent Catalog"
+    );
+    assert!(
+        !SETUP_RENDER_SOURCE.contains("Connect to Claude Code"),
+        "setup card must NOT mention Claude Code specifically"
+    );
+}
