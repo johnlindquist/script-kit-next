@@ -17,6 +17,8 @@ pub use screenshot_files::{
     tab_ai_screenshot_prefix, TabAiScreenshotFile, TAB_AI_SCREENSHOT_MAX_KEEP,
 };
 
+use std::sync::LazyLock;
+
 use serde::{Deserialize, Serialize};
 
 // ---------------------------------------------------------------------------
@@ -808,6 +810,37 @@ fn should_force_artifact_guidance_for_script_list_submit(
         && has_non_empty_intent
 }
 
+// ---------------------------------------------------------------------------
+// Verification-marker constants and detection
+// ---------------------------------------------------------------------------
+
+const SCRIPT_AUTHORING_SKILL_MARKER: &str =
+    "~/.scriptkit/skills/script-authoring/SKILL.md";
+const BUN_BUILD_VERIFICATION_MARKER: &str =
+    "bun build ~/.scriptkit/kit/main/scripts/<name>.ts --target=bun --outfile ~/.scriptkit/tmp/test-scripts/<name>.verify.mjs";
+const BUN_EXECUTE_VERIFICATION_MARKER: &str =
+    "SK_VERIFY=1 bun ~/.scriptkit/kit/main/scripts/<name>.ts";
+
+/// Structured detection of which verification markers are present in a
+/// guidance block.  Used by both the ACP and PTY telemetry paths so marker
+/// detection cannot drift between surfaces.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct TabAiVerificationGuidanceMarkers {
+    pub includes_script_authoring_skill: bool,
+    pub includes_bun_build_verification: bool,
+    pub includes_bun_execute_verification: bool,
+}
+
+impl TabAiVerificationGuidanceMarkers {
+    pub(crate) fn from_guidance(guidance: &str) -> Self {
+        Self {
+            includes_script_authoring_skill: guidance.contains(SCRIPT_AUTHORING_SKILL_MARKER),
+            includes_bun_build_verification: guidance.contains(BUN_BUILD_VERIFICATION_MARKER),
+            includes_bun_execute_verification: guidance.contains(BUN_EXECUTE_VERIFICATION_MARKER),
+        }
+    }
+}
+
 /// Build the artifact-authoring guidance appendix for a Tab AI submission.
 ///
 /// Returns `Some((guidance_block, forced_by_script_list_submit))` when guidance
@@ -820,7 +853,7 @@ pub(crate) fn build_tab_ai_artifact_authoring_appendix_for_prompt(
     prompt_type: &str,
     effective_intent: Option<&str>,
     mode: TabAiHarnessSubmissionMode,
-) -> Option<(String, bool)> {
+) -> Option<(&'static str, bool)> {
     let effective_intent = effective_intent
         .map(str::trim)
         .filter(|value| !value.is_empty());
@@ -885,17 +918,14 @@ pub(crate) fn build_tab_ai_acp_initial_input_for_prompt(
             TabAiHarnessSubmissionMode::Submit,
         )
     {
+        let markers = TabAiVerificationGuidanceMarkers::from_guidance(guidance);
         TabAiAcpInitialInput {
             text: format!("{guidance}\n\nUser intent:\n{intent}\n"),
             guidance_appended: true,
             forced_by_script_list_submit,
-            includes_script_authoring_skill: guidance
-                .contains("~/.scriptkit/skills/script-authoring/SKILL.md"),
-            includes_bun_build_verification: guidance.contains(
-                "bun build ~/.scriptkit/kit/main/scripts/<name>.ts --target=bun --outfile ~/.scriptkit/tmp/test-scripts/<name>.verify.mjs",
-            ),
-            includes_bun_execute_verification: guidance
-                .contains("SK_VERIFY=1 bun ~/.scriptkit/kit/main/scripts/<name>.ts"),
+            includes_script_authoring_skill: markers.includes_script_authoring_skill,
+            includes_bun_build_verification: markers.includes_bun_build_verification,
+            includes_bun_execute_verification: markers.includes_bun_execute_verification,
         }
     } else {
         TabAiAcpInitialInput {
@@ -917,12 +947,17 @@ pub(crate) fn build_tab_ai_acp_initial_input_for_prompt(
 const TAB_AI_ONE_SHOT_LAUNCHPAD_SOURCE: &str =
     include_str!("../../../kit-init/examples/START_HERE.md");
 
-/// Wrap the canonical launchpad content in delimiters for PTY injection.
-fn build_tab_ai_artifact_authoring_guidance_block() -> String {
+/// Cached guidance block — allocated once on first access.
+static TAB_AI_ARTIFACT_AUTHORING_GUIDANCE_BLOCK: LazyLock<String> = LazyLock::new(|| {
     format!(
         "--- Script Kit artifact authoring guidance ---\n{}\n--- end artifact authoring guidance ---",
         TAB_AI_ONE_SHOT_LAUNCHPAD_SOURCE.trim_end()
     )
+});
+
+/// Wrap the canonical launchpad content in delimiters for PTY injection.
+fn build_tab_ai_artifact_authoring_guidance_block() -> &'static str {
+    TAB_AI_ARTIFACT_AUTHORING_GUIDANCE_BLOCK.as_str()
 }
 
 // ---------------------------------------------------------------------------
@@ -965,19 +1000,16 @@ pub fn build_tab_ai_harness_submission(
             mode,
         )
     {
+        let markers = TabAiVerificationGuidanceMarkers::from_guidance(guidance);
         tracing::info!(
             event = "tab_ai_artifact_authoring_guidance_appended",
             forced_by_script_list_submit,
-            includes_script_authoring_skill = guidance
-                .contains("~/.scriptkit/skills/script-authoring/SKILL.md"),
-            includes_bun_build_verification = guidance.contains(
-                "bun build ~/.scriptkit/kit/main/scripts/<name>.ts --target=bun --outfile ~/.scriptkit/tmp/test-scripts/<name>.verify.mjs"
-            ),
-            includes_bun_execute_verification = guidance
-                .contains("SK_VERIFY=1 bun ~/.scriptkit/kit/main/scripts/<name>.ts"),
+            includes_script_authoring_skill = markers.includes_script_authoring_skill,
+            includes_bun_build_verification = markers.includes_bun_build_verification,
+            includes_bun_execute_verification = markers.includes_bun_execute_verification,
         );
         output.push_str("\n\n");
-        output.push_str(&guidance);
+        output.push_str(guidance);
     }
 
     match effective_intent {
@@ -2831,5 +2863,89 @@ mod cleanup_contract_audits {
             )),
             "build_tab_ai_apply_back_hint must delegate to canonical crate::ai function"
         );
+    }
+
+    // ── Cached guidance block and marker detection tests ─────────────
+
+    #[test]
+    fn guidance_block_is_cached_across_calls() {
+        let first = super::build_tab_ai_artifact_authoring_guidance_block();
+        let second = super::build_tab_ai_artifact_authoring_guidance_block();
+        // Same &'static str means same allocation — LazyLock is doing its job.
+        assert!(std::ptr::eq(first, second));
+    }
+
+    #[test]
+    fn verification_markers_detect_all_three_in_guidance_block() {
+        let guidance = super::build_tab_ai_artifact_authoring_guidance_block();
+        let markers = super::TabAiVerificationGuidanceMarkers::from_guidance(guidance);
+        assert!(
+            markers.includes_script_authoring_skill,
+            "cached guidance must reference the script-authoring skill"
+        );
+        assert!(
+            markers.includes_bun_build_verification,
+            "cached guidance must reference the bun build command"
+        );
+        assert!(
+            markers.includes_bun_execute_verification,
+            "cached guidance must reference the SK_VERIFY bun execute command"
+        );
+    }
+
+    #[test]
+    fn verification_markers_are_all_false_for_non_authoring_text() {
+        let markers = super::TabAiVerificationGuidanceMarkers::from_guidance("rename this file");
+        assert!(!markers.includes_script_authoring_skill);
+        assert!(!markers.includes_bun_build_verification);
+        assert!(!markers.includes_bun_execute_verification);
+    }
+
+    #[test]
+    fn acp_initial_input_authoring_case_appends_guidance_with_all_markers_true() {
+        let input = super::build_tab_ai_acp_initial_input_for_prompt(
+            "ScriptList",
+            "clipboard cleanup",
+        );
+        assert!(input.guidance_appended);
+        assert!(input.forced_by_script_list_submit);
+        assert!(input.includes_script_authoring_skill);
+        assert!(input.includes_bun_build_verification);
+        assert!(input.includes_bun_execute_verification);
+        assert!(input.text.starts_with("--- Script Kit artifact authoring guidance ---"));
+        assert!(input.text.contains("User intent:\nclipboard cleanup"));
+    }
+
+    #[test]
+    fn acp_initial_input_non_authoring_case_omits_guidance_with_all_markers_false() {
+        let input = super::build_tab_ai_acp_initial_input_for_prompt(
+            "FileSearch",
+            "rename this file",
+        );
+        assert!(!input.guidance_appended);
+        assert!(!input.forced_by_script_list_submit);
+        assert!(!input.includes_script_authoring_skill);
+        assert!(!input.includes_bun_build_verification);
+        assert!(!input.includes_bun_execute_verification);
+        assert_eq!(input.text, "rename this file");
+    }
+
+    #[test]
+    fn appendix_builder_returns_static_str_not_fresh_allocation() {
+        let first = super::build_tab_ai_artifact_authoring_appendix_for_prompt(
+            "ScriptList",
+            Some("clipboard cleanup"),
+            super::TabAiHarnessSubmissionMode::Submit,
+        );
+        let second = super::build_tab_ai_artifact_authoring_appendix_for_prompt(
+            "ScriptList",
+            Some("make a snippet"),
+            super::TabAiHarnessSubmissionMode::Submit,
+        );
+        // Both should return the same &'static str pointer.
+        assert!(std::ptr::eq(
+            first.unwrap().0,
+            second.unwrap().0,
+        ));
     }
 }

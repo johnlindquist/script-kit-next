@@ -49,7 +49,334 @@ fn sync_theme_chooser_preview(
     sync_gpui_component_theme_for_theme_with_source(cx, active_theme.as_ref(), source);
 }
 
+#[derive(Debug, Clone, Copy)]
+struct ThemeChooserMatchSummary {
+    catalog_total: usize,
+    catalog_dark: usize,
+    catalog_light: usize,
+    visible_total: usize,
+    visible_dark: usize,
+    visible_light: usize,
+}
+
 impl ScriptListApp {
+    fn theme_chooser_match_summary(
+        filtered_indices: &[usize],
+        presets: &[theme::presets::ThemePreset],
+    ) -> ThemeChooserMatchSummary {
+        let catalog_dark = presets.iter().filter(|preset| preset.is_dark).count();
+        let visible_dark = filtered_indices
+            .iter()
+            .filter(|&&idx| presets[idx].is_dark)
+            .count();
+        ThemeChooserMatchSummary {
+            catalog_total: presets.len(),
+            catalog_dark,
+            catalog_light: presets.len().saturating_sub(catalog_dark),
+            visible_total: filtered_indices.len(),
+            visible_dark,
+            visible_light: filtered_indices.len().saturating_sub(visible_dark),
+        }
+    }
+
+    fn render_theme_chooser_summary_chip(
+        label: impl Into<String>,
+        active: bool,
+        chrome: &theme::AppChromeColors,
+        text_on_accent: u32,
+    ) -> AnyElement {
+        let label = label.into();
+        div()
+            .px(px(8.0))
+            .py(px(4.0))
+            .rounded(px(6.0))
+            .text_xs()
+            .when(active, |d| {
+                d.bg(rgb(chrome.accent_hex))
+                    .text_color(rgb(text_on_accent))
+                    .font_weight(gpui::FontWeight::SEMIBOLD)
+            })
+            .when(!active, |d| {
+                d.bg(rgba(chrome.badge_bg_rgba))
+                    .border_1()
+                    .border_color(rgba(chrome.badge_border_rgba))
+                    .text_color(rgb(chrome.badge_text_hex))
+            })
+            .child(label)
+            .into_any_element()
+    }
+
+    fn render_theme_chooser_summary_strip(
+        summary: ThemeChooserMatchSummary,
+        selected_preset_name: &str,
+        chrome: &theme::AppChromeColors,
+        text_on_accent: u32,
+    ) -> AnyElement {
+        div()
+            .flex()
+            .flex_row()
+            .items_center()
+            .gap(px(6.0))
+            .flex_wrap()
+            .child(Self::render_theme_chooser_summary_chip(
+                format!("{}/{} shown", summary.visible_total, summary.catalog_total),
+                true,
+                chrome,
+                text_on_accent,
+            ))
+            .child(Self::render_theme_chooser_summary_chip(
+                format!("{} dark", summary.visible_dark),
+                false,
+                chrome,
+                text_on_accent,
+            ))
+            .child(Self::render_theme_chooser_summary_chip(
+                format!("{} light", summary.visible_light),
+                false,
+                chrome,
+                text_on_accent,
+            ))
+            .child(Self::render_theme_chooser_summary_chip(
+                selected_preset_name.to_string(),
+                false,
+                chrome,
+                text_on_accent,
+            ))
+            .into_any_element()
+    }
+
+    fn render_theme_chooser_empty_state_body(
+        &self,
+        filter: &str,
+        summary: ThemeChooserMatchSummary,
+        chrome: &theme::AppChromeColors,
+    ) -> AnyElement {
+        let query = if filter.is_empty() {
+            "your search".to_string()
+        } else {
+            format!("\"{}\"", filter)
+        };
+
+        div()
+            .flex_1()
+            .flex()
+            .items_center()
+            .justify_center()
+            .child(
+                div()
+                    .max_w(px(360.0))
+                    .flex()
+                    .flex_col()
+                    .items_center()
+                    .gap(px(10.0))
+                    .child(
+                        div()
+                            .w(px(56.0))
+                            .h(px(10.0))
+                            .rounded(px(5.0))
+                            .bg(rgb(chrome.accent_hex)),
+                    )
+                    .child(
+                        div()
+                            .text_sm()
+                            .font_weight(gpui::FontWeight::SEMIBOLD)
+                            .text_color(rgb(chrome.text_primary_hex))
+                            .child(format!("No themes match {}", query)),
+                    )
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(rgb(chrome.text_muted_hex))
+                            .child("Try a family name like rose, github, nord, or light."),
+                    )
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(rgb(chrome.text_dimmed_hex))
+                            .child(format!(
+                                "{} dark · {} light · {} total presets",
+                                summary.catalog_dark, summary.catalog_light, summary.catalog_total
+                            )),
+                    ),
+            )
+            .into_any_element()
+    }
+
+    fn render_theme_chooser_surface_card(
+        title: &'static str,
+        bg_rgba: u32,
+        border_rgba: u32,
+        text_hex: u32,
+        muted_hex: u32,
+        accent_hex: u32,
+    ) -> AnyElement {
+        div()
+            .min_w(px(116.0))
+            .flex_1()
+            .rounded(px(8.0))
+            .border_1()
+            .border_color(rgba(border_rgba))
+            .bg(rgba(bg_rgba))
+            .p(px(8.0))
+            .flex()
+            .flex_col()
+            .gap(px(6.0))
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(rgb(muted_hex))
+                    .child(title),
+            )
+            .child(
+                div()
+                    .text_sm()
+                    .font_weight(gpui::FontWeight::SEMIBOLD)
+                    .text_color(rgb(text_hex))
+                    .child("Preview Text"),
+            )
+            .child(
+                div()
+                    .w(px(44.0))
+                    .h(px(6.0))
+                    .rounded(px(3.0))
+                    .bg(rgb(accent_hex)),
+            )
+            .into_any_element()
+    }
+
+    fn render_theme_chooser_surface_lab(
+        &self,
+        chrome: &theme::AppChromeColors,
+    ) -> AnyElement {
+        div()
+            .flex()
+            .flex_col()
+            .gap(px(6.0))
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(rgb(chrome.text_muted_hex))
+                    .child("Surface Lab"),
+            )
+            .child(
+                div()
+                    .flex()
+                    .flex_row()
+                    .gap(px(8.0))
+                    .flex_wrap()
+                    .child(Self::render_theme_chooser_surface_card(
+                        "Window",
+                        chrome.window_surface_rgba,
+                        chrome.border_rgba,
+                        chrome.text_primary_hex,
+                        chrome.text_muted_hex,
+                        chrome.accent_hex,
+                    ))
+                    .child(Self::render_theme_chooser_surface_card(
+                        "Preview",
+                        chrome.preview_surface_rgba,
+                        chrome.border_rgba,
+                        chrome.text_primary_hex,
+                        chrome.text_muted_hex,
+                        chrome.accent_hex,
+                    ))
+                    .child(Self::render_theme_chooser_surface_card(
+                        "Panel",
+                        chrome.panel_surface_rgba,
+                        chrome.border_rgba,
+                        chrome.text_primary_hex,
+                        chrome.text_muted_hex,
+                        chrome.accent_hex,
+                    ))
+                    .child(Self::render_theme_chooser_surface_card(
+                        "Input",
+                        chrome.input_active_rgba,
+                        chrome.border_rgba,
+                        chrome.text_primary_hex,
+                        chrome.text_muted_hex,
+                        chrome.accent_hex,
+                    ))
+                    .child(Self::render_theme_chooser_surface_card(
+                        "Log",
+                        chrome.log_panel_surface_rgba,
+                        chrome.border_rgba,
+                        chrome.text_primary_hex,
+                        chrome.text_muted_hex,
+                        chrome.accent_hex,
+                    ))
+                    .child(Self::render_theme_chooser_surface_card(
+                        "Dialog",
+                        chrome.dialog_surface_rgba,
+                        chrome.border_rgba,
+                        chrome.text_primary_hex,
+                        chrome.text_muted_hex,
+                        chrome.accent_hex,
+                    )),
+            )
+            .into_any_element()
+    }
+
+    fn render_theme_chooser_contrast_row(
+        sample: &theme::ThemeContrastSample,
+        chrome: &theme::AppChromeColors,
+    ) -> AnyElement {
+        let status_bg = if sample.passes() {
+            rgba(chrome.accent_badge_bg_rgba)
+        } else {
+            rgba(chrome.hover_rgba)
+        };
+        let status_text = if sample.passes() { "Pass" } else { "Fix" };
+        let status_text_hex = if sample.passes() {
+            chrome.accent_badge_text_hex
+        } else {
+            chrome.text_primary_hex
+        };
+
+        div()
+            .flex()
+            .flex_row()
+            .items_center()
+            .justify_between()
+            .gap(px(8.0))
+            .px(px(8.0))
+            .py(px(6.0))
+            .rounded(px(6.0))
+            .bg(rgba(chrome.badge_bg_rgba))
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap(px(2.0))
+                    .child(
+                        div()
+                            .text_xs()
+                            .font_weight(gpui::FontWeight::SEMIBOLD)
+                            .text_color(rgb(chrome.text_primary_hex))
+                            .child(sample.label),
+                    )
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(rgb(chrome.text_muted_hex))
+                            .child(format!(
+                                "{:.2}:1 minimum {:.1}:1",
+                                sample.ratio, sample.minimum
+                            )),
+                    ),
+            )
+            .child(
+                div()
+                    .px(px(6.0))
+                    .py(px(3.0))
+                    .rounded(px(4.0))
+                    .bg(status_bg)
+                    .text_xs()
+                    .text_color(rgb(status_text_hex))
+                    .child(status_text),
+            )
+            .into_any_element()
+    }
+
     fn contains_ascii_case_insensitive(haystack: &str, needle: &str) -> bool {
         if needle.is_empty() {
             return true;
@@ -217,13 +544,6 @@ impl ScriptListApp {
         let selected_desc_rgba =
             rgba((chrome.text_primary_hex << 8) | crate::list_item::ALPHA_DESC_SELECTED);
         let hint_rgba = (chrome.text_dimmed_hex << 8) | 0xA6;
-
-        tracing::debug!(
-            preset_name,
-            accent_name,
-            accent_hex = chrome.accent_hex,
-            "theme_chooser_live_preview_built"
-        );
 
         div()
             .w_full()
@@ -462,6 +782,13 @@ impl ScriptListApp {
         let filtered_indices = Self::theme_chooser_filtered_indices(filter);
         let filtered_count = filtered_indices.len();
         let filter_is_empty = filter.is_empty();
+
+        let summary = Self::theme_chooser_match_summary(&filtered_indices, presets);
+        let selected_preset_name_early = filtered_indices
+            .get(selected_index)
+            .and_then(|idx| presets.get(*idx))
+            .map(|preset| preset.name)
+            .unwrap_or("Theme Preview");
 
         let row_layout = Self::theme_chooser_row_layout(&design_spacing);
         let entity_handle = cx.entity().downgrade();
@@ -885,24 +1212,28 @@ impl ScriptListApp {
             8,
         );
 
-        // ── Header with search input ───────────────────────────────
+        // ── Header with search input + summary strip ─────────────────
+        let header_divider = div()
+            .mx(px(design_spacing.padding_lg))
+            .h(px(1.0))
+            .bg(divider_bg);
+
         let header = div()
             .w_full()
             .px(px(design_spacing.padding_lg))
             .pt(px(design_spacing.padding_md))
-            .pb(px(4.0))
+            .pb(px(6.0))
             .flex()
             .flex_col()
-            .gap(px(6.0))
-            // Search input (no title — consistent with other UIs)
+            .gap(px(8.0))
             .child(
                 div().flex().flex_row().items_center().child(
                     div().flex_1().flex().flex_row().items_center().child(
                         Input::new(&self.gpui_input_state)
                             .w_full()
-                            .h(px(28.))
-                            .px(px(0.))
-                            .py(px(0.))
+                            .h(px(28.0))
+                            .px(px(0.0))
+                            .py(px(0.0))
                             .with_size(Size::Size(px(design_typography.font_size_xl)))
                             .appearance(false)
                             .bordered(false)
@@ -910,6 +1241,12 @@ impl ScriptListApp {
                     ),
                 ),
             )
+            .child(Self::render_theme_chooser_summary_strip(
+                summary,
+                selected_preset_name_early,
+                &chrome,
+                text_on_accent,
+            ))
             // "DARK" section label only when unfiltered
             .when(filter_is_empty, |d| {
                 d.child(
@@ -1433,6 +1770,37 @@ impl ScriptListApp {
                     .child(Self::render_theme_chooser_semantic_chip("Warn", warning_chip))
                     .child(Self::render_theme_chooser_semantic_chip("Info", info_chip)),
             )
+            // ── Surface Lab ─────────────────────────────────────────
+            .child(self.render_theme_chooser_surface_lab(&chrome))
+            // ── Contrast audit ──────────────────────────────────────
+            .child({
+                let contrast_samples = theme::audit_theme_contrast(self.theme.as_ref());
+                let (contrast_passing, contrast_total) = theme::theme_contrast_score(self.theme.as_ref());
+                let worst_contrast = theme::worst_theme_contrast(self.theme.as_ref());
+
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap(px(4.0))
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(rgb(text_muted))
+                            .child(format!(
+                                "Contrast {}/{} pass · worst {} {:.2}:1",
+                                contrast_passing,
+                                contrast_total,
+                                worst_contrast.label,
+                                worst_contrast.ratio,
+                            )),
+                    )
+                    .children(
+                        contrast_samples
+                            .iter()
+                            .map(|s| Self::render_theme_chooser_contrast_row(s, &chrome))
+                            .collect::<Vec<_>>(),
+                    )
+            })
             // ── Launcher-style live preview (spacing-only separation per spec) ──
             .child(div().h(px(1.0)).bg(divider_bg))
             .child(self.render_theme_chooser_live_preview(
@@ -1461,14 +1829,10 @@ impl ScriptListApp {
                 .track_focus(&self.focus_handle)
                 .on_key_down(handle_key)
                 .child(header)
-                .child(
-                    div().flex_1().flex().items_center().justify_center().child(
-                        div()
-                            .text_sm()
-                            .text_color(rgb(text_muted))
-                            .child("No matching themes"),
-                    ),
-                )
+                .child(header_divider)
+                .child(self.render_theme_chooser_empty_state_body(
+                    filter, summary, &chrome,
+                ))
                 .child(footer)
                 .into_any_element();
         }
@@ -1486,6 +1850,7 @@ impl ScriptListApp {
             .track_focus(&self.focus_handle)
             .on_key_down(handle_key)
             .child(header)
+            .child(header_divider)
             .child(
                 div()
                     .flex_1()
