@@ -63,6 +63,8 @@ pub use gpui_integration::sync_gpui_component_theme;
 const _: fn(u32) -> f32 = relative_luminance_srgb;
 const _: fn() -> &'static [presets::ThemePreset] = presets::presets_cached;
 const _: fn() -> &'static [presets::PresetPreviewColors] = presets::preset_preview_colors_cached;
+const _: fn(usize) -> std::sync::Arc<Theme> = presets::preset_theme_cached;
+const _: fn(&str) -> Vec<usize> = presets::filtered_preset_indices_cached;
 const _: usize = core::mem::size_of::<ListItemColors>();
 const _: fn(u32, u32) -> f32 = contrast_ratio;
 const _: fn(u32) -> u32 = best_readable_text_hex;

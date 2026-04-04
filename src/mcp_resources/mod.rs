@@ -348,7 +348,25 @@ pub struct SdkFunctionRef {
     pub category: String,
 }
 
-/// Describes how a harness can create and run scripts non-interactively.
+/// Mandatory Bun verification contract for final user-authored scripts.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct HarnessVerificationContract {
+    /// Whether verification is mandatory before the agent can report success.
+    pub required: bool,
+    /// Canonical skill file that defines the verification loop.
+    pub skill_path: String,
+    /// Exact Bun syntax-check / transpile command for the final script.
+    pub build_command: String,
+    /// Exact Bun execution command for the final script.
+    pub run_command: String,
+    /// Observable result the agent must confirm after execution.
+    pub success_criteria: String,
+    /// What the agent must do if either Bun command fails.
+    pub failure_policy: String,
+}
+
+/// Describes how a harness can create and verify scripts non-interactively.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct HarnessWorkflow {
@@ -357,7 +375,7 @@ pub struct HarnessWorkflow {
     pub test_script_directory: String,
     /// Dedicated directory for test scriptlet extension files.
     pub test_scriptlet_directory: String,
-    /// Shell command to execute a script non-interactively.
+    /// Shell command to execute a script via the app stdin bridge.
     /// The harness replaces `{path}` with the absolute script path.
     pub run_command: String,
     /// JSONL message the app sends to its stdin to trigger a script run.
@@ -367,6 +385,8 @@ pub struct HarnessWorkflow {
     pub success_output_shape: String,
     /// Shape of an error execution result on stdout (JSONL).
     pub error_output_shape: String,
+    /// Mandatory Bun verification contract for the final user-authored script.
+    pub verification: HarnessVerificationContract,
     /// Example minimal test script content (TypeScript).
     pub example_test_script: String,
     /// Example scriptlet (Markdown) content.
@@ -635,8 +655,16 @@ fn build_harness_workflow() -> HarnessWorkflow {
         test_scriptlet_directory: "~/.scriptkit/tmp/test-scriptlets/".into(),
         run_command: build_harness_run_command(),
         stdin_run_message: r#"{"type":"run","path":"/absolute/path/to/script.ts"}"#.into(),
-        success_output_shape: "No dedicated success envelope is emitted for stdin `run`; successful scripts communicate through their normal stdout JSONL protocol and app logs. The published example script prints {\"ok\":true,\"result\":\"a\"} when executed with SK_VERIFY=1.".into(),
-        error_output_shape: "No dedicated error envelope is emitted for stdin `run`; failures surface through script error protocol messages, app logs, and HUD/toast feedback. Verification failures are expected to be fixed and rerun before success is reported.".into(),
+        success_output_shape: "No dedicated success envelope is emitted for stdin `run`; successful scripts communicate through their normal stdout JSONL protocol and app logs. The mandatory Bun gate for final user scripts is published in `verification`.".into(),
+        error_output_shape: "No dedicated error envelope is emitted for stdin `run`; failures surface through script error protocol messages, app logs, and HUD/toast feedback. If either Bun verification command fails, the agent must fix the script and rerun both commands before reporting success.".into(),
+        verification: HarnessVerificationContract {
+            required: true,
+            skill_path: crate::ai::harness::SCRIPT_AUTHORING_SKILL_MARKER.into(),
+            build_command: crate::ai::harness::BUN_BUILD_VERIFICATION_MARKER.into(),
+            run_command: crate::ai::harness::BUN_EXECUTE_VERIFICATION_MARKER.into(),
+            success_criteria: crate::ai::harness::BUN_VERIFICATION_SUCCESS_CRITERIA.into(),
+            failure_policy: crate::ai::harness::BUN_VERIFICATION_FAILURE_POLICY.into(),
+        },
         example_test_script: concat!(
             "import \"@scriptkit/sdk\";\n",
             "\n",
