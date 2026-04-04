@@ -235,6 +235,20 @@ impl ScriptListApp {
         self.sync_coordinator_to_legacy();
     }
 
+    /// Check if the actions popup was closed very recently (within 300ms).
+    ///
+    /// This guards against a race where clicking the footer ⌘K button causes
+    /// the actions window's activation observer to close the dialog (deferred)
+    /// before the click handler fires `toggle_actions`. Without this debounce
+    /// the toggle would see the dialog as closed and immediately reopen it.
+    pub(crate) fn was_actions_recently_closed(&self) -> bool {
+        const ACTIONS_CLOSE_DEBOUNCE: std::time::Duration =
+            std::time::Duration::from_millis(300);
+        self.actions_closed_at
+            .map(|t| t.elapsed() < ACTIONS_CLOSE_DEBOUNCE)
+            .unwrap_or(false)
+    }
+
     /// Close the actions popup and restore focus based on host type.
     ///
     /// This centralizes close behavior, ensuring cx.notify() is always called
@@ -266,6 +280,7 @@ impl ScriptListApp {
         let callback_restored_focus = overlay_depth_after_on_close < overlay_depth_before_on_close;
 
         self.show_actions_popup = false;
+        self.actions_closed_at = Some(std::time::Instant::now());
         self.actions_dialog = None;
         self.resync_filter_input_after_actions_if_needed(window, cx);
 

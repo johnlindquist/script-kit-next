@@ -148,6 +148,7 @@ impl ScriptListApp {
                     }
 
                     app.show_actions_popup = false;
+                    app.actions_closed_at = Some(std::time::Instant::now());
                     app.actions_dialog = None;
                     app.mark_filter_resync_after_actions_if_needed();
                     app.pop_focus_overlay(cx);
@@ -234,6 +235,13 @@ impl ScriptListApp {
         );
         if self.show_actions_popup || is_actions_window_open() {
             self.close_actions_popup(ActionsDialogHost::MainList, window, cx);
+        } else if self.was_actions_recently_closed() {
+            // The activation-triggered close (focus_lost) already closed the dialog
+            // between mouseDown and the click handler. Suppress reopen.
+            logging::log(
+                "KEY",
+                "Suppressed actions reopen — closed by activation observer within debounce window",
+            );
         } else {
             if !self.has_actions() {
                 return;
@@ -390,6 +398,11 @@ impl ScriptListApp {
         );
         if self.show_actions_popup || is_actions_window_open() {
             self.close_actions_popup(ActionsDialogHost::ArgPrompt, window, cx);
+        } else if self.was_actions_recently_closed() {
+            logging::log(
+                "KEY",
+                "Suppressed arg actions reopen — closed within debounce window",
+            );
         } else {
             // Clone SDK actions early to avoid borrow conflicts
             let sdk_actions_opt = self.sdk_actions.clone();
