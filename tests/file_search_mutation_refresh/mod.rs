@@ -229,8 +229,49 @@ fn parse_directory_path_detects_directory_browse() {
     let parsed = parse_directory_path("~/").expect("~/ must parse");
     assert_eq!(parsed.directory, "~/");
     assert!(parsed.filter.is_none());
+    assert!(!parsed.show_hidden);
 
     let parsed = parse_directory_path("~").expect("~ must parse");
     assert_eq!(parsed.directory, "~/");
     assert!(parsed.filter.is_none());
+    assert!(!parsed.show_hidden);
+}
+
+#[test]
+fn parse_directory_path_enables_hidden_listing_for_dot_navigation() {
+    use script_kit_gpui::file_search::parse_directory_path;
+
+    let parsed = parse_directory_path("~/.").expect("~/. must parse");
+    assert_eq!(parsed.directory, "~/");
+    assert_eq!(parsed.filter.as_deref(), Some("."));
+    assert!(parsed.show_hidden);
+}
+
+#[test]
+fn parse_directory_path_keeps_hidden_listing_inside_hidden_directories() {
+    use script_kit_gpui::file_search::parse_directory_path;
+
+    let unique = format!(
+        "script-kit-hidden-dir-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("system clock should be after unix epoch")
+            .as_nanos()
+    );
+    let temp_dir = std::env::temp_dir().join(unique).join(".hidden");
+    std::fs::create_dir_all(&temp_dir).expect("should create hidden directory");
+
+    let parsed = parse_directory_path(&format!(
+        "{}/",
+        temp_dir.to_str().expect("hidden path should be utf8")
+    ))
+    .expect("hidden directory path must parse");
+    assert!(parsed.show_hidden);
+
+    let _ = std::fs::remove_dir_all(
+        temp_dir
+            .parent()
+            .expect("hidden directory should have a parent"),
+    );
 }

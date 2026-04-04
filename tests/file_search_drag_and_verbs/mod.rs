@@ -554,6 +554,35 @@ fn directory_stream_batches_reapply_active_sort_mode_before_recompute() {
     );
 }
 
+#[test]
+fn directory_stream_batches_keep_auto_selection_pinned_to_first_row() {
+    let source = include_str!("../../src/app_impl/filter_input_change.rs");
+
+    assert!(
+        source.contains("self.file_search_selection_mode == FileSearchSelectionMode::AutoFirst"),
+        "selection restore must branch on file-search selection mode"
+    );
+    assert!(
+        source.contains("let next_index = if pin_to_first_row {\n            0"),
+        "auto selection mode must keep streamed directory updates pinned to the first visible row"
+    );
+}
+
+#[test]
+fn file_search_user_navigation_locks_selection_mode() {
+    let arrow_source = include_str!("../../src/app_impl/startup_new_arrow.rs");
+    let render_source = include_str!("../../src/render_builtins/file_search.rs");
+
+    assert!(
+        arrow_source.contains("this.lock_file_search_selection_to_user_choice();"),
+        "file-search arrow navigation must mark selection as user-owned"
+    );
+    assert!(
+        render_source.contains("this.lock_file_search_selection_to_user_choice();"),
+        "file-search row clicks must mark selection as user-owned"
+    );
+}
+
 // ──────────────────────────────────────────────────────────────────────
 // Sort mode paths emit verification logs
 // ──────────────────────────────────────────────────────────────────────

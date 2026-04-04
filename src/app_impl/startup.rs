@@ -1008,8 +1008,10 @@ impl ScriptListApp {
                                         this.cached_file_results.len()
                                     };
 
+                                    let mut moved_selection = false;
                                     if is_up && *selected_index > 0 {
                                         *selected_index -= 1;
+                                        moved_selection = true;
                                         this.file_search_scroll_handle.scroll_to_item(
                                             *selected_index,
                                             gpui::ScrollStrategy::Nearest,
@@ -1017,11 +1019,15 @@ impl ScriptListApp {
                                         cx.notify();
                                     } else if is_down && *selected_index + 1 < filtered_len {
                                         *selected_index += 1;
+                                        moved_selection = true;
                                         this.file_search_scroll_handle.scroll_to_item(
                                             *selected_index,
                                             gpui::ScrollStrategy::Nearest,
                                         );
                                         cx.notify();
+                                    }
+                                    if moved_selection {
+                                        this.lock_file_search_selection_to_user_choice();
                                     }
                                     // Stop propagation so Input doesn't handle it
                                     cx.stop_propagation();

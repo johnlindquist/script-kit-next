@@ -305,6 +305,7 @@ impl ScriptListApp {
                     // Update query immediately for responsive UI
                     *query = new_text.clone();
                     *selected_index = 0;
+                    self.reset_file_search_selection_mode();
 
                     // Check if this is a directory path with potential filter
                     if let Some(parsed) = crate::file_search::parse_directory_path(&new_text) {
@@ -437,11 +438,19 @@ impl ScriptListApp {
 /// Describes the source of a file search stream.
 #[derive(Clone, Debug)]
 enum FileSearchStreamSource {
-    Directory { dir: String },
+    Directory { dir: String, show_hidden: bool },
     Spotlight { query: String },
 }
 
 impl ScriptListApp {
+    fn reset_file_search_selection_mode(&mut self) {
+        self.file_search_selection_mode = FileSearchSelectionMode::AutoFirst;
+    }
+
+    pub(crate) fn lock_file_search_selection_to_user_choice(&mut self) {
+        self.file_search_selection_mode = FileSearchSelectionMode::UserLockedPath;
+    }
+
     /// Return the path of the currently selected file-search row, if any.
     pub(crate) fn current_file_search_selected_path(&self) -> Option<String> {
         let AppView::FileSearchView { selected_index, .. } = &self.current_view else {
@@ -465,6 +474,7 @@ impl ScriptListApp {
         preferred_path: Option<&str>,
     ) {
         let len = self.file_search_display_indices.len();
+        let pin_to_first_row = self.file_search_selection_mode == FileSearchSelectionMode::AutoFirst;
         let fallback_index = match &self.current_view {
             AppView::FileSearchView { selected_index, .. } if len > 0 => {
                 (*selected_index).min(len.saturating_sub(1))
@@ -472,9 +482,13 @@ impl ScriptListApp {
             _ => 0,
         };
 
-        let next_index = preferred_path
-            .and_then(|path| self.file_search_display_index_for_path(path))
-            .unwrap_or(fallback_index);
+        let next_index = if pin_to_first_row {
+            0
+        } else {
+            preferred_path
+                .and_then(|path| self.file_search_display_index_for_path(path))
+                .unwrap_or(fallback_index)
+        };
 
         if let AppView::FileSearchView { selected_index, .. } = &mut self.current_view {
             *selected_index = if len == 0 { 0 } else { next_index.min(len.saturating_sub(1)) };
@@ -492,6 +506,7 @@ impl ScriptListApp {
         self.file_search_debounce_task = None;
         self.cached_file_results.clear();
         self.file_search_display_indices.clear();
+        self.reset_file_search_selection_mode();
         self.file_search_scroll_handle
             .scroll_to_item(0, ScrollStrategy::Top);
     }
@@ -525,11 +540,12 @@ impl ScriptListApp {
                 let cancel = cancel.clone();
                 let source = source.clone();
                 move || match source {
-                    FileSearchStreamSource::Directory { dir } => {
-                        crate::file_search::list_directory_streaming(
+                    FileSearchStreamSource::Directory { dir, show_hidden } => {
+                        crate::file_search::list_directory_streaming_with_options(
                             &dir,
                             cancel,
                             false,
+                            show_hidden,
                             |event| {
                                 let _ = tx.send(event);
                             },
@@ -715,6 +731,7 @@ impl ScriptListApp {
     ) {
         let gen = self.begin_file_search_session();
         self.file_search_loading = true;
+        self.reset_file_search_selection_mode();
 
         if let Some(parsed) = crate::file_search::parse_directory_path(&query) {
             self.file_search_current_dir = Some(parsed.directory.clone());
@@ -739,6 +756,7 @@ impl ScriptListApp {
                 gen,
                 FileSearchStreamSource::Directory {
                     dir: parsed.directory,
+                    show_hidden: parsed.show_hidden,
                 },
                 presentation,
                 30,

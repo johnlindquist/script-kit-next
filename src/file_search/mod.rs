@@ -227,8 +227,8 @@ pub use crate::scripts::input_detection::is_directory_path;
 #[allow(unused_imports)]
 pub use directory::{
     ensure_trailing_slash, expand_path, list_directory, list_directory_filtered,
-    list_directory_streaming, parent_dir_display, parse_directory_path, shorten_path,
-    ParsedDirPath,
+    list_directory_streaming, list_directory_streaming_with_options, list_directory_with_options,
+    parent_dir_display, parse_directory_path, shorten_path, ParsedDirPath,
 };
 pub use mdfind::{
     new_cancel_token, search_files, search_files_streaming, CancelToken, SearchEvent,
@@ -983,17 +983,63 @@ mod tests {
         assert!(results.is_empty(), "limit=0 should return no results");
     }
     #[test]
-    fn test_list_directory_hides_dotfiles() {
-        // Hidden files (starting with .) should be excluded
+    fn test_list_directory_hides_dotfiles_by_default() {
         let results = list_directory("~", 100);
 
         for result in &results {
             assert!(
                 !result.name.starts_with('.'),
-                "Should not include hidden files: {}",
+                "default listing should not include hidden files: {}",
                 result.name
             );
         }
+    }
+
+    #[test]
+    fn test_list_directory_with_options_can_include_dotfiles() {
+        let unique = format!(
+            "script-kit-file-search-hidden-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock should be after unix epoch")
+                .as_nanos()
+        );
+        let temp_dir = std::env::temp_dir().join(unique);
+        std::fs::create_dir_all(temp_dir.join(".hidden-dir")).expect("should create hidden dir");
+        std::fs::write(temp_dir.join(".hidden-file"), b"hidden").expect("should create dotfile");
+        std::fs::write(temp_dir.join("visible-file"), b"visible").expect("should create file");
+
+        let hidden_results =
+            list_directory_with_options(temp_dir.to_str().expect("utf8 temp path"), 10, true);
+        let hidden_names: Vec<&str> = hidden_results
+            .iter()
+            .map(|result| result.name.as_str())
+            .collect();
+        assert!(
+            hidden_names.contains(&".hidden-dir"),
+            "hidden listing should include hidden directories"
+        );
+        assert!(
+            hidden_names.contains(&".hidden-file"),
+            "hidden listing should include dotfiles"
+        );
+
+        let default_results = list_directory(temp_dir.to_str().expect("utf8 temp path"), 10);
+        let default_names: Vec<&str> = default_results
+            .iter()
+            .map(|result| result.name.as_str())
+            .collect();
+        assert!(
+            !default_names.contains(&".hidden-dir"),
+            "default listing should still hide hidden directories"
+        );
+        assert!(
+            !default_names.contains(&".hidden-file"),
+            "default listing should still hide dotfiles"
+        );
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
     }
     #[test]
     fn test_is_directory_path_reexport() {

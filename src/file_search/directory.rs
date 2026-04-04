@@ -25,6 +25,20 @@ pub fn list_directory_streaming<F>(
     dir_path: &str,
     cancel: CancelToken,
     skip_metadata: bool,
+    on_event: F,
+) where
+    F: FnMut(SearchEvent),
+{
+    list_directory_streaming_with_options(dir_path, cancel, skip_metadata, false, on_event);
+}
+
+/// Streaming directory listing with optional hidden-file visibility.
+#[instrument(skip_all, fields(dir_path = %dir_path, skip_metadata = skip_metadata, show_hidden = show_hidden))]
+pub fn list_directory_streaming_with_options<F>(
+    dir_path: &str,
+    cancel: CancelToken,
+    skip_metadata: bool,
+    show_hidden: bool,
     mut on_event: F,
 ) where
     F: FnMut(SearchEvent),
@@ -82,8 +96,8 @@ pub fn list_directory_streaming<F>(
             .unwrap_or("")
             .to_string();
 
-        // Skip hidden files
-        if name.starts_with('.') {
+        // Skip hidden files unless the query explicitly opted into them.
+        if !show_hidden && name.starts_with('.') {
             continue;
         }
 
@@ -300,6 +314,16 @@ pub fn expand_path(path: &str) -> Option<String> {
 /// Vector of FileResult structs for directory contents
 #[instrument(skip_all, fields(dir_path = %dir_path, limit = limit))]
 pub fn list_directory(dir_path: &str, limit: usize) -> Vec<FileResult> {
+    list_directory_with_options(dir_path, limit, false)
+}
+
+/// List contents of a directory with optional hidden-file visibility.
+#[instrument(skip_all, fields(dir_path = %dir_path, limit = limit, show_hidden = show_hidden))]
+pub fn list_directory_with_options(
+    dir_path: &str,
+    limit: usize,
+    show_hidden: bool,
+) -> Vec<FileResult> {
     debug!("Starting directory listing");
 
     let effective_limit = limit.min(MAX_DIRECTORY_ENTRIES);
@@ -349,8 +373,8 @@ pub fn list_directory(dir_path: &str, limit: usize) -> Vec<FileResult> {
             .unwrap_or("")
             .to_string();
 
-        // Skip hidden files (starting with .)
-        if name.starts_with('.') {
+        // Skip hidden files unless the query explicitly opted into them.
+        if !show_hidden && name.starts_with('.') {
             continue;
         }
 
@@ -405,6 +429,8 @@ pub struct ParsedDirPath {
     pub directory: String,
     /// Optional filter pattern (the part after the last /)
     pub filter: Option<String>,
+    /// Whether this query should include hidden entries in the directory listing.
+    pub show_hidden: bool,
 }
 
 /// Parse a directory path into its directory component and optional filter
@@ -422,6 +448,7 @@ pub struct ParsedDirPath {
 #[instrument(skip_all, fields(path = %path))]
 pub fn parse_directory_path(path: &str) -> Option<ParsedDirPath> {
     let trimmed = path.trim();
+    let show_hidden_for_path = path_requests_hidden_entries(trimmed, None);
 
     // Must be a directory-style path
     if !crate::scripts::input_detection::is_directory_path(trimmed) {
@@ -433,6 +460,7 @@ pub fn parse_directory_path(path: &str) -> Option<ParsedDirPath> {
         return Some(ParsedDirPath {
             directory: "~/".to_string(),
             filter: None,
+            show_hidden: show_hidden_for_path,
         });
     }
 
@@ -445,6 +473,7 @@ pub fn parse_directory_path(path: &str) -> Option<ParsedDirPath> {
                 return Some(ParsedDirPath {
                     directory: trimmed.to_string(),
                     filter: None,
+                    show_hidden: path_requests_hidden_entries(trimmed, None),
                 });
             }
         }
@@ -472,15 +501,27 @@ pub fn parse_directory_path(path: &str) -> Option<ParsedDirPath> {
                 } else {
                     Some(potential_filter.to_string())
                 };
+                let show_hidden = path_requests_hidden_entries(trimmed, filter.as_deref());
                 return Some(ParsedDirPath {
                     directory: parent.to_string(),
                     filter,
+                    show_hidden,
                 });
             }
         }
     }
 
     None
+}
+
+fn path_requests_hidden_entries(path: &str, filter: Option<&str>) -> bool {
+    filter.is_some_and(|value| value.starts_with('.')) || path_contains_hidden_component(path)
+}
+
+fn path_contains_hidden_component(path: &str) -> bool {
+    path.split('/').any(|segment| {
+        !segment.is_empty() && segment != "." && segment != ".." && segment.starts_with('.')
+    })
 }
 
 /// List directory contents with optional filter applied
@@ -503,7 +544,8 @@ pub fn list_directory_filtered(
     limit: usize,
 ) -> Vec<FileResult> {
     // First get additional entries so filtering can still return enough matches.
-    let mut results = list_directory(dir_path, limit.saturating_mul(2));
+    let show_hidden = path_requests_hidden_entries(dir_path, filter);
+    let mut results = list_directory_with_options(dir_path, limit.saturating_mul(2), show_hidden);
 
     // Apply filter if present
     if let Some(filter_str) = filter {
