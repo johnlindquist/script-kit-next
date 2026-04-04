@@ -142,15 +142,26 @@ fn normalize_display_shortcut_maps_cmd_i_symbols() {
     let fn_start = source
         .find("fn normalize_display_shortcut")
         .expect("normalize_display_shortcut function not found");
-    let fn_body = &source[fn_start..];
+    let after_start = &source[fn_start..];
+    let fn_end = after_start
+        .find("\n    fn ")
+        .map(|offset| fn_start + offset)
+        .unwrap_or(source.len());
+    let fn_body = &source[fn_start..fn_end];
 
+    // The shared canonicalizer in hint_strip.rs handles ⌘→cmd mapping and modifier sorting.
+    // Verify normalize_display_shortcut delegates to the shared path.
     assert!(
-        fn_body.contains("'⌘' => parts.push(\"cmd\")"),
-        "normalize_display_shortcut must map ⌘ to cmd"
+        fn_body.contains("canonical_shortcut_hint"),
+        "normalize_display_shortcut must delegate to the shared canonical_shortcut_hint"
     );
     assert!(
-        fn_body.contains("parts.sort()"),
-        "normalize_display_shortcut must sort modifiers for deterministic comparison"
+        fn_body.contains("crate::components::hint_strip::canonical_shortcut_hint(hint)"),
+        "normalize_display_shortcut must return the shared canonical shortcut value directly"
+    );
+    assert!(
+        !fn_body.contains("'⌘' => parts.push(\"cmd\")"),
+        "normalize_display_shortcut should not duplicate local symbol parsing"
     );
 }
 

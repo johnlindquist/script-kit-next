@@ -183,6 +183,7 @@ impl ScriptListApp {
         entity: Entity<DropPrompt>,
         cx: &mut Context<Self>,
     ) -> AnyElement {
+        tracing::info!(surface = "render_prompts::drop", "prompt_surface_rendered");
         crate::components::emit_prompt_chrome_audit(
             &crate::components::PromptChromeAudit::minimal_list(
                 "render_prompts::drop",
@@ -199,6 +200,7 @@ impl ScriptListApp {
         entity: Entity<TemplatePrompt>,
         cx: &mut Context<Self>,
     ) -> AnyElement {
+        tracing::info!(surface = "render_prompts::template", "prompt_surface_rendered");
         crate::components::emit_prompt_chrome_audit(
             &crate::components::PromptChromeAudit::minimal_list(
                 "render_prompts::template",
@@ -263,6 +265,7 @@ impl ScriptListApp {
         entity: Entity<prompts::NamingPrompt>,
         cx: &mut Context<Self>,
     ) -> AnyElement {
+        tracing::info!(surface = "render_prompts::naming", "prompt_surface_rendered");
         crate::components::emit_prompt_chrome_audit(
             &crate::components::PromptChromeAudit::minimal_list(
                 "render_prompts::naming",

@@ -518,6 +518,30 @@ fn audit_app_chrome_surface_contrast() {
                 min_ratio: 4.5,
             },
             ContrastCheck {
+                pair: "primary/preview_surface",
+                fg: chrome.text_primary_hex,
+                bg: composite_rgba(chrome.preview_surface_rgba, bg),
+                min_ratio: 4.5,
+            },
+            ContrastCheck {
+                pair: "primary/panel_surface",
+                fg: chrome.text_primary_hex,
+                bg: composite_rgba(chrome.panel_surface_rgba, bg),
+                min_ratio: 4.5,
+            },
+            ContrastCheck {
+                pair: "primary/dialog_surface",
+                fg: chrome.text_primary_hex,
+                bg: composite_rgba(chrome.dialog_surface_rgba, bg),
+                min_ratio: 4.5,
+            },
+            ContrastCheck {
+                pair: "primary/log_surface",
+                fg: chrome.text_primary_hex,
+                bg: composite_rgba(chrome.log_panel_surface_rgba, bg),
+                min_ratio: 4.5,
+            },
+            ContrastCheck {
                 pair: "primary/selection_surface",
                 fg: chrome.text_primary_hex,
                 bg: composite_rgba(chrome.selection_rgba, bg),

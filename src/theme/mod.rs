@@ -47,7 +47,7 @@ pub use helpers::{
 };
 
 // Re-export color resolver for unified color access
-pub use color_resolver::{ColorResolver, SpacingResolver, TypographyResolver};
+pub use color_resolver::{ColorResolver, SpacingResolver, SurfaceColorStrategy, TypographyResolver};
 
 // Re-export loader functions
 pub use types::load_theme;

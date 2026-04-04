@@ -1,3 +1,4 @@
+use super::chrome::AppChromeColors;
 use super::{best_readable_text_hex, contrast_ratio, Theme};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -41,9 +42,17 @@ fn composite_over(fg_hex: u32, alpha: f32, bg_hex: u32) -> u32 {
     (r << 16) | (g << 8) | b
 }
 
+/// Composite a 0xRRGGBBAA value over an opaque 0xRRGGBB background.
+fn composite_rgba_over(rgba_hex: u32, bg_hex: u32) -> u32 {
+    let fg_hex = rgba_hex >> 8;
+    let alpha = (rgba_hex & 0xFF) as f32 / 255.0;
+    composite_over(fg_hex, alpha, bg_hex)
+}
+
 pub fn audit_theme_contrast(theme: &Theme) -> Vec<ThemeContrastSample> {
     let colors = &theme.colors;
     let opacity = theme.get_opacity();
+    let chrome = AppChromeColors::from_theme(theme);
 
     // Composited selection background: selected_subtle at opacity.selected over bg.main
     let selection_bg = composite_over(
@@ -52,7 +61,16 @@ pub fn audit_theme_contrast(theme: &Theme) -> Vec<ThemeContrastSample> {
         colors.background.main,
     );
 
-    vec![
+    // Resolved chrome surfaces composited over the main background
+    let surface_window = composite_rgba_over(chrome.window_surface_rgba, colors.background.main);
+    let surface_input = composite_rgba_over(chrome.input_surface_rgba, colors.background.main);
+    let surface_preview = composite_rgba_over(chrome.preview_surface_rgba, colors.background.main);
+    let surface_panel = composite_rgba_over(chrome.panel_surface_rgba, colors.background.main);
+    let surface_dialog = composite_rgba_over(chrome.dialog_surface_rgba, colors.background.main);
+    let surface_log = composite_rgba_over(chrome.log_panel_surface_rgba, colors.background.main);
+    let badge_bg = composite_rgba_over(chrome.badge_bg_rgba, colors.background.main);
+
+    let samples = vec![
         // ── Window surface ──────────────────────────────────────
         sample(
             "window.primary",
@@ -113,6 +131,44 @@ pub fn audit_theme_contrast(theme: &Theme) -> Vec<ThemeContrastSample> {
             colors.background.main,
             1.2,
         ),
+        // ── Resolved chrome surfaces ────────────────────────────
+        sample(
+            "surface.window.primary",
+            colors.text.primary,
+            surface_window,
+            4.5,
+        ),
+        sample(
+            "surface.input.primary",
+            colors.text.primary,
+            surface_input,
+            4.5,
+        ),
+        sample(
+            "surface.preview.primary",
+            colors.text.primary,
+            surface_preview,
+            4.5,
+        ),
+        sample(
+            "surface.panel.primary",
+            colors.text.primary,
+            surface_panel,
+            4.5,
+        ),
+        sample(
+            "surface.dialog.primary",
+            colors.text.primary,
+            surface_dialog,
+            4.5,
+        ),
+        sample(
+            "surface.log.primary",
+            colors.text.primary,
+            surface_log,
+            4.5,
+        ),
+        sample("badge.text", chrome.badge_text_hex, badge_bg, 3.0),
         // ── Semantic status colors ──────────────────────────────
         sample(
             "success.auto_text",
@@ -138,7 +194,9 @@ pub fn audit_theme_contrast(theme: &Theme) -> Vec<ThemeContrastSample> {
             colors.ui.info,
             4.5,
         ),
-    ]
+    ];
+
+    samples
 }
 
 pub fn worst_theme_contrast(theme: &Theme) -> ThemeContrastSample {
@@ -167,7 +225,7 @@ mod tests {
     fn default_dark_theme_has_expected_sample_count() {
         let theme = Theme::dark_default();
         let samples = audit_theme_contrast(&theme);
-        assert_eq!(samples.len(), 14);
+        assert_eq!(samples.len(), 21);
     }
 
     #[test]

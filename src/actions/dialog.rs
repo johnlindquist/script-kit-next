@@ -2038,21 +2038,26 @@ impl Render for ActionsDialog {
                                         } else {
                                             secondary_text
                                         };
-                                        // Shortcut color: whisper-chrome preset from shared renderer
-                                        let mut shortcut_color =
-                                            if design_variant == DesignVariant::Default {
-                                                rgb(this.theme.colors.text.secondary)
-                                            } else {
-                                                dimmed_text
-                                            };
+                                        // Shortcut chrome stays whisper-muted even on destructive rows.
+                                        // The destructive signal belongs on the action label/icon, not the shortcut.
+                                        let shortcut_glyph_color = if is_selected {
+                                            secondary_text
+                                        } else {
+                                            dimmed_text
+                                        };
+                                        let shortcut_chrome_color = dimmed_text;
 
                                         let title_color = if is_destructive {
                                             destructive_text
                                         } else {
                                             title_color
                                         };
-                                        if is_destructive {
-                                            shortcut_color = destructive_text;
+
+                                        if is_destructive && style.shortcut_visible && action.shortcut.is_some() {
+                                            crate::components::hint_strip::emit_shortcut_chrome_audit(
+                                                "actions_dialog_destructive_shortcut",
+                                                "neutral-muted",
+                                            );
                                         }
 
                                         let selection_dot_color =
@@ -2203,12 +2208,8 @@ impl Render for ActionsDialog {
                                                     crate::components::hint_strip::render_inline_shortcut_keys(
                                                         shortcut_tokens.iter().map(String::as_str),
                                                         crate::components::hint_strip::whisper_inline_shortcut_colors(
-                                                            shortcut_color.into(),
-                                                            if is_destructive {
-                                                                destructive_text.into()
-                                                            } else {
-                                                                dimmed_text.into()
-                                                            },
+                                                            shortcut_glyph_color.into(),
+                                                            shortcut_chrome_color.into(),
                                                             true,
                                                         ),
                                                     ),

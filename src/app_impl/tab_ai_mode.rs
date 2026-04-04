@@ -198,11 +198,44 @@ impl ScriptListApp {
         plan: crate::ai::TabAiQuickSubmitPlan,
         cx: &mut Context<Self>,
     ) {
-        let prompt_type = self
+        let source_view = self
             .tab_ai_harness_return_view
-            .as_ref()
-            .map(|view| app_view_to_prompt_type_str(view))
-            .unwrap_or("QuickTerminal");
+            .clone()
+            .unwrap_or(AppView::ScriptList);
+        let prompt_type = app_view_to_prompt_type_str(&source_view);
+
+        let surface_preference = crate::ai::harness::tab_ai_surface_preference_for_prompt(
+            prompt_type,
+            Some(plan.submission_intent()),
+            crate::ai::TabAiHarnessSubmissionMode::Submit,
+        );
+
+        if surface_preference.use_quick_terminal {
+            tracing::info!(
+                target: "script_kit::tab_ai",
+                event = "tab_ai_quick_submit_acp_live_rerouted",
+                surface = "quick_terminal",
+                reason = "script_verification_required",
+                prompt_type = prompt_type,
+                source = ?plan.source,
+                kind = ?plan.kind,
+                capture_kind = %plan.capture_kind,
+                includes_script_authoring_skill = surface_preference.includes_script_authoring_skill,
+                includes_bun_build_verification = surface_preference.includes_bun_build_verification,
+                includes_bun_execute_verification = surface_preference.includes_bun_execute_verification,
+            );
+
+            let capture_kind = plan.capture_kind_enum();
+            let entry_intent = Some(plan.submission_intent().to_string());
+            self.begin_tab_ai_harness_entry_from_source_view(
+                source_view,
+                entry_intent,
+                Some(plan),
+                capture_kind,
+                cx,
+            );
+            return;
+        }
 
         let initial_input = crate::ai::harness::build_tab_ai_acp_initial_input_for_prompt(
             prompt_type,
@@ -511,7 +544,29 @@ impl ScriptListApp {
         capture_kind: crate::ai::TabAiCaptureKind,
         cx: &mut Context<Self>,
     ) {
-        let source_view = self.current_view.clone();
+        self.begin_tab_ai_harness_entry_from_source_view(
+            self.current_view.clone(),
+            entry_intent,
+            quick_submit_plan,
+            capture_kind,
+            cx,
+        );
+    }
+
+    /// Deferred-capture entry point with an explicit source view.
+    ///
+    /// This is the inner implementation that `begin_tab_ai_harness_entry`
+    /// delegates to. The `source_view` parameter allows callers like the
+    /// ACP live-submit reroute to preserve the original source surface
+    /// instead of using `self.current_view` (which may already be ACP).
+    fn begin_tab_ai_harness_entry_from_source_view(
+        &mut self,
+        source_view: AppView,
+        entry_intent: Option<String>,
+        quick_submit_plan: Option<crate::ai::TabAiQuickSubmitPlan>,
+        capture_kind: crate::ai::TabAiCaptureKind,
+        cx: &mut Context<Self>,
+    ) {
         let snapshot_started_at = std::time::Instant::now();
         let (ui_snapshot, invocation_receipt) =
             if matches!(source_view, AppView::ScriptList) {

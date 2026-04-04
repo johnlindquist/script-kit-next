@@ -173,9 +173,11 @@ impl ScriptListApp {
         let design_visual = tokens.visual();
 
         // Unified color, typography, and spacing resolution
-        let color_resolver = crate::theme::ColorResolver::new_theme_first(&self.theme, self.current_design);
+        // Shell uses theme-first so non-default design variants keep the active
+        // theme's colors while still using the variant's spacing and shape tokens.
+        let color_resolver = crate::theme::ColorResolver::new_for_shell(&self.theme, self.current_design);
         let typography_resolver =
-            crate::theme::TypographyResolver::new(&self.theme, self.current_design);
+            crate::theme::TypographyResolver::new_theme_first(&self.theme, self.current_design);
         let spacing_resolver = crate::theme::SpacingResolver::new(self.current_design);
 
         // For Default design, use header constants; for others, use spacing resolver

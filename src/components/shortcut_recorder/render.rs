@@ -95,7 +95,6 @@ impl Render for ShortcutRecorder {
                     .child(
                         Button::new("Cancel", button_colors)
                             .variant(ButtonVariant::Ghost)
-                            .shortcut("Esc")
                             .on_click(Box::new(move |event, window, cx| {
                                 cancel_handler(event, window, cx);
                             })),
@@ -103,7 +102,6 @@ impl Render for ShortcutRecorder {
                     .child(
                         Button::new("Save", button_colors)
                             .variant(ButtonVariant::Primary)
-                            .shortcut("↵")
                             .disabled(!can_save)
                             .on_click(Box::new(move |event, window, cx| {
                                 save_handler(event, window, cx);
@@ -193,7 +191,8 @@ impl Render for ShortcutRecorder {
             .child(self.render_key_display())
             .child(self.render_conflict_warning())
             .child(instructions)
-            .child(buttons);
+            .child(buttons)
+            .child(self.render_footer_shortcuts());
 
         // Full-screen overlay with backdrop and centered modal
         // The overlay captures ALL keyboard and modifier events while open

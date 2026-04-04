@@ -1,5 +1,6 @@
 use super::*;
 use crate::components::{FocusablePrompt, FocusablePromptInterceptedKey};
+use crate::theme::AppChromeColors;
 
 impl Focusable for EnvPrompt {
     fn focus_handle(&self, _cx: &gpui::App) -> FocusHandle {
@@ -9,16 +10,15 @@ impl Focusable for EnvPrompt {
 
 impl Render for EnvPrompt {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let tokens = get_tokens(self.design_variant);
-        let design_colors = tokens.colors();
-        let design_typography = tokens.typography();
+        let chrome = AppChromeColors::from_theme(&self.theme);
 
-        // Use design tokens for consistent styling
-        let text_primary = design_colors.text_primary;
-        let text_muted = design_colors.text_muted;
-        let accent_color = design_colors.accent;
-        let success_color = design_colors.success;
-        let error_color = design_colors.error;
+        let text_primary = chrome.text_primary_hex;
+        let text_muted = chrome.text_muted_hex;
+        let accent_color = chrome.accent_hex;
+
+        // Error/success from theme UI colors
+        let success_color = self.theme.colors.ui.success;
+        let error_color = self.theme.colors.ui.error;
 
         // Build placeholder text for input
         let input_placeholder: SharedString =
@@ -42,7 +42,7 @@ impl Render for EnvPrompt {
             .w_full()
             .h_full()
             .text_color(rgb(text_primary))
-            .font_family(design_typography.font_family)
+            .font_family(crate::list_item::FONT_MONO)
             // Main content area - centered vertically
             .child(
                 div()
@@ -61,7 +61,12 @@ impl Render for EnvPrompt {
                             .items_center()
                             .justify_center()
                             .rounded(px(16.))
-                            .bg(rgba(accent_color << 8 | 0x20)) // Accent with low alpha
+                            .bg(rgba(
+                                crate::ui_foundation::hex_to_rgba_with_opacity(
+                                    accent_color,
+                                    crate::theme::opacity::OPACITY_SUBTLE,
+                                ),
+                            ))
                             .child(
                                 svg()
                                     .external_path(if self.secret {
@@ -311,5 +316,27 @@ impl Render for EnvPrompt {
                     }
                 },
             )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn env_render_has_no_prompt_footer_or_hardcoded_hex() {
+        const SOURCE: &str = include_str!("render.rs");
+        let render_fn_end = SOURCE.find("#[cfg(test)]").unwrap_or(SOURCE.len());
+        let render_code = &SOURCE[..render_fn_end];
+        assert!(
+            !render_code.contains("PromptFooter::new("),
+            "env render should not use PromptFooter"
+        );
+        assert!(
+            !render_code.contains("rgb(0x"),
+            "env render should not use hardcoded rgb(0x...) hex colors"
+        );
+        assert!(
+            !render_code.contains("rgba(0x"),
+            "env render should not use hardcoded rgba(0x...) hex colors"
+        );
     }
 }

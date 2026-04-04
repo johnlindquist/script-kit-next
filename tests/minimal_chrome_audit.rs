@@ -110,3 +110,35 @@ fn file_search_uses_shared_expanded_view_contract() {
 
     eprintln!("{{\"audit\":\"expanded_contract\",\"surface\":\"file_search\",\"scaffold_used\":true,\"layout_mode\":\"expanded\",\"divider_absent\":true,\"status\":\"pass\"}}");
 }
+
+#[test]
+fn editor_choice_popup_has_no_box_card_chrome() {
+    let source = include_str!("../src/editor/mod.rs");
+    assert!(
+        !source.contains(".rounded_md()"),
+        "editor choice popup should not use rounded card chrome"
+    );
+    assert!(
+        !source.contains(".border_1()"),
+        "editor choice popup should not use bordered card chrome"
+    );
+    eprintln!("{{\"audit\":\"minimal_chrome\",\"surface\":\"editor_choice_popup\",\"border_absent\":true,\"rounded_absent\":true,\"status\":\"pass\"}}");
+}
+
+#[test]
+fn form_prompt_wrapper_has_no_prompt_footer_or_hardcoded_hex() {
+    let source = include_str!("../src/render_prompts/form/render.rs");
+    assert!(
+        !source.contains("PromptFooter::new("),
+        "form prompt wrapper should not use PromptFooter"
+    );
+    assert!(
+        !source.contains("rgb(0x"),
+        "form prompt wrapper should not contain hardcoded hex rgb colors"
+    );
+    assert!(
+        !source.contains("rgba(0x"),
+        "form prompt wrapper should not contain hardcoded hex rgba colors"
+    );
+    eprintln!("{{\"audit\":\"minimal_chrome\",\"surface\":\"form_prompt\",\"footer_absent\":true,\"hardcoded_hex_absent\":true,\"status\":\"pass\"}}");
+}

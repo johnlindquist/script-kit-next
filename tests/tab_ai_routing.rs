@@ -4373,6 +4373,37 @@ fn harness_verification_markers_are_used_in_from_guidance() {
 }
 
 // =========================================================================
+// Regression: ACP live quick-submit reroutes verification requests
+// =========================================================================
+
+#[test]
+fn acp_live_quick_submit_reroutes_verification_bearing_requests_to_quick_terminal() {
+    let fn_start = TAB_AI_MODE_SOURCE
+        .find("fn submit_live_acp_tab_ai_from_plan(")
+        .expect("submit_live_acp_tab_ai_from_plan must exist");
+    let fn_body = &TAB_AI_MODE_SOURCE[fn_start..];
+    let next_fn = fn_body[1..].find("\n    fn ").unwrap_or(fn_body.len());
+    let fn_body = &fn_body[..next_fn];
+
+    assert!(
+        fn_body.contains("tab_ai_surface_preference_for_prompt"),
+        "live ACP quick submit must compute surface preference from the shared markers"
+    );
+    assert!(
+        fn_body.contains("if surface_preference.use_quick_terminal"),
+        "live ACP quick submit must reroute verification-bearing requests to the terminal"
+    );
+    assert!(
+        fn_body.contains("begin_tab_ai_harness_entry_from_source_view"),
+        "rerouted ACP quick submit must preserve the original source view"
+    );
+    assert!(
+        fn_body.contains(r#"event = "tab_ai_quick_submit_acp_live_rerouted""#),
+        "rerouted ACP quick submit must emit a dedicated log event"
+    );
+}
+
+// =========================================================================
 // Regression: unit tests for surface preference exist in harness module
 // =========================================================================
 

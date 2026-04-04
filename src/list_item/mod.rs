@@ -1235,7 +1235,7 @@ impl RenderOnce for ListItem {
             if show_shortcut {
                 crate::components::hint_strip::emit_shortcut_chrome_audit(
                     "list_item",
-                    "compact-inline",
+                    "compact-inline-whisper",
                 );
                 let shortcut_tokens =
                     crate::components::hint_strip::shortcut_tokens_from_hint(sc.as_str());
@@ -1244,23 +1244,14 @@ impl RenderOnce for ListItem {
                 } else {
                     rgba((colors.text_muted << 8) | ALPHA_READABLE)
                 };
-                let keycap_bg = if is_filtering {
-                    rgba((colors.text_dimmed << 8) | 0x10)
-                } else {
-                    rgba((colors.text_dimmed << 8) | 0x18)
-                };
-                let keycap_border = if is_filtering {
-                    None
-                } else {
-                    Some(rgba((colors.text_dimmed << 8) | 0x28).into())
-                };
+                let chrome_color = rgba((colors.text_dimmed << 8) | 0xFF);
                 crate::components::hint_strip::render_inline_shortcut_keys(
                     shortcut_tokens.iter().map(String::as_str),
-                    crate::components::hint_strip::InlineShortcutColors {
-                        glyph: glyph_color.into(),
-                        keycap_bg: keycap_bg.into(),
-                        keycap_border,
-                    },
+                    crate::components::hint_strip::whisper_inline_shortcut_colors(
+                        glyph_color.into(),
+                        chrome_color.into(),
+                        !is_filtering,
+                    ),
                 )
             } else {
                 div().into_any_element()

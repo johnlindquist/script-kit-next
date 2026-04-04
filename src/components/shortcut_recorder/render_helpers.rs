@@ -58,11 +58,62 @@ impl ShortcutRecorder {
             .flex()
             .items_center()
             .justify_center()
-            .bg(rgba((colors.key_display_bg << 8) | 0x38))
-            .rounded(px(6.))
+            .bg(rgba((colors.key_display_bg << 8) | 0x18))
+            .rounded(px(8.))
             .border_1()
-            .border_color(rgba((colors.border << 8) | 0x28))
+            .border_color(rgba((colors.border << 8) | 0x1C))
             .child(content)
+    }
+
+    /// Render a compact footer strip: ⎋ Cancel • ↵ Save
+    pub(super) fn render_footer_shortcuts(&self) -> gpui::AnyElement {
+        let colors = self.colors;
+
+        crate::components::hint_strip::emit_shortcut_chrome_audit(
+            "shortcut_recorder_footer",
+            "compact-inline",
+        );
+
+        let hint = |keys: &[&str], label: &'static str| -> gpui::AnyElement {
+            div()
+                .flex()
+                .flex_row()
+                .items_center()
+                .gap(px(6.0))
+                .child(crate::components::hint_strip::render_inline_shortcut_keys(
+                    keys.iter().copied(),
+                    crate::components::hint_strip::whisper_inline_shortcut_colors(
+                        rgb(colors.text_muted).into(),
+                        rgba((colors.border << 8) | 0xFF).into(),
+                        true,
+                    ),
+                ))
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(rgb(colors.text_muted))
+                        .child(label),
+                )
+                .into_any_element()
+        };
+
+        div()
+            .w_full()
+            .mt(px(10.0))
+            .flex()
+            .flex_row()
+            .items_center()
+            .justify_center()
+            .gap(px(12.0))
+            .child(hint(&["⎋"], "Cancel"))
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(rgba((colors.text_muted << 8) | 0x72))
+                    .child("•"),
+            )
+            .child(hint(&["↵"], "Save"))
+            .into_any_element()
     }
 
     /// Render conflict warning if present

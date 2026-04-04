@@ -1,11 +1,9 @@
 use super::*;
 use crate::components::{FocusablePrompt, FocusablePromptInterceptedKey};
+use crate::theme::AppChromeColors;
 use crate::ui_foundation::{
     is_key_backspace, is_key_down, is_key_enter, is_key_space, is_key_up, printable_char,
 };
-
-const ROW_FOCUSED_BG_ALPHA: u32 = 0x3A;
-const ROW_HOVER_BG_ALPHA: u32 = 0x26;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) struct SelectRowState {
@@ -42,15 +40,15 @@ pub(super) fn visual_row_state_for_input_modality(
     }
 }
 
-pub(super) fn resolve_row_bg_hex(
+pub(super) fn resolve_row_bg_rgba(
     row_state: SelectRowState,
-    focused_bg_hex: u32,
-    hovered_bg_hex: u32,
+    focused_bg_rgba: u32,
+    hovered_bg_rgba: u32,
 ) -> u32 {
     if row_state.is_focused || row_state.is_selected {
-        focused_bg_hex
+        focused_bg_rgba
     } else if row_state.is_hovered {
-        hovered_bg_hex
+        hovered_bg_rgba
     } else {
         0x00000000
     }
@@ -113,26 +111,15 @@ impl Focusable for SelectPrompt {
 
 impl Render for SelectPrompt {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let chrome = AppChromeColors::from_theme(&self.theme);
         let tokens = get_tokens(self.design_variant);
-        let colors = tokens.colors();
         let spacing = tokens.spacing();
 
-        let (text_color, muted_color) = if self.design_variant == DesignVariant::Default {
-            (
-                rgb(self.theme.colors.text.secondary),
-                rgb(self.theme.colors.text.muted),
-            )
-        } else {
-            (rgb(colors.text_secondary), rgb(colors.text_muted))
-        };
-        let row_accent_color = if self.design_variant == DesignVariant::Default {
-            self.theme.colors.accent.selected
-        } else {
-            colors.accent
-        };
-        let focused_row_bg_hex = (row_accent_color << 8) | ROW_FOCUSED_BG_ALPHA;
-        let hovered_row_bg_hex = (row_accent_color << 8) | ROW_HOVER_BG_ALPHA;
-        let hovered_row_bg = rgba(hovered_row_bg_hex);
+        let text_color = rgb(chrome.text_secondary_hex);
+        let muted_color = rgb(chrome.text_muted_hex);
+        let focused_row_bg_rgba = chrome.selection_rgba;
+        let hovered_row_bg_rgba = chrome.hover_rgba;
+        let hovered_row_bg = rgba(hovered_row_bg_rgba);
 
         let placeholder = self
             .placeholder
@@ -253,10 +240,10 @@ impl Render for SelectPrompt {
                                                     ))
                                                 },
                                             );
-                                        let row_bg = rgba(resolve_row_bg_hex(
+                                        let row_bg = rgba(resolve_row_bg_rgba(
                                             visual_row_state,
-                                            focused_row_bg_hex,
-                                            hovered_row_bg_hex,
+                                            focused_row_bg_rgba,
+                                            hovered_row_bg_rgba,
                                         ));
                                         let hover_handler = cx.listener(
                                             move |this: &mut SelectPrompt,
@@ -390,10 +377,10 @@ impl Render for SelectPrompt {
 
 #[cfg(test)]
 mod tests {
-    use super::{resolve_row_bg_hex, visual_row_state_for_input_modality, SelectRowState};
+    use super::{resolve_row_bg_rgba, visual_row_state_for_input_modality, SelectRowState};
 
     #[test]
-    fn test_resolve_row_bg_hex_uses_focused_accent_for_selected_row() {
+    fn test_resolve_row_bg_rgba_uses_focused_accent_for_selected_row() {
         let focused_bg_hex = 0x55AAFF3A;
         let hovered_bg_hex = 0x55AAFF26;
 
@@ -404,13 +391,13 @@ mod tests {
         };
 
         assert_eq!(
-            resolve_row_bg_hex(selected_row, focused_bg_hex, hovered_bg_hex),
+            resolve_row_bg_rgba(selected_row, focused_bg_hex, hovered_bg_hex),
             focused_bg_hex
         );
     }
 
     #[test]
-    fn test_resolve_row_bg_hex_uses_hover_color_for_unselected_hovered_row() {
+    fn test_resolve_row_bg_rgba_uses_hover_color_for_unselected_hovered_row() {
         let focused_bg_hex = 0x55AAFF3A;
         let hovered_bg_hex = 0x55AAFF26;
 
@@ -421,7 +408,7 @@ mod tests {
         };
 
         assert_eq!(
-            resolve_row_bg_hex(hovered_row, focused_bg_hex, hovered_bg_hex),
+            resolve_row_bg_rgba(hovered_row, focused_bg_hex, hovered_bg_hex),
             hovered_bg_hex
         );
     }
@@ -492,5 +479,20 @@ mod tests {
         };
         let visual = visual_row_state_for_input_modality(row_state, false);
         assert_eq!(visual, row_state);
+    }
+
+    #[test]
+    fn select_render_drops_local_row_alpha_constants() {
+        const SOURCE: &str = include_str!("render.rs");
+        let render_fn_end = SOURCE.find("#[cfg(test)]").unwrap_or(SOURCE.len());
+        let render_code = &SOURCE[..render_fn_end];
+        assert!(
+            !render_code.contains("ROW_FOCUSED_BG_ALPHA"),
+            "select render should not define ROW_FOCUSED_BG_ALPHA"
+        );
+        assert!(
+            !render_code.contains("ROW_HOVER_BG_ALPHA"),
+            "select render should not define ROW_HOVER_BG_ALPHA"
+        );
     }
 }

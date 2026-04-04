@@ -180,6 +180,11 @@ impl ScriptListApp {
         entity: Entity<PathPrompt>,
         cx: &mut Context<Self>,
     ) -> AnyElement {
+        tracing::info!(
+            surface = "render_prompts::path",
+            actions_open = self.show_actions_popup,
+            "prompt_surface_rendered"
+        );
         crate::components::emit_prompt_chrome_audit(
             &crate::components::PromptChromeAudit::minimal_list(
                 "render_prompts::path",

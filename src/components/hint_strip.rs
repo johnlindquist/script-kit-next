@@ -285,21 +285,72 @@ pub(crate) fn shortcut_tokens_from_hint(shortcut: &str) -> Vec<String> {
             .collect();
     }
 
-    // "⌃⌘↑" style — each char is a token
+    // Display-style input: "⌘F1", "⌘PAGEUP", "⌃⌘↑"
+    // Preserve contiguous text runs so multi-character keys stay grouped.
     if trimmed.chars().any(is_symbol_shortcut_char) {
-        return trimmed
-            .chars()
-            .map(|ch| {
-                if is_symbol_shortcut_char(ch) {
-                    ch.to_string()
-                } else {
-                    ch.to_uppercase().to_string()
+        let mut tokens = Vec::new();
+        let mut text_run = String::new();
+        for ch in trimmed.chars() {
+            if is_symbol_shortcut_char(ch) {
+                if !text_run.is_empty() {
+                    tokens.push(normalize_shortcut_part(&text_run));
+                    text_run.clear();
                 }
-            })
-            .collect();
+                tokens.push(ch.to_string());
+            } else {
+                text_run.push(ch);
+            }
+        }
+        if !text_run.is_empty() {
+            tokens.push(normalize_shortcut_part(&text_run));
+        }
+        return tokens;
     }
 
     vec![normalize_shortcut_part(trimmed)]
+}
+
+fn canonical_shortcut_part(part: &str) -> String {
+    match part.trim().to_lowercase().as_str() {
+        "⌘" | "cmd" | "command" | "meta" | "super" => "cmd".to_string(),
+        "⌃" | "ctrl" | "control" => "ctrl".to_string(),
+        "⌥" | "alt" | "option" | "opt" => "alt".to_string(),
+        "⇧" | "shift" => "shift".to_string(),
+        "↵" | "↩" | "⏎" | "enter" | "return" => "enter".to_string(),
+        "⎋" | "escape" | "esc" => "escape".to_string(),
+        "⇥" | "tab" => "tab".to_string(),
+        "⌫" | "backspace" | "delete" => "backspace".to_string(),
+        "␣" | "space" => "space".to_string(),
+        "↑" | "up" | "arrowup" => "up".to_string(),
+        "↓" | "down" | "arrowdown" => "down".to_string(),
+        "←" | "left" | "arrowleft" => "left".to_string(),
+        "→" | "right" | "arrowright" => "right".to_string(),
+        "⇞" | "pageup" => "pageup".to_string(),
+        "⇟" | "pagedown" => "pagedown".to_string(),
+        "↖" | "home" => "home".to_string(),
+        "↘" | "end" => "end".to_string(),
+        other => other.to_string(),
+    }
+}
+
+pub(crate) fn canonical_shortcut_hint(shortcut: &str) -> String {
+    let tokens = shortcut_tokens_from_hint(shortcut);
+    let mut modifiers = Vec::new();
+    let mut key: Option<String> = None;
+
+    for token in tokens {
+        let canonical = canonical_shortcut_part(&token);
+        match canonical.as_str() {
+            "cmd" | "ctrl" | "alt" | "shift" => modifiers.push(canonical),
+            _ => key = Some(canonical),
+        }
+    }
+
+    modifiers.sort();
+    if let Some(key) = key {
+        modifiers.push(key);
+    }
+    modifiers.join("+")
 }
 
 fn inline_shortcut_token(token: &str) -> InlineShortcutToken {
@@ -366,7 +417,7 @@ pub(crate) fn render_inline_shortcut_keys<'a>(
 
 #[cfg(test)]
 mod inline_shortcut_tests {
-    use super::shortcut_tokens_from_hint;
+    use super::{canonical_shortcut_hint, shortcut_tokens_from_hint};
 
     #[test]
     fn shortcut_tokens_handle_raw_and_symbol_inputs() {
@@ -377,6 +428,26 @@ mod inline_shortcut_tests {
         assert_eq!(shortcut_tokens_from_hint("⌃⌘↑"), vec!["⌃", "⌘", "↑"]);
         assert_eq!(shortcut_tokens_from_hint("cmd+pageup"), vec!["⌘", "⇞"]);
         assert_eq!(shortcut_tokens_from_hint("cmd+home"), vec!["⌘", "↖"]);
+    }
+
+    #[test]
+    fn shortcut_tokens_preserve_grouped_multi_char_keys() {
+        // F-keys must stay grouped, not split into individual characters
+        assert_eq!(shortcut_tokens_from_hint("⌘F1"), vec!["⌘", "F1"]);
+        assert_eq!(shortcut_tokens_from_hint("⌘F12"), vec!["⌘", "F12"]);
+        // PAGEUP normalizes to compact glyph
+        assert_eq!(shortcut_tokens_from_hint("⌘PAGEUP"), vec!["⌘", "⇞"]);
+        assert_eq!(shortcut_tokens_from_hint("⌘PAGEDOWN"), vec!["⌘", "⇟"]);
+        assert_eq!(shortcut_tokens_from_hint("⌘HOME"), vec!["⌘", "↖"]);
+        assert_eq!(shortcut_tokens_from_hint("⌘END"), vec!["⌘", "↘"]);
+    }
+
+    #[test]
+    fn canonical_shortcut_hint_normalizes_display_strings() {
+        assert_eq!(canonical_shortcut_hint("⌘⇞"), "cmd+pageup");
+        assert_eq!(canonical_shortcut_hint("⌘F1"), "cmd+f1");
+        assert_eq!(canonical_shortcut_hint("⌃⇧↵"), "ctrl+shift+enter");
+        assert_eq!(canonical_shortcut_hint("cmd+shift+k"), "cmd+shift+k");
     }
 }
 

@@ -45,6 +45,19 @@ use crate::designs::{get_tokens, DesignVariant};
 use crate::theme::types::Theme;
 use tracing::debug;
 
+/// Strategy for how the color resolver picks its color source.
+///
+/// - `VariantAware`: Default variant → theme colors; other variants → design tokens.
+/// - `ThemeFirst`: Always uses the active theme colors regardless of design variant.
+///   Use this for shell surfaces that must visually track the active theme.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SurfaceColorStrategy {
+    /// Default variant uses theme colors; non-default variants use design tokens.
+    VariantAware,
+    /// Always uses theme colors — design variant only affects spacing/shape/typography.
+    ThemeFirst,
+}
+
 /// Unified color resolution that works with both theme and design tokens
 ///
 /// This struct provides a single API for color access that automatically
@@ -71,19 +84,28 @@ pub struct ColorResolver {
 }
 
 impl ColorResolver {
-    /// Create a new color resolver for the given theme and design variant
+    /// Create a color resolver with an explicit strategy.
     ///
-    /// This automatically selects colors from either the theme (for Default variant)
-    /// or from design tokens (for all other variants).
-    pub fn new(theme: &Theme, variant: DesignVariant) -> Self {
-        let (source, resolver) = if variant == DesignVariant::Default {
-            ("theme", Self::from_theme(theme))
-        } else {
-            ("design_tokens", Self::from_design_tokens(variant))
+    /// This is the canonical entry point — all other constructors delegate here.
+    pub fn new_with_strategy(
+        theme: &Theme,
+        variant: DesignVariant,
+        strategy: SurfaceColorStrategy,
+    ) -> Self {
+        let (source, resolver) = match strategy {
+            SurfaceColorStrategy::ThemeFirst => ("theme_first", Self::from_theme(theme)),
+            SurfaceColorStrategy::VariantAware => {
+                if variant == DesignVariant::Default {
+                    ("theme", Self::from_theme(theme))
+                } else {
+                    ("design_tokens", Self::from_design_tokens(variant))
+                }
+            }
         };
 
         debug!(
             variant = %variant.name(),
+            strategy = ?strategy,
             source,
             background = %format_args!("{:#08x}", resolver.background),
             text_primary = %format_args!("{:#08x}", resolver.text_primary),
@@ -95,6 +117,14 @@ impl ColorResolver {
         resolver
     }
 
+    /// Create a new color resolver for the given theme and design variant
+    ///
+    /// This automatically selects colors from either the theme (for Default variant)
+    /// or from design tokens (for all other variants).
+    pub fn new(theme: &Theme, variant: DesignVariant) -> Self {
+        Self::new_with_strategy(theme, variant, SurfaceColorStrategy::VariantAware)
+    }
+
     /// Create a theme-first color resolver that always uses the active theme colors,
     /// regardless of the current design variant.
     ///
@@ -104,19 +134,16 @@ impl ColorResolver {
     /// accent, and border colors on these surfaces even when the design variant
     /// is not `Default`.
     pub fn new_theme_first(theme: &Theme, variant: DesignVariant) -> Self {
-        let resolver = Self::from_theme(theme);
+        Self::new_with_strategy(theme, variant, SurfaceColorStrategy::ThemeFirst)
+    }
 
-        debug!(
-            variant = %variant.name(),
-            source = "theme_first",
-            background = %format_args!("{:#08x}", resolver.background),
-            text_primary = %format_args!("{:#08x}", resolver.text_primary),
-            accent = %format_args!("{:#08x}", resolver.accent),
-            border = %format_args!("{:#08x}", resolver.border),
-            "ColorResolver initialized"
-        );
-
-        resolver
+    /// Create a theme-first color resolver for shell chrome.
+    ///
+    /// Shell surfaces (main menu, prompt frames) should always follow the active
+    /// theme. Non-default design variants still control spacing, density, and shape
+    /// via `SpacingResolver` — only colors come from the theme.
+    pub fn new_for_shell(theme: &Theme, variant: DesignVariant) -> Self {
+        Self::new_with_strategy(theme, variant, SurfaceColorStrategy::ThemeFirst)
     }
 
     /// Create a resolver from theme colors (Default variant)
@@ -205,6 +232,24 @@ impl TypographyResolver {
             DesignVariant::Default => Self::from_theme(theme),
             _ => Self::from_design_tokens(variant),
         }
+    }
+
+    /// Create a theme-first typography resolver that always uses the active
+    /// theme's font configuration, regardless of the current design variant.
+    ///
+    /// Use this alongside `ColorResolver::new_for_shell` so that shell chrome
+    /// fully tracks the active theme's visual identity.
+    pub fn new_theme_first(theme: &Theme, variant: DesignVariant) -> Self {
+        let resolver = Self::from_theme(theme);
+        debug!(
+            variant = %variant.name(),
+            source = "theme_first",
+            font_family = %resolver.font_family,
+            mono_font_family = %resolver.font_family_mono,
+            font_size_xl = resolver.font_size_xl,
+            "TypographyResolver initialized"
+        );
+        resolver
     }
 
     /// Create a resolver from theme fonts (Default variant)
@@ -404,5 +449,95 @@ mod tests {
             assert!(resolver.primary_text_color() <= 0xFFFFFF);
             assert!(resolver.primary_accent() <= 0xFFFFFF);
         }
+    }
+
+    #[test]
+    fn test_new_with_strategy_variant_aware_matches_new() {
+        let theme = Theme::default();
+        for variant in DesignVariant::all() {
+            let via_new = ColorResolver::new(&theme, *variant);
+            let via_strategy = ColorResolver::new_with_strategy(
+                &theme,
+                *variant,
+                SurfaceColorStrategy::VariantAware,
+            );
+            assert_eq!(
+                via_new.primary_text_color(),
+                via_strategy.primary_text_color(),
+                "VariantAware strategy should match new() for {:?}",
+                variant
+            );
+            assert_eq!(via_new.primary_accent(), via_strategy.primary_accent());
+            assert_eq!(via_new.main_background(), via_strategy.main_background());
+        }
+    }
+
+    #[test]
+    fn test_new_with_strategy_theme_first_matches_new_theme_first() {
+        let theme = Theme::default();
+        for variant in DesignVariant::all() {
+            let via_old = ColorResolver::new_theme_first(&theme, *variant);
+            let via_strategy = ColorResolver::new_with_strategy(
+                &theme,
+                *variant,
+                SurfaceColorStrategy::ThemeFirst,
+            );
+            assert_eq!(
+                via_old.primary_text_color(),
+                via_strategy.primary_text_color(),
+            );
+            assert_eq!(via_old.primary_accent(), via_strategy.primary_accent());
+            assert_eq!(via_old.main_background(), via_strategy.main_background());
+        }
+    }
+
+    #[test]
+    fn test_new_for_shell_keeps_theme_colors_under_non_default_variant() {
+        // This is the key acceptance criterion: shell chrome must use theme
+        // colors even when a non-default design variant is active.
+        let theme = Theme::default();
+
+        for variant in DesignVariant::all() {
+            let shell = ColorResolver::new_for_shell(&theme, *variant);
+
+            // Shell always resolves to the active theme's colors
+            assert_eq!(
+                shell.primary_text_color(),
+                theme.colors.text.primary,
+                "new_for_shell should use theme text.primary for {:?}",
+                variant
+            );
+            assert_eq!(
+                shell.primary_accent(),
+                theme.colors.accent.selected,
+                "new_for_shell should use theme accent for {:?}",
+                variant
+            );
+            assert_eq!(
+                shell.main_background(),
+                theme.colors.background.main,
+                "new_for_shell should use theme background for {:?}",
+                variant
+            );
+        }
+    }
+
+    #[test]
+    fn test_typography_new_theme_first_uses_theme_fonts() {
+        let theme = Theme::default();
+        let fonts = theme.get_fonts();
+
+        // For a non-default variant, regular new() uses design tokens
+        let regular = TypographyResolver::new(&theme, DesignVariant::RetroTerminal);
+        assert_eq!(regular.primary_font(), "Menlo");
+
+        // Theme-first always uses the theme's fonts
+        let theme_first =
+            TypographyResolver::new_theme_first(&theme, DesignVariant::RetroTerminal);
+        assert_eq!(
+            theme_first.primary_font(),
+            fonts.ui_family.as_str(),
+            "new_theme_first should use theme font, not design token font"
+        );
     }
 }

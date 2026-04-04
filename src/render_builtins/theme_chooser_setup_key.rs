@@ -214,6 +214,17 @@
                     cx.notify();
                     return;
                 }
+                // Cmd+J: surprise me / remix
+                if has_cmd && key.eq_ignore_ascii_case("j") {
+                    let remixed = Self::build_theme_chooser_remix(
+                        this.theme.as_ref(),
+                        theme_chooser_remix_seed(),
+                    );
+                    this.theme = std::sync::Arc::new(remixed);
+                    theme::sync_gpui_component_theme(cx);
+                    cx.notify();
+                    return;
+                }
                 // Cmd+R: reset customizations to selected preset defaults
                 if has_cmd && key.eq_ignore_ascii_case("r") {
                     let current_filter =

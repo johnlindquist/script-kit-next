@@ -204,6 +204,13 @@ impl FormPromptState {
 
 impl Render for FormPromptState {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        tracing::info!(
+            surface = "form_prompt",
+            field_count = self.fields.len(),
+            focused_index = self.focused_index,
+            "prompt_surface_rendered"
+        );
+
         let colors = self.colors;
 
         // Ensure the currently selected field is the keyboard focus target.
