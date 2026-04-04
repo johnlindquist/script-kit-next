@@ -171,11 +171,30 @@ pub(crate) fn match_query_chars_in_display_meta(
     Some(hits.into_iter().map(|ix| ix + prefix_len).collect())
 }
 
+/// A hint chip for the empty state when no results match.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct ContextPickerEmptyStateHint {
+    /// What is displayed in the hint chip.
+    pub display: &'static str,
+    /// What is inserted into the composer when clicked.
+    pub insertion: &'static str,
+}
+
 /// Hint chips for the empty state when no results match.
-pub(crate) fn empty_state_hints(trigger: ContextPickerTrigger) -> &'static [&'static str] {
+pub(crate) fn empty_state_hints(trigger: ContextPickerTrigger) -> &'static [ContextPickerEmptyStateHint] {
+    static MENTION_HINTS: &[ContextPickerEmptyStateHint] = &[
+        ContextPickerEmptyStateHint { display: "@context", insertion: "@context" },
+        ContextPickerEmptyStateHint { display: "@selection", insertion: "@selection" },
+        ContextPickerEmptyStateHint { display: "@browser", insertion: "@browser" },
+    ];
+    static SLASH_HINTS: &[ContextPickerEmptyStateHint] = &[
+        ContextPickerEmptyStateHint { display: "/context", insertion: "/context" },
+        ContextPickerEmptyStateHint { display: "/selection", insertion: "/selection" },
+        ContextPickerEmptyStateHint { display: "/browser", insertion: "/browser" },
+    ];
     match trigger {
-        ContextPickerTrigger::Mention => &["@context", "@selection", "@browser"],
-        ContextPickerTrigger::Slash => &["/context", "/selection", "/browser"],
+        ContextPickerTrigger::Mention => MENTION_HINTS,
+        ContextPickerTrigger::Slash => SLASH_HINTS,
     }
 }
 

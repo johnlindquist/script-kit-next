@@ -125,14 +125,16 @@ const DEFAULT_HUD_DURATION_MS: u64 = 2000;
 const HUD_STACK_GAP: f32 = 45.0;
 /// Maximum number of simultaneous HUDs
 const MAX_SIMULTANEOUS_HUDS: usize = 3;
-/// HUD window dimensions - compact pill shape
-const HUD_WIDTH: f32 = 200.0;
-const HUD_HEIGHT: f32 = 36.0;
+/// HUD window dimensions - compact pill shape with room for wrapped errors
+const HUD_MIN_WIDTH: f32 = 220.0;
+const HUD_MAX_WIDTH: f32 = 420.0;
+const HUD_SINGLE_LINE_HEIGHT: f32 = 40.0;
+const HUD_MULTI_LINE_HEIGHT: f32 = 68.0;
 /// HUD with action button dimensions (wider to fit button)
 #[allow(dead_code)]
-const HUD_ACTION_WIDTH: f32 = 300.0;
+const HUD_ACTION_WIDTH: f32 = 360.0;
 #[allow(dead_code)]
-const HUD_ACTION_HEIGHT: f32 = 40.0;
+const HUD_ACTION_HEIGHT: f32 = 48.0;
 // =============================================================================
 // HUD Actions - Clickable actions for HUD notifications
 // =============================================================================
@@ -248,6 +250,20 @@ impl HudView {
         self.action.is_some() && self.action_label.is_some()
     }
 }
+
+fn hud_dimensions_for_text(text: &str) -> (f32, f32) {
+    let longest_line = text.lines().map(|line| line.chars().count()).max().unwrap_or(0);
+    let line_count = text.lines().count().max(1);
+    let estimated_width = 140.0 + (longest_line as f32 * 6.5);
+    let width = estimated_width.clamp(HUD_MIN_WIDTH, HUD_MAX_WIDTH);
+    let height = if line_count > 1 || text.chars().count() > 70 {
+        HUD_MULTI_LINE_HEIGHT
+    } else {
+        HUD_SINGLE_LINE_HEIGHT
+    };
+
+    (width, height)
+}
 impl Render for HudView {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
         let has_action = self.has_action();
@@ -279,8 +295,8 @@ impl Render for HudView {
                     )))
                     .text_sm()
                     .text_color(rgb(colors.text_primary))
-                    .overflow_hidden()
-                    .text_ellipsis()
+                    .w_full()
+                    .whitespace_normal()
                     .tooltip(move |window, cx| {
                         Tooltip::new(hud_label_text.clone()).build(window, cx)
                     })
@@ -471,18 +487,17 @@ pub fn show_hud(text: String, duration_ms: Option<u64>, cx: &mut App) {
         }
     };
 
+    let (hud_width, hud_height) = hud_dimensions_for_text(&text);
+
     // Calculate position - bottom center of screen with mouse
-    let (hud_x, hud_y) = calculate_hud_position(cx);
+    let (hud_x, hud_y) = calculate_hud_position(cx, hud_width);
 
     // Calculate vertical offset using SLOT index (not len) - this prevents overlap
     let stack_offset = slot as f32 * HUD_STACK_GAP;
 
-    let hud_width: Pixels = px(HUD_WIDTH);
-    let hud_height: Pixels = px(HUD_HEIGHT);
-
     let bounds = gpui::Bounds {
         origin: point(px(hud_x), px(hud_y - stack_offset)),
-        size: size(hud_width, hud_height),
+        size: size(px(hud_width), px(hud_height)),
     };
 
     let text_for_log = text.clone();
@@ -505,7 +520,7 @@ pub fn show_hud(text: String, duration_ms: Option<u64>, cx: &mut App) {
         Ok(window_handle) => {
             // Configure the window as a floating overlay using size-based matching
             // Regular HUDs without actions are click-through (true)
-            configure_hud_window_by_size(HUD_WIDTH, HUD_HEIGHT, true);
+            configure_hud_window_by_size(hud_width, hud_height, true);
 
             // Generate unique ID for this HUD
             let hud_id = next_hud_id();
@@ -604,22 +619,19 @@ pub fn show_hud_with_action(
         }
     };
 
+    let (message_width, _) = hud_dimensions_for_text(&text);
+
     // Calculate position - bottom center of screen with mouse
-    let (hud_x, hud_y) = calculate_hud_position(cx);
+    let (hud_x, hud_y) = calculate_hud_position(cx, HUD_ACTION_WIDTH.max(message_width));
 
     // Calculate vertical offset using SLOT index (not len) - this prevents overlap
     let stack_offset = slot as f32 * HUD_STACK_GAP;
 
-    // Use wider dimensions for action HUDs
-    let hud_width: Pixels = px(HUD_ACTION_WIDTH);
-    let hud_height: Pixels = px(HUD_ACTION_HEIGHT);
-
-    // Adjust x position for wider HUD
-    let adjusted_x = hud_x - (HUD_ACTION_WIDTH - HUD_WIDTH) / 2.0;
+    let hud_width = HUD_ACTION_WIDTH.max(message_width);
 
     let bounds = gpui::Bounds {
-        origin: point(px(adjusted_x), px(hud_y - stack_offset)),
-        size: size(hud_width, hud_height),
+        origin: point(px(hud_x), px(hud_y - stack_offset)),
+        size: size(px(hud_width), px(HUD_ACTION_HEIGHT)),
     };
 
     let text_for_log = text.clone();
@@ -642,7 +654,7 @@ pub fn show_hud_with_action(
         Ok(window_handle) => {
             // Configure the window as a floating overlay using size-based matching
             // Action HUDs need to receive mouse events for button clicks (click_through = false)
-            configure_hud_window_by_size(HUD_ACTION_WIDTH, HUD_ACTION_HEIGHT, false);
+            configure_hud_window_by_size(hud_width, HUD_ACTION_HEIGHT, false);
 
             // Generate unique ID for this HUD
             let hud_id = next_hud_id();
@@ -693,7 +705,7 @@ pub fn show_hud_with_action(
     }
 }
 /// Calculate HUD position - bottom center of screen containing mouse
-fn calculate_hud_position(cx: &App) -> (f32, f32) {
+fn calculate_hud_position(cx: &App, hud_width: f32) -> (f32, f32) {
     let displays = cx.displays();
 
     // Try to get mouse position
@@ -725,7 +737,7 @@ fn calculate_hud_position(cx: &App) -> (f32, f32) {
         let screen_height: f32 = bounds.size.height.into();
 
         // Center horizontally, position at 85% down the screen
-        let hud_x = screen_x + (screen_width - HUD_WIDTH) / 2.0;
+        let hud_x = screen_x + (screen_width - hud_width) / 2.0;
         let hud_y = screen_y + screen_height * 0.85;
 
         (hud_x, hud_y)
