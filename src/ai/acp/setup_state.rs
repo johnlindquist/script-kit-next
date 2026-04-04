@@ -28,6 +28,43 @@ pub(crate) struct AcpInlineSetupState {
 }
 
 impl AcpInlineSetupState {
+    /// Build inline setup state from a runtime `SetupRequired` event.
+    ///
+    /// Called when the ACP client emits `AcpEvent::SetupRequired` during a
+    /// live session (e.g. auth expired mid-conversation). Preserves the
+    /// selected agent context so the recovery card can show agent-specific
+    /// guidance.
+    pub(crate) fn from_runtime_setup_required(
+        selected_agent: Option<AcpAgentCatalogEntry>,
+        reason: &str,
+        auth_methods: &[String],
+    ) -> Self {
+        match reason {
+            "auth_required" => Self {
+                title: "Authentication required".into(),
+                body: if auth_methods.is_empty() {
+                    "Authenticate the selected ACP agent, then retry this chat.".into()
+                } else {
+                    format!(
+                        "Authenticate the selected ACP agent, then retry this chat. Available methods: {}.",
+                        auth_methods.join(", ")
+                    )
+                    .into()
+                },
+                primary_action: AcpSetupAction::Authenticate,
+                secondary_action: Some(AcpSetupAction::Retry),
+                selected_agent,
+            },
+            _ => Self {
+                title: "ACP agent setup required".into(),
+                body: format!("Agent reported setup requirement: {reason}").into(),
+                primary_action: AcpSetupAction::Retry,
+                secondary_action: Some(AcpSetupAction::OpenCatalog),
+                selected_agent,
+            },
+        }
+    }
+
     pub(crate) fn from_resolution(resolution: &AcpLaunchResolution) -> Self {
         let selected_agent = resolution.selected_agent.clone();
 

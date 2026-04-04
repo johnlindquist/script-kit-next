@@ -127,6 +127,9 @@ pub(crate) struct AcpThreadInit {
     pub available_models: Vec<super::config::AcpModelEntry>,
     /// Initially selected model ID (e.g. "claude-sonnet-4-6").
     pub selected_model_id: Option<String>,
+    /// The resolved catalog entry for the selected agent (used for runtime
+    /// setup recovery — preserves agent context when `SetupRequired` fires).
+    pub selected_agent: Option<super::catalog::AcpAgentCatalogEntry>,
 }
 
 /// One-shot context payload consumed by `prepare_turn_blocks()`.
@@ -196,6 +199,16 @@ pub(crate) struct AcpThread {
     /// O(1) lookup from tool_call_id to index in `active_tool_calls`.
     tool_call_lookup: HashMap<String, usize>,
 
+    /// The resolved catalog entry for the selected agent. Retained so
+    /// runtime `SetupRequired` events can build recovery cards with
+    /// agent-specific context.
+    selected_agent: Option<super::catalog::AcpAgentCatalogEntry>,
+
+    /// Inline setup state armed by a runtime `SetupRequired` event.
+    /// When `Some`, the view renders the setup recovery card instead of
+    /// the normal chat transcript.
+    setup_state: Option<super::setup_state::AcpInlineSetupState>,
+
     /// Session usage: tokens used / context window size.
     pub(crate) usage_tokens: Option<(u64, u64)>,
     /// Session cost in USD (cumulative).
@@ -257,6 +270,8 @@ impl AcpThread {
             available_commands: Vec::new(),
             active_tool_calls: Vec::new(),
             tool_call_lookup: HashMap::new(),
+            selected_agent: init.selected_agent,
+            setup_state: None,
             usage_tokens: None,
             usage_cost_usd: None,
             stream_started_at: None,
@@ -477,6 +492,9 @@ impl AcpThread {
             })
             .map_err(|error| error.to_string())?;
 
+        // A successful retry should return the session to the live transcript
+        // instead of keeping the runtime setup recovery card armed.
+        self.setup_state = None;
         self.bind_stream(rx, cx);
         cx.notify();
         Ok(())
@@ -863,13 +881,17 @@ impl AcpThread {
             AcpEvent::SetupRequired { reason, auth_methods } => {
                 tracing::info!(
                     target: "script_kit::tab_ai",
-                    event = "acp_setup_required_event",
+                    event = "acp_runtime_setup_session_armed",
                     reason = %reason,
                     auth_method_count = auth_methods.len(),
+                    selected_agent_id = self.selected_agent.as_ref().map(|a| a.id.as_ref()),
                 );
-                changed |= self.push_message(
-                    AcpThreadMessageRole::System,
-                    format!("Setup required: {reason}"),
+                self.setup_state = Some(
+                    super::setup_state::AcpInlineSetupState::from_runtime_setup_required(
+                        self.selected_agent.clone(),
+                        &reason,
+                        &auth_methods,
+                    ),
                 );
                 changed |= self.set_status(AcpThreadStatus::Error);
             }
@@ -1070,6 +1092,12 @@ impl AcpThread {
     }
 
     // ── Public accessors for structured session state ──────────────
+
+    /// Runtime setup state armed by `AcpEvent::SetupRequired`.
+    /// When `Some`, the view should render the inline setup recovery card.
+    pub(crate) fn setup_state(&self) -> Option<&super::setup_state::AcpInlineSetupState> {
+        self.setup_state.as_ref()
+    }
 
     /// Current plan entries from the latest `PlanUpdated` event.
     pub(crate) fn active_plan_entries(&self) -> &[String] {
@@ -1381,6 +1409,8 @@ impl AcpThread {
             available_commands: Vec::new(),
             active_tool_calls: Vec::new(),
             tool_call_lookup: HashMap::new(),
+            selected_agent: None,
+            setup_state: None,
             usage_tokens: None,
             usage_cost_usd: None,
             stream_started_at: None,
@@ -1521,10 +1551,13 @@ impl AcpThread {
             super::AcpEvent::TurnFinished { .. } => {
                 self.set_status(AcpThreadStatus::Idle);
             }
-            super::AcpEvent::SetupRequired { reason, .. } => {
-                self.push_message(
-                    AcpThreadMessageRole::System,
-                    format!("Setup required: {reason}"),
+            super::AcpEvent::SetupRequired { reason, auth_methods } => {
+                self.setup_state = Some(
+                    super::setup_state::AcpInlineSetupState::from_runtime_setup_required(
+                        self.selected_agent.clone(),
+                        &reason,
+                        &auth_methods,
+                    ),
                 );
                 self.set_status(AcpThreadStatus::Error);
             }
@@ -1574,6 +1607,8 @@ mod tests {
             available_commands: Vec::new(),
             active_tool_calls: Vec::new(),
             tool_call_lookup: HashMap::new(),
+            selected_agent: None,
+            setup_state: None,
             usage_tokens: None,
             usage_cost_usd: None,
             stream_started_at: None,

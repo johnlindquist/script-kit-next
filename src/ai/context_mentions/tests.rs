@@ -199,3 +199,131 @@ fn part_to_inline_token_returns_none_for_ambient() {
     };
     assert_eq!(part_to_inline_token(&part), None);
 }
+
+// ── Provider-backed token coverage ───────────────────────────────
+
+#[test]
+fn parse_inline_mentions_resolves_screenshot() {
+    let mentions = parse_inline_context_mentions("Attach @screenshot please");
+    assert_eq!(mentions.len(), 1);
+    assert_eq!(mentions[0].token, "@screenshot");
+    assert!(mentions[0].part.source().contains("screenshot=1"));
+}
+
+#[test]
+fn parse_inline_mentions_resolves_clipboard() {
+    let mentions = parse_inline_context_mentions("Check @clipboard");
+    assert_eq!(mentions.len(), 1);
+    assert_eq!(mentions[0].token, "@clipboard");
+    assert_eq!(mentions[0].part.source(), "kit://clipboard-history");
+}
+
+#[test]
+fn parse_inline_mentions_resolves_git_diff() {
+    let mentions = parse_inline_context_mentions("Review @git-diff");
+    assert_eq!(mentions.len(), 1);
+    assert_eq!(mentions[0].token, "@git-diff");
+    assert_eq!(mentions[0].part.source(), "kit://git-diff");
+}
+
+#[test]
+fn parse_inline_mentions_resolves_recent_scripts() {
+    let mentions = parse_inline_context_mentions("Show @recent-scripts");
+    assert_eq!(mentions.len(), 1);
+    assert_eq!(mentions[0].token, "@recent-scripts");
+    assert_eq!(mentions[0].part.source(), "kit://scripts");
+}
+
+#[test]
+fn parse_inline_mentions_resolves_calendar() {
+    let mentions = parse_inline_context_mentions("Check @calendar");
+    assert_eq!(mentions.len(), 1);
+    assert_eq!(mentions[0].token, "@calendar");
+    assert_eq!(mentions[0].part.source(), "kit://calendar");
+}
+
+#[test]
+fn parse_inline_mentions_resolves_git_status() {
+    let mentions = parse_inline_context_mentions("What's in @git-status");
+    assert_eq!(mentions.len(), 1);
+    assert_eq!(mentions[0].token, "@git-status");
+    assert_eq!(mentions[0].part.source(), "kit://git-status");
+}
+
+#[test]
+fn parse_inline_mentions_resolves_processes() {
+    let mentions = parse_inline_context_mentions("Show @processes");
+    assert_eq!(mentions.len(), 1);
+    assert_eq!(mentions[0].token, "@processes");
+    assert_eq!(mentions[0].part.source(), "kit://processes");
+}
+
+#[test]
+fn parse_inline_mentions_resolves_system() {
+    let mentions = parse_inline_context_mentions("Show @system info");
+    assert_eq!(mentions.len(), 1);
+    assert_eq!(mentions[0].token, "@system");
+    assert_eq!(mentions[0].part.source(), "kit://system");
+}
+
+#[test]
+fn parse_context_mentions_handles_all_provider_backed_directives() {
+    let input = "@screenshot\n@clipboard\n@git-diff\n@git-status\n@recent-scripts\n@calendar\n@processes\n@system\n@notifications\n@dictation";
+    let parsed = parse_context_mentions(input);
+
+    assert_eq!(parsed.cleaned_content, "");
+    assert_eq!(parsed.parts.len(), 10);
+    assert_eq!(parsed.parts[0].label(), "Screenshot");
+    assert_eq!(parsed.parts[1].label(), "Clipboard");
+    assert_eq!(parsed.parts[2].label(), "Git Diff");
+    assert_eq!(parsed.parts[3].label(), "Git Status");
+    assert_eq!(parsed.parts[4].label(), "Recent Scripts");
+    assert_eq!(parsed.parts[5].label(), "Calendar");
+    assert_eq!(parsed.parts[6].label(), "Processes");
+    assert_eq!(parsed.parts[7].label(), "System Info");
+    assert_eq!(parsed.parts[8].label(), "Notifications");
+    assert_eq!(parsed.parts[9].label(), "Dictation");
+}
+
+#[test]
+fn parse_inline_mentions_multiple_provider_backed() {
+    let mentions =
+        parse_inline_context_mentions("Review @clipboard and @git-diff for issues");
+    assert_eq!(mentions.len(), 2);
+    assert_eq!(mentions[0].token, "@clipboard");
+    assert_eq!(mentions[1].token, "@git-diff");
+}
+
+#[test]
+fn part_to_inline_token_roundtrips_all_provider_backed() {
+    use crate::ai::context_contract::ContextAttachmentKind;
+    let kinds = [
+        ContextAttachmentKind::Screenshot,
+        ContextAttachmentKind::Clipboard,
+        ContextAttachmentKind::GitDiff,
+        ContextAttachmentKind::GitStatus,
+        ContextAttachmentKind::RecentScripts,
+        ContextAttachmentKind::Calendar,
+        ContextAttachmentKind::Processes,
+        ContextAttachmentKind::System,
+        ContextAttachmentKind::Notifications,
+        ContextAttachmentKind::Dictation,
+    ];
+    for kind in kinds {
+        let part = kind.part();
+        let token = part_to_inline_token(&part);
+        assert!(
+            token.is_some(),
+            "part_to_inline_token should return Some for {kind:?}"
+        );
+        // Verify the token round-trips through inline parse
+        let mentions = parse_inline_context_mentions(&token.clone().unwrap());
+        assert_eq!(
+            mentions.len(),
+            1,
+            "token {:?} should round-trip through inline parse",
+            token
+        );
+        assert_eq!(mentions[0].part, part, "round-trip mismatch for {kind:?}");
+    }
+}

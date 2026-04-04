@@ -307,6 +307,10 @@ pub struct AiPreferences {
     /// Last-selected model ID (e.g. "claude-sonnet-4-6").
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub selected_model_id: Option<String>,
+
+    /// Last-selected ACP agent ID (e.g. "opencode", "claude-code").
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub selected_acp_agent_id: Option<String>,
 }
 
 // ============================================
