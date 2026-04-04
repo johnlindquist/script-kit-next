@@ -6,8 +6,8 @@ pub(super) use crate::components::overlay_modal::{
 };
 
 /// Shortcut-recorder-specific layout constants
-pub(super) const KEY_DISPLAY_HEIGHT: f32 = 48.0;
-pub(super) const KEY_DISPLAY_PADDING: f32 = 12.0;
+pub(super) const KEY_DISPLAY_HEIGHT: f32 = 44.0;
+pub(super) const KEY_DISPLAY_PADDING: f32 = 10.0;
 
 /// Backdrop alpha values specific to shortcut recorder
 pub(super) const OVERLAY_BACKDROP_ALPHA: u8 = 0x80;
@@ -185,6 +185,10 @@ impl RecordedShortcut {
             "down" | "arrowdown" => "↓".to_string(),
             "left" | "arrowleft" => "←".to_string(),
             "right" | "arrowright" => "→".to_string(),
+            "pageup" => "⇞".to_string(),
+            "pagedown" => "⇟".to_string(),
+            "home" => "↖".to_string(),
+            "end" => "↘".to_string(),
             _ => key.to_uppercase(),
         }
     }

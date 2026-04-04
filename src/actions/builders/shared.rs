@@ -67,6 +67,10 @@ pub(crate) fn format_shortcut_hint(shortcut: &str) -> String {
             "down" | "arrowdown" => "↓",
             "left" | "arrowleft" => "←",
             "right" | "arrowright" => "→",
+            "pageup" => "⇞",
+            "pagedown" => "⇟",
+            "home" => "↖",
+            "end" => "↘",
             _ => {
                 if i == parts.len() - 1 {
                     result.push_str(&part.trim().to_uppercase());

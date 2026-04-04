@@ -108,6 +108,14 @@ fn build_theme_chooser_contrast_snapshot(
     }
 }
 
+fn theme_chooser_remix_seed() -> usize {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.subsec_nanos() as usize)
+        .unwrap_or(0)
+}
+
 fn cached_theme_chooser_contrast_snapshot(
     theme: &std::sync::Arc<crate::theme::Theme>,
 ) -> ThemeChooserContrastSnapshot {
@@ -545,8 +553,8 @@ impl ScriptListApp {
     fn theme_chooser_hint_items() -> Vec<gpui::SharedString> {
         vec![
             gpui::SharedString::from("↵ Apply"),
+            gpui::SharedString::from("⌘J Remix"),
             gpui::SharedString::from("Esc Back"),
-            gpui::SharedString::from("⌘R Reset"),
         ]
     }
 
@@ -569,6 +577,31 @@ impl ScriptListApp {
         opacity.input_active = (value + 0.08).min(1.0);
         opacity.vibrancy_background = Some(value);
         next.opacity = Some(opacity);
+        next
+    }
+
+    /// Build a remixed theme by randomly combining accent, opacity, and vibrancy material.
+    fn build_theme_chooser_remix(base: &crate::theme::Theme, seed: usize) -> crate::theme::Theme {
+        let mut next = base.clone();
+
+        // Use different bit ranges of the seed for each dimension to avoid correlation
+        let accent_index = seed % Self::ACCENT_PALETTE.len();
+        let opacity_index = (seed / 7) % Self::OPACITY_PRESETS.len();
+        let material_index = (seed / 13) % Self::VIBRANCY_MATERIALS.len();
+
+        let (accent_hex, _) = Self::ACCENT_PALETTE[accent_index];
+        let (opacity_value, _) = Self::OPACITY_PRESETS[opacity_index];
+        let (material, _) = Self::VIBRANCY_MATERIALS[material_index];
+
+        next.colors.accent.selected = accent_hex;
+        next.colors.text.on_accent =
+            best_contrast_of_two(accent_hex, 0xFFFFFF, next.colors.background.main);
+        next = Self::apply_surface_opacity_preset(&next, opacity_value);
+        if let Some(ref mut vibrancy) = next.vibrancy {
+            vibrancy.enabled = true;
+            vibrancy.material = material;
+        }
+
         next
     }
 
@@ -919,6 +952,15 @@ impl ScriptListApp {
                         vibrancy.material = new_material;
                     }
                     this.apply_theme_chooser_theme(modified, "theme_chooser_vibrancy_material_cycle", cx);
+                    return;
+                }
+                // Cmd+J: surprise me / remix
+                if has_cmd && key.eq_ignore_ascii_case("j") {
+                    let remixed = Self::build_theme_chooser_remix(
+                        this.theme.as_ref(),
+                        theme_chooser_remix_seed(),
+                    );
+                    this.apply_theme_chooser_theme(remixed, "theme_chooser_surprise_me", cx);
                     return;
                 }
                 // Cmd+R: reset customizations to selected preset defaults
@@ -1589,6 +1631,44 @@ impl ScriptListApp {
             )
             .child("Reset to Defaults");
 
+        // Build surprise me / remix button (clickable)
+        let surprise_entity = entity_handle_for_customize.clone();
+        let surprise_button = div()
+            .id("theme-surprise-me")
+            .px(px(10.0))
+            .py(px(4.0))
+            .rounded(px(4.0))
+            .cursor_pointer()
+            .text_xs()
+            .border_1()
+            .border_color(badge_border_bg)
+            .text_color(rgb(text_secondary))
+            .hover(move |s| s.bg(theme_row_hover_bg))
+            .tooltip(|window, cx| {
+                gpui_component::tooltip::Tooltip::new(
+                    "Remix accent, opacity, and vibrancy (\u{2318}J)",
+                )
+                .build(window, cx)
+            })
+            .on_click(
+                move |_event: &gpui::ClickEvent, _window: &mut Window, cx: &mut gpui::App| {
+                    if let Some(app) = surprise_entity.upgrade() {
+                        app.update(cx, |this, cx| {
+                            let remixed = Self::build_theme_chooser_remix(
+                                this.theme.as_ref(),
+                                theme_chooser_remix_seed(),
+                            );
+                            this.apply_theme_chooser_theme(
+                                remixed,
+                                "theme_chooser_surprise_me",
+                                cx,
+                            );
+                        });
+                    }
+                },
+            )
+            .child("Surprise Me");
+
         let accent_name = Self::accent_color_name(accent_color);
 
         // Resolve selected preset name for live preview header
@@ -1615,7 +1695,7 @@ impl ScriptListApp {
             .flex_col()
             .gap(px(10.0))
             .overflow_y_hidden()
-            // ── Customize header with reset button ────────────────
+            // ── Customize header with remix + reset buttons ─────────
             .child(
                 div()
                     .flex()
@@ -1629,7 +1709,15 @@ impl ScriptListApp {
                             .font_weight(gpui::FontWeight::SEMIBOLD)
                             .child("CUSTOMIZE"),
                     )
-                    .child(reset_button),
+                    .child(
+                        div()
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .gap(px(6.0))
+                            .child(surprise_button)
+                            .child(reset_button),
+                    ),
             )
             // Accent color row (with name)
             .child(

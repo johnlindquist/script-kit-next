@@ -303,6 +303,10 @@ pub fn list_directory(dir_path: &str, limit: usize) -> Vec<FileResult> {
     debug!("Starting directory listing");
 
     let effective_limit = limit.min(MAX_DIRECTORY_ENTRIES);
+    if effective_limit == 0 {
+        debug!("Directory listing short-circuited because limit is 0");
+        return Vec::new();
+    }
 
     // Expand the path
     let expanded = match expand_path(dir_path) {

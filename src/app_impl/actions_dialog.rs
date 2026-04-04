@@ -179,43 +179,8 @@ impl ScriptListApp {
     }
 
     /// Convert a display shortcut (⌘⇧E) to normalized form (cmd+shift+e)
-    pub(crate) fn normalize_display_shortcut(display: &str) -> String {
-        let mut parts: Vec<&str> = Vec::new();
-        let mut key_char: Option<char> = None;
-
-        for ch in display.chars() {
-            match ch {
-                '⌘' => parts.push("cmd"),
-                '⌃' => parts.push("ctrl"),
-                '⌥' => parts.push("alt"),
-                '⇧' => parts.push("shift"),
-                '↵' => key_char = Some('e'), // Enter - map to 'enter' below
-                '⎋' => key_char = Some('`'), // Escape placeholder
-                '⇥' => key_char = Some('t'), // Tab placeholder
-                '⌫' => key_char = Some('b'), // Backspace placeholder
-                _ => key_char = Some(ch),
-            }
-        }
-
-        // Sort modifiers alphabetically (matches keystroke_to_shortcut order)
-        parts.sort();
-
-        let mut result = parts.join("+");
-        if let Some(k) = key_char {
-            if !result.is_empty() {
-                result.push('+');
-            }
-            // Handle special keys
-            match k {
-                'e' if display.contains('↵') => result.push_str("enter"),
-                '`' if display.contains('⎋') => result.push_str("escape"),
-                't' if display.contains('⇥') => result.push_str("tab"),
-                'b' if display.contains('⌫') => result.push_str("backspace"),
-                _ => result.push_str(&k.to_lowercase().to_string()),
-            }
-        }
-
-        result
+    pub(crate) fn normalize_display_shortcut(hint: &str) -> String {
+        crate::components::hint_strip::canonical_shortcut_hint(hint)
     }
 
     fn should_preserve_main_filter_while_actions_open(&self) -> bool {

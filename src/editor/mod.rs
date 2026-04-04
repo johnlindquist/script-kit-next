@@ -910,8 +910,10 @@ impl EditorPrompt {
         }
     }
 
-    /// Render the choice popup overlay
+    /// Render the choice popup overlay — whisper chrome: ghost bg, no border, no card shadow.
     fn render_choices_popup(&self, _cx: &Context<Self>) -> Option<impl IntoElement> {
+        use crate::ui_foundation::HexColorExt;
+
         let popup = self.choices_popup.as_ref()?;
         let colors = &self.theme.colors;
 
@@ -920,26 +922,20 @@ impl EditorPrompt {
                 .absolute()
                 .top(px(40.)) // Position below the editor toolbar area
                 .left(px(16.))
-                //.z_index(1000) // Not available in GPUI, using layer order instead
                 .min_w(px(200.))
                 .max_w(px(400.))
-                .bg(rgb(colors.background.main))
-                .border_1()
-                .border_color(rgb(colors.ui.border))
-                .rounded_md()
-                // Only apply shadow when vibrancy is disabled - shadows block blur
-                .when(!self.theme.is_vibrancy_enabled(), |d| d.shadow_lg())
+                // Whisper chrome: near-opaque bg for readability, no border, no rounded card, no shadow
+                .bg(colors.background.main.to_rgb())
                 .py(px(4.))
                 .children(popup.choices.iter().enumerate().map(|(idx, choice)| {
                     let is_selected = idx == popup.selected_index;
-                    let bg_color = if is_selected {
-                        rgb(colors.accent.selected)
+                    let bg_color: gpui::Hsla = if is_selected {
+                        // Theme-driven selected accent
+                        rgb(colors.accent.selected).into()
                     } else {
-                        rgb(colors.background.main)
+                        gpui::transparent_black()
                     };
-                    // Use contrasting text color for selected item
                     let text_color = if is_selected {
-                        // Use on_accent color for text on accent backgrounds
                         rgb(colors.text.on_accent)
                     } else {
                         rgb(colors.text.primary)
@@ -1404,5 +1400,21 @@ mod tests {
 
         // This is a zero-length selection at the end (cursor, not selection)
         assert_eq!(start_bytes, end_bytes);
+    }
+
+    #[test]
+    fn editor_choice_popup_has_no_box_card_chrome() {
+        const SOURCE: &str = include_str!("mod.rs");
+        // Build needle strings to avoid self-match with include_str
+        let rounded_needle = format!(".rounded{}md()", "_");
+        let border_needle = format!(".border{}1()", "_");
+        assert!(
+            !SOURCE.contains(&rounded_needle),
+            "editor choice popup should not use rounded card chrome"
+        );
+        assert!(
+            !SOURCE.contains(&border_needle),
+            "editor choice popup should not use bordered card chrome"
+        );
     }
 }

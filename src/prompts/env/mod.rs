@@ -18,7 +18,7 @@ use std::sync::Arc;
 
 use crate::components::TextInputState;
 use crate::designs::icon_variations::IconName;
-use crate::designs::{get_tokens, DesignVariant};
+use crate::designs::DesignVariant;
 use crate::logging;
 use crate::panel::{CURSOR_HEIGHT_LG, CURSOR_WIDTH};
 use crate::secrets;

@@ -102,23 +102,26 @@ mod tests {
     #[test]
     fn env_prompt_render_delegates_footer_to_wrapper() {
         let source = include_str!("render.rs");
+        // Scope to render code only (exclude test assertions that mention the same strings)
+        let render_fn_end = source.find("#[cfg(test)]").unwrap_or(source.len());
+        let render_code = &source[..render_fn_end];
         // Footer is owned by the outer wrapper shell (render_prompts::other.rs),
         // so the inner prompt must NOT render its own footer.
         assert!(
-            !source.contains("render_simple_hint_strip("),
+            !render_code.contains("render_simple_hint_strip("),
             "env render should not render its own hint strip (wrapper owns the footer)"
         );
         assert!(
-            !source.contains("PromptFooter::new("),
+            !render_code.contains("PromptFooter::new("),
             "env render should not use PromptFooter"
         );
         assert!(
-            !source.contains("PromptFooterColors"),
+            !render_code.contains("PromptFooterColors"),
             "env render should not reference PromptFooterColors"
         );
         // Storage hint text still appears in the prompt body (inline context).
         assert!(
-            source.contains("env_storage_hint_text("),
+            render_code.contains("env_storage_hint_text("),
             "env render should still show storage hint text in the body"
         );
     }
