@@ -953,6 +953,84 @@ fn slash_and_mention_highlights_both_cover_query_length() {
     }
 }
 
+// ── Fuzzy-only admission tests ─────────────────────────────────────────
+
+#[test]
+fn fuzzy_gst_matches_git_status() {
+    let items = build_picker_items(ContextPickerTrigger::Mention, "gst");
+    let has_git_status = items.iter().any(|i| {
+        matches!(
+            i.kind,
+            ContextPickerItemKind::BuiltIn(ContextAttachmentKind::GitStatus)
+        )
+    });
+    assert!(
+        has_git_status,
+        "Fuzzy query 'gst' should match Git Status via scattered character matching"
+    );
+}
+
+#[test]
+fn fuzzy_rsc_matches_recent_scripts() {
+    let items = build_picker_items(ContextPickerTrigger::Mention, "rsc");
+    let has_recent_scripts = items.iter().any(|i| {
+        matches!(
+            i.kind,
+            ContextPickerItemKind::BuiltIn(ContextAttachmentKind::RecentScripts)
+        )
+    });
+    assert!(
+        has_recent_scripts,
+        "Fuzzy query 'rsc' should match Recent Scripts via scattered character matching"
+    );
+}
+
+#[test]
+fn fuzzy_match_scores_below_substring() {
+    let spec = ContextAttachmentKind::GitStatus.spec();
+    let fuzzy_score = score_builtin(spec, "gst");
+    let substring_score = score_builtin(spec, "git");
+    assert!(
+        substring_score > fuzzy_score,
+        "Substring match ({}) should outrank fuzzy match ({})",
+        substring_score,
+        fuzzy_score,
+    );
+    assert_eq!(fuzzy_score, 50, "Fuzzy-only matches should score exactly 50");
+}
+
+#[test]
+fn fuzzy_match_has_highlight_indices() {
+    let items = build_picker_items(ContextPickerTrigger::Mention, "gst");
+    let git_status = items
+        .iter()
+        .find(|i| {
+            matches!(
+                i.kind,
+                ContextPickerItemKind::BuiltIn(ContextAttachmentKind::GitStatus)
+            )
+        })
+        .expect("Git Status should be in fuzzy results for 'gst'");
+    assert!(
+        !git_status.label_highlight_indices.is_empty()
+            || !git_status.meta_highlight_indices.is_empty(),
+        "Fuzzy matches should have highlight indices for rendering"
+    );
+}
+
+#[test]
+fn fuzzy_nonexistent_query_still_filters() {
+    let items = build_picker_items(ContextPickerTrigger::Mention, "zqx");
+    let builtin_count = items
+        .iter()
+        .filter(|i| matches!(i.kind, ContextPickerItemKind::BuiltIn(_)))
+        .count();
+    assert_eq!(
+        builtin_count, 0,
+        "Query with no fuzzy match should still filter out all built-ins"
+    );
+}
+
 // ── Deterministic ranking across trigger modes ─────────────────────────
 
 #[test]

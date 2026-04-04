@@ -308,16 +308,16 @@ fn score_builtin_seed(
         return (100, Vec::new(), Vec::new());
     }
 
-    let (display_meta, primary, secondary) = match trigger {
+    let (display_meta, primary, secondary): (&str, &str, &str) = match trigger {
         ContextPickerTrigger::Mention => (
             seed.mention_meta,
-            seed.mention_meta_lower.trim_start_matches(['@', '/']).to_string(),
-            seed.slash_meta_lower.trim_start_matches(['@', '/']).to_string(),
+            seed.mention_meta_lower.trim_start_matches(['@', '/']),
+            seed.slash_meta_lower.trim_start_matches(['@', '/']),
         ),
         ContextPickerTrigger::Slash => (
             seed.slash_meta,
-            seed.slash_meta_lower.trim_start_matches(['@', '/']).to_string(),
-            seed.mention_meta_lower.trim_start_matches(['@', '/']).to_string(),
+            seed.slash_meta_lower.trim_start_matches(['@', '/']),
+            seed.mention_meta_lower.trim_start_matches(['@', '/']),
         ),
     };
 
@@ -359,6 +359,27 @@ fn score_builtin_seed(
     {
         best_score = 100;
         (best_label_hits, best_meta_hits) = compute_hits(query);
+    }
+
+    // Fuzzy fallback: admit scattered-character matches when no stronger
+    // rule matched (e.g. "gst" → "git-status").
+    if best_score == 0 {
+        let label_fuzzy = match_query_chars(query, seed.label);
+        let meta_fuzzy = match_query_chars_in_display_meta(query, display_meta);
+        if label_fuzzy.is_some() || meta_fuzzy.is_some() {
+            best_score = 50;
+            best_label_hits = label_fuzzy.unwrap_or_default();
+            best_meta_hits = meta_fuzzy.unwrap_or_default();
+            tracing::debug!(
+                target: "ai",
+                kind = ?seed.kind,
+                query = %query,
+                score = best_score,
+                label_hits = ?best_label_hits,
+                meta_hits = ?best_meta_hits,
+                "ai_context_picker_builtin_fuzzy_match"
+            );
+        }
     }
 
     (best_score, best_label_hits, best_meta_hits)
@@ -576,21 +597,21 @@ impl AiApp {
     }
 }
 
-/// Build the ranked list of picker items for a given trigger and query.
-///
-/// Uses the cached `BuiltinPickerSeed` catalog to avoid per-query
-/// lowercasing and metadata reconstruction. File results are only
-/// included when the query resolves to explicit `@file:` intent.
-pub fn build_picker_items(trigger: ContextPickerTrigger, query: &str) -> Vec<ContextPickerItem> {
-    let query_lower = query.to_lowercase();
-    let mut items = Vec::with_capacity(builtin_picker_seeds().len());
-
+/// Populate `items` with built-in context attachment entries and optional
+/// file/folder results. Shared by both `build_picker_items` and
+/// `build_slash_picker_items`.
+fn extend_builtin_picker_items(
+    trigger: ContextPickerTrigger,
+    query: &str,
+    query_lower: &str,
+    items: &mut Vec<ContextPickerItem>,
+) {
     for seed in builtin_picker_seeds() {
         if trigger == ContextPickerTrigger::Slash && !seed.has_slash_command {
             continue;
         }
 
-        let (score, label_hits, meta_hits) = score_builtin_seed(seed, trigger, &query_lower);
+        let (score, label_hits, meta_hits) = score_builtin_seed(seed, trigger, query_lower);
 
         if score == 0 && !query_lower.is_empty() {
             continue;
@@ -615,7 +636,7 @@ pub fn build_picker_items(trigger: ContextPickerTrigger, query: &str) -> Vec<Con
     // File/folder results only when the user explicitly types @file: intent
     if let Some(file_query) = file_search_query(trigger, query) {
         if let Ok(cwd) = std::env::current_dir() {
-            collect_file_items(&cwd, &file_query, &mut items);
+            collect_file_items(&cwd, &file_query, items);
         }
     } else {
         tracing::debug!(
@@ -625,13 +646,66 @@ pub fn build_picker_items(trigger: ContextPickerTrigger, query: &str) -> Vec<Con
             "ai_context_picker_file_scan_skipped"
         );
     }
+}
 
+/// Populate `items` with agent slash command entries (e.g. `/compact`,
+/// `/clear`). Shared by ACP and any future slash-command surface.
+fn extend_agent_slash_command_items<'a, I>(
+    query_lower: &str,
+    names: I,
+    items: &mut Vec<ContextPickerItem>,
+) where
+    I: IntoIterator<Item = &'a str>,
+{
+    for name in names {
+        let name_lower = name.to_lowercase();
+        let score = if query_lower.is_empty() {
+            50
+        } else if name_lower.starts_with(query_lower) {
+            90
+        } else if name_lower.contains(query_lower) {
+            50
+        } else if match_query_chars(query_lower, &name_lower).is_some() {
+            10
+        } else {
+            continue;
+        };
+
+        let meta_str = format!("/{name}");
+        let label_hits = if query_lower.is_empty() {
+            Vec::new()
+        } else {
+            match_query_chars(query_lower, name).unwrap_or_default()
+        };
+        let meta_hits = if query_lower.is_empty() {
+            Vec::new()
+        } else {
+            match_query_chars_in_display_meta(query_lower, &meta_str).unwrap_or_default()
+        };
+
+        items.push(ContextPickerItem {
+            id: SharedString::from(format!("slash-cmd:{name}")),
+            label: SharedString::from(name.to_string()),
+            meta: SharedString::from(meta_str),
+            kind: ContextPickerItemKind::SlashCommand(name.to_string()),
+            score,
+            label_highlight_indices: label_hits,
+            meta_highlight_indices: meta_hits,
+        });
+    }
+}
+
+/// Sort items by section priority then score (descending).
+fn sort_picker_items(items: &mut [ContextPickerItem]) {
     items.sort_by(|a, b| {
         let section_a = section_priority(&a.kind);
         let section_b = section_priority(&b.kind);
         section_a.cmp(&section_b).then(b.score.cmp(&a.score))
     });
+}
 
+/// Log the top ranked items for debugging.
+fn log_top_ranked_items(items: &[ContextPickerItem]) {
     for (rank, item) in items.iter().enumerate().take(5) {
         tracing::debug!(
             target: "ai",
@@ -643,6 +717,64 @@ pub fn build_picker_items(trigger: ContextPickerTrigger, query: &str) -> Vec<Con
             "ai_context_picker_ranked_item"
         );
     }
+}
+
+/// Build the ranked list of picker items for a given trigger and query.
+///
+/// Uses the cached `BuiltinPickerSeed` catalog to avoid per-query
+/// lowercasing and metadata reconstruction. File results are only
+/// included when the query resolves to explicit `@file:` intent.
+pub fn build_picker_items(trigger: ContextPickerTrigger, query: &str) -> Vec<ContextPickerItem> {
+    let query_lower = query.to_lowercase();
+    let mut items = Vec::with_capacity(builtin_picker_seeds().len() + FILE_RESULTS_LIMIT);
+
+    extend_builtin_picker_items(trigger, query, &query_lower, &mut items);
+    sort_picker_items(&mut items);
+
+    tracing::debug!(
+        target: "ai",
+        ?trigger,
+        query = %query,
+        item_count = items.len(),
+        "ai_context_picker_items_built"
+    );
+    log_top_ranked_items(&items);
+
+    items
+}
+
+/// Build a ranked list of picker items for slash mode, including both
+/// built-in context attachments and agent slash commands.
+///
+/// This is the single entry point for ACP slash-mode item construction,
+/// replacing the previous ACP-only `append_agent_slash_commands` method.
+pub fn build_slash_picker_items<'a, I>(query: &str, agent_commands: I) -> Vec<ContextPickerItem>
+where
+    I: IntoIterator<Item = &'a str>,
+{
+    let query_lower = query.to_lowercase();
+    let command_names: Vec<&str> = agent_commands.into_iter().collect();
+    let command_count = command_names.len();
+    let mut items =
+        Vec::with_capacity(builtin_picker_seeds().len() + FILE_RESULTS_LIMIT + command_count);
+
+    extend_builtin_picker_items(
+        ContextPickerTrigger::Slash,
+        query,
+        &query_lower,
+        &mut items,
+    );
+    extend_agent_slash_command_items(&query_lower, command_names, &mut items);
+    sort_picker_items(&mut items);
+
+    tracing::info!(
+        target: "ai",
+        query = %query,
+        command_count,
+        item_count = items.len(),
+        "ai_context_picker_slash_items_built"
+    );
+    log_top_ranked_items(&items);
 
     items
 }
