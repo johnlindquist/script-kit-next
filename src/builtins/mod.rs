@@ -320,7 +320,7 @@ pub struct BuiltInEntry {
     pub keywords: Vec<String>,
     /// The actual feature this entry represents
     pub feature: BuiltInFeature,
-    /// Optional icon (emoji) to display
+    /// Optional icon name (Lucide kebab-case or legacy emoji) to display
     pub icon: Option<String>,
     /// Group for categorization in the UI (will be used when menu bar integration is complete)
     #[allow(dead_code)]
@@ -436,7 +436,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
                 "Open clipboard history to view, search, and reuse copied items",
                 vec!["clipboard", "history", "paste", "copy"],
                 BuiltInFeature::ClipboardHistory,
-                "📋",
+                "clipboard",
             ));
             debug!("Added Clipboard History built-in entry");
 
@@ -446,7 +446,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
                 "Paste multiple clipboard items one at a time in sequence",
                 vec!["paste", "sequential", "clipboard", "batch", "paseq"],
                 BuiltInFeature::PasteSequentially,
-                "📌",
+                "clipboard-paste",
             ));
             debug!("Added Paste Sequentially built-in entry");
         }
@@ -464,7 +464,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
                 "Open window switcher to focus, tile, and manage open windows",
                 vec!["window", "switch", "tile", "focus", "manage", "switcher"],
                 BuiltInFeature::WindowSwitcher,
-                "🪟",
+                "app-window",
             ));
             debug!("Added Window Switcher built-in entry");
         }
@@ -485,7 +485,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
                 "tab",
             ],
             BuiltInFeature::AiChat,
-            "🤖",
+            "bot",
         ));
         debug!("Added AI Harness built-in entry");
 
@@ -502,7 +502,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
                 "saved",
             ],
             BuiltInFeature::Favorites,
-            "⭐",
+            "star",
         ));
         debug!("Added Favorites built-in entry");
 
@@ -513,7 +513,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             "Pick an emoji from the built-in list and copy it to the clipboard",
             vec!["emoji", "picker", "symbols", "unicode", "copy", "clipboard"],
             BuiltInFeature::EmojiPicker,
-            "😀",
+            "smile",
         ));
         debug!("Added Emoji Picker built-in entry");
 
@@ -534,7 +534,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
                     "variations",
                 ],
                 BuiltInFeature::DesignGallery,
-                "🎨",
+                "palette",
             ));
             debug!("Added Design Gallery built-in entry");
 
@@ -545,7 +545,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
                 "Open the confirmation dialog test tool (dev only)",
                 vec!["test", "confirmation", "dev", "debug"],
                 BuiltInFeature::SystemAction(SystemActionType::TestConfirmation),
-                "🧪",
+                "flask-conical",
             ));
             debug!("Added Test Confirmation built-in entry");
         }
@@ -567,7 +567,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
                     "ui",
                 ],
                 BuiltInFeature::DesignExplorer,
-                "🧪",
+                "flask-conical",
             ));
             debug!("Added Design Explorer built-in entry");
         }
@@ -587,7 +587,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             "Empty the macOS Trash",
             vec!["empty", "trash", "delete", "clean"],
             BuiltInFeature::SystemAction(SystemActionType::EmptyTrash),
-            "🗑️",
+            "trash-2",
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
@@ -596,7 +596,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             "Lock the screen",
             vec!["lock", "screen", "security"],
             BuiltInFeature::SystemAction(SystemActionType::LockScreen),
-            "🔒",
+            "lock",
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
@@ -605,7 +605,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             "Put the system to sleep",
             vec!["sleep", "suspend", "power"],
             BuiltInFeature::SystemAction(SystemActionType::Sleep),
-            "😴",
+            "moon",
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
@@ -614,7 +614,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             "Restart the system",
             vec!["restart", "reboot", "power"],
             BuiltInFeature::SystemAction(SystemActionType::Restart),
-            "🔄",
+            "refresh-cw",
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
@@ -623,7 +623,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             "Shut down the system",
             vec!["shut", "down", "shutdown", "power", "off"],
             BuiltInFeature::SystemAction(SystemActionType::ShutDown),
-            "⏻",
+            "power",
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
@@ -632,7 +632,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             "Log out the current user",
             vec!["log", "out", "logout", "user"],
             BuiltInFeature::SystemAction(SystemActionType::LogOut),
-            "🚪",
+            "log-out",
         ));
 
         // UI controls
@@ -642,7 +642,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             "Switch between light and dark appearance",
             vec!["dark", "mode", "light", "appearance", "theme", "toggle"],
             BuiltInFeature::SystemAction(SystemActionType::ToggleDarkMode),
-            "🌙",
+            "sun-moon",
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
@@ -651,7 +651,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             "Hide all windows to reveal the desktop",
             vec!["show", "desktop", "hide", "windows"],
             BuiltInFeature::SystemAction(SystemActionType::ShowDesktop),
-            "🖥️",
+            "monitor",
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
@@ -660,7 +660,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             "Show all windows and desktops",
             vec!["mission", "control", "expose", "spaces", "windows"],
             BuiltInFeature::SystemAction(SystemActionType::MissionControl),
-            "🪟",
+            "layout-grid",
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
@@ -669,7 +669,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             "Open Launchpad to show all applications",
             vec!["launchpad", "apps", "applications"],
             BuiltInFeature::SystemAction(SystemActionType::Launchpad),
-            "🚀",
+            "rocket",
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
@@ -686,7 +686,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
                 "stop",
             ],
             BuiltInFeature::SystemAction(SystemActionType::ForceQuitApps),
-            "⚠️",
+            "triangle-alert",
         ));
 
         // Volume controls (preset levels)
@@ -696,7 +696,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             "Set system volume to 0% (mute)",
             vec!["volume", "mute", "0", "percent", "zero", "off"],
             BuiltInFeature::SystemAction(SystemActionType::Volume0),
-            "🔇",
+            "volume-x",
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
@@ -705,7 +705,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             "Set system volume to 25%",
             vec!["volume", "25", "percent", "low", "quiet"],
             BuiltInFeature::SystemAction(SystemActionType::Volume25),
-            "🔈",
+            "volume",
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
@@ -714,7 +714,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             "Set system volume to 50%",
             vec!["volume", "50", "percent", "half", "medium"],
             BuiltInFeature::SystemAction(SystemActionType::Volume50),
-            "🔉",
+            "volume-1",
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
@@ -723,7 +723,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             "Set system volume to 75%",
             vec!["volume", "75", "percent", "high", "loud"],
             BuiltInFeature::SystemAction(SystemActionType::Volume75),
-            "🔉",
+            "volume-1",
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
@@ -732,7 +732,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             "Set system volume to 100% (max)",
             vec!["volume", "100", "percent", "max", "full"],
             BuiltInFeature::SystemAction(SystemActionType::Volume100),
-            "🔊",
+            "volume-2",
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
@@ -741,7 +741,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             "Toggle system audio mute on or off",
             vec!["mute", "unmute", "volume", "sound", "audio", "toggle"],
             BuiltInFeature::SystemAction(SystemActionType::VolumeMute),
-            "🔇",
+            "volume-x",
         ));
 
         // App control
@@ -751,7 +751,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             "Quit the Script Kit application",
             vec!["quit", "exit", "close", "script", "kit", "app"],
             BuiltInFeature::SystemAction(SystemActionType::QuitScriptKit),
-            "🚪",
+            "log-out",
         ));
 
         // System utilities
@@ -769,7 +769,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
                 "toggle",
             ],
             BuiltInFeature::SystemAction(SystemActionType::ToggleDoNotDisturb),
-            "🔕",
+            "bell-off",
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
@@ -778,7 +778,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             "Activate the screen saver",
             vec!["screen", "saver", "screensaver"],
             BuiltInFeature::SystemAction(SystemActionType::StartScreenSaver),
-            "🖼️",
+            "image",
         ));
 
         // System Preferences
@@ -788,7 +788,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             "Open System Settings (System Preferences)",
             vec!["system", "settings", "preferences", "prefs"],
             BuiltInFeature::SystemAction(SystemActionType::OpenSystemPreferences),
-            "⚙️",
+            "settings",
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
@@ -797,7 +797,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             "Open Privacy & Security settings",
             vec!["privacy", "security", "settings"],
             BuiltInFeature::SystemAction(SystemActionType::OpenPrivacySettings),
-            "🔐",
+            "shield",
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
@@ -806,7 +806,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             "Open Display settings",
             vec!["display", "monitor", "screen", "resolution", "settings"],
             BuiltInFeature::SystemAction(SystemActionType::OpenDisplaySettings),
-            "🖥️",
+            "monitor",
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
@@ -815,7 +815,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             "Open Sound settings",
             vec!["sound", "audio", "volume", "settings"],
             BuiltInFeature::SystemAction(SystemActionType::OpenSoundSettings),
-            "🔊",
+            "volume-2",
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
@@ -824,7 +824,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             "Open Network settings",
             vec!["network", "wifi", "ethernet", "internet", "settings"],
             BuiltInFeature::SystemAction(SystemActionType::OpenNetworkSettings),
-            "📡",
+            "wifi",
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
@@ -833,7 +833,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             "Open Keyboard settings",
             vec!["keyboard", "shortcuts", "input", "settings"],
             BuiltInFeature::SystemAction(SystemActionType::OpenKeyboardSettings),
-            "⌨️",
+            "keyboard",
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
@@ -842,7 +842,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             "Open Bluetooth settings",
             vec!["bluetooth", "wireless", "settings"],
             BuiltInFeature::SystemAction(SystemActionType::OpenBluetoothSettings),
-            "🔵",
+            "bluetooth",
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
@@ -851,7 +851,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             "Open Notifications settings",
             vec!["notifications", "alerts", "banners", "settings"],
             BuiltInFeature::SystemAction(SystemActionType::OpenNotificationsSettings),
-            "🔔",
+            "bell",
         ));
 
         // NOTE: Window Actions removed - now handled by window-management extension
@@ -886,7 +886,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
                 "text",
             ],
             BuiltInFeature::NotesCommand(NotesCommandType::OpenNotes),
-            "📝",
+            "notebook-pen",
         ));
 
         // NewNote and SearchNotes intentionally collapse into OpenNotes until
@@ -898,7 +898,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             "Capture a new note without opening the full Notes window",
             vec!["quick", "capture", "note", "fast"],
             BuiltInFeature::NotesCommand(NotesCommandType::QuickCapture),
-            "⚡",
+            "zap",
         ));
 
         // =========================================================================
@@ -923,7 +923,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
                 "tab",
             ],
             BuiltInFeature::AiCommand(AiCommandType::GenerateScript),
-            "🧠",
+            "brain",
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
@@ -944,7 +944,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
                 "ai",
             ],
             BuiltInFeature::AiCommand(AiCommandType::GenerateScriptFromCurrentApp),
-            "🪄",
+            "wand-sparkles",
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
@@ -961,7 +961,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
                 "image",
             ],
             BuiltInFeature::AiCommand(AiCommandType::SendScreenToAi),
-            "📸",
+            "camera",
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
@@ -978,7 +978,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
                 "screenshot",
             ],
             BuiltInFeature::AiCommand(AiCommandType::SendFocusedWindowToAi),
-            "🪟",
+            "app-window",
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
@@ -995,7 +995,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
                 "copy",
             ],
             BuiltInFeature::AiCommand(AiCommandType::SendSelectedTextToAi),
-            "📝",
+            "text-cursor-input",
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
@@ -1006,7 +1006,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
                 "send", "browser", "tab", "url", "safari", "chrome", "ai", "chat", "web",
             ],
             BuiltInFeature::AiCommand(AiCommandType::SendBrowserTabToAi),
-            "🌐",
+            "globe",
         ));
 
         // Preview AI commands are currently stubs and should only appear in debug builds.
@@ -1019,7 +1019,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
                 "Create a reusable AI preset with name, system prompt, and model",
                 vec!["create", "ai", "preset", "template", "save", "new"],
                 BuiltInFeature::AiCommand(AiCommandType::CreateAiPreset),
-                "🧪",
+                "flask-conical",
             ));
 
             entries.push(BuiltInEntry::new_with_icon(
@@ -1028,7 +1028,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
                 "Import AI presets from a JSON file via file picker",
                 vec!["import", "ai", "preset", "template", "file", "load"],
                 BuiltInFeature::AiCommand(AiCommandType::ImportAiPresets),
-                "📥",
+                "download",
             ));
 
             entries.push(BuiltInEntry::new_with_icon(
@@ -1039,7 +1039,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
                     "export", "ai", "preset", "template", "file", "save", "backup",
                 ],
                 BuiltInFeature::AiCommand(AiCommandType::ExportAiPresets),
-                "📤",
+                "upload",
             ));
 
             entries.push(BuiltInEntry::new_with_icon(
@@ -1048,7 +1048,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
                 "Search and browse saved AI presets to start a new chat",
                 vec!["search", "ai", "preset", "template", "browse", "find"],
                 BuiltInFeature::AiCommand(AiCommandType::SearchAiPresets),
-                "🔎",
+                "search",
             ));
         }
 
@@ -1071,7 +1071,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
                 "code",
             ],
             BuiltInFeature::ScriptCommand(ScriptCommandType::NewScript),
-            "➕",
+            "plus",
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
@@ -1089,7 +1089,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
                 "create",
             ],
             BuiltInFeature::ScriptCommand(ScriptCommandType::NewExtension),
-            "✨",
+            "sparkles",
         ));
 
         // =========================================================================
@@ -1102,7 +1102,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             "Run a check for all required macOS permissions",
             vec!["check", "permissions", "accessibility", "privacy"],
             BuiltInFeature::PermissionCommand(PermissionCommandType::CheckPermissions),
-            "✅",
+            "circle-check",
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
@@ -1111,7 +1111,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             "Request accessibility permission for Script Kit in System Settings",
             vec!["request", "accessibility", "permission"],
             BuiltInFeature::PermissionCommand(PermissionCommandType::RequestAccessibility),
-            "🔑",
+            "key-round",
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
@@ -1120,7 +1120,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             "Open Accessibility settings in System Preferences",
             vec!["accessibility", "settings", "permission", "open"],
             BuiltInFeature::PermissionCommand(PermissionCommandType::OpenAccessibilitySettings),
-            "♿",
+            "accessibility",
         ));
 
         // =========================================================================
@@ -1140,7 +1140,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
                 "history",
             ],
             BuiltInFeature::FrecencyCommand(FrecencyCommandType::ClearSuggested),
-            "🧹",
+            "eraser",
         ));
 
         // =========================================================================
@@ -1163,7 +1163,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
                 "setup",
             ],
             BuiltInFeature::Settings,
-            "⚙️",
+            "settings",
         ));
 
         // Settings Commands
@@ -1179,7 +1179,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
                     "reset", "window", "position", "default", "restore", "layout", "location",
                 ],
                 BuiltInFeature::SettingsCommand(SettingsCommandType::ResetWindowPositions),
-                "🔄",
+                "refresh-cw",
             ));
         }
 
@@ -1200,7 +1200,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
                 "settings",
             ],
             BuiltInFeature::SettingsCommand(SettingsCommandType::ConfigureVercelApiKey),
-            "🔑",
+            "key-round",
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
@@ -1219,7 +1219,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
                 "settings",
             ],
             BuiltInFeature::SettingsCommand(SettingsCommandType::ConfigureOpenAiApiKey),
-            "🔑",
+            "key-round",
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
@@ -1238,7 +1238,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
                 "settings",
             ],
             BuiltInFeature::SettingsCommand(SettingsCommandType::ConfigureAnthropicApiKey),
-            "🔑",
+            "key-round",
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
@@ -1247,7 +1247,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             "Open the theme picker and apply a color theme with live preview",
             vec!["theme", "appearance", "color", "dark", "light", "scheme"],
             BuiltInFeature::SettingsCommand(SettingsCommandType::ChooseTheme),
-            "🎨",
+            "palette",
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
@@ -1264,7 +1264,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
                 "recording",
             ],
             BuiltInFeature::SettingsCommand(SettingsCommandType::SelectMicrophone),
-            "🎙️",
+            "mic",
         ));
 
         // =========================================================================
@@ -1287,7 +1287,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
                 "jot",
             ],
             BuiltInFeature::UtilityCommand(UtilityCommandType::ScratchPad),
-            "📝",
+            "notebook-pen",
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
@@ -1316,7 +1316,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
                 "terminal", "term", "shell", "bash", "zsh", "command", "quick", "console", "cli",
             ],
             BuiltInFeature::UtilityCommand(UtilityCommandType::QuickTerminal),
-            "💻",
+            "square-terminal",
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
@@ -1334,7 +1334,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
                 "tab ai",
             ],
             BuiltInFeature::UtilityCommand(UtilityCommandType::ClaudeCode),
-            "🤖",
+            "bot",
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
@@ -1400,7 +1400,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
                 "selection",
             ],
             BuiltInFeature::UtilityCommand(UtilityCommandType::DoInCurrentApp),
-            "🎯",
+            "target",
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
@@ -1423,7 +1423,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
                 "generate",
             ],
             BuiltInFeature::UtilityCommand(UtilityCommandType::TurnThisIntoCommand),
-            "🧩",
+            "puzzle",
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
@@ -1444,7 +1444,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
                 "ai",
             ],
             BuiltInFeature::UtilityCommand(UtilityCommandType::InspectCurrentContext),
-            "🧭",
+            "compass",
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
@@ -1470,7 +1470,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
                 "shortcut",
             ],
             BuiltInFeature::UtilityCommand(UtilityCommandType::TraceCurrentAppIntent),
-            "🧪",
+            "flask-conical",
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
@@ -1492,7 +1492,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
                 "automation",
             ],
             BuiltInFeature::UtilityCommand(UtilityCommandType::VerifyCurrentAppRecipe),
-            "🔬",
+            "microscope",
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
@@ -1514,7 +1514,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
                 "drift",
             ],
             BuiltInFeature::UtilityCommand(UtilityCommandType::ReplayCurrentAppRecipe),
-            "🔁",
+            "repeat",
         ));
 
         // =========================================================================
@@ -1596,7 +1596,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             "Open the webcam prompt and capture a photo",
             vec!["webcam", "camera", "capture", "photo", "image"],
             BuiltInFeature::Webcam,
-            "📸",
+            "camera",
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
@@ -1612,7 +1612,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
                 "whisper",
             ],
             BuiltInFeature::Dictation,
-            "🎙️",
+            "mic",
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
@@ -1627,7 +1627,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
                 "speak to ai",
             ],
             BuiltInFeature::DictationToAiHarness,
-            "🎙️",
+            "mic",
         ));
     }
 
@@ -1844,18 +1844,18 @@ fn flatten_menu_item(
 #[allow(dead_code)] // Will be used when menu bar integration is complete
 fn get_menu_icon(top_menu: &str) -> &'static str {
     match top_menu.to_lowercase().as_str() {
-        "file" => "📁",
-        "edit" => "📋",
-        "view" => "👁",
-        "window" => "🪟",
-        "help" => "❓",
-        "format" => "🎨",
-        "tools" => "🔧",
-        "go" => "➡️",
-        "bookmarks" | "favorites" => "⭐",
-        "history" => "🕐",
-        "develop" | "developer" => "🛠",
-        _ => "📌",
+        "file" => "folder",
+        "edit" => "clipboard",
+        "view" => "eye",
+        "window" => "app-window",
+        "help" => "circle-help",
+        "format" => "palette",
+        "tools" => "wrench",
+        "go" => "arrow-right",
+        "bookmarks" | "favorites" => "star",
+        "history" => "clock",
+        "develop" | "developer" => "code",
+        _ => "pin",
     }
 }
 // --- merged from part_003.rs ---
@@ -2038,7 +2038,7 @@ mod tests {
             .find(|e| e.id == "builtin/window-switcher")
             .unwrap();
         assert_eq!(window_switcher.feature, BuiltInFeature::WindowSwitcher);
-        assert_eq!(window_switcher.icon, Some("🪟".to_string()));
+        assert_eq!(window_switcher.icon, Some("app-window".to_string()));
 
         // Clipboard history should NOT be present
         assert!(!entries.iter().any(|e| e.id == "builtin/clipboard-history"));
@@ -2130,12 +2130,12 @@ mod tests {
             "Test description",
             vec!["test"],
             BuiltInFeature::ClipboardHistory,
-            "📋",
+            "clipboard",
         );
 
         assert_eq!(entry.id, "builtin/test-id");
         assert_eq!(entry.name, "Test Entry");
-        assert_eq!(entry.icon, Some("📋".to_string()));
+        assert_eq!(entry.icon, Some("clipboard".to_string()));
     }
     #[test]
     fn test_builtin_entry_clone() {
@@ -2145,7 +2145,7 @@ mod tests {
             "Test description",
             vec!["test"],
             BuiltInFeature::AppLauncher,
-            "🚀",
+            "rocket",
         );
 
         let cloned = entry.clone();
@@ -2687,7 +2687,7 @@ mod tests {
                 enabled: true,
                 shortcut: Some("⌘T".into()),
             }),
-            Some("📁".into()),
+            Some("folder".into()),
             BuiltInGroup::MenuBar,
         );
 
@@ -2707,7 +2707,7 @@ mod tests {
                 enabled: true,
                 shortcut: None,
             }),
-            Some("📌".into()),
+            Some("pin".into()),
             BuiltInGroup::MenuBar,
         );
 
@@ -2722,7 +2722,7 @@ mod tests {
             "View and paste from clipboard",
             vec!["clipboard"],
             BuiltInFeature::ClipboardHistory,
-            "📋",
+            "clipboard",
         );
         // Core group → leaf_name returns full name unchanged
         assert_eq!(entry.leaf_name(), "Clipboard History");
@@ -2741,7 +2741,7 @@ mod tests {
                 enabled: true,
                 shortcut: Some("⌘T".into()),
             }),
-            Some("📁".into()),
+            Some("folder".into()),
             BuiltInGroup::MenuBar,
         );
 
@@ -2912,7 +2912,7 @@ mod tests {
                 enabled: true,
                 shortcut: Some("⌘T".into()),
             }),
-            Some("📁".into()),
+            Some("folder".into()),
             BuiltInGroup::MenuBar,
         );
 
@@ -2936,7 +2936,7 @@ mod tests {
                     enabled: true,
                     shortcut: Some("⌘T".into()),
                 }),
-                Some("📁".into()),
+                Some("folder".into()),
                 BuiltInGroup::MenuBar,
             ),
             BuiltInEntry::new_with_group(
@@ -2950,7 +2950,7 @@ mod tests {
                     enabled: true,
                     shortcut: Some("⌘N".into()),
                 }),
-                Some("📁".into()),
+                Some("folder".into()),
                 BuiltInGroup::MenuBar,
             ),
         ];

@@ -454,6 +454,43 @@ impl ScriptListApp {
         theme::presets::filtered_preset_indices_cached(filter)
     }
 
+    /// Unified helper for all chooser-local theme mutations.
+    /// Updates self.theme, syncs gpui-component + native vibrancy, and notifies.
+    fn apply_theme_chooser_theme(
+        &mut self,
+        next_theme: crate::theme::Theme,
+        reason: &'static str,
+        cx: &mut Context<Self>,
+    ) {
+        self.theme = std::sync::Arc::new(next_theme);
+        let chrome = theme::AppChromeColors::from_theme(self.theme.as_ref());
+        tracing::debug!(
+            reason,
+            accent_hex = chrome.accent_hex,
+            "theme_chooser_theme_applied"
+        );
+        sync_theme_chooser_preview(cx, &self.theme, reason);
+        cx.notify();
+    }
+
+    /// Restore a previously saved theme (escape/close paths).
+    /// Routes through the same preview sync pipeline as mutations.
+    fn restore_theme_chooser_theme(
+        &mut self,
+        original: std::sync::Arc<crate::theme::Theme>,
+        reason: &'static str,
+        cx: &mut Context<Self>,
+    ) {
+        self.theme = original;
+        let chrome = theme::AppChromeColors::from_theme(self.theme.as_ref());
+        tracing::debug!(
+            reason,
+            accent_hex = chrome.accent_hex,
+            "theme_chooser_theme_applied"
+        );
+        sync_theme_chooser_preview(cx, &self.theme, reason);
+    }
+
     /// Shared helper: preview a preset by filtered index, using the cached theme.
     fn preview_theme_chooser_preset(
         &mut self,
@@ -465,12 +502,10 @@ impl ScriptListApp {
         let Some(&preset_idx) = filtered_indices.get(filtered_selected_index) else {
             return;
         };
-        self.theme = theme::presets::preset_theme_cached(preset_idx);
+        let next_theme = (*theme::presets::preset_theme_cached(preset_idx)).clone();
         self.theme_chooser_scroll_handle
             .scroll_to_item(filtered_selected_index, ScrollStrategy::Nearest);
-
-        sync_theme_chooser_preview(cx, &self.theme, reason);
-        cx.notify();
+        self.apply_theme_chooser_theme(next_theme, reason, cx);
     }
 
     /// Accent color palette for theme customization
@@ -795,8 +830,7 @@ impl ScriptListApp {
                     if !this.clear_builtin_view_filter(cx) {
                         // No filter to clear — restore original theme and go back
                         if let Some(original) = this.theme_before_chooser.take() {
-                            this.theme = original;
-                            sync_theme_chooser_preview(cx, &this.theme, "theme_chooser_escape_restore");
+                            this.restore_theme_chooser_theme(original, "theme_chooser_escape_restore", cx);
                         }
                         this.go_back_or_close(window, cx);
                     }
@@ -805,8 +839,7 @@ impl ScriptListApp {
                 // Cmd+W: restore and close window
                 if has_cmd && key.eq_ignore_ascii_case("w") {
                     if let Some(original) = this.theme_before_chooser.take() {
-                        this.theme = original;
-                        sync_theme_chooser_preview(cx, &this.theme, "theme_chooser_close_restore");
+                        this.restore_theme_chooser_theme(original, "theme_chooser_close_restore", cx);
                     }
                     this.close_and_reset_window(cx);
                     return;
@@ -825,9 +858,7 @@ impl ScriptListApp {
                     modified.colors.accent.selected = new_accent;
                     modified.colors.text.on_accent =
                         best_contrast_of_two(new_accent, 0xFFFFFF, modified.colors.background.main);
-                    this.theme = std::sync::Arc::new(modified);
-                    sync_theme_chooser_preview(cx, &this.theme, "theme_chooser_accent_cycle");
-                    cx.notify();
+                    this.apply_theme_chooser_theme(modified, "theme_chooser_accent_cycle", cx);
                     return;
                 }
                 if has_cmd && (key == "]" || key.eq_ignore_ascii_case("bracketright")) {
@@ -839,9 +870,7 @@ impl ScriptListApp {
                     modified.colors.accent.selected = new_accent;
                     modified.colors.text.on_accent =
                         best_contrast_of_two(new_accent, 0xFFFFFF, modified.colors.background.main);
-                    this.theme = std::sync::Arc::new(modified);
-                    sync_theme_chooser_preview(cx, &this.theme, "theme_chooser_accent_cycle");
-                    cx.notify();
+                    this.apply_theme_chooser_theme(modified, "theme_chooser_accent_cycle", cx);
                     return;
                 }
                 // Cmd+- / Cmd+=: adjust surface opacity (all shell surfaces together)
@@ -851,9 +880,7 @@ impl ScriptListApp {
                     if idx > 0 {
                         let target = Self::OPACITY_PRESETS[idx - 1].0;
                         let modified = Self::apply_surface_opacity_preset(this.theme.as_ref(), target);
-                        this.theme = std::sync::Arc::new(modified);
-                        sync_theme_chooser_preview(cx, &this.theme, "theme_chooser_opacity_decrease");
-                        cx.notify();
+                        this.apply_theme_chooser_theme(modified, "theme_chooser_opacity_decrease", cx);
                     }
                     return;
                 }
@@ -863,9 +890,7 @@ impl ScriptListApp {
                     if idx < Self::OPACITY_PRESETS.len() - 1 {
                         let target = Self::OPACITY_PRESETS[idx + 1].0;
                         let modified = Self::apply_surface_opacity_preset(this.theme.as_ref(), target);
-                        this.theme = std::sync::Arc::new(modified);
-                        sync_theme_chooser_preview(cx, &this.theme, "theme_chooser_opacity_increase");
-                        cx.notify();
+                        this.apply_theme_chooser_theme(modified, "theme_chooser_opacity_increase", cx);
                     }
                     return;
                 }
@@ -875,9 +900,7 @@ impl ScriptListApp {
                     if let Some(ref mut vibrancy) = modified.vibrancy {
                         vibrancy.enabled = !vibrancy.enabled;
                     }
-                    this.theme = std::sync::Arc::new(modified);
-                    sync_theme_chooser_preview(cx, &this.theme, "theme_chooser_vibrancy_toggle");
-                    cx.notify();
+                    this.apply_theme_chooser_theme(modified, "theme_chooser_vibrancy_toggle", cx);
                     return;
                 }
                 // Cmd+M: cycle vibrancy material
@@ -895,9 +918,7 @@ impl ScriptListApp {
                     if let Some(ref mut vibrancy) = modified.vibrancy {
                         vibrancy.material = new_material;
                     }
-                    this.theme = std::sync::Arc::new(modified);
-                    sync_theme_chooser_preview(cx, &this.theme, "theme_chooser_vibrancy_material_cycle");
-                    cx.notify();
+                    this.apply_theme_chooser_theme(modified, "theme_chooser_vibrancy_material_cycle", cx);
                     return;
                 }
                 // Cmd+R: reset customizations to selected preset defaults
@@ -925,10 +946,18 @@ impl ScriptListApp {
                 // Enter: apply and close
                 if is_key_enter(key) {
                     this.theme_before_chooser = None;
-                    if let Err(e) = theme::presets::write_theme_to_disk(&this.theme) {
-                        logging::log("ERROR", &format!("Failed to save theme: {}", e));
+                    match crate::theme::service::persist_theme_and_sync_all_windows(
+                        cx,
+                        this.theme.as_ref(),
+                        "theme_chooser_apply",
+                    ) {
+                        Ok(applied_theme) => {
+                            this.theme = std::sync::Arc::new(applied_theme);
+                        }
+                        Err(e) => {
+                            logging::log("ERROR", &format!("Failed to save theme: {}", e));
+                        }
                     }
-                    sync_theme_chooser_preview(cx, &this.theme, "theme_chooser_apply");
                     this.go_back_or_close(window, cx);
                     return;
                 }
@@ -1287,9 +1316,7 @@ impl ScriptListApp {
                                     modified.colors.accent.selected = color;
                                     modified.colors.text.on_accent =
                                         best_contrast_of_two(color, 0xFFFFFF, swatch_bg_main);
-                                    this.theme = std::sync::Arc::new(modified);
-                                    sync_theme_chooser_preview(cx, &this.theme, "theme_chooser_accent_click");
-                                    cx.notify();
+                                    this.apply_theme_chooser_theme(modified, "theme_chooser_accent_click", cx);
                                 });
                             }
                         },
@@ -1335,9 +1362,7 @@ impl ScriptListApp {
                             if let Some(app) = click_entity.upgrade() {
                                 app.update(cx, |this, cx| {
                                     let modified = Self::apply_surface_opacity_preset(this.theme.as_ref(), value);
-                                    this.theme = std::sync::Arc::new(modified);
-                                    sync_theme_chooser_preview(cx, &this.theme, "theme_chooser_opacity_click");
-                                    cx.notify();
+                                    this.apply_theme_chooser_theme(modified, "theme_chooser_opacity_click", cx);
                                 });
                             }
                         },
@@ -1371,9 +1396,7 @@ impl ScriptListApp {
                             if let Some(ref mut vibrancy) = modified.vibrancy {
                                 vibrancy.enabled = !vibrancy.enabled;
                             }
-                            this.theme = std::sync::Arc::new(modified);
-                            sync_theme_chooser_preview(cx, &this.theme, "theme_chooser_vibrancy_click");
-                            cx.notify();
+                            this.apply_theme_chooser_theme(modified, "theme_chooser_vibrancy_click", cx);
                         });
                     }
                 },
@@ -1453,9 +1476,7 @@ impl ScriptListApp {
                                     if let Some(ref mut vibrancy) = modified.vibrancy {
                                         vibrancy.material = material;
                                     }
-                                    this.theme = std::sync::Arc::new(modified);
-                                    sync_theme_chooser_preview(cx, &this.theme, "theme_chooser_material_click");
-                                    cx.notify();
+                                    this.apply_theme_chooser_theme(modified, "theme_chooser_material_click", cx);
                                 });
                             }
                         },
@@ -1511,9 +1532,7 @@ impl ScriptListApp {
                                             ..Default::default()
                                         });
                                     }
-                                    this.theme = std::sync::Arc::new(modified);
-                                    sync_theme_chooser_preview(cx, &this.theme, "theme_chooser_font_size_click");
-                                    cx.notify();
+                                    this.apply_theme_chooser_theme(modified, "theme_chooser_font_size_click", cx);
                                 });
                             }
                         },

@@ -111,6 +111,20 @@ impl ScriptListApp {
         }
     }
 
+    /// Build the canonical three-key footer with click handlers wired to app actions.
+    fn clickable_universal_hint_strip(&self, cx: &mut Context<Self>) -> AnyElement {
+        let on_run = cx.listener(|this, _: &gpui::ClickEvent, _window, cx| {
+            this.execute_selected(cx);
+        });
+        let on_actions = cx.listener(|this, _: &gpui::ClickEvent, window, cx| {
+            this.toggle_actions(cx, window);
+        });
+        let on_ai = cx.listener(|this, _: &gpui::ClickEvent, _window, cx| {
+            this.open_tab_ai_chat(cx);
+        });
+        crate::components::render_universal_prompt_hint_strip_clickable(on_run, on_actions, on_ai)
+    }
+
     fn render_wrapped_prompt_entity(
         &mut self,
         entity: impl IntoElement,
@@ -120,12 +134,13 @@ impl ScriptListApp {
         let shell_radius = self.other_prompt_shell_radius();
         let handle_key = cx.listener(key_handler);
         let vibrancy_bg = get_vibrancy_background(&self.theme);
+        let footer = self.clickable_universal_hint_strip(cx);
 
         crate::components::render_simple_prompt_shell(
             shell_radius,
             vibrancy_bg,
             entity,
-            Some(crate::components::render_universal_prompt_hint_strip()),
+            Some(footer),
         )
         .on_key_down(handle_key)
         .into_any_element()
@@ -209,7 +224,7 @@ impl ScriptListApp {
                     .p(px(design_spacing.padding_xl))
                     .child(entity),
             )
-            .child(crate::components::render_universal_prompt_hint_strip())
+            .child(self.clickable_universal_hint_strip(cx))
             .into_any_element()
     }
 
@@ -273,7 +288,7 @@ impl ScriptListApp {
                     .p(px(design_spacing.padding_xl))
                     .child(entity),
             )
-            .child(crate::components::render_universal_prompt_hint_strip())
+            .child(self.clickable_universal_hint_strip(cx))
             .into_any_element()
     }
 
@@ -319,7 +334,7 @@ impl ScriptListApp {
                     .child(entity),
             )
             // Shared three-key hint strip footer
-            .child(crate::components::render_universal_prompt_hint_strip())
+            .child(self.clickable_universal_hint_strip(cx))
             .into_any_element()
     }
 
@@ -388,7 +403,7 @@ impl ScriptListApp {
                     .p(px(design_spacing.padding_xl))
                     .child(panel),
             )
-            .child(crate::components::render_universal_prompt_hint_strip())
+            .child(self.clickable_universal_hint_strip(cx))
             .into_any_element()
     }
 }
@@ -485,12 +500,8 @@ mod other_prompt_render_wrapper_tests {
             "render_wrapped_prompt_entity must call the shared component helper explicitly"
         );
         assert!(
-            body.contains("render_universal_prompt_hint_strip()"),
-            "render_wrapped_prompt_entity must supply the canonical three-key hint strip footer"
-        );
-        assert!(
-            !body.contains(", None)"),
-            "render_wrapped_prompt_entity must not pass None for the footer parameter"
+            body.contains("clickable_universal_hint_strip("),
+            "render_wrapped_prompt_entity must supply the clickable three-key hint strip footer"
         );
     }
 
@@ -502,8 +513,8 @@ mod other_prompt_render_wrapper_tests {
             "render_template_prompt should not use PromptFooter"
         );
         assert!(
-            body.contains("render_universal_prompt_hint_strip("),
-            "render_template_prompt should use the shared hint strip"
+            body.contains("clickable_universal_hint_strip("),
+            "render_template_prompt should use the clickable hint strip"
         );
         assert!(
             body.contains("window_resize::layout::STANDARD_HEIGHT"),
@@ -519,8 +530,8 @@ mod other_prompt_render_wrapper_tests {
             "render_naming_prompt should not use PromptFooter"
         );
         assert!(
-            body.contains("render_universal_prompt_hint_strip("),
-            "render_naming_prompt should use the shared hint strip"
+            body.contains("clickable_universal_hint_strip("),
+            "render_naming_prompt should use the clickable hint strip"
         );
         assert!(
             body.contains("window_resize::layout::STANDARD_HEIGHT"),
@@ -544,8 +555,8 @@ mod other_prompt_render_wrapper_tests {
             "render_creation_feedback should not use PromptFooter"
         );
         assert!(
-            body.contains("render_universal_prompt_hint_strip("),
-            "render_creation_feedback should use the shared hint strip"
+            body.contains("clickable_universal_hint_strip("),
+            "render_creation_feedback should use the clickable hint strip"
         );
     }
 
@@ -557,8 +568,8 @@ mod other_prompt_render_wrapper_tests {
             "render_webcam_prompt should not use PromptFooter"
         );
         assert!(
-            body.contains("render_universal_prompt_hint_strip("),
-            "render_webcam_prompt should use the shared hint strip"
+            body.contains("clickable_universal_hint_strip("),
+            "render_webcam_prompt should use the clickable hint strip"
         );
     }
 }
@@ -644,7 +655,8 @@ mod prompt_footer_regression_tests {
         let source = fs::read_to_string("src/render_prompts/form/render.rs")
             .expect("Failed to read src/render_prompts/form/render.rs");
         assert!(
-            source.contains("render_simple_hint_strip(")
+            source.contains("clickable_universal_hint_strip(")
+                || source.contains("render_simple_hint_strip(")
                 || source.contains("render_minimal_list_prompt_shell("),
             "form prompt should render the shared hint strip"
         );

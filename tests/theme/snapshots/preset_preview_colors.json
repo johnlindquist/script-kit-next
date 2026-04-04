@@ -480,6 +480,36 @@
     "border": "#2A2520"
   },
   {
+    "id": "midnight-blue",
+    "name": "Midnight Blue",
+    "is_dark": true,
+    "bg": "#0D1B2A",
+    "accent": "#5B9BD5",
+    "text": "#D6E4F0",
+    "secondary": "#8EACC5",
+    "border": "#2E4A5E"
+  },
+  {
+    "id": "ember",
+    "name": "Ember",
+    "is_dark": true,
+    "bg": "#1A1210",
+    "accent": "#E0954A",
+    "text": "#E8D5C4",
+    "secondary": "#B89A82",
+    "border": "#4A3828"
+  },
+  {
+    "id": "arctic",
+    "name": "Arctic",
+    "is_dark": true,
+    "bg": "#101820",
+    "accent": "#5CCFE6",
+    "text": "#DCE8F0",
+    "secondary": "#96B0C4",
+    "border": "#304050"
+  },
+  {
     "id": "script-kit-light",
     "name": "Script Kit Light",
     "is_dark": false,
@@ -668,5 +698,35 @@
     "text": "#434343",
     "secondary": "#6A6A5E",
     "border": "#D5CFBB"
+  },
+  {
+    "id": "linen",
+    "name": "Linen",
+    "is_dark": false,
+    "bg": "#F5EFE6",
+    "accent": "#8B6542",
+    "text": "#3D3530",
+    "secondary": "#6B5E52",
+    "border": "#D5CAB8"
+  },
+  {
+    "id": "slate-morning",
+    "name": "Slate Morning",
+    "is_dark": false,
+    "bg": "#EEF1F5",
+    "accent": "#2A8A7A",
+    "text": "#2D333B",
+    "secondary": "#556070",
+    "border": "#C8CDD5"
+  },
+  {
+    "id": "coral-reef",
+    "name": "Coral Reef",
+    "is_dark": false,
+    "bg": "#FAF5F2",
+    "accent": "#D06050",
+    "text": "#3A3232",
+    "secondary": "#685858",
+    "border": "#D8CCC5"
   }
 ]

@@ -398,14 +398,28 @@ pub fn render_hint_icons_hsla(hints: &[&str], color: gpui::Hsla) -> AnyElement {
     row.into_any_element()
 }
 
+/// A hint label paired with an optional click handler for [`render_hint_icons_clickable`].
+pub struct ClickableHint {
+    pub label: &'static str,
+    pub on_click: Option<HintClickHandler>,
+}
+
+impl ClickableHint {
+    pub fn new(
+        label: &'static str,
+        on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    ) -> Self {
+        Self {
+            label,
+            on_click: Some(Rc::new(on_click)),
+        }
+    }
+}
+
 /// Render clickable hint icons with per-hint click handlers.
 ///
-/// Each `(hint, handler)` pair renders as a clickable button. Use `None` for
-/// hints that should be visually interactive (hover) but have no click action.
-pub fn render_hint_icons_clickable(
-    hints: &[(&str, Option<HintClickHandler>)],
-    text_rgba: u32,
-) -> AnyElement {
+/// Each [`ClickableHint`] renders as a clickable button with ghost-bg hover.
+pub fn render_hint_icons_clickable(hints: Vec<ClickableHint>, text_rgba: u32) -> AnyElement {
     let theme = crate::theme::get_cached_theme();
     let chrome = crate::theme::AppChromeColors::from_theme(&theme);
     let hover_bg = rgba(chrome.hover_rgba);
@@ -418,8 +432,8 @@ pub fn render_hint_icons_clickable(
         .items_center()
         .gap(px(HINT_STRIP_CONTENT_GAP));
 
-    for (i, (hint, handler)) in hints.iter().enumerate() {
-        let element = parse_hint(hint);
+    for (i, hint) in hints.into_iter().enumerate() {
+        let element = parse_hint(hint.label);
         let hint_content = render_hint_element_hsla(element, color);
 
         let mut button = div()
@@ -432,7 +446,7 @@ pub fn render_hint_icons_clickable(
             .active(move |s| s.bg(active_bg))
             .child(hint_content);
 
-        if let Some(handler) = handler.clone() {
+        if let Some(handler) = hint.on_click {
             button = button.on_click(move |event, window, cx| handler(event, window, cx));
         }
 

@@ -73,10 +73,7 @@ impl ScriptListApp {
                     .child(crate::components::prompt_shell_content(entity.clone())),
             )
             // Universal three-key hint strip footer
-            .child(crate::components::render_simple_hint_strip(
-                crate::components::universal_prompt_hints(),
-                None,
-            ))
+            .child(self.clickable_universal_hint_strip(cx))
             // Actions dialog overlay (when Cmd+K is pressed with SDK actions)
             .when_some(
                 render_actions_backdrop(
@@ -141,12 +138,8 @@ mod div_prompt_render_tests {
     #[test]
     fn div_prompt_uses_universal_hint_strip_footer() {
         assert!(
-            DIV_RENDER_SOURCE.contains("render_simple_hint_strip("),
-            "div prompt should render a minimal hint strip footer"
-        );
-        assert!(
-            DIV_RENDER_SOURCE.contains("universal_prompt_hints()"),
-            "div prompt should use the canonical three-key hint strip"
+            DIV_RENDER_SOURCE.contains("clickable_universal_hint_strip("),
+            "div prompt should render a clickable hint strip footer"
         );
         // Split string to avoid self-match in source audit
         let needle = ["PromptFooter", "::new("].concat();

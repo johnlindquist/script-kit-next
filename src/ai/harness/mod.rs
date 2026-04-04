@@ -878,6 +878,54 @@ pub(crate) fn build_tab_ai_artifact_authoring_appendix_for_prompt(
 }
 
 // ---------------------------------------------------------------------------
+// Surface-preference helper (derived from shared appendix builder)
+// ---------------------------------------------------------------------------
+
+/// Derived surface preference for verification-bearing script authoring prompts.
+///
+/// All marker flags are computed from the shared appendix builder output so
+/// detection cannot drift between surfaces.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct TabAiSurfacePreference {
+    pub use_quick_terminal: bool,
+    pub includes_script_authoring_skill: bool,
+    pub includes_bun_build_verification: bool,
+    pub includes_bun_execute_verification: bool,
+}
+
+/// Derive the preferred Tab AI surface from the shared appendix builder.
+///
+/// Returns `use_quick_terminal = true` only when the guidance includes the
+/// script-authoring marker AND both Bun verification markers.  When no
+/// appendix is produced, all flags are `false`.
+pub(crate) fn tab_ai_surface_preference_for_prompt(
+    prompt_type: &str,
+    effective_intent: Option<&str>,
+    mode: TabAiHarnessSubmissionMode,
+) -> TabAiSurfacePreference {
+    let Some((guidance, _forced_by_script_list_submit)) =
+        build_tab_ai_artifact_authoring_appendix_for_prompt(prompt_type, effective_intent, mode)
+    else {
+        return TabAiSurfacePreference {
+            use_quick_terminal: false,
+            includes_script_authoring_skill: false,
+            includes_bun_build_verification: false,
+            includes_bun_execute_verification: false,
+        };
+    };
+
+    let markers = TabAiVerificationGuidanceMarkers::from_guidance(guidance);
+    TabAiSurfacePreference {
+        use_quick_terminal: markers.includes_script_authoring_skill
+            && markers.includes_bun_build_verification
+            && markers.includes_bun_execute_verification,
+        includes_script_authoring_skill: markers.includes_script_authoring_skill,
+        includes_bun_build_verification: markers.includes_bun_build_verification,
+        includes_bun_execute_verification: markers.includes_bun_execute_verification,
+    }
+}
+
+// ---------------------------------------------------------------------------
 // ACP initial-input builder (single-sourced)
 // ---------------------------------------------------------------------------
 
@@ -2976,5 +3024,60 @@ mod cleanup_contract_audits {
             first.unwrap().0,
             second.unwrap().0,
         ));
+    }
+
+    // ── Surface-preference helper tests ──────────────────────────────
+
+    #[test]
+    fn surface_preference_script_list_submit_uses_quick_terminal() {
+        let pref = super::tab_ai_surface_preference_for_prompt(
+            "ScriptList",
+            Some("clipboard cleanup"),
+            super::TabAiHarnessSubmissionMode::Submit,
+        );
+        assert!(pref.use_quick_terminal, "script authoring flow must prefer quick terminal");
+        assert!(pref.includes_script_authoring_skill);
+        assert!(pref.includes_bun_build_verification);
+        assert!(pref.includes_bun_execute_verification);
+    }
+
+    #[test]
+    fn surface_preference_non_authoring_stays_acp() {
+        let pref = super::tab_ai_surface_preference_for_prompt(
+            "FileSearch",
+            Some("rename this file"),
+            super::TabAiHarnessSubmissionMode::Submit,
+        );
+        assert!(!pref.use_quick_terminal, "non-authoring flow must stay on ACP");
+        assert!(!pref.includes_script_authoring_skill);
+        assert!(!pref.includes_bun_build_verification);
+        assert!(!pref.includes_bun_execute_verification);
+    }
+
+    #[test]
+    fn surface_preference_no_appendix_returns_all_false() {
+        // PasteOnly on a non-ScriptList prompt with no artifact words → no appendix
+        let pref = super::tab_ai_surface_preference_for_prompt(
+            "FileSearch",
+            Some("hello"),
+            super::TabAiHarnessSubmissionMode::PasteOnly,
+        );
+        assert!(!pref.use_quick_terminal);
+        assert!(!pref.includes_script_authoring_skill);
+        assert!(!pref.includes_bun_build_verification);
+        assert!(!pref.includes_bun_execute_verification);
+    }
+
+    #[test]
+    fn surface_preference_none_intent_returns_all_false() {
+        let pref = super::tab_ai_surface_preference_for_prompt(
+            "ScriptList",
+            None,
+            super::TabAiHarnessSubmissionMode::Submit,
+        );
+        assert!(!pref.use_quick_terminal);
+        assert!(!pref.includes_script_authoring_skill);
+        assert!(!pref.includes_bun_build_verification);
+        assert!(!pref.includes_bun_execute_verification);
     }
 }

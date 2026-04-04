@@ -562,6 +562,38 @@ impl ScriptListApp {
             capture_generation: self.tab_ai_harness_capture_generation,
         };
 
+        // Compute surface preference from the shared verification markers
+        // *before* branching so the decision is logged and deterministic.
+        let effective_intent = Self::tab_ai_effective_submission_intent(&request);
+        let submit_now = request
+            .quick_submit_plan
+            .as_ref()
+            .map(|plan| plan.submit)
+            .unwrap_or(request.entry_intent.is_some());
+        let submission_mode = if submit_now {
+            crate::ai::TabAiHarnessSubmissionMode::Submit
+        } else {
+            crate::ai::TabAiHarnessSubmissionMode::PasteOnly
+        };
+        let surface_preference = crate::ai::harness::tab_ai_surface_preference_for_prompt(
+            &request.ui_snapshot.prompt_type,
+            effective_intent.as_deref(),
+            submission_mode,
+        );
+
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "tab_ai_surface_selected",
+            surface = if surface_preference.use_quick_terminal { "quick_terminal" } else { "acp_chat" },
+            reason = if surface_preference.use_quick_terminal { "script_verification_required" } else { "default_acp" },
+            prompt_type = %request.ui_snapshot.prompt_type,
+            has_entry_intent = request.entry_intent.is_some(),
+            submit_now,
+            includes_script_authoring_skill = surface_preference.includes_script_authoring_skill,
+            includes_bun_build_verification = surface_preference.includes_bun_build_verification,
+            includes_bun_execute_verification = surface_preference.includes_bun_execute_verification,
+        );
+
         // Resolve whether we have a focused target or need the Ask Anything
         // fallback *before* spawning background capture.
         let use_ask_anything_fallback = self.should_use_tab_ai_ask_anything_fallback(
@@ -621,7 +653,11 @@ impl ScriptListApp {
             rx
         };
 
-        self.open_tab_ai_acp_view_from_request_impl(request, capture_rx, focused_part, use_ask_anything_fallback, explicit_ambient_chip_label, cx);
+        if surface_preference.use_quick_terminal {
+            self.open_tab_ai_harness_terminal_from_request(request, capture_rx, cx);
+        } else {
+            self.open_tab_ai_acp_view_from_request_impl(request, capture_rx, focused_part, use_ask_anything_fallback, explicit_ambient_chip_label, cx);
+        }
     }
 
     /// Start background capture immediately on a dedicated OS thread.

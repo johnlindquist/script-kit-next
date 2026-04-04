@@ -39,8 +39,8 @@ fn audit_returns_expected_sample_count() {
     let samples = audit_theme_contrast(&theme);
     assert_eq!(
         samples.len(),
-        8,
-        "audit should return 8 surface pairing samples"
+        14,
+        "audit should return 14 surface pairing samples"
     );
 }
 
