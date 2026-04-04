@@ -1,15 +1,15 @@
 ---
 title: "Design Principles"
 slug: "design-principles"
-sourceSnapshot: "4be166ea"
+sourceSnapshot: "c9fbc3ca"
 sourceDocuments:
-  - "raw/4be166ea/CLAUDE.md"
-  - "raw/4be166ea/README.md"
+  - "raw/c9fbc3ca/CLAUDE.md"
+  - "raw/c9fbc3ca/README.md"
 relatedPages:
   - "project-overview"
   - "architecture"
 generatedBy: "scripts/wiki/ingest.ts"
-generatedAt: "2026-04-04T18:48:29.295Z"
+generatedAt: "2026-04-04T19:40:47.586Z"
 ---
 
 # Design Principles
@@ -27,8 +27,8 @@ The product's launcher UX rules, chrome discipline, and macOS-native interaction
 - `README.md` — Project overview. High-level product positioning, setup, prompt APIs, configuration, and built-in capabilities.
 
 ## Source Documents
-- [raw/4be166ea/CLAUDE.md](../raw/4be166ea/CLAUDE.md)
-- [raw/4be166ea/README.md](../raw/4be166ea/README.md)
+- [raw/c9fbc3ca/CLAUDE.md](../raw/c9fbc3ca/CLAUDE.md)
+- [raw/c9fbc3ca/README.md](../raw/c9fbc3ca/README.md)
 
 ## Related Pages
 - [project-overview](./project-overview.md)

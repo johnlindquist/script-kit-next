@@ -44,6 +44,35 @@ type IngestResult = {
   logPath: string;
 };
 
+type ParsedSection = {
+  heading: string;
+  body: string;
+};
+
+type ExistingPageContent = {
+  summary: string | null;
+  keyFactsBody: string | null;
+  extraSections: ParsedSection[];
+};
+
+type MaterializedPageContent = {
+  summary: string;
+  keyFactsBody: string;
+  extraSections: ParsedSection[];
+};
+
+type WritePagesResult = {
+  pagesWritten: number;
+  summaries: Map<string, string>;
+};
+
+const REQUIRED_SECTION_HEADINGS = [
+  "Key Facts",
+  "Key Files",
+  "Source Documents",
+  "Related Pages",
+] as const;
+
 function log(event: string, fields: Record<string, unknown> = {}): void {
   console.error(JSON.stringify({ level: "info", event, ...fields }));
 }
@@ -151,11 +180,88 @@ function yamlList(values: string[], indent = 0): string {
   return values.map((value) => `${prefix}- "${value}"`).join("\n");
 }
 
+function stripFrontmatter(markdown: string): string {
+  return markdown.replace(/^---\n[\s\S]*?\n---\n+/m, "");
+}
+
+function parseExistingPage(markdown: string): ExistingPageContent {
+  const body = stripFrontmatter(markdown).replace(/\r\n/g, "\n");
+
+  const titleMatch = body.match(/^# .+\n*/);
+  const afterTitle = titleMatch ? body.slice(titleMatch[0].length) : body;
+
+  const headingRegex = /^## (.+)$/gm;
+  const matches = [...afterTitle.matchAll(headingRegex)];
+
+  const summary =
+    (
+      matches.length > 0
+        ? afterTitle.slice(0, matches[0].index ?? 0)
+        : afterTitle
+    ).trim() || null;
+
+  const requiredSections = new Map<string, string>();
+  const extraSections: ParsedSection[] = [];
+  let afterRelatedPages = false;
+
+  for (let i = 0; i < matches.length; i += 1) {
+    const heading = matches[i][1].trim();
+    const start = (matches[i].index ?? 0) + matches[i][0].length;
+    const end =
+      i + 1 < matches.length
+        ? (matches[i + 1].index ?? afterTitle.length)
+        : afterTitle.length;
+    const sectionBody = afterTitle.slice(start, end).trim();
+
+    if (heading === "Related Pages") {
+      afterRelatedPages = true;
+      requiredSections.set(heading, sectionBody);
+    } else if (
+      afterRelatedPages &&
+      !(REQUIRED_SECTION_HEADINGS as readonly string[]).includes(heading)
+    ) {
+      extraSections.push({ heading, body: sectionBody });
+    } else if (
+      (REQUIRED_SECTION_HEADINGS as readonly string[]).includes(heading)
+    ) {
+      requiredSections.set(heading, sectionBody);
+    } else {
+      extraSections.push({ heading, body: sectionBody });
+    }
+  }
+
+  return {
+    summary,
+    keyFactsBody: requiredSections.get("Key Facts") ?? null,
+    extraSections,
+  };
+}
+
+function materializePageContent(
+  page: PageSpec,
+  existing?: ExistingPageContent
+): MaterializedPageContent {
+  const summary = existing?.summary?.trim()
+    ? existing.summary.trim()
+    : page.summary;
+
+  const keyFactsBody = existing?.keyFactsBody?.trim()
+    ? existing.keyFactsBody.trim()
+    : page.facts.map((fact) => `- ${fact}`).join("\n");
+
+  return {
+    summary,
+    keyFactsBody,
+    extraSections: existing?.extraSections ?? [],
+  };
+}
+
 function renderPage(
   page: PageSpec,
   sources: SourceSpec[],
   snapshot: string,
-  generatedAt: string
+  generatedAt: string,
+  content: MaterializedPageContent
 ): string {
   const rawPaths = sources.map((source) =>
     rawWikiPath(snapshot, source.path)
@@ -168,8 +274,6 @@ function renderPage(
     )
     .join("\n");
 
-  const keyFacts = page.facts.map((fact) => `- ${fact}`).join("\n");
-
   const sourceLinks = rawPaths
     .map((path) => `- [${path}](../${path})`)
     .join("\n");
@@ -180,7 +284,7 @@ function renderPage(
 
   const escapedTitle = page.title.replace(/"/g, '\\"');
 
-  return [
+  const lines = [
     "---",
     `title: "${escapedTitle}"`,
     `slug: "${page.slug}"`,
@@ -195,10 +299,10 @@ function renderPage(
     "",
     `# ${page.title}`,
     "",
-    page.summary,
+    content.summary,
     "",
     "## Key Facts",
-    keyFacts,
+    content.keyFactsBody,
     "",
     "## Key Files",
     keyFiles,
@@ -209,18 +313,25 @@ function renderPage(
     "## Related Pages",
     relatedLinks,
     "",
-  ].join("\n");
+  ];
+
+  for (const section of content.extraSections) {
+    lines.push(`## ${section.heading}`, section.body, "");
+  }
+
+  return lines.join("\n");
 }
 
 function renderIndex(
   config: WikiConfig,
   snapshot: string,
-  generatedAt: string
+  generatedAt: string,
+  summaries: Map<string, string>
 ): string {
-  const pageLines = config.pages.map(
-    (page) =>
-      `- [${page.title}](./pages/${page.slug}.md) — ${page.summary}`
-  );
+  const pageLines = config.pages.map((page) => {
+    const summary = summaries.get(page.slug) ?? page.summary;
+    return `- [${page.title}](./pages/${page.slug}.md) — ${summary}`;
+  });
 
   const sourceLines = config.sources.map(
     (source) =>
@@ -270,7 +381,9 @@ function appendLog(
     "",
     `- Raw sources processed: ${config.sources.length}`,
     `- Pages written: ${config.pages.length}`,
-    `- Page slugs: ${config.pages.map((page) => `\`${page.slug}\``).join(", ")}`,
+    `- Page slugs: ${config.pages
+      .map((page) => `\`${page.slug}\``)
+      .join(", ")}`,
     "",
   ].join("\n");
 
@@ -287,7 +400,7 @@ function writePages(
   config: WikiConfig,
   snapshot: string,
   generatedAt: string
-): number {
+): WritePagesResult {
   const pageDir = join(root, "wiki", "pages");
   ensureDir(pageDir);
 
@@ -295,7 +408,8 @@ function writePages(
     config.sources.map((source) => [source.id, source] as const)
   );
 
-  let written = 0;
+  const summaries = new Map<string, string>();
+  let pagesWritten = 0;
 
   for (const page of config.pages) {
     const sources = page.sourceIds
@@ -303,20 +417,38 @@ function writePages(
       .filter((value): value is SourceSpec => value !== undefined);
 
     const pagePath = join(pageDir, `${page.slug}.md`);
+
+    const existing = existsSync(pagePath)
+      ? parseExistingPage(readFileSync(pagePath, "utf8"))
+      : undefined;
+
+    const content = materializePageContent(page, existing);
+
     writeFileSync(
       pagePath,
-      renderPage(page, sources, snapshot, generatedAt),
+      renderPage(page, sources, snapshot, generatedAt, content),
       "utf8"
     );
-    written += 1;
-    log("wiki_ingest.page_written", {
-      slug: page.slug,
-      pagePath: `wiki/pages/${page.slug}.md`,
-      sourceCount: sources.length,
-    });
+
+    summaries.set(page.slug, content.summary);
+    pagesWritten += 1;
+
+    log(
+      existing
+        ? "wiki_ingest.page_updated"
+        : "wiki_ingest.page_bootstrapped",
+      {
+        slug: page.slug,
+        pagePath: `wiki/pages/${page.slug}.md`,
+        sourceCount: sources.length,
+        preservedSummary: Boolean(existing?.summary),
+        preservedKeyFacts: Boolean(existing?.keyFactsBody),
+        preservedExtraSections: existing?.extraSections.length ?? 0,
+      }
+    );
   }
 
-  return written;
+  return { pagesWritten, summaries };
 }
 
 function run(
@@ -341,13 +473,18 @@ function run(
     copyImmutableRaw(root, snapshot, source);
   }
 
-  const pagesWritten = writePages(root, config, snapshot, generatedAt);
+  const { pagesWritten, summaries } = writePages(
+    root,
+    config,
+    snapshot,
+    generatedAt
+  );
 
   const indexPath = join(root, "wiki", "index.md");
   ensureDir(dirname(indexPath));
   writeFileSync(
     indexPath,
-    renderIndex(config, snapshot, generatedAt),
+    renderIndex(config, snapshot, generatedAt, summaries),
     "utf8"
   );
   log("wiki_ingest.index_written", {

@@ -1,18 +1,18 @@
 ---
 title: "Tab AI Harness"
 slug: "tab-ai-harness"
-sourceSnapshot: "4be166ea"
+sourceSnapshot: "c9fbc3ca"
 sourceDocuments:
-  - "raw/4be166ea/README.md"
-  - "raw/4be166ea/src/ai/harness/mod.rs"
-  - "raw/4be166ea/src/ai/tab_context.rs"
-  - "raw/4be166ea/tests/tab_ai_context.rs"
+  - "raw/c9fbc3ca/README.md"
+  - "raw/c9fbc3ca/src/ai/harness/mod.rs"
+  - "raw/c9fbc3ca/src/ai/tab_context.rs"
+  - "raw/c9fbc3ca/tests/tab_ai_context.rs"
 relatedPages:
   - "project-overview"
   - "ai-context-and-mcp"
   - "verification-and-testing"
 generatedBy: "scripts/wiki/ingest.ts"
-generatedAt: "2026-04-04T18:48:29.295Z"
+generatedAt: "2026-04-04T19:40:47.586Z"
 ---
 
 # Tab AI Harness
@@ -32,10 +32,10 @@ The current QuickTerminal-based Tab AI flow, context assembly, and harness submi
 - `tests/tab_ai_context.rs` — Tab AI context tests. Integration tests for the Tab AI context blob schema and serialization.
 
 ## Source Documents
-- [raw/4be166ea/README.md](../raw/4be166ea/README.md)
-- [raw/4be166ea/src/ai/harness/mod.rs](../raw/4be166ea/src/ai/harness/mod.rs)
-- [raw/4be166ea/src/ai/tab_context.rs](../raw/4be166ea/src/ai/tab_context.rs)
-- [raw/4be166ea/tests/tab_ai_context.rs](../raw/4be166ea/tests/tab_ai_context.rs)
+- [raw/c9fbc3ca/README.md](../raw/c9fbc3ca/README.md)
+- [raw/c9fbc3ca/src/ai/harness/mod.rs](../raw/c9fbc3ca/src/ai/harness/mod.rs)
+- [raw/c9fbc3ca/src/ai/tab_context.rs](../raw/c9fbc3ca/src/ai/tab_context.rs)
+- [raw/c9fbc3ca/tests/tab_ai_context.rs](../raw/c9fbc3ca/tests/tab_ai_context.rs)
 
 ## Related Pages
 - [project-overview](./project-overview.md)

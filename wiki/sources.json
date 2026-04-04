@@ -37,6 +37,30 @@
       "description": "Proposed next-stage protocol surfaces for autonomous agent interaction."
     },
     {
+      "id": "query-ops",
+      "path": "src/protocol/message/variants/query_ops.rs",
+      "title": "Protocol query message variants",
+      "description": "Wire types for getElements, elementsResult, waitFor, batch, and related transaction receipts."
+    },
+    {
+      "id": "element-types",
+      "path": "src/protocol/types/elements_actions_scriptlets.rs",
+      "title": "Element introspection types",
+      "description": "ElementType and ElementInfo definitions used by getElements responses."
+    },
+    {
+      "id": "collect-elements",
+      "path": "src/app_layout/collect_elements.rs",
+      "title": "Visible element collectors",
+      "description": "Per-view element collection that emits stable semantic IDs, totals, focused/selected IDs, and warnings."
+    },
+    {
+      "id": "prompt-handler-automation",
+      "path": "src/prompt_handler/mod.rs",
+      "title": "Automation request handler",
+      "description": "Runtime execution and logging for element queries, waitFor polling, and batch transactions."
+    },
+    {
       "id": "context-snapshot-types",
       "path": "src/context_snapshot/types.rs",
       "title": "Context snapshot types",
@@ -116,7 +140,14 @@
       "slug": "protocol-and-introspection",
       "title": "Protocol and Introspection",
       "summary": "The current automation-facing protocol, visible-element introspection, and deterministic transaction model.",
-      "sourceIds": ["protocol", "roadmap"],
+      "sourceIds": [
+        "protocol",
+        "roadmap",
+        "query-ops",
+        "element-types",
+        "collect-elements",
+        "prompt-handler-automation"
+      ],
       "facts": [
         "getElements returns visible UI elements using stable semantic IDs such as input:filter, list:choices, and choice:<index>:<value>.",
         "elementsResult includes totalCount, truncated, focusedSemanticId, selectedSemanticId, and machine-readable warnings.",
