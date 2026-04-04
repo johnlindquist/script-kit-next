@@ -5,7 +5,7 @@
 //! - Display dropped file information
 //! - Submit file paths
 
-use gpui::{div, prelude::*, px, rgb, Context, FocusHandle, Focusable, Render, Window};
+use gpui::{div, prelude::*, px, rgb, rgba, Context, FocusHandle, Focusable, Render, Window};
 use std::sync::Arc;
 
 use crate::components::{FocusablePrompt, FocusablePromptInterceptedKey};
@@ -146,17 +146,17 @@ impl Render for DropPrompt {
             .unwrap_or_else(|| "Drag and drop files to upload".to_string());
 
         // Whisper chrome: ghost-opacity background at rest, gold accent when dragging
-        let drop_zone_bg = if self.is_drag_over {
+        let drop_zone_bg = rgba(if self.is_drag_over {
             hex_to_rgba_with_opacity(self.theme.colors.accent.selected_subtle, OPACITY_GHOST)
         } else {
             hex_to_rgba_with_opacity(self.theme.colors.background.search_box, OPACITY_GHOST_SOFT)
-        };
+        });
         // Ghost border: barely visible at rest, gold emphasis when active
-        let drop_zone_border = if self.is_drag_over {
+        let drop_zone_border = rgba(if self.is_drag_over {
             hex_to_rgba_with_opacity(self.theme.colors.accent.selected_subtle, OPACITY_GHOST)
         } else {
             hex_to_rgba_with_opacity(self.theme.colors.ui.border, OPACITY_GHOST)
-        };
+        });
 
         let container = div()
             .id(gpui::ElementId::Name("window:drop".into()))
