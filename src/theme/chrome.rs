@@ -32,7 +32,40 @@ pub(crate) struct AppChromeColors {
     pub accent_badge_text_hex: u32,
 }
 
+/// Contrast-safe colors for semantic status chips (OK, Err, Warn, Info).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct SemanticChipColors {
+    pub bg_rgba: u32,
+    pub border_rgba: u32,
+    pub text_hex: u32,
+}
+
 impl AppChromeColors {
+    /// Resolve contrast-safe chip colors for a given semantic base color.
+    #[allow(dead_code)] // used by binary target (theme_chooser.rs)
+    pub(crate) fn semantic_chip_colors(
+        &self,
+        theme: &Theme,
+        base_hex: u32,
+    ) -> SemanticChipColors {
+        let opacity = theme.get_opacity();
+        let bg_alpha = opacity.hover.max(0.18);
+        let border_alpha = opacity.selected.max(0.28);
+        let text_hex = super::best_readable_text_hex(base_hex);
+        tracing::debug!(
+            base_hex,
+            text_hex,
+            bg_alpha,
+            border_alpha,
+            "theme_semantic_chip_resolved"
+        );
+        SemanticChipColors {
+            bg_rgba: hex_to_rgba_with_opacity(base_hex, bg_alpha),
+            border_rgba: hex_to_rgba_with_opacity(base_hex, border_alpha),
+            text_hex,
+        }
+    }
+
     pub(crate) fn from_theme(theme: &Theme) -> Self {
         let opacity = theme.get_opacity();
         let colors = &theme.colors;

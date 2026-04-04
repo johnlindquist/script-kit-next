@@ -331,29 +331,7 @@ pub struct CommandConfig {
     pub confirmation_required: Option<bool>,
 }
 
-/// Check if a string is a valid command ID format.
-///
-/// Valid command IDs start with one of:
-/// - `builtin/` - Built-in Script Kit features
-/// - `app/` - macOS applications (by bundle identifier)
-/// - `script/` - User scripts (by filename)
-/// - `scriptlet/` - Inline scriptlets (by UUID or name)
-#[cfg(test)]
-fn is_valid_command_id(id: &str) -> bool {
-    id.starts_with("builtin/")
-        || id.starts_with("app/")
-        || id.starts_with("script/")
-        || id.starts_with("scriptlet/")
-}
-
-/// Convert a command ID to its deeplink URL.
-///
-/// The deeplink format is: `scriptkit://commands/{commandId}`
-/// Note: The app registers 'scriptkit' URL scheme (not 'kit')
-#[cfg(test)]
-fn command_id_to_deeplink(command_id: &str) -> String {
-    format!("scriptkit://commands/{}", command_id)
-}
+// Command ID validation and deeplink helpers are now in `crate::config::command_ids`.
 
 // ============================================
 // CLAUDE CODE CLI CONFIG
@@ -1022,49 +1000,8 @@ mod tests {
         assert_eq!(config.to_shortcut_string(), "cmd+j");
     }
 
-    #[test]
-    fn test_is_valid_command_id_accepts_supported_prefixes() {
-        assert!(is_valid_command_id("builtin/clipboard-history"));
-        assert!(is_valid_command_id("app/com.apple.Safari"));
-        assert!(is_valid_command_id("script/hello-world"));
-        assert!(is_valid_command_id("scriptlet/my-snippet"));
-    }
-
-    #[test]
-    fn test_is_valid_command_id_rejects_unsupported_prefixes() {
-        assert!(!is_valid_command_id("builtin-clipboard-history"));
-        assert!(!is_valid_command_id("foo/bar"));
-    }
-
-    #[test]
-    fn test_command_id_to_deeplink_uses_scriptkit_scheme() {
-        let deeplink = command_id_to_deeplink("builtin/clipboard-history");
-        assert_eq!(deeplink, "scriptkit://commands/builtin/clipboard-history");
-
-        let deeplink = command_id_to_deeplink("script/hello-world");
-        assert_eq!(deeplink, "scriptkit://commands/script/hello-world");
-
-        let deeplink = command_id_to_deeplink("app/com.apple.Safari");
-        assert_eq!(deeplink, "scriptkit://commands/app/com.apple.Safari");
-
-        let deeplink = command_id_to_deeplink("scriptlet/my-snippet");
-        assert_eq!(deeplink, "scriptkit://commands/scriptlet/my-snippet");
-    }
-
-    #[test]
-    fn test_command_id_to_deeplink_not_kit_scheme() {
-        let deeplink = command_id_to_deeplink("builtin/test");
-        assert!(
-            !deeplink.starts_with("kit://"),
-            "Deeplink should NOT use kit:// scheme, got: {}",
-            deeplink
-        );
-        assert!(
-            deeplink.starts_with("scriptkit://"),
-            "Deeplink should use scriptkit:// scheme, got: {}",
-            deeplink
-        );
-    }
+    // Command ID validation and deeplink tests have moved to config_tests/mod.rs
+    // and now use the public crate::config::command_ids module.
 
     #[test]
     fn test_get_ui_scale_returns_default_when_unset() {

@@ -10,17 +10,17 @@ use script_kit_gpui::action_helpers::{
 
 #[test]
 fn dispatch_context_for_builtin_sets_builtin_surface() {
-    let dctx = DispatchContext::for_builtin("builtin-clipboard-history");
+    let dctx = DispatchContext::for_builtin("builtin/clipboard-history");
 
     assert_eq!(dctx.surface, DispatchSurface::Builtin);
-    assert_eq!(dctx.action_id, "builtin-clipboard-history");
+    assert_eq!(dctx.action_id, "builtin/clipboard-history");
     assert!(!dctx.trace_id.is_empty());
 }
 
 #[test]
 fn dispatch_context_for_builtin_generates_unique_trace_ids() {
-    let dctx1 = DispatchContext::for_builtin("builtin-notes");
-    let dctx2 = DispatchContext::for_builtin("builtin-notes");
+    let dctx1 = DispatchContext::for_builtin("builtin/notes");
+    let dctx2 = DispatchContext::for_builtin("builtin/notes");
 
     assert_ne!(
         dctx1.trace_id, dctx2.trace_id,
@@ -30,7 +30,7 @@ fn dispatch_context_for_builtin_generates_unique_trace_ids() {
 
 #[test]
 fn builtin_success_outcome_carries_trace_id() {
-    let dctx = DispatchContext::for_builtin("builtin-notes");
+    let dctx = DispatchContext::for_builtin("builtin/notes");
 
     let outcome = DispatchOutcome::success()
         .with_trace_id(dctx.trace_id.clone())
@@ -44,7 +44,7 @@ fn builtin_success_outcome_carries_trace_id() {
 
 #[test]
 fn builtin_error_outcome_carries_code_message_and_trace_id() {
-    let dctx = DispatchContext::for_builtin("builtin-restart");
+    let dctx = DispatchContext::for_builtin("builtin/restart");
 
     let outcome = DispatchOutcome::error(
         ERROR_LAUNCH_FAILED,
@@ -65,7 +65,7 @@ fn builtin_error_outcome_carries_code_message_and_trace_id() {
 
 #[test]
 fn builtin_cancelled_outcome_has_cancelled_status_and_error_code() {
-    let dctx = DispatchContext::for_builtin("builtin-shut-down");
+    let dctx = DispatchContext::for_builtin("builtin/shut-down");
 
     let outcome = DispatchOutcome::cancelled()
         .with_trace_id(dctx.trace_id.clone())

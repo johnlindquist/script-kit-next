@@ -50,21 +50,21 @@ pub const DEFAULT_SUGGESTED_TRACK_USAGE: bool = true;
 /// Commands that require confirmation before execution by default.
 /// Users can override this behavior per-command in config.ts using `confirmationRequired`.
 pub const DEFAULT_CONFIRMATION_COMMANDS: &[&str] = &[
-    "builtin-shut-down",
-    "builtin-restart",
-    "builtin-log-out",
-    "builtin-empty-trash",
-    "builtin-sleep",
-    "builtin-quit-script-kit",
-    "builtin-force-quit",
-    "builtin-stop-all-processes",
-    "builtin-clear-suggested",
-    "builtin-test-confirmation", // Dev test item
+    "builtin/shut-down",
+    "builtin/restart",
+    "builtin/log-out",
+    "builtin/empty-trash",
+    "builtin/sleep",
+    "builtin/quit-script-kit",
+    "builtin/force-quit",
+    "builtin/stop-all-processes",
+    "builtin/clear-suggested",
+    "builtin/test-confirmation", // Dev test item
 ];
 
 /// Commands that should be excluded from frecency/suggested tracking.
 /// These are commands that don't make sense to suggest (e.g., quit).
-pub const DEFAULT_FRECENCY_EXCLUDED_COMMANDS: &[&str] = &["builtin-quit-script-kit"];
+pub const DEFAULT_FRECENCY_EXCLUDED_COMMANDS: &[&str] = &["builtin/quit-script-kit"];
 
 // ============================================
 // CLAUDE CODE CLI DEFAULTS

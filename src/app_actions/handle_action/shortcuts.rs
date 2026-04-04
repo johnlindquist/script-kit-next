@@ -35,7 +35,7 @@ impl ScriptListApp {
                             self.show_shortcut_recorder(command_id, command_name, cx);
                         }
                         scripts::SearchResult::BuiltIn(m) => {
-                            let command_id = format!("builtin/{}", m.entry.id);
+                            let command_id = m.entry.id.clone();
                             let command_name = m.entry.name.clone();
                             self.show_shortcut_recorder(command_id, command_name, cx);
                         }
@@ -92,7 +92,7 @@ impl ScriptListApp {
                             Some(format!("scriptlet/{}", m.scriptlet.name))
                         }
                         scripts::SearchResult::BuiltIn(m) => {
-                            Some(format!("builtin/{}", m.entry.id))
+                            Some(m.entry.id.clone())
                         }
                         scripts::SearchResult::App(m) => {
                             if let Some(ref bundle_id) = m.app.bundle_id {
@@ -168,7 +168,7 @@ impl ScriptListApp {
                             m.scriptlet.name.clone(),
                         ),
                         scripts::SearchResult::BuiltIn(m) => {
-                            (format!("builtin/{}", m.entry.id), m.entry.name.clone())
+                            (m.entry.id.clone(), m.entry.name.clone())
                         }
                         scripts::SearchResult::App(m) => {
                             let id = if let Some(ref bundle_id) = m.app.bundle_id {
@@ -216,7 +216,7 @@ impl ScriptListApp {
                             Some(format!("scriptlet/{}", m.scriptlet.name))
                         }
                         scripts::SearchResult::BuiltIn(m) => {
-                            Some(format!("builtin/{}", m.entry.id))
+                            Some(m.entry.id.clone())
                         }
                         scripts::SearchResult::App(m) => {
                             if let Some(ref bundle_id) = m.app.bundle_id {

@@ -3,13 +3,13 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 
 const NO_MAIN_WINDOW_BUILTINS: &[&str] = &[
-    "builtin-ai-chat",
-    "builtin-open-ai",
-    "builtin-open-notes",
-    "builtin-quick-capture",
-    "builtin-new-conversation",
-    "builtin-dictation",
-    "builtin-dictation-to-ai",
+    "builtin/ai-chat",
+    "builtin/open-ai",
+    "builtin/open-notes",
+    "builtin/quick-capture",
+    "builtin/new-conversation",
+    "builtin/dictation",
+    "builtin/dictation-to-ai",
 ];
 
 fn builtin_needs_main_window_for_command_id(identifier: &str) -> bool {
@@ -471,75 +471,67 @@ impl ScriptListApp {
             &format!("Executing by command ID or path: {}", command_id),
         );
 
-        // Parse command ID format: "type/identifier"
-        if let Some((cmd_type, identifier)) = command_id.split_once('/') {
-            match cmd_type {
-                "scriptlet" => {
-                    // Find scriptlet by name
+        // Try structured command ID resolution first
+        if let Ok((category, identifier)) = crate::config::parse_command_id(command_id) {
+            match category {
+                crate::config::CommandCategory::Script => {
+                    if let Some(script) = self.scripts.iter().find(|s| s.name == identifier) {
+                        tracing::info!(
+                            command_id = %command_id,
+                            script = %script.name,
+                            "script_command_resolved"
+                        );
+                        let path = script.path.to_string_lossy().to_string();
+                        self.execute_script_by_path(&path, cx);
+                        return true;
+                    }
+                    tracing::warn!(command_id = %command_id, "script_command_not_found");
+                    return false;
+                }
+                crate::config::CommandCategory::Scriptlet => {
                     logging::bench_log("scriptlet_lookup_start");
                     if let Some(scriptlet) = self.scriptlets.iter().find(|s| s.name == identifier) {
                         logging::bench_log("scriptlet_found");
                         let scriptlet_clone = scriptlet.clone();
-                        logging::log("EXEC", &format!("Executing scriptlet: {}", identifier));
+                        tracing::info!(command_id = %command_id, "scriptlet_command_resolved");
                         self.execute_scriptlet(&scriptlet_clone, cx);
-                        // Don't show window immediately - scriptlets that need it (like getSelectedText)
-                        // will call hide() first, then their prompts (chat, arg, etc.) will show the window.
-                        // This prevents the flash of main menu before the scriptlet UI appears.
                         return false;
                     }
-                    logging::log("ERROR", &format!("Scriptlet not found: {}", identifier));
+                    tracing::warn!(command_id = %command_id, "scriptlet_command_not_found");
                     return false;
                 }
-                "builtin" => {
-                    // Execute builtin by ID
+                crate::config::CommandCategory::Builtin => {
+                    let canonical_id = crate::config::canonical_builtin_command_id(identifier);
                     let config = crate::config::BuiltInConfig::default();
                     if let Some(entry) = builtins::get_builtin_entries(&config)
                         .iter()
-                        .find(|e| e.id == identifier)
+                        .find(|e| e.id == canonical_id)
                     {
-                        logging::log("EXEC", &format!("Executing builtin: {}", identifier));
+                        tracing::info!(command_id = %canonical_id, "builtin_command_resolved");
                         self.execute_builtin(entry, cx);
-                        // Check if this builtin opens its own window
-                        let needs_main_window =
-                            builtin_needs_main_window_for_command_id(identifier);
-                        logging::log(
-                            "EXEC",
-                            &format!(
-                                "Builtin {} needs_main_window: {}",
-                                identifier, needs_main_window
-                            ),
-                        );
-                        return needs_main_window;
+                        return builtin_needs_main_window_for_command_id(&canonical_id);
                     }
-                    logging::log("ERROR", &format!("Builtin not found: {}", identifier));
+                    tracing::warn!(command_id = %canonical_id, "builtin_command_not_found");
                     return false;
                 }
-                "app" => {
-                    // Launch app by bundle ID - find app in cached apps and launch
-                    // Apps NEVER need the main window - they open externally
-                    logging::log(
-                        "EXEC",
-                        &format!("Launching app by bundle ID: {}", identifier),
+                crate::config::CommandCategory::App => {
+                    tracing::info!(
+                        command_id = %command_id,
+                        bundle_id = %identifier,
+                        "app_command_resolved"
                     );
                     let apps = crate::app_launcher::get_cached_apps();
                     if let Some(app) = apps
                         .iter()
                         .find(|a| a.bundle_id.as_deref() == Some(identifier))
                     {
-                        if let Err(e) = crate::app_launcher::launch_application(app) {
-                            logging::log("ERROR", &format!("Failed to launch app: {}", e));
+                        if let Err(error) = crate::app_launcher::launch_application(app) {
+                            tracing::error!(%error, bundle_id = %identifier, "app_command_launch_failed");
                         }
                     } else {
-                        logging::log("ERROR", &format!("App not found: {}", identifier));
+                        tracing::warn!(bundle_id = %identifier, "app_command_not_found");
                     }
-                    return false; // Apps never need main window
-                }
-                _ => {
-                    // Unknown type - fall through to path-based execution
-                    logging::log(
-                        "EXEC",
-                        &format!("Unknown command type '{}', trying as path", cmd_type),
-                    );
+                    return false;
                 }
             }
         }
@@ -562,19 +554,21 @@ impl ScriptListApp {
             return false; // Scriptlets don't need immediate window show
         }
 
-        // Try matching the raw command_id as a builtin entry ID (e.g. "builtin-dictation").
-        // Hotkey handlers pass the full builtin ID without the "builtin/" prefix split.
-        {
+        // Legacy raw builtin IDs still accepted at the boundary, never re-emitted.
+        let canonical_id = crate::config::canonical_builtin_command_id(command_id);
+        if canonical_id != command_id {
             let config = crate::config::BuiltInConfig::default();
             if let Some(entry) = builtins::get_builtin_entries(&config)
                 .iter()
-                .find(|e| e.id == command_id)
+                .find(|e| e.id == canonical_id)
             {
-                logging::log("EXEC", &format!("Executing builtin by raw ID: {}", command_id));
+                tracing::info!(
+                    raw_command_id = %command_id,
+                    command_id = %canonical_id,
+                    "legacy_builtin_command_resolved"
+                );
                 self.execute_builtin(entry, cx);
-                let needs_main_window =
-                    builtin_needs_main_window_for_command_id(command_id);
-                return needs_main_window;
+                return builtin_needs_main_window_for_command_id(&canonical_id);
             }
         }
 
@@ -595,16 +589,16 @@ mod builtin_command_window_visibility_tests {
 
     #[test]
     fn test_builtin_needs_main_window_false_for_open_ai_and_open_notes() {
-        assert!(!builtin_needs_main_window_for_command_id("builtin-open-ai"));
+        assert!(!builtin_needs_main_window_for_command_id("builtin/open-ai"));
         assert!(!builtin_needs_main_window_for_command_id(
-            "builtin-open-notes"
+            "builtin/open-notes"
         ));
     }
 
     #[test]
     fn test_builtin_needs_main_window_true_for_unlisted_builtin() {
         assert!(builtin_needs_main_window_for_command_id(
-            "builtin-refresh-scripts"
+            "builtin/refresh-scripts"
         ));
     }
 

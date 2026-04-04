@@ -24,7 +24,7 @@ fn dictation_to_ai_harness_variant_exists_in_builtin_feature() {
 #[test]
 fn dictation_to_ai_harness_entry_registered() {
     assert!(
-        BUILTINS_SOURCE.contains("builtin-dictation-to-ai"),
+        BUILTINS_SOURCE.contains("builtin/dictation-to-ai"),
         "A built-in entry with id 'builtin-dictation-to-ai' must be registered"
     );
     assert!(

@@ -100,6 +100,16 @@
     "border": "#30363D"
   },
   {
+    "id": "github-dimmed",
+    "name": "GitHub Dimmed",
+    "is_dark": true,
+    "bg": "#22272E",
+    "accent": "#539BF5",
+    "text": "#ADBAC7",
+    "secondary": "#909DAB",
+    "border": "#444C56"
+  },
+  {
     "id": "monokai-pro",
     "name": "Monokai Pro",
     "is_dark": true,
@@ -548,6 +558,16 @@
     "text": "#403F53",
     "secondary": "#403F53",
     "border": "#D9D9D9"
+  },
+  {
+    "id": "tokyo-day",
+    "name": "Tokyo Day",
+    "is_dark": false,
+    "bg": "#EEF4FF",
+    "accent": "#34548A",
+    "text": "#1F2329",
+    "secondary": "#3B4261",
+    "border": "#D0DAF0"
   },
   {
     "id": "gruvbox-light",

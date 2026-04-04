@@ -314,8 +314,8 @@ fn bench_get_grouped_results_repeated_calls() {
 
     let builtins: Vec<crate::builtins::BuiltInEntry> = (0..20)
         .map(|i| crate::builtins::BuiltInEntry {
-            id: format!("builtin-{:02}", i),
-            name: format!("builtin-{:02}", i),
+            id: format!("builtin/{:02}", i),
+            name: format!("builtin/{:02}", i),
             description: format!("Built-in {} description", i),
             keywords: vec![format!("keyword{}", i)],
             feature: crate::builtins::BuiltInFeature::ClipboardHistory,

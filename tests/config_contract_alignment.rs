@@ -1,5 +1,6 @@
 /// Drift-prevention tests: ensure the TypeScript config surface and skill docs
-/// stay aligned with the Rust runtime contract.
+/// stay aligned with the Rust runtime contract, and that canonical command IDs
+/// round-trip correctly between config keys, deeplinks, and runtime resolution.
 
 #[test]
 fn config_skill_mentions_root_skills_and_dictation_split() {
@@ -114,5 +115,127 @@ fn config_template_uses_satisfies_config() {
     assert!(
         template.contains("import type { Config }"),
         "config-template.ts must import Config"
+    );
+}
+
+// ============================================================================
+// Command ID round-trip contract tests
+// ============================================================================
+
+#[test]
+fn builtin_registry_ids_are_canonical_slash_style() {
+    let entries =
+        script_kit_gpui::builtins::get_builtin_entries(&script_kit_gpui::config::BuiltInConfig::default());
+    for entry in &entries {
+        assert!(
+            entry.id.starts_with("builtin/"),
+            "builtin id is not canonical: {}",
+            entry.id
+        );
+        // Must not have double prefix like "builtin/builtin-..."
+        let identifier = entry.id.strip_prefix("builtin/").unwrap();
+        assert!(
+            !identifier.starts_with("builtin-") && !identifier.starts_with("builtin/"),
+            "builtin id has double prefix: {}",
+            entry.id
+        );
+    }
+}
+
+#[test]
+fn builtin_registry_roundtrips_with_deeplinks() {
+    let entries =
+        script_kit_gpui::builtins::get_builtin_entries(&script_kit_gpui::config::BuiltInConfig::default());
+    for entry in &entries {
+        let deeplink = script_kit_gpui::config::command_id_to_deeplink(&entry.id)
+            .unwrap_or_else(|e| panic!("valid deeplink for {}: {}", entry.id, e));
+        let parsed = script_kit_gpui::config::command_id_from_deeplink(&deeplink)
+            .unwrap_or_else(|e| panic!("valid command id from {}: {}", deeplink, e));
+        assert_eq!(parsed, entry.id, "round-trip failed for {}", entry.id);
+    }
+}
+
+#[test]
+fn confirmation_defaults_use_canonical_builtin_ids() {
+    for command_id in script_kit_gpui::config::defaults::DEFAULT_CONFIRMATION_COMMANDS {
+        assert!(
+            command_id.starts_with("builtin/"),
+            "default uses non-canonical builtin id: {}",
+            command_id
+        );
+        // Verify each default parses as a valid command ID
+        assert!(
+            script_kit_gpui::config::is_valid_command_id(command_id),
+            "default is not a valid command id: {}",
+            command_id
+        );
+    }
+}
+
+#[test]
+fn frecency_excluded_defaults_use_canonical_builtin_ids() {
+    for command_id in script_kit_gpui::config::defaults::DEFAULT_FRECENCY_EXCLUDED_COMMANDS {
+        assert!(
+            command_id.starts_with("builtin/"),
+            "frecency excluded uses non-canonical builtin id: {}",
+            command_id
+        );
+    }
+}
+
+#[test]
+fn shortcut_handlers_do_not_double_prefix_builtin_ids() {
+    let source = include_str!("../src/app_actions/handle_action/shortcuts.rs");
+    assert!(
+        !source.contains("format!(\"builtin/{}\", m.entry.id)"),
+        "shortcuts.rs still double-prefixes builtin ids"
+    );
+}
+
+#[test]
+fn execution_scripts_has_explicit_script_command_branch() {
+    let source = include_str!("../src/app_impl/execution_scripts.rs");
+    assert!(
+        source.contains("CommandCategory::Script"),
+        "script/{{name}} ids must resolve before legacy path fallback"
+    );
+}
+
+#[test]
+fn deeplink_parser_validates_through_command_id_helpers() {
+    let source = include_str!("../src/main_sections/deeplink.rs");
+    assert!(
+        source.contains("command_id_from_deeplink"),
+        "deeplink parser must use command_id_from_deeplink for validation"
+    );
+}
+
+#[test]
+fn script_command_id_deeplink_roundtrip() {
+    let command_id = "script/hello-world";
+    let deeplink = script_kit_gpui::config::command_id_to_deeplink(command_id)
+        .expect("script command id should produce valid deeplink");
+    assert_eq!(deeplink, "scriptkit://commands/script/hello-world");
+    let parsed = script_kit_gpui::config::command_id_from_deeplink(&deeplink)
+        .expect("should parse back to command id");
+    assert_eq!(parsed, command_id);
+}
+
+#[test]
+fn canonical_builtin_command_id_handles_all_input_forms() {
+    // Legacy dash-style
+    assert_eq!(
+        script_kit_gpui::config::canonical_builtin_command_id("builtin-clipboard-history"),
+        "builtin/clipboard-history"
+    );
+    // Bare identifier
+    assert_eq!(
+        script_kit_gpui::config::canonical_builtin_command_id("clipboard-history"),
+        "builtin/clipboard-history"
+    );
+    // Already canonical
+    assert_eq!(
+        script_kit_gpui::config::canonical_builtin_command_id("builtin/clipboard-history"),
+        "builtin/clipboard-history"
     );
 }

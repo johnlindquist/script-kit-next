@@ -284,12 +284,12 @@ pub fn get_builtin_fallbacks() -> Vec<BuiltinFallback> {
         },
         // Do in Current App - match menu commands or generate scripts for the frontmost app
         BuiltinFallback {
-            id: "builtin-do-in-current-app",
+            id: "builtin/do-in-current-app",
             name: "Do in Current App",
             description: "Run a matching menu command or generate a script for the frontmost app",
             icon: "target",
             action: FallbackAction::ExecuteBuiltin {
-                builtin_id: "builtin-do-in-current-app".to_string(),
+                builtin_id: "builtin/do-in-current-app".to_string(),
             },
             condition: FallbackCondition::Always,
             enabled: true,
@@ -476,7 +476,7 @@ mod tests {
         // Should include all "Always" fallbacks
         let ids: Vec<&str> = fallbacks.iter().map(|f| f.id).collect();
         assert!(ids.contains(&SEND_TO_AI_FALLBACK_ID));
-        assert!(ids.contains(&"builtin-do-in-current-app"));
+        assert!(ids.contains(&"builtin/do-in-current-app"));
         assert!(ids.contains(&"search-files"));
         assert!(ids.contains(&"run-in-terminal"));
         assert!(ids.contains(&"add-to-notes"));
@@ -847,8 +847,8 @@ mod tests {
         let fallbacks = get_builtin_fallbacks();
         let entry = fallbacks
             .iter()
-            .find(|f| f.id == "builtin-do-in-current-app")
-            .expect("builtin-do-in-current-app fallback should exist");
+            .find(|f| f.id == "builtin/do-in-current-app")
+            .expect("builtin/do-in-current-app fallback should exist");
 
         assert_eq!(entry.name, "Do in Current App");
         assert_eq!(entry.priority, 1);
@@ -861,13 +861,13 @@ mod tests {
         let fallbacks = get_builtin_fallbacks();
         let entry = fallbacks
             .iter()
-            .find(|f| f.id == "builtin-do-in-current-app")
+            .find(|f| f.id == "builtin/do-in-current-app")
             .expect("fallback should exist");
 
         let result = entry.execute("new private window").unwrap();
         match result {
             FallbackResult::ExecuteBuiltin { builtin_id } => {
-                assert_eq!(builtin_id, "builtin-do-in-current-app");
+                assert_eq!(builtin_id, "builtin/do-in-current-app");
             }
             _ => panic!("Expected ExecuteBuiltin result"),
         }
@@ -882,7 +882,7 @@ mod tests {
             .position(|f| f.id == SEND_TO_AI_FALLBACK_ID);
         let do_pos = fallbacks
             .iter()
-            .position(|f| f.id == "builtin-do-in-current-app");
+            .position(|f| f.id == "builtin/do-in-current-app");
 
         assert!(ai_pos.is_some());
         assert!(do_pos.is_some());

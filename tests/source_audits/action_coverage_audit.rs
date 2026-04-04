@@ -1243,14 +1243,14 @@ fn destructive_builtin_ids_are_in_default_confirmation_commands() {
     // Destructive builtin IDs — any builtin command that deletes data, shuts down,
     // or performs an irreversible system action must appear in this list.
     let destructive_ids = [
-        "builtin-shut-down",
-        "builtin-restart",
-        "builtin-log-out",
-        "builtin-empty-trash",
-        "builtin-sleep",
-        "builtin-force-quit",
-        "builtin-stop-all-processes",
-        "builtin-clear-suggested",
+        "builtin/shut-down",
+        "builtin/restart",
+        "builtin/log-out",
+        "builtin/empty-trash",
+        "builtin/sleep",
+        "builtin/force-quit",
+        "builtin/stop-all-processes",
+        "builtin/clear-suggested",
     ];
 
     let missing: Vec<&&str> = destructive_ids

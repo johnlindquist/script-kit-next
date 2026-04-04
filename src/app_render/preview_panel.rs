@@ -80,8 +80,8 @@ impl ScriptListApp {
                 Some(format!("scriptlet/{}", m.scriptlet.name))
             }
             scripts::SearchResult::BuiltIn(m) => {
-                // Built-in command ID: "builtin/{id}"
-                Some(format!("builtin/{}", m.entry.id))
+                // Built-in entries already carry canonical builtin/{id} IDs.
+                Some(m.entry.id.clone())
             }
             scripts::SearchResult::App(m) => {
                 // App command ID: "app/{bundle_id}" or "app/{name}"

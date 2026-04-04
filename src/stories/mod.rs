@@ -13,6 +13,7 @@ mod drop_prompt_stories;
 mod env_prompt_stories;
 mod footer_action_variations;
 mod footer_layout_variations;
+mod hint_button_variations;
 mod form_field_stories;
 mod header_button_variations;
 mod header_design_variations;
@@ -46,6 +47,7 @@ pub use drop_prompt_stories::DropPromptStory;
 pub use env_prompt_stories::EnvPromptStory;
 pub use footer_action_variations::FooterActionVariationsStory;
 pub use footer_layout_variations::FooterLayoutVariationsStory;
+pub use hint_button_variations::HintButtonVariationsStory;
 pub use form_field_stories::FormFieldStory;
 pub use header_button_variations::HeaderButtonVariationsStory;
 pub use header_design_variations::HeaderDesignVariationsStory;
@@ -89,6 +91,7 @@ static ALL_STORIES: LazyLock<Vec<StoryEntry>> = LazyLock::new(|| {
         StoryEntry::new(Box::new(LogoCenteringStory)),
         StoryEntry::new(Box::new(FooterLayoutVariationsStory)),
         StoryEntry::new(Box::new(FooterActionVariationsStory)),
+        StoryEntry::new(Box::new(HintButtonVariationsStory)),
         StoryEntry::new(Box::new(InputDesignVariationsStory)),
         StoryEntry::new(Box::new(MainMenuVariationsStory)),
         StoryEntry::new(Box::new(ActionsMiniVariationsStory)),

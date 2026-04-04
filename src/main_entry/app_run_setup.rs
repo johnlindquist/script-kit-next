@@ -826,7 +826,7 @@ app.run(move |cx: &mut App| {
                 let app_entity_inner = app_entity_for_dictation.clone();
                 let _ = cx.update(move |cx: &mut gpui::App| {
                     let should_show_window = app_entity_inner.update(cx, |view, ctx| {
-                        view.execute_by_command_id_or_path("builtin-dictation", ctx)
+                        view.execute_by_command_id_or_path("builtin/dictation", ctx)
                     });
                     if should_show_window {
                         logging::log(

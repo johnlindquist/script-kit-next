@@ -1665,9 +1665,9 @@ impl ScriptListApp {
                                             }
                                             ActionsDialogHost::WebcamPrompt => {
                                                 let start = std::time::Instant::now();
-                                                let dctx = crate::action_helpers::DispatchContext::for_builtin("builtin-webcam");
+                                                let dctx = crate::action_helpers::DispatchContext::for_builtin("builtin/webcam");
                                                 let outcome = this.execute_webcam_action(&action_id, &dctx, cx);
-                                                Self::log_builtin_outcome("builtin-webcam", &dctx, "webcam_action", &outcome, &start);
+                                                Self::log_builtin_outcome("builtin/webcam", &dctx, "webcam_action", &outcome, &start);
                                             }
                                             _ => {
                                                 this.handle_action(action_id, window, cx);

@@ -214,11 +214,11 @@ mod tests {
         for (name, content) in [("startup.rs", &startup), ("startup_new_actions.rs", &startup_new)]
         {
             assert!(
-                content.contains("DispatchContext::for_builtin(\"builtin-webcam\")"),
+                content.contains("DispatchContext::for_builtin(\"builtin/webcam\")"),
                 "{name} should create a DispatchContext::for_builtin for webcam actions."
             );
             assert!(
-                content.contains("log_builtin_outcome(\"builtin-webcam\""),
+                content.contains("log_builtin_outcome(\"builtin/webcam\""),
                 "{name} should log the webcam action outcome via log_builtin_outcome."
             );
         }

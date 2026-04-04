@@ -117,6 +117,13 @@ pub fn all_presets() -> Vec<ThemePreset> {
             theme: theme_github_dark,
         },
         ThemePreset {
+            id: "github-dimmed",
+            name: "GitHub Dimmed",
+            description: "GitHub's softer dimmed dark palette",
+            is_dark: true,
+            theme: theme_github_dimmed,
+        },
+        ThemePreset {
             id: "monokai-pro",
             name: "Monokai Pro",
             description: "Classic vibrant syntax theme",
@@ -431,6 +438,13 @@ pub fn all_presets() -> Vec<ThemePreset> {
             description: "Light companion to the Night Owl palette",
             is_dark: false,
             theme: theme_night_owl_light,
+        },
+        ThemePreset {
+            id: "tokyo-day",
+            name: "Tokyo Day",
+            description: "Airy light theme with slate-blue accents",
+            is_dark: false,
+            theme: theme_tokyo_day,
         },
         ThemePreset {
             id: "gruvbox-light",
@@ -1187,6 +1201,41 @@ fn theme_github_dark() -> Theme {
             bright_magenta: 0xd2a8ff,
             bright_cyan: 0x56d4dd,
             bright_white: 0xf0f6fc,
+        },
+    })
+}
+
+fn theme_github_dimmed() -> Theme {
+    build_dark_theme(ColorScheme {
+        background: BackgroundColors {
+            main: 0x22272e,
+            title_bar: 0x2d333b,
+            search_box: 0x2d333b,
+            log_panel: 0x1b1f24,
+        },
+        text: TextColors {
+            primary: 0xadbac7,
+            secondary: 0x909dab,
+            tertiary: 0x768390,
+            muted: 0x6e7a87,
+            dimmed: 0x545d68,
+            on_accent: 0x0d1117,
+        },
+        accent: AccentColors {
+            selected: 0x539bf5,
+            selected_subtle: 0x335480,
+        },
+        ui: UIColors {
+            border: 0x444c56,
+            success: 0x57ab5a,
+            error: 0xe5534b,
+            warning: 0xc69026,
+            info: 0x539bf5,
+        },
+        terminal: TerminalColors {
+            foreground: Some(0xadbac7),
+            background: Some(0x1b1f24),
+            ..TerminalColors::dark_default()
         },
     })
 }
@@ -2441,6 +2490,41 @@ fn theme_night_owl_light() -> Theme {
             bright_magenta: 0xd6438a,
             bright_cyan: 0x2aa298,
             bright_white: 0x93a1a1,
+        },
+    })
+}
+
+fn theme_tokyo_day() -> Theme {
+    build_light_theme(ColorScheme {
+        background: BackgroundColors {
+            main: 0xeef4ff,
+            title_bar: 0xffffff,
+            search_box: 0xffffff,
+            log_panel: 0xe8f1ff,
+        },
+        text: TextColors {
+            primary: 0x1f2329,
+            secondary: 0x3b4261,
+            tertiary: 0x56617a,
+            muted: 0x6b7394,
+            dimmed: 0x8b93aa,
+            on_accent: 0xffffff,
+        },
+        accent: AccentColors {
+            selected: 0x34548a,
+            selected_subtle: 0xc8d8f0,
+        },
+        ui: UIColors {
+            border: 0xd0daf0,
+            success: 0x33635c,
+            error: 0x8c4351,
+            warning: 0x8f5e15,
+            info: 0x2959aa,
+        },
+        terminal: TerminalColors {
+            foreground: Some(0x1f2329),
+            background: Some(0xe8f1ff),
+            ..TerminalColors::light_default()
         },
     })
 }

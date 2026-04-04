@@ -21,7 +21,7 @@ const BUILTIN_DICTATION_MODEL_DOWNLOAD: &str = "download";
 const BUILTIN_DICTATION_MODEL_CANCEL: &str = "cancel";
 
 /// Choice value: user wants to hide the prompt while download continues.
-const BUILTIN_DICTATION_MODEL_HIDE: &str = "builtin-dictation-model-hide";
+const BUILTIN_DICTATION_MODEL_HIDE: &str = "builtin/dictation-model-hide";
 
 /// Typed progress events sent from the blocking download thread to the
 /// async context for updating the in-prompt progress display.
@@ -1277,50 +1277,50 @@ impl ScriptListApp {
         entry_name: &str,
     ) -> crate::confirm::ParentConfirmOptions {
         match entry_id {
-            "builtin-quit-script-kit" => Self::quit_script_kit_confirm_options(),
-            "builtin-shut-down" => crate::confirm::ParentConfirmOptions::destructive(
+            "builtin/quit-script-kit" => Self::quit_script_kit_confirm_options(),
+            "builtin/shut-down" => crate::confirm::ParentConfirmOptions::destructive(
                 "Shut Down Mac",
                 "Shut down this Mac now?",
                 "Shut Down",
             ),
-            "builtin-restart" => crate::confirm::ParentConfirmOptions::destructive(
+            "builtin/restart" => crate::confirm::ParentConfirmOptions::destructive(
                 "Restart Mac",
                 "Restart this Mac now?",
                 "Restart",
             ),
-            "builtin-log-out" => crate::confirm::ParentConfirmOptions::destructive(
+            "builtin/log-out" => crate::confirm::ParentConfirmOptions::destructive(
                 "Log Out",
                 "Log out of the current macOS session?",
                 "Log Out",
             ),
-            "builtin-empty-trash" => crate::confirm::ParentConfirmOptions::destructive(
+            "builtin/empty-trash" => crate::confirm::ParentConfirmOptions::destructive(
                 "Empty Trash",
                 "Empty Trash now? This cannot be undone.",
                 "Empty Trash",
             ),
-            "builtin-sleep" => crate::confirm::ParentConfirmOptions {
+            "builtin/sleep" => crate::confirm::ParentConfirmOptions {
                 title: "Sleep Mac".into(),
                 body: "Put this Mac to sleep now?".into(),
                 confirm_text: "Sleep".into(),
                 cancel_text: "Cancel".into(),
                 ..Default::default()
             },
-            "builtin-force-quit" => crate::confirm::ParentConfirmOptions::destructive(
+            "builtin/force-quit" => crate::confirm::ParentConfirmOptions::destructive(
                 "Force Quit Apps",
                 "Open Force Quit Apps?",
                 "Force Quit",
             ),
-            "builtin-stop-all-processes" => crate::confirm::ParentConfirmOptions::destructive(
+            "builtin/stop-all-processes" => crate::confirm::ParentConfirmOptions::destructive(
                 "Stop All Processes",
                 "Stop all running Script Kit processes?",
                 "Stop All",
             ),
-            "builtin-clear-suggested" => crate::confirm::ParentConfirmOptions::destructive(
+            "builtin/clear-suggested" => crate::confirm::ParentConfirmOptions::destructive(
                 "Clear Suggested",
                 "Clear suggested items and reset their ranking data?",
                 "Clear Suggested",
             ),
-            "builtin-test-confirmation" => crate::confirm::ParentConfirmOptions {
+            "builtin/test-confirmation" => crate::confirm::ParentConfirmOptions {
                 title: "Test Confirmation".into(),
                 body: "Open the confirmation test action?".into(),
                 confirm_text: "Run Test".into(),

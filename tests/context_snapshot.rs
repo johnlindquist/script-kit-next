@@ -221,8 +221,8 @@ fn inspect_current_context_builtin_is_registered() {
 
     let entry = entries
         .iter()
-        .find(|entry| entry.id == "builtin-inspect-current-context")
-        .expect("builtin-inspect-current-context must be in the registry");
+        .find(|entry| entry.id == "builtin/inspect-current-context")
+        .expect("builtin/inspect-current-context must be in the registry");
 
     assert_eq!(
         entry.feature,
