@@ -927,6 +927,62 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                     }
                                 }
                             }
+                            ExternalCommand::SetAcpInput { text, submit, ref request_id } => {
+                                let request_id = request_id.as_ref().map(|id| id.as_str());
+                                tracing::info!(
+                                    category = "STDIN",
+                                    event = "stdin_acp_command_received",
+                                    command = "setAcpInput",
+                                    request_id = ?request_id,
+                                    submit,
+                                    text_len = text.len(),
+                                    "STDIN ACP command received"
+                                );
+                                let result = match &view.current_view {
+                                    AppView::AcpChatView { entity } => {
+                                        let entity = entity.clone();
+                                        entity.update(ctx, |chat, cx| {
+                                            chat.set_input(text.clone(), cx);
+                                            if submit {
+                                                let _ = chat
+                                                    .thread
+                                                    .update(cx, |thread, cx| thread.submit_input(cx));
+                                            }
+                                        });
+                                        Ok(())
+                                    }
+                                    _ => Err("ACP chat view is not active".to_string()),
+                                };
+                                match result {
+                                    Ok(()) => {
+                                        tracing::info!(
+                                            category = "STDIN",
+                                            event = "stdin_acp_command_finished",
+                                            command = "setAcpInput",
+                                            request_id = ?request_id,
+                                            submit,
+                                            status = "success",
+                                            "STDIN ACP command finished"
+                                        );
+                                    }
+                                    Err(error) => {
+                                        logging::log(
+                                            "STDIN",
+                                            &format!("Failed to set ACP input: {}", error),
+                                        );
+                                        tracing::error!(
+                                            category = "STDIN",
+                                            event = "stdin_acp_command_finished",
+                                            command = "setAcpInput",
+                                            request_id = ?request_id,
+                                            submit,
+                                            status = "error",
+                                            error = %error,
+                                            "STDIN ACP command finished"
+                                        );
+                                    }
+                                }
+                            }
                             ExternalCommand::GetAiWindowState { ref request_id } => {
                                 let request_id = request_id.as_ref().map(|id| id.as_str());
                                 match ai::get_ai_window_state(ctx) {

@@ -428,6 +428,16 @@ pub enum ExternalCommand {
         #[serde(default, rename = "requestId")]
         request_id: Option<ExternalCommandRequestId>,
     },
+    /// Set the ACP chat input text and optionally submit (for testing ACP composer behavior)
+    /// text: Message text to set in the ACP input field
+    /// submit: If true, submit the message after setting
+    SetAcpInput {
+        text: String,
+        #[serde(default)]
+        submit: bool,
+        #[serde(default, rename = "requestId")]
+        request_id: Option<ExternalCommandRequestId>,
+    },
     /// Show the debug grid overlay with options (for visual testing)
     ShowGrid {
         #[serde(default = "default_grid_size", rename = "gridSize")]
@@ -491,6 +501,7 @@ impl ExternalCommand {
             | Self::CaptureWindow { request_id, .. }
             | Self::SetAiSearch { request_id, .. }
             | Self::SetAiInput { request_id, .. }
+            | Self::SetAcpInput { request_id, .. }
             | Self::GetAiWindowState { request_id, .. }
             | Self::ShowGrid { request_id, .. }
             | Self::ShowShortcutRecorder { request_id, .. }
@@ -519,6 +530,7 @@ impl ExternalCommand {
             Self::CaptureWindow { .. } => "captureWindow",
             Self::SetAiSearch { .. } => "setAiSearch",
             Self::SetAiInput { .. } => "setAiInput",
+            Self::SetAcpInput { .. } => "setAcpInput",
             Self::GetAiWindowState { .. } => "getAiWindowState",
             Self::ShowGrid { .. } => "showGrid",
             Self::HideGrid => "hideGrid",
@@ -972,6 +984,34 @@ mod tests {
         let json = r#"{"type": "getAiWindowState", "requestId": "req-42"}"#;
         let cmd: ExternalCommand = serde_json::from_str(json)?;
         assert_eq!(cmd.request_id(), Some("req-42"));
+        Ok(())
+    }
+
+    #[test]
+    fn test_external_command_set_acp_input_deserialization() -> anyhow::Result<()> {
+        let json = r#"{"type": "setAcpInput", "text": "hello world", "submit": true}"#;
+        let cmd: ExternalCommand = serde_json::from_str(json)?;
+        assert_eq!(cmd.command_type(), "setAcpInput");
+        match cmd {
+            ExternalCommand::SetAcpInput {
+                text,
+                submit,
+                request_id,
+            } => {
+                assert_eq!(text, "hello world");
+                assert!(submit);
+                assert!(request_id.is_none());
+            }
+            _ => panic!("Expected SetAcpInput command"),
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_external_command_set_acp_input_with_request_id() -> anyhow::Result<()> {
+        let json = r#"{"type": "setAcpInput", "text": "hello", "requestId": "req-acp"}"#;
+        let cmd: ExternalCommand = serde_json::from_str(json)?;
+        assert_eq!(cmd.request_id(), Some("req-acp"));
         Ok(())
     }
 
