@@ -15,6 +15,7 @@
 //! - `gpui_integration` - gpui-component theme mapping
 //! - `service` - Global theme watcher service
 
+mod audit;
 mod chrome;
 mod color_resolver;
 pub(crate) mod gpui_integration;
@@ -29,6 +30,9 @@ pub(crate) mod validation;
 
 // Re-export shared chrome contract for app surfaces
 pub(crate) use chrome::{AppChromeColors, SemanticChipColors};
+
+// Re-export contrast audit helpers
+pub use audit::{audit_theme_contrast, theme_contrast_score, worst_theme_contrast, ThemeContrastSample};
 
 // Re-export types used externally
 pub(crate) use types::relative_luminance_srgb;
@@ -63,6 +67,7 @@ const _: usize = core::mem::size_of::<ListItemColors>();
 const _: fn(u32, u32) -> f32 = contrast_ratio;
 const _: fn(u32) -> u32 = best_readable_text_hex;
 const _: usize = core::mem::size_of::<SemanticChipColors>();
+const _: usize = core::mem::size_of::<ThemeContrastSample>();
 
 #[cfg(test)]
 #[path = "lightweight_colors_test.rs"]

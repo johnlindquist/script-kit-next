@@ -145,21 +145,10 @@ impl ScriptListApp {
             return;
         };
 
-        // If the ACP chat view is active, submit directly to the thread.
+        // If the ACP chat view is active, route through the shared
+        // verification-input builder so script-authoring guidance is appended.
         if let AppView::AcpChatView { ref entity } = self.current_view {
-            let entity = entity.clone();
-            entity.update(cx, |chat, cx| {
-                chat.thread.update(cx, |thread, cx| {
-                    thread.set_input(plan.raw_query.clone(), cx);
-                    let _ = thread.submit_input(cx);
-                });
-            });
-            tracing::info!(
-                target: "script_kit::tab_ai",
-                event = "tab_ai_quick_submit_acp_live",
-                source = ?plan.source,
-                input_len = plan.raw_query.len(),
-            );
+            self.submit_live_acp_tab_ai_from_plan(entity.clone(), plan, cx);
             return;
         }
 
@@ -195,6 +184,65 @@ impl ScriptListApp {
         );
 
         self.open_tab_ai_chat_with_quick_submit_plan(plan, cx);
+    }
+
+    /// Submit a quick-submit plan into an already-open, live ACP chat session.
+    ///
+    /// Routes through `build_tab_ai_acp_initial_input_for_prompt` so that
+    /// script-authoring guidance (including mandatory Bun verification) is
+    /// appended when the intent matches, keeping live ACP sessions aligned
+    /// with the new-session ACP path.
+    fn submit_live_acp_tab_ai_from_plan(
+        &mut self,
+        entity: gpui::Entity<crate::ai::acp::AcpChatView>,
+        plan: crate::ai::TabAiQuickSubmitPlan,
+        cx: &mut Context<Self>,
+    ) {
+        let prompt_type = self
+            .tab_ai_harness_return_view
+            .as_ref()
+            .map(|view| app_view_to_prompt_type_str(view))
+            .unwrap_or("QuickTerminal");
+
+        let initial_input = crate::ai::harness::build_tab_ai_acp_initial_input_for_prompt(
+            prompt_type,
+            plan.submission_intent(),
+        );
+
+        let submission_text = if initial_input.text.is_empty() {
+            plan.submission_intent().to_string()
+        } else {
+            initial_input.text
+        };
+
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "tab_ai_quick_submit_acp_live",
+            prompt_type = prompt_type,
+            source = ?plan.source,
+            kind = ?plan.kind,
+            input_len = plan.raw_query.len(),
+            submission_len = submission_text.len(),
+            guidance_appended = initial_input.guidance_appended,
+            forced_by_script_list_submit = initial_input.forced_by_script_list_submit,
+            includes_script_authoring_skill = initial_input.includes_script_authoring_skill,
+            includes_bun_build_verification = initial_input.includes_bun_build_verification,
+            includes_bun_execute_verification = initial_input.includes_bun_execute_verification,
+        );
+
+        entity.update(cx, |chat, cx| {
+            chat.thread.update(cx, |thread, cx| {
+                thread.set_input(submission_text, cx);
+                if let Err(error) = thread.submit_input(cx) {
+                    tracing::warn!(
+                        target: "script_kit::tab_ai",
+                        event = "tab_ai_quick_submit_acp_live_submit_failed",
+                        prompt_type = prompt_type,
+                        error = %error,
+                    );
+                }
+            });
+        });
     }
 
     /// Submit a structured turn into an already-open, live harness session.

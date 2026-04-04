@@ -17,6 +17,11 @@ pub(crate) struct AppChromeColors {
     pub window_surface_rgba: u32,
     pub surface_rgba: u32,
     pub input_surface_rgba: u32,
+    pub preview_surface_rgba: u32,
+    pub panel_surface_rgba: u32,
+    pub dialog_surface_rgba: u32,
+    pub log_panel_surface_rgba: u32,
+    pub input_active_rgba: u32,
     pub divider_rgba: u32,
     pub border_rgba: u32,
 
@@ -82,6 +87,26 @@ impl AppChromeColors {
             input_surface_rgba: hex_to_rgba_with_opacity(
                 colors.background.search_box,
                 opacity.search_box,
+            ),
+            preview_surface_rgba: hex_to_rgba_with_opacity(
+                colors.background.main,
+                opacity.preview,
+            ),
+            panel_surface_rgba: hex_to_rgba_with_opacity(
+                colors.background.title_bar,
+                opacity.panel,
+            ),
+            dialog_surface_rgba: hex_to_rgba_with_opacity(
+                colors.background.main,
+                opacity.dialog,
+            ),
+            log_panel_surface_rgba: hex_to_rgba_with_opacity(
+                colors.background.log_panel,
+                opacity.log_panel,
+            ),
+            input_active_rgba: hex_to_rgba_with_opacity(
+                colors.background.search_box,
+                opacity.input_active,
             ),
             divider_rgba: hex_to_rgba_with_opacity(colors.ui.border, opacity.border_inactive),
             border_rgba: hex_to_rgba_with_opacity(

@@ -494,3 +494,93 @@ fn paste_only_with_no_intent_does_not_receive_verification_guidance() {
         "PasteOnly with no intent must not contain the SK_VERIFY execution command"
     );
 }
+
+#[test]
+fn authoring_submission_includes_all_verification_markers() {
+    // ScriptList + Submit + non-empty intent forces authoring guidance
+    let context = script_kit_gpui::ai::TabAiContextBlob::from_parts(
+        script_kit_gpui::ai::TabAiUiSnapshot {
+            prompt_type: "ScriptList".to_string(),
+            ..Default::default()
+        },
+        Default::default(),
+        vec![],
+        None,
+        vec![],
+        vec![],
+        "2026-04-03T00:00:00Z".to_string(),
+    );
+    let submission = script_kit_gpui::ai::build_tab_ai_harness_submission(
+        &context,
+        Some("clipboard cleanup"),
+        script_kit_gpui::ai::TabAiHarnessSubmissionMode::Submit,
+        None,
+        None,
+        &[],
+    )
+    .expect("submission should build");
+
+    assert!(
+        submission.contains("--- Script Kit artifact authoring guidance ---"),
+        "authoring submission must include the guidance block"
+    );
+    assert!(
+        submission.contains("~/.scriptkit/skills/script-authoring/SKILL.md"),
+        "authoring submission must reference the script-authoring skill"
+    );
+    assert!(
+        submission.contains("bun build ~/.scriptkit/kit/main/scripts/<name>.ts --target=bun --outfile ~/.scriptkit/tmp/test-scripts/<name>.verify.mjs"),
+        "authoring submission must include the bun build verification command"
+    );
+    assert!(
+        submission.contains("SK_VERIFY=1 bun ~/.scriptkit/kit/main/scripts/<name>.ts"),
+        "authoring submission must include the SK_VERIFY bun execute command"
+    );
+    assert!(
+        submission.contains("User intent:\nclipboard cleanup"),
+        "authoring submission must include the user intent"
+    );
+}
+
+#[test]
+fn non_authoring_submission_omits_all_verification_markers() {
+    // FileSearch + Submit + non-authoring intent skips guidance
+    let context = script_kit_gpui::ai::TabAiContextBlob::from_parts(
+        script_kit_gpui::ai::TabAiUiSnapshot {
+            prompt_type: "FileSearch".to_string(),
+            ..Default::default()
+        },
+        Default::default(),
+        vec![],
+        None,
+        vec![],
+        vec![],
+        "2026-04-03T00:00:00Z".to_string(),
+    );
+    let submission = script_kit_gpui::ai::build_tab_ai_harness_submission(
+        &context,
+        Some("rename this file"),
+        script_kit_gpui::ai::TabAiHarnessSubmissionMode::Submit,
+        None,
+        None,
+        &[],
+    )
+    .expect("submission should build");
+
+    assert!(
+        !submission.contains("--- Script Kit artifact authoring guidance ---"),
+        "non-authoring submission must not include the guidance block"
+    );
+    assert!(
+        !submission.contains("SK_VERIFY=1"),
+        "non-authoring submission must not contain the SK_VERIFY execution command"
+    );
+    assert!(
+        !submission.contains("bun build ~/.scriptkit/kit/main/scripts/<name>.ts --target=bun"),
+        "non-authoring submission must not contain the bun build command"
+    );
+    assert!(
+        submission.contains("User intent:\nrename this file"),
+        "non-authoring submission must still include the user intent"
+    );
+}
