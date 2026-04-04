@@ -105,6 +105,7 @@ pub(crate) fn render_text_input_cursor_selection(config: TextInputRenderConfig<'
         .flex()
         .flex_row()
         .items_center()
+        .whitespace_nowrap()
         .text_color(rgb(config.text_color));
 
     if let Some(height) = config.container_height {
@@ -117,6 +118,7 @@ pub(crate) fn render_text_input_cursor_selection(config: TextInputRenderConfig<'
         if let Some(indicator) = config.leading_indicator {
             content = content.child(
                 div()
+                    .whitespace_nowrap()
                     .text_color(rgb(indicator.color))
                     .child(indicator.text.to_string()),
             );
@@ -134,7 +136,14 @@ pub(crate) fn render_text_input_cursor_selection(config: TextInputRenderConfig<'
             ));
         } else {
             content =
-                content.child(div().child(format_segment(&segments.before, config.transform)));
+                content.child(
+                    div()
+                        .whitespace_nowrap()
+                        .child(format_single_line_segment(
+                            &segments.before,
+                            config.transform,
+                        )),
+                );
         }
     }
     if segments.show_cursor {
@@ -148,9 +157,13 @@ pub(crate) fn render_text_input_cursor_selection(config: TextInputRenderConfig<'
     } else if !segments.selected.is_empty() {
         content = content.child(
             div()
+                .whitespace_nowrap()
                 .bg(rgba((config.selection_color << 8) | config.selection_alpha))
                 .text_color(rgb(config.selection_text_color))
-                .child(format_segment(&segments.selected, config.transform)),
+                .child(format_single_line_segment(
+                    &segments.selected,
+                    config.transform,
+                )),
         );
     }
     if !segments.after.is_empty() {
@@ -163,13 +176,21 @@ pub(crate) fn render_text_input_cursor_selection(config: TextInputRenderConfig<'
                 config.transform,
             ));
         } else {
-            content = content.child(div().child(format_segment(&segments.after, config.transform)));
+            content = content.child(
+                div()
+                    .whitespace_nowrap()
+                    .child(format_single_line_segment(
+                        &segments.after,
+                        config.transform,
+                    )),
+            );
         }
     }
     if segments.show_trailing_indicator {
         if let Some(indicator) = config.trailing_indicator {
             content = content.child(
                 div()
+                    .whitespace_nowrap()
                     .text_color(rgb(indicator.color))
                     .child(indicator.text.to_string()),
             );
@@ -371,17 +392,23 @@ fn color_for_char(highlights: &[TextHighlightRange], char_index: usize) -> Optio
 }
 
 fn render_cursor(config: &TextInputRenderConfig<'_>) -> Div {
-    let mut cursor = div().w(px(config.cursor_width)).h(px(config.cursor_height));
+    let mut cursor = div().relative().w(px(0.0)).h(px(config.cursor_height));
     if config.cursor_margin_y > 0.0 {
         cursor = cursor.my(px(config.cursor_margin_y));
     }
+    let mut cursor_bar = div()
+        .absolute()
+        .left(px(-(config.cursor_width / 2.0)))
+        .top(px(0.0))
+        .w(px(config.cursor_width))
+        .h(px(config.cursor_height));
     if let Some(hidden_color) = config.cursor_hidden_color {
-        cursor = cursor.bg(hidden_color);
+        cursor_bar = cursor_bar.bg(hidden_color);
     }
     if config.cursor_visible {
-        cursor = cursor.bg(rgb(config.cursor_color));
+        cursor_bar = cursor_bar.bg(rgb(config.cursor_color));
     }
-    cursor
+    cursor.child(cursor_bar)
 }
 
 fn format_segment(segment: &str, transform: Option<fn(&str) -> String>) -> String {
@@ -389,6 +416,10 @@ fn format_segment(segment: &str, transform: Option<fn(&str) -> String>) -> Strin
         Some(transform_fn) => transform_fn(segment),
         None => segment.to_string(),
     }
+}
+
+fn format_single_line_segment(segment: &str, transform: Option<fn(&str) -> String>) -> String {
+    format_segment(segment, transform).replace(' ', "\u{00A0}")
 }
 
 /// Render a text segment, splitting it into sub-spans where highlight ranges
@@ -437,17 +468,19 @@ fn render_segment_with_highlights(
     if spans.len() == 1 {
         let (text, color) = &spans[0];
         return div()
+            .whitespace_nowrap()
             .text_color(rgb(*color))
-            .child(format_segment(text, transform))
+            .child(format_single_line_segment(text, transform))
             .into_any_element();
     }
 
-    let mut container = div().flex().flex_row();
+    let mut container = div().flex().flex_row().whitespace_nowrap();
     for (text, color) in &spans {
         container = container.child(
             div()
+                .whitespace_nowrap()
                 .text_color(rgb(*color))
-                .child(format_segment(text, transform)),
+                .child(format_single_line_segment(text, transform)),
         );
     }
     container.into_any_element()
