@@ -628,15 +628,13 @@ fn list_item_shortcut_tokens_for_render<'a>(
     ))
 }
 
-/// Search rows keep shortcuts only on the actively focused row to avoid right-side noise.
+/// Row shortcuts stay hidden until a row is focused or hovered.
+/// This keeps the right edge quiet across both browse and search states.
 pub(crate) fn should_show_search_shortcut(
-    is_filtering: bool,
+    _is_filtering: bool,
     selected: bool,
     hovered: bool,
 ) -> bool {
-    if !is_filtering {
-        return true;
-    }
     selected || hovered
 }
 /// Search rows keep descriptions only when they add context for the current focus or match.
@@ -1274,7 +1272,7 @@ impl RenderOnce for ListItem {
             if show_shortcut {
                 crate::components::hint_strip::emit_shortcut_chrome_audit(
                     "list_item",
-                    "compact-inline-whisper",
+                    "compact-inline-whisper-focused-only",
                 );
                 let glyph_color = if is_filtering {
                     rgba((colors.text_dimmed << 8) | ALPHA_HINT)

@@ -117,6 +117,7 @@ impl Render for SelectPrompt {
 
         let text_color = rgb(chrome.text_secondary_hex);
         let muted_color = rgb(chrome.text_muted_hex);
+        let accent_bar_color = rgb(chrome.accent_hex);
         let focused_row_bg_rgba = chrome.selection_rgba;
         let hovered_row_bg_rgba = chrome.hover_rgba;
         let hovered_row_bg = rgba(hovered_row_bg_rgba);
@@ -224,10 +225,14 @@ impl Render for SelectPrompt {
                                                 icon_kind_from_choice(choice),
                                             ))
                                         };
-                                        let subtitle = indexed_choice
-                                            .metadata
-                                            .subtitle_text()
-                                            .map(TextContent::plain);
+                                        let subtitle = if is_focused {
+                                            indexed_choice
+                                                .metadata
+                                                .subtitle_text()
+                                                .map(TextContent::plain)
+                                        } else {
+                                            None
+                                        };
                                         let title = highlighted_choice_title(
                                             &choice.name,
                                             &this.filter_text,
@@ -267,6 +272,12 @@ impl Render for SelectPrompt {
                                             .w_full()
                                             .h(px(LIST_ITEM_HEIGHT))
                                             .bg(row_bg)
+                                            .border_l(px(3.0))
+                                            .border_color(if is_focused {
+                                                accent_bar_color
+                                            } else {
+                                                gpui::rgba(0x00000000)
+                                            })
                                             .cursor_pointer()
                                             .on_hover(hover_handler)
                                             .child(
@@ -312,7 +323,6 @@ impl Render for SelectPrompt {
             .flex_col()
             .flex_1()
             .w_full()
-            .px(px(8.0))
             .child(choices_content);
 
         let hints = crate::components::universal_prompt_hints();

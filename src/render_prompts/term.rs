@@ -155,10 +155,19 @@ impl ScriptListApp {
     ) -> AnyElement {
         let has_actions = self.has_nonempty_sdk_actions();
 
-        crate::components::emit_prompt_chrome_audit(&crate::components::PromptChromeAudit::editor(
-            "render_prompts::term",
+        crate::components::emit_prompt_chrome_audit(&crate::components::PromptChromeAudit {
+            surface: "render_prompts::term",
+            layout_mode: "editor",
+            input_mode: "bare",
+            divider_mode: "none",
+            footer_mode: "custom_hint_strip",
+            header_padding_x: crate::ui::chrome::HEADER_PADDING_X as u16,
+            header_padding_y: crate::ui::chrome::HEADER_PADDING_Y as u16,
+            hint_count: 0,
+            has_leading_status: false,
             has_actions,
-        ));
+            exception_reason: Some("terminal_owns_contextual_footer"),
+        });
 
         let render_context = PromptRenderContext::new(self.theme.as_ref(), self.current_design);
         let theme = render_context.theme;
@@ -556,15 +565,19 @@ mod term_prompt_render_tests {
     }
 
     #[test]
-    fn test_term_chrome_audit_uses_editor_layout_mode() {
+    fn test_term_chrome_audit_uses_editor_layout_with_custom_footer() {
         const TERM_RENDER_SOURCE: &str = include_str!("term.rs");
         assert!(
-            TERM_RENDER_SOURCE.contains("PromptChromeAudit::editor("),
-            "term prompt should emit an editor-type chrome audit, not an exception"
+            TERM_RENDER_SOURCE.contains("layout_mode: \"editor\""),
+            "term prompt should emit an editor layout mode"
         );
         assert!(
-            !TERM_RENDER_SOURCE.contains("PromptChromeAudit::exception("),
-            "term prompt should no longer use exception chrome audit"
+            TERM_RENDER_SOURCE.contains("footer_mode: \"custom_hint_strip\""),
+            "term prompt should declare a custom hint strip footer, not the universal one"
+        );
+        assert!(
+            TERM_RENDER_SOURCE.contains("exception_reason: Some(\"terminal_owns_contextual_footer\")"),
+            "term prompt should document why it has a custom footer"
         );
         assert!(
             TERM_RENDER_SOURCE.contains("render_terminal_prompt_hint_strip("),

@@ -1164,7 +1164,7 @@ impl Render for NotesActionsPanel {
         let theme = cx.theme();
         crate::components::hint_strip::emit_shortcut_chrome_audit(
             "notes_actions_panel",
-            "compact-inline",
+            "compact-inline-focused-only",
         );
 
         // Vibrancy-aware colors using Script Kit theme hex values
@@ -1284,13 +1284,14 @@ impl Render for NotesActionsPanel {
                                     };
                                     let row_label = row.label().to_string();
 
+                                    let show_shortcut = is_selected;
                                     let shortcut_badges: AnyElement = match row {
                                         NotesPanelRow::BuiltIn(item) => {
                                             let tokens = item.action.shortcut_tokens();
-                                            render_shortcut_keys_dynamic(&tokens, theme)
+                                            render_shortcut_keys_dynamic(&tokens, theme, show_shortcut)
                                         }
                                         NotesPanelRow::Sdk(action) => {
-                                            render_shortcut_keys_dynamic(&action.shortcut_keys, theme)
+                                            render_shortcut_keys_dynamic(&action.shortcut_keys, theme, show_shortcut)
                                         }
                                     };
 
@@ -1436,7 +1437,10 @@ impl Render for NotesActionsPanel {
     }
 }
 
-fn render_shortcut_keys_dynamic(keys: &[String], theme: &Theme) -> AnyElement {
+fn render_shortcut_keys_dynamic(keys: &[String], theme: &Theme, visible: bool) -> AnyElement {
+    if !visible || keys.is_empty() {
+        return div().into_any_element();
+    }
     crate::components::hint_strip::render_inline_shortcut_keys(
         keys.iter().map(String::as_str),
         crate::components::hint_strip::whisper_inline_shortcut_colors(
