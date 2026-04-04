@@ -151,6 +151,13 @@ impl ScriptListApp {
         entity: Entity<SelectPrompt>,
         cx: &mut Context<Self>,
     ) -> AnyElement {
+        tracing::info!(
+            surface = "render_prompts::select",
+            row_subtitle = "focus-only",
+            row_accent_bar = "focused-only",
+            trailing_metadata = "hint-text",
+            "prompt_surface_rendered"
+        );
         crate::components::emit_prompt_chrome_audit(
             &crate::components::PromptChromeAudit::minimal_list(
                 "render_prompts::select",

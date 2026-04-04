@@ -1696,7 +1696,7 @@ impl Render for ActionsDialog {
         let style = actions_dialog_default_style();
         crate::components::hint_strip::emit_shortcut_chrome_audit(
             "actions_dialog",
-            "compact-inline",
+            "compact-inline-focused-only",
         );
 
         // Get design tokens for the current design variant
@@ -2215,8 +2215,10 @@ impl Render for ActionsDialog {
                                             .justify_between()
                                             .child(left_side);
 
-                                        // Right side: keyboard shortcuts as compact inline glyphs
-                                        if style.shortcut_visible {
+                                        // Right side: keyboard shortcuts only on the focused row.
+                                        // This keeps the actions list visually quiet and makes the hint feel earned.
+                                        let show_shortcut = is_selected;
+                                        if style.shortcut_visible && show_shortcut {
                                             if let Some(shortcut_tokens) = action_shortcut_tokens_for_render(action) {
                                                 content = content.child(
                                                     crate::components::hint_strip::render_inline_shortcut_keys(

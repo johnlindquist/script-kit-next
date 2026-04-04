@@ -29,26 +29,51 @@ impl ShortcutRecorder {
         }
     }
 
-    /// Render the key display area with the shared compact shortcut chrome.
+    /// Render the live shortcut preview as an inline status row.
+    /// This keeps the recorder aligned with the footer hint strip language instead of
+    /// giving the shortcut a boxed "mini keyboard" treatment.
     pub(super) fn render_key_display(&self) -> impl IntoElement {
         let colors = self.colors;
         let keycaps = self.get_display_keycaps();
 
+        crate::components::hint_strip::emit_shortcut_chrome_audit(
+            "shortcut_recorder_display",
+            "inline-preview",
+        );
+
         let content = if keycaps.is_empty() {
             div()
-                .text_sm()
-                .text_color(rgb(colors.text_muted))
-                .child("Press any key combination...")
+                .text_xs()
+                .text_color(rgba((colors.text_muted << 8) | 0xD0))
+                .child("Hold modifiers, then press a key")
                 .into_any_element()
         } else {
-            crate::components::hint_strip::render_inline_shortcut_keys(
-                keycaps.iter().map(String::as_str),
-                crate::components::hint_strip::whisper_inline_shortcut_colors(
-                    rgba((colors.text_primary << 8) | 0xD0).into(),
-                    rgba((colors.border << 8) | 0xFF).into(),
-                    true,
-                ),
-            )
+            let status = if self.shortcut.is_complete() {
+                "Recorded"
+            } else {
+                "Listening"
+            };
+
+            div()
+                .flex()
+                .flex_row()
+                .items_center()
+                .gap(px(8.0))
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(rgba((colors.text_muted << 8) | 0xC0))
+                        .child(status),
+                )
+                .child(crate::components::hint_strip::render_inline_shortcut_keys(
+                    keycaps.iter().map(String::as_str),
+                    crate::components::hint_strip::whisper_inline_shortcut_colors(
+                        rgba((colors.text_primary << 8) | 0xD0).into(),
+                        rgba((colors.border << 8) | 0xFF).into(),
+                        true,
+                    ),
+                ))
+                .into_any_element()
         };
 
         div()
@@ -58,10 +83,6 @@ impl ShortcutRecorder {
             .flex()
             .items_center()
             .justify_center()
-            .bg(rgba((colors.key_display_bg << 8) | 0x18))
-            .rounded(px(8.))
-            .border_1()
-            .border_color(rgba((colors.border << 8) | 0x1C))
             .child(content)
     }
 

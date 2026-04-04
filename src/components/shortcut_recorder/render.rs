@@ -24,7 +24,7 @@ impl Render for ShortcutRecorder {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         crate::components::hint_strip::emit_shortcut_chrome_audit(
             "shortcut_recorder",
-            "compact-inline",
+            "compact-inline-preview",
         );
 
         let colors = self.colors;
@@ -109,14 +109,13 @@ impl Render for ShortcutRecorder {
                     ),
             );
 
-        // Compact hint — just the modifier symbols
         let instructions = div()
             .w_full()
-            .mt(px(8.))
+            .mt(px(6.))
             .text_xs()
-            .text_color(rgb(colors.text_muted))
+            .text_color(rgba((colors.text_muted << 8) | 0xC0))
             .text_center()
-            .child("⌘ ⌃ ⌥ ⇧ + key");
+            .child("Esc cancels. Enter saves when the shortcut is valid.");
 
         // Key down event handler - captures modifiers and keys
         let handle_key_down = cx.listener(move |this, event: &gpui::KeyDownEvent, _window, cx| {

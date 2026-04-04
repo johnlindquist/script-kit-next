@@ -315,37 +315,32 @@ fn render_trailing(
     trailing: &Option<TrailingContent>,
     colors: &UnifiedListItemColors,
 ) -> Option<Div> {
+    let hint_color = rgb(colors.text_dimmed);
+
     match trailing {
         Some(TrailingContent::Shortcut(shortcut)) => Some(
             div()
                 .text_xs()
-                .text_color(rgb(colors.text_dimmed))
-                .px(px(6.))
-                .py(px(2.))
-                .rounded(px(3.))
-                .bg(rgba((colors.background << 8) | 0x40))
+                .font_family(crate::list_item::FONT_MONO)
+                .text_color(hint_color)
                 .child(shortcut.clone()),
         ),
         Some(TrailingContent::Hint(hint)) => Some(
             div()
                 .text_xs()
-                .text_color(rgb(colors.text_dimmed))
+                .text_color(hint_color)
                 .child(hint.clone()),
         ),
         Some(TrailingContent::Count(count)) => Some(
             div()
                 .text_xs()
-                .text_color(rgb(colors.text_dimmed))
-                .px(px(6.))
-                .py(px(2.))
-                .rounded(px(3.))
-                .bg(rgba((colors.background << 8) | 0x30))
+                .text_color(hint_color)
                 .child(format!("{}", count)),
         ),
         Some(TrailingContent::Chevron) => Some(
             div()
                 .text_xs()
-                .text_color(rgb(colors.text_dimmed))
+                .text_color(hint_color)
                 .child("→"),
         ),
         Some(TrailingContent::Checkmark) => {
