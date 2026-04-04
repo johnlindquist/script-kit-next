@@ -278,7 +278,12 @@ fn render_multiline_line(
                     line = line.child(render_cursor(config));
                 }
 
-                line = line.child(render_multiline_char(ch, char_index, selection_range, config));
+                line = line.child(render_multiline_char(
+                    ch,
+                    char_index,
+                    selection_range,
+                    config,
+                ));
             }
             continue;
         }
@@ -290,8 +295,12 @@ fn render_multiline_line(
                 token_node = token_node.child(render_cursor(config));
             }
 
-            token_node =
-                token_node.child(render_multiline_char(ch, char_index, selection_range, config));
+            token_node = token_node.child(render_multiline_char(
+                ch,
+                char_index,
+                selection_range,
+                config,
+            ));
         }
 
         line = line.child(token_node);
