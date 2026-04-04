@@ -230,7 +230,15 @@ impl ScriptListApp {
             move |this, _, event: &InputEvent, window, cx| match event {
                 InputEvent::Focus => {
                     this.gpui_input_focused = true;
-                    this.focused_input = FocusedInput::MainFilter;
+                    // Set focused_input based on current view
+                    if matches!(
+                        this.current_view,
+                        AppView::MiniPrompt { .. } | AppView::ArgPrompt { .. }
+                    ) {
+                        this.focused_input = FocusedInput::ArgPrompt;
+                    } else {
+                        this.focused_input = FocusedInput::MainFilter;
+                    }
 
                     // Close actions popup when main input receives focus
                     // This ensures consistent behavior: clicking the input closes actions
@@ -253,20 +261,38 @@ impl ScriptListApp {
                     cx.notify();
                 }
                 InputEvent::Change => {
-                    let input_received_at = std::time::Instant::now();
-                    // Read the current input value to see what we're processing
                     let current_value = this.gpui_input_state.read(cx).value().to_string();
-                    logging::log(
-                        "FILTER_PERF",
-                        &format!(
-                            "[1/5] INPUT_CHANGE value='{}' len={} at {:?}",
-                            current_value,
-                            current_value.len(),
-                            input_received_at
-                        ),
-                    );
-                    this.filter_perf_start = Some(input_received_at);
-                    this.handle_filter_input_change(window, cx);
+
+                    if matches!(
+                        this.current_view,
+                        AppView::MiniPrompt { .. } | AppView::ArgPrompt { .. }
+                    ) {
+                        // Sync text from Input component to arg_input for choice filtering
+                        let prev_original_idx = this
+                            .filtered_arg_choices()
+                            .get(this.arg_selected_index)
+                            .map(|(orig_idx, _)| *orig_idx);
+                        this.arg_input.set_text(&current_value);
+                        this.sync_arg_prompt_after_text_change(
+                            prev_original_idx,
+                            window,
+                            cx,
+                        );
+                        cx.notify();
+                    } else {
+                        let input_received_at = std::time::Instant::now();
+                        logging::log(
+                            "FILTER_PERF",
+                            &format!(
+                                "[1/5] INPUT_CHANGE value='{}' len={} at {:?}",
+                                current_value,
+                                current_value.len(),
+                                input_received_at
+                            ),
+                        );
+                        this.filter_perf_start = Some(input_received_at);
+                        this.handle_filter_input_change(window, cx);
+                    }
                 }
                 InputEvent::PressEnter { .. } => {
                     // Block Enter when confirm popup is open — the confirm
@@ -274,6 +300,18 @@ impl ScriptListApp {
                     // capture_key_down in render_impl.
                     if confirm::is_confirm_window_open() {
                         logging::log("KEY", "Ignoring PressEnter: confirm popup is open");
+                        return;
+                    }
+
+                    // Handle Enter for mini/arg prompts — submit the arg value
+                    let prompt_id = match &this.current_view {
+                        AppView::MiniPrompt { id, .. } | AppView::ArgPrompt { id, .. } => {
+                            Some(id.clone())
+                        }
+                        _ => None,
+                    };
+                    if let Some(prompt_id) = prompt_id {
+                        this.submit_arg_prompt_from_current_state(&prompt_id, cx);
                         return;
                     }
 

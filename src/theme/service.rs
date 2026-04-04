@@ -87,10 +87,17 @@ fn reload_theme_cache_and_bump_revision() -> super::types::Theme {
 /// Call this while already inside an app/window update so cache + revision visibility stays atomic.
 pub(crate) fn reload_theme_cache_sync_and_bump_revision(cx: &mut App) -> super::types::Theme {
     let theme = reload_theme_cache_and_bump_revision();
-    super::gpui_integration::sync_gpui_component_theme_for_theme(cx, &theme);
+    super::gpui_integration::sync_gpui_component_theme_for_theme_with_source(
+        cx,
+        &theme,
+        "theme_service_reload",
+    );
     debug!(
         theme_revision = theme_revision(),
-        "Applied atomic theme cache + gpui sync + revision update"
+        appearance = ?theme.appearance,
+        vibrancy_enabled = theme.get_vibrancy().enabled,
+        vibrancy_material = %theme.get_vibrancy().material,
+        "Applied atomic theme cache + runtime theme sync + revision update"
     );
     theme
 }

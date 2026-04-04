@@ -8,7 +8,7 @@ impl ScriptListApp {
     fn render_mini_prompt(
         &mut self,
         id: String,
-        placeholder: String,
+        _placeholder: String,
         choices: Vec<Choice>,
         cx: &mut Context<Self>,
     ) -> AnyElement {
@@ -27,28 +27,22 @@ impl ScriptListApp {
 
         let text_primary = theme.colors.text.primary;
         let text_muted = theme.colors.text.muted;
-        let accent_color = theme.colors.accent.selected;
-        let input_is_empty = self.arg_input.is_empty();
-
         // Mini uses shared layout tokens from the resize contract
         let mini_padding_x: f32 = crate::window_resize::mini_layout::HEADER_PADDING_X;
         let mini_padding_y: f32 = crate::window_resize::mini_layout::HEADER_PADDING_Y;
 
-        // Key handler - Enter submits, Escape dismisses, arrow keys navigate hidden selection
-        let prompt_id = id.clone();
+        // Navigation key handler — Escape, arrows, Tab, Cmd+W
+        // Text editing is handled by the Input component; Enter by the subscription
         let handle_key = cx.listener(
             move |this: &mut Self,
                   event: &gpui::KeyDownEvent,
                   window: &mut Window,
                   cx: &mut Context<Self>| {
-                // Hide cursor while typing
                 this.hide_mouse_cursor(cx);
 
                 let key = event.keystroke.key.as_str();
-                let key_char = event.keystroke.key_char.as_deref();
                 let has_cmd = event.keystroke.modifiers.platform;
                 let modifiers = &event.keystroke.modifiers;
-                let key_lower = key.to_lowercase();
 
                 // Escape dismisses
                 if ui_foundation::is_key_escape(key) {
@@ -57,14 +51,7 @@ impl ScriptListApp {
                     return;
                 }
 
-                // Enter submits
-                if ui_foundation::is_key_enter(key) {
-                    this.submit_arg_prompt_from_current_state(&prompt_id, cx);
-                    cx.stop_propagation();
-                    return;
-                }
-
-                // Arrow up/down for hidden selection navigation
+                // Arrow up/down for choice navigation
                 if ui_foundation::is_key_up(key) && !modifiers.shift {
                     if this.arg_selected_index > 0 {
                         this.arg_selected_index -= 1;
@@ -99,42 +86,8 @@ impl ScriptListApp {
                     return;
                 }
 
-                // Delegate text editing to TextInputState
-                let old_text = this.arg_input.text().to_string();
-                let prev_original_idx = this
-                    .filtered_arg_choices()
-                    .get(this.arg_selected_index)
-                    .map(|(orig_idx, _)| *orig_idx);
-
-                let handled = this.arg_input.handle_key(
-                    &key_lower,
-                    key_char,
-                    modifiers.platform,
-                    modifiers.alt,
-                    modifiers.shift,
-                    cx,
-                );
-
-                if handled {
-                    if this.arg_input.text() != old_text {
-                        // Update selection tracking but don't resize (mini is fixed height)
-                        let new_selected_idx = {
-                            let filtered = this.filtered_arg_choices();
-                            if let Some(prev_idx) = prev_original_idx {
-                                filtered
-                                    .iter()
-                                    .position(|(orig_idx, _)| *orig_idx == prev_idx)
-                                    .unwrap_or(0)
-                            } else {
-                                0
-                            }
-                        };
-                        this.arg_selected_index = new_selected_idx;
-                    }
-                    cx.notify();
-                } else {
-                    cx.propagate();
-                }
+                // All other keys propagate to the Input component
+                cx.propagate();
             },
         );
 
@@ -145,7 +98,8 @@ impl ScriptListApp {
             ),
         );
 
-        // Build header (compact input row with reduced padding)
+        // Build header — use the same Input component as the main menu
+        let input_height = CURSOR_HEIGHT_LG + (CURSOR_MARGIN_Y * 2.0);
         let header = div()
             .w_full()
             .px(px(mini_padding_x))
@@ -153,49 +107,27 @@ impl ScriptListApp {
             .flex()
             .flex_row()
             .items_center()
-            .child({
-                let input_height = CURSOR_HEIGHT_LG + (CURSOR_MARGIN_Y * 2.0);
+            .child(
                 div()
                     .flex_1()
                     .flex()
-                    .flex_row()
                     .items_center()
-                    .h(px(input_height))
-                    .text_size(px(typography_resolver.font_size_xl()))
-                    .text_color(if input_is_empty {
-                        rgb(text_muted)
-                    } else {
-                        rgb(text_primary)
-                    })
-                    .when(input_is_empty, |d: gpui::Div| {
-                        let is_cursor_visible = self.focused_input
-                            == FocusedInput::ArgPrompt
-                            && self.cursor_visible;
-                        d.child(
-                            div()
-                                .flex()
-                                .flex_row()
-                                .items_center()
-                                .child(
-                                    div()
-                                        .w(px(CURSOR_WIDTH))
-                                        .h(px(CURSOR_HEIGHT_LG))
-                                        .when(is_cursor_visible, |d: gpui::Div| {
-                                            d.bg(rgb(text_primary))
-                                        }),
-                                )
-                                .child(
-                                    div()
-                                        .ml(px(-(CURSOR_WIDTH)))
-                                        .text_color(rgb(text_muted))
-                                        .child(placeholder),
-                                ),
-                        )
-                    })
-                    .when(!input_is_empty, |d: gpui::Div| {
-                        d.child(self.render_arg_input_text(text_primary, accent_color))
-                    })
-            });
+                    .child(
+                        div().flex_1().flex().flex_row().items_center().child(
+                            Input::new(&self.gpui_input_state)
+                                .w_full()
+                                .h(px(input_height))
+                                .px(px(0.))
+                                .py(px(0.))
+                                .with_size(Size::Size(px(
+                                    typography_resolver.font_size_xl()
+                                )))
+                                .appearance(false)
+                                .bordered(false)
+                                .focus_bordered(false),
+                        ),
+                    ),
+            );
 
         // Compact choice list for mini prompt (e.g. mic picker)
         let content = if choices.is_empty() {
@@ -269,7 +201,7 @@ impl ScriptListApp {
         .font_family(design_typography.font_family)
         .key_context("mini_prompt")
         .track_focus(&self.focus_handle)
-        .on_key_down(handle_key)
+        .capture_key_down(handle_key)
         .into_any_element()
     }
 }

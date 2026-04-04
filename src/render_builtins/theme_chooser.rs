@@ -1,4 +1,6 @@
-use crate::theme::gpui_integration::{best_contrast_of_two, sync_gpui_component_theme_for_theme};
+use crate::theme::gpui_integration::{
+    best_contrast_of_two, sync_gpui_component_theme_for_theme_with_source,
+};
 
 const THEME_LIST_PAGE_SIZE: usize = 5;
 const OPACITY_MATCH_TOLERANCE: f32 = 0.05;
@@ -27,6 +29,24 @@ struct ThemeChooserRowLayout {
     text_gap: f32,
     swatch_gap: f32,
     list_vertical_padding: f32,
+}
+
+/// Unified theme chooser preview sync: applies both gpui-component colors and
+/// native vibrancy/material in one call, with a source tag for tracing.
+fn sync_theme_chooser_preview(
+    cx: &mut gpui::App,
+    active_theme: &std::sync::Arc<crate::theme::Theme>,
+    source: &'static str,
+) {
+    let chrome = crate::theme::AppChromeColors::from_theme(active_theme.as_ref());
+    tracing::debug!(
+        source,
+        accent_hex = chrome.accent_hex,
+        selection_rgba = chrome.selection_rgba,
+        input_surface_rgba = chrome.input_surface_rgba,
+        "theme_chooser_preview_synced"
+    );
+    sync_gpui_component_theme_for_theme_with_source(cx, active_theme.as_ref(), source);
 }
 
 impl ScriptListApp {
@@ -226,7 +246,7 @@ impl ScriptListApp {
                         // No filter to clear — restore original theme and go back
                         if let Some(original) = this.theme_before_chooser.take() {
                             this.theme = original;
-                            sync_gpui_component_theme_for_theme(cx, this.theme.as_ref());
+                            sync_theme_chooser_preview(cx, &this.theme, "theme_chooser_escape_restore");
                         }
                         this.go_back_or_close(window, cx);
                     }
@@ -236,7 +256,7 @@ impl ScriptListApp {
                 if has_cmd && key.eq_ignore_ascii_case("w") {
                     if let Some(original) = this.theme_before_chooser.take() {
                         this.theme = original;
-                        sync_gpui_component_theme_for_theme(cx, this.theme.as_ref());
+                        sync_theme_chooser_preview(cx, &this.theme, "theme_chooser_close_restore");
                     }
                     this.close_and_reset_window(cx);
                     return;
@@ -256,7 +276,7 @@ impl ScriptListApp {
                     modified.colors.text.on_accent =
                         best_contrast_of_two(new_accent, 0xFFFFFF, modified.colors.background.main);
                     this.theme = std::sync::Arc::new(modified);
-                    sync_gpui_component_theme_for_theme(cx, this.theme.as_ref());
+                    sync_theme_chooser_preview(cx, &this.theme, "theme_chooser_accent_cycle");
                     cx.notify();
                     return;
                 }
@@ -270,7 +290,7 @@ impl ScriptListApp {
                     modified.colors.text.on_accent =
                         best_contrast_of_two(new_accent, 0xFFFFFF, modified.colors.background.main);
                     this.theme = std::sync::Arc::new(modified);
-                    sync_gpui_component_theme_for_theme(cx, this.theme.as_ref());
+                    sync_theme_chooser_preview(cx, &this.theme, "theme_chooser_accent_cycle");
                     cx.notify();
                     return;
                 }
@@ -289,7 +309,7 @@ impl ScriptListApp {
                             op.vibrancy_background = Some(target);
                         }
                         this.theme = std::sync::Arc::new(modified);
-                        sync_gpui_component_theme_for_theme(cx, this.theme.as_ref());
+                        sync_theme_chooser_preview(cx, &this.theme, "theme_chooser_opacity_decrease");
                         cx.notify();
                     }
                     return;
@@ -308,7 +328,7 @@ impl ScriptListApp {
                             op.vibrancy_background = Some(target);
                         }
                         this.theme = std::sync::Arc::new(modified);
-                        sync_gpui_component_theme_for_theme(cx, this.theme.as_ref());
+                        sync_theme_chooser_preview(cx, &this.theme, "theme_chooser_opacity_increase");
                         cx.notify();
                     }
                     return;
@@ -320,13 +340,7 @@ impl ScriptListApp {
                         vibrancy.enabled = !vibrancy.enabled;
                     }
                     this.theme = std::sync::Arc::new(modified);
-                    sync_gpui_component_theme_for_theme(cx, this.theme.as_ref());
-                    let is_dark = this.theme.should_use_dark_vibrancy();
-                    let material = this.theme.get_vibrancy().material;
-                    platform::configure_window_vibrancy_material_for_appearance(
-                        is_dark,
-                        material,
-                    );
+                    sync_theme_chooser_preview(cx, &this.theme, "theme_chooser_vibrancy_toggle");
                     cx.notify();
                     return;
                 }
@@ -346,13 +360,7 @@ impl ScriptListApp {
                         vibrancy.material = new_material;
                     }
                     this.theme = std::sync::Arc::new(modified);
-                    sync_gpui_component_theme_for_theme(cx, this.theme.as_ref());
-                    let is_dark = this.theme.should_use_dark_vibrancy();
-                    let material = this.theme.get_vibrancy().material;
-                    platform::configure_window_vibrancy_material_for_appearance(
-                        is_dark,
-                        material,
-                    );
+                    sync_theme_chooser_preview(cx, &this.theme, "theme_chooser_vibrancy_material_cycle");
                     cx.notify();
                     return;
                 }
@@ -373,7 +381,7 @@ impl ScriptListApp {
                         if let Some(&pidx) = filtered.get(*selected_index) {
                             if pidx < presets.len() {
                                 this.theme = std::sync::Arc::new(presets[pidx].create_theme());
-                                sync_gpui_component_theme_for_theme(cx, this.theme.as_ref());
+                                sync_theme_chooser_preview(cx, &this.theme, "theme_chooser_reset_shortcut");
                                 cx.notify();
                             }
                         }
@@ -386,7 +394,7 @@ impl ScriptListApp {
                     if let Err(e) = theme::presets::write_theme_to_disk(&this.theme) {
                         logging::log("ERROR", &format!("Failed to save theme: {}", e));
                     }
-                    sync_gpui_component_theme_for_theme(cx, this.theme.as_ref());
+                    sync_theme_chooser_preview(cx, &this.theme, "theme_chooser_apply");
                     this.go_back_or_close(window, cx);
                     return;
                 }
@@ -451,7 +459,7 @@ impl ScriptListApp {
                         input_surface_rgba = active_chrome.input_surface_rgba,
                         "theme_chooser_preset_preview_applied"
                     );
-                    sync_gpui_component_theme_for_theme(cx, this.theme.as_ref());
+                    sync_theme_chooser_preview(cx, &this.theme, "theme_chooser_keyboard_preview");
                     cx.notify();
                 }
             },
@@ -572,19 +580,7 @@ impl ScriptListApp {
                                                 this.theme = std::sync::Arc::new(
                                                     presets[pidx].create_theme(),
                                                 );
-                                                let active_chrome = theme::AppChromeColors::from_theme(this.theme.as_ref());
-                                                tracing::debug!(
-                                                    preset_id = presets[pidx].id,
-                                                    preset_index = pidx,
-                                                    accent_hex = active_chrome.accent_hex,
-                                                    selection_rgba = active_chrome.selection_rgba,
-                                                    input_surface_rgba = active_chrome.input_surface_rgba,
-                                                    "theme_chooser_preset_preview_applied"
-                                                );
-                                                sync_gpui_component_theme_for_theme(
-                                                    cx,
-                                                    this.theme.as_ref(),
-                                                );
+                                                sync_theme_chooser_preview(cx, &this.theme, "theme_chooser_mouse_preview");
                                                 cx.notify();
                                             }
                                         }
@@ -761,7 +757,7 @@ impl ScriptListApp {
                                     modified.colors.text.on_accent =
                                         best_contrast_of_two(color, 0xFFFFFF, swatch_bg_main);
                                     this.theme = std::sync::Arc::new(modified);
-                                    sync_gpui_component_theme_for_theme(cx, this.theme.as_ref());
+                                    sync_theme_chooser_preview(cx, &this.theme, "theme_chooser_accent_click");
                                     cx.notify();
                                 });
                             }
@@ -812,7 +808,7 @@ impl ScriptListApp {
                                         op.vibrancy_background = Some(value);
                                     }
                                     this.theme = std::sync::Arc::new(modified);
-                                    sync_gpui_component_theme_for_theme(cx, this.theme.as_ref());
+                                    sync_theme_chooser_preview(cx, &this.theme, "theme_chooser_opacity_click");
                                     cx.notify();
                                 });
                             }
@@ -848,13 +844,7 @@ impl ScriptListApp {
                                 vibrancy.enabled = !vibrancy.enabled;
                             }
                             this.theme = std::sync::Arc::new(modified);
-                            sync_gpui_component_theme_for_theme(cx, this.theme.as_ref());
-                            let is_dark = this.theme.should_use_dark_vibrancy();
-                            let material = this.theme.get_vibrancy().material;
-                            platform::configure_window_vibrancy_material_for_appearance(
-                                is_dark,
-                                material,
-                            );
+                            sync_theme_chooser_preview(cx, &this.theme, "theme_chooser_vibrancy_click");
                             cx.notify();
                         });
                     }
@@ -936,13 +926,7 @@ impl ScriptListApp {
                                         vibrancy.material = material;
                                     }
                                     this.theme = std::sync::Arc::new(modified);
-                                    sync_gpui_component_theme_for_theme(cx, this.theme.as_ref());
-                                    let is_dark = this.theme.should_use_dark_vibrancy();
-                                    let current_material = this.theme.get_vibrancy().material;
-                                    platform::configure_window_vibrancy_material_for_appearance(
-                                        is_dark,
-                                        current_material,
-                                    );
+                                    sync_theme_chooser_preview(cx, &this.theme, "theme_chooser_material_click");
                                     cx.notify();
                                 });
                             }
@@ -1000,7 +984,7 @@ impl ScriptListApp {
                                         });
                                     }
                                     this.theme = std::sync::Arc::new(modified);
-                                    sync_gpui_component_theme_for_theme(cx, this.theme.as_ref());
+                                    sync_theme_chooser_preview(cx, &this.theme, "theme_chooser_font_size_click");
                                     cx.notify();
                                 });
                             }
@@ -1050,10 +1034,7 @@ impl ScriptListApp {
                                     if pidx < presets.len() {
                                         this.theme =
                                             std::sync::Arc::new(presets[pidx].create_theme());
-                                        sync_gpui_component_theme_for_theme(
-                                            cx,
-                                            this.theme.as_ref(),
-                                        );
+                                        sync_theme_chooser_preview(cx, &this.theme, "theme_chooser_reset_click");
                                         cx.notify();
                                     }
                                 }
