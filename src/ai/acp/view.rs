@@ -15,7 +15,9 @@ use gpui::{
 
 use gpui_component::scroll::ScrollableElement;
 
-use crate::components::text_input::{render_text_input_cursor_selection, TextInputRenderConfig};
+use crate::components::text_input::{
+    render_text_input_cursor_selection, TextHighlightRange, TextInputRenderConfig,
+};
 use crate::prompts::markdown::render_markdown_with_scope;
 use crate::theme::{self, PromptColors};
 
@@ -33,7 +35,7 @@ use crate::ai::window::context_picker::build_picker_items;
 /// Active @-mention session state for the ACP inline context picker.
 #[derive(Debug, Clone)]
 struct AcpMentionSession {
-    /// Byte range of the `@query` in the input text (from `@` to cursor).
+    /// Character range of the `@query` in the input text (from `@` to cursor).
     trigger_range: std::ops::Range<usize>,
     /// Currently highlighted row index.
     selected_index: usize,
@@ -115,6 +117,13 @@ pub(crate) struct AcpChatView {
 }
 
 impl AcpChatView {
+    fn char_to_byte_offset(text: &str, char_idx: usize) -> usize {
+        text.char_indices()
+            .nth(char_idx)
+            .map(|(byte_idx, _)| byte_idx)
+            .unwrap_or(text.len())
+    }
+
     pub(crate) fn new(thread: Entity<AcpThread>, cx: &mut Context<Self>) -> Self {
         // Virtualized list: bottom-aligned (chat), 200px overdraw for smooth scroll.
         let list_state = ListState::new(0, ListAlignment::Bottom, px(200.0));
@@ -1344,30 +1353,32 @@ impl AcpChatView {
 
     /// Detect an active `@query` from the input text and cursor position.
     ///
-    /// Returns the byte range of `@query` and the query string, or `None`
+    /// Returns the character range of `@query` and the query string, or `None`
     /// if the cursor is not inside a valid mention trigger.
     fn find_active_mention(text: &str, cursor: usize) -> Option<(std::ops::Range<usize>, String)> {
-        if cursor > text.len() || !text.is_char_boundary(cursor) {
+        if cursor > text.chars().count() {
             return None;
         }
-        let before_cursor = &text[..cursor];
-        let at_index = before_cursor.rfind('@')?;
+        let cursor_byte = Self::char_to_byte_offset(text, cursor);
+        let before_cursor = &text[..cursor_byte];
+        let at_byte = before_cursor.rfind('@')?;
+        let at_char = text[..at_byte].chars().count();
 
         // `@` must be at start of text or preceded by whitespace / punctuation
-        if at_index > 0 {
-            let prev = text.as_bytes()[at_index - 1];
+        if at_byte > 0 {
+            let prev = text.as_bytes()[at_byte - 1];
             if prev.is_ascii_alphanumeric() || prev == b'_' {
                 return None;
             }
         }
 
-        let between = &before_cursor[at_index + 1..];
+        let between = &before_cursor[at_byte + 1..];
         // Reject if there's another `@` or whitespace inside the query
         if between.contains('@') || between.chars().any(char::is_whitespace) {
             return None;
         }
 
-        Some((at_index..cursor, between.to_string()))
+        Some((at_char..cursor, between.to_string()))
     }
 
     /// Re-derive the mention session from current input state.
@@ -1435,14 +1446,16 @@ impl AcpChatView {
         };
 
         let current_text = self.thread.read(cx).input.text().to_string();
+        let trigger_start_byte = Self::char_to_byte_offset(&current_text, session.trigger_range.start);
+        let trigger_end_byte = Self::char_to_byte_offset(&current_text, session.trigger_range.end);
         let replacement = format!("{mention_text} ");
         let mut next_text = String::with_capacity(
-            current_text.len() - (session.trigger_range.end - session.trigger_range.start)
+            current_text.len() - (trigger_end_byte - trigger_start_byte)
                 + replacement.len(),
         );
-        next_text.push_str(&current_text[..session.trigger_range.start]);
+        next_text.push_str(&current_text[..trigger_start_byte]);
         next_text.push_str(&replacement);
-        next_text.push_str(&current_text[session.trigger_range.end..]);
+        next_text.push_str(&current_text[trigger_end_byte..]);
 
         self.thread.update(cx, |thread, cx| {
             // Move cursor to end first so set_text clamps to the full
@@ -1452,6 +1465,59 @@ impl AcpChatView {
             thread.add_context_part(part, cx);
         });
         cx.notify();
+    }
+
+    /// Find accepted @mentions in the input text and return character-level
+    /// highlight ranges with the gold accent color.
+    ///
+    /// An accepted mention is an `@word` (or `@file:path`) that matches a
+    /// known context attachment spec mention or the `@file:` prefix, and is
+    /// followed by whitespace or end-of-text.
+    fn find_mention_highlight_ranges(text: &str, accent_color: u32) -> Vec<TextHighlightRange> {
+        use crate::ai::context_contract::context_attachment_specs;
+
+        let specs = context_attachment_specs();
+        let known_mentions: Vec<&str> = specs
+            .iter()
+            .filter_map(|s| s.mention)
+            .collect();
+
+        let mut ranges = Vec::new();
+        let chars: Vec<char> = text.chars().collect();
+        let mut i = 0;
+        while i < chars.len() {
+            if chars[i] != '@' {
+                i += 1;
+                continue;
+            }
+
+            // `@` must be at start or preceded by whitespace/punctuation
+            if i > 0 && (chars[i - 1].is_alphanumeric() || chars[i - 1] == '_') {
+                i += 1;
+                continue;
+            }
+
+            // Collect the mention token: everything from @ up to next whitespace
+            let start = i;
+            i += 1; // skip '@'
+            while i < chars.len() && !chars[i].is_whitespace() {
+                i += 1;
+            }
+            let mention: String = chars[start..i].iter().collect();
+
+            // Check if it matches a known mention or @file: prefix
+            let is_known = known_mentions.iter().any(|m| *m == mention)
+                || mention.starts_with("@file:");
+
+            if is_known {
+                ranges.push(TextHighlightRange {
+                    start,
+                    end: i,
+                    color: accent_color,
+                });
+            }
+        }
+        ranges
     }
 
     /// Render the mention picker dropdown.
@@ -2177,6 +2243,8 @@ impl Render for AcpChatView {
         let messages: Vec<AcpThreadMessage> = thread.messages.clone();
         let colors = Self::prompt_colors();
         let theme = theme::get_cached_theme();
+        let mention_highlights =
+            Self::find_mention_highlight_ranges(&input_text, theme.colors.accent.selected);
 
         div()
             .size_full()
@@ -2266,6 +2334,7 @@ impl Render for AcpChatView {
                                     cursor_height: 18.0,
                                     cursor_width: 2.0,
                                     container_height: Some(22.0),
+                                    highlight_ranges: &mention_highlights,
                                     ..TextInputRenderConfig::default_for_prompt(&input_text)
                                 })
                                 .into_any_element()
