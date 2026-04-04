@@ -106,11 +106,13 @@ impl AiApp {
 
         let mut chips: Vec<gpui::AnyElement> = Vec::new();
         for hint in hints {
-            let hint_str = SharedString::from(*hint);
-            let hint_for_click = hint_str.clone();
+            let hint_display = SharedString::from(hint.display);
+            let hint_display_for_click = hint_display.clone();
+            let hint_insertion = hint.insertion.to_string();
+            let hint_insertion_for_click = hint_insertion.clone();
             chips.push(
                 div()
-                    .id(SharedString::from(format!("hint-{}", hint)))
+                    .id(SharedString::from(format!("hint-{}", hint.display)))
                     .px(px(6.))
                     .py(px(2.))
                     .rounded(px(4.))
@@ -118,14 +120,20 @@ impl AiApp {
                     .hover(|el| el.bg(fg.opacity(0.08)))
                     .cursor_pointer()
                     .on_click(cx.listener(move |this, _, window, cx| {
-                        this.set_composer_value(hint_for_click.to_string(), window, cx);
+                        tracing::info!(
+                            target: "ai",
+                            display = %hint_display_for_click,
+                            insertion = %hint_insertion_for_click,
+                            "ai_context_picker_empty_hint_applied"
+                        );
+                        this.set_composer_value(hint_insertion_for_click.clone(), window, cx);
                     }))
                     .child(
                         div()
                             .text_xs()
                             .font_family(FONT_MONO)
                             .text_color(muted_fg.opacity(HINT))
-                            .child(hint_str),
+                            .child(hint_display),
                     )
                     .into_any_element(),
             );

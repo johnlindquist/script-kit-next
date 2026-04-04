@@ -130,11 +130,25 @@ function assertUniqueConfig(config: WikiConfig): void {
       throw new Error(`Duplicate page slug: ${page.slug}`);
     }
     pageSlugs.add(page.slug);
+  }
 
+  for (const page of config.pages) {
     for (const sourceId of page.sourceIds) {
       if (!sourceIds.has(sourceId)) {
         throw new Error(
           `Page ${page.slug} references unknown source id: ${sourceId}`
+        );
+      }
+    }
+
+    for (const relatedSlug of page.related) {
+      if (!pageSlugs.has(relatedSlug)) {
+        log("wiki_ingest.invalid_related_page", {
+          slug: page.slug,
+          relatedSlug,
+        });
+        throw new Error(
+          `Page ${page.slug} references unknown related page: ${relatedSlug}`
         );
       }
     }
@@ -184,34 +198,106 @@ function stripFrontmatter(markdown: string): string {
   return markdown.replace(/^---\n[\s\S]*?\n---\n+/m, "");
 }
 
+type FenceState = { char: "`" | "~"; length: number };
+
+type ParsedPageBody = {
+  summary: string | null;
+  sections: ParsedSection[];
+};
+
+function parseFenceStart(line: string): FenceState | null {
+  const trimmed = line.trimStart();
+  const first = trimmed[0];
+  if (first !== "`" && first !== "~") {
+    return null;
+  }
+  let length = 0;
+  while (length < trimmed.length && trimmed[length] === first) {
+    length += 1;
+  }
+  if (length < 3) {
+    return null;
+  }
+  return { char: first as "`" | "~", length };
+}
+
+function isFenceBoundary(line: string, fence: FenceState): boolean {
+  const trimmed = line.trimStart();
+  let length = 0;
+  while (length < trimmed.length && trimmed[length] === fence.char) {
+    length += 1;
+  }
+  return length >= fence.length;
+}
+
+function parsePageBody(markdown: string): ParsedPageBody {
+  const lines = markdown.replace(/\r\n/g, "\n").split("\n");
+  const summaryLines: string[] = [];
+  const sections: ParsedSection[] = [];
+  let currentHeading: string | null = null;
+  let currentLines: string[] = [];
+  let fence: FenceState | null = null;
+
+  const flushSection = () => {
+    if (!currentHeading) {
+      return;
+    }
+    sections.push({
+      heading: currentHeading,
+      body: currentLines.join("\n").trim(),
+    });
+    currentHeading = null;
+    currentLines = [];
+  };
+
+  for (const line of lines) {
+    if (!fence && line.startsWith("## ")) {
+      flushSection();
+      currentHeading = line.slice(3).trim();
+      continue;
+    }
+
+    if (currentHeading) {
+      currentLines.push(line);
+    } else {
+      summaryLines.push(line);
+    }
+
+    if (!fence) {
+      fence = parseFenceStart(line);
+    } else if (isFenceBoundary(line, fence)) {
+      fence = null;
+    }
+  }
+
+  flushSection();
+
+  return {
+    summary: summaryLines.join("\n").trim() || null,
+    sections,
+  };
+}
+
+function summarizeForIndex(summary: string): string {
+  const firstParagraph = summary.split(/\n\s*\n/)[0] ?? summary;
+  return firstParagraph.replace(/\s+/g, " ").trim();
+}
+
 function parseExistingPage(markdown: string): ExistingPageContent {
   const body = stripFrontmatter(markdown).replace(/\r\n/g, "\n");
 
   const titleMatch = body.match(/^# .+\n*/);
   const afterTitle = titleMatch ? body.slice(titleMatch[0].length) : body;
 
-  const headingRegex = /^## (.+)$/gm;
-  const matches = [...afterTitle.matchAll(headingRegex)];
-
-  const summary =
-    (
-      matches.length > 0
-        ? afterTitle.slice(0, matches[0].index ?? 0)
-        : afterTitle
-    ).trim() || null;
+  const { summary, sections } = parsePageBody(afterTitle);
 
   const requiredSections = new Map<string, string>();
   const extraSections: ParsedSection[] = [];
   let afterRelatedPages = false;
 
-  for (let i = 0; i < matches.length; i += 1) {
-    const heading = matches[i][1].trim();
-    const start = (matches[i].index ?? 0) + matches[i][0].length;
-    const end =
-      i + 1 < matches.length
-        ? (matches[i + 1].index ?? afterTitle.length)
-        : afterTitle.length;
-    const sectionBody = afterTitle.slice(start, end).trim();
+  for (const section of sections) {
+    const heading = section.heading.trim();
+    const sectionBody = section.body.trim();
 
     if (heading === "Related Pages") {
       afterRelatedPages = true;
@@ -329,7 +415,7 @@ function renderIndex(
   summaries: Map<string, string>
 ): string {
   const pageLines = config.pages.map((page) => {
-    const summary = summaries.get(page.slug) ?? page.summary;
+    const summary = summaries.get(page.slug) ?? summarizeForIndex(page.summary);
     return `- [${page.title}](./pages/${page.slug}.md) — ${summary}`;
   });
 
@@ -423,6 +509,8 @@ function writePages(
       : undefined;
 
     const content = materializePageContent(page, existing);
+    const trimmedSummary = content.summary.trim();
+    const indexSummary = summarizeForIndex(trimmedSummary);
 
     writeFileSync(
       pagePath,
@@ -430,8 +518,16 @@ function writePages(
       "utf8"
     );
 
-    summaries.set(page.slug, content.summary);
+    summaries.set(page.slug, indexSummary);
     pagesWritten += 1;
+
+    if (indexSummary !== trimmedSummary) {
+      log("wiki_ingest.index_summary_normalized", {
+        slug: page.slug,
+        pagePath: `wiki/pages/${page.slug}.md`,
+        indexSummary,
+      });
+    }
 
     log(
       existing
@@ -444,6 +540,7 @@ function writePages(
         preservedSummary: Boolean(existing?.summary),
         preservedKeyFacts: Boolean(existing?.keyFactsBody),
         preservedExtraSections: existing?.extraSections.length ?? 0,
+        indexSummaryNormalized: indexSummary !== trimmedSummary,
       }
     );
   }

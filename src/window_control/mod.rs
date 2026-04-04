@@ -27,6 +27,8 @@ mod display;
 mod ffi;
 mod query;
 mod snap;
+mod snap_overlay;
+mod snap_runtime;
 mod snap_session;
 mod tiling;
 mod types;
@@ -38,4 +40,5 @@ pub use actions::{
     move_to_previous_display, move_window, resize_window, tile_window,
 };
 pub use query::{get_frontmost_window_of_previous_app, has_accessibility_permission, list_windows};
+pub use snap_runtime::{cancel_snap_runtime, start_snap_runtime};
 pub use types::*;

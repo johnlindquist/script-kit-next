@@ -287,6 +287,21 @@ impl AcpChatView {
             return true;
         }
 
+        // Plain Tab accepts the focused picker item (same as Enter but without submit).
+        if !has_shift && self.mention_session.is_some() {
+            tracing::info!(
+                target: "script_kit::tab_ai",
+                event = "acp_picker_tab_accept",
+                selected_index = self
+                    .mention_session
+                    .as_ref()
+                    .map(|s| s.selected_index)
+                    .unwrap_or(0),
+            );
+            self.accept_mention_selection_impl(false, cx);
+            return true;
+        }
+
         cx.notify();
         true
     }
@@ -1402,9 +1417,13 @@ impl AcpChatView {
     ///
     /// Called after every input mutation and cursor movement.
     fn refresh_mention_session(&mut self, cx: &mut Context<Self>) {
-        let (text, cursor) = {
+        let (text, cursor, available_commands) = {
             let thread = self.thread.read(cx);
-            (thread.input.text().to_string(), thread.input.cursor())
+            (
+                thread.input.text().to_string(),
+                thread.input.cursor(),
+                thread.available_commands().to_vec(),
+            )
         };
 
         let previous_index = self
@@ -1419,7 +1438,7 @@ impl AcpChatView {
 
                 // For slash mode, also include Claude Code agent commands.
                 if trigger == ContextPickerTrigger::Slash {
-                    self.append_agent_slash_commands(&query, &mut items);
+                    self.append_agent_slash_commands(&query, &available_commands, &mut items);
                 }
 
                 let selected_index = if items.is_empty() {
@@ -1436,6 +1455,7 @@ impl AcpChatView {
                     query = %query,
                     item_count = items.len(),
                     selected_index,
+                    live_command_count = available_commands.len(),
                     anchor_char = trigger_range.start,
                     visible_start = visible.start,
                     visible_end = visible.end,
@@ -1851,11 +1871,12 @@ impl AcpChatView {
 
         let mut chips: Vec<gpui::AnyElement> = Vec::new();
         for hint in hints {
-            let hint_str = SharedString::from(*hint);
-            let token = hint.to_string();
+            let hint_display = SharedString::from(hint.display);
+            let hint_insertion = hint.insertion.to_string();
+            let close_after_apply = !hint.insertion.ends_with(':');
             chips.push(
                 div()
-                    .id(SharedString::from(format!("mention-hint-{hint}")))
+                    .id(SharedString::from(format!("mention-hint-{}", hint.display)))
                     .px(px(6.0))
                     .py(px(2.0))
                     .rounded(px(4.0))
@@ -1863,14 +1884,29 @@ impl AcpChatView {
                     .hover(|el| el.bg(fg.opacity(0.08)))
                     .cursor_pointer()
                     .on_click(cx.listener(move |this, _, _window, cx| {
-                        this.apply_picker_hint_token(&token, cx);
+                        tracing::info!(
+                            target: "script_kit::tab_ai",
+                            event = "acp_mention_empty_hint_applied",
+                            display = %hint_display,
+                            insertion = %hint_insertion,
+                        );
+                        if close_after_apply {
+                            this.apply_picker_hint_token(&hint_insertion, cx);
+                        } else {
+                            this.thread.update(cx, |thread, cx| {
+                                thread.input.set_text(hint_insertion.clone());
+                                cx.notify();
+                            });
+                            this.refresh_mention_session(cx);
+                            this.sync_inline_mentions(cx);
+                        }
                     }))
                     .child(
                         div()
                             .text_xs()
                             .font_family(FONT_MONO)
                             .text_color(muted_fg.opacity(HINT))
-                            .child(hint_str),
+                            .child(SharedString::from(hint.display)),
                     )
                     .into_any_element(),
             );
