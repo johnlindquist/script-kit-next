@@ -1,13 +1,81 @@
 import { describe, expect, it } from "bun:test";
 import {
+  COMMAND_ID_CATEGORIES,
   isValidCommandId,
   parseCommandConfigPath,
+  parseCommandId,
   validateCommandConfigFieldValue,
   validateCommandConfigValue,
+  validateCommandIdList,
   validateCommandsConfig,
   toDeeplink,
   fromDeeplink,
 } from "./config-schema";
+
+// =============================================================================
+// parseCommandId
+// =============================================================================
+
+describe("parseCommandId", () => {
+  it("parses canonical ids into category and identifier", () => {
+    expect(parseCommandId("builtin/clipboard-history")).toEqual({
+      category: "builtin",
+      identifier: "clipboard-history",
+    });
+    expect(parseCommandId("scriptlet/abc-123")).toEqual({
+      category: "scriptlet",
+      identifier: "abc-123",
+    });
+  });
+
+  it("rejects empty identifiers", () => {
+    expect(parseCommandId("builtin/")).toBeNull();
+    expect(parseCommandId("app/")).toBeNull();
+    expect(parseCommandId("script/")).toBeNull();
+    expect(parseCommandId("scriptlet/")).toBeNull();
+  });
+
+  it("exports all supported categories", () => {
+    expect(COMMAND_ID_CATEGORIES).toEqual([
+      "builtin",
+      "app",
+      "script",
+      "scriptlet",
+    ]);
+  });
+});
+
+// =============================================================================
+// validateCommandIdList
+// =============================================================================
+
+describe("validateCommandIdList", () => {
+  it("accepts canonical slash-style ids", () => {
+    expect(
+      validateCommandIdList(
+        ["builtin/quit-script-kit", "script/my-script"],
+        "suggested.excludedCommands",
+      ),
+    ).toEqual([]);
+  });
+
+  it("rejects dash-style and empty ids", () => {
+    const errors = validateCommandIdList(
+      ["builtin-quit-script-kit", "builtin/"],
+      "suggested.excludedCommands",
+    );
+    expect(errors).toHaveLength(2);
+    expect(errors[0].code).toBe("invalidCommandId");
+    expect(errors[0].path).toBe("suggested.excludedCommands[0]");
+    expect(errors[1].path).toBe("suggested.excludedCommands[1]");
+  });
+
+  it("rejects non-array input", () => {
+    const errors = validateCommandIdList("not-array", "path");
+    expect(errors).toHaveLength(1);
+    expect(errors[0].code).toBe("invalidType");
+  });
+});
 
 // =============================================================================
 // isValidCommandId
@@ -167,6 +235,10 @@ describe("deeplink roundtrip", () => {
 
   it("rejects deeplink with unknown category", () => {
     expect(fromDeeplink("scriptkit://commands/unknown/foo")).toBeNull();
+  });
+
+  it("rejects deeplink with empty identifier", () => {
+    expect(fromDeeplink("scriptkit://commands/builtin/")).toBeNull();
   });
 });
 

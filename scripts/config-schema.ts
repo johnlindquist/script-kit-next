@@ -960,6 +960,81 @@ export interface Config extends BaseConfig {
 }
 
 // =============================================================================
+// COMMAND ID PARSING
+// =============================================================================
+
+export const COMMAND_ID_CATEGORIES = [
+  "builtin",
+  "app",
+  "script",
+  "scriptlet",
+] as const;
+
+export type RuntimeCommandIdCategory = (typeof COMMAND_ID_CATEGORIES)[number];
+
+export interface ParsedCommandId {
+  category: RuntimeCommandIdCategory;
+  identifier: string;
+}
+
+/**
+ * Parse a command ID string into its category and identifier parts.
+ * Returns null if the string is not a valid command ID.
+ *
+ * Unlike the prefix-only `isValidCommandId`, this function also rejects
+ * empty identifiers (e.g. `"builtin/"`) to match the Rust runtime contract.
+ */
+export function parseCommandId(value: string): ParsedCommandId | null {
+  const slashIndex = value.indexOf("/");
+  if (slashIndex <= 0 || slashIndex === value.length - 1) {
+    return null;
+  }
+  const category = value.slice(0, slashIndex);
+  const identifier = value.slice(slashIndex + 1);
+  if (
+    !COMMAND_ID_CATEGORIES.includes(category as RuntimeCommandIdCategory)
+  ) {
+    return null;
+  }
+  return {
+    category: category as RuntimeCommandIdCategory,
+    identifier,
+  };
+}
+
+/**
+ * Validate an array of command IDs (e.g. `suggested.excludedCommands`).
+ * Returns an empty array when all entries are valid.
+ */
+export function validateCommandIdList(
+  value: unknown,
+  path: string,
+): ValidationMessage[] {
+  if (!Array.isArray(value)) {
+    return [{ path, code: "invalidType", message: `${path} must be an array` }];
+  }
+  const errors: ValidationMessage[] = [];
+  for (const [index, item] of value.entries()) {
+    if (typeof item !== "string") {
+      errors.push({
+        path: `${path}[${index}]`,
+        code: "invalidType",
+        message: `${path}[${index}] must be a string`,
+      });
+      continue;
+    }
+    if (!isValidCommandId(item)) {
+      errors.push({
+        path: `${path}[${index}]`,
+        code: "invalidCommandId",
+        message: `Invalid command id: ${item}`,
+      });
+    }
+  }
+  return errors;
+}
+
+// =============================================================================
 // UTILITY TYPES FOR AI AGENTS
 // =============================================================================
 
@@ -1026,14 +1101,7 @@ export function fromDeeplink(deeplink: string): CommandId | null {
     return null;
   }
   const id = deeplink.slice(prefix.length);
-  // Validate it matches one of our categories
-  if (id.startsWith("builtin/") || 
-      id.startsWith("app/") || 
-      id.startsWith("script/") || 
-      id.startsWith("scriptlet/")) {
-    return id as CommandId;
-  }
-  return null;
+  return isValidCommandId(id) ? id : null;
 }
 
 /**
@@ -1051,12 +1119,7 @@ export function fromDeeplink(deeplink: string): CommandId | null {
  * ```
  */
 export function isValidCommandId(value: string): value is CommandId {
-  return (
-    value.startsWith("builtin/") ||
-    value.startsWith("app/") ||
-    value.startsWith("script/") ||
-    value.startsWith("scriptlet/")
-  );
+  return parseCommandId(value) !== null;
 }
 
 // =============================================================================

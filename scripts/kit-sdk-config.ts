@@ -225,15 +225,49 @@ async function validate(): Promise<ValidateResult> {
 
 /**
  * Validate a proposed config change before writing.
- * Returns structured validation result with errors/warnings.
+ * Resolves with a structured result for both valid AND invalid changes —
+ * never throws on normal validation failure.
  */
-async function validateChange(change: { key: string; value: unknown }): Promise<{
-  valid: boolean;
-  normalizedValue?: unknown;
-  errors: Array<{ path: string; code: string; message: string }>;
-  warnings: Array<{ path: string; code: string; message: string }>;
-}> {
-  return runCLI(['validate-change', JSON.stringify(change)]);
+export async function validateChange(change: { key: string; value: unknown }): Promise<
+  import('./config-schema').ValidateConfigChangeResult
+> {
+  return new Promise((resolve, reject) => {
+    const bunPath = process.env.BUN_PATH || 'bun';
+    const proc = spawn(
+      bunPath,
+      [CLI_PATH, 'validate-change', JSON.stringify(change)],
+      { stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env } },
+    );
+
+    let stdout = '';
+    proc.stdout.on('data', (d) => { stdout += d.toString(); });
+    proc.on('close', () => {
+      try {
+        const parsed = JSON.parse(stdout);
+        // CLI wraps valid results as { success: true, data: result }
+        // and invalid results as { success: false, ...result }
+        if (parsed.success === true && parsed.data) {
+          resolve(parsed.data);
+          return;
+        }
+        if ('valid' in parsed) {
+          resolve({
+            valid: parsed.valid,
+            normalizedValue: parsed.normalizedValue,
+            errors: parsed.errors ?? [],
+            warnings: parsed.warnings ?? [],
+          });
+          return;
+        }
+        reject(new Error(parsed.error || `Unexpected validate-change output`));
+      } catch {
+        reject(new Error(`Failed to parse validate-change output: ${stdout}`));
+      }
+    });
+    proc.on('error', (e) => {
+      reject(new Error(`Failed to spawn validate-change: ${e.message}`));
+    });
+  });
 }
 
 /**
@@ -273,6 +307,9 @@ export const config = {
   validateChange,
   reset
 };
+
+// Convenience alias for Tab AI consumers
+export const configValidation = { validateChange };
 
 // Default export for convenience
 export default config;
