@@ -35,7 +35,9 @@ use crate::ai::window::context_picker::build_picker_items;
 /// Active @-mention session state for the ACP inline context picker.
 #[derive(Debug, Clone)]
 struct AcpMentionSession {
-    /// Character range of the `@query` in the input text (from `@` to cursor).
+    /// Which trigger character opened this session (`@` or `/`).
+    trigger: ContextPickerTrigger,
+    /// Character range of the trigger+query in the input text.
     trigger_range: std::ops::Range<usize>,
     /// Currently highlighted row index.
     selected_index: usize,
@@ -114,6 +116,11 @@ pub(crate) struct AcpChatView {
     _slash_discovery_task: Task<()>,
     /// Active @-mention picker session (None = picker hidden).
     mention_session: Option<AcpMentionSession>,
+    /// Canonical inline tokens that currently own their attached context part.
+    ///
+    /// This preserves non-inline chip attachments during mention sync while
+    /// still letting deleted inline mentions remove the parts they created.
+    inline_owned_context_tokens: HashSet<String>,
 }
 
 impl AcpChatView {
@@ -214,6 +221,7 @@ impl AcpChatView {
             cached_slash_commands: Vec::new(),
             _slash_discovery_task: slash_task,
             mention_session: None,
+            inline_owned_context_tokens: HashSet::new(),
         }
     }
 
@@ -404,18 +412,45 @@ impl AcpChatView {
         PromptColors::from_theme(&theme::get_cached_theme())
     }
 
-    /// Render the focused context chip below the composer input.
+    /// Render context chips below the composer input, but only for parts
+    /// that are NOT already represented by an inline `@mention` token.
     ///
     /// Accent left-bar design: a 2px gold bar on the left edge with
     /// a ghost-opacity chip containing the label and a × dismiss button.
-    /// At most one chip is shown (the focused target from the list).
     fn render_pending_context_chips(&self, cx: &mut Context<Self>) -> gpui::AnyElement {
-        let parts = {
+        use crate::ai::context_mentions::{parse_inline_context_mentions, part_to_inline_token};
+
+        let (parts, input_text) = {
             let thread = self.thread.read(cx);
-            thread.pending_context_parts().to_vec()
+            (
+                thread.pending_context_parts().to_vec(),
+                thread.input.text().to_string(),
+            )
         };
 
         if parts.is_empty() {
+            return div()
+                .id("acp-pending-context-chips-empty")
+                .into_any_element();
+        }
+
+        // Tokens present inline — suppress chips for these.
+        let inline_tokens: HashSet<String> = parse_inline_context_mentions(&input_text)
+            .into_iter()
+            .map(|m| m.token)
+            .collect();
+
+        // Filter to parts that have no inline token representation.
+        let chip_parts: Vec<(usize, &AiContextPart)> = parts
+            .iter()
+            .enumerate()
+            .filter(|(_, part)| match part_to_inline_token(part) {
+                Some(token) => !inline_tokens.contains(&token),
+                None => true,
+            })
+            .collect();
+
+        if chip_parts.is_empty() {
             return div()
                 .id("acp-pending-context-chips-empty")
                 .into_any_element();
@@ -428,8 +463,8 @@ impl AcpChatView {
         let muted_text = theme.colors.text.muted;
         let primary_text = theme.colors.text.primary;
 
-        // Show only the first context part (focused target).
-        let part = &parts[0];
+        // Show only the first non-inline part as a chip.
+        let (remove_idx, part) = chip_parts[0];
         let label = SharedString::from(part.label().to_string());
 
         let chip = div()
@@ -480,9 +515,9 @@ impl AcpChatView {
                                     .bg(rgba((border << 8) | 0x18))
                                     .rounded(px(999.0))
                             })
-                            .on_click(cx.listener(|this, _, _window, cx| {
+                            .on_click(cx.listener(move |this, _, _window, cx| {
                                 this.thread.update(cx, |thread, cx| {
-                                    thread.remove_context_part(0, cx);
+                                    thread.remove_context_part(remove_idx, cx);
                                 });
                             }))
                             .child("\u{00d7}"),
@@ -1355,30 +1390,54 @@ impl AcpChatView {
     ///
     /// Returns the character range of `@query` and the query string, or `None`
     /// if the cursor is not inside a valid mention trigger.
-    fn find_active_mention(text: &str, cursor: usize) -> Option<(std::ops::Range<usize>, String)> {
+    /// Find an active trigger (`@` or `/`) before the cursor.
+    ///
+    /// Returns `(trigger, char_range, query_text)` when the cursor is
+    /// immediately after an in-progress `@query` or `/query`.
+    fn find_active_trigger(
+        text: &str,
+        cursor: usize,
+    ) -> Option<(ContextPickerTrigger, std::ops::Range<usize>, String)> {
         if cursor > text.chars().count() {
             return None;
         }
         let cursor_byte = Self::char_to_byte_offset(text, cursor);
         let before_cursor = &text[..cursor_byte];
-        let at_byte = before_cursor.rfind('@')?;
-        let at_char = text[..at_byte].chars().count();
 
-        // `@` must be at start of text or preceded by whitespace / punctuation
-        if at_byte > 0 {
-            let prev = text.as_bytes()[at_byte - 1];
+        // Find the last `@` or `/` before the cursor.
+        let (trigger_byte, trigger) = {
+            let at_pos = before_cursor.rfind('@');
+            let slash_pos = before_cursor.rfind('/');
+            match (at_pos, slash_pos) {
+                (Some(a), Some(s)) if s > a => (s, ContextPickerTrigger::Slash),
+                (Some(a), _) => (a, ContextPickerTrigger::Mention),
+                (None, Some(s)) => (s, ContextPickerTrigger::Slash),
+                (None, None) => return None,
+            }
+        };
+
+        let trigger_char_idx = text[..trigger_byte].chars().count();
+
+        // Trigger must be at start of text or preceded by whitespace / punctuation
+        if trigger_byte > 0 {
+            let prev = text.as_bytes()[trigger_byte - 1];
             if prev.is_ascii_alphanumeric() || prev == b'_' {
                 return None;
             }
         }
 
-        let between = &before_cursor[at_byte + 1..];
-        // Reject if there's another `@` or whitespace inside the query
-        if between.contains('@') || between.chars().any(char::is_whitespace) {
+        let between = &before_cursor[trigger_byte + 1..];
+        let trigger_char = if trigger == ContextPickerTrigger::Mention {
+            '@'
+        } else {
+            '/'
+        };
+        // Reject if there's another trigger char or whitespace inside the query
+        if between.contains(trigger_char) || between.chars().any(char::is_whitespace) {
             return None;
         }
 
-        Some((at_char..cursor, between.to_string()))
+        Some((trigger, trigger_char_idx..cursor, between.to_string()))
     }
 
     /// Re-derive the mention session from current input state.
@@ -1396,28 +1455,57 @@ impl AcpChatView {
             .map(|s| s.selected_index)
             .unwrap_or(0);
 
-        self.mention_session = Self::find_active_mention(&text, cursor).and_then(
-            |(trigger_range, query)| {
-                let items = build_picker_items(ContextPickerTrigger::Mention, &query);
-                if items.is_empty() {
-                    return None;
-                }
-                let selected_index = previous_index.min(items.len().saturating_sub(1));
-                Some(AcpMentionSession {
+        self.mention_session = Self::find_active_trigger(&text, cursor).map(
+            |(trigger, trigger_range, query)| {
+                let items = build_picker_items(trigger, &query);
+                let selected_index = if items.is_empty() {
+                    0
+                } else {
+                    previous_index.min(items.len().saturating_sub(1))
+                };
+                let visible = Self::mention_visible_range_for(selected_index, items.len());
+                tracing::info!(
+                    target: "script_kit::tab_ai",
+                    event = "acp_mention_picker_refreshed",
+                    layout = "dense_monoline_shared",
+                    ?trigger,
+                    query = %query,
+                    item_count = items.len(),
+                    selected_index,
+                    anchor_char = trigger_range.start,
+                    visible_start = visible.start,
+                    visible_end = visible.end,
+                );
+                AcpMentionSession {
+                    trigger,
                     trigger_range,
                     selected_index,
                     items,
-                })
+                }
             },
         );
         cx.notify();
     }
 
-    /// Accept the currently selected mention picker row.
+    /// Accept the currently selected picker row.
     ///
-    /// Replaces the `@query` text inline with the accepted mention text
-    /// and attaches the corresponding `AiContextPart` to the thread.
+    /// For `@` mentions: replaces the trigger+query inline and attaches the
+    /// corresponding `AiContextPart`.
+    /// For `/` commands: replaces the entire input with the command and
+    /// optionally submits (Enter accepts + submits, Tab accepts without submit).
     fn accept_mention_selection(&mut self, cx: &mut Context<Self>) {
+        self.accept_mention_selection_impl(false, cx);
+    }
+
+    /// Accept the currently selected picker row, submitting if `submit` is true.
+    ///
+    /// For `@` mentions the `submit` flag is ignored — mentions always insert
+    /// inline text and attach a context part without submitting.
+    /// For `/` commands `submit=true` inserts the command text and submits;
+    /// `submit=false` (Tab) inserts the command text without submitting.
+    fn accept_mention_selection_impl(&mut self, submit: bool, cx: &mut Context<Self>) {
+        use crate::ai::context_mentions::part_to_inline_token;
+
         let session = match self.mention_session.take() {
             Some(s) => s,
             None => return,
@@ -1427,6 +1515,22 @@ impl AcpChatView {
             None => return,
         };
 
+        // ── Slash trigger: insert /command text (and optionally submit) ──
+        if session.trigger == ContextPickerTrigger::Slash {
+            let cmd_text = format!("{} ", item.meta);
+            self.thread.update(cx, |thread, cx| {
+                thread.input.set_text(cmd_text);
+                if submit {
+                    let _ = thread.submit_input(cx);
+                } else {
+                    cx.notify();
+                }
+            });
+            cx.notify();
+            return;
+        }
+
+        // ── Mention trigger: attach context part inline ──
         let (part, mention_text) = match &item.kind {
             ContextPickerItemKind::BuiltIn(kind) => {
                 let spec = kind.spec();
@@ -1462,146 +1566,305 @@ impl AcpChatView {
             // new length (replacement is always >= original range).
             thread.input.move_to_end(false);
             thread.input.set_text(next_text);
-            thread.add_context_part(part, cx);
+            thread.add_context_part(part.clone(), cx);
         });
+        if let Some(token) = part_to_inline_token(&part) {
+            self.inline_owned_context_tokens.insert(token);
+        }
+        self.sync_inline_mentions(cx);
         cx.notify();
     }
 
-    /// Find accepted @mentions in the input text and return character-level
-    /// highlight ranges with the gold accent color.
-    ///
-    /// An accepted mention is an `@word` (or `@file:path`) that matches a
-    /// known context attachment spec mention or the `@file:` prefix, and is
-    /// followed by whitespace or end-of-text.
-    fn find_mention_highlight_ranges(text: &str, accent_color: u32) -> Vec<TextHighlightRange> {
-        use crate::ai::context_contract::context_attachment_specs;
+    /// Return highlight ranges for inline `@mentions` that are **actually
+    /// attached** as pending context parts. Unattached lookalike tokens are
+    /// not highlighted.
+    fn attached_inline_mention_highlight_ranges(
+        text: &str,
+        attached_parts: &[AiContextPart],
+        accent_color: u32,
+    ) -> Vec<TextHighlightRange> {
+        use crate::ai::context_mentions::{parse_inline_context_mentions, part_to_inline_token};
 
-        let specs = context_attachment_specs();
-        let known_mentions: Vec<&str> = specs
+        let attached_tokens: HashSet<String> = attached_parts
             .iter()
-            .filter_map(|s| s.mention)
+            .filter_map(part_to_inline_token)
             .collect();
 
-        let mut ranges = Vec::new();
-        let chars: Vec<char> = text.chars().collect();
-        let mut i = 0;
-        while i < chars.len() {
-            if chars[i] != '@' {
-                i += 1;
-                continue;
-            }
-
-            // `@` must be at start or preceded by whitespace/punctuation
-            if i > 0 && (chars[i - 1].is_alphanumeric() || chars[i - 1] == '_') {
-                i += 1;
-                continue;
-            }
-
-            // Collect the mention token: everything from @ up to next whitespace
-            let start = i;
-            i += 1; // skip '@'
-            while i < chars.len() && !chars[i].is_whitespace() {
-                i += 1;
-            }
-            let mention: String = chars[start..i].iter().collect();
-
-            // Check if it matches a known mention or @file: prefix
-            let is_known = known_mentions.iter().any(|m| *m == mention)
-                || mention.starts_with("@file:");
-
-            if is_known {
-                ranges.push(TextHighlightRange {
-                    start,
-                    end: i,
-                    color: accent_color,
-                });
-            }
-        }
-        ranges
+        parse_inline_context_mentions(text)
+            .into_iter()
+            .filter(|mention| attached_tokens.contains(&mention.token))
+            .map(|mention| TextHighlightRange {
+                start: mention.range.start,
+                end: mention.range.end,
+                color: accent_color,
+            })
+            .collect()
     }
 
-    /// Render the mention picker dropdown.
+    /// Synchronise `pending_context_parts` from the live inline `@mention`
+    /// tokens. Removes stale parts whose token was deleted from the input
+    /// and adds new parts for freshly typed tokens.
+    fn sync_inline_mentions(&mut self, cx: &mut Context<Self>) {
+        use crate::ai::context_mentions::{parse_inline_context_mentions, part_to_inline_token};
+
+        let text = self.thread.read(cx).input.text().to_string();
+        let parsed = parse_inline_context_mentions(&text);
+
+        let desired_parts: Vec<AiContextPart> = parsed.iter().map(|m| m.part.clone()).collect();
+        let desired_tokens: HashSet<String> = desired_parts
+            .iter()
+            .filter_map(part_to_inline_token)
+            .collect();
+        let mut new_inline_owned_tokens = HashSet::new();
+
+        self.thread.update(cx, |thread, cx| {
+            // Remove stale inline parts (iterate in reverse to keep indices stable).
+            let stale_indices: Vec<usize> = thread
+                .pending_context_parts()
+                .iter()
+                .enumerate()
+                .filter_map(|(ix, part)| {
+                    let token = part_to_inline_token(part)?;
+                    (self.inline_owned_context_tokens.contains(&token)
+                        && !desired_tokens.contains(&token))
+                    .then_some(ix)
+                })
+                .collect();
+            for ix in stale_indices.into_iter().rev() {
+                thread.remove_context_part(ix, cx);
+            }
+
+            // Add new parts that aren't already attached.
+            let existing_tokens: HashSet<String> = thread
+                .pending_context_parts()
+                .iter()
+                .filter_map(part_to_inline_token)
+                .collect();
+            for part in desired_parts {
+                if let Some(token) = part_to_inline_token(&part) {
+                    if !existing_tokens.contains(&token) {
+                        thread.add_context_part(part, cx);
+                        new_inline_owned_tokens.insert(token);
+                    }
+                }
+            }
+        });
+        self.inline_owned_context_tokens
+            .retain(|token| desired_tokens.contains(token));
+        self.inline_owned_context_tokens
+            .extend(new_inline_owned_tokens);
+
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "acp_inline_mentions_synced",
+            inline_count = parsed.len(),
+            text_len = text.len(),
+        );
+    }
+
+    /// Approximate monospace character width for anchor offset.
+    const ACP_MENTION_ANCHOR_CHAR_WIDTH: f32 = 7.6;
+
+    /// Fixed picker dropdown width.
+    const ACP_MENTION_PICKER_WIDTH: f32 = 320.0;
+
+    /// Compute the visible range of items around a selected index.
+    fn mention_visible_range_for(
+        selected_index: usize,
+        item_count: usize,
+    ) -> std::ops::Range<usize> {
+        let max_visible = Self::MENTION_PICKER_MAX_VISIBLE;
+        if item_count <= max_visible {
+            return 0..item_count;
+        }
+        let half = max_visible / 2;
+        let mut start = selected_index.saturating_sub(half);
+        let max_start = item_count.saturating_sub(max_visible);
+        if start > max_start {
+            start = max_start;
+        }
+        start..(start + max_visible).min(item_count)
+    }
+
+    /// Compute the visible range of items around the selected index.
+    fn mention_visible_range(session: &AcpMentionSession) -> std::ops::Range<usize> {
+        Self::mention_visible_range_for(session.selected_index, session.items.len())
+    }
+
+    /// Render the mention picker dropdown using the shared dense-monoline
+    /// row contract (`context_picker_row`).
     fn render_mention_picker(
         &self,
         session: &AcpMentionSession,
         cx: &mut Context<Self>,
     ) -> gpui::AnyElement {
+        use crate::ai::context_picker_row::render_dense_monoline_picker_row;
+
         let theme = theme::get_cached_theme();
+        let visible = Self::mention_visible_range(session);
+        let fg: gpui::Hsla = rgb(theme.colors.text.primary).into();
+        let muted_fg: gpui::Hsla = rgb(theme.colors.text.muted).into();
 
         div()
             .id("acp-mention-picker")
-            .w_full()
-            .bg(rgba((theme.colors.background.search_box << 8) | 0x0A))
-            .border_t_1()
-            .border_color(rgba((theme.colors.ui.border << 8) | 0x18))
+            .w(px(Self::ACP_MENTION_PICKER_WIDTH))
+            // Vibrancy-friendly: near-transparent bg, no border/rounded
+            .bg(fg.opacity(0.02))
             .py(px(2.0))
             .children(
                 session
                     .items
                     .iter()
-                    .take(Self::MENTION_PICKER_MAX_VISIBLE)
                     .enumerate()
+                    .skip(visible.start)
+                    .take(visible.len())
                     .map(|(idx, item)| {
                         let is_selected = idx == session.selected_index;
-                        let mention_hint = match &item.kind {
-                            ContextPickerItemKind::BuiltIn(kind) => {
-                                kind.spec().mention.unwrap_or("@context").to_string()
+                        render_dense_monoline_picker_row(
+                            SharedString::from(format!("acp-mention-row-{idx}")),
+                            item.label.clone(),
+                            item.meta.clone(),
+                            &item.label_highlight_indices,
+                            &item.meta_highlight_indices,
+                            is_selected,
+                            fg,
+                            muted_fg,
+                        )
+                        .cursor_pointer()
+                        .on_click(cx.listener(move |this, _event, _window, cx| {
+                            if let Some(session) = this.mention_session.as_mut() {
+                                session.selected_index = idx;
                             }
-                            ContextPickerItemKind::File(path)
-                            | ContextPickerItemKind::Folder(path) => {
-                                format!("@file:{}", path.display())
-                            }
-                        };
-                        div()
-                            .id(SharedString::from(format!("acp-mention-row-{idx}")))
-                            .w_full()
-                            .h(px(20.0))
-                            .px(px(10.0))
-                            .cursor_pointer()
-                            .when(is_selected, |d| {
-                                d.bg(rgba((theme.colors.accent.selected << 8) | 0x10))
-                                    .border_l_2()
-                                    .border_color(rgb(theme.colors.accent.selected))
-                            })
-                            .when(!is_selected, |d| {
-                                d.border_l_2().border_color(gpui::transparent_black())
-                            })
-                            .hover(|d| d.bg(rgba((theme.colors.text.primary << 8) | 0x06)))
-                            .on_click(cx.listener(move |this, _event, _window, cx| {
-                                if let Some(session) = this.mention_session.as_mut() {
-                                    session.selected_index = idx;
-                                }
-                                this.accept_mention_selection(cx);
-                            }))
-                            .child(
-                                div()
-                                    .h_full()
-                                    .flex()
-                                    .flex_row()
-                                    .items_center()
-                                    .justify_between()
-                                    .child(
-                                        div()
-                                            .text_sm()
-                                            .text_color(if is_selected {
-                                                rgb(theme.colors.text.primary)
-                                            } else {
-                                                rgba((theme.colors.text.primary << 8) | 0xD0)
-                                            })
-                                            .child(item.label.clone()),
-                                    )
-                                    .child(
-                                        div()
-                                            .text_xs()
-                                            .font_family(crate::list_item::FONT_MONO)
-                                            .text_color(rgba(
-                                                (theme.colors.text.muted << 8) | 0x88,
-                                            ))
-                                            .child(mention_hint),
-                                    ),
-                            )
+                            this.accept_mention_selection(cx);
+                        }))
+                        .into_any_element()
                     }),
             )
+            .into_any_element()
+    }
+
+    /// Render empty state for the @-mention picker with clickable hint chips.
+    fn render_mention_empty_state(&self, cx: &mut Context<Self>) -> gpui::AnyElement {
+        use crate::ai::context_picker_row::{GHOST, HINT, MUTED_OP};
+        use crate::list_item::FONT_MONO;
+
+        let cached_theme = theme::get_cached_theme();
+        let fg: gpui::Hsla = rgb(cached_theme.colors.text.primary).into();
+        let muted_fg: gpui::Hsla = rgb(cached_theme.colors.text.muted).into();
+        let hints = ["@context", "@selection", "@browser"];
+
+        let mut chips: Vec<gpui::AnyElement> = Vec::new();
+        for hint in hints {
+            let hint_str = SharedString::from(hint);
+            let hint_for_click = hint_str.clone();
+            chips.push(
+                div()
+                    .id(SharedString::from(format!("mention-hint-{hint}")))
+                    .px(px(6.0))
+                    .py(px(2.0))
+                    .rounded(px(4.0))
+                    .bg(fg.opacity(GHOST))
+                    .hover(|el| el.bg(fg.opacity(0.08)))
+                    .cursor_pointer()
+                    .on_click(cx.listener(move |this, _, _window, cx| {
+                        // Replace entire input with the hint text
+                        this.thread.update(cx, |thread, cx| {
+                            thread.input.set_text(hint_for_click.to_string());
+                            cx.notify();
+                        });
+                        this.mention_session = None;
+                        this.refresh_mention_session(cx);
+                        this.sync_inline_mentions(cx);
+                    }))
+                    .child(
+                        div()
+                            .text_xs()
+                            .font_family(FONT_MONO)
+                            .text_color(muted_fg.opacity(HINT))
+                            .child(hint_str),
+                    )
+                    .into_any_element(),
+            );
+        }
+
+        div()
+            .id("acp-mention-empty-state")
+            .w(px(Self::ACP_MENTION_PICKER_WIDTH))
+            .bg(fg.opacity(0.02))
+            .py(px(4.0))
+            .px(px(6.0))
+            .flex()
+            .flex_col()
+            .gap(px(4.0))
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(muted_fg.opacity(MUTED_OP))
+                    .child("No matching context"),
+            )
+            .child(div().flex().items_center().gap(px(4.0)).children(chips))
+            .into_any_element()
+    }
+
+    /// Render empty state for the slash command menu with clickable hint chips.
+    fn render_slash_empty_state(&self, cx: &mut Context<Self>) -> gpui::AnyElement {
+        use crate::ai::context_picker_row::{GHOST, HINT, MUTED_OP};
+        use crate::list_item::FONT_MONO;
+
+        let cached_theme = theme::get_cached_theme();
+        let fg: gpui::Hsla = rgb(cached_theme.colors.text.primary).into();
+        let muted_fg: gpui::Hsla = rgb(cached_theme.colors.text.muted).into();
+        let hints = ["/compact", "/clear", "/help"];
+
+        let mut chips: Vec<gpui::AnyElement> = Vec::new();
+        for hint in hints {
+            let hint_str = SharedString::from(hint);
+            let hint_for_click = hint_str.clone();
+            chips.push(
+                div()
+                    .id(SharedString::from(format!("slash-hint-{hint}")))
+                    .px(px(6.0))
+                    .py(px(2.0))
+                    .rounded(px(4.0))
+                    .bg(fg.opacity(GHOST))
+                    .hover(|el| el.bg(fg.opacity(0.08)))
+                    .cursor_pointer()
+                    .on_click(cx.listener(move |this, _, _window, cx| {
+                        this.thread.update(cx, |thread, cx| {
+                            let cmd_text = format!("{} ", hint_for_click);
+                            thread.input.set_text(cmd_text);
+                            let _ = thread.submit_input(cx);
+                        });
+                        this.slash_menu_index = None;
+                        cx.notify();
+                    }))
+                    .child(
+                        div()
+                            .text_xs()
+                            .font_family(FONT_MONO)
+                            .text_color(muted_fg.opacity(HINT))
+                            .child(hint_str),
+                    )
+                    .into_any_element(),
+            );
+        }
+
+        div()
+            .id("acp-slash-empty-state")
+            .w_full()
+            .bg(fg.opacity(0.02))
+            .py(px(4.0))
+            .px(px(6.0))
+            .flex()
+            .flex_col()
+            .gap(px(4.0))
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(muted_fg.opacity(MUTED_OP))
+                    .child("No matching commands"),
+            )
+            .child(div().flex().items_center().gap(px(4.0)).children(chips))
             .into_any_element()
     }
 
@@ -1664,14 +1927,15 @@ impl AcpChatView {
     fn update_slash_menu(&mut self, cx: &Context<Self>) {
         let text = self.thread.read(cx).input.text().to_string();
         if text.starts_with('/') && !text.contains(' ') {
-            // Show menu when typing /... (no space yet = still filtering)
+            // Show menu when typing /... (no space yet = still filtering).
+            // Keep menu open even when no matches so empty state renders.
             let filtered = self.filtered_slash_commands(cx);
-            if !filtered.is_empty() {
-                let idx = self.slash_menu_index.unwrap_or(0);
-                self.slash_menu_index = Some(idx.min(filtered.len().saturating_sub(1)));
+            let idx = self.slash_menu_index.unwrap_or(0);
+            self.slash_menu_index = Some(if filtered.is_empty() {
+                0
             } else {
-                self.slash_menu_index = None;
-            }
+                idx.min(filtered.len().saturating_sub(1))
+            });
         } else {
             self.slash_menu_index = None;
         }
@@ -1684,9 +1948,16 @@ impl AcpChatView {
         &self,
         commands: &[(String, String)],
         selected_index: usize,
+        query: &str,
         cx: &mut Context<Self>,
     ) -> gpui::AnyElement {
-        let theme = theme::get_cached_theme();
+        use crate::ai::context_picker_row::render_dense_monoline_picker_row;
+        use crate::ai::window::context_picker::match_query_chars;
+
+        let cached_theme = theme::get_cached_theme();
+        let fg: gpui::Hsla = rgb(cached_theme.colors.text.primary).into();
+        let muted_fg: gpui::Hsla = rgb(cached_theme.colors.text.muted).into();
+
         // Cap visible items — show at most SLASH_MENU_MAX_VISIBLE.
         let visible = commands
             .iter()
@@ -1696,65 +1967,49 @@ impl AcpChatView {
         div()
             .id("acp-slash-menu")
             .w_full()
-            // Whisper chrome: ghost-opacity bg, hairline top border only
-            .bg(rgba((theme.colors.background.search_box << 8) | 0x0A))
-            .border_t_1()
-            .border_color(rgba((theme.colors.ui.border << 8) | 0x18))
+            // Vibrancy-friendly: near-transparent bg, no border
+            .bg(fg.opacity(0.02))
             .py(px(2.0))
-            .children(visible.map(|(i, (name, desc))| {
+            .children(visible.map(|(i, (name, _desc))| {
                 let is_selected = i == selected_index;
                 let cmd_text = format!("/{name} ");
-                div()
-                    .id(SharedString::from(format!("slash-cmd-{i}")))
-                    .w_full()
-                    .px(px(10.0))
-                    .py(px(3.0))
-                    .cursor_pointer()
-                    .when(is_selected, |d| {
-                        d.bg(rgba((theme.colors.accent.selected << 8) | 0x10))
-                            .border_l_2()
-                            .border_color(rgb(theme.colors.accent.selected))
-                    })
-                    .when(!is_selected, |d| {
-                        d.border_l_2().border_color(gpui::transparent_black())
-                    })
-                    .hover(|d| d.bg(rgba((theme.colors.text.primary << 8) | 0x06)))
-                    .on_click(cx.listener(move |this, _event, _window, cx| {
-                        // Click inserts the command text and submits immediately.
-                        this.thread.update(cx, |thread, cx| {
-                            thread.input.set_text(cmd_text.clone());
-                            let _ = thread.submit_input(cx);
-                        });
-                        this.slash_menu_index = None;
-                        cx.notify();
-                    }))
-                    .child(
-                        div()
-                            .flex()
-                            .flex_row()
-                            .items_center()
-                            .gap(px(6.0))
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .text_color(if is_selected {
-                                        rgb(theme.colors.text.primary)
-                                    } else {
-                                        rgba((theme.colors.text.primary << 8) | 0xB0)
-                                    })
-                                    .child(format!("/{name}")),
-                            )
-                            .when(!desc.is_empty(), |d| {
-                                d.child(
-                                    div()
-                                        .text_xs()
-                                        .opacity(0.35)
-                                        .overflow_x_hidden()
-                                        .text_ellipsis()
-                                        .child(desc.clone()),
-                                )
-                            }),
-                    )
+                let label = SharedString::from(name.clone());
+                let meta = SharedString::from(format!("/{name}"));
+
+                // Compute highlight indices from the query
+                let label_hits = if query.is_empty() {
+                    Vec::new()
+                } else {
+                    match_query_chars(query, name).unwrap_or_default()
+                };
+                let meta_bare = name.as_str();
+                let meta_hits = if query.is_empty() {
+                    Vec::new()
+                } else {
+                    match_query_chars(query, meta_bare).unwrap_or_default()
+                };
+
+                render_dense_monoline_picker_row(
+                    SharedString::from(format!("slash-cmd-{i}")),
+                    label,
+                    meta,
+                    &label_hits,
+                    &meta_hits,
+                    is_selected,
+                    fg,
+                    muted_fg,
+                )
+                .cursor_pointer()
+                .on_click(cx.listener(move |this, _event, _window, cx| {
+                    // Click inserts the command text and submits immediately.
+                    this.thread.update(cx, |thread, cx| {
+                        thread.input.set_text(cmd_text.clone());
+                        let _ = thread.submit_input(cx);
+                    });
+                    this.slash_menu_index = None;
+                    cx.notify();
+                }))
+                .into_any_element()
             }))
             .into_any_element()
     }
@@ -2078,7 +2333,20 @@ impl AcpChatView {
         if self.mention_session.is_some() {
             if crate::ui_foundation::is_key_up(key) {
                 if let Some(session) = self.mention_session.as_mut() {
-                    session.selected_index = session.selected_index.saturating_sub(1);
+                    if !session.items.is_empty() {
+                        session.selected_index = if session.selected_index == 0 {
+                            session.items.len() - 1
+                        } else {
+                            session.selected_index - 1
+                        };
+                        tracing::info!(
+                            target: "script_kit::tab_ai",
+                            event = "acp_mention_selection_changed",
+                            direction = "prev",
+                            selected_index = session.selected_index,
+                            item_count = session.items.len(),
+                        );
+                    }
                 }
                 cx.notify();
                 cx.stop_propagation();
@@ -2086,8 +2354,17 @@ impl AcpChatView {
             }
             if crate::ui_foundation::is_key_down(key) {
                 if let Some(session) = self.mention_session.as_mut() {
-                    session.selected_index = (session.selected_index + 1)
-                        .min(session.items.len().saturating_sub(1));
+                    if !session.items.is_empty() {
+                        session.selected_index =
+                            (session.selected_index + 1) % session.items.len();
+                        tracing::info!(
+                            target: "script_kit::tab_ai",
+                            event = "acp_mention_selection_changed",
+                            direction = "next",
+                            selected_index = session.selected_index,
+                            item_count = session.items.len(),
+                        );
+                    }
                 }
                 cx.notify();
                 cx.stop_propagation();
@@ -2216,6 +2493,7 @@ impl AcpChatView {
             });
             self.update_slash_menu(cx);
             self.refresh_mention_session(cx);
+            self.sync_inline_mentions(cx);
             cx.stop_propagation();
         } else {
             cx.propagate();
@@ -2240,11 +2518,15 @@ impl Render for AcpChatView {
         let cursor_visible = self.cursor_visible;
         let pending_permission = thread.pending_permission.clone();
         let plan_entries = thread.active_plan_entries().to_vec();
+        let attached_parts = thread.pending_context_parts().to_vec();
         let messages: Vec<AcpThreadMessage> = thread.messages.clone();
         let colors = Self::prompt_colors();
         let theme = theme::get_cached_theme();
-        let mention_highlights =
-            Self::find_mention_highlight_ranges(&input_text, theme.colors.accent.selected);
+        let mention_highlights = Self::attached_inline_mention_highlight_ranges(
+            &input_text,
+            &attached_parts,
+            theme.colors.accent.selected,
+        );
 
         div()
             .size_full()
@@ -2409,25 +2691,47 @@ impl Render for AcpChatView {
             // ── Slash command menu (below input) ─────────────
             .when_some(self.slash_menu_index, |d, idx| {
                 let filtered = self.filtered_slash_commands(cx);
+                let query = {
+                    let text = self.thread.read(cx).input.text().to_string();
+                    text.strip_prefix('/').unwrap_or("").to_string()
+                };
                 if filtered.is_empty() {
-                    d
+                    d.child(
+                        div()
+                            .w_full()
+                            .px(px(8.0))
+                            .child(self.render_slash_empty_state(cx)),
+                    )
                 } else {
                     d.child(
                         div()
                             .w_full()
                             .px(px(8.0))
-                            .child(self.render_slash_menu(&filtered, idx, cx)),
+                            .child(self.render_slash_menu(&filtered, idx, &query, cx)),
                     )
                 }
             })
-            // ── @-mention picker (below input) ──────────────────
+            // ── @-mention picker (anchored to @ position) ─────────
             .when_some(self.mention_session.clone(), |d, session| {
-                d.child(
-                    div()
-                        .w_full()
-                        .px(px(8.0))
-                        .child(self.render_mention_picker(&session, cx)),
-                )
+                let anchor_px =
+                    (session.trigger_range.start as f32) * Self::ACP_MENTION_ANCHOR_CHAR_WIDTH;
+                if session.items.is_empty() {
+                    d.child(
+                        div()
+                            .w_full()
+                            .pl(px(12.0 + anchor_px))
+                            .pb(px(4.0))
+                            .child(self.render_mention_empty_state(cx)),
+                    )
+                } else {
+                    d.child(
+                        div()
+                            .w_full()
+                            .pl(px(12.0 + anchor_px))
+                            .pb(px(4.0))
+                            .child(self.render_mention_picker(&session, cx)),
+                    )
+                }
             })
             // ── History picker (below input, replaces message list) ──
             .when_some(

@@ -163,7 +163,7 @@ fn context_action_contract_dispatch_uri_parity() {
     }
 }
 
-/// Context action count is exactly 7 — catches accidental additions or removals.
+/// Context action count stays aligned with the canonical context catalog.
 #[test]
 fn context_action_contract_count() {
     let actions = get_ai_command_bar_actions();
@@ -175,8 +175,8 @@ fn context_action_contract_count() {
 
     assert_eq!(
         context_actions.len(),
-        17,
-        "expected exactly 17 context actions, found {}: {:?}",
+        20,
+        "expected exactly 20 context actions, found {}: {:?}",
         context_actions.len(),
         context_actions.iter().map(|a| &a.id).collect::<Vec<_>>()
     );

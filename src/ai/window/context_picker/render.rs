@@ -1,23 +1,11 @@
 use super::super::*;
 use super::types::ContextPickerItemKind;
+use crate::ai::context_picker_row::{
+    render_dense_monoline_picker_row, render_highlighted_meta, render_highlighted_text, COMMAND_OPACITY,
+    GHOST, GOLD, HINT, MUTED_OP,
+};
 use crate::list_item::FONT_MONO;
 use std::collections::HashSet;
-
-/// Gold accent (#fbbf24) — the one warm signature touch.
-const GOLD: gpui::Hsla = gpui::Hsla {
-    h: 0.1194,
-    s: 0.956,
-    l: 0.565,
-    a: 1.0,
-};
-
-/// Impeccable opacity tiers.
-const GHOST: f32 = 0.04;
-const HINT: f32 = 0.45;
-const MUTED_OP: f32 = 0.65;
-
-/// V05 right-side command opacity.
-const COMMAND_OPACITY: f32 = 0.30;
 
 impl AiApp {
     /// Render the inline context picker overlay.
@@ -56,69 +44,29 @@ impl AiApp {
             let is_selected = ix == selected_index;
             let label: SharedString = item.label.clone();
             let meta: SharedString = item.meta.clone();
-            let label_hits: HashSet<usize> =
-                item.label_highlight_indices.iter().copied().collect();
-            let meta_hits: HashSet<usize> =
-                item.meta_highlight_indices.iter().copied().collect();
 
             let entity_click = entity.clone();
 
-            div()
-                .id(SharedString::from(format!("ctx-picker-{}", ix)))
-                .flex()
-                .items_center()
-                .justify_between()
-                .px(px(3.))
-                .py(px(3.))
-                .cursor_pointer()
-                .bg(if is_selected {
-                    fg.opacity(GHOST)
-                } else {
-                    gpui::transparent_black()
-                })
-                .hover(|el| el.bg(fg.opacity(GHOST)))
-                .on_click(move |_, window, cx| {
-                    entity_click.update(cx, |this, cx| {
-                        if let Some(picker) = this.context_picker.as_mut() {
-                            picker.selected_index = ix;
-                        }
-                        this.accept_context_picker_selection(window, cx);
-                    });
-                })
-                // Left side: gold bar + highlighted label
-                .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap(S2)
-                        .child(
-                            div()
-                                .w(px(2.))
-                                .h(px(12.))
-                                .rounded(px(1.))
-                                .bg(if is_selected {
-                                    GOLD
-                                } else {
-                                    gpui::transparent_black()
-                                }),
-                        )
-                        .child(render_highlighted_text(
-                            &label,
-                            &label_hits,
-                            if is_selected { fg } else { fg.opacity(MUTED_OP) },
-                            GOLD,
-                        )),
-                )
-                // Right side: /command in FONT_MONO at COMMAND_OPACITY
-                .when(!meta.is_empty(), |d| {
-                    d.child(render_highlighted_meta(
-                        &meta,
-                        &meta_hits,
-                        muted_fg.opacity(COMMAND_OPACITY),
-                        GOLD.opacity(HINT),
-                    ))
-                })
-                .into_any_element()
+            render_dense_monoline_picker_row(
+                SharedString::from(format!("ctx-picker-{}", ix)),
+                label,
+                meta,
+                &item.label_highlight_indices,
+                &item.meta_highlight_indices,
+                is_selected,
+                fg,
+                muted_fg,
+            )
+            .cursor_pointer()
+            .on_click(move |_, window, cx| {
+                entity_click.update(cx, |this, cx| {
+                    if let Some(picker) = this.context_picker.as_mut() {
+                        picker.selected_index = ix;
+                    }
+                    this.accept_context_picker_selection(window, cx);
+                });
+            })
+            .into_any_element()
         })
         .with_sizing_behavior(ListSizingBehavior::Infer)
         .max_h(px(260.))
@@ -198,111 +146,4 @@ impl AiApp {
             .child(div().flex().items_center().gap(S2).children(chips))
             .into_any_element()
     }
-}
-
-/// Render label text with gold highlights on matched characters (V05 text_xs).
-fn render_highlighted_text(
-    text: &str,
-    hits: &HashSet<usize>,
-    base: gpui::Hsla,
-    accent: gpui::Hsla,
-) -> gpui::AnyElement {
-    if hits.is_empty() {
-        return div()
-            .text_xs()
-            .text_color(base)
-            .text_ellipsis()
-            .child(SharedString::from(text.to_string()))
-            .into_any_element();
-    }
-
-    let mut spans: Vec<gpui::AnyElement> = Vec::new();
-    let mut current = String::new();
-    let mut current_highlighted = false;
-
-    for (ix, ch) in text.chars().enumerate() {
-        let is_hit = hits.contains(&ix);
-        if ix > 0 && is_hit != current_highlighted {
-            spans.push(
-                div()
-                    .text_xs()
-                    .text_color(if current_highlighted { accent } else { base })
-                    .child(SharedString::from(std::mem::take(&mut current)))
-                    .into_any_element(),
-            );
-        }
-        current_highlighted = is_hit;
-        current.push(ch);
-    }
-    if !current.is_empty() {
-        spans.push(
-            div()
-                .text_xs()
-                .text_color(if current_highlighted { accent } else { base })
-                .child(SharedString::from(current))
-                .into_any_element(),
-        );
-    }
-
-    div()
-        .flex()
-        .items_center()
-        .text_ellipsis()
-        .children(spans)
-        .into_any_element()
-}
-
-/// Render right-side meta text in FONT_MONO with optional highlights.
-fn render_highlighted_meta(
-    text: &str,
-    hits: &HashSet<usize>,
-    base: gpui::Hsla,
-    accent: gpui::Hsla,
-) -> gpui::AnyElement {
-    if hits.is_empty() {
-        return div()
-            .text_xs()
-            .font_family(FONT_MONO)
-            .text_color(base)
-            .text_ellipsis()
-            .child(SharedString::from(text.to_string()))
-            .into_any_element();
-    }
-
-    let mut spans: Vec<gpui::AnyElement> = Vec::new();
-    let mut current = String::new();
-    let mut current_highlighted = false;
-
-    for (ix, ch) in text.chars().enumerate() {
-        let is_hit = hits.contains(&ix);
-        if ix > 0 && is_hit != current_highlighted {
-            spans.push(
-                div()
-                    .text_xs()
-                    .font_family(FONT_MONO)
-                    .text_color(if current_highlighted { accent } else { base })
-                    .child(SharedString::from(std::mem::take(&mut current)))
-                    .into_any_element(),
-            );
-        }
-        current_highlighted = is_hit;
-        current.push(ch);
-    }
-    if !current.is_empty() {
-        spans.push(
-            div()
-                .text_xs()
-                .font_family(FONT_MONO)
-                .text_color(if current_highlighted { accent } else { base })
-                .child(SharedString::from(current))
-                .into_any_element(),
-        );
-    }
-
-    div()
-        .flex()
-        .items_center()
-        .text_ellipsis()
-        .children(spans)
-        .into_any_element()
 }

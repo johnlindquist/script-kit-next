@@ -155,6 +155,9 @@ fn context_description(kind: ContextAttachmentKind) -> &'static str {
         ContextAttachmentKind::GitDiff => "Adds git diff of staged and unstaged changes",
         ContextAttachmentKind::Processes => "Adds top running processes",
         ContextAttachmentKind::System => "Adds basic system information",
+        ContextAttachmentKind::Dictation => "Adds voice dictation input",
+        ContextAttachmentKind::Calendar => "Adds upcoming calendar events",
+        ContextAttachmentKind::Notifications => "Adds recent notifications",
     }
 }
 
@@ -175,6 +178,9 @@ fn context_icon(kind: ContextAttachmentKind) -> IconName {
         ContextAttachmentKind::GitDiff => IconName::Code,
         ContextAttachmentKind::Processes => IconName::Settings,
         ContextAttachmentKind::System => IconName::Settings,
+        ContextAttachmentKind::Dictation => IconName::File,
+        ContextAttachmentKind::Calendar => IconName::File,
+        ContextAttachmentKind::Notifications => IconName::File,
     }
 }
 

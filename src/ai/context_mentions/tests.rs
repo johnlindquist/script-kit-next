@@ -108,3 +108,83 @@ fn parse_context_mentions_has_parts_helper() {
     let with_parts = parse_context_mentions("@context\nText.");
     assert!(with_parts.has_parts());
 }
+
+// ── @file: colon-prefix parsing ────────────────────────────────
+
+#[test]
+fn parse_context_mentions_extracts_file_colon_directive() {
+    let parsed = parse_context_mentions("@file:/tmp/demo.rs\nRefactor this.");
+
+    assert_eq!(parsed.cleaned_content, "Refactor this.");
+    assert_eq!(
+        parsed.parts,
+        vec![AiContextPart::FilePath {
+            path: "/tmp/demo.rs".to_string(),
+            label: "demo.rs".to_string(),
+        }]
+    );
+}
+
+// ── Inline mention parsing ─────────────────────────────────────
+
+#[test]
+fn parse_inline_context_mentions_finds_builtins() {
+    let mentions = parse_inline_context_mentions("Fix @browser and @git-status");
+    assert_eq!(mentions.len(), 2);
+    assert_eq!(mentions[0].token, "@browser");
+    assert_eq!(mentions[0].range, 4..12);
+    assert_eq!(mentions[1].token, "@git-status");
+}
+
+#[test]
+fn parse_inline_context_mentions_finds_file_colon() {
+    let mentions = parse_inline_context_mentions("Check @file:/tmp/demo.rs please");
+    assert_eq!(mentions.len(), 1);
+    assert_eq!(mentions[0].token, "@file:/tmp/demo.rs");
+    assert_eq!(
+        mentions[0].part,
+        AiContextPart::FilePath {
+            path: "/tmp/demo.rs".to_string(),
+            label: "demo.rs".to_string(),
+        }
+    );
+}
+
+#[test]
+fn parse_inline_context_mentions_ignores_unknown() {
+    let mentions = parse_inline_context_mentions("Hello @unknown world");
+    assert!(mentions.is_empty());
+}
+
+#[test]
+fn parse_inline_context_mentions_requires_word_boundary() {
+    let mentions = parse_inline_context_mentions("email@browser.com");
+    assert!(mentions.is_empty());
+}
+
+// ── part_to_inline_token round-trip ────────────────────────────
+
+#[test]
+fn part_to_inline_token_roundtrips_builtin() {
+    let part = crate::ai::context_contract::ContextAttachmentKind::Browser.part();
+    let token = part_to_inline_token(&part);
+    assert_eq!(token, Some("@browser".to_string()));
+}
+
+#[test]
+fn part_to_inline_token_roundtrips_file() {
+    let part = AiContextPart::FilePath {
+        path: "/tmp/demo.rs".to_string(),
+        label: "demo.rs".to_string(),
+    };
+    let token = part_to_inline_token(&part);
+    assert_eq!(token, Some("@file:/tmp/demo.rs".to_string()));
+}
+
+#[test]
+fn part_to_inline_token_returns_none_for_ambient() {
+    let part = AiContextPart::AmbientContext {
+        label: "test".to_string(),
+    };
+    assert_eq!(part_to_inline_token(&part), None);
+}
