@@ -61,13 +61,41 @@ impl ScriptListApp {
     ) {
         let previous_cached_count = self.cached_file_results.len();
         self.cached_file_results = results;
+
+        let directory_sort_applied = matches!(
+            &self.current_view,
+            AppView::FileSearchView { query, .. }
+                if crate::file_search::parse_directory_path(query).is_some()
+        );
+
+        if directory_sort_applied {
+            self.sort_directory_results();
+        }
+
         self.file_search_display_indices.clear();
         self.recompute_file_search_display_indices();
+
+        let first_display_rows: Vec<String> = self
+            .file_search_display_indices
+            .iter()
+            .take(5)
+            .filter_map(|&result_index| {
+                self.cached_file_results
+                    .get(result_index)
+                    .map(|entry| entry.name.clone())
+            })
+            .collect();
+
         tracing::debug!(
+            category = "FILE_SEARCH",
             event = "update_file_search_results",
             previous_cached_count,
             cached_count = self.cached_file_results.len(),
-            display_count = self.file_search_display_indices.len()
+            display_count = self.file_search_display_indices.len(),
+            directory_sort_applied,
+            ?self.file_search_sort_mode,
+            first_display_rows = ?first_display_rows,
+            "Updated file-search results"
         );
     }
 

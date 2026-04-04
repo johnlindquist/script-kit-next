@@ -2147,15 +2147,17 @@ fn test_context_palette_shortcut_requires_cmd_shift_a() {
 #[test]
 fn test_palette_slash_mention_produce_identical_parts() {
     use crate::ai::context_contract::{context_attachment_specs, ContextAttachmentKind};
-    use crate::ai::message_parts::AiContextPart;
-    use crate::ai::window::context_picker::{build_picker_items, types::ContextPickerItemKind};
+    use crate::ai::window::context_picker::{
+        build_picker_items,
+        types::{ContextPickerItemKind, ContextPickerTrigger},
+    };
 
     for spec in context_attachment_specs() {
         // Part from canonical contract
         let canonical_part = spec.kind.part();
 
         // Part from picker item
-        let items = build_picker_items("");
+        let items = build_picker_items(ContextPickerTrigger::Mention, "");
         let picker_item = items
             .iter()
             .find(|i| matches!(&i.kind, ContextPickerItemKind::BuiltIn(k) if *k == spec.kind))
@@ -2208,10 +2210,13 @@ fn test_palette_slash_mention_produce_identical_parts() {
 /// Picker snapshot is machine-readable and matches actual state.
 #[test]
 fn test_picker_snapshot_is_serializable_and_consistent() {
-    use crate::ai::window::context_picker::{build_picker_items, types::ContextPickerState};
+    use crate::ai::window::context_picker::{
+        build_picker_items,
+        types::{ContextPickerState, ContextPickerTrigger},
+    };
 
-    let items = build_picker_items("sel");
-    let mut state = ContextPickerState::new("sel".to_string(), items);
+    let items = build_picker_items(ContextPickerTrigger::Mention, "sel");
+    let mut state = ContextPickerState::new(ContextPickerTrigger::Mention, "sel".to_string(), items);
     state.selected_index = 0;
 
     let snapshot = state.snapshot();
@@ -2306,11 +2311,14 @@ fn test_palette_to_preflight_to_send_end_to_end() {
     crate::context_snapshot::enable_deterministic_context_capture();
     use crate::ai::context_contract::ContextAttachmentKind;
     use crate::ai::message_parts::{prepare_user_message_with_receipt, PreparedMessageDecision};
-    use crate::ai::window::context_picker::{build_picker_items, types::ContextPickerItemKind};
+    use crate::ai::window::context_picker::{
+        build_picker_items,
+        types::{ContextPickerItemKind, ContextPickerTrigger},
+    };
     use crate::ai::window::context_preflight::preflight_state_from_receipt;
 
     // Step 1: User opens palette, selects "Current Context"
-    let items = build_picker_items("");
+    let items = build_picker_items(ContextPickerTrigger::Mention, "");
     let current_item = items
         .iter()
         .find(|i| {

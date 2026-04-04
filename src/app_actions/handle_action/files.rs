@@ -955,11 +955,20 @@ impl ScriptListApp {
         let mode = self.file_search_sort_mode;
         self.cached_file_results
             .sort_by(|a, b| Self::compare_file_search_results_for_mode(mode, a, b));
+
+        let first_rows: Vec<String> = self
+            .cached_file_results
+            .iter()
+            .take(5)
+            .map(|entry| entry.name.clone())
+            .collect();
+
         tracing::info!(
             category = "FILE_SEARCH",
             event = "apply_file_search_sort_mode",
             ?mode,
             cached_count = self.cached_file_results.len(),
+            first_rows = ?first_rows,
             "Applied file-search sort mode to cached results"
         );
     }

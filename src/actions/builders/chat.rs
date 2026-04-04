@@ -146,6 +146,15 @@ fn context_description(kind: ContextAttachmentKind) -> &'static str {
         ContextAttachmentKind::Browser => "Adds the focused browser tab URL",
         ContextAttachmentKind::Window => "Adds focused window metadata",
         ContextAttachmentKind::Diagnostics => "Adds capture diagnostics for debugging",
+        ContextAttachmentKind::Screenshot => "Adds a screenshot of the focused window",
+        ContextAttachmentKind::Clipboard => "Adds recent clipboard history entries",
+        ContextAttachmentKind::FrontmostApp => "Adds frontmost application info",
+        ContextAttachmentKind::MenuBar => "Adds menu bar items from the frontmost app",
+        ContextAttachmentKind::RecentScripts => "Adds the list of available scripts",
+        ContextAttachmentKind::GitStatus => "Adds git status of the working directory",
+        ContextAttachmentKind::GitDiff => "Adds git diff of staged and unstaged changes",
+        ContextAttachmentKind::Processes => "Adds top running processes",
+        ContextAttachmentKind::System => "Adds basic system information",
     }
 }
 
@@ -157,6 +166,15 @@ fn context_icon(kind: ContextAttachmentKind) -> IconName {
         ContextAttachmentKind::Browser => IconName::MagnifyingGlass,
         ContextAttachmentKind::Window => IconName::File,
         ContextAttachmentKind::Diagnostics => IconName::Settings,
+        ContextAttachmentKind::Screenshot => IconName::File,
+        ContextAttachmentKind::Clipboard => IconName::File,
+        ContextAttachmentKind::FrontmostApp => IconName::File,
+        ContextAttachmentKind::MenuBar => IconName::File,
+        ContextAttachmentKind::RecentScripts => IconName::Code,
+        ContextAttachmentKind::GitStatus => IconName::Code,
+        ContextAttachmentKind::GitDiff => IconName::Code,
+        ContextAttachmentKind::Processes => IconName::Settings,
+        ContextAttachmentKind::System => IconName::Settings,
     }
 }
 

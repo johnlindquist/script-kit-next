@@ -1454,6 +1454,18 @@ fn actions_dialog_rgba_with_alpha(hex: u32, alpha: u8) -> gpui::Rgba {
     rgba(hex_with_alpha(hex, alpha))
 }
 
+/// Extract the click count from a `ClickEvent`.
+/// Keyboard-triggered clicks always count as 1.
+fn actions_dialog_click_count(event: &gpui::ClickEvent) -> usize {
+    event.click_count()
+}
+
+/// Determine whether a row click should submit (run the action).
+/// Only a double-click (`click_count == 2`) on an already-selected row submits.
+fn should_submit_actions_dialog_row(was_selected: bool, click_count: usize) -> bool {
+    was_selected && click_count == 2
+}
+
 impl ActionsDialog {
     /// Move selection up, skipping section headers
     ///
@@ -1543,6 +1555,72 @@ impl ActionsDialog {
     pub fn submit_cancel(&mut self) {
         logging::log("ACTIONS", "Actions dialog cancelled");
         (self.on_select)("__cancel__".to_string());
+    }
+
+    /// Select a grouped item by index without submitting.
+    /// Skips the update if the row is already selected.
+    fn select_grouped_item(&mut self, ix: usize, cx: &mut Context<Self>) {
+        if self.selected_index == ix {
+            return;
+        }
+        self.selected_index = ix;
+        self.list_state.scroll_to_reveal_item(self.selected_index);
+        let action_id = self
+            .get_selected_action()
+            .map(|action| action.id.clone())
+            .unwrap_or_else(|| "<none>".to_string());
+        tracing::info!(
+            event = "actions_dialog_row_selected",
+            row_index = ix,
+            action_id = %action_id,
+        );
+        cx.notify();
+    }
+
+    /// Handle a click on a row: select on first click, submit on double-click of
+    /// an already-selected row. Section headers are ignored.
+    pub fn handle_row_click(
+        &mut self,
+        ix: usize,
+        event: &gpui::ClickEvent,
+        cx: &mut Context<Self>,
+    ) {
+        // Ignore clicks on section headers
+        if !matches!(self.grouped_items.get(ix), Some(GroupedActionItem::Item(_))) {
+            return;
+        }
+
+        let was_selected = self.selected_index == ix;
+        if !was_selected {
+            self.select_grouped_item(ix, cx);
+        }
+
+        let click_count = actions_dialog_click_count(event);
+        let should_submit = should_submit_actions_dialog_row(was_selected, click_count);
+
+        let action_id = self
+            .grouped_items
+            .get(ix)
+            .and_then(|item| match item {
+                GroupedActionItem::Item(filter_idx) => self.filtered_actions.get(*filter_idx),
+                GroupedActionItem::SectionHeader(_) => None,
+            })
+            .and_then(|&action_idx| self.actions.get(action_idx))
+            .map(|action| action.id.clone())
+            .unwrap_or_else(|| "<none>".to_string());
+
+        tracing::info!(
+            event = "actions_dialog_row_click",
+            row_index = ix,
+            action_id = %action_id,
+            click_count = click_count,
+            was_selected = was_selected,
+            should_submit = should_submit,
+        );
+
+        if should_submit {
+            self.submit_selected();
+        }
     }
 
     /// Create box shadow for the overlay popup
@@ -2085,8 +2163,6 @@ impl Render for ActionsDialog {
                                             };
 
                                         // Inner row with pill-style selection
-                                        let on_select = this.on_select.clone();
-                                        let action_id_for_click = action.id.clone();
 
                                         let hover_row_bg = if is_destructive {
                                             destructive_hover_bg
@@ -2258,12 +2334,14 @@ impl Render for ActionsDialog {
                                             } else {
                                                 gpui::transparent_black().into()
                                             })
-                                            .on_mouse_down(
-                                                gpui::MouseButton::Left,
-                                                move |_, _, _| {
-                                                    (on_select)(action_id_for_click.clone());
-                                                },
-                                            );
+                                            .on_click({
+                                                let entity = entity.clone();
+                                                move |event, _window, cx| {
+                                                    entity.update(cx, |this, cx| {
+                                                        this.handle_row_click(ix, event, cx);
+                                                    });
+                                                }
+                                            });
 
                                         action_row
                                             .child(inner_row.child(content))
@@ -3367,5 +3445,26 @@ mod actions_dialog_spec_tests {
         let via_validate_against =
             audit.validate_against(&ActionsDialogExpectedContract::impeccable());
         assert_eq!(via_validate, via_validate_against);
+    }
+}
+
+// ── Click contract tests ─────────────────────────────────────────────
+
+#[cfg(test)]
+mod actions_dialog_click_contract_tests {
+    use super::should_submit_actions_dialog_row;
+
+    #[test]
+    fn submits_only_on_selected_row_double_click() {
+        // First click on unselected row: select only
+        assert!(!should_submit_actions_dialog_row(false, 1));
+        // Double-click on unselected row: still no submit (first click selects)
+        assert!(!should_submit_actions_dialog_row(false, 2));
+        // Single click on already-selected row: no submit
+        assert!(!should_submit_actions_dialog_row(true, 1));
+        // Double-click on already-selected row: submit
+        assert!(should_submit_actions_dialog_row(true, 2));
+        // Triple-click on selected row: no submit (only click_count==2 qualifies)
+        assert!(!should_submit_actions_dialog_row(true, 3));
     }
 }
