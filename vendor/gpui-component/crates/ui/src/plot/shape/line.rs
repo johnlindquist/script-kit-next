@@ -6,7 +6,6 @@ use gpui::{
 };
 
 use crate::{
-    PixelsExt,
     plot::{StrokeStyle, origin_point},
 };
 

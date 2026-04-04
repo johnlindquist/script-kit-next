@@ -1,5 +1,6 @@
 #![doc = include_str!("../README.md")]
 #![warn(missing_docs)]
+#![allow(unexpected_cfgs)] // Vendored upstream uses cfgs from rust-analyzer/objc macros that this toolchain now warns about.
 #![allow(clippy::type_complexity)] // Not useful, GPUI makes heavy use of callbacks
 #![allow(clippy::collapsible_else_if)] // False positives in platform specific code
 #![allow(unused_mut)] // False positives in platform specific code

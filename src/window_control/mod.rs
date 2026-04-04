@@ -42,6 +42,7 @@ pub use actions::{
 };
 pub use query::{get_frontmost_window_of_previous_app, has_accessibility_permission, list_windows};
 pub use snap_monitor::install_snap_drag_monitor;
+#[allow(unused_imports)]
 pub use snap_runtime::{
     cancel_snap_runtime, finish_snap_runtime, is_snap_runtime_active, start_snap_runtime,
 };

@@ -32,6 +32,7 @@ pub(crate) mod validation;
 pub(crate) use chrome::{AppChromeColors, SemanticChipColors};
 
 // Re-export contrast audit helpers
+#[allow(unused_imports)]
 pub use audit::{
     audit_theme_contrast, theme_contrast_score, worst_theme_contrast, ThemeContrastSample,
 };
@@ -47,6 +48,7 @@ pub use helpers::{
 };
 
 // Re-export color resolver for unified color access
+#[allow(unused_imports)]
 pub use color_resolver::{
     ColorResolver, SpacingResolver, SurfaceColorStrategy, TypographyResolver,
 };
