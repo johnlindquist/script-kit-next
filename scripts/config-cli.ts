@@ -21,8 +21,7 @@ import * as path from 'node:path';
 import * as os from 'node:os';
 
 import {
-  isValidCommandId,
-  parseCommandConfigPath,
+  analyzeCommandConfigPath,
   validateCommandConfigFieldValue,
   validateCommandConfigValue,
   validateCommandIdList,
@@ -1122,13 +1121,29 @@ async function cmdReset(key?: string): Promise<void> {
   }
 }
 
+function debugLog(event: string, details: Record<string, unknown> = {}): void {
+  if (process.env.SCRIPT_KIT_CONFIG_DEBUG !== '1') {
+    return;
+  }
+  process.stderr.write(
+    `[config-cli] ${JSON.stringify({ event, ...details })}\n`,
+  );
+}
+
 function validateConfigChange(change: ConfigChange): ValidateConfigChangeResult {
   if (change.key === "commands") {
-    return validateCommandsConfig(change.value);
+    const result = validateCommandsConfig(change.value);
+    debugLog('validate_change_commands_root', {
+      key: change.key,
+      valid: result.valid,
+      errorCount: result.errors.length,
+    });
+    return result;
   }
 
-  const commandPath = parseCommandConfigPath(change.key);
-  if (commandPath) {
+  const commandPath = analyzeCommandConfigPath(change.key);
+
+  if (commandPath?.kind === 'parsed') {
     const errors = commandPath.fieldPath
       ? validateCommandConfigFieldValue(
           commandPath.fieldPath,
@@ -1136,6 +1151,14 @@ function validateConfigChange(change: ConfigChange): ValidateConfigChangeResult 
           change.key,
         )
       : validateCommandConfigValue(change.value, change.key);
+
+    debugLog('validate_change_command_path', {
+      key: change.key,
+      commandId: commandPath.commandId,
+      fieldPath: commandPath.fieldPath ?? null,
+      valid: errors.length === 0,
+      errorCount: errors.length,
+    });
 
     return {
       valid: errors.length === 0,
@@ -1145,13 +1168,34 @@ function validateConfigChange(change: ConfigChange): ValidateConfigChangeResult 
     };
   }
 
-  // Reject unparseable commands.* paths (e.g. empty identifier like "commands.builtin/")
-  if (change.key.startsWith("commands.")) {
+  if (commandPath?.kind === 'invalidCommandId') {
+    debugLog('validate_change_invalid_command_id', {
+      key: change.key,
+      rawCommandId: commandPath.rawCommandId,
+      fieldPath: commandPath.fieldPath ?? null,
+    });
+
     return {
       valid: false,
       errors: [{
         path: change.key,
-        code: "invalidCommandPath",
+        code: 'invalidCommandId',
+        message: `Invalid command id: ${commandPath.rawCommandId}`,
+      }],
+      warnings: [],
+    };
+  }
+
+  if (commandPath?.kind === 'invalidCommandPath') {
+    debugLog('validate_change_invalid_command_path', {
+      key: change.key,
+    });
+
+    return {
+      valid: false,
+      errors: [{
+        path: change.key,
+        code: 'invalidCommandPath',
         message: `Invalid commands path: ${change.key}`,
       }],
       warnings: [],
@@ -1161,6 +1205,11 @@ function validateConfigChange(change: ConfigChange): ValidateConfigChangeResult 
   // Validate command-ID arrays (e.g. suggested.excludedCommands)
   if (change.key === "suggested.excludedCommands") {
     const errors = validateCommandIdList(change.value, change.key);
+    debugLog('validate_change_command_id_list', {
+      key: change.key,
+      valid: errors.length === 0,
+      errorCount: errors.length,
+    });
     return {
       valid: errors.length === 0,
       normalizedValue: errors.length === 0 ? change.value : undefined,
@@ -1171,6 +1220,11 @@ function validateConfigChange(change: ConfigChange): ValidateConfigChangeResult 
 
   // Fall back to existing scalar validation for other keys
   const basic = validateValue(change.key, change.value);
+  debugLog('validate_change_scalar', {
+    key: change.key,
+    valid: basic.valid,
+    error: basic.error ?? null,
+  });
   return {
     valid: basic.valid,
     normalizedValue: basic.valid ? change.value : undefined,
@@ -1179,7 +1233,7 @@ function validateConfigChange(change: ConfigChange): ValidateConfigChangeResult 
       : [{
           path: change.key,
           code: "invalidValue",
-          message: basic.error ?? "Invalid value",
+          message: basic.error ?? `Invalid value for ${change.key}`,
         }],
     warnings: [],
   };
@@ -1194,20 +1248,7 @@ async function cmdValidateChange(payload: string): Promise<void> {
     return;
   }
 
-  const commandPath = parseCommandConfigPath(change.key);
   const result = validateConfigChange(change);
-
-  // Structured log to stderr (machine-readable)
-  console.error(JSON.stringify({
-    ts: new Date().toISOString(),
-    level: "info",
-    msg: "config.validate_change",
-    key: change.key,
-    commandPath,
-    valid: result.valid,
-    errorCount: result.errors.length,
-    warningCount: result.warnings.length,
-  }));
 
   if (!result.valid) {
     output({ success: false, ...result });

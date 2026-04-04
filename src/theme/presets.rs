@@ -505,9 +505,44 @@ pub fn all_presets() -> Vec<ThemePreset> {
     ]
 }
 
+fn normalize_preset_search_text(input: &str) -> String {
+    let mut out = String::with_capacity(input.len());
+    let mut last_was_space = true;
+    for ch in input.chars().flat_map(char::to_lowercase) {
+        let normalized = match ch {
+            '-' | '_' | '/' | '\\' | '\'' | '\u{2019}' | '.' | ',' | ':' | ';' | '(' | ')'
+            | '[' | ']' | '\u{00E9}' => ' ',
+            ch if ch.is_whitespace() => ' ',
+            ch => ch,
+        };
+        if normalized == ' ' {
+            if !last_was_space {
+                out.push(' ');
+                last_was_space = true;
+            }
+        } else {
+            out.push(normalized);
+            last_was_space = false;
+        }
+    }
+    out.trim().to_string()
+}
+
+fn build_preset_search_blob(preset: &ThemePreset) -> String {
+    let tone = if preset.is_dark { "dark" } else { "light" };
+    normalize_preset_search_text(&format!(
+        "{} {} {} {}",
+        preset.id, preset.name, preset.description, tone
+    ))
+}
+
 struct PresetsCache {
     presets: Vec<ThemePreset>,
+    #[allow(dead_code)]
+    preset_themes: Vec<std::sync::Arc<Theme>>,
     preset_preview_colors: Vec<PresetPreviewColors>,
+    #[allow(dead_code)]
+    preset_search_blobs: Vec<String>,
     first_light_theme_index: usize,
     preset_index_by_bg_accent: HashMap<u64, usize>,
 }
@@ -516,11 +551,13 @@ impl PresetsCache {
     fn new() -> Self {
         let presets = all_presets();
         let first_light_theme_index = presets.iter().position(|p| !p.is_dark).unwrap_or(0);
+        let mut preset_themes = Vec::with_capacity(presets.len());
         let mut preset_preview_colors = Vec::with_capacity(presets.len());
+        let mut preset_search_blobs = Vec::with_capacity(presets.len());
         let mut preset_index_by_bg_accent = HashMap::with_capacity(presets.len());
 
         for (index, preset) in presets.iter().enumerate() {
-            let theme = preset.create_theme();
+            let theme = std::sync::Arc::new(preset.create_theme());
             let bg_main = theme.colors.background.main;
             let accent_selected = theme.colors.accent.selected;
 
@@ -531,12 +568,17 @@ impl PresetsCache {
                 secondary: theme.colors.text.secondary,
                 border: theme.colors.ui.border,
             });
-            preset_index_by_bg_accent.insert(preset_bg_accent_key(bg_main, accent_selected), index);
+            preset_search_blobs.push(build_preset_search_blob(preset));
+            preset_index_by_bg_accent
+                .insert(preset_bg_accent_key(bg_main, accent_selected), index);
+            preset_themes.push(theme);
         }
 
         Self {
             presets,
+            preset_themes,
             preset_preview_colors,
+            preset_search_blobs,
             first_light_theme_index,
             preset_index_by_bg_accent,
         }
@@ -559,6 +601,30 @@ pub(crate) fn presets_cached() -> &'static [ThemePreset] {
 
 pub(crate) fn preset_preview_colors_cached() -> &'static [PresetPreviewColors] {
     &presets_cache().preset_preview_colors
+}
+
+#[allow(dead_code)]
+pub(crate) fn preset_theme_cached(index: usize) -> std::sync::Arc<Theme> {
+    presets_cache().preset_themes[index].clone()
+}
+
+#[allow(dead_code)]
+pub(crate) fn filtered_preset_indices_cached(filter: &str) -> Vec<usize> {
+    let cache = presets_cache();
+    let needle = normalize_preset_search_text(filter);
+
+    let results = if needle.is_empty() {
+        (0..cache.presets.len()).collect::<Vec<_>>()
+    } else {
+        cache
+            .preset_search_blobs
+            .iter()
+            .enumerate()
+            .filter_map(|(index, blob)| blob.contains(&needle).then_some(index))
+            .collect::<Vec<_>>()
+    };
+
+    results
 }
 
 /// Find the index of the preset matching the given theme, or 0 if not found.
@@ -3943,5 +4009,64 @@ mod tests {
             assert_eq!(all_colors.secondary, cached_colors.secondary);
             assert_eq!(all_colors.border, cached_colors.border);
         }
+    }
+
+    #[test]
+    fn test_filtered_preset_indices_cached_rose_finds_rose_pine_family() {
+        let rose_ids: Vec<&str> = filtered_preset_indices_cached("rose")
+            .into_iter()
+            .map(|idx| presets_cached()[idx].id)
+            .collect();
+        assert!(
+            rose_ids.contains(&"rose-pine"),
+            "Expected rose-pine in results: {:?}",
+            rose_ids
+        );
+        assert!(
+            rose_ids.contains(&"rose-pine-moon"),
+            "Expected rose-pine-moon in results: {:?}",
+            rose_ids
+        );
+        assert!(
+            rose_ids.contains(&"rose-pine-dawn"),
+            "Expected rose-pine-dawn in results: {:?}",
+            rose_ids
+        );
+    }
+
+    #[test]
+    fn test_filtered_preset_indices_cached_frappe_finds_catppuccin_frappe() {
+        let frappe_ids: Vec<&str> = filtered_preset_indices_cached("frappe")
+            .into_iter()
+            .map(|idx| presets_cached()[idx].id)
+            .collect();
+        assert!(
+            frappe_ids.contains(&"catppuccin-frappe"),
+            "Expected catppuccin-frappe in results: {:?}",
+            frappe_ids
+        );
+    }
+
+    #[test]
+    fn test_preset_theme_cached_returns_same_arc_instance() {
+        let a = preset_theme_cached(0);
+        let b = preset_theme_cached(0);
+        assert!(
+            std::sync::Arc::ptr_eq(&a, &b),
+            "Repeated preset_theme_cached calls should return the same Arc instance"
+        );
+    }
+
+    #[test]
+    fn test_filtered_preset_indices_cached_empty_returns_all() {
+        let all = filtered_preset_indices_cached("");
+        assert_eq!(all.len(), presets_cached().len());
+    }
+
+    #[test]
+    fn test_normalize_preset_search_text_strips_accents_and_punctuation() {
+        assert_eq!(normalize_preset_search_text("Rosé Pine"), "ros pine");
+        assert_eq!(normalize_preset_search_text("Frappé"), "frapp");
+        assert_eq!(normalize_preset_search_text("one-dark-pro"), "one dark pro");
     }
 }

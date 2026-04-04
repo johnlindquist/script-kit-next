@@ -1320,36 +1320,73 @@ export function validateCommandsConfig(
   };
 }
 
-export interface ParsedCommandConfigPath {
-  commandId: CommandId;
-  fieldPath?: string;
-}
+export type CommandConfigPathAnalysis =
+  | { kind: "parsed"; commandId: CommandId; fieldPath?: string }
+  | { kind: "invalidCommandId"; rawCommandId: string; fieldPath?: string }
+  | { kind: "invalidCommandPath"; path: string };
 
-export function parseCommandConfigPath(key: string): ParsedCommandConfigPath | null {
+export function analyzeCommandConfigPath(
+  key: string,
+): CommandConfigPathAnalysis | null {
   if (!key.startsWith("commands.")) {
     return null;
   }
 
   const remainder = key.slice("commands.".length);
+  if (remainder.length === 0) {
+    return { kind: "invalidCommandPath", path: key };
+  }
+
   for (const suffix of COMMAND_CONFIG_PATH_SUFFIXES) {
     const fieldSuffix = `.${suffix}`;
     if (!remainder.endsWith(fieldSuffix)) {
       continue;
     }
 
-    const commandId = remainder.slice(0, -fieldSuffix.length);
-    if (!isValidCommandId(commandId)) {
-      return null;
+    const rawCommandId = remainder.slice(0, -fieldSuffix.length);
+    if (rawCommandId.length === 0) {
+      return { kind: "invalidCommandPath", path: key };
     }
 
-    return { commandId, fieldPath: suffix };
+    if (!isValidCommandId(rawCommandId)) {
+      return {
+        kind: "invalidCommandId",
+        rawCommandId,
+        fieldPath: suffix,
+      };
+    }
+
+    return {
+      kind: "parsed",
+      commandId: rawCommandId,
+      fieldPath: suffix,
+    };
   }
 
   if (!isValidCommandId(remainder)) {
-    return null;
+    return {
+      kind: "invalidCommandId",
+      rawCommandId: remainder,
+    };
   }
 
-  return { commandId: remainder };
+  return { kind: "parsed", commandId: remainder };
+}
+
+export interface ParsedCommandConfigPath {
+  commandId: CommandId;
+  fieldPath?: string;
+}
+
+export function parseCommandConfigPath(key: string): ParsedCommandConfigPath | null {
+  const analyzed = analyzeCommandConfigPath(key);
+  if (!analyzed || analyzed.kind !== "parsed") {
+    return null;
+  }
+  return {
+    commandId: analyzed.commandId,
+    fieldPath: analyzed.fieldPath,
+  };
 }
 
 export function validateCommandConfigFieldValue(

@@ -38,14 +38,6 @@ fn sync_theme_chooser_preview(
     active_theme: &std::sync::Arc<crate::theme::Theme>,
     source: &'static str,
 ) {
-    let chrome = crate::theme::AppChromeColors::from_theme(active_theme.as_ref());
-    tracing::debug!(
-        source,
-        accent_hex = chrome.accent_hex,
-        selection_rgba = chrome.selection_rgba,
-        input_surface_rgba = chrome.input_surface_rgba,
-        "theme_chooser_preview_synced"
-    );
     sync_gpui_component_theme_for_theme_with_source(cx, active_theme.as_ref(), source);
 }
 
@@ -57,6 +49,86 @@ struct ThemeChooserMatchSummary {
     visible_total: usize,
     visible_dark: usize,
     visible_light: usize,
+}
+
+#[derive(Clone, Debug)]
+struct ThemeChooserContrastRow {
+    label: String,
+    ratio: f32,
+    minimum: f32,
+    passes: bool,
+}
+
+#[derive(Clone, Debug)]
+struct ThemeChooserContrastSnapshot {
+    rows: Vec<ThemeChooserContrastRow>,
+    passing: usize,
+    total: usize,
+    worst_label: String,
+    worst_ratio: f32,
+}
+
+fn build_theme_chooser_contrast_snapshot(
+    theme: &crate::theme::Theme,
+) -> ThemeChooserContrastSnapshot {
+    let rows = theme::audit_theme_contrast(theme)
+        .into_iter()
+        .map(|sample| ThemeChooserContrastRow {
+            label: sample.label.to_string(),
+            ratio: sample.ratio,
+            minimum: sample.minimum,
+            passes: sample.passes(),
+        })
+        .collect::<Vec<_>>();
+
+    let passing = rows.iter().filter(|row| row.passes).count();
+    let total = rows.len();
+
+    let worst = rows
+        .iter()
+        .min_by(|left, right| {
+            left.ratio
+                .partial_cmp(&right.ratio)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        })
+        .cloned()
+        .unwrap_or(ThemeChooserContrastRow {
+            label: "n/a".to_string(),
+            ratio: 0.0,
+            minimum: 4.5,
+            passes: false,
+        });
+
+    ThemeChooserContrastSnapshot {
+        rows,
+        passing,
+        total,
+        worst_label: worst.label,
+        worst_ratio: worst.ratio,
+    }
+}
+
+fn cached_theme_chooser_contrast_snapshot(
+    theme: &std::sync::Arc<crate::theme::Theme>,
+) -> ThemeChooserContrastSnapshot {
+    static THEME_CHOOSER_CONTRAST_CACHE: std::sync::LazyLock<
+        parking_lot::Mutex<std::collections::HashMap<usize, ThemeChooserContrastSnapshot>>,
+    > = std::sync::LazyLock::new(|| parking_lot::Mutex::new(std::collections::HashMap::new()));
+
+    let cache_key = std::sync::Arc::as_ptr(theme) as usize;
+
+    if let Some(snapshot) = THEME_CHOOSER_CONTRAST_CACHE.lock().get(&cache_key).cloned() {
+        return snapshot;
+    }
+
+    let snapshot = build_theme_chooser_contrast_snapshot(theme.as_ref());
+
+    let mut cache = THEME_CHOOSER_CONTRAST_CACHE.lock();
+    if cache.len() >= 128 {
+        cache.clear();
+    }
+    cache.insert(cache_key, snapshot.clone());
+    snapshot
 }
 
 impl ScriptListApp {
@@ -317,16 +389,16 @@ impl ScriptListApp {
     }
 
     fn render_theme_chooser_contrast_row(
-        sample: &theme::ThemeContrastSample,
+        sample: &ThemeChooserContrastRow,
         chrome: &theme::AppChromeColors,
     ) -> AnyElement {
-        let status_bg = if sample.passes() {
+        let status_bg = if sample.passes {
             rgba(chrome.accent_badge_bg_rgba)
         } else {
             rgba(chrome.hover_rgba)
         };
-        let status_text = if sample.passes() { "Pass" } else { "Fix" };
-        let status_text_hex = if sample.passes() {
+        let status_text = if sample.passes { "Pass" } else { "Fix" };
+        let status_text_hex = if sample.passes {
             chrome.accent_badge_text_hex
         } else {
             chrome.text_primary_hex
@@ -352,7 +424,7 @@ impl ScriptListApp {
                             .text_xs()
                             .font_weight(gpui::FontWeight::SEMIBOLD)
                             .text_color(rgb(chrome.text_primary_hex))
-                            .child(sample.label),
+                            .child(sample.label.clone()),
                     )
                     .child(
                         div()
@@ -377,48 +449,28 @@ impl ScriptListApp {
             .into_any_element()
     }
 
-    fn contains_ascii_case_insensitive(haystack: &str, needle: &str) -> bool {
-        if needle.is_empty() {
-            return true;
-        }
-
-        let haystack = haystack.as_bytes();
-        let needle = needle.as_bytes();
-        if needle.len() > haystack.len() {
-            return false;
-        }
-
-        haystack
-            .windows(needle.len())
-            .any(|window| window.eq_ignore_ascii_case(needle))
-    }
-
     /// Helper: compute filtered preset indices from a filter string
     fn theme_chooser_filtered_indices(filter: &str) -> Vec<usize> {
-        let presets = theme::presets::presets_cached();
-        if filter.is_empty() {
-            (0..presets.len()).collect()
-        } else if filter.is_ascii() {
-            presets
-                .iter()
-                .enumerate()
-                .filter(|(_, p)| {
-                    Self::contains_ascii_case_insensitive(p.name, filter)
-                        || Self::contains_ascii_case_insensitive(p.description, filter)
-                })
-                .map(|(i, _)| i)
-                .collect()
-        } else {
-            let f = filter.to_lowercase();
-            presets
-                .iter()
-                .enumerate()
-                .filter(|(_, p)| {
-                    p.name.to_lowercase().contains(&f) || p.description.to_lowercase().contains(&f)
-                })
-                .map(|(i, _)| i)
-                .collect()
-        }
+        theme::presets::filtered_preset_indices_cached(filter)
+    }
+
+    /// Shared helper: preview a preset by filtered index, using the cached theme.
+    fn preview_theme_chooser_preset(
+        &mut self,
+        filtered_indices: &[usize],
+        filtered_selected_index: usize,
+        reason: &'static str,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(&preset_idx) = filtered_indices.get(filtered_selected_index) else {
+            return;
+        };
+        self.theme = theme::presets::preset_theme_cached(preset_idx);
+        self.theme_chooser_scroll_handle
+            .scroll_to_item(filtered_selected_index, ScrollStrategy::Nearest);
+
+        sync_theme_chooser_preview(cx, &self.theme, reason);
+        cx.notify();
     }
 
     /// Accent color palette for theme customization
@@ -481,15 +533,6 @@ impl ScriptListApp {
         opacity.input_inactive = (value + 0.02).min(1.0);
         opacity.input_active = (value + 0.08).min(1.0);
         opacity.vibrancy_background = Some(value);
-        tracing::debug!(
-            preset = value,
-            main = opacity.main,
-            title_bar = opacity.title_bar,
-            search_box = opacity.search_box,
-            panel = opacity.panel,
-            input = opacity.input,
-            "theme_chooser_surface_opacity_applied"
-        );
         next.opacity = Some(opacity);
         next
     }
@@ -533,16 +576,35 @@ impl ScriptListApp {
     }
 
     /// Render a launcher-style live preview that matches the main menu shell
+    fn render_theme_chooser_list_item_preview_rows(&self) -> gpui::AnyElement {
+        let list_colors = crate::list_item::ListItemColors::from_theme(self.theme.as_ref());
+
+        div()
+            .flex()
+            .flex_col()
+            .child(
+                crate::list_item::ListItem::new("Selected Item", list_colors)
+                    .description("Description appears only on the focused row")
+                    .selected(true)
+                    .with_accent_bar(true),
+            )
+            .child(
+                crate::list_item::ListItem::new("Regular Item", list_colors)
+                    .shortcut("cmd+p"),
+            )
+            .child(
+                crate::list_item::ListItem::new("Another Item", list_colors)
+                    .tool_badge("ts"),
+            )
+            .into_any_element()
+    }
+
     fn render_theme_chooser_live_preview(
         &self,
         preset_name: &str,
         accent_name: &str,
         chrome: &theme::AppChromeColors,
     ) -> gpui::AnyElement {
-        let quiet_name_rgba =
-            rgba((chrome.text_primary_hex << 8) | crate::list_item::ALPHA_NAME_QUIET);
-        let selected_desc_rgba =
-            rgba((chrome.text_primary_hex << 8) | crate::list_item::ALPHA_DESC_SELECTED);
         let hint_rgba = (chrome.text_dimmed_hex << 8) | 0xA6;
 
         div()
@@ -615,83 +677,8 @@ impl ScriptListApp {
                     )
                     // Divider
                     .child(div().mx(px(12.0)).h(px(1.0)).bg(rgba(chrome.divider_rgba)))
-                    // List rows
-                    .child(
-                        div()
-                            .flex()
-                            .flex_col()
-                            // Selected item with gold bar + description
-                            .child(
-                                div()
-                                    .px(px(12.0))
-                                    .py(px(10.0))
-                                    .bg(rgba(chrome.selection_rgba))
-                                    .border_l(px(3.0))
-                                    .border_color(rgb(chrome.accent_hex))
-                                    .flex()
-                                    .flex_col()
-                                    .gap(px(2.0))
-                                    .child(
-                                        div()
-                                            .text_sm()
-                                            .font_weight(gpui::FontWeight::SEMIBOLD)
-                                            .text_color(rgb(chrome.text_primary_hex))
-                                            .child("Selected Item"),
-                                    )
-                                    .child(
-                                        div()
-                                            .text_xs()
-                                            .text_color(selected_desc_rgba)
-                                            .child(
-                                                "Description appears only on the focused row",
-                                            ),
-                                    ),
-                            )
-                            // Regular item with right-aligned shortcut
-                            .child(
-                                div()
-                                    .px(px(12.0))
-                                    .py(px(10.0))
-                                    .flex()
-                                    .flex_row()
-                                    .items_center()
-                                    .justify_between()
-                                    .child(
-                                        div()
-                                            .text_sm()
-                                            .text_color(quiet_name_rgba)
-                                            .child("Regular Item"),
-                                    )
-                                    .child(
-                                        div()
-                                            .text_xs()
-                                            .text_color(rgb(chrome.text_dimmed_hex))
-                                            .child("⌘P"),
-                                    ),
-                            )
-                            // Another item with type tag
-                            .child(
-                                div()
-                                    .px(px(12.0))
-                                    .py(px(10.0))
-                                    .flex()
-                                    .flex_row()
-                                    .items_center()
-                                    .justify_between()
-                                    .child(
-                                        div()
-                                            .text_sm()
-                                            .text_color(quiet_name_rgba)
-                                            .child("Another Item"),
-                                    )
-                                    .child(
-                                        div()
-                                            .text_xs()
-                                            .text_color(rgb(chrome.text_dimmed_hex))
-                                            .child("ts"),
-                                    ),
-                            ),
-                    )
+                    // List rows — real ListItem components for pixel-perfect alignment
+                    .child(self.render_theme_chooser_list_item_preview_rows())
                     // Footer divider + hints
                     .child(div().mx(px(12.0)).h(px(1.0)).bg(rgba(chrome.divider_rgba)))
                     .child(
@@ -921,19 +908,17 @@ impl ScriptListApp {
                         } else {
                             return;
                         };
-                    let presets = theme::presets::presets_cached();
                     let filtered = Self::theme_chooser_filtered_indices(&current_filter);
                     if let AppView::ThemeChooserView {
                         ref selected_index, ..
                     } = this.current_view
                     {
-                        if let Some(&pidx) = filtered.get(*selected_index) {
-                            if pidx < presets.len() {
-                                this.theme = std::sync::Arc::new(presets[pidx].create_theme());
-                                sync_theme_chooser_preview(cx, &this.theme, "theme_chooser_reset_shortcut");
-                                cx.notify();
-                            }
-                        }
+                        this.preview_theme_chooser_preset(
+                            &filtered,
+                            *selected_index,
+                            "theme_chooser_reset_shortcut",
+                            cx,
+                        );
                     }
                     return;
                 }
@@ -955,7 +940,6 @@ impl ScriptListApp {
                     } else {
                         return;
                     };
-                let presets = theme::presets::presets_cached();
                 let filtered = Self::theme_chooser_filtered_indices(&current_filter);
                 let count = filtered.len();
                 if count == 0 {
@@ -993,23 +977,15 @@ impl ScriptListApp {
                         }
                         _ => return,
                     }
+                    // Copy index before calling &mut self method
+                    let idx = *selected_index;
                     // Map to actual preset index and apply theme
-                    let preset_idx = filtered[*selected_index];
-                    let new_theme = std::sync::Arc::new(presets[preset_idx].create_theme());
-                    this.theme = new_theme;
-                    this.theme_chooser_scroll_handle
-                        .scroll_to_item(*selected_index, ScrollStrategy::Nearest);
-                    let active_chrome = theme::AppChromeColors::from_theme(this.theme.as_ref());
-                    tracing::debug!(
-                        preset_id = presets[preset_idx].id,
-                        preset_index = preset_idx,
-                        accent_hex = active_chrome.accent_hex,
-                        selection_rgba = active_chrome.selection_rgba,
-                        input_surface_rgba = active_chrome.input_surface_rgba,
-                        "theme_chooser_preset_preview_applied"
+                    this.preview_theme_chooser_preset(
+                        &filtered,
+                        idx,
+                        "theme_chooser_keyboard_preview",
+                        cx,
                     );
-                    sync_theme_chooser_preview(cx, &this.theme, "theme_chooser_keyboard_preview");
-                    cx.notify();
                 }
             },
         );
@@ -1113,7 +1089,6 @@ impl ScriptListApp {
                                         } else {
                                             return;
                                         };
-                                        let presets = theme::presets::presets_cached();
                                         let filtered =
                                             Self::theme_chooser_filtered_indices(&current_filter);
 
@@ -1124,15 +1099,12 @@ impl ScriptListApp {
                                         {
                                             *selected_index = ix;
                                         }
-                                        if let Some(&pidx) = filtered.get(ix) {
-                                            if pidx < presets.len() {
-                                                this.theme = std::sync::Arc::new(
-                                                    presets[pidx].create_theme(),
-                                                );
-                                                sync_theme_chooser_preview(cx, &this.theme, "theme_chooser_mouse_preview");
-                                                cx.notify();
-                                            }
-                                        }
+                                        this.preview_theme_chooser_preset(
+                                            &filtered,
+                                            ix,
+                                            "theme_chooser_mouse_preview",
+                                            cx,
+                                        );
                                     });
                                 }
                             };
@@ -1580,20 +1552,17 @@ impl ScriptListApp {
                                 } else {
                                     return;
                                 };
-                            let presets = theme::presets::presets_cached();
                             let filtered = Self::theme_chooser_filtered_indices(&current_filter);
                             if let AppView::ThemeChooserView {
                                 ref selected_index, ..
                             } = this.current_view
                             {
-                                if let Some(&pidx) = filtered.get(*selected_index) {
-                                    if pidx < presets.len() {
-                                        this.theme =
-                                            std::sync::Arc::new(presets[pidx].create_theme());
-                                        sync_theme_chooser_preview(cx, &this.theme, "theme_chooser_reset_click");
-                                        cx.notify();
-                                    }
-                                }
+                                this.preview_theme_chooser_preset(
+                                    &filtered,
+                                    *selected_index,
+                                    "theme_chooser_reset_click",
+                                    cx,
+                                );
                             }
                         });
                     }
@@ -1774,9 +1743,7 @@ impl ScriptListApp {
             .child(self.render_theme_chooser_surface_lab(&chrome))
             // ── Contrast audit ──────────────────────────────────────
             .child({
-                let contrast_samples = theme::audit_theme_contrast(self.theme.as_ref());
-                let (contrast_passing, contrast_total) = theme::theme_contrast_score(self.theme.as_ref());
-                let worst_contrast = theme::worst_theme_contrast(self.theme.as_ref());
+                let contrast_snapshot = cached_theme_chooser_contrast_snapshot(&self.theme);
 
                 div()
                     .flex()
@@ -1788,16 +1755,17 @@ impl ScriptListApp {
                             .text_color(rgb(text_muted))
                             .child(format!(
                                 "Contrast {}/{} pass · worst {} {:.2}:1",
-                                contrast_passing,
-                                contrast_total,
-                                worst_contrast.label,
-                                worst_contrast.ratio,
+                                contrast_snapshot.passing,
+                                contrast_snapshot.total,
+                                contrast_snapshot.worst_label,
+                                contrast_snapshot.worst_ratio,
                             )),
                     )
                     .children(
-                        contrast_samples
+                        contrast_snapshot
+                            .rows
                             .iter()
-                            .map(|s| Self::render_theme_chooser_contrast_row(s, &chrome))
+                            .map(|row| Self::render_theme_chooser_contrast_row(row, &chrome))
                             .collect::<Vec<_>>(),
                     )
             })

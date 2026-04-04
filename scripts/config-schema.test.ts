@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import {
+  analyzeCommandConfigPath,
   COMMAND_ID_CATEGORIES,
   isValidCommandId,
   parseCommandConfigPath,
@@ -266,6 +267,62 @@ describe("parseCommandConfigPath", () => {
 
   it("rejects invalid command ids in nested paths", () => {
     expect(parseCommandConfigPath("commands.builtin-clipboard-history.hidden")).toBeNull();
+  });
+});
+
+// =============================================================================
+// analyzeCommandConfigPath
+// =============================================================================
+
+describe("analyzeCommandConfigPath", () => {
+  it("classifies valid nested command paths", () => {
+    expect(
+      analyzeCommandConfigPath("commands.builtin/clipboard-history.hidden"),
+    ).toEqual({
+      kind: "parsed",
+      commandId: "builtin/clipboard-history",
+      fieldPath: "hidden",
+    });
+  });
+
+  it("classifies valid whole-entry command paths", () => {
+    expect(
+      analyzeCommandConfigPath("commands.builtin/clipboard-history"),
+    ).toEqual({
+      kind: "parsed",
+      commandId: "builtin/clipboard-history",
+    });
+  });
+
+  it("preserves invalidCommandId for dash-style nested ids", () => {
+    expect(
+      analyzeCommandConfigPath("commands.builtin-clipboard-history.hidden"),
+    ).toEqual({
+      kind: "invalidCommandId",
+      rawCommandId: "builtin-clipboard-history",
+      fieldPath: "hidden",
+    });
+  });
+
+  it("preserves invalidCommandId for invalid whole-entry ids", () => {
+    expect(
+      analyzeCommandConfigPath("commands.builtin-clipboard-history"),
+    ).toEqual({
+      kind: "invalidCommandId",
+      rawCommandId: "builtin-clipboard-history",
+    });
+  });
+
+  it("uses invalidCommandPath only for structurally broken keys", () => {
+    expect(analyzeCommandConfigPath("commands.")).toEqual({
+      kind: "invalidCommandPath",
+      path: "commands.",
+    });
+  });
+
+  it("returns null for non-commands keys", () => {
+    expect(analyzeCommandConfigPath("hotkey.modifiers")).toBeNull();
+    expect(analyzeCommandConfigPath("suggested.excludedCommands")).toBeNull();
   });
 });
 
