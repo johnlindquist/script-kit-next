@@ -161,6 +161,12 @@ pub struct AiApp {
     /// Inline `@` context picker state. `Some` when the picker overlay is open.
     pub(super) context_picker: Option<super::context_picker::types::ContextPickerState>,
 
+    /// Virtualized list state for the context picker overlay (scroll-to-reveal on Up/Down).
+    pub(super) context_picker_list_state: ListState,
+
+    /// Last index scrolled to in the picker (avoids redundant reveal calls).
+    pub(super) context_picker_last_scrolled_index: Option<usize>,
+
     // === Attachments State ===
     /// Pending context parts (file paths and resource URIs) that will be resolved
     /// into prompt blocks at submit time.

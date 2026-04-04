@@ -662,7 +662,7 @@ fn build_sdk_function_refs() -> Vec<SdkFunctionRef> {
             signature:
                 "await waitFor(condition: WaitCondition, options?: WaitForOptions): Promise<WaitForResult>"
                     .into(),
-            description: "Poll until a UI condition is satisfied or the timeout expires.".into(),
+            description: "Poll until a UI condition is satisfied or the timeout expires. Returns { success, elapsed, error?, trace? }. On failure, error contains a stable code (wait_condition_timeout | element_not_found | unsupported_prompt | action_failed), a human message, and an optional suggestion. Pass trace: 'onFailure' in options to get poll-by-poll diagnostics on timeout.".into(),
             category: "automation".into(),
         },
         SdkFunctionRef {
@@ -670,8 +670,7 @@ fn build_sdk_function_refs() -> Vec<SdkFunctionRef> {
             signature:
                 "await batch(commands: BatchCommand[], options?: BatchOptions): Promise<BatchResult>"
                     .into(),
-            description:
-                "Execute a deterministic sequence of UI commands with structured results.".into(),
+            description: "Execute a deterministic sequence of UI commands. Returns { success, results, failedAt?, totalElapsed, trace? }. Each result entry includes index, success, command, elapsed, value?, and a structured error with stable code on failure. Pass trace: 'onFailure' at the top-level message (not inside options) for per-command diagnostics. Error codes: wait_condition_timeout, element_not_found, selection_not_found, unsupported_command, unsupported_prompt, action_failed.".into(),
             category: "automation".into(),
         },
     ]

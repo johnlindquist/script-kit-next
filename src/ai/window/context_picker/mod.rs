@@ -109,6 +109,52 @@ pub(crate) fn empty_state_hints(trigger: ContextPickerTrigger) -> &'static [&'st
 }
 
 impl AiApp {
+    /// Synchronize the `context_picker_list_state` item count with the
+    /// current picker items. Must be called after the picker opens or
+    /// its filtered result set changes.
+    pub(super) fn sync_context_picker_list_state(&mut self) {
+        let item_count = self
+            .context_picker
+            .as_ref()
+            .map(|p| p.items.len())
+            .unwrap_or(0);
+        let old_count = self.context_picker_list_state.item_count();
+        if old_count != item_count {
+            self.context_picker_list_state
+                .splice(0..old_count, item_count);
+        }
+        self.context_picker_last_scrolled_index = None;
+    }
+
+    /// Scroll the picker list so the currently selected row is visible.
+    /// De-duplicates consecutive calls for the same index.
+    pub(super) fn reveal_selected_context_picker_item(
+        &mut self,
+        reason: &'static str,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(target) = self
+            .context_picker
+            .as_ref()
+            .map(|p| p.selected_index)
+        else {
+            return;
+        };
+        if self.context_picker_last_scrolled_index == Some(target) {
+            return;
+        }
+        self.context_picker_list_state
+            .scroll_to_reveal_item(target);
+        self.context_picker_last_scrolled_index = Some(target);
+        tracing::info!(
+            target: "ai",
+            reason,
+            selected_index = target,
+            "ai_context_picker_scrolled_to_selected"
+        );
+        cx.notify();
+    }
+
     /// Open the context picker with an initial seed query.
     pub(super) fn open_context_picker(
         &mut self,
@@ -121,13 +167,13 @@ impl AiApp {
         tracing::info!(
             target: "ai",
             ?trigger,
-            query = %seed_query,
             item_count = items.len(),
             selected_index = 0,
             "ai_context_picker_opened"
         );
         self.context_picker = Some(ContextPickerState::new(trigger, seed_query, items));
-        cx.notify();
+        self.sync_context_picker_list_state();
+        self.reveal_selected_context_picker_item("picker_opened", cx);
     }
 
     /// Update the picker query and re-rank results.
@@ -149,13 +195,13 @@ impl AiApp {
             tracing::info!(
                 target: "ai",
                 ?trigger,
-                query = %query,
                 item_count = picker.items.len(),
                 selected_index = picker.selected_index,
                 "ai_context_picker_filtered"
             );
         }
-        cx.notify();
+        self.sync_context_picker_list_state();
+        self.reveal_selected_context_picker_item("picker_filtered", cx);
     }
 
     /// Accept the currently selected picker row.
@@ -229,9 +275,9 @@ impl AiApp {
                 } else {
                     picker.selected_index = picker.items.len() - 1;
                 }
-                cx.notify();
             }
         }
+        self.reveal_selected_context_picker_item("keyboard_prev", cx);
     }
 
     /// Move selection down in the picker.
@@ -239,9 +285,9 @@ impl AiApp {
         if let Some(picker) = self.context_picker.as_mut() {
             if !picker.items.is_empty() {
                 picker.selected_index = (picker.selected_index + 1) % picker.items.len();
-                cx.notify();
             }
         }
+        self.reveal_selected_context_picker_item("keyboard_next", cx);
     }
 
     /// Whether the context picker is currently open.
@@ -330,6 +376,19 @@ pub fn build_picker_items(trigger: ContextPickerTrigger, query: &str) -> Vec<Con
         let section_b = section_priority(&b.kind);
         section_a.cmp(&section_b).then(b.score.cmp(&a.score))
     });
+
+    // Log ranked items for observability (top 5 only to avoid noise)
+    for (rank, item) in items.iter().enumerate().take(5) {
+        tracing::debug!(
+            target: "ai",
+            rank,
+            item_id = %item.id,
+            score = item.score,
+            label_hits = ?item.label_highlight_indices,
+            meta_hits = ?item.meta_highlight_indices,
+            "ai_context_picker_ranked_item"
+        );
+    }
 
     items
 }

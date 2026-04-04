@@ -24,6 +24,23 @@ use super::thread::{
 };
 use super::{AcpApprovalOption, AcpApprovalPreview, AcpApprovalPreviewKind, AcpApprovalRequest};
 
+use crate::ai::message_parts::AiContextPart;
+use crate::ai::window::context_picker::types::{
+    ContextPickerItem, ContextPickerItemKind, ContextPickerTrigger,
+};
+use crate::ai::window::context_picker::build_picker_items;
+
+/// Active @-mention session state for the ACP inline context picker.
+#[derive(Debug, Clone)]
+struct AcpMentionSession {
+    /// Byte range of the `@query` in the input text (from `@` to cursor).
+    trigger_range: std::ops::Range<usize>,
+    /// Currently highlighted row index.
+    selected_index: usize,
+    /// Ranked picker items for the current query.
+    items: Vec<ContextPickerItem>,
+}
+
 /// Click handler type for collapsible block toggle.
 type ToggleHandler = Box<dyn Fn(&gpui::ClickEvent, &mut Window, &mut App) + 'static>;
 
@@ -93,6 +110,8 @@ pub(crate) struct AcpChatView {
     cached_slash_commands: Vec<(String, String)>,
     /// Handle to the deferred slash command discovery task.
     _slash_discovery_task: Task<()>,
+    /// Active @-mention picker session (None = picker hidden).
+    mention_session: Option<AcpMentionSession>,
 }
 
 impl AcpChatView {
@@ -128,9 +147,9 @@ impl AcpChatView {
                 this.list_state.set_follow_tail(true);
             }
 
-            // Update slash command menu on any input change.
+            // Update slash command menu and @-mention picker on any input change.
             this.update_slash_menu(cx);
-            cx.notify();
+            this.refresh_mention_session(cx);
         })
         .detach();
 
@@ -185,6 +204,7 @@ impl AcpChatView {
             search_state: None,
             cached_slash_commands: Vec::new(),
             _slash_discovery_task: slash_task,
+            mention_session: None,
         }
     }
 
@@ -1317,6 +1337,208 @@ impl AcpChatView {
         btn.child(icon_char).into_any_element()
     }
 
+    // ── @-mention picker ──────────────────────────────────────────
+
+    /// Maximum visible rows in the mention picker.
+    const MENTION_PICKER_MAX_VISIBLE: usize = 8;
+
+    /// Detect an active `@query` from the input text and cursor position.
+    ///
+    /// Returns the byte range of `@query` and the query string, or `None`
+    /// if the cursor is not inside a valid mention trigger.
+    fn find_active_mention(text: &str, cursor: usize) -> Option<(std::ops::Range<usize>, String)> {
+        if cursor > text.len() || !text.is_char_boundary(cursor) {
+            return None;
+        }
+        let before_cursor = &text[..cursor];
+        let at_index = before_cursor.rfind('@')?;
+
+        // `@` must be at start of text or preceded by whitespace / punctuation
+        if at_index > 0 {
+            let prev = text.as_bytes()[at_index - 1];
+            if prev.is_ascii_alphanumeric() || prev == b'_' {
+                return None;
+            }
+        }
+
+        let between = &before_cursor[at_index + 1..];
+        // Reject if there's another `@` or whitespace inside the query
+        if between.contains('@') || between.chars().any(char::is_whitespace) {
+            return None;
+        }
+
+        Some((at_index..cursor, between.to_string()))
+    }
+
+    /// Re-derive the mention session from current input state.
+    ///
+    /// Called after every input mutation and cursor movement.
+    fn refresh_mention_session(&mut self, cx: &mut Context<Self>) {
+        let (text, cursor) = {
+            let thread = self.thread.read(cx);
+            (thread.input.text().to_string(), thread.input.cursor())
+        };
+
+        let previous_index = self
+            .mention_session
+            .as_ref()
+            .map(|s| s.selected_index)
+            .unwrap_or(0);
+
+        self.mention_session = Self::find_active_mention(&text, cursor).and_then(
+            |(trigger_range, query)| {
+                let items = build_picker_items(ContextPickerTrigger::Mention, &query);
+                if items.is_empty() {
+                    return None;
+                }
+                let selected_index = previous_index.min(items.len().saturating_sub(1));
+                Some(AcpMentionSession {
+                    trigger_range,
+                    selected_index,
+                    items,
+                })
+            },
+        );
+        cx.notify();
+    }
+
+    /// Accept the currently selected mention picker row.
+    ///
+    /// Replaces the `@query` text inline with the accepted mention text
+    /// and attaches the corresponding `AiContextPart` to the thread.
+    fn accept_mention_selection(&mut self, cx: &mut Context<Self>) {
+        let session = match self.mention_session.take() {
+            Some(s) => s,
+            None => return,
+        };
+        let item = match session.items.get(session.selected_index).cloned() {
+            Some(i) => i,
+            None => return,
+        };
+
+        let (part, mention_text) = match &item.kind {
+            ContextPickerItemKind::BuiltIn(kind) => {
+                let spec = kind.spec();
+                let mention = spec.mention.unwrap_or("@context");
+                (kind.part(), mention.to_string())
+            }
+            ContextPickerItemKind::File(path) | ContextPickerItemKind::Folder(path) => {
+                let path_text = path.to_string_lossy().to_string();
+                (
+                    AiContextPart::FilePath {
+                        path: path_text.clone(),
+                        label: item.label.to_string(),
+                    },
+                    format!("@file:{path_text}"),
+                )
+            }
+        };
+
+        let current_text = self.thread.read(cx).input.text().to_string();
+        let replacement = format!("{mention_text} ");
+        let mut next_text = String::with_capacity(
+            current_text.len() - (session.trigger_range.end - session.trigger_range.start)
+                + replacement.len(),
+        );
+        next_text.push_str(&current_text[..session.trigger_range.start]);
+        next_text.push_str(&replacement);
+        next_text.push_str(&current_text[session.trigger_range.end..]);
+
+        self.thread.update(cx, |thread, cx| {
+            // Move cursor to end first so set_text clamps to the full
+            // new length (replacement is always >= original range).
+            thread.input.move_to_end(false);
+            thread.input.set_text(next_text);
+            thread.add_context_part(part, cx);
+        });
+        cx.notify();
+    }
+
+    /// Render the mention picker dropdown.
+    fn render_mention_picker(
+        &self,
+        session: &AcpMentionSession,
+        cx: &mut Context<Self>,
+    ) -> gpui::AnyElement {
+        let theme = theme::get_cached_theme();
+
+        div()
+            .id("acp-mention-picker")
+            .w_full()
+            .bg(rgba((theme.colors.background.search_box << 8) | 0x0A))
+            .border_t_1()
+            .border_color(rgba((theme.colors.ui.border << 8) | 0x18))
+            .py(px(2.0))
+            .children(
+                session
+                    .items
+                    .iter()
+                    .take(Self::MENTION_PICKER_MAX_VISIBLE)
+                    .enumerate()
+                    .map(|(idx, item)| {
+                        let is_selected = idx == session.selected_index;
+                        let mention_hint = match &item.kind {
+                            ContextPickerItemKind::BuiltIn(kind) => {
+                                kind.spec().mention.unwrap_or("@context").to_string()
+                            }
+                            ContextPickerItemKind::File(path)
+                            | ContextPickerItemKind::Folder(path) => {
+                                format!("@file:{}", path.display())
+                            }
+                        };
+                        div()
+                            .id(SharedString::from(format!("acp-mention-row-{idx}")))
+                            .w_full()
+                            .h(px(20.0))
+                            .px(px(10.0))
+                            .cursor_pointer()
+                            .when(is_selected, |d| {
+                                d.bg(rgba((theme.colors.accent.selected << 8) | 0x10))
+                                    .border_l_2()
+                                    .border_color(rgb(theme.colors.accent.selected))
+                            })
+                            .when(!is_selected, |d| {
+                                d.border_l_2().border_color(gpui::transparent_black())
+                            })
+                            .hover(|d| d.bg(rgba((theme.colors.text.primary << 8) | 0x06)))
+                            .on_click(cx.listener(move |this, _event, _window, cx| {
+                                if let Some(session) = this.mention_session.as_mut() {
+                                    session.selected_index = idx;
+                                }
+                                this.accept_mention_selection(cx);
+                            }))
+                            .child(
+                                div()
+                                    .h_full()
+                                    .flex()
+                                    .flex_row()
+                                    .items_center()
+                                    .justify_between()
+                                    .child(
+                                        div()
+                                            .text_sm()
+                                            .text_color(if is_selected {
+                                                rgb(theme.colors.text.primary)
+                                            } else {
+                                                rgba((theme.colors.text.primary << 8) | 0xD0)
+                                            })
+                                            .child(item.label.clone()),
+                                    )
+                                    .child(
+                                        div()
+                                            .text_xs()
+                                            .font_family(crate::list_item::FONT_MONO)
+                                            .text_color(rgba(
+                                                (theme.colors.text.muted << 8) | 0x88,
+                                            ))
+                                            .child(mention_hint),
+                                    ),
+                            )
+                    }),
+            )
+            .into_any_element()
+    }
+
     // ── Slash command menu ─────────────────────────────────────────
 
     /// Known Claude Code slash commands (used when the agent doesn't send
@@ -1786,6 +2008,42 @@ impl AcpChatView {
             }
         }
 
+        // ── @-mention picker intercept ───────────────────────────
+        if self.mention_session.is_some() {
+            if crate::ui_foundation::is_key_up(key) {
+                if let Some(session) = self.mention_session.as_mut() {
+                    session.selected_index = session.selected_index.saturating_sub(1);
+                }
+                cx.notify();
+                cx.stop_propagation();
+                return;
+            }
+            if crate::ui_foundation::is_key_down(key) {
+                if let Some(session) = self.mention_session.as_mut() {
+                    session.selected_index = (session.selected_index + 1)
+                        .min(session.items.len().saturating_sub(1));
+                }
+                cx.notify();
+                cx.stop_propagation();
+                return;
+            }
+            if crate::ui_foundation::is_key_enter(key)
+                || crate::ui_foundation::is_key_tab(key)
+            {
+                self.accept_mention_selection(cx);
+                cx.stop_propagation();
+                return;
+            }
+            if crate::ui_foundation::is_key_escape(key) {
+                self.mention_session = None;
+                cx.notify();
+                cx.stop_propagation();
+                return;
+            }
+            // Other keys fall through to normal input handling,
+            // which will update the query text and refresh the session.
+        }
+
         // ── Slash command menu intercept ─────────────────────────
         if self.slash_menu_index.is_some() {
             if crate::ui_foundation::is_key_up(key) {
@@ -1865,6 +2123,7 @@ impl AcpChatView {
         // Enter submits.
         if crate::ui_foundation::is_key_enter(key) && !modifiers.shift {
             self.slash_menu_index = None;
+            self.mention_session = None;
             let _ = self.thread.update(cx, |thread, cx| thread.submit_input(cx));
             cx.stop_propagation();
             return;
@@ -1890,6 +2149,7 @@ impl AcpChatView {
                 cx.notify();
             });
             self.update_slash_menu(cx);
+            self.refresh_mention_session(cx);
             cx.stop_propagation();
         } else {
             cx.propagate();
@@ -2090,6 +2350,15 @@ impl Render for AcpChatView {
                             .child(self.render_slash_menu(&filtered, idx, cx)),
                     )
                 }
+            })
+            // ── @-mention picker (below input) ──────────────────
+            .when_some(self.mention_session.clone(), |d, session| {
+                d.child(
+                    div()
+                        .w_full()
+                        .px(px(8.0))
+                        .child(self.render_mention_picker(&session, cx)),
+                )
             })
             // ── History picker (below input, replaces message list) ──
             .when_some(

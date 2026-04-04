@@ -246,6 +246,8 @@ impl AiApp {
             last_used_settings,
             // Context picker state
             context_picker: None,
+            context_picker_list_state: ListState::new(0, ListAlignment::Top, px(128.)),
+            context_picker_last_scrolled_index: None,
             // Attachments state
             pending_context_parts: Vec::new(),
             context_preview_index: None,

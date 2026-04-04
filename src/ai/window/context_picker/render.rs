@@ -43,10 +43,17 @@ impl AiApp {
         let fg = cx.theme().foreground;
         let muted_fg = cx.theme().muted_foreground;
 
-        let mut rows: Vec<gpui::AnyElement> = Vec::new();
+        // Snapshot items and selection for the list closure
+        let items = state.items.clone();
+        let selected_index = state.selected_index;
+        let entity = cx.entity().clone();
 
-        for (idx, item) in state.items.iter().enumerate() {
-            let is_selected = idx == state.selected_index;
+        let picker_list = list(self.context_picker_list_state.clone(), move |ix, _window, _cx| {
+            let item = match items.get(ix) {
+                Some(i) => i,
+                None => return div().into_any_element(),
+            };
+            let is_selected = ix == selected_index;
             let label: SharedString = item.label.clone();
             let meta: SharedString = item.meta.clone();
             let label_hits: HashSet<usize> =
@@ -54,73 +61,76 @@ impl AiApp {
             let meta_hits: HashSet<usize> =
                 item.meta_highlight_indices.iter().copied().collect();
 
-            rows.push(
-                div()
-                    .id(SharedString::from(format!("ctx-picker-{}", idx)))
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .px(px(3.))
-                    .py(px(3.))
-                    .cursor_pointer()
-                    .bg(if is_selected {
-                        fg.opacity(GHOST)
-                    } else {
-                        gpui::transparent_black()
-                    })
-                    .hover(|el| el.bg(fg.opacity(GHOST)))
-                    .on_click(cx.listener(move |this, _, window, cx| {
+            let entity_click = entity.clone();
+
+            div()
+                .id(SharedString::from(format!("ctx-picker-{}", ix)))
+                .flex()
+                .items_center()
+                .justify_between()
+                .px(px(3.))
+                .py(px(3.))
+                .cursor_pointer()
+                .bg(if is_selected {
+                    fg.opacity(GHOST)
+                } else {
+                    gpui::transparent_black()
+                })
+                .hover(|el| el.bg(fg.opacity(GHOST)))
+                .on_click(move |_, window, cx| {
+                    entity_click.update(cx, |this, cx| {
                         if let Some(picker) = this.context_picker.as_mut() {
-                            picker.selected_index = idx;
+                            picker.selected_index = ix;
                         }
                         this.accept_context_picker_selection(window, cx);
-                    }))
-                    // Left side: gold bar + highlighted label
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap(S2)
-                            .child(
-                                div()
-                                    .w(px(2.))
-                                    .h(px(12.))
-                                    .rounded(px(1.))
-                                    .bg(if is_selected {
-                                        GOLD
-                                    } else {
-                                        gpui::transparent_black()
-                                    }),
-                            )
-                            .child(render_highlighted_text(
-                                &label,
-                                &label_hits,
-                                if is_selected { fg } else { fg.opacity(MUTED_OP) },
-                                GOLD,
-                            )),
-                    )
-                    // Right side: /command in FONT_MONO at COMMAND_OPACITY
-                    .when(!meta.is_empty(), |d| {
-                        d.child(render_highlighted_meta(
-                            &meta,
-                            &meta_hits,
-                            muted_fg.opacity(COMMAND_OPACITY),
-                            GOLD.opacity(HINT),
-                        ))
-                    })
-                    .into_any_element(),
-            );
-        }
+                    });
+                })
+                // Left side: gold bar + highlighted label
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(S2)
+                        .child(
+                            div()
+                                .w(px(2.))
+                                .h(px(12.))
+                                .rounded(px(1.))
+                                .bg(if is_selected {
+                                    GOLD
+                                } else {
+                                    gpui::transparent_black()
+                                }),
+                        )
+                        .child(render_highlighted_text(
+                            &label,
+                            &label_hits,
+                            if is_selected { fg } else { fg.opacity(MUTED_OP) },
+                            GOLD,
+                        )),
+                )
+                // Right side: /command in FONT_MONO at COMMAND_OPACITY
+                .when(!meta.is_empty(), |d| {
+                    d.child(render_highlighted_meta(
+                        &meta,
+                        &meta_hits,
+                        muted_fg.opacity(COMMAND_OPACITY),
+                        GOLD.opacity(HINT),
+                    ))
+                })
+                .into_any_element()
+        })
+        .with_sizing_behavior(ListSizingBehavior::Infer)
+        .max_h(px(260.))
+        .min_h(px(0.));
 
         div()
             .id("context-picker-overlay")
             .w_full()
-            .max_h(px(260.))
-            .overflow_y_scroll()
             // Near-transparent — vibrancy shows through
             .bg(fg.opacity(0.02))
             .py(SP_1)
-            .children(rows)
+            .child(picker_list)
             .into_any_element()
     }
 

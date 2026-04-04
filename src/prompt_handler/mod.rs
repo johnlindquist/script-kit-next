@@ -1615,9 +1615,12 @@ impl ScriptListApp {
                 // Check if condition is already satisfied
                 if self.wait_condition_satisfied(&condition, cx) {
                     tracing::info!(
-                        category = "WAIT",
+                        category = "AUTOMATION",
                         request_id = %rid,
-                        "wait_for.immediate"
+                        success = true,
+                        elapsed_ms = 0_u64,
+                        error_code = "",
+                        "automation.wait_for.completed"
                     );
                     let response = Message::wait_for_result(
                         request_id.clone(),
@@ -1639,11 +1642,14 @@ impl ScriptListApp {
                         loop {
                             cx.background_executor().timer(poll_dur).await;
                             if start.elapsed() >= timeout_dur {
+                                let elapsed_ms = start.elapsed().as_millis() as u64;
                                 tracing::info!(
-                                    category = "WAIT",
+                                    category = "AUTOMATION",
                                     request_id = %rid,
-                                    elapsed_ms = start.elapsed().as_millis() as u64,
-                                    "wait_for.timeout"
+                                    success = false,
+                                    elapsed_ms = elapsed_ms,
+                                    error_code = "wait_condition_timeout",
+                                    "automation.wait_for.completed"
                                 );
                                 if let Some(ref s) = sender {
                                     let _ = s.try_send(Message::wait_for_result(
@@ -1663,11 +1669,14 @@ impl ScriptListApp {
                                 this.wait_condition_satisfied(&condition, cx)
                             }) {
                                 Ok(true) => {
+                                    let elapsed_ms = start.elapsed().as_millis() as u64;
                                     tracing::info!(
-                                        category = "WAIT",
+                                        category = "AUTOMATION",
                                         request_id = %rid,
-                                        elapsed_ms = start.elapsed().as_millis() as u64,
-                                        "wait_for.satisfied"
+                                        success = true,
+                                        elapsed_ms = elapsed_ms,
+                                        error_code = "",
+                                        "automation.wait_for.completed"
                                     );
                                     if let Some(ref s) = sender {
                                         let _ = s.try_send(Message::wait_for_result(
@@ -1682,9 +1691,12 @@ impl ScriptListApp {
                                 Ok(false) => continue,
                                 Err(_) => {
                                     tracing::info!(
-                                        category = "WAIT",
+                                        category = "AUTOMATION",
                                         request_id = %rid,
-                                        "wait_for.entity_dropped"
+                                        success = false,
+                                        elapsed_ms = start.elapsed().as_millis() as u64,
+                                        error_code = "action_failed",
+                                        "automation.wait_for.completed"
                                     );
                                     if let Some(ref s) = sender {
                                         let _ = s.try_send(Message::wait_for_result(
@@ -1937,6 +1949,55 @@ impl ScriptListApp {
                                     }
                                 }
                             }
+                            protocol::BatchCommand::ForceSubmit { value } => {
+                                let value = value.clone();
+                                match this.update(cx, |this, cx| {
+                                    let prompt_id = match &this.current_view {
+                                        AppView::ArgPrompt { id, .. } => Some(id.clone()),
+                                        AppView::DivPrompt { id, .. } => Some(id.clone()),
+                                        AppView::FormPrompt { id, .. } => Some(id.clone()),
+                                        AppView::TermPrompt { id, .. } => Some(id.clone()),
+                                        AppView::EditorPrompt { id, .. } => Some(id.clone()),
+                                        _ => None,
+                                    };
+                                    if let Some(id) = prompt_id {
+                                        let value_str = match &value {
+                                            serde_json::Value::String(s) => s.clone(),
+                                            serde_json::Value::Null => String::new(),
+                                            other => other.to_string(),
+                                        };
+                                        this.submit_prompt_response(id, Some(value_str.clone()), cx);
+                                        Ok(value_str)
+                                    } else {
+                                        Err(anyhow::anyhow!("No active prompt to submit to"))
+                                    }
+                                }) {
+                                    Ok(Ok(v)) => {
+                                        tracing::info!(category = "BATCH", request_id = %rid, index = index, command = "forceSubmit", "batch.step.ok");
+                                        results.push(protocol::BatchResultEntry {
+                                            index,
+                                            success: true,
+                                            command: "forceSubmit".to_string(),
+                                            elapsed: Some(cmd_start.elapsed().as_millis() as u64),
+                                            value: Some(v),
+                                            error: None,
+                                        });
+                                    }
+                                    Ok(Err(e)) | Err(e) => {
+                                        tracing::info!(category = "BATCH", request_id = %rid, index = index, command = "forceSubmit", error = %e, "batch.step.error");
+                                        results.push(protocol::BatchResultEntry {
+                                            index,
+                                            success: false,
+                                            command: "forceSubmit".to_string(),
+                                            elapsed: Some(cmd_start.elapsed().as_millis() as u64),
+                                            value: None,
+                                            error: Some(protocol::TransactionError::action_failed(format!("{e}"))),
+                                        });
+                                        failed = true;
+                                        if opts.stop_on_error { break; }
+                                    }
+                                }
+                            }
                             protocol::BatchCommand::WaitFor { condition, timeout, poll_interval } => {
                                 let wait_timeout = std::time::Duration::from_millis(timeout.unwrap_or(5_000));
                                 let wait_poll = std::time::Duration::from_millis(poll_interval.unwrap_or(25));
@@ -2031,11 +2092,12 @@ impl ScriptListApp {
                     };
 
                     tracing::info!(
-                        category = "BATCH",
+                        category = "AUTOMATION",
                         request_id = %rid,
                         success = !failed,
-                        total_elapsed = total_elapsed,
-                        "batch.complete"
+                        total_elapsed_ms = total_elapsed,
+                        failed_at = ?failed_at,
+                        "automation.batch.completed"
                     );
 
                     if let Some(ref s) = sender {
@@ -2052,12 +2114,6 @@ impl ScriptListApp {
             }
 
             PromptMessage::ForceSubmit { value } => {
-                tracing::info!(
-                    category = "UI",
-                    value = ?value,
-                    "ForceSubmit received"
-                );
-
                 // Get the current prompt ID and submit the value
                 let prompt_id = match &self.current_view {
                     AppView::ArgPrompt { id, .. } => Some(id.clone()),
@@ -2077,12 +2133,6 @@ impl ScriptListApp {
                         other => other.to_string(),
                     };
 
-                    tracing::info!(
-                        category = "UI",
-                        value = %value_str,
-                        prompt_id = %id,
-                        "ForceSubmit submitting value"
-                    );
                     self.submit_prompt_response(id, Some(value_str), cx);
                 } else {
                     tracing::warn!(
@@ -3310,6 +3360,7 @@ impl ScriptListApp {
 fn batch_command_name(cmd: &protocol::BatchCommand) -> String {
     match cmd {
         protocol::BatchCommand::SetInput { .. } => "setInput".to_string(),
+        protocol::BatchCommand::ForceSubmit { .. } => "forceSubmit".to_string(),
         protocol::BatchCommand::WaitFor { .. } => "waitFor".to_string(),
         protocol::BatchCommand::SelectByValue { .. } => "selectByValue".to_string(),
         protocol::BatchCommand::SelectBySemanticId { .. } => "selectBySemanticId".to_string(),

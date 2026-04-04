@@ -149,6 +149,7 @@ fn build_wait_suggestion(condition: &WaitCondition, snapshot: &UiStateSnapshot) 
 fn command_name(command: &BatchCommand) -> &'static str {
     match command {
         BatchCommand::SetInput { .. } => "setInput",
+        BatchCommand::ForceSubmit { .. } => "forceSubmit",
         BatchCommand::WaitFor { .. } => "waitFor",
         BatchCommand::SelectByValue { .. } => "selectByValue",
         BatchCommand::SelectBySemanticId { .. } => "selectBySemanticId",
@@ -572,7 +573,9 @@ pub fn execute_batch<P: TransactionStateProvider>(
                 }
             }
 
-            BatchCommand::FilterAndSelect { .. } | BatchCommand::TypeAndSubmit { .. } => {
+            BatchCommand::ForceSubmit { .. }
+            | BatchCommand::FilterAndSelect { .. }
+            | BatchCommand::TypeAndSubmit { .. } => {
                 // These compound commands are not yet wired to the executor.
                 // Record as unsupported so the caller gets a clear signal.
                 let error = TransactionError {
