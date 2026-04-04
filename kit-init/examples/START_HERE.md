@@ -151,7 +151,7 @@ description: Save a quick note
 import "@scriptkit/sdk";
 
 const note = await arg("Note");
-await Bun.write(`${env.HOME}/quick-note.txt`, note);
+await Bun.write(home("quick-note.txt"), note);
 await notify("Saved");
 ```
 ~~~
@@ -179,6 +179,7 @@ Return:
 - Pick the smallest artifact that fits.
 - Save only under `~/.scriptkit/kit/main/`.
 - For scripts, start with `import "@scriptkit/sdk";`.
+- Prefer `home(...)` for user-relative paths instead of `env.HOME`.
 - For extension bundles / scriptlet bundles, prefer `metadata` code fences.
 - For `tool:<name>` scriptlets, the first line must be `import "@scriptkit/sdk";`.
 - For agents, use underscore-prefixed `_sk_*` metadata keys.

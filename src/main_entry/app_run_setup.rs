@@ -275,6 +275,16 @@ app.run(move |cx: &mut App| {
         #[cfg(target_os = "macos")]
         frontmost_app_tracker::start_tracking();
 
+        // Install the snap drag monitor — detects external window drags and
+        // drives the desktop snap overlay lifecycle (start on drag, finish on release).
+        if let Err(e) = window_control::install_snap_drag_monitor(cx) {
+            tracing::warn!(
+                target: "script_kit::snap_monitor",
+                %e,
+                "failed to install snap drag monitor"
+            );
+        }
+
         // Register bundled JetBrains Mono font
         // This makes "JetBrains Mono" available as a font family for the editor
         register_bundled_fonts(cx);
