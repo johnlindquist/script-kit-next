@@ -20,8 +20,8 @@ fn tab_ai_mode_uses_catalog_loader_not_claude_only_loader() {
         "tab_ai_mode must use the multi-agent catalog loader"
     );
     assert!(
-        TAB_AI_MODE_SOURCE.contains("resolve_default_acp_launch"),
-        "tab_ai_mode must use preflight resolution"
+        TAB_AI_MODE_SOURCE.contains("resolve_acp_launch_with_requirements"),
+        "tab_ai_mode must use capability-aware preflight resolution"
     );
 }
 
@@ -309,6 +309,78 @@ fn runtime_setup_state_only_suggests_capable_alternatives() {
     assert!(
         SETUP_STATE_SOURCE.contains("has_launchable_capable_alternative"),
         "runtime setup must only suggest switching to alternatives that satisfy launch requirements"
+    );
+}
+
+// ── from_resolution is fully capability-aware ──────────────────────
+
+#[test]
+fn from_resolution_uses_can_switch_capable_for_install_branch() {
+    assert!(
+        SETUP_STATE_SOURCE.contains("AgentNotInstalled) if can_switch_capable"),
+        "AgentNotInstalled must gate on can_switch_capable, not can_switch"
+    );
+}
+
+#[test]
+fn from_resolution_uses_can_switch_capable_for_auth_branch() {
+    assert!(
+        SETUP_STATE_SOURCE.contains("AuthenticationRequired) if can_switch_capable"),
+        "AuthenticationRequired must gate on can_switch_capable, not can_switch"
+    );
+}
+
+#[test]
+fn from_resolution_uses_can_switch_capable_for_misconfig_branch() {
+    assert!(
+        SETUP_STATE_SOURCE.contains("AgentMisconfigured) if can_switch_capable"),
+        "AgentMisconfigured must gate on can_switch_capable, not can_switch"
+    );
+}
+
+#[test]
+fn from_resolution_emits_structured_log() {
+    assert!(
+        SETUP_STATE_SOURCE.contains("acp_setup_state_from_resolution"),
+        "from_resolution must emit acp_setup_state_from_resolution log event"
+    );
+    assert!(
+        SETUP_STATE_SOURCE.contains("can_switch_capable"),
+        "from_resolution log must include can_switch_capable field"
+    );
+}
+
+#[test]
+fn from_resolution_has_capability_gap_message_helper() {
+    assert!(
+        SETUP_STATE_SOURCE.contains("fn capability_gap_message"),
+        "setup_state must have capability_gap_message helper"
+    );
+}
+
+// ── Picker surfaces auth + capability labels ──────────────────────
+
+#[test]
+fn picker_row_includes_auth_label() {
+    assert!(
+        ACP_VIEW_SOURCE.contains("setup_agent_auth_label"),
+        "picker must render auth state labels"
+    );
+}
+
+#[test]
+fn picker_row_includes_capability_label() {
+    assert!(
+        ACP_VIEW_SOURCE.contains("setup_agent_capability_label"),
+        "picker must render capability compatibility labels"
+    );
+}
+
+#[test]
+fn picker_log_includes_compatible_count() {
+    assert!(
+        ACP_VIEW_SOURCE.contains("compatible_count"),
+        "picker opened log must include compatible_count"
     );
 }
 

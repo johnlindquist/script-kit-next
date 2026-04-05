@@ -1151,20 +1151,43 @@ impl ScriptListApp {
             );
 
         // List pane: loading/empty/results with scrollbar overlay
+        let loading_badge = div()
+            .absolute()
+            .top(px(12.))
+            .right(px(12.))
+            .px(px(10.))
+            .py(px(6.))
+            .rounded(px(999.))
+            .bg(rgba(crate::ui_foundation::hex_to_rgba_with_opacity(
+                ui_border,
+                crate::theme::opacity::OPACITY_SUBTLE,
+            )))
+            .text_xs()
+            .text_color(rgb(text_dimmed))
+            .child("Searching\u{2026}");
+
         let list_pane = if is_loading && filtered_len == 0 {
+            tracing::info!(
+                target: "script_kit::prompt_chrome",
+                surface = "file_search",
+                state = "loading_skeleton",
+                filtered_len,
+                "file_search_state_rendered"
+            );
             div()
+                .relative()
                 .w_full()
                 .h_full()
-                .flex()
-                .items_center()
-                .justify_center()
-                .child(
-                    div()
-                        .text_sm()
-                        .text_color(rgb(text_dimmed))
-                        .child("Searching..."),
-                )
+                .child(list_element)
+                .child(loading_badge)
         } else if filtered_len == 0 {
+            tracing::info!(
+                target: "script_kit::prompt_chrome",
+                surface = "file_search",
+                state = if query.is_empty() { "empty_idle" } else { "empty_no_results" },
+                filtered_len,
+                "file_search_state_rendered"
+            );
             div()
                 .w_full()
                 .h_full()
@@ -1191,6 +1214,13 @@ impl ScriptListApp {
                         ),
                 )
         } else {
+            tracing::info!(
+                target: "script_kit::prompt_chrome",
+                surface = "file_search",
+                state = "results",
+                filtered_len,
+                "file_search_state_rendered"
+            );
             div()
                 .relative()
                 .w_full()

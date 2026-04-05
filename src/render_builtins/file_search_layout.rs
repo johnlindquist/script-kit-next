@@ -36,7 +36,54 @@
             );
 
         // List pane: loading/empty/results with scrollbar overlay
+        let loading_badge = div()
+            .absolute()
+            .top(px(12.))
+            .right(px(12.))
+            .px(px(10.))
+            .py(px(6.))
+            .rounded(px(999.))
+            .bg(rgba(crate::ui_foundation::hex_to_rgba_with_opacity(
+                ui_border,
+                crate::theme::opacity::OPACITY_SUBTLE,
+            )))
+            .text_xs()
+            .text_color(rgb(text_dimmed))
+            .child("Searching\u{2026}");
+
+        let empty_title = if query.is_empty() {
+            "Start typing to search files"
+        } else {
+            "No files found"
+        };
+        let empty_body = if query.is_empty() {
+            "Search names and paths as you type."
+        } else {
+            "Try a broader name, path, or extension."
+        };
+
         let list_pane = if is_loading && filtered_len == 0 {
+            tracing::info!(
+                target: "script_kit::prompt_chrome",
+                surface = "file_search",
+                state = "loading_skeleton",
+                filtered_len,
+                "file_search_state_rendered"
+            );
+            div()
+                .relative()
+                .w_full()
+                .h_full()
+                .child(list_element)
+                .child(loading_badge)
+        } else if filtered_len == 0 {
+            tracing::info!(
+                target: "script_kit::prompt_chrome",
+                surface = "file_search",
+                state = if query.is_empty() { "empty_idle" } else { "empty_no_results" },
+                filtered_len,
+                "file_search_state_rendered"
+            );
             div()
                 .w_full()
                 .h_full()
@@ -45,29 +92,31 @@
                 .justify_center()
                 .child(
                     div()
-                        .text_sm()
-                        .text_color(rgb(text_dimmed))
-                        .child("Searching..."),
-                )
-        } else if filtered_len == 0 {
-            div()
-                .w_full()
-                .h_full()
-                .flex()
-                .items_center()
-                .justify_center()
-                .child(
-                    div().flex().flex_col().items_center().gap(px(8.)).child(
-                        div()
-                            .text_color(rgb(text_dimmed))
-                            .child(if query.is_empty() {
-                                "Type to search files"
-                            } else {
-                                "No files found"
-                            }),
-                    ),
+                        .flex()
+                        .flex_col()
+                        .items_center()
+                        .gap(px(8.))
+                        .child(
+                            div()
+                                .text_sm()
+                                .text_color(rgb(text_dimmed))
+                                .child(empty_title),
+                        )
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(rgb(text_dimmed))
+                                .child(empty_body),
+                        ),
                 )
         } else {
+            tracing::info!(
+                target: "script_kit::prompt_chrome",
+                surface = "file_search",
+                state = "results",
+                filtered_len,
+                "file_search_state_rendered"
+            );
             div()
                 .relative()
                 .w_full()

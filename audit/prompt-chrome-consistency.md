@@ -1,7 +1,7 @@
 # Prompt Chrome Consistency Audit
 
 ## Summary
-Scanned 7 prompt/builtin surfaces. 7 pass, 0 warning, 0 error. The only non-standard footer remains the documented terminal exception, and it is explicitly declared rather than drifting silently.
+Scanned 7 prompt/builtin surfaces. 7 pass, 0 warning, 0 error. No current drift markers were detected.
 
 ## Surface Status
 | Surface | Status | Files |
@@ -28,21 +28,15 @@ Scanned 7 prompt/builtin surfaces. 7 pass, 0 warning, 0 error. The only non-stan
 - pass — no drift markers detected in the audited source files.
 
 ### render_prompts::term
-- info — contextual footer exception remains explicit.
-  - Term intentionally owns a contextual footer. Keep it documented as an exception instead of forcing the universal footer onto the terminal surface.
+- info — **contextual footer exception**
+  - Term intentionally owns a contextual footer. Keep it documented as an exception in the report instead of forcing universal hints onto the terminal surface.
   - Evidence: `src/render_prompts/term.rs`
 
 ### clipboard_history
-- pass — layout now routes through the shared expanded-view scaffold instead of hand-building split chrome.
-- pass — footer hints emit `emit_prompt_hint_audit("clipboard_history", ...)` and resolve to the canonical three-key contract.
-- info — list-pane vertical padding remains content-local inside the scaffold, not as outer layout chrome.
-- Evidence: `src/render_builtins/clipboard.rs`, `src/render_builtins/clipboard_history_layout.rs`
+- pass — no drift markers detected in the audited source files.
 
 ### file_search
-- pass — expanded presentation still routes through `render_expanded_view_scaffold(...)`.
-- pass — mini presentation now emits `emit_prompt_hint_audit("file_search", ...)` and uses the canonical `↵ Run`, `⌘K Actions`, `Tab AI` footer.
-- info — runtime `file_search_chrome_checkpoint` continues to expose `layout_mode=mini|expanded` for inspection without changing footer semantics.
-- Evidence: `src/render_builtins/file_search.rs`, `src/render_builtins/file_search_layout.rs`
+- pass — no drift markers detected in the audited source files.
 
 ## Verification
 
@@ -64,3 +58,4 @@ Expected runtime log output:
 - `prompt_hint_audit` with `surface=clipboard_history hint_count=3 is_universal=true`
 - `file_search_chrome_checkpoint`
 - `prompt_hint_audit` with `surface=file_search hint_count=3 is_universal=true` (when mini mode is exercised)
+- `file_search_state_rendered` with `state=loading_skeleton`, `state=results`, or `state=empty_no_results`

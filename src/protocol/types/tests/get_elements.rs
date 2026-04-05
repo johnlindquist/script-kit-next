@@ -11,7 +11,7 @@ fn test_get_elements_request_parses_without_limit() {
         serde_json::from_str(json).expect("Should parse getElements");
 
     match msg {
-        crate::protocol::Message::GetElements { request_id, limit } => {
+        crate::protocol::Message::GetElements { request_id, limit, .. } => {
             assert_eq!(request_id, "elm-1");
             assert_eq!(limit, None);
         }
@@ -26,7 +26,7 @@ fn test_get_elements_request_parses_with_limit() {
         serde_json::from_str(json).expect("Should parse getElements with limit");
 
     match msg {
-        crate::protocol::Message::GetElements { request_id, limit } => {
+        crate::protocol::Message::GetElements { request_id, limit, .. } => {
             assert_eq!(request_id, "elm-2");
             assert_eq!(limit, Some(5));
         }

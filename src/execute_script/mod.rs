@@ -1462,7 +1462,7 @@ impl ScriptListApp {
                                     }
 
                                     // Handle GetState - needs UI state, forward to UI thread
-                                    if let Message::GetState { request_id } = &msg {
+                                    if let Message::GetState { request_id, .. } = &msg {
                                         tracing::info!(
                                             category = "EXEC",
                                             request_id = %request_id,
@@ -1482,7 +1482,7 @@ impl ScriptListApp {
                                     }
 
                                     // Handle GetElements - needs UI state, forward to UI thread
-                                    if let Message::GetElements { request_id, limit } = &msg {
+                                    if let Message::GetElements { request_id, limit, .. } = &msg {
                                         tracing::info!(
                                             category = "EXEC",
                                             request_id = %request_id,
@@ -1504,7 +1504,7 @@ impl ScriptListApp {
                                     }
 
                                     // Handle GetAcpState - needs ACP view state, forward to UI thread
-                                    if let Message::GetAcpState { request_id } = &msg {
+                                    if let Message::GetAcpState { request_id, .. } = &msg {
                                         tracing::info!(
                                             category = "EXEC",
                                             request_id = %request_id,
@@ -1544,7 +1544,7 @@ impl ScriptListApp {
                                     }
 
                                     // Handle GetAcpTestProbe - forward to UI thread
-                                    if let Message::GetAcpTestProbe { request_id, tail } = &msg {
+                                    if let Message::GetAcpTestProbe { request_id, tail, .. } = &msg {
                                         tracing::info!(
                                             category = "EXEC",
                                             request_id = %request_id,
@@ -1591,6 +1591,7 @@ impl ScriptListApp {
                                         timeout,
                                         poll_interval,
                                         trace,
+                                        ..
                                     } = &msg
                                     {
                                         tracing::info!(
@@ -1622,6 +1623,7 @@ impl ScriptListApp {
                                         commands,
                                         options,
                                         trace,
+                                        ..
                                     } = &msg
                                     {
                                         tracing::info!(
@@ -1648,7 +1650,11 @@ impl ScriptListApp {
                                     }
 
                                     // Handle CaptureScreenshot directly (no UI needed)
-                                    if let Message::CaptureScreenshot { request_id, hi_dpi } = &msg
+                                    if let Message::CaptureScreenshot {
+                                        request_id,
+                                        hi_dpi,
+                                        ..
+                                    } = &msg
                                     {
                                         let hi_dpi_mode = hi_dpi.unwrap_or(false);
                                         tracing::info!(request_id = %request_id, hi_dpi = hi_dpi_mode, "Capturing screenshot");

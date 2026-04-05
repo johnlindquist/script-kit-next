@@ -11,6 +11,8 @@
 
 pub(crate) mod acp_state;
 mod ai;
+pub mod automation_surface;
+pub mod automation_window;
 pub(crate) mod batch_wait;
 mod chat;
 mod elements_actions_scriptlets;
@@ -18,6 +20,7 @@ mod grid_layout;
 mod input;
 mod menu_bar;
 mod primitives;
+pub mod simulated_gpui_event;
 mod system;
 
 pub use acp_state::{
@@ -27,6 +30,11 @@ pub use acp_state::{
     ACP_TEST_PROBE_SCHEMA_VERSION,
 };
 pub use ai::{AiChatInfo, AiContextPartInput, AiMessageInfo};
+pub use automation_surface::{AutomationSurfaceSnapshot, AUTOMATION_SURFACE_SCHEMA_VERSION};
+pub use automation_window::{
+    AutomationWindowBounds, AutomationWindowInfo, AutomationWindowKind, AutomationWindowTarget,
+    AUTOMATION_WINDOW_SCHEMA_VERSION,
+};
 pub use batch_wait::{
     BatchCommand, BatchOptions, BatchResultEntry, StateMatchSpec, TransactionCommandTrace,
     TransactionError, TransactionErrorCode, TransactionTrace, TransactionTraceMode,
@@ -48,6 +56,7 @@ pub use primitives::{
     Choice, ClipboardAction, ClipboardEntryType, ClipboardFormat, ClipboardHistoryAction, Field,
     KeyboardAction, MouseAction, SubmitValue, TilePosition, WindowActionType,
 };
+pub use simulated_gpui_event::SimulatedGpuiEvent;
 pub use system::{
     ClipboardHistoryEntryData, DisplayInfo, FileSearchResultEntry, SystemWindowInfo,
     TargetWindowBounds,

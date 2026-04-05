@@ -431,7 +431,7 @@ fn get_acp_state_request_parses() {
     let msg: crate::protocol::Message = serde_json::from_str(json).expect("parse getAcpState");
 
     match msg {
-        crate::protocol::Message::GetAcpState { request_id } => {
+        crate::protocol::Message::GetAcpState { request_id, .. } => {
             assert_eq!(request_id, "acp-state-1");
         }
         other => panic!("Expected GetAcpState, got: {:?}", other),
@@ -617,9 +617,7 @@ fn wait_for_request_parses_trace_on_failure() {
 
     match msg {
         crate::protocol::Message::WaitFor {
-            request_id,
-            trace,
-            ..
+            request_id, trace, ..
         } => {
             assert_eq!(request_id, "wf-trace");
             assert_eq!(trace, crate::protocol::TransactionTraceMode::OnFailure);
@@ -747,9 +745,7 @@ fn batch_request_parses_trace_on_failure() {
 
     match msg {
         crate::protocol::Message::Batch {
-            request_id,
-            trace,
-            ..
+            request_id, trace, ..
         } => {
             assert_eq!(request_id, "b-trace");
             assert_eq!(trace, crate::protocol::TransactionTraceMode::OnFailure);
@@ -831,7 +827,7 @@ fn get_acp_test_probe_request_parses() {
         serde_json::from_value(json).expect("parse getAcpTestProbe");
 
     match msg {
-        crate::protocol::Message::GetAcpTestProbe { request_id, tail } => {
+        crate::protocol::Message::GetAcpTestProbe { request_id, tail, .. } => {
             assert_eq!(request_id, "probe-get-1");
             assert_eq!(tail, Some(20));
         }
@@ -846,7 +842,7 @@ fn get_acp_test_probe_request_parses_without_tail() {
         serde_json::from_str(json).expect("parse getAcpTestProbe without tail");
 
     match msg {
-        crate::protocol::Message::GetAcpTestProbe { request_id, tail } => {
+        crate::protocol::Message::GetAcpTestProbe { request_id, tail, .. } => {
             assert_eq!(request_id, "probe-get-2");
             assert_eq!(tail, None);
         }

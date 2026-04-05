@@ -1145,6 +1145,14 @@ impl AcpThread {
                     needs_embedded_context = current_requirements.needs_embedded_context,
                     needs_image = current_requirements.needs_image,
                 );
+                tracing::info!(
+                    target: "script_kit::tab_ai",
+                    event = "acp_runtime_setup_requirements_preserved",
+                    original_needs_embedded_context = self.launch_requirements.needs_embedded_context,
+                    original_needs_image = self.launch_requirements.needs_image,
+                    current_needs_embedded_context = current_requirements.needs_embedded_context,
+                    current_needs_image = current_requirements.needs_image,
+                );
                 self.setup_state = Some(
                     super::setup_state::AcpInlineSetupState::from_runtime_setup_required(
                         self.selected_agent.clone(),
@@ -1388,9 +1396,7 @@ impl AcpThread {
     /// Unions the original `launch_requirements` with the current pending
     /// context parts and blocks so that later-added `@screenshot` or context
     /// chips are reflected when the thread re-enters `SetupRequired`.
-    pub(crate) fn current_setup_requirements(
-        &self,
-    ) -> super::preflight::AcpLaunchRequirements {
+    pub(crate) fn current_setup_requirements(&self) -> super::preflight::AcpLaunchRequirements {
         let needs_embedded_context = self.launch_requirements.needs_embedded_context
             || !self.pending_context_parts.is_empty()
             || !self.pending_context_blocks.is_empty();
@@ -2696,31 +2702,33 @@ mod tests {
     #[test]
     fn current_setup_requirements_reflects_pending_parts() {
         let mut thread = test_thread(Vec::new(), false);
-        thread.add_context_part_test(
-            crate::ai::message_parts::AiContextPart::ResourceUri {
-                uri: "kit://context?profile=minimal".to_string(),
-                label: "Current Context".to_string(),
-            },
-        );
+        thread.add_context_part_test(crate::ai::message_parts::AiContextPart::ResourceUri {
+            uri: "kit://context?profile=minimal".to_string(),
+            label: "Current Context".to_string(),
+        });
         let reqs = thread.current_setup_requirements();
         assert!(
             reqs.needs_embedded_context,
             "pending_context_parts should set needs_embedded_context"
         );
-        assert!(!reqs.needs_image, "non-screenshot part should not set needs_image");
+        assert!(
+            !reqs.needs_image,
+            "non-screenshot part should not set needs_image"
+        );
     }
 
     #[test]
     fn current_setup_requirements_detects_screenshot_part() {
         let mut thread = test_thread(Vec::new(), false);
-        thread.add_context_part_test(
-            crate::ai::message_parts::AiContextPart::ResourceUri {
-                uri: "kit://context?screenshot=1".to_string(),
-                label: "Screenshot".to_string(),
-            },
-        );
+        thread.add_context_part_test(crate::ai::message_parts::AiContextPart::ResourceUri {
+            uri: "kit://context?screenshot=1".to_string(),
+            label: "Screenshot".to_string(),
+        });
         let reqs = thread.current_setup_requirements();
-        assert!(reqs.needs_embedded_context, "screenshot part implies embedded context");
+        assert!(
+            reqs.needs_embedded_context,
+            "screenshot part implies embedded context"
+        );
         assert!(reqs.needs_image, "screenshot part should set needs_image");
     }
 
@@ -2733,16 +2741,17 @@ mod tests {
         };
         // No pending parts/blocks — should still reflect launch_requirements.
         let reqs = thread.current_setup_requirements();
-        assert!(reqs.needs_embedded_context, "should preserve launch needs_embedded_context");
+        assert!(
+            reqs.needs_embedded_context,
+            "should preserve launch needs_embedded_context"
+        );
         assert!(!reqs.needs_image, "no screenshot added → false");
 
         // Now add screenshot part — should union to true.
-        thread.add_context_part_test(
-            crate::ai::message_parts::AiContextPart::ResourceUri {
-                uri: "kit://context?screenshot=1".to_string(),
-                label: "Screenshot".to_string(),
-            },
-        );
+        thread.add_context_part_test(crate::ai::message_parts::AiContextPart::ResourceUri {
+            uri: "kit://context?screenshot=1".to_string(),
+            label: "Screenshot".to_string(),
+        });
         let reqs = thread.current_setup_requirements();
         assert!(reqs.needs_embedded_context, "still true from launch");
         assert!(reqs.needs_image, "screenshot part added after open → true");
