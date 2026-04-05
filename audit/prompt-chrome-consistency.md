@@ -1,12 +1,12 @@
 # Prompt Chrome Consistency Audit
 
 ## Summary
-Scanned 8 prompt/builtin surfaces. 8 pass, 0 warning, 0 error. 2 intentional exceptions documented: render_prompts::term, file_search.
+Scanned 8 prompt/builtin surfaces. 7 pass, 1 warning, 0 error. Highest-leverage current drifts: file_search.
 
 ## Scope Notes
 - Scope: prompt and builtin chrome surfaces only. Excluded this pass: ACP compact-chat popup surfaces (for example src/ai/acp/model_selector_popup.rs).
 - Verification precondition: keep only one visible target window per GPUI window kind when using `simulateGpuiEvent`; ambiguous same-kind routing now fails closed.
-- Intentional exceptions: render_prompts::term, file_search.
+- Intentional exception: render_prompts::term.
 
 ## Surface Status
 | Surface | Status | Files |
@@ -18,7 +18,7 @@ Scanned 8 prompt/builtin surfaces. 8 pass, 0 warning, 0 error. 2 intentional exc
 | render_prompts::term | pass | `src/render_prompts/term.rs` |
 | prompts::path | pass | `src/prompts/path/render.rs` |
 | clipboard_history | pass | `src/render_builtins/clipboard.rs`, `src/render_builtins/clipboard_history_layout.rs` |
-| file_search | pass | `src/render_builtins/file_search.rs`, `src/render_builtins/file_search_layout.rs` |
+| file_search | warning | `src/render_builtins/file_search.rs` |
 
 ## Findings
 ### render_prompts::select
@@ -45,6 +45,9 @@ Scanned 8 prompt/builtin surfaces. 8 pass, 0 warning, 0 error. 2 intentional exc
 - pass — no drift markers detected in the audited source files.
 
 ### file_search
+- warning — **duplicate file_search layout source**
+  - file_search chrome markers still exist in `src/render_builtins/file_search_layout.rs` even though the live surface is audited from `src/render_builtins/file_search.rs`. Keep one source of truth or the report can pass on stale code.
+  - Evidence: `src/render_builtins/file_search.rs`, `src/render_builtins/file_search_layout.rs`
 - info — **contextual primary label follows three-key pattern**
   - File Search uses `↵ Open` / `↵ Browse` as the primary action label instead of `↵ Run`, paired with canonical `⌘K Actions` and `Tab AI`. This is an accepted contextual variant of the three-key footer pattern.
-  - Evidence: `src/render_builtins/file_search.rs`, `src/render_builtins/file_search_layout.rs`
+  - Evidence: `src/render_builtins/file_search.rs`
