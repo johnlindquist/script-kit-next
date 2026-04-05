@@ -2154,6 +2154,24 @@ Enumerate all automation-addressable windows.
 {"type": "captureScreenshot", "requestId": "shot-acp", "target": {"type": "kind", "kind": "acpDetached", "index": 0}, "hiDpi": true}
 ```
 
+**Determinism rule:** when two OS-window candidates match a resolved automation target equally well, `captureScreenshot` fails closed with `screenshotResult.error` instead of guessing. Target bounds from `AutomationWindowInfo.bounds` are the strongest scoring signal when available — exact size match dominates title and focus heuristics.
+
+**Successful capture log** (`automation.capture_screenshot.candidate_selected`):
+- `window_id`, `kind`, `requested_title`, `requested_bounds`
+- `candidate_count`, `selected_title`, `selected_width`, `selected_height`, `selected_score`
+
+**Ambiguous capture log** (`automation.capture_screenshot.ambiguous_candidate`):
+- `window_id`, `kind`, `first_title`, `first_size`, `second_title`, `second_size`, `score`
+
+**Sample ambiguous error:**
+```json
+{
+  "type": "screenshotResult",
+  "requestId": "shot-acp",
+  "error": "Ambiguous OS window match for automation target acpDetached:thread-1 (AcpDetached); 'Script Kit AI' and 'Script Kit AI' tied at score 5600"
+}
+```
+
 ### ACP targetability contract
 
 `getAcpState` and `getAcpTestProbe` accept an optional `target` field but currently execute only against the main window's ACP view. Non-main targets fail closed with a structured result containing the `target_unsupported_non_main` warning — they do **not** silently fall back to the main window.
@@ -2257,7 +2275,7 @@ High-fidelity event simulation through GPUI's real event pipeline (unlike legacy
 |---------|-------|
 | `getState` | UI state for targeted window |
 | `getElements` | Semantic elements for targeted window (main-only, non-main fails closed) |
-| `captureScreenshot` | Screenshot of targeted window |
+| `captureScreenshot` | Screenshot of targeted window (uses bounds for scoring; fails closed on ambiguous tie) |
 | `getAcpState` | ACP state (main-only, non-main returns default + `target_unsupported_non_main` warning) |
 | `getAcpTestProbe` | Test probe (main-only, non-main returns default + `target_unsupported_non_main` warning) |
 | `resetAcpTestProbe` | **Global-only** — no `target` field, always resets main window probe |

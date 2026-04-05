@@ -53,6 +53,8 @@ struct Candidate {
     title: String,
     app_name: String,
     focused: bool,
+    width: i32,
+    height: i32,
 }
 
 /// Enumerate all visible Script Kit OS windows that are large enough to be
@@ -81,26 +83,55 @@ fn list_script_kit_candidates() -> Result<Vec<Candidate>, Box<dyn std::error::Er
                 title,
                 app_name,
                 focused,
+                width: width as i32,
+                height: height as i32,
             });
         }
     }
     Ok(candidates)
 }
 
+/// Score how well a candidate's dimensions match the resolved target's bounds.
+///
+/// Returns a bonus/penalty based on dimension proximity. Exact match gets the
+/// highest bonus; large deviations get a penalty to push mismatched windows
+/// below better candidates.
+fn candidate_size_score(
+    resolved: &crate::protocol::AutomationWindowInfo,
+    candidate: &Candidate,
+) -> i32 {
+    let Some(bounds) = resolved.bounds.as_ref() else {
+        return 0;
+    };
+
+    let target_w = bounds.width.round() as i32;
+    let target_h = bounds.height.round() as i32;
+
+    let dw = (candidate.width - target_w).abs();
+    let dh = (candidate.height - target_h).abs();
+
+    match (dw, dh) {
+        (0, 0) => 5_000,
+        (dw, dh) if dw <= 4 && dh <= 4 => 2_500,
+        (dw, dh) if dw <= 16 && dh <= 16 => 500,
+        _ => -1_500,
+    }
+}
+
 /// Score an OS window candidate against a resolved automation target.
 ///
-/// Higher scores mean a better match. The scoring deliberately avoids the
-/// historical heuristic that preferred Notes/AI windows over the actual
-/// main window — instead, the resolved target's metadata drives selection.
+/// Higher scores mean a better match. Uses bounds as a first-class signal
+/// when available, plus title and focus agreement. The resolved target's
+/// metadata drives selection.
 fn score_candidate(
     resolved: &crate::protocol::AutomationWindowInfo,
     candidate: &Candidate,
 ) -> i32 {
     use crate::protocol::AutomationWindowKind;
 
-    let mut score: i32 = 0;
+    let mut score: i32 = candidate_size_score(resolved, candidate);
 
-    // Exact title match is the strongest signal
+    // Exact title match is a strong signal
     if let Some(title) = resolved.title.as_deref() {
         if !title.is_empty() && candidate.title == title {
             score += 1_000;
@@ -127,36 +158,82 @@ fn score_candidate(
 
 /// Capture the OS window that best matches the resolved automation target.
 ///
-/// Returns a hard error when no OS window matches.  Emits
-/// `automation.capture_screenshot.candidate_selected` on every successful
-/// capture so agents can audit which OS window was actually captured.
+/// Returns a hard error when no OS window matches or when the top two
+/// candidates tie (ambiguous match). Emits structured logs on every
+/// successful capture and on ambiguous rejection so agents can audit
+/// which OS window was actually captured.
 fn capture_resolved_window(
     resolved: &crate::protocol::AutomationWindowInfo,
     hi_dpi: bool,
 ) -> Result<(Vec<u8>, u32, u32), Box<dyn std::error::Error + Send + Sync>> {
     let candidates = list_script_kit_candidates()?;
 
-    let best = candidates
+    let mut ranked: Vec<(i32, &Candidate)> = candidates
         .iter()
-        .max_by_key(|c| score_candidate(resolved, c))
-        .filter(|c| score_candidate(resolved, c) > -200);
+        .map(|candidate| (score_candidate(resolved, candidate), candidate))
+        .collect();
 
-    let Some(best) = best else {
+    ranked.sort_by(|(left_score, left), (right_score, right)| {
+        right_score
+            .cmp(left_score)
+            .then_with(|| right.focused.cmp(&left.focused))
+            .then_with(|| right.title.cmp(&left.title))
+    });
+
+    let Some((best_score, best)) = ranked.first().copied() else {
+        return Err(
+            "No visible Script Kit windows available for screenshot capture"
+                .to_string()
+                .into(),
+        );
+    };
+
+    if best_score <= 0 {
         return Err(format!(
-            "No OS window matched automation target {} ({:?})",
+            "No OS window matched automation target {} ({:?}) \
+             strongly enough for deterministic capture",
             resolved.id, resolved.kind
         )
         .into());
-    };
+    }
+
+    // Reject tied top candidates instead of guessing
+    if let Some((second_score, second)) = ranked.get(1).copied() {
+        if second_score == best_score {
+            tracing::warn!(
+                target: "script_kit::automation",
+                window_id = %resolved.id,
+                kind = ?resolved.kind,
+                first_title = %best.title,
+                first_size = %format!("{}x{}", best.width, best.height),
+                second_title = %second.title,
+                second_size = %format!("{}x{}", second.width, second.height),
+                score = best_score,
+                "automation.capture_screenshot.ambiguous_candidate"
+            );
+
+            return Err(format!(
+                "Ambiguous OS window match for automation target {} ({:?}); \
+                 '{}' and '{}' tied at score {}",
+                resolved.id, resolved.kind, best.title, second.title, best_score
+            )
+            .into());
+        }
+    }
 
     tracing::info!(
         target: "script_kit::automation",
         window_id = %resolved.id,
         kind = ?resolved.kind,
         requested_title = ?resolved.title,
+        requested_bounds = ?resolved.bounds,
+        candidate_count = ranked.len(),
         selected_title = %best.title,
         selected_app = %best.app_name,
         selected_focused = best.focused,
+        selected_width = best.width,
+        selected_height = best.height,
+        selected_score = best_score,
         "automation.capture_screenshot.candidate_selected"
     );
 
