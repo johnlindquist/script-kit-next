@@ -257,6 +257,17 @@ async function ensureFocusViaSession(
 
   // 3. Delegate actual focus to window.ts
   const focusResult = await ensureFocusViaWindowTs(focusTitle, retry, settleMs);
+
+  // Emit structured session focus resolution event for autonomous verification
+  stderrLog("session_focus_resolved", {
+    sessionName,
+    targetSurface,
+    resolvedSurfaceId,
+    focusTitle,
+    frontmost: focusResult.frontmost,
+    focused: focusResult.focused,
+  });
+
   return { ...focusResult, surfaceId: resolvedSurfaceId };
 }
 

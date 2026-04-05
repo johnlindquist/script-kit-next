@@ -19,7 +19,10 @@ SESSION_DIR="${SCRIPT_KIT_SESSION_DIR:-/tmp/sk-agentic-sessions}"
 PROJECT_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 BINARY="${PROJECT_ROOT}/target/debug/script-kit-gpui"
 READY_TIMEOUT_MS="${SCRIPT_KIT_SESSION_READY_TIMEOUT_MS:-3000}"
-READY_LOG_MARKER="APP_READY|main-window-ready show=false focus=false stdin-safe"
+READY_LOG_MARKER_APP="APP_READY|main-window-ready show=false focus=false stdin-safe"
+READY_LOG_MARKER_STARTUP="|STARTUP|STARTUP_READY "
+READY_WAIT_MS_RESULT=0
+READY_MARKER_RESULT="none"
 
 # --- helpers ----------------------------------------------------------------
 
@@ -44,8 +47,25 @@ json_error() {
 
 session_dir() { echo "${SESSION_DIR}/$1"; }
 
-# Wait for the APP_READY log marker instead of a fixed sleep.
-# Returns via printf the number of milliseconds waited.
+# Detect which readiness marker is present in the log file.
+# Prints the marker name ("startup_ready" or "app_ready") and returns 0 if found.
+detect_ready_marker() {
+  local log_path="$1"
+  if [ -f "$log_path" ] && grep -Fq "$READY_LOG_MARKER_STARTUP" "$log_path" 2>/dev/null; then
+    printf '%s' "startup_ready"
+    return 0
+  fi
+  if [ -f "$log_path" ] && grep -Fq "$READY_LOG_MARKER_APP" "$log_path" 2>/dev/null; then
+    printf '%s' "app_ready"
+    return 0
+  fi
+  return 1
+}
+
+# Wait for the earliest safe readiness log marker instead of a fixed sleep.
+# Sets:
+#   READY_WAIT_MS_RESULT  - number of milliseconds waited
+#   READY_MARKER_RESULT   - startup_ready | app_ready | none
 # Exit codes: 0 = marker found, 1 = timeout, 2 = process exited early.
 wait_for_ready_log() {
   local log_path="$1"
@@ -54,20 +74,25 @@ wait_for_ready_log() {
   local waited=0
   local step_ms=25
 
+  READY_WAIT_MS_RESULT=0
+  READY_MARKER_RESULT="none"
+
   while [ "$waited" -lt "$timeout_ms" ]; do
     if ! kill -0 "$pid" 2>/dev/null; then
-      printf '%s' "$waited"
+      READY_WAIT_MS_RESULT="$waited"
       return 2
     fi
-    if [ -f "$log_path" ] && grep -Fq "$READY_LOG_MARKER" "$log_path" 2>/dev/null; then
-      printf '%s' "$waited"
+    local marker_name=""
+    if marker_name="$(detect_ready_marker "$log_path")"; then
+      READY_WAIT_MS_RESULT="$waited"
+      READY_MARKER_RESULT="$marker_name"
       return 0
     fi
     sleep 0.025
     waited=$((waited + step_ms))
   done
 
-  printf '%s' "$waited"
+  READY_WAIT_MS_RESULT="$waited"
   return 1
 }
 
@@ -118,7 +143,8 @@ cmd_start() {
         "responses:\"${responses_path}\"" \
         "resumed:true" \
         "ready:true" \
-        "readyWaitMs:0"
+        "readyWaitMs:0" \
+        "readyMarker:\"existing_session\""
       return 0
     else
       log "Stale session '${name}': ${reason}. Cleaning up."
@@ -189,14 +215,19 @@ cmd_start() {
   local app_pid=$!
   echo "$app_pid" > "$pid_path"
 
-  # Wait for APP_READY log marker instead of a fixed sleep.
+  # Wait for the earliest safe readiness marker instead of a fixed sleep.
   local ready=false
   local ready_wait_ms=0
-  if ready_wait_ms="$(wait_for_ready_log "$log_path" "$app_pid" "$READY_TIMEOUT_MS")"; then
+  local ready_marker="none"
+  if wait_for_ready_log "$log_path" "$app_pid" "$READY_TIMEOUT_MS"; then
     ready=true
-    log "Session '${name}' reached readiness marker in ${ready_wait_ms}ms"
+    ready_wait_ms="$READY_WAIT_MS_RESULT"
+    ready_marker="$READY_MARKER_RESULT"
+    log "Session '${name}' reached readiness marker '${ready_marker}' in ${ready_wait_ms}ms"
   else
     local ready_status=$?
+    ready_wait_ms="$READY_WAIT_MS_RESULT"
+    ready_marker="$READY_MARKER_RESULT"
     if [ "$ready_status" -eq 2 ]; then
       kill "$fwd_pid" 2>/dev/null || true
       wait "$fwd_pid" 2>/dev/null || true
@@ -216,7 +247,7 @@ cmd_start() {
     return 1
   fi
 
-  log "Started session '${name}' (pid ${app_pid}, ready=${ready}, waited=${ready_wait_ms}ms)"
+  log "Started session '${name}' (pid ${app_pid}, ready=${ready}, marker=${ready_marker}, waited=${ready_wait_ms}ms)"
   json_envelope "ok" \
     "session:\"${name}\"" \
     "pid:${app_pid}" \
@@ -225,7 +256,8 @@ cmd_start() {
     "responses:\"${responses_path}\"" \
     "resumed:false" \
     "ready:${ready}" \
-    "readyWaitMs:${ready_wait_ms}"
+    "readyWaitMs:${ready_wait_ms}" \
+    "readyMarker:\"${ready_marker}\""
 }
 
 # --- send -------------------------------------------------------------------

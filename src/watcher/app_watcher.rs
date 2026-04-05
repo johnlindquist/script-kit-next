@@ -21,23 +21,33 @@ pub struct AppWatcher {
 }
 
 impl AppWatcher {
-    /// Create a new AppWatcher.
+    /// Create a new AppWatcher using a fresh config load.
     ///
-    /// Returns a tuple of (watcher, receiver) where receiver will emit AppReloadEvent
-    /// when .app bundles in /Applications or ~/Applications change.
+    /// Keep this for callers that do not already have a config instance.
     pub fn new() -> (Self, async_channel::Receiver<AppReloadEvent>) {
-        let (tx, rx) = async_channel::bounded(APP_WATCHER_CHANNEL_CAPACITY);
-        let settings = load_watcher_settings();
+        Self::with_settings(load_watcher_settings())
+    }
 
+    /// Create a new AppWatcher using an already-loaded config.
+    ///
+    /// This avoids an extra config.ts evaluation on startup.
+    pub(crate) fn new_with_config(
+        app_config: &crate::config::Config,
+    ) -> (Self, async_channel::Receiver<AppReloadEvent>) {
+        Self::with_settings(super::watcher_settings_from_config(app_config))
+    }
+
+    fn with_settings(
+        settings: WatcherSettings,
+    ) -> (Self, async_channel::Receiver<AppReloadEvent>) {
+        let (tx, rx) = async_channel::bounded(APP_WATCHER_CHANNEL_CAPACITY);
         let spec = AppWatcherSpec::new(
             PathBuf::from("/Applications"),
             PathBuf::from(shellexpand::tilde("~/Applications").as_ref()),
             settings,
         );
-
         let watcher =
             GenericWatcher::new(tx, spec, generic_settings_from_watcher_settings(settings));
-
         (Self { watcher }, rx)
     }
 

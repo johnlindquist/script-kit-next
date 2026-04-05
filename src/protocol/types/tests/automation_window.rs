@@ -457,9 +457,11 @@ fn simulate_gpui_event_result_success_constructor() {
 fn simulate_gpui_event_result_error_constructor() {
     let msg = crate::protocol::Message::simulate_gpui_event_result_error(
         "evt-1".into(),
+        "target_not_found".into(),
         "Window not found".into(),
     );
     let json = serde_json::to_string(&msg).expect("serialize");
     assert!(json.contains(r#""success":false"#));
+    assert!(json.contains(r#""errorCode":"target_not_found""#));
     assert!(json.contains("Window not found"));
 }

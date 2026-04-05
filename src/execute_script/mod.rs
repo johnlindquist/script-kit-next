@@ -1599,14 +1599,16 @@ impl ScriptListApp {
                                     }
 
                                     // Handle GetLayoutInfo - needs UI state, forward to UI thread
-                                    if let Message::GetLayoutInfo { request_id } = &msg {
+                                    if let Message::GetLayoutInfo { request_id, target } = &msg {
                                         tracing::info!(
                                             category = "EXEC",
                                             request_id = %request_id,
+                                            target = ?target,
                                             "GetLayoutInfo request"
                                         );
                                         let prompt_msg = PromptMessage::GetLayoutInfo {
                                             request_id: request_id.clone(),
+                                            target: target.clone(),
                                         };
                                         if tx.send_blocking(prompt_msg).is_err() {
                                             tracing::info!(

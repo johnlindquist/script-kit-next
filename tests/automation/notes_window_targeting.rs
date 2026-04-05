@@ -5,7 +5,7 @@
 //! is preserved across register/resolve/unregister cycles.
 
 use script_kit_gpui::protocol::{
-    AutomationWindowInfo, AutomationWindowKind, AutomationWindowTarget,
+    AutomationWindowInfo, AutomationWindowKind, AutomationWindowTarget, Message,
 };
 use std::sync::atomic::{AtomicU32, Ordering};
 
@@ -155,4 +155,69 @@ fn notes_focus_transfer_from_main() {
     assert!(!main_resolved.focused);
 
     cleanup(&p, &["main", "notes"]);
+}
+
+#[test]
+fn get_state_notes_target_round_trip() {
+    // getState with a Notes target should parse and round-trip correctly.
+    let json = serde_json::json!({
+        "type": "getState",
+        "requestId": "gs-notes-1",
+        "target": { "type": "kind", "kind": "notes" }
+    });
+    let msg: Message = serde_json::from_value(json).expect("parse getState with notes target");
+    match msg {
+        Message::GetState { request_id, target } => {
+            assert_eq!(request_id, "gs-notes-1");
+            let target = target.expect("target should be present");
+            match target {
+                AutomationWindowTarget::Kind { kind, .. } => {
+                    assert_eq!(kind, AutomationWindowKind::Notes);
+                }
+                other => panic!("Expected Kind target, got: {:?}", other),
+            }
+        }
+        other => panic!("Expected GetState, got: {:?}", other),
+    }
+}
+
+#[test]
+fn get_layout_info_notes_target_round_trip() {
+    // getLayoutInfo with a Notes target should parse and round-trip correctly.
+    let msg = Message::get_layout_info_targeted(
+        "li-notes-1".into(),
+        AutomationWindowTarget::Kind {
+            kind: AutomationWindowKind::Notes,
+            index: None,
+        },
+    );
+    let json = serde_json::to_string(&msg).expect("serialize");
+    let back: Message = serde_json::from_str(&json).expect("deserialize");
+    match back {
+        Message::GetLayoutInfo { request_id, target } => {
+            assert_eq!(request_id, "li-notes-1");
+            let target = target.expect("target should be present");
+            match target {
+                AutomationWindowTarget::Kind { kind, .. } => {
+                    assert_eq!(kind, AutomationWindowKind::Notes);
+                }
+                other => panic!("Expected Kind target, got: {:?}", other),
+            }
+        }
+        other => panic!("Expected GetLayoutInfo, got: {:?}", other),
+    }
+}
+
+#[test]
+fn get_layout_info_without_target_backward_compatible() {
+    // Legacy getLayoutInfo requests (no target field) should still parse.
+    let json = r#"{"type":"getLayoutInfo","requestId":"li-legacy"}"#;
+    let msg: Message = serde_json::from_str(json).expect("parse");
+    match msg {
+        Message::GetLayoutInfo { request_id, target } => {
+            assert_eq!(request_id, "li-legacy");
+            assert!(target.is_none(), "target should default to None for legacy");
+        }
+        other => panic!("Expected GetLayoutInfo, got: {:?}", other),
+    }
 }

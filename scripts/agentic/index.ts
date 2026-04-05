@@ -155,11 +155,13 @@ function buildCmd(
 }
 
 /**
- * Build native-input args with optional --surface and --ensure-focus.
+ * Build native-input args with session, optional --surface, and --ensure-focus.
+ * Always passes --session so macos-input.ts uses the session-aware focus path.
  */
 function nativeInputArgs(
   command: string,
   value: string,
+  session: string,
   surface?: string
 ): string[] {
   const args = [
@@ -168,6 +170,8 @@ function nativeInputArgs(
     command,
     value,
     "--ensure-focus",
+    "--session",
+    session,
   ];
   if (surface) {
     args.push("--target", surface);
@@ -458,7 +462,7 @@ async function recipeAcpPickerAccept(
   // 3. Type @ to open picker (native input with focus enforcement)
   const typeAtStep = await step("type-at-trigger", () =>
     runTool(
-      nativeInputArgs("type", "@", opts.surface),
+      nativeInputArgs("type", "@", session, opts.surface),
       "type-at"
     )
   );
@@ -521,7 +525,7 @@ async function recipeAcpPickerAccept(
   // 6. Accept with native key (with focus enforcement)
   const nativeKeyStep = await step(`native-${acceptKey}`, () =>
     runTool(
-      nativeInputArgs("key", acceptKey, opts.surface),
+      nativeInputArgs("key", acceptKey, session, opts.surface),
       `native-${acceptKey}`
     )
   );

@@ -181,3 +181,101 @@ fn backward_compat_get_acp_state_without_target() {
         other => panic!("Expected GetAcpState, got: {:?}", other),
     }
 }
+
+#[test]
+fn get_state_actions_dialog_target_round_trip() {
+    // getState with an ActionsDialog target should parse correctly.
+    let json = serde_json::json!({
+        "type": "getState",
+        "requestId": "gs-actions-1",
+        "target": { "type": "kind", "kind": "actionsDialog" }
+    });
+    let msg: Message = serde_json::from_value(json).expect("parse");
+    match msg {
+        Message::GetState { request_id, target } => {
+            assert_eq!(request_id, "gs-actions-1");
+            let target = target.expect("target should be present");
+            match target {
+                AutomationWindowTarget::Kind { kind, .. } => {
+                    assert_eq!(kind, AutomationWindowKind::ActionsDialog);
+                }
+                other => panic!("Expected Kind target, got: {:?}", other),
+            }
+        }
+        other => panic!("Expected GetState, got: {:?}", other),
+    }
+}
+
+#[test]
+fn get_layout_info_actions_dialog_target_round_trip() {
+    // getLayoutInfo with an ActionsDialog target should parse correctly.
+    let json = serde_json::json!({
+        "type": "getLayoutInfo",
+        "requestId": "li-actions-1",
+        "target": { "type": "kind", "kind": "actionsDialog" }
+    });
+    let msg: Message = serde_json::from_value(json).expect("parse");
+    match msg {
+        Message::GetLayoutInfo { request_id, target } => {
+            assert_eq!(request_id, "li-actions-1");
+            let target = target.expect("target should be present");
+            match target {
+                AutomationWindowTarget::Kind { kind, .. } => {
+                    assert_eq!(kind, AutomationWindowKind::ActionsDialog);
+                }
+                other => panic!("Expected Kind target, got: {:?}", other),
+            }
+        }
+        other => panic!("Expected GetLayoutInfo, got: {:?}", other),
+    }
+}
+
+#[test]
+fn get_elements_with_actions_dialog_target_round_trip() {
+    // getElements with an ActionsDialog target should parse correctly.
+    let json = serde_json::json!({
+        "type": "getElements",
+        "requestId": "ge-actions-1",
+        "limit": 20,
+        "target": { "type": "kind", "kind": "actionsDialog" }
+    });
+    let msg: Message = serde_json::from_value(json).expect("parse");
+    match msg {
+        Message::GetElements { request_id, limit, target } => {
+            assert_eq!(request_id, "ge-actions-1");
+            assert_eq!(limit, Some(20));
+            let target = target.expect("target should be present");
+            match target {
+                AutomationWindowTarget::Kind { kind, .. } => {
+                    assert_eq!(kind, AutomationWindowKind::ActionsDialog);
+                }
+                other => panic!("Expected Kind target, got: {:?}", other),
+            }
+        }
+        other => panic!("Expected GetElements, got: {:?}", other),
+    }
+}
+
+#[test]
+fn capture_screenshot_with_actions_dialog_target_round_trip() {
+    // captureScreenshot with an ActionsDialog target should parse correctly.
+    let json = serde_json::json!({
+        "type": "captureScreenshot",
+        "requestId": "ss-actions-1",
+        "target": { "type": "kind", "kind": "actionsDialog" }
+    });
+    let msg: Message = serde_json::from_value(json).expect("parse");
+    match msg {
+        Message::CaptureScreenshot { request_id, target, .. } => {
+            assert_eq!(request_id, "ss-actions-1");
+            let target = target.expect("target should be present");
+            match target {
+                AutomationWindowTarget::Kind { kind, .. } => {
+                    assert_eq!(kind, AutomationWindowKind::ActionsDialog);
+                }
+                other => panic!("Expected Kind target, got: {:?}", other),
+            }
+        }
+        other => panic!("Expected CaptureScreenshot, got: {:?}", other),
+    }
+}

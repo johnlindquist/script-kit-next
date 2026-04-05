@@ -36,7 +36,7 @@ const MAX_NOTIFY_ERRORS: u32 = config::defaults::DEFAULT_WATCHER_MAX_NOTIFY_ERRO
 /// Default interval for periodic health checks when idle
 const HEALTH_CHECK_INTERVAL_MS: u64 = config::defaults::DEFAULT_HEALTH_CHECK_INTERVAL_MS;
 #[derive(Debug, Clone, Copy)]
-struct WatcherSettings {
+pub(crate) struct WatcherSettings {
     debounce_ms: u64,
     storm_threshold: usize,
     initial_backoff_ms: u64,
@@ -56,7 +56,7 @@ impl Default for WatcherSettings {
         }
     }
 }
-fn watcher_settings_from_config(app_config: &config::Config) -> WatcherSettings {
+pub(crate) fn watcher_settings_from_config(app_config: &config::Config) -> WatcherSettings {
     let watcher = app_config.get_watcher();
     let process_limits = app_config.get_process_limits();
     WatcherSettings {

@@ -200,7 +200,14 @@
         }
     };
 
-    let (mut script_watcher, script_rx) = watcher::ScriptWatcher::new();
+    let watcher_boot_started = std::time::Instant::now();
+
+    let (mut script_watcher, script_rx) =
+        watcher::ScriptWatcher::new_with_config(&config_for_app);
+    logging::log(
+        "APP",
+        "Starting script watcher with preloaded startup config (no extra config.ts evaluation)",
+    );
     let script_watcher_ok = match script_watcher.start() {
         Ok(()) => {
             logging::log("APP", "Script watcher started");
@@ -213,7 +220,11 @@
     };
 
     // Create AppWatcher for live application cache updates
-    let (mut app_watcher, app_rx) = watcher::AppWatcher::new();
+    let (mut app_watcher, app_rx) = watcher::AppWatcher::new_with_config(&config_for_app);
+    logging::log(
+        "APP",
+        "Starting app watcher with preloaded startup config (no extra config.ts evaluation)",
+    );
     let app_watcher_ok = match app_watcher.start() {
         Ok(()) => {
             logging::log("APP", "App watcher started");
@@ -224,6 +235,17 @@
             false
         }
     };
+
+    logging::log(
+        "STARTUP",
+        &format!(
+            "STARTUP_WATCHERS_READY source=preloaded_config elapsed_ms={:.2} config={} script={} apps={}",
+            watcher_boot_started.elapsed().as_secs_f64() * 1000.0,
+            config_watcher_ok,
+            script_watcher_ok,
+            app_watcher_ok,
+        ),
+    );
 
     // Initialize script scheduler. In the dev-fast startup profile we move the
     // initial scan/start until after the UI is already usable.

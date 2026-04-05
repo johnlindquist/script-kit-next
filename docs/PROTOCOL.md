@@ -2174,9 +2174,9 @@ Enumerate all automation-addressable windows.
 
 ### ACP targetability contract
 
-`getAcpState` and `getAcpTestProbe` accept an optional `target` field and support both the **main window** and **detached ACP** (`acpDetached`) targets. When targeting a detached ACP window, the response contains real state from the detached view entity. Non-ACP secondary targets (Notes, Ai, etc.) fail closed with a structured `target_unsupported` warning.
+`getAcpState`, `getAcpTestProbe`, `resetAcpTestProbe`, and `performAcpSetupAction` all accept an optional `target` field and support both the **main window** and **detached ACP** (`acpDetached`) targets. When targeting a detached ACP window, the response contains real state from the detached view entity. Non-ACP secondary targets (Notes, Ai, etc.) fail closed with a structured `target_unsupported` warning.
 
-`resetAcpTestProbe` is **global-only**: it always resets the main window's probe ring buffer and does not accept a `target` field.
+All four commands resolve `Main` vs `AcpDetached` through the same `resolve_acp_read_target` path and stamp every response with `resolvedTarget` metadata identifying which window actually answered.
 
 **Targeted getAcpState (detached ACP → real state):**
 
@@ -2219,6 +2219,42 @@ Enumerate all automation-addressable windows.
   "acceptedItems": [],
   "state": {"schemaVersion": 1, "status": "idle", "inputText": "", "cursorIndex": 0, "hasSelection": false, "messageCount": 3, "contextChipCount": 0, "contextReady": true, "hasPendingPermission": false},
   "warnings": []
+}
+```
+
+**Targeted resetAcpTestProbe (detached ACP → targeted reset):**
+
+```json
+{"type": "resetAcpTestProbe", "requestId": "probe-reset-1", "target": {"type": "kind", "kind": "acpDetached", "index": 0}}
+```
+
+**Response** (probe cleared on the detached window, `resolvedTarget` identifies which window was reset):
+```json
+{
+  "type": "acpTestProbeResult",
+  "requestId": "probe-reset-1",
+  "schemaVersion": 1,
+  "eventSeq": 0,
+  "keyRoutes": [],
+  "acceptedItems": [],
+  "state": {"schemaVersion": 1, "status": "idle", "resolvedTarget": {"windowId": "acpDetached:thread-1", "windowKind": "acpDetached", "title": "Script Kit AI"}},
+  "warnings": []
+}
+```
+
+**Targeted performAcpSetupAction (detached ACP → setup action):**
+
+```json
+{"type": "performAcpSetupAction", "requestId": "a-open-picker", "action": "openAgentPicker", "target": {"type": "kind", "kind": "acpDetached", "index": 0}}
+```
+
+**Response** (action executed on detached window, `resolvedTarget` confirms target):
+```json
+{
+  "type": "acpSetupActionResult",
+  "requestId": "a-open-picker",
+  "success": true,
+  "state": {"schemaVersion": 1, "status": "setup", "resolvedTarget": {"windowId": "acpDetached:thread-1", "windowKind": "acpDetached", "title": "Script Kit AI"}}
 }
 ```
 
@@ -2307,9 +2343,19 @@ High-fidelity event simulation through GPUI's real event pipeline (unlike legacy
   "type": "simulateGpuiEventResult",
   "requestId": "gpui-ambiguous",
   "success": false,
+  "errorCode": "target_ambiguous",
   "error": "Resolved target acpDetached:thread-1 (AcpDetached) is ambiguous: 2 visible windows share this kind and GPUI dispatch still routes through one WindowRole"
 }
 ```
+
+**Error codes** (machine-readable, present only on failure):
+
+| `errorCode` | Meaning |
+|---|---|
+| `target_not_found` | No window matched the target (unregistered, wrong ID/kind/index) |
+| `target_ambiguous` | Multiple visible windows share the resolved kind; GPUI dispatch cannot distinguish them |
+| `handle_unavailable` | Target resolved but no GPUI window handle available (window may be closing) |
+| `dispatch_failed` | GPUI event dispatch threw an error |
 
 **Event types:**
 - `keyDown` — `key`, `modifiers` (cmd/shift/alt/ctrl), optional `text`
@@ -2326,7 +2372,8 @@ High-fidelity event simulation through GPUI's real event pipeline (unlike legacy
 | `captureScreenshot` | Screenshot of targeted window (uses bounds for scoring; fails closed on ambiguous tie) |
 | `getAcpState` | ACP state (Main + AcpDetached targets supported; non-ACP secondary targets return default + `target_unsupported` warning) |
 | `getAcpTestProbe` | Test probe (Main + AcpDetached targets supported; non-ACP secondary targets return default + `target_unsupported` warning) |
-| `resetAcpTestProbe` | **Global-only** — no `target` field, always resets main window probe |
+| `resetAcpTestProbe` | Probe reset (Main + AcpDetached targets supported; non-ACP secondary targets return default + `target_unsupported` warning) |
+| `performAcpSetupAction` | Setup action dispatch (Main + AcpDetached targets supported; non-ACP secondary targets return structured error) |
 | `simulateClick` | Click in targeted window |
 | `waitFor` | Poll condition on targeted window (main-only, non-main fails closed) |
 | `batch` | Execute batch on targeted window (main-only, non-main fails closed) |
