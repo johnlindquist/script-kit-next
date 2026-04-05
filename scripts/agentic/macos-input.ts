@@ -9,10 +9,10 @@
  * separate activation path.
  *
  * Usage:
- *   bun scripts/agentic/macos-input.ts key <keyname> [--modifiers cmd,shift,...] [--ensure-focus] [--focus-title SUBSTR] [--json]
- *   bun scripts/agentic/macos-input.ts type <text> [--ensure-focus] [--focus-title SUBSTR] [--json]
- *   bun scripts/agentic/macos-input.ts click <x> <y> [--ensure-focus] [--focus-title SUBSTR] [--json]
- *   bun scripts/agentic/macos-input.ts sequence <json-array> [--ensure-focus] [--focus-title SUBSTR] [--json]
+ *   bun scripts/agentic/macos-input.ts key <keyname> [--modifiers cmd,shift,...] [--ensure-focus] [--focus-title SUBSTR] [--session NAME] [--target SURFACE] [--json]
+ *   bun scripts/agentic/macos-input.ts type <text> [--ensure-focus] [--focus-title SUBSTR] [--session NAME] [--target SURFACE] [--json]
+ *   bun scripts/agentic/macos-input.ts click <x> <y> [--ensure-focus] [--focus-title SUBSTR] [--session NAME] [--target SURFACE] [--json]
+ *   bun scripts/agentic/macos-input.ts sequence <json-array> [--ensure-focus] [--focus-title SUBSTR] [--session NAME] [--target SURFACE] [--json]
  *   bun scripts/agentic/macos-input.ts check [--json]
  *
  * All structured output is JSON on stdout. Diagnostics go to stderr as NDJSON.
@@ -44,6 +44,10 @@ interface KeyResult {
   delivered: boolean;
   method: "cliclick" | "osascript";
   focusEnforced: boolean;
+  /** Automation surface targeted, if --target was specified. */
+  target?: string;
+  /** Session used for focus, if --session was specified. */
+  session?: string;
 }
 
 interface TypeResult {
@@ -51,6 +55,8 @@ interface TypeResult {
   delivered: boolean;
   method: "cliclick" | "osascript";
   focusEnforced: boolean;
+  target?: string;
+  session?: string;
 }
 
 interface ClickResult {
@@ -58,6 +64,8 @@ interface ClickResult {
   y: number;
   delivered: boolean;
   focusEnforced: boolean;
+  target?: string;
+  session?: string;
 }
 
 interface SequenceStep {
@@ -182,6 +190,74 @@ async function runProcess(
   const stderr = await new Response(proc.stderr).text();
   const exitCode = await proc.exited;
   return { stdout: stdout.trim(), stderr: stderr.trim(), exitCode };
+}
+
+// ---------------------------------------------------------------------------
+// Session-aware focus: show window via session.sh then verify with window.ts
+// ---------------------------------------------------------------------------
+
+const SESSION_SH_PATH = new URL("../../scripts/agentic/session.sh", import.meta.url).pathname;
+
+/**
+ * Show the app window via session.sh send, then delegate to window.ts focus.
+ * This is more reliable than OS-level activation alone because it uses the
+ * app's own show protocol to ensure the window is visible before focusing.
+ */
+async function ensureFocusViaSession(
+  sessionName: string,
+  targetSurface: string | null,
+  retry: number = DEFAULT_FOCUS_RETRY,
+  settleMs: number = DEFAULT_FOCUS_SETTLE_MS
+): Promise<{ frontmost: boolean; focused: boolean; surfaceId: string | null }> {
+  stderrLog("session_focus_start", { sessionName, targetSurface, retry, settleMs });
+
+  // 1. Send show command via session to ensure window is visible
+  const { exitCode: showCode, stderr: showErr } = await runProcess(
+    ["bash", SESSION_SH_PATH, "send", sessionName, '{"type":"show"}'],
+    "session-show"
+  );
+  if (showCode !== 0) {
+    stderrLog("session_show_failed", { exitCode: showCode, stderr: showErr.slice(0, 200) });
+  }
+
+  // Brief settle for window to appear
+  await Bun.sleep(150);
+
+  // 2. If target surface specified, resolve via window.ts list to find the right title
+  let focusTitle = DEFAULT_FOCUS_TITLE;
+  let resolvedSurfaceId: string | null = null;
+
+  if (targetSurface) {
+    const { stdout: listOut } = await runProcess(
+      ["bun", WINDOW_TS_PATH, "list"],
+      "window-list"
+    );
+    try {
+      const listResult = JSON.parse(listOut);
+      const surfaces = listResult?.data?.surfaces ?? [];
+      const match = surfaces.find(
+        (s: any) => s.surfaceId === targetSurface || s.surfaceId.startsWith(targetSurface + ":")
+      );
+      if (match) {
+        resolvedSurfaceId = match.surfaceId;
+        // Use title for focused targeting if available
+        if (match.title) {
+          focusTitle = match.title;
+        }
+      } else {
+        stderrLog("session_focus_target_not_found", {
+          targetSurface,
+          availableSurfaces: surfaces.map((s: any) => s.surfaceId),
+        });
+      }
+    } catch {
+      stderrLog("session_focus_list_parse_error", { stdout: listOut.slice(0, 200) });
+    }
+  }
+
+  // 3. Delegate actual focus to window.ts
+  const focusResult = await ensureFocusViaWindowTs(focusTitle, retry, settleMs);
+  return { ...focusResult, surfaceId: resolvedSurfaceId };
 }
 
 // ---------------------------------------------------------------------------
@@ -529,6 +605,8 @@ const command = args[0] ?? "help";
 // Global focus flags
 const ensureFocus = hasFlag(args, "--ensure-focus");
 const focusTitle = getStringArg(args, "--focus-title", DEFAULT_FOCUS_TITLE);
+const sessionName = getStringArg(args, "--session", "");
+const targetSurface = getStringArg(args, "--target", "");
 
 function emit(data: Envelope<any>) {
   console.log(JSON.stringify(data, null, 2));
@@ -536,14 +614,35 @@ function emit(data: Envelope<any>) {
 
 // Run focus enforcement once before any command if requested
 let focusEnforced = false;
+let resolvedTarget: string | null = null;
 if (ensureFocus && command !== "check" && command !== "help" && command !== "--help") {
-  const focusResult = await ensureFocusViaWindowTs(focusTitle);
+  let frontmost = false;
+  let focused = false;
+
+  if (sessionName) {
+    // Session-aware focus: show via session, then verify with window.ts
+    const result = await ensureFocusViaSession(
+      sessionName,
+      targetSurface || null
+    );
+    frontmost = result.frontmost;
+    focused = result.focused;
+    resolvedTarget = result.surfaceId;
+  } else {
+    // Legacy focus: directly via window.ts
+    const result = await ensureFocusViaWindowTs(focusTitle);
+    frontmost = result.frontmost;
+    focused = result.focused;
+  }
+
   focusEnforced = true;
-  if (!focusResult.frontmost) {
+  if (!frontmost) {
     stderrLog("focus_enforcement_failed", {
-      frontmost: focusResult.frontmost,
-      focused: focusResult.focused,
+      frontmost,
+      focused,
       focusTitle,
+      sessionName: sessionName || undefined,
+      targetSurface: targetSurface || undefined,
     });
     emit({
       schemaVersion: SCHEMA_VERSION,
@@ -551,12 +650,17 @@ if (ensureFocus && command !== "check" && command !== "help" && command !== "--h
       command,
       error: {
         code: "FOCUS_NOT_CONFIRMED",
-        message: "Script Kit window was not frontmost after focus enforcement",
+        message: sessionName
+          ? `Script Kit window was not frontmost after session-based focus (session: ${sessionName}${targetSurface ? `, target: ${targetSurface}` : ""})`
+          : "Script Kit window was not frontmost after focus enforcement",
       },
       data: {
-        frontmost: focusResult.frontmost,
-        focused: focusResult.focused,
+        frontmost,
+        focused,
         focusTitle,
+        ...(sessionName ? { session: sessionName } : {}),
+        ...(targetSurface ? { target: targetSurface } : {}),
+        ...(resolvedTarget ? { resolvedTarget } : {}),
       },
     } as Envelope<any>);
     process.exit(1);
@@ -572,7 +676,7 @@ try {
           errorEnvelope(
             "key",
             "MISSING_KEY",
-            "Usage: macos-input.ts key <keyname> [--modifiers cmd,shift] [--ensure-focus] [--focus-title SUBSTR]"
+            "Usage: macos-input.ts key <keyname> [--modifiers cmd,shift] [--ensure-focus] [--session NAME] [--target SURFACE]"
           )
         );
         process.exit(1);
@@ -584,6 +688,8 @@ try {
           ? args[modIdx + 1].split(",").map((m) => m.trim())
           : [];
       const result = await sendKey(keyName, modifiers, focusEnforced);
+      if (sessionName) result.session = sessionName;
+      if (resolvedTarget) result.target = resolvedTarget;
       emit(envelope("key", result));
       process.exit(result.delivered ? 0 : 1);
       break;
@@ -596,13 +702,15 @@ try {
           errorEnvelope(
             "type",
             "MISSING_TEXT",
-            "Usage: macos-input.ts type <text> [--ensure-focus] [--focus-title SUBSTR]"
+            "Usage: macos-input.ts type <text> [--ensure-focus] [--session NAME] [--target SURFACE]"
           )
         );
         process.exit(1);
         break;
       }
       const result = await sendType(text, focusEnforced);
+      if (sessionName) result.session = sessionName;
+      if (resolvedTarget) result.target = resolvedTarget;
       emit(envelope("type", result));
       process.exit(result.delivered ? 0 : 1);
       break;
@@ -616,13 +724,15 @@ try {
           errorEnvelope(
             "click",
             "MISSING_COORDS",
-            "Usage: macos-input.ts click <x> <y> [--ensure-focus] [--focus-title SUBSTR]"
+            "Usage: macos-input.ts click <x> <y> [--ensure-focus] [--session NAME] [--target SURFACE]"
           )
         );
         process.exit(1);
         break;
       }
       const result = await sendClick(x, y, focusEnforced);
+      if (sessionName) result.session = sessionName;
+      if (resolvedTarget) result.target = resolvedTarget;
       emit(envelope("click", result));
       process.exit(result.delivered ? 0 : 1);
       break;

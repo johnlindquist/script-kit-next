@@ -176,8 +176,12 @@
     // Start watchers and track which ones succeeded
     // We only spawn poll loops for watchers that successfully started
     // Note: Appearance watching is handled by GPUI's observe_window_appearance (set up on the window)
+    logging::log(
+        "APP",
+        "Starting config watcher with preloaded startup config (no extra config.ts evaluation)",
+    );
     let (mut config_watcher, config_rx) = watcher::ConfigWatcher::new();
-    let config_watcher_ok = match config_watcher.start() {
+    let config_watcher_ok = match config_watcher.start_with_config(&config_for_app) {
         Ok(()) => {
             logging::log("APP", "Config watcher started");
             true

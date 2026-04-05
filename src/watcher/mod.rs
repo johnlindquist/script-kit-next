@@ -267,13 +267,33 @@ impl ThemeWatcher {
         )
     }
 
-    /// Start watching the theme file for changes.
+    /// Start watching the theme file for changes using a fresh config load.
     pub fn start(&mut self) -> NotifyResult<()> {
+        self.start_with_settings(load_watcher_settings(), "load_config")
+    }
+
+    /// Start watching the theme file for changes using an already-loaded config.
+    #[allow(dead_code)]
+    pub(crate) fn start_with_config(
+        &mut self,
+        app_config: &config::Config,
+    ) -> NotifyResult<()> {
+        self.start_with_settings(
+            watcher_settings_from_config(app_config),
+            "startup_preloaded_config",
+        )
+    }
+
+    fn start_with_settings(
+        &mut self,
+        settings: WatcherSettings,
+        settings_source: &'static str,
+    ) -> NotifyResult<()> {
         let tx = self
             .tx
             .take()
             .ok_or_else(|| std::io::Error::other("watcher already started"))?;
-        let settings = load_watcher_settings();
+        log_watcher_settings_start("theme", settings_source, settings);
         let target_path = crate::setup::get_kit_path().join("kit").join("theme.json");
 
         let mut watcher = build_single_file_reload_watcher(

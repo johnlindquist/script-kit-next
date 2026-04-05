@@ -69,6 +69,26 @@ interface StatusResult {
   windows: WindowInfo[];
 }
 
+/** Stable automation-surface identity for ACP-relevant windows. */
+interface AutomationSurface {
+  /** Stable identity: "main", "acp", "actions", "notes", "ai", or window title. */
+  surfaceId: string;
+  /** Window kind hint: "main", "popup", "panel", or "unknown". */
+  kind: string;
+  windowId: number;
+  title: string;
+  frontmost: boolean;
+  focused: boolean;
+  visible: boolean;
+  bounds: { x: number; y: number; width: number; height: number } | null;
+}
+
+interface ListResult {
+  surfaces: AutomationSurface[];
+  appRunning: boolean;
+  focusedSurfaceId: string | null;
+}
+
 interface CaptureResult {
   path: string;
   windowId: number;
@@ -419,6 +439,70 @@ end tell`);
   };
 }
 
+/**
+ * Classify a Script Kit window into a stable automation surface identity.
+ * Uses title heuristics to assign surface IDs that agents can target.
+ */
+function classifyWindow(w: WindowInfo): AutomationSurface {
+  const titleLower = (w.title ?? "").toLowerCase();
+  let surfaceId = "main";
+  let kind = "popup";
+
+  if (titleLower.includes("acp") || titleLower.includes("chat")) {
+    surfaceId = "acp";
+    kind = "panel";
+  } else if (titleLower.includes("actions") || titleLower.includes("⌘k")) {
+    surfaceId = "actions";
+    kind = "popup";
+  } else if (titleLower.includes("notes")) {
+    surfaceId = "notes";
+    kind = "panel";
+  } else if (titleLower.includes("ai")) {
+    surfaceId = "ai";
+    kind = "panel";
+  } else if (w.layer > 100) {
+    // PopUp windows at elevated levels are likely main or detached surfaces
+    surfaceId = "main";
+    kind = "popup";
+  }
+
+  return {
+    surfaceId,
+    kind,
+    windowId: w.windowId,
+    title: w.title,
+    frontmost: w.frontmost,
+    focused: w.focused,
+    visible: w.visible,
+    bounds: w.bounds,
+  };
+}
+
+async function listSurfaces(titleSubstr: string): Promise<ListResult> {
+  const findResult = await findWindows(titleSubstr);
+  const surfaces = findResult.windows.map(classifyWindow);
+
+  // Deduplicate by surfaceId — keep the first (frontmost) window per ID
+  const seen = new Set<string>();
+  const deduped: AutomationSurface[] = [];
+  for (const s of surfaces) {
+    // If two windows have the same surfaceId, disambiguate with index
+    const key = seen.has(s.surfaceId) ? `${s.surfaceId}:${s.windowId}` : s.surfaceId;
+    if (seen.has(s.surfaceId)) {
+      s.surfaceId = key;
+    }
+    seen.add(s.surfaceId);
+    deduped.push(s);
+  }
+
+  const focusedSurface = deduped.find((s) => s.focused || s.frontmost);
+  return {
+    surfaces: deduped,
+    appRunning: findResult.appRunning,
+    focusedSurfaceId: focusedSurface?.surfaceId ?? null,
+  };
+}
+
 async function getStatus(): Promise<StatusResult> {
   const findResult = await findWindows("");
   return {
@@ -575,6 +659,13 @@ function emit(data: Envelope<any>) {
 
 try {
   switch (command) {
+    case "list": {
+      const result = await listSurfaces(titleSubstr);
+      emit(envelope("list", result));
+      process.exit(result.surfaces.length > 0 ? 0 : 1);
+      break;
+    }
+
     case "find": {
       const result = await findWindows(titleSubstr);
       emit(envelope("find", result));
@@ -625,7 +716,8 @@ try {
       console.log(`Usage: bun scripts/agentic/window.ts <command> [options]
 
 Commands:
-  find    [--title SUBSTR]                                 Find Script Kit windows
+  list    [--title SUBSTR]                                 List automation surfaces with stable IDs
+  find    [--title SUBSTR]                                 Find Script Kit windows (raw Quartz)
   focus   [--title SUBSTR] [--retry N] [--settle-ms MS]    Activate and focus window
   status                                                    App running + window status
   capture PATH [--title SUBSTR] [--retry N]                Focus + screencapture window
