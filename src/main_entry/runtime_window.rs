@@ -130,6 +130,15 @@
         // This gives us Raycast/Spotlight-like vibrancy appearance.
         platform::swizzle_gpui_blurred_view();
 
+        // Startup readiness marker for automation/session.sh.
+        // This is the earliest point where the main runtime window exists,
+        // stdin-driven automation can safely show it, and the app should be
+        // considered ready for agentic interaction.
+        logging::log(
+            "APP_READY",
+            "main-window-ready show=false focus=false stdin-safe",
+        );
+
         // Window starts hidden - no activation, no panel configuration yet
         // Panel will be configured on first show via hotkey
         // WINDOW_VISIBLE is already false by default (static initializer)

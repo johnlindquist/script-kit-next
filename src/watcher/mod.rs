@@ -80,6 +80,7 @@ fn log_watcher_settings_start(
     settings: WatcherSettings,
 ) {
     info!(
+        target: "script_kit::watcher",
         watcher = label,
         settings_source,
         debounce_ms = settings.debounce_ms,
@@ -88,7 +89,7 @@ fn log_watcher_settings_start(
         max_backoff_ms = settings.max_backoff_ms,
         max_notify_errors = settings.max_notify_errors,
         health_check_interval_ms = settings.health_check_interval_ms,
-        "Starting watcher with settings"
+        "single-file watcher configured"
     );
 }
 fn is_relevant_event_kind(kind: &notify::EventKind) -> bool {

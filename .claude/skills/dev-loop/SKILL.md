@@ -7,6 +7,13 @@ description: Run ./dev.sh in background, monitor logs, iterate on code changes u
 
 Run the app via `./dev.sh` in the background, monitor its logs, make code changes, and verify the expected behavior appears in the output. cargo-watch auto-rebuilds on file changes, so you just edit and check logs.
 
+## Launch-Speed Rule
+
+Do not assume Script Kit needs a fixed startup sleep before automation.
+If you are launching via `scripts/agentic/session.sh`, use the returned
+`ready` / `readyWaitMs` fields. A fixed delay is fallback behavior only,
+not the default.
+
 ## Quick Start
 
 ```

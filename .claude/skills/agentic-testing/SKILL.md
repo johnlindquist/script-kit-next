@@ -53,8 +53,18 @@ Must complete with `Finished`. If it fails, fix the build error first.
 ### 2. Start a Session (Preferred)
 ```bash
 # Start or resume a named session — works from any shell
-eval "$(bash scripts/agentic/session.sh start default 2>/dev/null | jq -r '@sh "APP_PID=\(.pid) PIPE=\(.pipe) LOG=\(.log)"')"
-sleep 3
+# session.sh waits for the APP_READY log marker instead of sleeping
+SESSION_JSON="$(bash scripts/agentic/session.sh start default 2>/dev/null)"
+APP_PID="$(printf '%s' "$SESSION_JSON" | jq -r '.pid')"
+PIPE="$(printf '%s' "$SESSION_JSON" | jq -r '.pipe')"
+LOG="$(printf '%s' "$SESSION_JSON" | jq -r '.log')"
+READY="$(printf '%s' "$SESSION_JSON" | jq -r '.ready // false')"
+READY_WAIT_MS="$(printf '%s' "$SESSION_JSON" | jq -r '.readyWaitMs // 0')"
+
+# Fallback only if readiness marker was not observed.
+if [ "$READY" != "true" ]; then
+  sleep 0.5
+fi
 ```
 The session wrapper manages the named pipe, forwarder process, and PID tracking.
 Sessions are reusable across shells — no `exec 3>` / fd 3 trick required.
@@ -175,7 +185,7 @@ Cleanup is mandatory, even after failures or interrupted runs.
 
 | Action | Wait strategy |
 |--------|--------------|
-| App startup | 3s sleep |
+| App startup | `session.sh start` readiness wait; fallback 0.5s only if `ready=false` |
 | `show` window | 0.3s macOS focus-settling delay |
 | `setFilter` | 1s sleep or waitFor stateMatch |
 | `triggerBuiltin` (opens new view) | waitFor appropriate condition |
@@ -189,6 +199,9 @@ Cleanup is mandatory, even after failures or interrupted runs.
 
 **Rule:** Use `waitFor` for all ACP state transitions. Only use fixed sleeps
 for macOS focus-settling (0.3s) and file I/O (1s screenshot write).
+
+**Rule:** Do not add a fixed `sleep 3` after `session.sh start`. The session
+wrapper is responsible for readiness. Only use the 0.5s fallback when `ready=false`.
 
 ## Session Management
 
@@ -379,7 +392,6 @@ reconstructing the manual steps below.
 
 ```bash
 bash scripts/agentic/session.sh start default
-sleep 3
 bun scripts/agentic/index.ts acp-accept --session default --key enter --vision
 # The recipe returns a machine-readable JSON receipt with proofBundle.
 # Parse proofBundle.state, proofBundle.probe, proofBundle.screenshot, proofBundle.visionCrops
