@@ -14,6 +14,7 @@ impl Message {
             x,
             y,
             button: None,
+            target: None,
         }
     }
 
@@ -27,6 +28,7 @@ impl Message {
             x,
             y,
             button: Some(button),
+            target: None,
         }
     }
 

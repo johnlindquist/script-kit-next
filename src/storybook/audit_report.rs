@@ -134,6 +134,19 @@ fn contains_any(haystack: &str, needles: &[&str]) -> bool {
     needles.iter().any(|needle| haystack.contains(needle))
 }
 
+fn has_file_search_skeleton_loading(haystack: &str) -> bool {
+    contains_any(
+        haystack,
+        &["show static skeleton rows", "Render 6 skeleton rows"],
+    )
+}
+
+fn has_text_only_file_search_loading(haystack: &str) -> bool {
+    haystack.contains("is_loading && filtered_len == 0")
+        && haystack.contains(".justify_center()")
+        && haystack.contains(".child(\"Searching...\")")
+}
+
 fn info(title: &'static str, summary: impl Into<String>, evidence: Vec<String>) -> AuditFinding {
     AuditFinding {
         severity: AuditSeverity::Info,
@@ -206,6 +219,19 @@ fn audit_surface(spec: SurfaceSpec, repo_root: &Path) -> Result<AuditSurfaceResu
 
     match spec.surface {
         "file_search" => {
+            if has_file_search_skeleton_loading(&combined)
+                && has_text_only_file_search_loading(&combined)
+            {
+                findings.push(warning(
+                    "loading state mismatch",
+                    "File Search defines skeleton loading rows in source, but the live layout still collapses loading to a centered `Searching...` label. Keep a single intentional loading state on the real runtime surface.",
+                    vec![
+                        "src/render_builtins/file_search.rs".to_string(),
+                        "src/render_builtins/file_search_layout.rs".to_string(),
+                    ],
+                ));
+            }
+
             let has_custom_file_search_hints = contains_any(
                 &combined,
                 &[
@@ -236,11 +262,14 @@ fn audit_surface(spec: SurfaceSpec, repo_root: &Path) -> Result<AuditSurfaceResu
         }
 
         "clipboard_history" => {
-            if !combined.contains("render_expanded_view_scaffold(") {
+            if !uses_expanded_scaffold {
                 findings.push(info(
                     "manual expanded layout",
-                    "Clipboard History still hand-builds the 50/50 split layout instead of routing through `render_expanded_view_scaffold`, which makes future chrome drift easier to reintroduce.",
-                    vec!["src/render_builtins/clipboard_history_layout.rs".to_string()],
+                    "Clipboard History is not routing through a shared expanded-view scaffold or shell, which makes future chrome drift easier to reintroduce.",
+                    vec![
+                        "src/render_builtins/clipboard.rs".to_string(),
+                        "src/render_builtins/clipboard_history_layout.rs".to_string(),
+                    ],
                 ));
             }
 
@@ -248,7 +277,10 @@ fn audit_surface(spec: SurfaceSpec, repo_root: &Path) -> Result<AuditSurfaceResu
                 findings.push(warning(
                     "missing prompt hint audit",
                     "Clipboard History should keep a discoverable hint-contract marker in source so the report can distinguish intentional from accidental footer changes.",
-                    vec!["src/render_builtins/clipboard_history_layout.rs".to_string()],
+                    vec![
+                        "src/render_builtins/clipboard.rs".to_string(),
+                        "src/render_builtins/clipboard_history_layout.rs".to_string(),
+                    ],
                 ));
             }
         }

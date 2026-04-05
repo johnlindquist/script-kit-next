@@ -2017,3 +2017,126 @@ try {
 | `captureScreenshot` | `screenshotResult` |
 | `waitFor` | `waitForResult` |
 | `batch` | `batchResult` |
+
+---
+
+## Automation Window Targeting
+
+All read/write automation commands accept an optional `target` field to address a specific window. When omitted, the focused window is used (backward-compatible).
+
+### AutomationWindowTarget
+
+```json
+// Target the main Script Kit launcher
+{"type": "main"}
+
+// Target whichever window has focus (default)
+{"type": "focused"}
+
+// Target by stable automation ID
+{"type": "id", "id": "acpDetached:thread-1"}
+
+// Target by window kind (with optional index for multiple of same kind)
+{"type": "kind", "kind": "notes"}
+{"type": "kind", "kind": "acpDetached", "index": 0}
+
+// Target by title substring
+{"type": "titleContains", "text": "Script Kit AI"}
+```
+
+### AutomationWindowKind values
+
+`main`, `notes`, `ai`, `miniAi`, `acpDetached`, `actionsDialog`, `promptPopup`
+
+### listAutomationWindows
+
+Enumerate all automation-addressable windows.
+
+**Request:**
+```json
+{"type": "listAutomationWindows", "requestId": "wins-1"}
+```
+
+**Response:**
+```json
+{
+  "type": "automationWindowListResult",
+  "requestId": "wins-1",
+  "focusedWindowId": "acpDetached:thread-1",
+  "windows": [
+    {
+      "id": "main",
+      "kind": "main",
+      "title": "Script Kit",
+      "focused": false,
+      "visible": true,
+      "semanticSurface": "scriptList"
+    },
+    {
+      "id": "acpDetached:thread-1",
+      "kind": "acpDetached",
+      "title": "Script Kit AI",
+      "focused": true,
+      "visible": true,
+      "semanticSurface": "acpChat"
+    }
+  ]
+}
+```
+
+### Targeted getElements (Notes window)
+
+```json
+{"type": "getElements", "requestId": "elm-notes", "target": {"type": "kind", "kind": "notes"}, "limit": 20}
+```
+
+### Targeted captureScreenshot (detached ACP)
+
+```json
+{"type": "captureScreenshot", "requestId": "shot-acp", "target": {"type": "kind", "kind": "acpDetached", "index": 0}, "hiDpi": true}
+```
+
+### Targeted getAcpState (detached ACP)
+
+```json
+{"type": "getAcpState", "requestId": "acp-state-1", "target": {"type": "kind", "kind": "acpDetached"}}
+```
+
+### simulateGpuiEvent
+
+High-fidelity event simulation through GPUI's real event pipeline (unlike legacy `simulateKey` which bypasses GPUI intercepts).
+
+**Request:**
+```json
+{
+  "type": "simulateGpuiEvent",
+  "requestId": "gpui-1",
+  "target": {"type": "kind", "kind": "acpDetached"},
+  "event": {"type": "keyDown", "key": "k", "modifiers": ["cmd"]}
+}
+```
+
+**Response:**
+```json
+{"type": "simulateGpuiEventResult", "requestId": "gpui-1", "success": true}
+```
+
+**Event types:**
+- `keyDown` — `key`, `modifiers` (cmd/shift/alt/ctrl), optional `text`
+- `mouseMove` — `x`, `y`
+- `mouseDown` — `x`, `y`, optional `button` (left/right/middle)
+- `mouseUp` — `x`, `y`, optional `button`
+
+### Commands that accept `target`
+
+| Command | Notes |
+|---------|-------|
+| `getState` | UI state for targeted window |
+| `getElements` | Semantic elements for targeted window |
+| `captureScreenshot` | Screenshot of targeted window |
+| `getAcpState` | ACP state from targeted ACP window |
+| `getAcpTestProbe` | Test probe from targeted ACP window |
+| `simulateClick` | Click in targeted window |
+| `waitFor` | Poll condition on targeted window |
+| `batch` | Execute batch on targeted window |
+| `simulateGpuiEvent` | GPUI event dispatch to targeted window |

@@ -34,6 +34,9 @@ macro_rules! protocol_message_variants_query_ops {
         /// If true, return full retina resolution (2x). If false (default), scale down to 1x.
         #[serde(rename = "hiDpi", skip_serializing_if = "Option::is_none")]
         hi_dpi: Option<bool>,
+        /// Optional window target (defaults to focused window).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        target: Option<AutomationWindowTarget>,
     },
 
     /// Response with screenshot data as base64 PNG
@@ -57,6 +60,9 @@ macro_rules! protocol_message_variants_query_ops {
     GetState {
         #[serde(rename = "requestId")]
         request_id: String,
+        /// Optional window target (defaults to focused window).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        target: Option<AutomationWindowTarget>,
     },
 
     /// Response with current UI state
@@ -107,6 +113,9 @@ macro_rules! protocol_message_variants_query_ops {
         /// Maximum number of elements to return (default: 50)
         #[serde(skip_serializing_if = "Option::is_none")]
         limit: Option<usize>,
+        /// Optional window target (defaults to focused window).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        target: Option<AutomationWindowTarget>,
     },
 
     /// Response with list of visible UI elements
@@ -263,6 +272,9 @@ macro_rules! protocol_message_variants_query_ops {
         /// Optional button: "left" (default), "right", or "middle"
         #[serde(skip_serializing_if = "Option::is_none")]
         button: Option<String>,
+        /// Optional window target (defaults to focused window).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        target: Option<AutomationWindowTarget>,
     },
 
     /// Response after simulating a click
@@ -389,6 +401,9 @@ macro_rules! protocol_message_variants_query_ops {
     GetAcpState {
         #[serde(rename = "requestId")]
         request_id: String,
+        /// Optional window target (defaults to focused window).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        target: Option<AutomationWindowTarget>,
     },
 
     /// Response with ACP chat view state snapshot.
@@ -425,6 +440,9 @@ macro_rules! protocol_message_variants_query_ops {
         /// Maximum number of events to return per category (default: 32).
         #[serde(default, skip_serializing_if = "Option::is_none")]
         tail: Option<usize>,
+        /// Optional window target (defaults to focused window).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        target: Option<AutomationWindowTarget>,
     },
 
     /// Response with ACP test probe snapshot.
@@ -459,6 +477,9 @@ macro_rules! protocol_message_variants_query_ops {
         /// Trace mode: off (default), on, or onFailure
         #[serde(default, skip_serializing_if = "super::types::batch_wait::is_trace_off")]
         trace: TransactionTraceMode,
+        /// Optional window target (defaults to focused window).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        target: Option<AutomationWindowTarget>,
     },
 
     /// Result of a waitFor request.
@@ -494,6 +515,9 @@ macro_rules! protocol_message_variants_query_ops {
         /// Trace mode: off (default), on, or onFailure
         #[serde(default, skip_serializing_if = "super::types::batch_wait::is_trace_off")]
         trace: TransactionTraceMode,
+        /// Optional window target (defaults to focused window).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        target: Option<AutomationWindowTarget>,
     },
 
     /// Result of a batch execution.
@@ -514,6 +538,55 @@ macro_rules! protocol_message_variants_query_ops {
         /// Embedded trace receipt (present when trace mode is on or onFailure+failed)
         #[serde(skip_serializing_if = "Option::is_none")]
         trace: Option<TransactionTrace>,
+    },
+
+    // ============================================================
+    // AUTOMATION WINDOW TARGETING
+    // ============================================================
+    /// List all automation-addressable windows with their IDs, kinds, and state.
+    #[serde(rename = "listAutomationWindows")]
+    ListAutomationWindows {
+        #[serde(rename = "requestId")]
+        request_id: String,
+    },
+
+    /// Response with the list of automation windows.
+    #[serde(rename = "automationWindowListResult")]
+    AutomationWindowListResult {
+        #[serde(rename = "requestId")]
+        request_id: String,
+        /// All currently registered automation windows.
+        windows: Vec<AutomationWindowInfo>,
+        /// ID of the window that currently has focus, if any.
+        #[serde(rename = "focusedWindowId", default, skip_serializing_if = "Option::is_none")]
+        focused_window_id: Option<String>,
+    },
+
+    // ============================================================
+    // GPUI EVENT SIMULATION
+    // ============================================================
+    /// Dispatch a high-fidelity input event through GPUI's real event pipeline.
+    #[serde(rename = "simulateGpuiEvent")]
+    SimulateGpuiEvent {
+        #[serde(rename = "requestId")]
+        request_id: String,
+        /// Optional window target (defaults to focused window).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        target: Option<AutomationWindowTarget>,
+        /// The event to simulate.
+        event: SimulatedGpuiEvent,
+    },
+
+    /// Result of a GPUI event simulation.
+    #[serde(rename = "simulateGpuiEventResult")]
+    SimulateGpuiEventResult {
+        #[serde(rename = "requestId")]
+        request_id: String,
+        /// Whether the event was dispatched successfully.
+        success: bool,
+        /// Error message if dispatch failed.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        error: Option<String>,
     },
 
         }

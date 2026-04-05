@@ -44,10 +44,7 @@ impl AcpAgentCatalogEntry {
 /// 1. `last_session_ok == true` beats `false` (proven-good agent).
 /// 2. Non-legacy source beats `LegacyClaudeCode` (generic-first).
 /// 3. Stable alphabetical tie-breaker on `display_name`.
-fn compare_launchable_candidates(
-    a: &AcpAgentCatalogEntry,
-    b: &AcpAgentCatalogEntry,
-) -> Ordering {
+fn compare_launchable_candidates(a: &AcpAgentCatalogEntry, b: &AcpAgentCatalogEntry) -> Ordering {
     let a_is_legacy = matches!(a.source, super::catalog::AcpAgentSource::LegacyClaudeCode);
     let b_is_legacy = matches!(b.source, super::catalog::AcpAgentSource::LegacyClaudeCode);
 
@@ -838,12 +835,10 @@ mod tests {
 
     #[test]
     fn ranking_with_requirements_prefers_capable_non_legacy() {
-        let mut opencode =
-            make_ranked_entry("opencode", AcpAgentSource::ScriptKitCatalog, false);
+        let mut opencode = make_ranked_entry("opencode", AcpAgentSource::ScriptKitCatalog, false);
         opencode.supports_image = Some(true);
 
-        let mut claude =
-            make_ranked_entry("claude-code", AcpAgentSource::LegacyClaudeCode, false);
+        let mut claude = make_ranked_entry("claude-code", AcpAgentSource::LegacyClaudeCode, false);
         claude.supports_image = Some(true);
 
         let agents = vec![claude, opencode];

@@ -28,12 +28,17 @@ impl Message {
         Message::CaptureScreenshot {
             request_id,
             hi_dpi: None,
+            target: None,
         }
     }
 
     /// Create a capture screenshot request with hi_dpi option
     pub fn capture_screenshot_with_options(request_id: String, hi_dpi: Option<bool>) -> Self {
-        Message::CaptureScreenshot { request_id, hi_dpi }
+        Message::CaptureScreenshot {
+            request_id,
+            hi_dpi,
+            target: None,
+        }
     }
 
     /// Create a screenshot result response
@@ -64,7 +69,10 @@ impl Message {
 
     /// Create a get state request
     pub fn get_state(request_id: String) -> Self {
-        Message::GetState { request_id }
+        Message::GetState {
+            request_id,
+            target: None,
+        }
     }
 
     /// Create a state result response
@@ -106,6 +114,7 @@ impl Message {
         Message::GetElements {
             request_id,
             limit: None,
+            target: None,
         }
     }
 
@@ -114,6 +123,7 @@ impl Message {
         Message::GetElements {
             request_id,
             limit: Some(limit),
+            target: None,
         }
     }
 
@@ -288,7 +298,10 @@ impl Message {
 
     /// Create a getAcpState request
     pub fn get_acp_state(request_id: String) -> Self {
-        Message::GetAcpState { request_id }
+        Message::GetAcpState {
+            request_id,
+            target: None,
+        }
     }
 
     /// Create an ACP state result response
@@ -307,7 +320,11 @@ impl Message {
 
     /// Create a getAcpTestProbe request
     pub fn get_acp_test_probe(request_id: String, tail: Option<usize>) -> Self {
-        Message::GetAcpTestProbe { request_id, tail }
+        Message::GetAcpTestProbe {
+            request_id,
+            tail,
+            target: None,
+        }
     }
 
     /// Create an ACP test probe result response
@@ -332,6 +349,7 @@ impl Message {
             timeout,
             poll_interval,
             trace: TransactionTraceMode::Off,
+            target: None,
         }
     }
 
@@ -349,6 +367,7 @@ impl Message {
             timeout,
             poll_interval,
             trace,
+            target: None,
         }
     }
 
@@ -396,6 +415,7 @@ impl Message {
             commands,
             options,
             trace: TransactionTraceMode::Off,
+            target: None,
         }
     }
 
@@ -411,6 +431,7 @@ impl Message {
             commands,
             options,
             trace,
+            target: None,
         }
     }
 
@@ -429,6 +450,63 @@ impl Message {
             failed_at,
             total_elapsed,
             trace: None,
+        }
+    }
+
+    // ============================================================
+    // Constructor methods for automation window targeting
+    // ============================================================
+
+    /// Create a listAutomationWindows request
+    pub fn list_automation_windows(request_id: String) -> Self {
+        Message::ListAutomationWindows { request_id }
+    }
+
+    /// Create an automation window list result response
+    pub fn automation_window_list_result(
+        request_id: String,
+        windows: Vec<AutomationWindowInfo>,
+        focused_window_id: Option<String>,
+    ) -> Self {
+        Message::AutomationWindowListResult {
+            request_id,
+            windows,
+            focused_window_id,
+        }
+    }
+
+    // ============================================================
+    // Constructor methods for GPUI event simulation
+    // ============================================================
+
+    /// Create a simulateGpuiEvent request
+    pub fn simulate_gpui_event(
+        request_id: String,
+        event: SimulatedGpuiEvent,
+        target: Option<AutomationWindowTarget>,
+    ) -> Self {
+        Message::SimulateGpuiEvent {
+            request_id,
+            target,
+            event,
+        }
+    }
+
+    /// Create a simulateGpuiEvent success result
+    pub fn simulate_gpui_event_result_success(request_id: String) -> Self {
+        Message::SimulateGpuiEventResult {
+            request_id,
+            success: true,
+            error: None,
+        }
+    }
+
+    /// Create a simulateGpuiEvent error result
+    pub fn simulate_gpui_event_result_error(request_id: String, error: String) -> Self {
+        Message::SimulateGpuiEventResult {
+            request_id,
+            success: false,
+            error: Some(error),
         }
     }
 

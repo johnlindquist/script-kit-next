@@ -121,6 +121,8 @@ pub(crate) struct AcpChatView {
     mention_session: Option<AcpMentionSession>,
     /// Cached parent window metadata for the detached picker popup.
     mention_popup_parent_window: Option<AcpMentionPopupParentWindow>,
+    /// Cached parent window metadata for the detached model selector popup.
+    model_selector_popup_parent_window: Option<AcpMentionPopupParentWindow>,
     /// Canonical inline tokens that currently own their attached context part.
     ///
     /// This preserves non-inline chip attachments during mention sync while
@@ -194,6 +196,16 @@ impl AcpChatView {
         });
     }
 
+    fn cache_popup_parent_window(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let parent = AcpMentionPopupParentWindow {
+            handle: window.window_handle(),
+            bounds: window.bounds(),
+            display_id: window.display(cx).map(|display| display.id()),
+        };
+        self.mention_popup_parent_window = Some(parent);
+        self.model_selector_popup_parent_window = Some(parent);
+    }
+
     fn mention_popup_snapshot(
         &self,
         cx: &App,
@@ -244,6 +256,89 @@ impl AcpChatView {
         } else {
             crate::ai::acp::picker_popup::close_mention_popup_window(cx);
         }
+    }
+
+    fn model_selector_popup_snapshot(
+        &self,
+        cx: &App,
+    ) -> Option<crate::ai::acp::model_selector_popup::AcpModelSelectorPopupSnapshot> {
+        if !self.model_selector_open {
+            return None;
+        }
+
+        let thread = self.live_thread().read(cx);
+        let selected_id = thread.selected_model_id().map(str::to_string);
+        let entries = thread
+            .available_models()
+            .iter()
+            .map(|model| crate::ai::acp::model_selector_popup::AcpModelSelectorPopupEntry {
+                id: model.id.clone(),
+                display: SharedString::from(
+                    model
+                        .display_name
+                        .clone()
+                        .unwrap_or_else(|| model.id.clone()),
+                ),
+                is_selected: selected_id.as_deref() == Some(model.id.as_str()),
+            })
+            .collect();
+
+        Some(crate::ai::acp::model_selector_popup::AcpModelSelectorPopupSnapshot {
+            entries,
+        })
+    }
+
+    pub(super) fn sync_model_selector_popup_window_from_cached_parent(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(parent) = self.model_selector_popup_parent_window else {
+            crate::ai::acp::model_selector_popup::close_model_selector_popup_window(cx);
+            return;
+        };
+
+        let source_view = cx.entity().downgrade();
+        if let Some(snapshot) = self.model_selector_popup_snapshot(cx) {
+            let _ = crate::ai::acp::model_selector_popup::sync_model_selector_popup_window(
+                cx,
+                crate::ai::acp::model_selector_popup::AcpModelSelectorPopupRequest {
+                    parent_window_handle: parent.handle,
+                    parent_bounds: parent.bounds,
+                    display_id: parent.display_id,
+                    source_view,
+                    snapshot,
+                },
+            );
+        } else {
+            crate::ai::acp::model_selector_popup::close_model_selector_popup_window(cx);
+        }
+    }
+
+    pub(super) fn select_model_from_popup(&mut self, model_id: &str, cx: &mut Context<Self>) {
+        self.live_thread().update(cx, |thread, cx| {
+            thread.select_model(model_id, cx);
+        });
+        self.model_selector_open = false;
+        self.sync_model_selector_popup_window_from_cached_parent(cx);
+        cx.notify();
+    }
+
+    pub(crate) fn dismiss_escape_popup(&mut self, cx: &mut Context<Self>) -> bool {
+        if self.model_selector_open {
+            self.model_selector_open = false;
+            self.sync_model_selector_popup_window_from_cached_parent(cx);
+            cx.notify();
+            return true;
+        }
+
+        if self.mention_session.is_some() {
+            self.mention_session = None;
+            self.sync_mention_popup_window_from_cached_parent(cx);
+            cx.notify();
+            return true;
+        }
+
+        false
     }
 
     /// Access the live thread entity, if in live mode.
@@ -444,6 +539,7 @@ impl AcpChatView {
             _slash_discovery_task: slash_task,
             mention_session: None,
             mention_popup_parent_window: None,
+            model_selector_popup_parent_window: None,
             inline_owned_context_tokens: HashSet::new(),
             setup_agent_picker: None,
             last_accepted_item: None,
@@ -483,6 +579,7 @@ impl AcpChatView {
             _slash_discovery_task: noop_slash,
             mention_session: None,
             mention_popup_parent_window: None,
+            model_selector_popup_parent_window: None,
             inline_owned_context_tokens: HashSet::new(),
             setup_agent_picker: None,
             last_accepted_item: None,
@@ -1815,72 +1912,6 @@ impl AcpChatView {
             .into_any_element()
     }
 
-    fn render_model_selector(&self, cx: &mut Context<Self>) -> gpui::AnyElement {
-        let theme = theme::get_cached_theme();
-        let thread = self.live_thread().read(cx);
-        let models = thread.available_models().to_vec();
-        let selected_id = thread.selected_model_id().map(|s| s.to_string());
-
-        div()
-            .absolute()
-            .bottom(px(
-                crate::window_resize::mini_layout::HINT_STRIP_HEIGHT + 4.0
-            ))
-            .left(px(8.0))
-            .w(px(200.0))
-            .rounded(px(8.0))
-            .bg(rgb(theme.colors.background.main))
-            .border_1()
-            .border_color(rgba((theme.colors.ui.border << 8) | 0x40))
-            .py(px(4.0))
-            .shadow_md()
-            .children(models.into_iter().enumerate().map(|(idx, model)| {
-                let model_id = model.id.clone();
-                let display = model
-                    .display_name
-                    .clone()
-                    .unwrap_or_else(|| model.id.clone());
-                let is_selected = selected_id.as_deref() == Some(model_id.as_str());
-                let accent = theme.colors.accent.selected;
-                let text_primary = theme.colors.text.primary;
-
-                div()
-                    .id(SharedString::from(format!("model-{idx}")))
-                    .w_full()
-                    .px(px(10.0))
-                    .py(px(5.0))
-                    .cursor_pointer()
-                    .rounded(px(4.0))
-                    .mx(px(4.0))
-                    .hover(|d| d.bg(rgba((text_primary << 8) | 0x0C)))
-                    .when(is_selected, |d| d.bg(rgba((accent << 8) | 0x10)))
-                    .on_click(cx.listener(move |this, _event, _window, cx| {
-                        this.live_thread().update(cx, |thread, cx| {
-                            thread.select_model(&model_id, cx);
-                        });
-                        this.model_selector_open = false;
-                        cx.notify();
-                    }))
-                    .child(
-                        div()
-                            .flex()
-                            .flex_row()
-                            .items_center()
-                            .justify_between()
-                            .child(
-                                div()
-                                    .text_sm()
-                                    .when(is_selected, |d| d.text_color(rgb(accent)))
-                                    .child(display),
-                            )
-                            .when(is_selected, |d| {
-                                d.child(div().text_xs().text_color(rgb(accent)).child("\u{2713}"))
-                            }),
-                    )
-            }))
-            .into_any_element()
-    }
-
     fn render_toolbar(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = theme::get_cached_theme();
         let is_streaming = matches!(
@@ -1958,12 +1989,15 @@ impl AcpChatView {
                                 rgba(hint_text_rgba)
                             })
                             .hover(|d| d.text_color(rgb(theme.colors.text.primary)))
-                            .on_click(cx.listener(|this, _event, _window, cx| {
+                            .on_click(cx.listener(|this, _event, window, cx| {
+                                this.cache_popup_parent_window(window, cx);
                                 this.model_selector_open = !this.model_selector_open;
                                 // Close other menus
                                 this.attach_menu_open = false;
                                 this.mention_session = None;
                                 this.history_menu = None;
+                                this.sync_mention_popup_window_from_cached_parent(cx);
+                                this.sync_model_selector_popup_window_from_cached_parent(cx);
                                 cx.notify();
                             }))
                             .child(model_display)
@@ -2770,7 +2804,7 @@ impl AcpChatView {
                 )
             })
             // Show the agent picker when open.
-            .when_some(self.render_setup_agent_picker_inline(), |d, picker| {
+            .when_some(self.render_setup_agent_picker_inline(state), |d, picker| {
                 d.child(picker)
             })
             .child(
@@ -2791,8 +2825,72 @@ impl AcpChatView {
             .into_any_element()
     }
 
+    fn setup_agent_install_label(
+        state: super::catalog::AcpAgentInstallState,
+    ) -> &'static str {
+        match state {
+            super::catalog::AcpAgentInstallState::Ready => "ready",
+            super::catalog::AcpAgentInstallState::NeedsInstall => "install",
+            super::catalog::AcpAgentInstallState::Unsupported => "unsupported",
+        }
+    }
+
+    fn setup_agent_auth_label(state: super::catalog::AcpAgentAuthState) -> &'static str {
+        match state {
+            super::catalog::AcpAgentAuthState::Unknown => "auth?",
+            super::catalog::AcpAgentAuthState::Authenticated => "authed",
+            super::catalog::AcpAgentAuthState::NeedsAuthentication => "login",
+        }
+    }
+
+    fn setup_agent_config_label(state: super::catalog::AcpAgentConfigState) -> &'static str {
+        match state {
+            super::catalog::AcpAgentConfigState::Valid => "config-ok",
+            super::catalog::AcpAgentConfigState::Missing => "config-missing",
+            super::catalog::AcpAgentConfigState::Invalid => "config-invalid",
+        }
+    }
+
+    fn setup_agent_capability_label(
+        entry: &super::catalog::AcpAgentCatalogEntry,
+        requirements: super::preflight::AcpLaunchRequirements,
+    ) -> Option<&'static str> {
+        if !requirements.needs_embedded_context && !requirements.needs_image {
+            return None;
+        }
+        if entry.satisfies_requirements(requirements) {
+            Some("compatible")
+        } else if requirements.needs_image {
+            Some("image-mismatch")
+        } else {
+            Some("context-mismatch")
+        }
+    }
+
+    fn format_setup_agent_picker_status(
+        entry: &super::catalog::AcpAgentCatalogEntry,
+        requirements: super::preflight::AcpLaunchRequirements,
+    ) -> String {
+        let mut parts = vec![
+            format!("{:?}", entry.source),
+            Self::setup_agent_install_label(entry.install_state).to_string(),
+            Self::setup_agent_auth_label(entry.auth_state).to_string(),
+            Self::setup_agent_config_label(entry.config_state).to_string(),
+        ];
+        if let Some(capability) = Self::setup_agent_capability_label(entry, requirements) {
+            parts.push(capability.to_string());
+        }
+        if entry.last_session_ok {
+            parts.push("last-ok".to_string());
+        }
+        parts.join(" \u{00b7} ")
+    }
+
     /// Render the setup agent picker inline (non-mut version for use in render).
-    fn render_setup_agent_picker_inline(&self) -> Option<gpui::AnyElement> {
+    fn render_setup_agent_picker_inline(
+        &self,
+        setup: &super::setup_state::AcpInlineSetupState,
+    ) -> Option<gpui::AnyElement> {
         let picker = self.setup_agent_picker.as_ref()?;
         let theme = theme::get_cached_theme();
 
@@ -2802,10 +2900,8 @@ impl AcpChatView {
             .enumerate()
             .map(|(ix, item)| {
                 let is_selected = ix == picker.selected_index;
-                let status_text: String = format!(
-                    "{:?} \u{00b7} {:?} \u{00b7} {:?}",
-                    item.source, item.install_state, item.config_state,
-                );
+                let status_text =
+                    Self::format_setup_agent_picker_status(item, setup.launch_requirements);
                 div()
                     .id(gpui::ElementId::Name(
                         format!("acp-setup-agent-{ix}").into(),
@@ -2949,6 +3045,12 @@ impl AcpChatView {
             selected_index,
         });
 
+        let compatible_count = setup
+            .catalog_entries
+            .iter()
+            .filter(|entry| entry.satisfies_requirements(setup.launch_requirements))
+            .count();
+
         tracing::info!(
             target: "script_kit::tab_ai",
             event = "acp_setup_agent_picker_opened",
@@ -2958,6 +3060,9 @@ impl AcpChatView {
                 .map(|p| p.items.len())
                 .unwrap_or(0),
             selected_index,
+            compatible_count,
+            needs_embedded_context = setup.launch_requirements.needs_embedded_context,
+            needs_image = setup.launch_requirements.needs_image,
         );
         cx.notify();
     }
@@ -3336,15 +3441,14 @@ impl AcpChatView {
         let modifiers = &event.keystroke.modifiers;
 
         // ── Model selector dismiss on Escape ───────────────────
-        if self.model_selector_open && crate::ui_foundation::is_key_escape(key) {
-            self.model_selector_open = false;
-            cx.notify();
+        if crate::ui_foundation::is_key_escape(key) && self.dismiss_escape_popup(cx) {
             cx.stop_propagation();
             return;
         }
         // Close model selector on any non-modifier key
         if self.model_selector_open {
             self.model_selector_open = false;
+            self.sync_model_selector_popup_window_from_cached_parent(cx);
             cx.notify();
         }
 
@@ -3923,7 +4027,7 @@ impl Render for AcpChatView {
                 cx.listener(|this, event: &gpui::KeyDownEvent, window, cx| {
                     let key = event.keystroke.key.as_str();
                     let modifiers = &event.keystroke.modifiers;
-                    this.cache_mention_popup_parent_window(window, cx);
+                    this.cache_popup_parent_window(window, cx);
 
                     // Cmd+W in detached window: close the window directly.
                     // In the main panel, Cmd+W is handled by the interceptor.
@@ -4372,10 +4476,6 @@ impl Render for AcpChatView {
             // ── Attach menu popup ──────────────────────────
             .when(self.attach_menu_open, |d| {
                 d.child(self.render_attach_menu(cx))
-            })
-            // ── Model selector popup ──────────────────────────
-            .when(self.model_selector_open, |d| {
-                d.child(self.render_model_selector(cx))
             })
             // ── BOTTOM: Hint strip ─────────────────────
             .child(self.render_toolbar(cx))
