@@ -257,6 +257,9 @@ pub struct AcpPickerItemAcceptedTelemetry {
 /// Schema version for the ACP test probe response envelope.
 pub const ACP_TEST_PROBE_SCHEMA_VERSION: u32 = 1;
 
+/// Maximum number of events stored per category in the test probe ring buffer.
+pub const ACP_TEST_PROBE_MAX_EVENTS: usize = 32;
+
 /// Top-level ACP test probe snapshot returned by `getAcpTestProbe`.
 ///
 /// Contains a bounded tail of recent key-route, picker-acceptance, and
@@ -808,5 +811,80 @@ mod tests {
             e_json["key"], t_json["key"],
             "enter and tab key-route events must have distinct key fields"
         );
+    }
+
+    // ── AcpTestProbeSnapshot serde ─────────────────────────────
+
+    #[test]
+    fn acp_test_probe_snapshot_default_round_trips() {
+        let snap = AcpTestProbeSnapshot::default();
+        let json = serde_json::to_value(&snap).expect("serialize default probe");
+        assert_eq!(json["schemaVersion"], ACP_TEST_PROBE_SCHEMA_VERSION);
+        assert_eq!(json["eventSeq"], 0);
+        assert!(json["keyRoutes"].as_array().expect("array").is_empty());
+        assert!(json["acceptedItems"].as_array().expect("array").is_empty());
+        assert!(json.get("inputLayout").is_none());
+
+        let back: AcpTestProbeSnapshot =
+            serde_json::from_value(json).expect("deserialize default probe");
+        assert_eq!(back, snap);
+    }
+
+    #[test]
+    fn acp_test_probe_snapshot_with_events_round_trips() {
+        let snap = AcpTestProbeSnapshot {
+            schema_version: ACP_TEST_PROBE_SCHEMA_VERSION,
+            event_seq: 14,
+            key_routes: vec![AcpKeyRouteTelemetry {
+                key: "tab".to_string(),
+                route: AcpKeyRoute::Picker,
+                picker_open: true,
+                permission_active: false,
+                cursor_before: 1,
+                cursor_after: 17,
+                caused_submit: false,
+                consumed: true,
+            }],
+            accepted_items: vec![AcpPickerItemAcceptedTelemetry {
+                trigger: "@".to_string(),
+                item_label: "Current Context".to_string(),
+                item_id: "built_in:context".to_string(),
+                accepted_via_key: "tab".to_string(),
+                cursor_after: 17,
+                caused_submit: false,
+            }],
+            input_layout: Some(AcpInputLayoutTelemetry {
+                char_count: 27,
+                visible_start: 0,
+                visible_end: 27,
+                cursor_in_window: 17,
+            }),
+            state: AcpStateSnapshot {
+                status: "idle".to_string(),
+                cursor_index: 17,
+                ..Default::default()
+            },
+        };
+        let json = serde_json::to_value(&snap).expect("serialize probe with events");
+        assert_eq!(json["eventSeq"], 14);
+        assert_eq!(json["keyRoutes"][0]["key"], "tab");
+        assert_eq!(json["acceptedItems"][0]["acceptedViaKey"], "tab");
+        assert_eq!(json["acceptedItems"][0]["cursorAfter"], 17);
+        assert_eq!(json["inputLayout"]["cursorInWindow"], 17);
+        assert_eq!(json["state"]["cursorIndex"], 17);
+
+        let back: AcpTestProbeSnapshot =
+            serde_json::from_value(json).expect("deserialize probe with events");
+        assert_eq!(back, snap);
+    }
+
+    #[test]
+    fn acp_test_probe_snapshot_schema_version_constant() {
+        assert_eq!(ACP_TEST_PROBE_SCHEMA_VERSION, 1);
+    }
+
+    #[test]
+    fn acp_test_probe_max_events_constant() {
+        assert_eq!(ACP_TEST_PROBE_MAX_EVENTS, 32);
     }
 }

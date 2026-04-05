@@ -255,6 +255,15 @@ enum PromptMessage {
     GetAcpState {
         request_id: String,
     },
+    /// Reset the ACP test probe ring buffer
+    ResetAcpTestProbe {
+        request_id: String,
+    },
+    /// Request a bounded ACP test probe snapshot
+    GetAcpTestProbe {
+        request_id: String,
+        tail: Option<usize>,
+    },
     /// Wait for a UI condition to be satisfied (polling)
     WaitFor {
         request_id: String,

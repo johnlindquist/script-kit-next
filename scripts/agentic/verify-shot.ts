@@ -2,16 +2,14 @@
 /**
  * scripts/agentic/verify-shot.ts
  *
- * Screenshot assertion helper for ACP agentic testing.
- * Captures a screenshot, reads the PNG, and returns a JSON pass/fail
- * receipt tied to explicit ACP state assertions and/or visual anchors.
+ * ACP proof bundle: state receipt + test probe + screenshot + vision prompts.
  *
  * The reliable ACP verification order is:
  *   1. State receipt (getAcpState) — machine-readable proof
- *   2. Screenshot capture — visual proof (secondary confirmation)
- *   3. Note: actual image-read / pixel inspection is NOT performed automatically.
- *      The screenshot is captured and its metadata recorded, but a human or
- *      external vision tool must inspect the PNG to confirm visual correctness.
+ *   2. Probe receipt (getAcpTestProbe) — key-route / picker-acceptance telemetry
+ *   3. Screenshot capture — visual proof (secondary confirmation)
+ *   4. Vision checks — structured prompts for external image readers
+ *   Note: actual image-read / pixel inspection is NOT performed automatically.
  *
  * Usage:
  *   bun scripts/agentic/verify-shot.ts --session NAME [options]
@@ -29,6 +27,8 @@
  *   --acp-item-accepted         Assert lastAcceptedItem is non-null
  *   --acp-accepted-label STR    Assert lastAcceptedItem.label equals STR
  *   --acp-accepted-trigger STR  Assert lastAcceptedItem.trigger equals STR (@ or /)
+ *   --acp-accepted-via KEY      Assert probe acceptedItems[last].acceptedViaKey equals KEY (enter|tab)
+ *   --acp-cursor-after-accepted N  Assert probe acceptedItems[last].cursorAfter equals N
  *   --acp-context-ready         Assert contextReady is true
  *   --acp-no-selection          Assert hasSelection is false
  *   --acp-has-selection         Assert hasSelection is true
@@ -37,8 +37,11 @@
  *   --acp-visible-start N       Assert inputLayout.visibleStart equals N
  *   --acp-visible-end N         Assert inputLayout.visibleEnd equals N
  *   --acp-cursor-in-window N    Assert inputLayout.cursorInWindow equals N
+ *   --probe-tail N              Number of probe events to request (default: 20)
+ *   --emit-vision-crops         Emit vision check entries with crop regions for external readers
  *   --skip-screenshot           Only run state assertions, skip capture
  *   --skip-state                Only capture screenshot, skip ACP state query
+ *   --skip-probe                Skip ACP test probe query
  *   --request-id ID             Request ID for getAcpState (default: auto-generated)
  *   --json                      (default) Output JSON receipt
  *   --help                      Show this help
@@ -52,7 +55,7 @@
 import { existsSync, mkdirSync, statSync } from "fs";
 import { join, resolve } from "path";
 
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 const PROJECT_ROOT = resolve(import.meta.dir, "../..");
 
 // ---------------------------------------------------------------------------
@@ -66,12 +69,20 @@ interface VerifyReceipt {
   timestamp: string;
   durationMs: number;
   stateReceipt: AcpStateResult | null;
+  probeReceipt: ProbeResult | null;
   screenshotReceipt: ScreenshotResult | null;
+  visionChecks: VisionCheck[];
   assertions: AssertionResult[];
   summary: string;
 }
 
 interface AcpStateResult {
+  queried: boolean;
+  snapshot: Record<string, unknown> | null;
+  error: string | null;
+}
+
+interface ProbeResult {
   queried: boolean;
   snapshot: Record<string, unknown> | null;
   error: string | null;
@@ -86,6 +97,13 @@ interface ScreenshotResult {
   captureMethod: "window.ts" | "captureWindow" | null;
   windowFrontmost: boolean | null;
   error: string | null;
+}
+
+interface VisionCheck {
+  name: string;
+  path: string;
+  question: string;
+  crop: { x: number; y: number; width: number; height: number } | null;
 }
 
 interface AssertionResult {
@@ -127,6 +145,10 @@ function parseArgs() {
       opts.acpNoPermission = true;
     } else if (arg === "--acp-has-permission") {
       opts.acpHasPermission = true;
+    } else if (arg === "--emit-vision-crops") {
+      opts.emitVisionCrops = true;
+    } else if (arg === "--skip-probe") {
+      opts.skipProbe = true;
     } else if (arg === "--json") {
       // default, no-op
     } else if (arg.startsWith("--") && i + 1 < args.length) {
@@ -235,6 +257,89 @@ async function queryAcpState(
     snapshot: response as Record<string, unknown>,
     error: null,
   };
+}
+
+async function queryAcpTestProbe(
+  session: string,
+  requestId: string,
+  tail: number
+): Promise<ProbeResult> {
+  const sessionScript = join(PROJECT_ROOT, "scripts/agentic/session.sh");
+  const cmd = JSON.stringify({
+    type: "getAcpTestProbe",
+    requestId,
+    tail,
+  });
+
+  const proc = Bun.spawn(
+    [
+      "bash",
+      sessionScript,
+      "rpc",
+      session,
+      cmd,
+      "--expect",
+      "acpTestProbeResult",
+      "--timeout",
+      "3000",
+    ],
+    {
+      stdout: "pipe",
+      stderr: "pipe",
+    }
+  );
+  const stdout = await new Response(proc.stdout).text();
+  const stderr = await new Response(proc.stderr).text();
+  const code = await proc.exited;
+
+  let parsed: Record<string, unknown> | null = null;
+  try {
+    parsed = JSON.parse(stdout) as Record<string, unknown>;
+  } catch {
+    parsed = null;
+  }
+
+  if (code !== 0) {
+    const errorMessage =
+      parsed &&
+      typeof parsed.error === "object" &&
+      parsed.error != null &&
+      typeof (parsed.error as Record<string, unknown>).message === "string"
+        ? String((parsed.error as Record<string, unknown>).message)
+        : stderr.trim() || stdout.trim() || "RPC failed";
+    return {
+      queried: true,
+      snapshot: null,
+      error: `Failed to query getAcpTestProbe: ${errorMessage}`,
+    };
+  }
+
+  const response = parsed?.response;
+  if (!response || typeof response !== "object") {
+    return {
+      queried: true,
+      snapshot: null,
+      error: "RPC completed but did not return an acpTestProbeResult payload",
+    };
+  }
+
+  if ((response as Record<string, unknown>).type !== "acpTestProbeResult") {
+    return {
+      queried: true,
+      snapshot: null,
+      error: "RPC returned an unexpected response type",
+    };
+  }
+
+  return {
+    queried: true,
+    snapshot: response as Record<string, unknown>,
+    error: null,
+  };
+}
+
+function diag(event: string, data: Record<string, unknown> = {}): void {
+  console.error(JSON.stringify({ event, ...data }));
 }
 
 async function getImageDimensions(
@@ -693,6 +798,136 @@ function runAssertions(
   return results;
 }
 
+function runProbeAssertions(
+  probeSnapshot: Record<string, unknown> | null,
+  opts: Record<string, string | boolean>
+): AssertionResult[] {
+  const results: AssertionResult[] = [];
+
+  const needsProbe =
+    hasOpt(opts, "acpAcceptedVia") || hasOpt(opts, "acpCursorAfterAccepted");
+  if (!needsProbe) return results;
+
+  if (!probeSnapshot) {
+    if (hasOpt(opts, "acpAcceptedVia")) {
+      results.push({
+        name: "acp-accepted-via",
+        expected: String(opts.acpAcceptedVia),
+        actual: "<no probe>",
+        passed: false,
+      });
+    }
+    if (hasOpt(opts, "acpCursorAfterAccepted")) {
+      results.push({
+        name: "acp-cursor-after-accepted",
+        expected: String(opts.acpCursorAfterAccepted),
+        actual: "<no probe>",
+        passed: false,
+      });
+    }
+    return results;
+  }
+
+  // Extract the last accepted item from the probe
+  const acceptedItems = probeSnapshot.acceptedItems as
+    | Record<string, unknown>[]
+    | undefined;
+  const lastAccepted =
+    acceptedItems && acceptedItems.length > 0
+      ? acceptedItems[acceptedItems.length - 1]
+      : null;
+
+  if (hasOpt(opts, "acpAcceptedVia")) {
+    const expected = String(opts.acpAcceptedVia);
+    const actual = lastAccepted
+      ? String(lastAccepted.acceptedViaKey ?? "<missing>")
+      : "<no accepted items>";
+    results.push({
+      name: "acp-accepted-via",
+      expected,
+      actual,
+      passed: actual === expected,
+    });
+  }
+
+  if (hasOpt(opts, "acpCursorAfterAccepted")) {
+    const expected = Number(opts.acpCursorAfterAccepted);
+    const actual = lastAccepted
+      ? Number(lastAccepted.cursorAfter ?? -1)
+      : -1;
+    results.push({
+      name: "acp-cursor-after-accepted",
+      expected: String(expected),
+      actual: lastAccepted ? String(actual) : "<no accepted items>",
+      passed: actual === expected,
+    });
+  }
+
+  return results;
+}
+
+function buildVisionChecks(
+  screenshotResult: ScreenshotResult | null,
+  probeSnapshot: Record<string, unknown> | null,
+  opts: Record<string, string | boolean>
+): VisionCheck[] {
+  if (!opts.emitVisionCrops) return [];
+  if (!screenshotResult?.captured || !screenshotResult.path) return [];
+
+  const checks: VisionCheck[] = [];
+  const imgWidth = screenshotResult.width ?? 998;
+  const imgHeight = screenshotResult.height ?? 712;
+
+  // Composer line check — bottom region of the window where input lives
+  const composerHeight = 56;
+  const composerY = Math.max(0, imgHeight - composerHeight - 40);
+  checks.push({
+    name: "composer-line",
+    path: screenshotResult.path,
+    question:
+      "Is the caret immediately after the inserted token with no picker still visible?",
+    crop: {
+      x: 0,
+      y: composerY,
+      width: imgWidth,
+      height: composerHeight,
+    },
+  });
+
+  // Picker visibility check — middle area where picker dropdown appears
+  if (opts.acpPickerClosed || hasOpt(opts, "acpAcceptedVia")) {
+    checks.push({
+      name: "picker-dismissed",
+      path: screenshotResult.path,
+      question:
+        "Is the inline mention/slash picker dropdown fully dismissed (no floating list visible)?",
+      crop: {
+        x: 0,
+        y: Math.max(0, composerY - 200),
+        width: imgWidth,
+        height: 200,
+      },
+    });
+  }
+
+  if (opts.acpPickerOpen) {
+    checks.push({
+      name: "picker-visible",
+      path: screenshotResult.path,
+      question:
+        "Is the inline mention/slash picker dropdown visible with selectable rows?",
+      crop: {
+        x: 0,
+        y: Math.max(0, composerY - 200),
+        width: imgWidth,
+        height: 200,
+      },
+    });
+  }
+
+  return checks;
+}
+
 // ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
@@ -702,7 +937,7 @@ const opts = parseArgs();
 if (opts.help) {
   console.log(`Usage: bun scripts/agentic/verify-shot.ts --session NAME [options]
 
-Captures a screenshot and verifies ACP state assertions. Returns a JSON receipt.
+ACP proof bundle: state receipt + test probe + screenshot + vision prompts.
 
 Options:
   --session NAME              Session name (default: "default")
@@ -717,6 +952,8 @@ Options:
   --acp-item-accepted         Assert lastAcceptedItem is non-null
   --acp-accepted-label STR    Assert lastAcceptedItem.label equals STR
   --acp-accepted-trigger STR  Assert lastAcceptedItem.trigger equals STR (@ or /)
+  --acp-accepted-via KEY      Assert probe acceptedItems[last].acceptedViaKey (enter|tab)
+  --acp-cursor-after-accepted N  Assert probe acceptedItems[last].cursorAfter equals N
   --acp-context-ready         Assert contextReady is true
   --acp-no-selection          Assert hasSelection is false
   --acp-has-selection         Assert hasSelection is true
@@ -725,15 +962,20 @@ Options:
   --acp-visible-start N       Assert inputLayout.visibleStart equals N
   --acp-visible-end N         Assert inputLayout.visibleEnd equals N
   --acp-cursor-in-window N    Assert inputLayout.cursorInWindow equals N
+  --probe-tail N              Number of probe events to request (default: 20)
+  --emit-vision-crops         Emit vision check entries with crop regions
   --skip-screenshot           Only run state assertions, skip capture
   --skip-state                Only capture screenshot, skip state query
+  --skip-probe                Skip ACP test probe query
   --request-id ID             Request ID for getAcpState (auto-generated)
 
 Verification order (ACP golden path):
-  1. State receipt first (getAcpState) — machine-readable proof
-  2. Screenshot capture — secondary visual proof (metadata only; no automatic
-     pixel inspection is performed — a human or vision tool must read the PNG)
-  3. Assertions check ACP state fields
+  1. State receipt (getAcpState) — machine-readable proof
+  2. Probe receipt (getAcpTestProbe) — key-route/picker-acceptance telemetry
+  3. Screenshot capture — visual proof (metadata only; no automatic
+     pixel inspection — a human or vision tool must read the PNG)
+  4. Vision checks — structured prompts for external image readers
+  5. Assertions check state + probe fields
 
 Exit 0 = all assertions pass. Exit 1 = assertion failure. Exit 2 = infra error.`);
   process.exit(0);
@@ -746,6 +988,8 @@ const requestId =
   String(opts.requestId ?? `verify-${label}-${Date.now()}`);
 const skipScreenshot = opts.skipScreenshot === true;
 const skipState = opts.skipState === true;
+const skipProbe = opts.skipProbe === true;
+const probeTail = Number(opts.probeTail ?? 20);
 
 // Determine output path
 let outPath: string;
@@ -768,19 +1012,67 @@ if (!skipState) {
   stateResult = await queryAcpState(session, requestId);
 }
 
-// Step 2: Capture screenshot (unless skipped)
+// Step 2: Query ACP test probe (unless skipped) — before screenshot
+let probeResult: ProbeResult | null = null;
+const needsProbe =
+  !skipProbe &&
+  (hasOpt(opts, "acpAcceptedVia") ||
+    hasOpt(opts, "acpCursorAfterAccepted") ||
+    !skipState);
+if (needsProbe) {
+  const probeRequestId = `${requestId}-probe`;
+  probeResult = await queryAcpTestProbe(session, probeRequestId, probeTail);
+  diag("verify_shot_probe_loaded", {
+    label,
+    queried: probeResult.queried,
+    hasSnapshot: probeResult.snapshot != null,
+    acceptedVia: hasOpt(opts, "acpAcceptedVia")
+      ? String(opts.acpAcceptedVia)
+      : null,
+    cursorAfterAccepted: hasOpt(opts, "acpCursorAfterAccepted")
+      ? String(opts.acpCursorAfterAccepted)
+      : null,
+    error: probeResult.error ?? null,
+  });
+}
+
+// Step 3: Capture screenshot (unless skipped)
 let screenshotResult: ScreenshotResult | null = null;
 if (!skipScreenshot) {
   screenshotResult = await captureScreenshot(session, outPath);
 }
 
-// Step 3: Run assertions against state
-const assertions = runAssertions(stateResult?.snapshot ?? null, opts);
+// Step 4: Run assertions against state + probe
+const stateAssertions = runAssertions(stateResult?.snapshot ?? null, opts);
+const probeAssertions = runProbeAssertions(
+  probeResult?.snapshot ?? null,
+  opts
+);
+const assertions = [...stateAssertions, ...probeAssertions];
+
+// Step 5: Build vision checks
+const visionChecks = buildVisionChecks(
+  screenshotResult,
+  probeResult?.snapshot ?? null,
+  opts
+);
+
+// Log assertion evaluation
+for (const a of assertions) {
+  diag("verify_shot_assertion", {
+    label,
+    assertion: a.name,
+    expected: a.expected,
+    actual: a.actual,
+    passed: a.passed,
+  });
+}
 
 // Build receipt
 const allPassed = assertions.every((a) => a.passed);
 const hasInfraError =
   (stateResult?.error && !skipState) ||
+  (probeResult?.error && needsProbe) ||
   (screenshotResult && !screenshotResult.captured && !skipScreenshot);
 
 const receipt: VerifyReceipt = {
@@ -790,9 +1082,11 @@ const receipt: VerifyReceipt = {
   timestamp: new Date().toISOString(),
   durationMs: Date.now() - startTime,
   stateReceipt: stateResult,
+  probeReceipt: probeResult,
   screenshotReceipt: screenshotResult,
+  visionChecks,
   assertions,
-  summary: buildSummary(assertions, stateResult, screenshotResult),
+  summary: buildSummary(assertions, stateResult, probeResult, screenshotResult),
 };
 
 console.log(JSON.stringify(receipt, null, 2));
@@ -806,6 +1100,7 @@ if (hasInfraError && assertions.length === 0) {
 function buildSummary(
   assertions: AssertionResult[],
   state: AcpStateResult | null,
+  probe: ProbeResult | null,
   screenshot: ScreenshotResult | null
 ): string {
   const parts: string[] = [];
@@ -815,6 +1110,14 @@ function buildSummary(
       parts.push(`state: ERROR (${state.error})`);
     } else {
       parts.push("state: queried");
+    }
+  }
+
+  if (probe) {
+    if (probe.error) {
+      parts.push(`probe: ERROR (${probe.error})`);
+    } else {
+      parts.push("probe: queried");
     }
   }
 

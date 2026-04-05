@@ -1523,6 +1523,47 @@ impl ScriptListApp {
                                         continue;
                                     }
 
+                                    // Handle ResetAcpTestProbe - forward to UI thread
+                                    if let Message::ResetAcpTestProbe { request_id } = &msg {
+                                        tracing::info!(
+                                            category = "EXEC",
+                                            request_id = %request_id,
+                                            "ResetAcpTestProbe request"
+                                        );
+                                        let prompt_msg = PromptMessage::ResetAcpTestProbe {
+                                            request_id: request_id.clone(),
+                                        };
+                                        if tx.send_blocking(prompt_msg).is_err() {
+                                            tracing::info!(
+                                                category = "EXEC",
+                                                "Prompt channel closed, reader exiting"
+                                            );
+                                            break;
+                                        }
+                                        continue;
+                                    }
+
+                                    // Handle GetAcpTestProbe - forward to UI thread
+                                    if let Message::GetAcpTestProbe { request_id, tail } = &msg {
+                                        tracing::info!(
+                                            category = "EXEC",
+                                            request_id = %request_id,
+                                            "GetAcpTestProbe request"
+                                        );
+                                        let prompt_msg = PromptMessage::GetAcpTestProbe {
+                                            request_id: request_id.clone(),
+                                            tail: *tail,
+                                        };
+                                        if tx.send_blocking(prompt_msg).is_err() {
+                                            tracing::info!(
+                                                category = "EXEC",
+                                                "Prompt channel closed, reader exiting"
+                                            );
+                                            break;
+                                        }
+                                        continue;
+                                    }
+
                                     // Handle GetLayoutInfo - needs UI state, forward to UI thread
                                     if let Message::GetLayoutInfo { request_id } = &msg {
                                         tracing::info!(

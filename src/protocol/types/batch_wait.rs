@@ -95,10 +95,13 @@ pub enum WaitDetailedCondition {
     /// ACP proof: wait until the input layout matches specific visibility metrics.
     AcpInputLayoutMatch {
         /// Visible window start (character index).
+        #[serde(rename = "visibleStart")]
         visible_start: usize,
         /// Visible window end (character index, exclusive).
+        #[serde(rename = "visibleEnd")]
         visible_end: usize,
         /// Cursor position within the visible window (0-based from visible_start).
+        #[serde(rename = "cursorInWindow")]
         cursor_in_window: usize,
     },
 }

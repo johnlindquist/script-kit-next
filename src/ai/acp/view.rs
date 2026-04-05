@@ -121,7 +121,28 @@ pub(crate) struct AcpChatView {
     setup_agent_picker: Option<AcpSetupAgentPickerState>,
     /// Most recently accepted picker item (for telemetry/testing).
     last_accepted_item: Option<crate::protocol::AcpAcceptedItem>,
+    /// Bounded test probe ring buffer for agentic verification.
+    test_probe: AcpTestProbe,
 }
+
+/// Bounded ring buffer for ACP test probe events.
+///
+/// Agents can reset, record, and snapshot this to verify native picker
+/// acceptance without scraping logs. Storage is cheap and bounded.
+#[derive(Clone, Debug, Default)]
+pub(crate) struct AcpTestProbe {
+    /// Monotonically increasing event counter.
+    pub(crate) event_seq: u64,
+    /// Recent key-route events (bounded by `MAX_EVENTS`).
+    pub(crate) key_routes: std::collections::VecDeque<crate::protocol::AcpKeyRouteTelemetry>,
+    /// Recent picker-acceptance events (bounded by `MAX_EVENTS`).
+    pub(crate) accepted_items:
+        std::collections::VecDeque<crate::protocol::AcpPickerItemAcceptedTelemetry>,
+    /// Most recent input-layout telemetry.
+    pub(crate) input_layout: Option<crate::protocol::AcpInputLayoutTelemetry>,
+}
+
+use crate::protocol::ACP_TEST_PROBE_MAX_EVENTS;
 
 /// State for the setup-mode agent selection picker.
 #[derive(Debug, Clone)]
@@ -356,6 +377,7 @@ impl AcpChatView {
             inline_owned_context_tokens: HashSet::new(),
             setup_agent_picker: None,
             last_accepted_item: None,
+            test_probe: AcpTestProbe::default(),
         }
     }
 
@@ -393,6 +415,7 @@ impl AcpChatView {
             inline_owned_context_tokens: HashSet::new(),
             setup_agent_picker: None,
             last_accepted_item: None,
+            test_probe: AcpTestProbe::default(),
         }
     }
 
@@ -2991,12 +3014,105 @@ impl AcpChatView {
         }
     }
 
+    // ── Test probe methods ────────────────────────────────────
+
+    /// Reset the test probe, clearing all recorded events.
+    pub(crate) fn reset_test_probe(&mut self) {
+        self.test_probe.event_seq = 0;
+        self.test_probe.key_routes.clear();
+        self.test_probe.accepted_items.clear();
+        self.test_probe.input_layout = None;
+        tracing::info!(
+            target: "script_kit::acp_telemetry",
+            event = "acp_test_probe_reset",
+        );
+    }
+
+    /// Record a key-route event into the test probe ring buffer.
+    pub(crate) fn record_key_route(
+        &mut self,
+        event: crate::protocol::AcpKeyRouteTelemetry,
+    ) {
+        self.test_probe.event_seq += 1;
+        if self.test_probe.key_routes.len() >= ACP_TEST_PROBE_MAX_EVENTS {
+            self.test_probe.key_routes.pop_front();
+        }
+        self.test_probe.key_routes.push_back(event);
+    }
+
+    /// Record a picker-acceptance event into the test probe ring buffer.
+    pub(crate) fn record_picker_accept(
+        &mut self,
+        event: crate::protocol::AcpPickerItemAcceptedTelemetry,
+    ) {
+        self.test_probe.event_seq += 1;
+        if self.test_probe.accepted_items.len() >= ACP_TEST_PROBE_MAX_EVENTS {
+            self.test_probe.accepted_items.pop_front();
+        }
+        self.test_probe.accepted_items.push_back(event);
+    }
+
+    /// Record an input-layout event into the test probe.
+    pub(crate) fn record_input_layout(
+        &mut self,
+        event: crate::protocol::AcpInputLayoutTelemetry,
+    ) {
+        self.test_probe.event_seq += 1;
+        self.test_probe.input_layout = Some(event);
+    }
+
+    /// Build a bounded snapshot of the test probe for agent queries.
+    pub(crate) fn test_probe_snapshot(
+        &self,
+        tail: usize,
+        cx: &gpui::App,
+    ) -> crate::protocol::AcpTestProbeSnapshot {
+        use crate::protocol::ACP_TEST_PROBE_SCHEMA_VERSION;
+
+        let key_routes: Vec<_> = self
+            .test_probe
+            .key_routes
+            .iter()
+            .rev()
+            .take(tail)
+            .rev()
+            .cloned()
+            .collect();
+        let accepted_items: Vec<_> = self
+            .test_probe
+            .accepted_items
+            .iter()
+            .rev()
+            .take(tail)
+            .rev()
+            .cloned()
+            .collect();
+
+        tracing::info!(
+            target: "script_kit::acp_telemetry",
+            event = "acp_test_probe_snapshot_requested",
+            tail = tail,
+            event_seq = self.test_probe.event_seq,
+        );
+
+        crate::protocol::AcpTestProbeSnapshot {
+            schema_version: ACP_TEST_PROBE_SCHEMA_VERSION,
+            event_seq: self.test_probe.event_seq,
+            key_routes,
+            accepted_items,
+            input_layout: self.test_probe.input_layout.clone(),
+            state: self.collect_acp_state_snapshot(cx),
+        }
+    }
+
+    // ── Telemetry emission ───────────────────────────────────
+
     /// Emit structured ACP key-routing telemetry.
     ///
     /// Logged on `script_kit::acp_telemetry` target. Contains no user content —
     /// only the key name, route, indices, and booleans.
     fn emit_key_route_telemetry(
-        &self,
+        &mut self,
         key: &str,
         route: crate::protocol::AcpKeyRoute,
         cursor_before: usize,
@@ -3019,6 +3135,8 @@ impl AcpChatView {
             caused_submit,
             consumed,
         };
+        // Record into test probe ring buffer.
+        self.record_key_route(telemetry.clone());
         let telemetry_json = serde_json::to_string(&telemetry).unwrap_or_default();
         tracing::info!(
             target: "script_kit::acp_telemetry",
@@ -3037,7 +3155,7 @@ impl AcpChatView {
 
     /// Emit structured picker-accepted telemetry after a mention/slash item is accepted.
     fn emit_picker_accepted_telemetry(
-        &self,
+        &mut self,
         trigger: &str,
         item_label: &str,
         item_id: &str,
@@ -3053,6 +3171,8 @@ impl AcpChatView {
             cursor_after,
             caused_submit,
         };
+        // Record into test probe ring buffer.
+        self.record_picker_accept(telemetry.clone());
         let telemetry_json = serde_json::to_string(&telemetry).unwrap_or_default();
         tracing::info!(
             target: "script_kit::acp_telemetry",
@@ -3068,13 +3188,15 @@ impl AcpChatView {
     }
 
     /// Emit structured input-layout telemetry after a mutation that may shift the visible window.
-    fn emit_input_layout_telemetry(&self, layout: &crate::protocol::AcpInputLayoutMetrics) {
+    fn emit_input_layout_telemetry(&mut self, layout: &crate::protocol::AcpInputLayoutMetrics) {
         let telemetry = crate::protocol::AcpInputLayoutTelemetry {
             char_count: layout.char_count,
             visible_start: layout.visible_start,
             visible_end: layout.visible_end,
             cursor_in_window: layout.cursor_in_window,
         };
+        // Record into test probe.
+        self.record_input_layout(telemetry.clone());
         let telemetry_json = serde_json::to_string(&telemetry).unwrap_or_default();
         tracing::info!(
             target: "script_kit::acp_telemetry",

@@ -2,23 +2,28 @@
 /**
  * scripts/agentic/window.ts
  *
- * Window discovery, focus, activation, and frontmost verification for
- * Script Kit GPUI agentic testing.
+ * Window discovery, focus, activation, and screenshot capture for
+ * Script Kit GPUI agentic testing. Single authority for window focus
+ * and capture — other scripts (macos-input.ts) delegate here.
  *
  * Usage:
- *   bun scripts/agentic/window.ts find [--title SUBSTR] [--json]
- *   bun scripts/agentic/window.ts focus [--title SUBSTR] [--json]
+ *   bun scripts/agentic/window.ts find   [--title SUBSTR] [--json]
+ *   bun scripts/agentic/window.ts focus  [--title SUBSTR] [--retry N] [--settle-ms MS] [--json]
  *   bun scripts/agentic/window.ts status [--json]
- *   bun scripts/agentic/window.ts capture PATH [--title SUBSTR] [--json]
+ *   bun scripts/agentic/window.ts capture PATH [--title SUBSTR] [--retry N] [--activate-first] [--settle-ms MS] [--json]
  *
- * All structured output is JSON on stdout. Diagnostics go to stderr.
+ * All structured output is JSON on stdout. Diagnostics go to stderr as NDJSON.
  */
 
 import { existsSync, statSync } from "fs";
 
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 const APP_NAME = "Script Kit";
 const DEFAULT_TITLE_SUBSTR = "";
+const DEFAULT_RETRY = 1;
+const DEFAULT_SETTLE_MS = 300;
+const DEFAULT_CAPTURE_RETRY = 1;
+const DEFAULT_CAPTURE_SETTLE_MS = 200;
 
 // ---------------------------------------------------------------------------
 // Types
@@ -33,10 +38,13 @@ interface Envelope<T> {
 }
 
 interface WindowInfo {
-  name: string;
-  index: number;
+  windowId: number;
+  ownerName: string;
+  title: string;
+  layer: number;
   bounds: { x: number; y: number; width: number; height: number } | null;
   frontmost: boolean;
+  focused: boolean;
   visible: boolean;
 }
 
@@ -48,7 +56,10 @@ interface FindResult {
 interface FocusResult {
   activated: boolean;
   frontmost: boolean;
-  keyWindow: boolean;
+  focused: boolean;
+  attempts: number;
+  settleMs: number;
+  windowId: number;
 }
 
 interface StatusResult {
@@ -60,19 +71,29 @@ interface StatusResult {
 
 interface CaptureResult {
   path: string;
+  windowId: number;
+  attempts: number;
+  method: "quartz" | "screencapture";
+  frontmost: boolean;
+  focused: boolean;
   sizeBytes: number;
   width: number | null;
   height: number | null;
 }
 
 // ---------------------------------------------------------------------------
+// Structured stderr logging
+// ---------------------------------------------------------------------------
+
+function stderrLog(event: string, fields: Record<string, unknown> = {}): void {
+  console.error(JSON.stringify({ event, ts: new Date().toISOString(), ...fields }));
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-function envelope<T>(
-  command: string,
-  data: T
-): Envelope<T> {
+function envelope<T>(command: string, data: T): Envelope<T> {
   return { schemaVersion: SCHEMA_VERSION, status: "ok", command, data };
 }
 
@@ -99,7 +120,6 @@ async function runOsascript(script: string): Promise<string> {
   const code = await proc.exited;
   if (code !== 0) {
     const msg = stderr.trim() || `osascript exit ${code}`;
-    // Check for common permission errors
     if (
       msg.includes("not allowed assistive access") ||
       msg.includes("is not allowed to send keystrokes") ||
@@ -135,127 +155,149 @@ async function runCommand(
 }
 
 // ---------------------------------------------------------------------------
-// Commands
+// Window ID resolution (Quartz CGWindowListCopyWindowInfo)
 // ---------------------------------------------------------------------------
 
-async function findWindows(titleSubstr: string): Promise<FindResult> {
-  // Check if app process is running
-  let appRunning = false;
+/**
+ * Resolve the CGWindowID for a Script Kit window.
+ * Returns the numeric ID (>0) or 0 if no window found.
+ * Prefers Quartz enumeration for reliable IDs that screencapture -l accepts.
+ */
+async function resolveWindowId(titleSubstr: string): Promise<{ windowId: number; method: "quartz" | "ax" }> {
+  // Primary: Quartz CGWindowListCopyWindowInfo
   try {
-    const ps = await runCommand(
-      ["pgrep", "-f", "script-kit-gpui"],
-      "pgrep"
-    );
-    appRunning = ps.trim().length > 0;
+    const script = `
+do shell script "python3 -c \\"
+import Quartz, json
+windows = Quartz.CGWindowListCopyWindowInfo(Quartz.kCGWindowListOptionOnScreenOnly, Quartz.kCGNullWindowID)
+for w in windows:
+    owner = w.get('kCGWindowOwnerName', '')
+    name = w.get('kCGWindowName', '')
+    wid = w.get('kCGWindowNumber', 0)
+    layer = w.get('kCGWindowLayer', -1)
+    bounds = w.get('kCGWindowBounds', {})
+    width = bounds.get('Width', 0)
+    height = bounds.get('Height', 0)
+    if 'Script Kit' in owner and width > 100 and height > 100:
+        print(json.dumps({'wid': wid, 'name': name, 'owner': owner, 'layer': layer}))
+\\""`;
+    const raw = await runOsascript(script);
+    const lines = raw
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean);
+    const lowerTitle = titleSubstr.toLowerCase();
+    for (const line of lines) {
+      const parsed = JSON.parse(line) as {
+        wid?: number;
+        name?: string;
+        owner?: string;
+      };
+      const name = parsed.name ?? "";
+      const owner = parsed.owner ?? "";
+      const matchesTitle =
+        lowerTitle.length === 0 ||
+        name.toLowerCase().includes(lowerTitle) ||
+        owner.toLowerCase().includes(lowerTitle);
+      if (matchesTitle && parsed.wid && parsed.wid > 0) {
+        return { windowId: parsed.wid, method: "quartz" };
+      }
+    }
   } catch {
-    appRunning = false;
+    // fall through to AX
   }
 
-  // Get window list from osascript
-  const windows: WindowInfo[] = [];
+  // Fallback: AXIdentifier
   try {
     const script = `
 tell application "System Events"
-  set appProcs to every process whose name contains "Script Kit"
-  set out to ""
-  repeat with p in appProcs
+    set appProcs to every process whose name contains "Script Kit"
+  if (count of appProcs) > 0 then
+    set p to item 1 of appProcs
     set wList to every window of p
-    set idx to 0
     repeat with w in wList
       set wName to name of w
-      set wPos to position of w
-      set wSize to size of w
-      set wVisible to true
       try
-        set wVisible to (value of attribute "AXMinimized" of w) is false
+        set wid to value of attribute "AXIdentifier" of w
+        return (wid as text) & "|||" & wName
+      on error
+        return ""
       end try
-      set out to out & wName & "|||" & idx & "|||" & (item 1 of wPos) & "," & (item 2 of wPos) & "," & (item 1 of wSize) & "," & (item 2 of wSize) & "|||" & wVisible & linefeed
-      set idx to idx + 1
     end repeat
-  end repeat
-  return out
+  end if
+  return ""
 end tell`;
-    const raw = await runOsascript(script);
-    // Check frontmost status
-    let frontmostApp = "";
-    try {
-      frontmostApp = await runOsascript(
-        'tell application "System Events" to get name of first process whose frontmost is true'
-      );
-    } catch {
-      // ignore
-    }
-
-    for (const line of raw.split("\n")) {
-      if (!line.trim()) continue;
-      const parts = line.split("|||");
-      if (parts.length < 4) continue;
-      const name = parts[0].trim();
-      const index = parseInt(parts[1].trim(), 10);
-      const boundsStr = parts[2].trim().split(",").map(Number);
-      const visible = parts[3].trim() === "true";
-      const bounds =
-        boundsStr.length === 4
-          ? {
-              x: boundsStr[0],
-              y: boundsStr[1],
-              width: boundsStr[2],
-              height: boundsStr[3],
-            }
-          : null;
-
-      // Apply title filter
-      if (titleSubstr && !name.toLowerCase().includes(titleSubstr.toLowerCase())) {
-        continue;
+    const wid = await runOsascript(script);
+    if (wid) {
+      const [idText, name = ""] = wid.split("|||");
+      const parsed = parseInt(idText, 10);
+      const lowerTitle = titleSubstr.toLowerCase();
+      const matchesTitle =
+        lowerTitle.length === 0 || name.toLowerCase().includes(lowerTitle);
+      if (matchesTitle && parsed > 0) {
+        return { windowId: parsed, method: "ax" };
       }
-
-      windows.push({
-        name,
-        index,
-        bounds,
-        frontmost: frontmostApp.includes("Script Kit"),
-        visible,
-      });
     }
-  } catch (e: any) {
-    if (e.code === "APP_NOT_RUNNING") {
-      return { windows: [], appRunning: false };
-    }
-    // Accessibility denied — still report it
-    if (e.code === "ACCESSIBILITY_DENIED") {
-      throw e;
-    }
-    // No windows found is ok
+  } catch {
+    // fall through
   }
 
-  return { windows, appRunning };
+  return { windowId: 0, method: "quartz" };
 }
 
-async function focusWindow(titleSubstr: string): Promise<FocusResult> {
-  // First activate via osascript
+// ---------------------------------------------------------------------------
+// Quartz-based window enumeration (richer than System Events)
+// ---------------------------------------------------------------------------
+
+async function enumerateQuartzWindows(titleSubstr: string): Promise<WindowInfo[]> {
   try {
-    await runOsascript(`
-tell application "System Events"
-  set appProcs to every process whose name contains "Script Kit"
-  if (count of appProcs) > 0 then
-    set frontmost of item 1 of appProcs to true
-  else
-    error "Script Kit process not found"
-  end if
-end tell`);
-  } catch (e: any) {
-    if (e.code === "ACCESSIBILITY_DENIED") throw e;
-    throw Object.assign(new Error(`Failed to activate: ${e.message}`), {
-      code: "ACTIVATION_FAILED",
-    });
+    const script = `
+do shell script "python3 -c \\"
+import Quartz, json
+windows = Quartz.CGWindowListCopyWindowInfo(Quartz.kCGWindowListOptionOnScreenOnly, Quartz.kCGNullWindowID)
+results = []
+for w in windows:
+    owner = w.get('kCGWindowOwnerName', '')
+    name = w.get('kCGWindowName', '')
+    wid = w.get('kCGWindowNumber', 0)
+    layer = w.get('kCGWindowLayer', -1)
+    bounds = w.get('kCGWindowBounds', {})
+    if 'Script Kit' in owner:
+        results.append({'wid': wid, 'owner': owner, 'name': name, 'layer': layer, 'x': int(bounds.get('X', 0)), 'y': int(bounds.get('Y', 0)), 'w': int(bounds.get('Width', 0)), 'h': int(bounds.get('Height', 0))})
+print(json.dumps(results))
+\\""`;
+    const raw = await runOsascript(script);
+    const parsed = JSON.parse(raw.trim());
+    const lowerTitle = titleSubstr.toLowerCase();
+    return (parsed as any[])
+      .filter((w: any) => {
+        if (lowerTitle.length === 0) return true;
+        const name = String(w.name ?? "").toLowerCase();
+        const owner = String(w.owner ?? "").toLowerCase();
+        return name.includes(lowerTitle) || owner.includes(lowerTitle);
+      })
+      .map((w: any) => ({
+        windowId: w.wid,
+        ownerName: w.owner,
+        title: w.name,
+        layer: w.layer,
+        bounds: { x: w.x, y: w.y, width: w.w, height: w.h },
+        frontmost: false, // filled in below
+        focused: false,
+        visible: w.w > 0 && w.h > 0,
+      }));
+  } catch {
+    return [];
   }
+}
 
-  // Brief wait for activation
-  await Bun.sleep(300);
+// ---------------------------------------------------------------------------
+// Frontmost / focused checks
+// ---------------------------------------------------------------------------
 
-  // Verify frontmost
+async function checkFrontmost(): Promise<{ frontmost: boolean; focused: boolean }> {
   let frontmost = false;
-  let keyWindow = false;
+  let focused = false;
   try {
     const frontApp = await runOsascript(
       'tell application "System Events" to get name of first process whose frontmost is true'
@@ -264,8 +306,6 @@ end tell`);
   } catch {
     // couldn't verify
   }
-
-  // Check key window via AX
   try {
     const keyResult = await runOsascript(`
 tell application "System Events"
@@ -280,12 +320,103 @@ tell application "System Events"
     end if
   end if
 end tell`);
-    keyWindow = keyResult === "key";
+    focused = keyResult === "key";
   } catch {
-    // AX query can fail - still report partial result
+    // AX query can fail
+  }
+  return { frontmost, focused };
+}
+
+// ---------------------------------------------------------------------------
+// Commands
+// ---------------------------------------------------------------------------
+
+async function findWindows(titleSubstr: string): Promise<FindResult> {
+  let appRunning = false;
+  try {
+    const ps = await runCommand(["pgrep", "-f", "script-kit-gpui"], "pgrep");
+    appRunning = ps.trim().length > 0;
+  } catch {
+    appRunning = false;
   }
 
-  return { activated: true, frontmost, keyWindow };
+  const windows = await enumerateQuartzWindows(titleSubstr);
+
+  // Fill in frontmost status
+  const { frontmost, focused } = await checkFrontmost();
+  if (windows.length > 0) {
+    // First window inherits frontmost/focused (Quartz returns front-to-back order)
+    windows[0].frontmost = frontmost;
+    windows[0].focused = focused;
+  }
+
+  return { windows, appRunning: appRunning || windows.length > 0 };
+}
+
+async function focusWindow(
+  titleSubstr: string,
+  retryCount: number,
+  settleMs: number
+): Promise<FocusResult> {
+  let lastFrontmost = false;
+  let lastFocused = false;
+  let windowId = 0;
+
+  for (let attempt = 1; attempt <= retryCount; attempt++) {
+    stderrLog("window_focus_attempt", { attempt, retryCount, titleSubstr });
+
+    try {
+      await runOsascript(`
+tell application "System Events"
+  set appProcs to every process whose name contains "Script Kit"
+  if (count of appProcs) > 0 then
+    set frontmost of item 1 of appProcs to true
+  else
+    error "Script Kit process not found"
+  end if
+end tell`);
+    } catch (e: any) {
+      if (e.code === "ACCESSIBILITY_DENIED") throw e;
+      stderrLog("window_focus_activate_failed", { attempt, error: e.message });
+      if (attempt < retryCount) {
+        await Bun.sleep(settleMs);
+        continue;
+      }
+      throw Object.assign(new Error(`Failed to activate after ${retryCount} attempts: ${e.message}`), {
+        code: "ACTIVATION_FAILED",
+      });
+    }
+
+    // Settle delay
+    await Bun.sleep(settleMs);
+
+    // Check state after settle
+    const state = await checkFrontmost();
+    lastFrontmost = state.frontmost;
+    lastFocused = state.focused;
+
+    // Resolve window ID
+    const resolved = await resolveWindowId(titleSubstr);
+    windowId = resolved.windowId;
+
+    stderrLog("window_focus_result", {
+      attempt,
+      frontmost: lastFrontmost,
+      focused: lastFocused,
+      windowId,
+    });
+
+    if (lastFrontmost) break;
+  }
+
+  return {
+    activated: true,
+    frontmost: lastFrontmost,
+    focused: lastFocused,
+    attempts: retryCount,
+    settleMs,
+    windowId,
+  };
 }
 
 async function getStatus(): Promise<StatusResult> {
@@ -300,44 +431,77 @@ async function getStatus(): Promise<StatusResult> {
 
 async function captureWindow(
   path: string,
-  titleSubstr: string
+  titleSubstr: string,
+  retryCount: number,
+  activateFirst: boolean,
+  settleMs: number
 ): Promise<CaptureResult> {
-  // Ensure window is focused first
-  const focusResult = await focusWindow(titleSubstr);
-  if (!focusResult.frontmost) {
-    console.error(
-      "[window.ts] Warning: window may not be frontmost after focus attempt"
-    );
-  }
+  let windowId = 0;
+  let captureMethod: "quartz" | "screencapture" = "screencapture";
+  let attempts = 0;
+  let lastFrontmost = false;
+  let lastFocused = false;
 
-  await Bun.sleep(200);
+  for (let attempt = 1; attempt <= retryCount; attempt++) {
+    attempts = attempt;
+    stderrLog("window_capture_attempt", { attempt, retryCount, path, titleSubstr, activateFirst });
 
-  // Use screencapture to capture the frontmost window
-  const proc = Bun.spawn(["screencapture", "-l", await getWindowId(titleSubstr), path], {
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-  const stderr = await new Response(proc.stderr).text();
-  const code = await proc.exited;
+    // Optionally focus first
+    if (activateFirst || attempt > 1) {
+      const focusResult = await focusWindow(titleSubstr, 1, settleMs);
+      lastFrontmost = focusResult.frontmost;
+      lastFocused = focusResult.focused;
+      windowId = focusResult.windowId;
+    } else {
+      // Just resolve ID without activating
+      const resolved = await resolveWindowId(titleSubstr);
+      windowId = resolved.windowId;
+      const state = await checkFrontmost();
+      lastFrontmost = state.frontmost;
+      lastFocused = state.focused;
+    }
 
-  if (code !== 0) {
-    // Fallback: use screencapture -w (interactive) won't work headless
-    // Try full-window capture of frontmost
-    const proc2 = Bun.spawn(["screencapture", "-o", "-x", path], {
-      stdout: "pipe",
-      stderr: "pipe",
-    });
-    const stderr2 = await new Response(proc2.stderr).text();
-    const code2 = await proc2.exited;
-    if (code2 !== 0) {
+    // Try screencapture with window ID
+    if (windowId > 0) {
+      const proc = Bun.spawn(["screencapture", "-l", String(windowId), path], {
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      const stderr = await new Response(proc.stderr).text();
+      const code = await proc.exited;
+
+      if (code === 0 && existsSync(path)) {
+        captureMethod = "quartz";
+        stderrLog("window_capture_success", { attempt, windowId, method: "quartz", path });
+        break;
+      }
+      stderrLog("window_capture_screencapture_l_failed", { attempt, windowId, exitCode: code, stderr: stderr.trim() });
+    }
+
+    // Fallback: full-screen capture (non-interactive)
+    if (attempt === retryCount) {
+      const proc2 = Bun.spawn(["screencapture", "-o", "-x", path], {
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      const stderr2 = await new Response(proc2.stderr).text();
+      const code2 = await proc2.exited;
+      if (code2 === 0 && existsSync(path)) {
+        captureMethod = "screencapture";
+        stderrLog("window_capture_fallback_success", { attempt, method: "screencapture", path });
+        break;
+      }
       throw Object.assign(
-        new Error(`screencapture failed: ${stderr2.trim() || stderr.trim()}`),
+        new Error(`screencapture failed after ${retryCount} attempts: ${stderr2.trim()}`),
         { code: "CAPTURE_FAILED" }
       );
     }
+
+    // Settle before retry
+    await Bun.sleep(settleMs);
   }
 
-  // Verify file was created
+  // Verify file
   if (!existsSync(path)) {
     throw Object.assign(new Error(`Screenshot file not created at ${path}`), {
       code: "CAPTURE_FAILED",
@@ -345,7 +509,6 @@ async function captureWindow(
   }
 
   const stats = statSync(path);
-  // Try to get dimensions via sips
   let width: number | null = null;
   let height: number | null = null;
   try {
@@ -361,66 +524,39 @@ async function captureWindow(
     // dimensions unknown
   }
 
-  return { path, sizeBytes: stats.size, width, height };
+  // Do not return windowId: 0 for a claimed successful capture
+  // If we used the fallback method, windowId may be 0 — that's still valid
+  // because the fallback captures the full screen, not a specific window.
+  // But we report it honestly.
+
+  return {
+    path,
+    windowId,
+    attempts,
+    method: captureMethod,
+    frontmost: lastFrontmost,
+    focused: lastFocused,
+    sizeBytes: stats.size,
+    width,
+    height,
+  };
 }
 
-async function getWindowId(titleSubstr: string): Promise<string> {
-  // Get the CGWindowID for screencapture -l
-  try {
-    const script = `
-tell application "System Events"
-  set appProcs to every process whose name contains "Script Kit"
-  if (count of appProcs) > 0 then
-    set p to item 1 of appProcs
-    set wList to every window of p
-    repeat with w in wList
-      set wName to name of w
-      ${titleSubstr ? `if wName contains "${titleSubstr}" then` : ""}
-        -- Get window ID via attribute
-        try
-          set wid to value of attribute "AXIdentifier" of w
-          return wid
-        on error
-          return ""
-        end try
-      ${titleSubstr ? "end if" : ""}
-    end repeat
-  end if
-  return ""
-end tell`;
-    const wid = await runOsascript(script);
-    if (wid && wid !== "") return wid;
-  } catch {
-    // fall through
-  }
+// ---------------------------------------------------------------------------
+// CLI argument parsing
+// ---------------------------------------------------------------------------
 
-  // Fallback: use CGWindowListCopyWindowInfo to find the window ID
-  try {
-    const script = `
-do shell script "python3 -c \\"
-import Quartz
-import json
-windows = Quartz.CGWindowListCopyWindowInfo(Quartz.kCGWindowListOptionOnScreenOnly, Quartz.kCGNullWindowID)
-for w in windows:
-    owner = w.get('kCGWindowOwnerName', '')
-    name = w.get('kCGWindowName', '')
-    wid = w.get('kCGWindowNumber', 0)
-    layer = w.get('kCGWindowLayer', -1)
-    bounds = w.get('kCGWindowBounds', {})
-    width = bounds.get('Width', 0)
-    height = bounds.get('Height', 0)
-    if 'Script Kit' in owner and width > 100 and height > 100:
-        print(wid)
-        break
-\\""`;
-    const wid = await runOsascript(script);
-    if (wid && wid.trim() !== "") return wid.trim();
-  } catch {
-    // fall through
+function parseIntArg(args: string[], flag: string, fallback: number): number {
+  const idx = args.indexOf(flag);
+  if (idx >= 0 && args[idx + 1]) {
+    const v = parseInt(args[idx + 1], 10);
+    return isNaN(v) ? fallback : v;
   }
+  return fallback;
+}
 
-  // Last resort — empty means screencapture will fail, caller handles fallback
-  return "0";
+function hasFlag(args: string[], flag: string): boolean {
+  return args.includes(flag);
 }
 
 // ---------------------------------------------------------------------------
@@ -447,7 +583,9 @@ try {
     }
 
     case "focus": {
-      const result = await focusWindow(titleSubstr);
+      const retry = parseIntArg(args, "--retry", DEFAULT_RETRY);
+      const settleMs = parseIntArg(args, "--settle-ms", DEFAULT_SETTLE_MS);
+      const result = await focusWindow(titleSubstr, retry, settleMs);
       emit(envelope("focus", result));
       process.exit(result.frontmost ? 0 : 1);
       break;
@@ -462,18 +600,21 @@ try {
 
     case "capture": {
       const capturePath = args[1];
-      if (!capturePath) {
+      if (!capturePath || capturePath.startsWith("--")) {
         emit(
           errorEnvelope(
             "capture",
             "MISSING_PATH",
-            "Usage: window.ts capture <path> [--title SUBSTR]"
+            "Usage: window.ts capture <path> [--title SUBSTR] [--retry N] [--activate-first] [--settle-ms MS]"
           )
         );
         process.exit(1);
         break;
       }
-      const result = await captureWindow(capturePath, titleSubstr);
+      const retry = parseIntArg(args, "--retry", DEFAULT_CAPTURE_RETRY);
+      const activateFirst = hasFlag(args, "--activate-first");
+      const settleMs = parseIntArg(args, "--settle-ms", DEFAULT_CAPTURE_SETTLE_MS);
+      const result = await captureWindow(capturePath, titleSubstr, retry, activateFirst, settleMs);
       emit(envelope("capture", result));
       process.exit(0);
       break;
@@ -484,15 +625,27 @@ try {
       console.log(`Usage: bun scripts/agentic/window.ts <command> [options]
 
 Commands:
-  find    [--title SUBSTR]           Find Script Kit windows
-  focus   [--title SUBSTR]           Activate and focus window
-  status                             App running + window status
-  capture PATH [--title SUBSTR]      Focus + screencapture window
+  find    [--title SUBSTR]                                 Find Script Kit windows
+  focus   [--title SUBSTR] [--retry N] [--settle-ms MS]    Activate and focus window
+  status                                                    App running + window status
+  capture PATH [--title SUBSTR] [--retry N]                Focus + screencapture window
+          [--activate-first] [--settle-ms MS]
 
 Options:
-  --title SUBSTR    Filter windows by title substring
+  --title SUBSTR       Filter windows by title substring
+  --retry N            Number of focus/capture attempts (default: 1 for focus, 1 for capture)
+  --settle-ms MS       Delay after activation before checking state (default: 300 focus, 200 capture)
+  --activate-first     Activate window before capture attempt (default: only on retry)
+  --json               (accepted for compatibility, output is always JSON)
 
-All commands output JSON. Exit 0 = success, 1 = not found or failed.
+Output:
+  Schema version ${SCHEMA_VERSION} JSON envelopes on stdout.
+  Structured NDJSON diagnostics on stderr.
+  Exit 0 = success, 1 = not found or failed.
+
+Window ID resolution:
+  Uses Quartz CGWindowListCopyWindowInfo (preferred) with AXIdentifier fallback.
+  screencapture -l <windowId> for targeted capture; full-screen fallback if ID unavailable.
 
 Permission requirements:
   - System Events access (Automation permission in Privacy & Security)
@@ -515,7 +668,6 @@ Remediation:
   const code = e.code ?? "UNKNOWN_ERROR";
   let message = e.message ?? String(e);
 
-  // Add remediation hints for permission errors
   if (code === "ACCESSIBILITY_DENIED") {
     message +=
       "\n\nRemediation: System Preferences → Privacy & Security → Accessibility → enable your terminal/IDE app.";

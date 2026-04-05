@@ -1535,6 +1535,73 @@ impl ScriptListApp {
                 }
             }
 
+            PromptMessage::ResetAcpTestProbe { request_id } => {
+                tracing::info!(
+                    category = "ACP_PROBE",
+                    request_id = %request_id,
+                    "acp_test_probe.reset"
+                );
+
+                self.reset_acp_test_probe(cx);
+
+                // Respond with the current (now-empty) probe snapshot.
+                let probe = self.collect_acp_test_probe(protocol::ACP_TEST_PROBE_MAX_EVENTS, cx);
+                let response = Message::acp_test_probe_result(request_id.clone(), probe);
+
+                if let Some(ref sender) = self.response_sender {
+                    match sender.try_send(response) {
+                        Ok(()) => {}
+                        Err(std::sync::mpsc::TrySendError::Full(_)) => {
+                            tracing::warn!(
+                                category = "ACP_PROBE",
+                                request_id = %request_id,
+                                "acp_test_probe.response_channel_full"
+                            );
+                        }
+                        Err(std::sync::mpsc::TrySendError::Disconnected(_)) => {
+                            tracing::info!(
+                                category = "ACP_PROBE",
+                                request_id = %request_id,
+                                "acp_test_probe.response_channel_disconnected"
+                            );
+                        }
+                    }
+                }
+            }
+
+            PromptMessage::GetAcpTestProbe { request_id, tail } => {
+                let tail = tail.unwrap_or(protocol::ACP_TEST_PROBE_MAX_EVENTS).clamp(1, protocol::ACP_TEST_PROBE_MAX_EVENTS);
+                tracing::info!(
+                    category = "ACP_PROBE",
+                    request_id = %request_id,
+                    tail,
+                    "acp_test_probe.request"
+                );
+
+                let probe = self.collect_acp_test_probe(tail, cx);
+                let response = Message::acp_test_probe_result(request_id.clone(), probe);
+
+                if let Some(ref sender) = self.response_sender {
+                    match sender.try_send(response) {
+                        Ok(()) => {}
+                        Err(std::sync::mpsc::TrySendError::Full(_)) => {
+                            tracing::warn!(
+                                category = "ACP_PROBE",
+                                request_id = %request_id,
+                                "acp_test_probe.response_channel_full"
+                            );
+                        }
+                        Err(std::sync::mpsc::TrySendError::Disconnected(_)) => {
+                            tracing::info!(
+                                category = "ACP_PROBE",
+                                request_id = %request_id,
+                                "acp_test_probe.response_channel_disconnected"
+                            );
+                        }
+                    }
+                }
+            }
+
             PromptMessage::GetElements { request_id, limit } => {
                 let max_elements = limit.unwrap_or(50).clamp(1, 1000);
 
@@ -3243,6 +3310,40 @@ impl ScriptListApp {
                     let state = self.collect_acp_state(cx);
                     state.input_text.contains(substring.as_str())
                 }
+                // ── ACP proof wait conditions (test probe) ─────────
+                protocol::WaitDetailedCondition::AcpAcceptedViaKey { key } => {
+                    let probe = self.collect_acp_test_probe(1, cx);
+                    probe
+                        .accepted_items
+                        .last()
+                        .is_some_and(|item| item.accepted_via_key == *key)
+                }
+                protocol::WaitDetailedCondition::AcpAcceptedLabel { label } => {
+                    let probe = self.collect_acp_test_probe(1, cx);
+                    probe
+                        .accepted_items
+                        .last()
+                        .is_some_and(|item| item.item_label == *label)
+                }
+                protocol::WaitDetailedCondition::AcpAcceptedCursorAt { index } => {
+                    let probe = self.collect_acp_test_probe(1, cx);
+                    probe
+                        .accepted_items
+                        .last()
+                        .is_some_and(|item| item.cursor_after == *index)
+                }
+                protocol::WaitDetailedCondition::AcpInputLayoutMatch {
+                    visible_start,
+                    visible_end,
+                    cursor_in_window,
+                } => {
+                    let probe = self.collect_acp_test_probe(1, cx);
+                    probe.input_layout.as_ref().is_some_and(|layout| {
+                        layout.visible_start == *visible_start
+                            && layout.visible_end == *visible_end
+                            && layout.cursor_in_window == *cursor_in_window
+                    })
+                }
             },
         }
     }
@@ -3308,6 +3409,38 @@ impl ScriptListApp {
 
         // Extract state from the ACP view's public API.
         view.collect_acp_state_snapshot(cx)
+    }
+
+    /// Reset the ACP test probe ring buffer.
+    fn reset_acp_test_probe(&mut self, cx: &mut Context<Self>) {
+        if let AppView::AcpChatView { entity } = &self.current_view {
+            entity.update(cx, |view, _cx| {
+                view.reset_test_probe();
+            });
+        }
+    }
+
+    /// Collect a bounded ACP test probe snapshot.
+    fn collect_acp_test_probe(
+        &self,
+        tail: usize,
+        cx: &Context<Self>,
+    ) -> protocol::AcpTestProbeSnapshot {
+        let entity = match &self.current_view {
+            AppView::AcpChatView { entity } => entity,
+            _ => {
+                return protocol::AcpTestProbeSnapshot {
+                    state: protocol::AcpStateSnapshot {
+                        status: "notAcp".to_string(),
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                };
+            }
+        };
+
+        let view = entity.read(cx);
+        view.test_probe_snapshot(tail, cx)
     }
 
     /// Set the input text for the current prompt.
