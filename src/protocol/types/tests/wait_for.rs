@@ -605,7 +605,8 @@ fn wait_for_request_parses_with_acp_input_layout_match() {
 #[test]
 fn reset_acp_test_probe_request_parses() {
     let json = r#"{"type":"resetAcpTestProbe","requestId":"probe-reset-1"}"#;
-    let msg: crate::protocol::Message = serde_json::from_str(json).expect("parse resetAcpTestProbe");
+    let msg: crate::protocol::Message =
+        serde_json::from_str(json).expect("parse resetAcpTestProbe");
 
     match msg {
         crate::protocol::Message::ResetAcpTestProbe { request_id } => {
@@ -637,7 +638,8 @@ fn get_acp_test_probe_request_parses() {
 #[test]
 fn get_acp_test_probe_request_parses_without_tail() {
     let json = r#"{"type":"getAcpTestProbe","requestId":"probe-get-2"}"#;
-    let msg: crate::protocol::Message = serde_json::from_str(json).expect("parse getAcpTestProbe without tail");
+    let msg: crate::protocol::Message =
+        serde_json::from_str(json).expect("parse getAcpTestProbe without tail");
 
     match msg {
         crate::protocol::Message::GetAcpTestProbe { request_id, tail } => {
@@ -688,7 +690,10 @@ fn acp_test_probe_result_round_trips() {
 
     assert_eq!(json["type"], "acpTestProbeResult");
     assert_eq!(json["requestId"], "probe-rt");
-    assert_eq!(json["schemaVersion"], crate::protocol::ACP_TEST_PROBE_SCHEMA_VERSION);
+    assert_eq!(
+        json["schemaVersion"],
+        crate::protocol::ACP_TEST_PROBE_SCHEMA_VERSION
+    );
     assert_eq!(json["eventSeq"], 5);
     assert_eq!(json["acceptedItems"][0]["acceptedViaKey"], "tab");
     assert_eq!(json["acceptedItems"][0]["cursorAfter"], 17);
