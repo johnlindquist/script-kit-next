@@ -357,8 +357,45 @@ pub struct AcpPickerItemAcceptedTelemetry {
     pub caused_submit: bool,
 }
 
+/// Machine-readable trace of the most recent ACP interaction.
+///
+/// Synthesised from the latest key-route and (optional) picker-acceptance
+/// telemetry events so agents can verify Enter-vs-Tab behaviour, picker
+/// acceptance, and caret movement in a single record without correlating
+/// multiple probe arrays.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct AcpLastInteractionTrace {
+    /// The key that was pressed (e.g. `"enter"`, `"tab"`).
+    pub key: String,
+
+    /// Where the key was routed (e.g. `"picker"`, `"composer"`).
+    pub route: String,
+
+    /// Whether the picker overlay was open before the key was processed.
+    pub picker_open_before: bool,
+
+    /// The key that caused a picker accept, if any (`"enter"` or `"tab"`).
+    /// `None` when the key did not trigger a picker acceptance.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub accepted_via_key: Option<String>,
+
+    /// Human-readable label of the accepted picker item, if any.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub accepted_label: Option<String>,
+
+    /// Cursor character index before the key was processed.
+    pub cursor_before: usize,
+
+    /// Cursor character index after the key was processed.
+    pub cursor_after: usize,
+
+    /// Whether the key caused a message submission.
+    pub caused_submit: bool,
+}
+
 /// Schema version for the ACP test probe response envelope.
-pub const ACP_TEST_PROBE_SCHEMA_VERSION: u32 = 1;
+pub const ACP_TEST_PROBE_SCHEMA_VERSION: u32 = 2;
 
 /// Maximum number of events stored per category in the test probe ring buffer.
 pub const ACP_TEST_PROBE_MAX_EVENTS: usize = 32;
@@ -387,6 +424,12 @@ pub struct AcpTestProbeSnapshot {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub input_layout: Option<AcpInputLayoutTelemetry>,
 
+    /// Synthesised trace of the most recent interaction (key-route + optional
+    /// picker acceptance merged into one record). `None` when no key events
+    /// have been recorded since the last probe reset.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_interaction_trace: Option<AcpLastInteractionTrace>,
+
     /// Current ACP state snapshot at the time the probe was queried.
     pub state: AcpStateSnapshot,
 
@@ -406,6 +449,7 @@ impl Default for AcpTestProbeSnapshot {
             key_routes: Vec::new(),
             accepted_items: Vec::new(),
             input_layout: None,
+            last_interaction_trace: None,
             state: AcpStateSnapshot::default(),
             warnings: Vec::new(),
         }
@@ -1021,6 +1065,16 @@ mod tests {
                 visible_end: 27,
                 cursor_in_window: 17,
             }),
+            last_interaction_trace: Some(AcpLastInteractionTrace {
+                key: "tab".to_string(),
+                route: "picker".to_string(),
+                picker_open_before: true,
+                accepted_via_key: Some("tab".to_string()),
+                accepted_label: Some("Current Context".to_string()),
+                cursor_before: 1,
+                cursor_after: 17,
+                caused_submit: false,
+            }),
             state: AcpStateSnapshot {
                 status: "idle".to_string(),
                 cursor_index: 17,
@@ -1043,7 +1097,7 @@ mod tests {
 
     #[test]
     fn acp_test_probe_snapshot_schema_version_constant() {
-        assert_eq!(ACP_TEST_PROBE_SCHEMA_VERSION, 1);
+        assert_eq!(ACP_TEST_PROBE_SCHEMA_VERSION, 2);
     }
 
     #[test]
@@ -1139,6 +1193,150 @@ mod tests {
         assert!(
             json.get("setup").is_none(),
             "setup field should be omitted when None"
+        );
+    }
+
+    // ── AcpLastInteractionTrace serde ────────────────────────
+
+    #[test]
+    fn last_interaction_trace_round_trips_with_accept() {
+        let trace = AcpLastInteractionTrace {
+            key: "tab".to_string(),
+            route: "picker".to_string(),
+            picker_open_before: true,
+            accepted_via_key: Some("tab".to_string()),
+            accepted_label: Some("Current Context".to_string()),
+            cursor_before: 1,
+            cursor_after: 17,
+            caused_submit: false,
+        };
+        let json = serde_json::to_value(&trace).expect("serialize trace");
+        assert_eq!(json["key"], "tab");
+        assert_eq!(json["route"], "picker");
+        assert_eq!(json["pickerOpenBefore"], true);
+        assert_eq!(json["acceptedViaKey"], "tab");
+        assert_eq!(json["acceptedLabel"], "Current Context");
+        assert_eq!(json["cursorBefore"], 1);
+        assert_eq!(json["cursorAfter"], 17);
+        assert_eq!(json["causedSubmit"], false);
+
+        let back: AcpLastInteractionTrace =
+            serde_json::from_value(json).expect("deserialize trace");
+        assert_eq!(back, trace);
+    }
+
+    #[test]
+    fn last_interaction_trace_without_accept_omits_optional_fields() {
+        let trace = AcpLastInteractionTrace {
+            key: "enter".to_string(),
+            route: "composer".to_string(),
+            picker_open_before: false,
+            accepted_via_key: None,
+            accepted_label: None,
+            cursor_before: 5,
+            cursor_after: 5,
+            caused_submit: true,
+        };
+        let json = serde_json::to_value(&trace).expect("serialize");
+        assert!(
+            json.get("acceptedViaKey").is_none(),
+            "acceptedViaKey should be omitted when None"
+        );
+        assert!(
+            json.get("acceptedLabel").is_none(),
+            "acceptedLabel should be omitted when None"
+        );
+        assert_eq!(json["causedSubmit"], true);
+
+        let back: AcpLastInteractionTrace =
+            serde_json::from_value(json).expect("deserialize");
+        assert_eq!(back, trace);
+    }
+
+    #[test]
+    fn enter_and_tab_traces_produce_distinct_accepted_via_key() {
+        let enter_trace = AcpLastInteractionTrace {
+            key: "enter".to_string(),
+            route: "picker".to_string(),
+            picker_open_before: true,
+            accepted_via_key: Some("enter".to_string()),
+            accepted_label: Some("Context".to_string()),
+            cursor_before: 1,
+            cursor_after: 9,
+            caused_submit: false,
+        };
+        let tab_trace = AcpLastInteractionTrace {
+            key: "tab".to_string(),
+            route: "picker".to_string(),
+            picker_open_before: true,
+            accepted_via_key: Some("tab".to_string()),
+            accepted_label: Some("Context".to_string()),
+            cursor_before: 1,
+            cursor_after: 9,
+            caused_submit: false,
+        };
+        assert_ne!(
+            enter_trace.accepted_via_key, tab_trace.accepted_via_key,
+            "enter and tab accepts must have distinct acceptedViaKey"
+        );
+    }
+
+    #[test]
+    fn probe_snapshot_default_has_no_trace() {
+        let snap = AcpTestProbeSnapshot::default();
+        assert!(
+            snap.last_interaction_trace.is_none(),
+            "default probe must have no interaction trace"
+        );
+        let json = serde_json::to_value(&snap).expect("serialize");
+        assert!(
+            json.get("lastInteractionTrace").is_none(),
+            "lastInteractionTrace should be omitted when None"
+        );
+    }
+
+    #[test]
+    fn probe_snapshot_with_trace_round_trips() {
+        let trace = AcpLastInteractionTrace {
+            key: "tab".to_string(),
+            route: "picker".to_string(),
+            picker_open_before: true,
+            accepted_via_key: Some("tab".to_string()),
+            accepted_label: Some("Current Context".to_string()),
+            cursor_before: 1,
+            cursor_after: 17,
+            caused_submit: false,
+        };
+        let snap = AcpTestProbeSnapshot {
+            last_interaction_trace: Some(trace.clone()),
+            ..Default::default()
+        };
+        let json = serde_json::to_value(&snap).expect("serialize");
+        assert!(json["lastInteractionTrace"].is_object());
+        assert_eq!(json["lastInteractionTrace"]["key"], "tab");
+        assert_eq!(json["lastInteractionTrace"]["acceptedViaKey"], "tab");
+        assert_eq!(json["lastInteractionTrace"]["causedSubmit"], false);
+
+        let back: AcpTestProbeSnapshot =
+            serde_json::from_value(json).expect("deserialize");
+        assert_eq!(back.last_interaction_trace, Some(trace));
+    }
+
+    #[test]
+    fn probe_snapshot_backward_compatible_without_trace_field() {
+        // Simulate a JSON payload from an older producer that lacks lastInteractionTrace.
+        let json = serde_json::json!({
+            "schemaVersion": 1,
+            "eventSeq": 0,
+            "keyRoutes": [],
+            "acceptedItems": [],
+            "state": AcpStateSnapshot::default(),
+        });
+        let snap: AcpTestProbeSnapshot =
+            serde_json::from_value(json).expect("deserialize old-format probe");
+        assert!(
+            snap.last_interaction_trace.is_none(),
+            "missing field should deserialize as None"
         );
     }
 }

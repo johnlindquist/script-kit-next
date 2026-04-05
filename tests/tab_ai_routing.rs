@@ -4584,6 +4584,74 @@ fn non_authoring_harness_submission_omits_guidance_block() {
     );
 }
 
+// =========================================================================
+// ACP action-surface agent switch preserves retry payload
+// =========================================================================
+
+const ACP_ACTION_HANDLER_SOURCE: &str =
+    include_str!("../src/app_actions/handle_action/mod.rs");
+
+#[test]
+fn acp_action_switch_stages_retry_before_persist() {
+    // The action handler must call stage_agent_switch_retry BEFORE
+    // persist_preferred_acp_agent_id_sync so the retry payload captures
+    // the live session's capability requirements before any side effects.
+    let stage_pos = ACP_ACTION_HANDLER_SOURCE
+        .find("stage_agent_switch_retry")
+        .expect("action handler must call stage_agent_switch_retry");
+    let persist_pos = ACP_ACTION_HANDLER_SOURCE
+        .find("persist_preferred_acp_agent_id_sync")
+        .expect("action handler must call persist_preferred_acp_agent_id_sync");
+    assert!(
+        stage_pos < persist_pos,
+        "stage_agent_switch_retry must be called BEFORE persist_preferred_acp_agent_id_sync \
+         so capability requirements are preserved from the live session"
+    );
+}
+
+#[test]
+fn acp_action_switch_emits_retry_payload_staged_log() {
+    assert!(
+        ACP_ACTION_HANDLER_SOURCE
+            .contains("acp_switch_agent_retry_payload_staged_from_action"),
+        "action handler must emit acp_switch_agent_retry_payload_staged_from_action log event"
+    );
+}
+
+#[test]
+fn acp_action_switch_already_selected_returns_success_message() {
+    // When the chosen agent is already selected, the handler must return
+    // a success outcome with an "already using" message instead of reopening.
+    let already_check = ACP_ACTION_HANDLER_SOURCE.find("ACP is already using");
+    assert!(
+        already_check.is_some(),
+        "action handler must return 'already using' message for current agent"
+    );
+    // The already-using branch must return before reaching stage/persist.
+    let already_pos = already_check.unwrap();
+    let stage_pos = ACP_ACTION_HANDLER_SOURCE
+        .find("stage_agent_switch_retry")
+        .unwrap();
+    assert!(
+        already_pos < stage_pos,
+        "already-using early return must happen before stage_agent_switch_retry"
+    );
+}
+
+#[test]
+fn acp_action_switch_reopens_after_persist() {
+    // After staging retry and persisting, the handler must close the
+    // harness terminal and open a fresh ACP chat.
+    assert!(
+        ACP_ACTION_HANDLER_SOURCE.contains("close_tab_ai_harness_terminal"),
+        "action handler must close the harness terminal on agent switch"
+    );
+    assert!(
+        ACP_ACTION_HANDLER_SOURCE.contains("open_tab_ai_chat"),
+        "action handler must reopen ACP chat after agent switch"
+    );
+}
+
 #[test]
 fn authoring_harness_submission_contains_verification_guidance() {
     // Runtime call: a ScriptList + Submit authoring submission must contain

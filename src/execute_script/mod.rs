@@ -1620,6 +1620,38 @@ impl ScriptListApp {
                                         continue;
                                     }
 
+                                    // Handle InspectAutomationWindow - needs UI state, forward to UI thread
+                                    if let Message::InspectAutomationWindow {
+                                        request_id,
+                                        target,
+                                        hi_dpi,
+                                        probes,
+                                    } = &msg
+                                    {
+                                        tracing::info!(
+                                            target: "script_kit::automation",
+                                            request_id = %request_id,
+                                            target = ?target,
+                                            hi_dpi = ?hi_dpi,
+                                            probe_count = probes.len(),
+                                            "automation.inspect.forward_to_ui"
+                                        );
+                                        let prompt_msg = PromptMessage::InspectAutomationWindow {
+                                            request_id: request_id.clone(),
+                                            target: target.clone(),
+                                            hi_dpi: *hi_dpi,
+                                            probes: probes.clone(),
+                                        };
+                                        if tx.send_blocking(prompt_msg).is_err() {
+                                            tracing::info!(
+                                                category = "EXEC",
+                                                "Prompt channel closed, reader exiting"
+                                            );
+                                            break;
+                                        }
+                                        continue;
+                                    }
+
                                     // Handle WaitFor - needs UI state polling, forward to UI thread
                                     if let Message::WaitFor {
                                         request_id,

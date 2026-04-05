@@ -2378,3 +2378,78 @@ High-fidelity event simulation through GPUI's real event pipeline (unlike legacy
 | `waitFor` | Poll condition on targeted window (main-only, non-main fails closed) |
 | `batch` | Execute batch on targeted window (main-only, non-main fails closed) |
 | `simulateGpuiEvent` | GPUI event dispatch to targeted window (fails closed when multiple visible windows share the resolved kind) |
+| `inspectAutomationWindow` | Unified inspection bundle: resolved identity, screenshot dimensions, pixel probes, and semantic elements in one round-trip |
+
+### inspectAutomationWindow
+
+Returns a compact, machine-readable inspection snapshot of one exact automation window. Combines resolved target identity, screenshot dimensions, optional pixel probe results, and semantic UI elements into a single response — avoiding separate `getElements` + `captureScreenshot` round-trips.
+
+**Exact-window routing:** The command resolves one exact automation target via the standard `target` field. Ambiguous or weak OS-window matches fail deterministically — the command never guesses.
+
+**Non-main window support:** Notes and detached ACP targets return screenshot dimensions and pixel probe data even when semantic element collection is not yet supported for those window kinds. The `warnings` array contains machine-readable codes describing any limitations.
+
+**Request:**
+```json
+{
+  "type": "inspectAutomationWindow",
+  "requestId": "inspect-1",
+  "target": {"type": "kind", "kind": "notes", "index": 0},
+  "probes": [{"x": 24, "y": 24}, {"x": 320, "y": 180}]
+}
+```
+
+**Response:**
+```json
+{
+  "type": "automationInspectResult",
+  "requestId": "inspect-1",
+  "schemaVersion": 1,
+  "windowId": "notes:0",
+  "windowKind": "Notes",
+  "title": "Script Kit Notes",
+  "elements": [],
+  "totalCount": 0,
+  "screenshotWidth": 1440,
+  "screenshotHeight": 900,
+  "pixelProbes": [
+    {"x": 24, "y": 24, "r": 28, "g": 28, "b": 30, "a": 255},
+    {"x": 320, "y": 180, "r": 245, "g": 245, "b": 247, "a": 255}
+  ],
+  "warnings": ["semantic_elements_non_main_pending"]
+}
+```
+
+**Request fields:**
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `requestId` | string | required | Correlation ID for the response |
+| `target` | AutomationWindowTarget | focused | Which window to inspect |
+| `hiDpi` | boolean | false | If true, capture at 2x retina resolution |
+| `probes` | PixelProbe[] | [] | Pixel coordinates to sample RGBA values from |
+
+**Response fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `schemaVersion` | number | Always `1` for forward compatibility |
+| `windowId` | string | Resolved automation window ID (e.g. `"main:0"`, `"acpDetached:thread-2"`) |
+| `windowKind` | string | Window kind (e.g. `"Main"`, `"Notes"`, `"AcpDetached"`) |
+| `title` | string? | Window title if available |
+| `elements` | ElementInfo[] | Semantic UI elements (empty when unavailable for this window kind) |
+| `totalCount` | number | Total element count before any limit |
+| `focusedSemanticId` | string? | Semantic ID of the focused element |
+| `selectedSemanticId` | string? | Semantic ID of the selected element |
+| `screenshotWidth` | number? | Screenshot width in pixels (null if capture failed) |
+| `screenshotHeight` | number? | Screenshot height in pixels (null if capture failed) |
+| `pixelProbes` | PixelProbeResult[] | RGBA values at requested coordinates |
+| `warnings` | string[] | Machine-readable warning codes |
+
+**Warning codes:**
+
+| Code | Meaning |
+|------|---------|
+| `target_resolution_failed: <message>` | The target could not be resolved |
+| `screenshot_capture_failed: <message>` | OS screenshot capture failed (dimensions and probes unavailable) |
+| `semantic_elements_non_main_pending` | Semantic element collection not yet implemented for this window kind |
+| `semantic_elements_detached_acp_pending` | Semantic element collection for detached ACP windows is pending |

@@ -2214,6 +2214,143 @@ impl ScriptListApp {
                     );
                 }
             }
+            PromptMessage::InspectAutomationWindow {
+                request_id,
+                target,
+                hi_dpi,
+                probes,
+            } => {
+                tracing::info!(
+                    target: "script_kit::automation",
+                    request_id = %request_id,
+                    target = ?target,
+                    probe_count = probes.len(),
+                    "automation.inspect.request"
+                );
+
+                // Step 1: Resolve the automation window target.
+                let resolved = match crate::windows::resolve_automation_window(target.as_ref()) {
+                    Ok(info) => info,
+                    Err(err) => {
+                        let snapshot = protocol::AutomationInspectSnapshot {
+                            schema_version: protocol::AUTOMATION_INSPECT_SCHEMA_VERSION,
+                            window_id: String::new(),
+                            window_kind: "unknown".to_string(),
+                            title: None,
+                            elements: Vec::new(),
+                            total_count: 0,
+                            focused_semantic_id: None,
+                            selected_semantic_id: None,
+                            screenshot_width: None,
+                            screenshot_height: None,
+                            pixel_probes: Vec::new(),
+                            warnings: vec![format!("target_resolution_failed: {}", err)],
+                        };
+                        if let Some(ref sender) = self.response_sender {
+                            let _ = sender.try_send(
+                                Message::automation_inspect_result(request_id.clone(), snapshot),
+                            );
+                        }
+                        return;
+                    }
+                };
+
+                // Step 2: Capture RGBA image for dimensions and pixel probes.
+                let hi_dpi_mode = hi_dpi.unwrap_or(false);
+                let rgba_result =
+                    crate::platform::capture_targeted_rgba_image(target.as_ref(), hi_dpi_mode);
+
+                let (shot_w, shot_h, probe_results, mut warnings) = match rgba_result {
+                    Ok(ref rgba_image) => {
+                        let w = rgba_image.width();
+                        let h = rgba_image.height();
+                        let mut results = Vec::with_capacity(probes.len());
+                        for probe in &probes {
+                            if probe.x < w && probe.y < h {
+                                let px = rgba_image.get_pixel(probe.x, probe.y);
+                                results.push(protocol::PixelProbeResult {
+                                    x: probe.x,
+                                    y: probe.y,
+                                    r: px[0],
+                                    g: px[1],
+                                    b: px[2],
+                                    a: px[3],
+                                });
+                            }
+                        }
+                        (Some(w), Some(h), results, Vec::new())
+                    }
+                    Err(err) => {
+                        tracing::warn!(
+                            target: "script_kit::automation",
+                            request_id = %request_id,
+                            error = %err,
+                            "automation.inspect.screenshot_failed"
+                        );
+                        (
+                            None,
+                            None,
+                            Vec::new(),
+                            vec![format!("screenshot_capture_failed: {}", err)],
+                        )
+                    }
+                };
+
+                // Step 3: Collect semantic elements (main window only for now).
+                let (elements, total_count, focused_semantic_id, selected_semantic_id) =
+                    match resolved.kind {
+                        protocol::AutomationWindowKind::Main => {
+                            let outcome = self.collect_visible_elements(200, cx);
+                            let focused = outcome.focused_semantic_id();
+                            let selected = outcome.selected_semantic_id();
+                            warnings.extend(outcome.warnings.iter().cloned());
+                            (outcome.elements, outcome.total_count, focused, selected)
+                        }
+                        protocol::AutomationWindowKind::AcpDetached => {
+                            warnings
+                                .push("semantic_elements_detached_acp_pending".to_string());
+                            (Vec::new(), 0, None, None)
+                        }
+                        _ => {
+                            warnings
+                                .push("semantic_elements_non_main_pending".to_string());
+                            (Vec::new(), 0, None, None)
+                        }
+                    };
+
+                let snapshot = protocol::AutomationInspectSnapshot {
+                    schema_version: protocol::AUTOMATION_INSPECT_SCHEMA_VERSION,
+                    window_id: resolved.id.clone(),
+                    window_kind: format!("{:?}", resolved.kind),
+                    title: resolved.title.clone(),
+                    elements,
+                    total_count,
+                    focused_semantic_id,
+                    selected_semantic_id,
+                    screenshot_width: shot_w,
+                    screenshot_height: shot_h,
+                    pixel_probes: probe_results,
+                    warnings,
+                };
+
+                tracing::info!(
+                    target: "script_kit::automation",
+                    request_id = %request_id,
+                    window_id = %resolved.id,
+                    screenshot_width = ?snapshot.screenshot_width,
+                    screenshot_height = ?snapshot.screenshot_height,
+                    element_count = snapshot.elements.len(),
+                    warning_count = snapshot.warnings.len(),
+                    "automation.inspect.result"
+                );
+
+                if let Some(ref sender) = self.response_sender {
+                    let _ = sender.try_send(
+                        Message::automation_inspect_result(request_id.clone(), snapshot),
+                    );
+                }
+            }
+
             PromptMessage::WaitFor {
                 request_id,
                 condition,

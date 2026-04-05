@@ -593,4 +593,34 @@ impl Message {
             trace,
         }
     }
+
+    // ============================================================
+    // Constructor methods for exact-window inspection
+    // ============================================================
+
+    /// Create an inspectAutomationWindow request
+    pub fn inspect_automation_window(
+        request_id: String,
+        target: Option<AutomationWindowTarget>,
+        hi_dpi: Option<bool>,
+        probes: Vec<crate::protocol::types::automation_inspect::PixelProbe>,
+    ) -> Self {
+        Message::InspectAutomationWindow {
+            request_id,
+            target,
+            hi_dpi,
+            probes,
+        }
+    }
+
+    /// Create an automationInspectResult response
+    pub fn automation_inspect_result(
+        request_id: String,
+        snapshot: crate::protocol::types::automation_inspect::AutomationInspectSnapshot,
+    ) -> Self {
+        Message::AutomationInspectResult {
+            request_id,
+            snapshot,
+        }
+    }
 }

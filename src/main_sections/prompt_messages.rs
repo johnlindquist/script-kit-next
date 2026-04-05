@@ -300,4 +300,11 @@ enum PromptMessage {
         agent_id: Option<String>,
         target: Option<protocol::AutomationWindowTarget>,
     },
+    /// Inspect one exact automation window (screenshot dims, pixel probes, elements)
+    InspectAutomationWindow {
+        request_id: String,
+        target: Option<protocol::AutomationWindowTarget>,
+        hi_dpi: Option<bool>,
+        probes: Vec<protocol::PixelProbe>,
+    },
 }

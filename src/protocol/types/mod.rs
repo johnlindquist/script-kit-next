@@ -11,6 +11,7 @@
 
 pub(crate) mod acp_state;
 mod ai;
+pub mod automation_inspect;
 pub mod automation_surface;
 pub mod automation_window;
 pub(crate) mod batch_wait;
@@ -25,12 +26,15 @@ mod system;
 
 pub use acp_state::{
     AcpAcceptedItem, AcpInputLayoutMetrics, AcpInputLayoutTelemetry, AcpKeyRoute,
-    AcpKeyRouteTelemetry, AcpPickerItemAcceptedTelemetry, AcpPickerState, AcpResolvedTarget,
-    AcpSetupActionKind, AcpSetupSnapshot, AcpStateSnapshot, AcpTestProbeSnapshot,
-    AcpWaitCondition, ACP_STATE_SCHEMA_VERSION, ACP_TEST_PROBE_MAX_EVENTS,
+    AcpKeyRouteTelemetry, AcpLastInteractionTrace, AcpPickerItemAcceptedTelemetry,
+    AcpPickerState, AcpResolvedTarget, AcpSetupActionKind, AcpSetupSnapshot, AcpStateSnapshot,
+    AcpTestProbeSnapshot, AcpWaitCondition, ACP_STATE_SCHEMA_VERSION, ACP_TEST_PROBE_MAX_EVENTS,
     ACP_TEST_PROBE_SCHEMA_VERSION,
 };
 pub use ai::{AiChatInfo, AiContextPartInput, AiMessageInfo};
+pub use automation_inspect::{
+    AutomationInspectSnapshot, PixelProbe, PixelProbeResult, AUTOMATION_INSPECT_SCHEMA_VERSION,
+};
 pub use automation_surface::{AutomationSurfaceSnapshot, AUTOMATION_SURFACE_SCHEMA_VERSION};
 pub use automation_window::{
     AutomationWindowBounds, AutomationWindowInfo, AutomationWindowKind, AutomationWindowTarget,

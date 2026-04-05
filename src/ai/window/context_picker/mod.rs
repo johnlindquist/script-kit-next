@@ -185,7 +185,7 @@ pub(crate) struct ContextPickerEmptyStateHint {
 /// the picker open for file suggestions instead of fabricating a fake path.
 pub(crate) fn empty_state_hints(
     trigger: ContextPickerTrigger,
-) -> &'static [ContextPickerEmptyStateHint] {
+) -> std::borrow::Cow<'static, [ContextPickerEmptyStateHint]> {
     static MENTION_HINTS: &[ContextPickerEmptyStateHint] = &[
         ContextPickerEmptyStateHint {
             display: "@screenshot",
@@ -226,19 +226,41 @@ pub(crate) fn empty_state_hints(
             insertion: "/help ",
         },
     ];
-    let hints = match trigger {
+    let base = match trigger {
         ContextPickerTrigger::Mention => MENTION_HINTS,
         ContextPickerTrigger::Slash => SLASH_HINTS,
     };
+
+    if trigger != ContextPickerTrigger::Mention {
+        tracing::debug!(
+            target: "ai",
+            event = "ai_context_picker_empty_state_hints_selected",
+            trigger = ?trigger,
+            hint_count = base.len(),
+            filtered_hint_count = base.len(),
+        );
+        return std::borrow::Cow::Borrowed(base);
+    }
+
+    let filtered: Vec<ContextPickerEmptyStateHint> = base
+        .iter()
+        .copied()
+        .filter(|hint| {
+            crate::ai::context_contract::ContextAttachmentKind::from_mention_line(hint.insertion)
+                .map(|kind| kind.provider_data_available())
+                .unwrap_or(true)
+        })
+        .collect();
 
     tracing::debug!(
         target: "ai",
         event = "ai_context_picker_empty_state_hints_selected",
         trigger = ?trigger,
-        hint_count = hints.len(),
+        hint_count = base.len(),
+        filtered_hint_count = filtered.len(),
     );
 
-    hints
+    std::borrow::Cow::Owned(filtered)
 }
 
 // ── Cached built-in picker seeds ──────────────────────────────────────

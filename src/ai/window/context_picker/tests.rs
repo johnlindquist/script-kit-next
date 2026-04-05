@@ -1063,3 +1063,44 @@ fn slash_ranking_is_deterministic() {
         assert_eq!(a.meta_highlight_indices, b.meta_highlight_indices);
     }
 }
+
+// ── Provider-backed empty state hint gating ──────────────────────────────
+
+fn restore_env(key: &str, value: Option<std::ffi::OsString>) {
+    match value {
+        Some(value) => std::env::set_var(key, value),
+        None => std::env::remove_var(key),
+    }
+}
+
+#[test]
+fn mention_empty_state_hints_hide_unavailable_provider_entries() {
+    let prev_calendar = std::env::var_os("SCRIPT_KIT_CALENDAR_JSON");
+    std::env::remove_var("SCRIPT_KIT_CALENDAR_JSON");
+    crate::mcp_resources::clear_provider_json_slots();
+
+    let hints = super::empty_state_hints(ContextPickerTrigger::Mention);
+    assert!(
+        !hints.iter().any(|hint| hint.display == "@calendar"),
+        "@calendar hint must be hidden when provider data is unavailable"
+    );
+
+    restore_env("SCRIPT_KIT_CALENDAR_JSON", prev_calendar);
+}
+
+#[test]
+fn mention_empty_state_hints_show_available_provider_entries() {
+    let prev_calendar = std::env::var_os("SCRIPT_KIT_CALENDAR_JSON");
+    std::env::set_var(
+        "SCRIPT_KIT_CALENDAR_JSON",
+        r#"{"schemaVersion":1,"type":"calendar","ok":true,"available":true,"source":"env","items":[{"title":"Demo"}]}"#,
+    );
+
+    let hints = super::empty_state_hints(ContextPickerTrigger::Mention);
+    assert!(
+        hints.iter().any(|hint| hint.display == "@calendar"),
+        "@calendar hint must be shown when provider data is real"
+    );
+
+    restore_env("SCRIPT_KIT_CALENDAR_JSON", prev_calendar);
+}

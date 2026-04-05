@@ -649,6 +649,19 @@ impl ScriptListApp {
                 agent_display_name = %agent_display_name,
             );
 
+            // Preserve the current session's capability requirements
+            // (screenshot/context needs, runtime recovery context, etc.)
+            // so the reopen path consumes a truthful retry payload.
+            entity.update(cx, |view, cx| {
+                view.stage_agent_switch_retry(agent_id.to_string(), cx);
+            });
+
+            tracing::info!(
+                target: "script_kit::tab_ai",
+                event = "acp_switch_agent_retry_payload_staged_from_action",
+                agent_id,
+            );
+
             let persist_result =
                 crate::ai::acp::persist_preferred_acp_agent_id_sync(Some(agent_id.to_string()));
 
@@ -667,18 +680,6 @@ impl ScriptListApp {
                     ),
                 );
             }
-
-            // Stage a retry payload preserving current capability requirements
-            // so the reopened session keeps needs_embedded_context / needs_image.
-            entity.update(cx, |view, cx| {
-                view.stage_agent_switch_retry(agent_id.to_string(), cx);
-            });
-
-            tracing::info!(
-                target: "script_kit::tab_ai",
-                event = "acp_switch_agent_reopen_requested",
-                agent_id,
-            );
 
             self.close_tab_ai_harness_terminal(cx);
             self.open_tab_ai_chat(cx);
