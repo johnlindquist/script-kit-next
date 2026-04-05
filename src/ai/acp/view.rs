@@ -4082,11 +4082,13 @@ impl AcpChatView {
                 next_text.push_str(&current_text[..start_byte]);
                 next_text.push_str(&current_text[end_byte..]);
 
+                let delete_forward = crate::ui_foundation::is_key_delete(key);
                 tracing::info!(
                     target: "script_kit::tab_ai",
                     event = "acp_inline_mention_deleted_atomically",
                     key = %key,
                     cursor,
+                    delete_forward,
                     token_range_start = range.start,
                     token_range_end = range.end,
                     next_cursor = range.start,
@@ -4097,6 +4099,7 @@ impl AcpChatView {
                     thread.input.set_cursor(range.start);
                     cx.notify();
                 });
+                self.refresh_mention_session(cx);
                 self.sync_inline_mentions(cx);
                 cx.notify();
                 cx.stop_propagation();
