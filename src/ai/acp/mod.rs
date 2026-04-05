@@ -23,6 +23,7 @@ pub(crate) mod events;
 pub(crate) mod handlers;
 pub(crate) mod history;
 pub(crate) mod permission_broker;
+pub(crate) mod picker_popup;
 pub(crate) mod preflight;
 pub(crate) mod provider;
 pub(crate) mod setup_state;

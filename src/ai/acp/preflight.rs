@@ -4,6 +4,8 @@
 //! either a ready agent or a structured blocker state that the UI
 //! can render inline instead of dead-ending with a toast.
 
+use std::cmp::Ordering;
+
 use gpui::SharedString;
 
 use super::catalog::{
@@ -34,6 +36,60 @@ impl AcpAgentCatalogEntry {
         let image_ok = !requirements.needs_image || self.supports_image.unwrap_or(true);
         embedded_ok && image_ok
     }
+}
+
+/// Compare two launchable candidates for ranking.
+///
+/// Ordering (best first):
+/// 1. `last_session_ok == true` beats `false` (proven-good agent).
+/// 2. Non-legacy source beats `LegacyClaudeCode` (generic-first).
+/// 3. Stable alphabetical tie-breaker on `display_name`.
+fn compare_launchable_candidates(
+    a: &AcpAgentCatalogEntry,
+    b: &AcpAgentCatalogEntry,
+) -> Ordering {
+    let a_is_legacy = matches!(a.source, super::catalog::AcpAgentSource::LegacyClaudeCode);
+    let b_is_legacy = matches!(b.source, super::catalog::AcpAgentSource::LegacyClaudeCode);
+
+    // Prefer last_session_ok == true (reverse: true > false).
+    b.last_session_ok
+        .cmp(&a.last_session_ok)
+        // Prefer non-legacy (false < true, so legacy sorts after).
+        .then_with(|| a_is_legacy.cmp(&b_is_legacy))
+        // Stable alphabetical tie-breaker.
+        .then_with(|| a.display_name.as_ref().cmp(b.display_name.as_ref()))
+}
+
+/// Pick the best launchable candidate from the catalog, optionally
+/// filtering by capability requirements.
+fn best_launchable_candidate(
+    agents: &[AcpAgentCatalogEntry],
+    requirements: Option<AcpLaunchRequirements>,
+) -> Option<AcpAgentCatalogEntry> {
+    let mut candidates: Vec<&AcpAgentCatalogEntry> = agents
+        .iter()
+        .filter(|entry| {
+            entry.is_launchable()
+                && requirements
+                    .map(|req| entry.satisfies_requirements(req))
+                    .unwrap_or(true)
+        })
+        .collect();
+
+    candidates.sort_by(|a, b| compare_launchable_candidates(a, b));
+
+    tracing::info!(
+        target: "script_kit::tab_ai",
+        event = "acp_launchable_candidate_ranked",
+        needs_embedded_context = requirements.map(|r| r.needs_embedded_context),
+        needs_image = requirements.map(|r| r.needs_image),
+        candidate_ids = ?candidates
+            .iter()
+            .map(|entry| entry.id.as_ref())
+            .collect::<Vec<_>>(),
+    );
+
+    candidates.into_iter().next().cloned()
 }
 
 /// Why an ACP launch cannot proceed.
@@ -80,7 +136,7 @@ impl AcpLaunchResolution {
 ///
 /// Selection priority:
 /// 1. Preferred agent ID (if provided and found in catalog)
-/// 2. First launchable agent
+/// 2. Best ranked launchable agent (last-known-good > non-legacy > alphabetical)
 /// 3. First agent in catalog (will have a blocker)
 /// 4. None (empty catalog → NoAgentsAvailable)
 pub(crate) fn resolve_default_acp_launch(
@@ -90,7 +146,7 @@ pub(crate) fn resolve_default_acp_launch(
     let selected = preferred_agent_id
         .and_then(|preferred| agents.iter().find(|entry| entry.id.as_ref() == preferred))
         .cloned()
-        .or_else(|| agents.iter().find(|entry| entry.is_launchable()).cloned())
+        .or_else(|| best_launchable_candidate(agents, None))
         .or_else(|| agents.first().cloned());
 
     let Some(selected_agent) = selected else {
@@ -128,11 +184,12 @@ pub(crate) fn resolve_default_acp_launch(
 ///
 /// Selection priority:
 /// 1. Preferred agent ID (if launchable AND satisfies requirements)
-/// 2. First launchable agent that satisfies requirements
+/// 2. Best ranked launchable agent that satisfies requirements
 /// 3. Preferred agent ID (if launchable, even without capability match)
-/// 4. First launchable agent (capability mismatch blocker)
-/// 5. First agent in catalog (will have an install/auth/config blocker)
-/// 6. None (empty catalog → NoAgentsAvailable)
+/// 4. Best ranked launchable agent (capability mismatch blocker)
+/// 5. Preferred agent (even if not launchable — will get install/auth blocker)
+/// 6. First agent in catalog (will have a blocker)
+/// 7. None (empty catalog → NoAgentsAvailable)
 pub(crate) fn resolve_acp_launch_with_requirements(
     agents: &[AcpAgentCatalogEntry],
     preferred_agent_id: Option<&str>,
@@ -145,17 +202,12 @@ pub(crate) fn resolve_acp_launch_with_requirements(
     let selected = preferred
         .filter(|entry| entry.is_launchable() && entry.satisfies_requirements(requirements))
         .cloned()
-        // Fallback: any launchable agent that satisfies requirements.
-        .or_else(|| {
-            agents
-                .iter()
-                .find(|entry| entry.is_launchable() && entry.satisfies_requirements(requirements))
-                .cloned()
-        })
+        // Fallback: best ranked launchable agent that satisfies requirements.
+        .or_else(|| best_launchable_candidate(agents, Some(requirements)))
         // Fallback: preferred is launchable but doesn't satisfy requirements.
         .or_else(|| preferred.filter(|entry| entry.is_launchable()).cloned())
-        // Fallback: any launchable agent (will get CapabilityMismatch blocker).
-        .or_else(|| agents.iter().find(|entry| entry.is_launchable()).cloned())
+        // Fallback: best ranked launchable agent (will get CapabilityMismatch blocker).
+        .or_else(|| best_launchable_candidate(agents, None))
         // Fallback: preferred even if not launchable (will get install/auth blocker).
         .or_else(|| preferred.cloned())
         // Last resort: first catalog entry.
@@ -700,5 +752,125 @@ mod tests {
         }
         let unique: std::collections::HashSet<&str> = titles.iter().map(|t| t.as_ref()).collect();
         assert_eq!(unique.len(), titles.len(), "all titles should be unique");
+    }
+
+    // ---------------------------------------------------------------
+    // Capability-driven ranking tests
+    // ---------------------------------------------------------------
+
+    fn make_ranked_entry(
+        id: &str,
+        source: AcpAgentSource,
+        last_session_ok: bool,
+    ) -> AcpAgentCatalogEntry {
+        AcpAgentCatalogEntry {
+            id: id.to_string().into(),
+            display_name: id.to_string().into(),
+            source,
+            install_state: AcpAgentInstallState::Ready,
+            auth_state: AcpAgentAuthState::Unknown,
+            config_state: AcpAgentConfigState::Valid,
+            install_hint: None,
+            config_hint: None,
+            supports_embedded_context: None,
+            supports_image: None,
+            last_session_ok,
+            config: None,
+        }
+    }
+
+    #[test]
+    fn ranking_prefers_last_session_ok_over_load_order() {
+        let agents = vec![
+            make_ranked_entry("claude-code", AcpAgentSource::LegacyClaudeCode, false),
+            make_ranked_entry("opencode", AcpAgentSource::ScriptKitCatalog, true),
+        ];
+        let result = resolve_default_acp_launch(&agents, None);
+        assert_eq!(
+            result.selected_agent_id(),
+            Some("opencode"),
+            "last_session_ok agent should win over load-order-first"
+        );
+    }
+
+    #[test]
+    fn ranking_prefers_non_legacy_when_equal() {
+        let agents = vec![
+            make_ranked_entry("claude-code", AcpAgentSource::LegacyClaudeCode, false),
+            make_ranked_entry("gemini-cli", AcpAgentSource::ScriptKitCatalog, false),
+        ];
+        let result = resolve_default_acp_launch(&agents, None);
+        assert_eq!(
+            result.selected_agent_id(),
+            Some("gemini-cli"),
+            "non-legacy should rank ahead of legacy when otherwise equal"
+        );
+    }
+
+    #[test]
+    fn ranking_stable_alphabetical_tiebreaker() {
+        let agents = vec![
+            make_ranked_entry("zeta-agent", AcpAgentSource::ScriptKitCatalog, false),
+            make_ranked_entry("alpha-agent", AcpAgentSource::ScriptKitCatalog, false),
+        ];
+        let result = resolve_default_acp_launch(&agents, None);
+        assert_eq!(
+            result.selected_agent_id(),
+            Some("alpha-agent"),
+            "alphabetical tie-breaker should pick alpha before zeta"
+        );
+    }
+
+    #[test]
+    fn ranking_last_session_ok_beats_non_legacy() {
+        // Legacy agent that worked last session should beat non-legacy that didn't.
+        let agents = vec![
+            make_ranked_entry("opencode", AcpAgentSource::ScriptKitCatalog, false),
+            make_ranked_entry("claude-code", AcpAgentSource::LegacyClaudeCode, true),
+        ];
+        let result = resolve_default_acp_launch(&agents, None);
+        assert_eq!(
+            result.selected_agent_id(),
+            Some("claude-code"),
+            "last_session_ok should outrank non-legacy preference"
+        );
+    }
+
+    #[test]
+    fn ranking_with_requirements_prefers_capable_non_legacy() {
+        let mut opencode =
+            make_ranked_entry("opencode", AcpAgentSource::ScriptKitCatalog, false);
+        opencode.supports_image = Some(true);
+
+        let mut claude =
+            make_ranked_entry("claude-code", AcpAgentSource::LegacyClaudeCode, false);
+        claude.supports_image = Some(true);
+
+        let agents = vec![claude, opencode];
+        let reqs = AcpLaunchRequirements {
+            needs_embedded_context: false,
+            needs_image: true,
+        };
+        let result = resolve_acp_launch_with_requirements(&agents, None, reqs);
+        assert_eq!(
+            result.selected_agent_id(),
+            Some("opencode"),
+            "non-legacy capable agent should rank ahead of legacy capable agent"
+        );
+        assert!(result.is_ready());
+    }
+
+    #[test]
+    fn ranking_preferred_still_wins_when_valid() {
+        let agents = vec![
+            make_ranked_entry("opencode", AcpAgentSource::ScriptKitCatalog, true),
+            make_ranked_entry("claude-code", AcpAgentSource::LegacyClaudeCode, false),
+        ];
+        let result = resolve_default_acp_launch(&agents, Some("claude-code"));
+        assert_eq!(
+            result.selected_agent_id(),
+            Some("claude-code"),
+            "explicit preferred agent should override ranking"
+        );
     }
 }

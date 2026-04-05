@@ -327,6 +327,9 @@ const STARTUP_NEW_TAB_SOURCE: &str = include_str!("../../app_impl/startup_new_ta
 const RENDER_IMPL_SOURCE: &str = include_str!("../../main_sections/render_impl.rs");
 const APP_VIEW_STATE_SOURCE: &str = include_str!("../../main_sections/app_view_state.rs");
 const APP_RUN_SETUP_SOURCE: &str = include_str!("../../main_entry/app_run_setup.rs");
+const ACP_MOD_SOURCE: &str = include_str!("mod.rs");
+const ACP_PICKER_POPUP_SOURCE: &str = include_str!("picker_popup.rs");
+const ACP_VIEW_SOURCE: &str = include_str!("view.rs");
 
 #[test]
 fn app_view_has_acp_chat_view_variant() {
@@ -482,6 +485,49 @@ fn script_triggered_terminals_still_use_pty() {
 fn acp_and_pty_views_coexist_in_app_view() {
     assert!(APP_VIEW_STATE_SOURCE.contains("AcpChatView"));
     assert!(APP_VIEW_STATE_SOURCE.contains("QuickTerminalView"));
+}
+
+#[test]
+fn acp_picker_popup_module_is_registered() {
+    assert!(
+        ACP_MOD_SOURCE.contains("pub(crate) mod picker_popup;"),
+        "ACP module should register the detached picker popup module"
+    );
+}
+
+#[test]
+fn acp_picker_migration_uses_popup_window_instead_of_inline_layer() {
+    assert!(
+        !ACP_VIEW_SOURCE.contains("acp-mention-picker-layer"),
+        "ACP chat view should no longer render the mention picker inline"
+    );
+    assert!(
+        ACP_PICKER_POPUP_SOURCE.contains("WindowKind::PopUp")
+            && ACP_PICKER_POPUP_SOURCE.contains("AcpMentionPopupWindow"),
+        "ACP picker migration should render through a popup window entity"
+    );
+}
+
+#[test]
+fn acp_picker_refresh_and_navigation_sync_popup_window() {
+    assert!(
+        ACP_VIEW_SOURCE.contains("pub(super) fn refresh_mention_session")
+            && ACP_VIEW_SOURCE.contains("self.sync_mention_popup_window_from_cached_parent(cx);"),
+        "picker refresh should keep the detached popup window synchronized"
+    );
+
+    let keydown_block_start = ACP_VIEW_SOURCE
+        .find("if self.mention_session.is_some() {")
+        .expect("mention-session keydown block should exist");
+    let keydown_block = &ACP_VIEW_SOURCE
+        [keydown_block_start..(keydown_block_start + 2200).min(ACP_VIEW_SOURCE.len())];
+    assert!(
+        keydown_block
+            .matches("self.sync_mention_popup_window_from_cached_parent(cx);")
+            .count()
+            >= 2,
+        "picker navigation should resync the detached popup window"
+    );
 }
 
 // =========================================================================

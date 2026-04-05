@@ -68,6 +68,17 @@ interface VerifyReceipt {
   label: string;
   timestamp: string;
   durationMs: number;
+  // Stable proof bundle fields (canonical names for machine consumption)
+  state: Record<string, unknown> | null;
+  probe: Record<string, unknown> | null;
+  screenshot: {
+    path: string | null;
+    captureMethod: string | null;
+    windowCaptureMethod: string | null;
+    windowId: number | null;
+  } | null;
+  visionCrops: VisionCheck[];
+  // Detailed receipts (full diagnostics)
   stateReceipt: AcpStateResult | null;
   probeReceipt: ProbeResult | null;
   screenshotReceipt: ScreenshotResult | null;
@@ -1191,6 +1202,19 @@ const receipt: VerifyReceipt = {
   label,
   timestamp: new Date().toISOString(),
   durationMs: Date.now() - startTime,
+  // Stable proof bundle fields
+  state: stateResult?.snapshot ?? null,
+  probe: probeResult?.snapshot ?? null,
+  screenshot: screenshotResult
+    ? {
+        path: screenshotResult.path,
+        captureMethod: screenshotResult.captureMethod,
+        windowCaptureMethod: screenshotResult.windowCaptureMethod,
+        windowId: screenshotResult.windowId,
+      }
+    : null,
+  visionCrops: visionChecks,
+  // Detailed receipts
   stateReceipt: stateResult,
   probeReceipt: probeResult,
   screenshotReceipt: screenshotResult,

@@ -25,7 +25,11 @@ interface SessionState {
   status: "ok" | "not_found" | "error";
   session: string;
   alive: boolean;
+  forwarderAlive: boolean;
+  healthy: boolean;
+  issues: string[];
   pid: number | null;
+  forwarderPid: number | null;
   pipe: string | null;
   pipeWritable: boolean;
   log: string | null;
@@ -70,7 +74,11 @@ function getSessionState(name: string): SessionState {
       status: "not_found",
       session: name,
       alive: false,
+      forwarderAlive: false,
+      healthy: false,
+      issues: ["session_not_found"],
       pid: null,
+      forwarderPid: null,
       pipe: null,
       pipeWritable: false,
       log: null,
@@ -82,7 +90,9 @@ function getSessionState(name: string): SessionState {
   }
 
   const pidPath = join(sdir, "pid");
+  const fwdPidPath = join(sdir, "fwd_pid");
   const inputFifo = join(sdir, "input");
+  const primaryPipe = join(sdir, "pipe");
   const logPath = join(sdir, "app.log");
   const responsesPath = join(sdir, "responses.ndjson");
 
@@ -97,10 +107,28 @@ function getSessionState(name: string): SessionState {
     }
   }
 
+  let forwarderPid: number | null = null;
+  let forwarderAlive = false;
+  if (existsSync(fwdPidPath)) {
+    forwarderPid = parseInt(readFileSync(fwdPidPath, "utf-8").trim(), 10);
+    if (!isNaN(forwarderPid)) {
+      forwarderAlive = isProcessAlive(forwarderPid);
+    } else {
+      forwarderPid = null;
+    }
+  }
+
   let pipeWritable = false;
   try {
     const stat = statSync(inputFifo);
     pipeWritable = stat.isFIFO();
+  } catch {
+    // not found or not a FIFO
+  }
+
+  let primaryPipeExists = false;
+  try {
+    primaryPipeExists = statSync(primaryPipe).isFIFO();
   } catch {
     // not found or not a FIFO
   }
@@ -126,12 +154,25 @@ function getSessionState(name: string): SessionState {
     }
   }
 
+  // Healthy = app alive AND forwarder alive AND both FIFOs exist
+  const healthy = alive && forwarderAlive && pipeWritable && primaryPipeExists;
+
+  const issues: string[] = [];
+  if (!alive) issues.push("app_process_dead");
+  if (!forwarderAlive) issues.push("forwarder_dead");
+  if (!pipeWritable) issues.push("input_fifo_missing");
+  if (!primaryPipeExists) issues.push("primary_pipe_missing");
+
   return {
     schemaVersion: SCHEMA_VERSION,
     status: "ok",
     session: name,
     alive,
+    forwarderAlive,
+    healthy,
+    issues,
     pid,
+    forwarderPid,
     pipe: existsSync(inputFifo) ? inputFifo : null,
     pipeWritable,
     log: existsSync(logPath) ? logPath : null,
