@@ -1,10 +1,10 @@
 # Command Bar Consistency Audit
 
 ## Summary
-Scanned 3 command bar presets. 3 pass, 0 warning, 0 error. Every audited preset is visible in source, validated by runtime chrome rules, and persisted as markdown.
+Scanned 4 command bar presets. 4 pass, 0 warning, 0 error. Every audited preset is visible in source, validated by runtime chrome rules, and persisted as markdown.
 
 ## What This Checks
-- CommandBar preset parity: constructor presence, runtime `emit_command_bar_chrome_audit(...)`, and validated search/section/anchor contract for `main_menu`, `no_search`, and `notes`.
+- CommandBar preset parity: constructor presence, runtime `emit_command_bar_chrome_audit(...)`, and validated search/section/anchor contract for `main_menu`, `no_search`, `notes`, and `ai`.
 
 ## Surface Status
 | Surface | Status | Files |
@@ -12,6 +12,7 @@ Scanned 3 command bar presets. 3 pass, 0 warning, 0 error. Every audited preset 
 | command_bar::main_menu | pass | `src/actions/command_bar.rs` |
 | command_bar::no_search | pass | `src/actions/command_bar.rs` |
 | command_bar::notes | pass | `src/actions/command_bar.rs` |
+| command_bar::ai | pass | `src/actions/command_bar.rs` |
 
 ## Findings
 ### command_bar::main_menu
@@ -27,4 +28,9 @@ Scanned 3 command bar presets. 3 pass, 0 warning, 0 error. Every audited preset 
 ### command_bar::notes
 - info — **command bar preset is reportable**
   - command_bar::notes is configured by `notes_style` with the audited search/section/anchor contract and emits `emit_command_bar_chrome_audit("notes", ...)`, so the preset can be persisted into `./audit/command-bar-consistency.md`.
+  - Evidence: `src/actions/command_bar.rs`
+
+### command_bar::ai
+- info — **command bar preset is reportable**
+  - command_bar::ai is configured by `ai_style` with the audited search/section/anchor contract and emits `emit_command_bar_chrome_audit("ai", ...)`, so the preset can be persisted into `./audit/command-bar-consistency.md`.
   - Evidence: `src/actions/command_bar.rs`

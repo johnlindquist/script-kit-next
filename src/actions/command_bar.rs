@@ -311,6 +311,29 @@ impl CommandBarChromeAudit {
                     self.anchor,
                 );
             }
+            "ai" => {
+                push_command_bar_violation_if_mismatch(
+                    &mut violations,
+                    self.surface,
+                    "search_position",
+                    "top",
+                    self.search_position,
+                );
+                push_command_bar_violation_if_mismatch(
+                    &mut violations,
+                    self.surface,
+                    "section_mode",
+                    super::constants::ACTIONS_DIALOG_EXPECT_SECTION_MODE,
+                    self.section_mode,
+                );
+                push_command_bar_violation_if_mismatch(
+                    &mut violations,
+                    self.surface,
+                    "anchor",
+                    "top",
+                    self.anchor,
+                );
+            }
             _ => {}
         }
         violations
@@ -406,7 +429,7 @@ impl CommandBarConfig {
 
     /// Create config for AI chat style (search at top, headers, icons)
     pub fn ai_style() -> Self {
-        Self {
+        let config = Self {
             dialog_config: ActionsDialogConfig {
                 search_position: SearchPosition::Top,
                 section_style: SectionStyle::Headers,
@@ -415,7 +438,9 @@ impl CommandBarConfig {
                 ..ActionsDialogConfig::default()
             },
             ..Default::default()
-        }
+        };
+        emit_command_bar_chrome_audit("ai", &config);
+        config
     }
 
     /// Create config with search hidden (external search handling)
@@ -1204,6 +1229,16 @@ mod command_bar_config_tests {
     #[test]
     fn notes_style_emits_top_headers_contract() {
         let audit = CommandBarChromeAudit::from_config("notes", &CommandBarConfig::notes_style());
+        assert_eq!(audit.search_position, "top");
+        assert_eq!(audit.section_mode, "headers");
+        assert_eq!(audit.anchor, "top");
+        assert!(audit.validate().is_empty());
+    }
+
+    #[test]
+    fn ai_style_emits_top_headers_contract() {
+        let audit =
+            CommandBarChromeAudit::from_config("ai", &CommandBarConfig::ai_style());
         assert_eq!(audit.search_position, "top");
         assert_eq!(audit.section_mode, "headers");
         assert_eq!(audit.anchor, "top");

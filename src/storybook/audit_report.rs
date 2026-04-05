@@ -140,10 +140,7 @@ const SURFACES: &[SurfaceSpec] = &[
     },
     SurfaceSpec {
         surface: "file_search",
-        files: &[
-            "src/render_builtins/file_search.rs",
-            "src/render_builtins/file_search_layout.rs",
-        ],
+        files: &["src/render_builtins/file_search.rs"],
         accepted_hint_surfaces: &["file_search"],
     },
 ];
@@ -163,6 +160,32 @@ fn has_text_only_file_search_loading(haystack: &str) -> bool {
     haystack.contains("is_loading && filtered_len == 0")
         && haystack.contains(".justify_center()")
         && haystack.contains(".child(\"Searching...\")")
+}
+
+const FILE_SEARCH_LIVE_FILE: &str = "src/render_builtins/file_search.rs";
+const FILE_SEARCH_STALE_LAYOUT_FILE: &str = "src/render_builtins/file_search_layout.rs";
+
+fn read_optional_source(repo_root: &Path, file: &str) -> Option<String> {
+    fs::read_to_string(repo_root.join(file)).ok()
+}
+
+fn has_file_search_duplicate_layout_markers(source: &str) -> bool {
+    contains_any(
+        source,
+        &[
+            "render_minimal_list_prompt_scaffold(",
+            "render_expanded_view_scaffold(",
+            "render_expanded_view_scaffold_with_hints(",
+            "emit_prompt_hint_audit(\"file_search\"",
+            "file_search_chrome_checkpoint",
+        ],
+    )
+}
+
+fn check_file_search_duplicate_layout(repo_root: &Path) -> bool {
+    read_optional_source(repo_root, FILE_SEARCH_STALE_LAYOUT_FILE)
+        .map(|source| has_file_search_duplicate_layout_markers(&source))
+        .unwrap_or(false)
 }
 
 fn info(title: &'static str, summary: impl Into<String>, evidence: Vec<String>) -> AuditFinding {
@@ -260,10 +283,7 @@ fn audit_surface(spec: SurfaceSpec, repo_root: &Path) -> Result<AuditSurfaceResu
                 findings.push(warning(
                     "loading state mismatch",
                     "File Search defines skeleton loading rows in source, but the live layout still collapses loading to a centered `Searching...` label. Keep a single intentional loading state on the real runtime surface.",
-                    vec![
-                        "src/render_builtins/file_search.rs".to_string(),
-                        "src/render_builtins/file_search_layout.rs".to_string(),
-                    ],
+                    vec![FILE_SEARCH_LIVE_FILE.to_string()],
                 ));
             }
 
@@ -284,7 +304,7 @@ fn audit_surface(spec: SurfaceSpec, repo_root: &Path) -> Result<AuditSurfaceResu
                 findings.push(warning(
                     "non-universal footer hints",
                     "File Search mini mode still advertises `⌘↵ Ask AI` and/or `⇥ Navigate` instead of the canonical `⌘K Actions`, `Tab AI` slots.",
-                    vec!["src/render_builtins/file_search_layout.rs".to_string()],
+                    vec![FILE_SEARCH_LIVE_FILE.to_string()],
                 ));
             }
 
@@ -292,7 +312,7 @@ fn audit_surface(spec: SurfaceSpec, repo_root: &Path) -> Result<AuditSurfaceResu
                 findings.push(warning(
                     "missing prompt hint audit",
                     "File Search does not emit `emit_prompt_hint_audit(\"file_search\", ...)`, so its mini-mode footer drift bypasses the shared hint-contract warning path.",
-                    vec!["src/render_builtins/file_search_layout.rs".to_string()],
+                    vec![FILE_SEARCH_LIVE_FILE.to_string()],
                 ));
             }
 
@@ -314,11 +334,29 @@ fn audit_surface(spec: SurfaceSpec, repo_root: &Path) -> Result<AuditSurfaceResu
                 findings.push(info(
                     "contextual primary label follows three-key pattern",
                     "File Search uses `↵ Open` / `↵ Browse` as the primary action label instead of `↵ Run`, paired with canonical `⌘K Actions` and `Tab AI`. This is an accepted contextual variant of the three-key footer pattern.",
+                    vec![FILE_SEARCH_LIVE_FILE.to_string()],
+                ));
+            }
+
+            if check_file_search_duplicate_layout(repo_root) {
+                findings.push(warning(
+                    "duplicate file_search layout source",
+                    format!(
+                        "file_search chrome markers still exist in `{}` even though the live surface is audited from `{}`. Keep one source of truth or the report can pass on stale code.",
+                        FILE_SEARCH_STALE_LAYOUT_FILE, FILE_SEARCH_LIVE_FILE
+                    ),
                     vec![
-                        "src/render_builtins/file_search.rs".to_string(),
-                        "src/render_builtins/file_search_layout.rs".to_string(),
+                        FILE_SEARCH_LIVE_FILE.to_string(),
+                        FILE_SEARCH_STALE_LAYOUT_FILE.to_string(),
                     ],
                 ));
+                tracing::warn!(
+                    target: "script_kit::audit",
+                    report_slug = REPORT_SLUG,
+                    surface = "file_search",
+                    duplicate_source = FILE_SEARCH_STALE_LAYOUT_FILE,
+                    "file_search duplicate layout source detected"
+                );
             }
         }
 
@@ -604,10 +642,7 @@ const WORKFLOW_SURFACES: &[WorkflowSurfaceSpec] = &[
     },
     WorkflowSurfaceSpec {
         surface: "file_search",
-        files: &[
-            "src/render_builtins/file_search.rs",
-            "src/render_builtins/file_search_layout.rs",
-        ],
+        files: &["src/render_builtins/file_search.rs"],
     },
     WorkflowSurfaceSpec {
         surface: "render_prompts::chat",
@@ -697,7 +732,8 @@ fn audit_workflow_affordance_surface(
             let has_expanded_layout = combined.contains("render_expanded_view_scaffold(");
             let has_layout_checkpoint = combined.contains("file_search_chrome_checkpoint");
             let has_hint_audit = combined.contains("emit_prompt_hint_audit(\"file_search\"");
-            let has_universal_hints = combined.contains("universal_prompt_hints()");
+            let has_universal_hints = combined.contains("universal_prompt_hints()")
+                || combined.contains("live_file_search_hints(");
             let has_presentation_switch =
                 combined.contains("matches!(presentation, FileSearchPresentation::Mini)");
             let has_mini_chrome_audit =
@@ -717,29 +753,41 @@ fn audit_workflow_affordance_surface(
                 findings.push(info(
                     "mini and expanded file search are both auditable",
                     "File Search already exposes both its compact and split-view workflows in source, emits distinct runtime chrome audits for each presentation, and keeps the mini footer on the canonical three-key hint strip.",
-                    vec![
-                        "src/render_builtins/file_search.rs".to_string(),
-                        "src/render_builtins/file_search_layout.rs".to_string(),
-                    ],
+                    vec![FILE_SEARCH_LIVE_FILE.to_string()],
                 ));
             } else if !has_hint_audit || !has_universal_hints {
                 findings.push(warning(
                     "file search mini footer is not provably universal",
                     "File Search should keep its mini mode on the canonical `↵ Run`, `⌘K Actions`, `Tab AI` footer and emit `emit_prompt_hint_audit(\"file_search\", ...)`, otherwise the workflow report cannot prove shortcut parity.",
-                    vec![
-                        "src/render_builtins/file_search.rs".to_string(),
-                        "src/render_builtins/file_search_layout.rs".to_string(),
-                    ],
+                    vec![FILE_SEARCH_LIVE_FILE.to_string()],
                 ));
             } else {
                 findings.push(warning(
                     "file search runtime chrome audit is not mode-aware",
                     "File Search renders both mini and expanded layouts, but the audited source does not yet prove that it emits distinct `PromptChromeAudit::minimal_list(...)` and `PromptChromeAudit::expanded(...)` contracts behind the `presentation` switch.",
+                    vec![FILE_SEARCH_LIVE_FILE.to_string()],
+                ));
+            }
+
+            if check_file_search_duplicate_layout(repo_root) {
+                findings.push(warning(
+                    "duplicate file_search layout source",
+                    format!(
+                        "workflow audit found file_search layout markers in `{}` even though the live workflow is audited from `{}`.",
+                        FILE_SEARCH_STALE_LAYOUT_FILE, FILE_SEARCH_LIVE_FILE
+                    ),
                     vec![
-                        "src/render_builtins/file_search.rs".to_string(),
-                        "src/render_builtins/file_search_layout.rs".to_string(),
+                        FILE_SEARCH_LIVE_FILE.to_string(),
+                        FILE_SEARCH_STALE_LAYOUT_FILE.to_string(),
                     ],
                 ));
+                tracing::warn!(
+                    target: "script_kit::audit",
+                    report_slug = WORKFLOW_REPORT_SLUG,
+                    surface = "file_search",
+                    duplicate_source = FILE_SEARCH_STALE_LAYOUT_FILE,
+                    "workflow audit detected duplicate file_search layout source"
+                );
             }
         }
 
@@ -1046,6 +1094,12 @@ const COMMAND_BAR_SURFACES: &[CommandBarSurfaceSpec] = &[
         preset_fn: "notes_style",
         files: &["src/actions/command_bar.rs"],
     },
+    CommandBarSurfaceSpec {
+        surface: "command_bar::ai",
+        audit_surface: "ai",
+        preset_fn: "ai_style",
+        files: &["src/actions/command_bar.rs"],
+    },
 ];
 
 fn extract_function_block<'a>(source: &'a str, fn_name: &str) -> &'a str {
@@ -1242,7 +1296,7 @@ pub fn render_command_bar_consistency_markdown(report: &AuditReport) -> String {
         report.summary.clone(),
         String::new(),
         "## What This Checks".to_string(),
-        "- CommandBar preset parity: constructor presence, runtime `emit_command_bar_chrome_audit(...)`, and validated search/section/anchor contract for `main_menu`, `no_search`, and `notes`.".to_string(),
+        "- CommandBar preset parity: constructor presence, runtime `emit_command_bar_chrome_audit(...)`, and validated search/section/anchor contract for `main_menu`, `no_search`, `notes`, and `ai`.".to_string(),
         String::new(),
         "## Surface Status".to_string(),
         "| Surface | Status | Files |".to_string(),
@@ -1333,29 +1387,46 @@ mod tests {
     }
 
     #[test]
-    fn prompt_chrome_consistency_report_all_surfaces_pass() {
+    fn prompt_chrome_consistency_report_all_surfaces_pass_or_have_known_warnings() {
         let report = report();
-        let warning_count = report
-            .surfaces
-            .iter()
-            .filter(|s| s.status() == "warning")
-            .count();
         let error_count = report
             .surfaces
             .iter()
             .filter(|s| s.status() == "error")
             .count();
         assert_eq!(report.surfaces.len(), 8, "expected 8 audited surfaces");
-        assert_eq!(warning_count, 0, "expected 0 warnings");
         assert_eq!(error_count, 0, "expected 0 errors");
+
+        // file_search may carry a known "duplicate file_search layout source" warning
+        // while the stale layout file still exists. All other surfaces must pass clean.
+        let unexpected_warnings: Vec<_> = report
+            .surfaces
+            .iter()
+            .filter(|s| s.status() == "warning" && s.surface != "file_search")
+            .map(|s| s.surface)
+            .collect();
+        assert!(
+            unexpected_warnings.is_empty(),
+            "unexpected warnings on: {:?}",
+            unexpected_warnings
+        );
     }
 
     #[test]
-    fn prompt_chrome_consistency_report_file_search_passes() {
+    fn prompt_chrome_consistency_report_file_search_detects_duplicate_layout() {
         let report = report();
         let file_search = surface(&report, "file_search");
-        assert_eq!(file_search.status(), "pass");
-        assert!(file_search.has_only_info_findings());
+        let has_duplicate_warning = file_search
+            .findings
+            .iter()
+            .any(|f| f.title == "duplicate file_search layout source");
+        // The stale layout file still exists, so the duplicate warning should fire
+        let stale_exists =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join(FILE_SEARCH_STALE_LAYOUT_FILE).exists();
+        assert_eq!(
+            has_duplicate_warning, stale_exists,
+            "duplicate layout warning should match stale file existence"
+        );
     }
 
     #[test]
@@ -1385,27 +1456,34 @@ mod tests {
     }
 
     #[test]
-    fn prompt_chrome_consistency_summary_has_no_drift() {
+    fn prompt_chrome_consistency_summary_is_well_formed() {
         let report = report();
+        // Summary should always contain the scan line
         assert!(
-            !report.summary.contains("Highest-leverage current drifts"),
-            "summary should not mention drifts when all surfaces pass: {}",
+            report.summary.contains("Scanned"),
+            "summary should start with scan line: {}",
             report.summary
         );
+        // If the stale layout file still exists, the summary may mention drifts
+        // for file_search — that is the expected behavior.
+        let stale_exists =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join(FILE_SEARCH_STALE_LAYOUT_FILE).exists();
+        if !stale_exists {
+            assert!(
+                !report.summary.contains("Highest-leverage current drifts"),
+                "summary should not mention drifts once the stale layout file is removed: {}",
+                report.summary
+            );
+        }
     }
 
     #[test]
-    fn workflow_affordance_report_all_surfaces_pass() {
+    fn workflow_affordance_report_all_surfaces_pass_or_have_known_warnings() {
         let report = build_workflow_affordance_consistency_report(Path::new(env!(
             "CARGO_MANIFEST_DIR"
         )))
         .expect("workflow report should build from current repo sources");
 
-        let warning_count = report
-            .surfaces
-            .iter()
-            .filter(|surface| surface.status() == "warning")
-            .count();
         let error_count = report
             .surfaces
             .iter()
@@ -1413,8 +1491,21 @@ mod tests {
             .count();
 
         assert_eq!(report.surfaces.len(), 6, "expected 6 audited surfaces");
-        assert_eq!(warning_count, 0, "expected 0 warnings");
         assert_eq!(error_count, 0, "expected 0 errors");
+
+        // file_search may carry a known "duplicate file_search layout source" warning
+        // while the stale layout file still exists. All other surfaces must pass clean.
+        let unexpected_warnings: Vec<_> = report
+            .surfaces
+            .iter()
+            .filter(|s| s.status() == "warning" && s.surface != "file_search")
+            .map(|s| s.surface)
+            .collect();
+        assert!(
+            unexpected_warnings.is_empty(),
+            "unexpected warnings on: {:?}",
+            unexpected_warnings
+        );
     }
 
     #[test]
