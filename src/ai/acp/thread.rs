@@ -2332,7 +2332,10 @@ mod tests {
         );
         thread.set_context_resolution_note(failed.receipt.as_ref());
         assert_eq!(
-            thread.context_bootstrap_note.as_ref().map(|note| note.as_ref()),
+            thread
+                .context_bootstrap_note
+                .as_ref()
+                .map(|note| note.as_ref()),
             Some("1 context attachment unavailable · Missing Context")
         );
 

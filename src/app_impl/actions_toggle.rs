@@ -137,6 +137,7 @@ fn terminal_actions_for_dialog() -> Vec<crate::actions::Action> {
 impl ScriptListApp {
     fn make_actions_window_on_close_callback(
         app_entity: Entity<Self>,
+        host: ActionsDialogHost,
         log_message: &'static str,
     ) -> std::sync::Arc<dyn Fn(&mut gpui::App) + Send + Sync> {
         std::sync::Arc::new(move |cx| {
@@ -152,7 +153,9 @@ impl ScriptListApp {
                     app.actions_dialog = None;
                     app.mark_filter_resync_after_actions_if_needed();
                     app.pop_focus_overlay(cx);
+                    app.request_focus_restore_for_actions_host(host);
                     logging::log("FOCUS", log_message);
+                    cx.notify();
                 });
             });
         })
@@ -233,9 +236,16 @@ impl ScriptListApp {
     }
 
     pub(crate) fn toggle_actions(&mut self, cx: &mut Context<Self>, window: &mut Window) {
+        let is_acp_chat = matches!(self.current_view, AppView::AcpChatView { .. });
+        let host = if is_acp_chat {
+            ActionsDialogHost::AcpChat
+        } else {
+            ActionsDialogHost::MainList
+        };
+        let host_label = if is_acp_chat { "AcpChat" } else { "MainList" };
         let recently_closed = self.was_actions_recently_closed();
         if self.show_actions_popup || is_actions_window_open() {
-            self.close_actions_popup(ActionsDialogHost::MainList, window, cx);
+            self.close_actions_popup(host, window, cx);
         } else if recently_closed {
             // The activation-triggered close (focus_lost) already closed the dialog
             // between mouseDown and the click handler. Suppress reopen.
@@ -247,7 +257,7 @@ impl ScriptListApp {
             let position = self.main_list_actions_window_position();
             crate::actions::emit_actions_popup_event(
                 crate::actions::ActionsPopupEvent::OpenRequested,
-                Some("MainList"),
+                Some(host_label),
                 Some(position),
                 None,
                 None,
@@ -258,7 +268,6 @@ impl ScriptListApp {
             // Open actions as a separate window with vibrancy blur
             self.begin_actions_popup_window_open(cx, window);
 
-            let is_acp_chat = matches!(self.current_view, AppView::AcpChatView { .. });
             let acp_actions = if let AppView::AcpChatView { ref entity } = self.current_view {
                 let selected_agent_id = {
                     let view = entity.read(cx);
@@ -365,6 +374,7 @@ impl ScriptListApp {
             dialog.update(cx, |d, _cx| {
                 d.set_on_close(Self::make_actions_window_on_close_callback(
                     app_entity.clone(),
+                    host,
                     "Actions closed via escape, focus restored via coordinator",
                 ));
             });
@@ -529,6 +539,7 @@ impl ScriptListApp {
             dialog.update(cx, |d, _cx| {
                 d.set_on_close(Self::make_actions_window_on_close_callback(
                     app_entity.clone(),
+                    ActionsDialogHost::WebcamPrompt,
                     "Webcam actions closed via escape, focus restored via coordinator",
                 ));
             });
@@ -600,6 +611,7 @@ impl ScriptListApp {
             dialog.update(cx, |d, _cx| {
                 d.set_on_close(Self::make_actions_window_on_close_callback(
                     app_entity,
+                    ActionsDialogHost::TermPrompt,
                     "Terminal actions closed, focus restored via coordinator",
                 ));
             });
@@ -726,6 +738,7 @@ impl ScriptListApp {
             dialog.update(cx, |d, _cx| {
                 d.set_on_close(Self::make_actions_window_on_close_callback(
                     app_entity.clone(),
+                    ActionsDialogHost::ChatPrompt,
                     "Chat actions closed via escape, focus restored via coordinator",
                 ));
             });
