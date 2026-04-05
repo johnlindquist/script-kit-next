@@ -12,7 +12,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use agent_client_protocol::{ContentBlock, TextContent};
+use agent_client_protocol::{ContentBlock, ImageContent, TextContent};
 use gpui::{Context, SharedString, Task};
 
 use crate::components::text_input::TextInputState;
@@ -144,6 +144,13 @@ pub(crate) struct AcpThreadInit {
 /// context parts. Produced by `take_pending_context_for_turn()` and consumed
 /// exactly once per submission.
 struct PendingContextTurn {
+    blocks: Vec<ContentBlock>,
+    receipt: crate::ai::message_parts::ContextResolutionReceipt,
+}
+
+/// Resolved turn-scoped context blocks plus the receipt describing
+/// resolution outcomes for the current submit.
+struct ResolvedPendingContext {
     blocks: Vec<ContentBlock>,
     receipt: crate::ai::message_parts::ContextResolutionReceipt,
 }
@@ -625,6 +632,145 @@ impl AcpThread {
         );
     }
 
+    /// Returns `true` for the explicit `@screenshot` resource chip.
+    ///
+    /// ACP follow-up submits should attach this as a real image block instead
+    /// of only resolving the text-only `kit://context?...` snapshot JSON.
+    fn is_explicit_screenshot_part(part: &crate::ai::message_parts::AiContextPart) -> bool {
+        matches!(
+            part,
+            crate::ai::message_parts::AiContextPart::ResourceUri { uri, label }
+                if label == "Screenshot" && uri.contains("screenshot=1")
+        )
+    }
+
+    /// Capture the explicit screenshot chip as an ACP image block.
+    ///
+    /// Returns `Ok(None)` for non-screenshot parts so the normal prompt-block
+    /// resolver can handle them. On capture failure the caller falls back to
+    /// the canonical `kit://context?...` resource path.
+    fn capture_special_context_block_for_part(
+        part: &crate::ai::message_parts::AiContextPart,
+    ) -> Result<Option<ContentBlock>, String> {
+        if !Self::is_explicit_screenshot_part(part) {
+            return Ok(None);
+        }
+
+        let capture = crate::platform::capture_focused_window_screenshot()
+            .map_err(|error| error.to_string())?;
+        if capture.png_data.is_empty() {
+            return Err("Focused window screenshot was empty".to_string());
+        }
+
+        use base64::Engine as _;
+
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "acp_inline_screenshot_attachment_captured",
+            width = capture.width,
+            height = capture.height,
+            title = %capture.window_title,
+            used_fallback = capture.used_fallback,
+            bytes = capture.png_data.len(),
+        );
+
+        let base64_png = base64::engine::general_purpose::STANDARD.encode(&capture.png_data);
+        Ok(Some(ContentBlock::Image(ImageContent::new(
+            base64_png,
+            "image/png",
+        ))))
+    }
+
+    /// Resolve pending context parts into ACP blocks plus a standard receipt.
+    ///
+    /// Most parts resolve into text prompt blocks. Explicit screenshot chips
+    /// are upgraded to real ACP attachment blocks first, with the canonical
+    /// resource resolver kept as a fallback if image capture fails.
+    fn resolve_pending_context_parts_with<F>(
+        parts: &[crate::ai::message_parts::AiContextPart],
+        mut special_block_resolver: F,
+    ) -> ResolvedPendingContext
+    where
+        F: FnMut(&crate::ai::message_parts::AiContextPart) -> Result<Option<ContentBlock>, String>,
+    {
+        let mut blocks = Vec::new();
+        let mut prompt_blocks = Vec::new();
+        let mut failures = Vec::new();
+
+        for part in parts {
+            let mut resolved_as_special_block = false;
+
+            match special_block_resolver(part) {
+                Ok(Some(block)) => {
+                    tracing::info!(
+                        target: "script_kit::tab_ai",
+                        event = "acp_context_part_resolved_to_special_block",
+                        source = %part.source(),
+                        label = %part.label(),
+                    );
+                    blocks.push(block);
+                    resolved_as_special_block = true;
+                }
+                Ok(None) => {}
+                Err(error) => {
+                    tracing::warn!(
+                        target: "script_kit::tab_ai",
+                        event = "acp_context_special_block_capture_failed",
+                        source = %part.source(),
+                        label = %part.label(),
+                        error = %error,
+                    );
+                }
+            }
+
+            if resolved_as_special_block {
+                continue;
+            }
+
+            match crate::ai::message_parts::resolve_context_part_to_prompt_block(part, &[], &[]) {
+                Ok(block) => {
+                    if block.trim().is_empty() {
+                        tracing::info!(
+                            target: "script_kit::tab_ai",
+                            event = "acp_context_part_prompt_block_empty",
+                            source = %part.source(),
+                            label = %part.label(),
+                        );
+                        continue;
+                    }
+                    prompt_blocks.push(block);
+                }
+                Err(err) => {
+                    tracing::warn!(
+                        target: "script_kit::tab_ai",
+                        event = "acp_context_part_prompt_resolution_failed",
+                        source = %part.source(),
+                        label = %part.label(),
+                        error = %err,
+                    );
+                    failures.push(crate::ai::message_parts::ContextResolutionFailure {
+                        label: part.label().to_string(),
+                        source: part.source().to_string(),
+                        error: format!("{err:#}"),
+                    });
+                }
+            }
+        }
+
+        let resolved = blocks.len() + prompt_blocks.len();
+        let prompt_prefix = prompt_blocks.join("\n\n");
+
+        ResolvedPendingContext {
+            blocks,
+            receipt: crate::ai::message_parts::ContextResolutionReceipt {
+                attempted: parts.len(),
+                resolved,
+                failures,
+                prompt_prefix,
+            },
+        }
+    }
+
     /// Flush a queued submit if conditions allow, otherwise just notify.
     fn flush_bootstrap_queue(&mut self, cx: &mut Context<Self>) -> Result<(), String> {
         let submit_now = self.queued_submit_while_bootstrapping
@@ -664,6 +810,18 @@ impl AcpThread {
     /// consumed or nothing is staged. Drains both hidden blocks and typed
     /// parts, resolves parts into prompt blocks, and marks context consumed.
     fn take_pending_context_for_turn(&mut self) -> Option<PendingContextTurn> {
+        self.take_pending_context_for_turn_with(Self::capture_special_context_block_for_part)
+    }
+
+    /// Variant of `take_pending_context_for_turn` that lets tests inject a
+    /// deterministic special-block resolver.
+    fn take_pending_context_for_turn_with<F>(
+        &mut self,
+        mut special_block_resolver: F,
+    ) -> Option<PendingContextTurn>
+    where
+        F: FnMut(&crate::ai::message_parts::AiContextPart) -> Result<Option<ContentBlock>, String>,
+    {
         let has_pending_parts = !self.pending_context_parts.is_empty();
         let has_pending_blocks = !self.pending_context_blocks.is_empty();
 
@@ -675,19 +833,28 @@ impl AcpThread {
         // Clone parts so the chip remains visible after submit.
         // The `pending_context_consumed` flag prevents re-resolution.
         let pending_parts = self.pending_context_parts.clone();
-        let consumed_block_count = blocks.len();
+        let consumed_hidden_block_count = blocks.len();
         let consumed_part_count = pending_parts.len();
 
-        let receipt = if pending_parts.is_empty() {
-            crate::ai::message_parts::ContextResolutionReceipt {
-                attempted: 0,
-                resolved: 0,
-                failures: Vec::new(),
-                prompt_prefix: String::new(),
+        let resolved_pending_context = if pending_parts.is_empty() {
+            ResolvedPendingContext {
+                blocks: Vec::new(),
+                receipt: crate::ai::message_parts::ContextResolutionReceipt {
+                    attempted: 0,
+                    resolved: 0,
+                    failures: Vec::new(),
+                    prompt_prefix: String::new(),
+                },
             }
         } else {
-            crate::ai::message_parts::resolve_context_parts_with_receipt(&pending_parts, &[], &[])
+            Self::resolve_pending_context_parts_with(&pending_parts, |part| {
+                special_block_resolver(part)
+            })
         };
+        let consumed_special_block_count = resolved_pending_context.blocks.len();
+        let receipt = resolved_pending_context.receipt;
+        let mut blocks = blocks;
+        blocks.extend(resolved_pending_context.blocks);
 
         self.pending_context_consumed = true;
         self.pending_ambient_context_enabled = false;
@@ -696,7 +863,8 @@ impl AcpThread {
             target: "script_kit::tab_ai",
             event = "acp_pending_context_consumed",
             consumed_part_count,
-            consumed_block_count,
+            consumed_hidden_block_count,
+            consumed_special_block_count,
             resolved_part_count = receipt.resolved,
             failed_part_count = receipt.failures.len(),
         );
@@ -2174,6 +2342,11 @@ mod tests {
         }
     }
 
+    /// Helper: build the explicit screenshot resource part.
+    fn screenshot_part() -> crate::ai::message_parts::AiContextPart {
+        crate::ai::context_contract::ContextAttachmentKind::Screenshot.part()
+    }
+
     /// Regression: Ask Anything chip removed before capture completes.
     ///
     /// When the user arms Ask Anything then removes the chip while the deferred
@@ -2317,6 +2490,76 @@ mod tests {
             blocks2.len(),
             1,
             "second turn should only have user input, no context"
+        );
+    }
+
+    #[test]
+    fn follow_up_screenshot_chip_emits_special_attachment_block() {
+        let mut thread = test_thread(Vec::new(), false);
+
+        // First turn consumes the existing focused target context.
+        thread.add_context_part_test(focused_target_part("choose-theme"));
+        let first_blocks = thread.prepare_turn_blocks("summarize this command");
+        assert!(
+            first_blocks.len() >= 2,
+            "first turn should include focused target context"
+        );
+        assert!(thread.pending_context_consumed);
+
+        // Follow-up: user explicitly types @screenshot.
+        thread.add_context_part_test(screenshot_part());
+        assert!(
+            !thread.pending_context_consumed,
+            "new explicit screenshot chip must re-arm pending context"
+        );
+
+        let turn = thread
+            .take_pending_context_for_turn_with(|part| {
+                if AcpThread::is_explicit_screenshot_part(part) {
+                    return Ok(Some(ContentBlock::Text(TextContent::new(
+                        "__test_screenshot_block__",
+                    ))));
+                }
+                Ok(None)
+            })
+            .expect("follow-up screenshot turn should resolve");
+
+        assert_eq!(
+            turn.receipt.attempted, 2,
+            "follow-up submit should resolve both the focused target and the explicit screenshot"
+        );
+        assert_eq!(
+            turn.receipt.resolved, 2,
+            "both follow-up context parts should resolve"
+        );
+        assert!(
+            turn.receipt.failures.is_empty(),
+            "follow-up screenshot should not fail: {:?}",
+            turn.receipt.failures
+        );
+        assert!(
+            !turn
+                .receipt
+                .prompt_prefix
+                .contains("kit://context?screenshot=1"),
+            "explicit screenshot should not fall back to the text-only MCP resource when the attachment block succeeds"
+        );
+        assert!(
+            turn.receipt.prompt_prefix.contains("focusedTarget"),
+            "focused target should still resolve through the normal prompt-prefix path"
+        );
+        assert_eq!(
+            turn.blocks.len(),
+            1,
+            "only the explicit screenshot should become a special attachment block"
+        );
+        match &turn.blocks[0] {
+            ContentBlock::Text(text) => assert_eq!(text.text, "__test_screenshot_block__"),
+            other => panic!("expected test screenshot block, got {other:?}"),
+        }
+        assert!(
+            thread.pending_context_consumed,
+            "follow-up screenshot submit should mark pending context consumed"
         );
     }
 
