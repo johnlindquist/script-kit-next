@@ -2068,56 +2068,84 @@ impl ScriptListApp {
                     "ui.elements.request"
                 );
 
-                // Fail closed: reject non-main targets before any
-                // element collection. Legacy requests with no target
-                // field pass through (resolve_main_only_target defaults
-                // to main/focused which resolves to main).
-                if target.is_some() {
-                    match resolve_main_only_target(&request_id, "getElements", target.as_ref()) {
-                        Ok(_resolved) => { /* main window — proceed */ }
-                        Err(error) => {
-                            if let Some(ref sender) = self.response_sender {
-                                let _ = sender.try_send(Message::elements_result(
-                                    request_id.clone(),
-                                    Vec::new(),
-                                    0,
-                                    None,
-                                    None,
-                                    vec![format!("target_unsupported_non_main: {}", error.message)],
-                                ));
+                // Resolve the target and delegate to the appropriate collector.
+                // Non-main targets use the secondary-surface collector; main
+                // (or absent target) uses the existing main-window collector.
+                let resolved_target = target
+                    .as_ref()
+                    .map(|t| crate::windows::resolve_automation_window(Some(t)));
+
+                let snapshot = match resolved_target {
+                    Some(Ok(ref resolved))
+                        if resolved.kind != protocol::AutomationWindowKind::Main =>
+                    {
+                        crate::windows::automation_surface_collector::collect_surface_snapshot(
+                            resolved,
+                            max_elements,
+                            cx,
+                        )
+                        .unwrap_or_else(|| {
+                            crate::windows::automation_surface_collector::SurfaceElementSnapshot {
+                                elements: Vec::new(),
+                                total_count: 0,
+                                focused_semantic_id: None,
+                                selected_semantic_id: None,
+                                warnings: vec![format!(
+                                    "target_unsupported_non_main: getElements has no collector for {} ({:?})",
+                                    resolved.id, resolved.kind
+                                )],
                             }
-                            return;
+                        })
+                    }
+                    Some(Err(ref err)) => {
+                        if let Some(ref sender) = self.response_sender {
+                            let _ = sender.try_send(Message::elements_result(
+                                request_id.clone(),
+                                Vec::new(),
+                                0,
+                                None,
+                                None,
+                                vec![format!("target_resolution_failed: {}", err)],
+                            ));
+                        }
+                        return;
+                    }
+                    _ => {
+                        // Main window or no target — use existing collector.
+                        let outcome = self.collect_visible_elements(max_elements, cx);
+                        crate::windows::automation_surface_collector::SurfaceElementSnapshot {
+                            total_count: outcome.total_count,
+                            focused_semantic_id: outcome.focused_semantic_id(),
+                            selected_semantic_id: outcome.selected_semantic_id(),
+                            warnings: outcome.warnings.clone(),
+                            elements: outcome.elements,
                         }
                     }
-                }
+                };
 
-                let outcome = self.collect_visible_elements(max_elements, cx);
-                let returned_count = outcome.elements.len();
-                let focused_semantic_id = outcome.focused_semantic_id();
-                let selected_semantic_id = outcome.selected_semantic_id();
-                let truncated = outcome.total_count > returned_count;
-                let warnings = outcome.warnings.clone();
+                let returned_count = snapshot.elements.len();
+                let truncated = snapshot.total_count > returned_count;
 
                 tracing::info!(
                     category = "UI_ELEMENTS",
                     request_id = %request_id,
                     limit = max_elements,
                     returned_count = returned_count,
-                    total_count = outcome.total_count,
+                    total_count = snapshot.total_count,
                     truncated = truncated,
-                    focused_semantic_id = focused_semantic_id.as_deref().unwrap_or(""),
-                    selected_semantic_id = selected_semantic_id.as_deref().unwrap_or(""),
-                    warnings = ?warnings,
+                    focused_semantic_id = snapshot.focused_semantic_id.as_deref().unwrap_or(""),
+                    selected_semantic_id = snapshot.selected_semantic_id.as_deref().unwrap_or(""),
+                    warnings = ?snapshot.warnings,
                     "ui.elements.result"
                 );
 
                 let response = Message::elements_result(
                     request_id.clone(),
-                    outcome.elements,
-                    outcome.total_count,
-                    focused_semantic_id,
-                    selected_semantic_id,
-                    warnings,
+                    snapshot.elements,
+                    snapshot.total_count,
+                    snapshot.focused_semantic_id,
+                    snapshot.selected_semantic_id,
+                    snapshot.warnings,
                 );
 
                 if let Some(ref sender) = self.response_sender {
@@ -2237,6 +2265,10 @@ impl ScriptListApp {
                             window_id: String::new(),
                             window_kind: "unknown".to_string(),
                             title: None,
+                            resolved_bounds: None,
+                            target_bounds_in_screenshot: None,
+                            surface_hit_point: None,
+                            suggested_hit_points: Vec::new(),
                             elements: Vec::new(),
                             total_count: 0,
                             focused_semantic_id: None,
@@ -2244,6 +2276,7 @@ impl ScriptListApp {
                             screenshot_width: None,
                             screenshot_height: None,
                             pixel_probes: Vec::new(),
+                            os_window_id: None,
                             warnings: vec![format!("target_resolution_failed: {}", err)],
                         };
                         if let Some(ref sender) = self.response_sender {
@@ -2296,33 +2329,73 @@ impl ScriptListApp {
                     }
                 };
 
-                // Step 3: Collect semantic elements (main window only for now).
-                let (elements, total_count, focused_semantic_id, selected_semantic_id) =
-                    match resolved.kind {
-                        protocol::AutomationWindowKind::Main => {
-                            let outcome = self.collect_visible_elements(200, cx);
-                            let focused = outcome.focused_semantic_id();
-                            let selected = outcome.selected_semantic_id();
-                            warnings.extend(outcome.warnings.iter().cloned());
-                            (outcome.elements, outcome.total_count, focused, selected)
+                // Step 3: Collect semantic elements via surface-aware collector.
+                let surface_snapshot = if resolved.kind == protocol::AutomationWindowKind::Main {
+                    let outcome = self.collect_visible_elements(200, cx);
+                    crate::windows::automation_surface_collector::SurfaceElementSnapshot {
+                        total_count: outcome.total_count,
+                        focused_semantic_id: outcome.focused_semantic_id(),
+                        selected_semantic_id: outcome.selected_semantic_id(),
+                        warnings: outcome.warnings.clone(),
+                        elements: outcome.elements,
+                    }
+                } else {
+                    crate::windows::automation_surface_collector::collect_surface_snapshot(
+                        &resolved, 200, cx,
+                    )
+                    .unwrap_or_else(|| {
+                        crate::windows::automation_surface_collector::SurfaceElementSnapshot {
+                            elements: Vec::new(),
+                            total_count: 0,
+                            focused_semantic_id: None,
+                            selected_semantic_id: None,
+                            warnings: vec![format!(
+                                "semantic_elements_non_main_pending: no collector for {} ({:?})",
+                                resolved.id, resolved.kind
+                            )],
                         }
-                        protocol::AutomationWindowKind::AcpDetached => {
-                            warnings
-                                .push("semantic_elements_detached_acp_pending".to_string());
-                            (Vec::new(), 0, None, None)
-                        }
-                        _ => {
-                            warnings
-                                .push("semantic_elements_non_main_pending".to_string());
-                            (Vec::new(), 0, None, None)
-                        }
-                    };
+                    })
+                };
+                warnings.extend(surface_snapshot.warnings.clone());
+                let elements = surface_snapshot.elements;
+                let total_count = surface_snapshot.total_count;
+                let focused_semantic_id = surface_snapshot.focused_semantic_id;
+                let selected_semantic_id = surface_snapshot.selected_semantic_id;
+
+                // Step 4: Resolve the native OS window ID (CGWindowID) for
+                // strict screenshot capture threading.
+                let os_window_id =
+                    crate::platform::resolve_targeted_os_window_id(target.as_ref());
+
+                // Step 5: Compute screenshot-relative geometry for the target surface.
+                let target_bounds_in_screenshot =
+                    protocol::target_bounds_in_screenshot(&resolved);
+                let surface_hit_point = target_bounds_in_screenshot
+                    .as_ref()
+                    .map(protocol::default_surface_hit_point);
+                let suggested_hit_points = protocol::default_suggested_hit_points(
+                    &resolved,
+                    target_bounds_in_screenshot.as_ref(),
+                );
+
+                tracing::info!(
+                    target: "script_kit::automation",
+                    request_id = %request_id,
+                    window_id = %resolved.id,
+                    target_bounds_in_screenshot = ?target_bounds_in_screenshot,
+                    suggested_hit_count = suggested_hit_points.len(),
+                    "automation.inspect.geometry_computed"
+                );
 
                 let snapshot = protocol::AutomationInspectSnapshot {
                     schema_version: protocol::AUTOMATION_INSPECT_SCHEMA_VERSION,
                     window_id: resolved.id.clone(),
                     window_kind: format!("{:?}", resolved.kind),
                     title: resolved.title.clone(),
+                    resolved_bounds: resolved.bounds.clone(),
+                    target_bounds_in_screenshot,
+                    surface_hit_point,
+                    suggested_hit_points,
                     elements,
                     total_count,
                     focused_semantic_id,
@@ -2330,13 +2403,17 @@ impl ScriptListApp {
                     screenshot_width: shot_w,
                     screenshot_height: shot_h,
                     pixel_probes: probe_results,
+                    os_window_id,
                     warnings,
                 };
 
                 tracing::info!(
                     target: "script_kit::automation",
+                    event = "inspect_automation_window",
                     request_id = %request_id,
                     window_id = %resolved.id,
+                    window_kind = %snapshot.window_kind,
+                    os_window_id = ?os_window_id,
                     screenshot_width = ?snapshot.screenshot_width,
                     screenshot_height = ?snapshot.screenshot_height,
                     element_count = snapshot.elements.len(),

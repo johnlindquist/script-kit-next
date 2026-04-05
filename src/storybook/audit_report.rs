@@ -162,6 +162,12 @@ fn has_text_only_file_search_loading(haystack: &str) -> bool {
         && haystack.contains(".child(\"Searching...\")")
 }
 
+fn has_file_search_empty_states(haystack: &str) -> bool {
+    (haystack.contains("\"Type to search files\"")
+        || haystack.contains("\"Start typing to search files\""))
+        && haystack.contains("\"No files found\"")
+}
+
 const FILE_SEARCH_LIVE_FILE: &str = "src/render_builtins/file_search.rs";
 const FILE_SEARCH_STALE_LAYOUT_FILE: &str = "src/render_builtins/file_search_layout.rs";
 
@@ -327,8 +333,8 @@ fn audit_surface(spec: SurfaceSpec, repo_root: &Path) -> Result<AuditSurfaceResu
                     "\u{21b5} Browse",
                 ],
             );
-            let has_canonical_actions_and_ai = combined.contains("K Actions")
-                && combined.contains("Tab AI");
+            let has_canonical_actions_and_ai =
+                combined.contains("K Actions") && combined.contains("Tab AI");
 
             if has_contextual_primary && has_canonical_actions_and_ai && has_runtime_hint_audit {
                 findings.push(info(
@@ -342,7 +348,7 @@ fn audit_surface(spec: SurfaceSpec, repo_root: &Path) -> Result<AuditSurfaceResu
                 findings.push(warning(
                     "duplicate file_search layout source",
                     format!(
-                        "file_search chrome markers still exist in `{}` even though the live surface is audited from `{}`. Keep one source of truth or the report can pass on stale code.",
+                        "`{}` still contains file-search chrome markers, but the live surface is `{}`. Delete the stale render contract or strip the audit markers so the markdown report only reflects the runtime UI.",
                         FILE_SEARCH_STALE_LAYOUT_FILE, FILE_SEARCH_LIVE_FILE
                     ),
                     vec![
@@ -357,6 +363,24 @@ fn audit_surface(spec: SurfaceSpec, repo_root: &Path) -> Result<AuditSurfaceResu
                     duplicate_source = FILE_SEARCH_STALE_LAYOUT_FILE,
                     "file_search duplicate layout source detected"
                 );
+            } else {
+                tracing::info!(
+                    target: "script_kit::audit",
+                    report_slug = REPORT_SLUG,
+                    surface = "file_search",
+                    live_source = FILE_SEARCH_LIVE_FILE,
+                    "file_search has a single live audit source"
+                );
+            }
+
+            if has_file_search_skeleton_loading(&combined)
+                && has_file_search_empty_states(&combined)
+            {
+                findings.push(info(
+                    "intentional loading and empty states",
+                    "File Search keeps a crafted loading state with skeleton rows plus helpful empty-state copy for both the blank-query and no-results cases.",
+                    vec![FILE_SEARCH_LIVE_FILE.to_string()],
+                ));
             }
         }
 
@@ -703,8 +727,7 @@ fn audit_workflow_affordance_surface(
         "clipboard_history" => {
             let uses_shared_expanded_scaffold =
                 combined.contains("render_expanded_view_scaffold_with_hints(");
-            let has_hint_audit =
-                combined.contains("emit_prompt_hint_audit(\"clipboard_history\"");
+            let has_hint_audit = combined.contains("emit_prompt_hint_audit(\"clipboard_history\"");
 
             if uses_shared_expanded_scaffold && has_hint_audit {
                 findings.push(info(
@@ -773,7 +796,7 @@ fn audit_workflow_affordance_surface(
                 findings.push(warning(
                     "duplicate file_search layout source",
                     format!(
-                        "workflow audit found file_search layout markers in `{}` even though the live workflow is audited from `{}`.",
+                        "`{}` still contains file-search chrome markers, but the live surface is `{}`. Delete the stale render contract or strip the audit markers so the markdown report only reflects the runtime UI.",
                         FILE_SEARCH_STALE_LAYOUT_FILE, FILE_SEARCH_LIVE_FILE
                     ),
                     vec![
@@ -788,14 +811,21 @@ fn audit_workflow_affordance_surface(
                     duplicate_source = FILE_SEARCH_STALE_LAYOUT_FILE,
                     "workflow audit detected duplicate file_search layout source"
                 );
+            } else {
+                tracing::info!(
+                    target: "script_kit::audit",
+                    report_slug = WORKFLOW_REPORT_SLUG,
+                    surface = "file_search",
+                    live_source = FILE_SEARCH_LIVE_FILE,
+                    "file_search has a single live audit source"
+                );
             }
         }
 
         "render_prompts::chat" => {
             let has_mini_hint_audit =
                 combined.contains("emit_prompt_hint_audit(\"prompts::chat::mini\"");
-            let has_full_hint_audit =
-                combined.contains("emit_prompt_hint_audit(\"prompts::chat\"");
+            let has_full_hint_audit = combined.contains("emit_prompt_hint_audit(\"prompts::chat\"");
             let has_status_leading = combined.contains("footer_status_text(")
                 && combined.contains("render_hint_strip_leading_text(");
 
@@ -841,8 +871,7 @@ fn audit_workflow_affordance_surface(
         }
 
         "prompts::path" => {
-            let has_minimal_scaffold =
-                combined.contains("render_minimal_list_prompt_scaffold(");
+            let has_minimal_scaffold = combined.contains("render_minimal_list_prompt_scaffold(");
             let has_hint_audit = combined.contains("emit_prompt_hint_audit(\"prompts::path\"");
             let has_chrome_audit = combined.contains("emit_prompt_chrome_audit(")
                 && combined.contains("\"prompts::path\"");
@@ -991,9 +1020,7 @@ pub fn render_workflow_affordance_consistency_markdown(report: &AuditReport) -> 
         lines.push(format!("### {}", surface.surface));
 
         if surface.findings.is_empty() {
-            lines.push(
-                "- pass — no workflow-affordance drift markers detected.".to_string(),
-            );
+            lines.push("- pass — no workflow-affordance drift markers detected.".to_string());
             lines.push(String::new());
             continue;
         }
@@ -1042,10 +1069,7 @@ pub fn write_workflow_affordance_consistency_report(
     Ok(output_path)
 }
 
-pub fn write_standard_audit_reports(
-    repo_root: &Path,
-    output_root: &Path,
-) -> Result<Vec<PathBuf>> {
+pub fn write_standard_audit_reports(repo_root: &Path, output_root: &Path) -> Result<Vec<PathBuf>> {
     let outputs = vec![
         write_prompt_chrome_consistency_report(repo_root, output_root)?,
         write_workflow_affordance_consistency_report(repo_root, output_root)?,
@@ -1112,9 +1136,18 @@ fn extract_function_block<'a>(source: &'a str, fn_name: &str) -> &'a str {
         return "";
     };
     let tail = &source[start..];
-    let next_pub = tail[1..].find("\n    pub fn ").map(|i| i + 1).unwrap_or(tail.len());
-    let next_priv = tail[1..].find("\n    fn ").map(|i| i + 1).unwrap_or(tail.len());
-    let next_cfg = tail[1..].find("\n#[cfg(").map(|i| i + 1).unwrap_or(tail.len());
+    let next_pub = tail[1..]
+        .find("\n    pub fn ")
+        .map(|i| i + 1)
+        .unwrap_or(tail.len());
+    let next_priv = tail[1..]
+        .find("\n    fn ")
+        .map(|i| i + 1)
+        .unwrap_or(tail.len());
+    let next_cfg = tail[1..]
+        .find("\n#[cfg(")
+        .map(|i| i + 1)
+        .unwrap_or(tail.len());
     let end = next_pub.min(next_priv).min(next_cfg);
     &tail[..end]
 }
@@ -1125,8 +1158,14 @@ fn extract_command_bar_validate_arm<'a>(source: &'a str, audit_surface: &str) ->
         return "";
     };
     let tail = &source[start..];
-    let next_arm = tail[1..].find("\n            \"").map(|i| i + 1).unwrap_or(tail.len());
-    let next_default = tail[1..].find("\n            _ =>").map(|i| i + 1).unwrap_or(tail.len());
+    let next_arm = tail[1..]
+        .find("\n            \"")
+        .map(|i| i + 1)
+        .unwrap_or(tail.len());
+    let next_default = tail[1..]
+        .find("\n            _ =>")
+        .map(|i| i + 1)
+        .unwrap_or(tail.len());
     let end = next_arm.min(next_default);
     &tail[..end]
 }
@@ -1413,19 +1452,16 @@ mod tests {
     }
 
     #[test]
-    fn prompt_chrome_consistency_report_file_search_detects_duplicate_layout() {
+    fn prompt_chrome_consistency_report_file_search_has_single_live_source() {
         let report = report();
         let file_search = surface(&report, "file_search");
         let has_duplicate_warning = file_search
             .findings
             .iter()
             .any(|f| f.title == "duplicate file_search layout source");
-        // The stale layout file still exists, so the duplicate warning should fire
-        let stale_exists =
-            Path::new(env!("CARGO_MANIFEST_DIR")).join(FILE_SEARCH_STALE_LAYOUT_FILE).exists();
-        assert_eq!(
-            has_duplicate_warning, stale_exists,
-            "duplicate layout warning should match stale file existence"
+        assert!(
+            !has_duplicate_warning,
+            "file_search should no longer report a duplicate layout source"
         );
     }
 
@@ -1466,8 +1502,9 @@ mod tests {
         );
         // If the stale layout file still exists, the summary may mention drifts
         // for file_search — that is the expected behavior.
-        let stale_exists =
-            Path::new(env!("CARGO_MANIFEST_DIR")).join(FILE_SEARCH_STALE_LAYOUT_FILE).exists();
+        let stale_exists = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join(FILE_SEARCH_STALE_LAYOUT_FILE)
+            .exists();
         if !stale_exists {
             assert!(
                 !report.summary.contains("Highest-leverage current drifts"),
@@ -1479,10 +1516,9 @@ mod tests {
 
     #[test]
     fn workflow_affordance_report_all_surfaces_pass_or_have_known_warnings() {
-        let report = build_workflow_affordance_consistency_report(Path::new(env!(
-            "CARGO_MANIFEST_DIR"
-        )))
-        .expect("workflow report should build from current repo sources");
+        let report =
+            build_workflow_affordance_consistency_report(Path::new(env!("CARGO_MANIFEST_DIR")))
+                .expect("workflow report should build from current repo sources");
 
         let error_count = report
             .surfaces
@@ -1510,10 +1546,9 @@ mod tests {
 
     #[test]
     fn workflow_affordance_report_path_prompt_passes() {
-        let report = build_workflow_affordance_consistency_report(Path::new(env!(
-            "CARGO_MANIFEST_DIR"
-        )))
-        .expect("workflow report should build from current repo sources");
+        let report =
+            build_workflow_affordance_consistency_report(Path::new(env!("CARGO_MANIFEST_DIR")))
+                .expect("workflow report should build from current repo sources");
         let path_prompt = surface(&report, "prompts::path");
 
         assert_eq!(path_prompt.status(), "pass");

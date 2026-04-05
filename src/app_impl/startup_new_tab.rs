@@ -20,6 +20,15 @@
                 let is_tab_key = key.eq_ignore_ascii_case("tab");
                 let has_shift = event.keystroke.modifiers.shift;
 
+                if confirm::consume_main_window_key_while_confirm_open(
+                    key,
+                    &event.keystroke.modifiers,
+                    cx,
+                ) {
+                    cx.stop_propagation();
+                    return;
+                }
+
                 // Check for Tab key (no cmd/alt/ctrl modifiers, but shift is allowed)
                 if is_tab_key
                     && !event.keystroke.modifiers.platform

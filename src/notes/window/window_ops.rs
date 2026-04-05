@@ -584,3 +584,16 @@ fn configure_notes_as_floating_panel() {
 fn configure_notes_as_floating_panel() {
     // No-op on non-macOS platforms
 }
+
+/// Return the current editor text from the Notes window, if open.
+///
+/// Used by the automation surface collector to expose Notes state to
+/// `getElements` and `inspectAutomationWindow` without routing through
+/// the main window.
+pub fn get_notes_editor_text(cx: &gpui::App) -> Option<String> {
+    let entity = {
+        let slot = NOTES_APP_ENTITY.get_or_init(|| std::sync::Mutex::new(None));
+        slot.lock().ok()?.clone()?
+    };
+    Some(entity.read(cx).editor_state.read(cx).value().to_string())
+}

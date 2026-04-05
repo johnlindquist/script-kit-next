@@ -236,7 +236,10 @@ fn parse_inline_mentions_resolves_recent_scripts() {
 #[test]
 fn parse_inline_mentions_resolves_calendar() {
     let prev = std::env::var_os("SCRIPT_KIT_CALENDAR_JSON");
-    std::env::set_var("SCRIPT_KIT_CALENDAR_JSON", r#"{"ok":true,"available":true,"items":[{"title":"Demo"}]}"#);
+    std::env::set_var(
+        "SCRIPT_KIT_CALENDAR_JSON",
+        r#"{"ok":true,"available":true,"items":[{"title":"Demo"}]}"#,
+    );
     let mentions = parse_inline_context_mentions("Check @calendar");
     assert_eq!(mentions.len(), 1);
     assert_eq!(mentions[0].token, "@calendar");
@@ -277,9 +280,18 @@ fn parse_context_mentions_handles_all_provider_backed_directives() {
     let prev_cal = std::env::var_os("SCRIPT_KIT_CALENDAR_JSON");
     let prev_dict = std::env::var_os("SCRIPT_KIT_DICTATION_JSON");
     let prev_notif = std::env::var_os("SCRIPT_KIT_NOTIFICATIONS_JSON");
-    std::env::set_var("SCRIPT_KIT_CALENDAR_JSON", r#"{"ok":true,"available":true,"items":[{"title":"Demo"}]}"#);
-    std::env::set_var("SCRIPT_KIT_DICTATION_JSON", r#"{"ok":true,"available":true,"items":[{"text":"Hello"}]}"#);
-    std::env::set_var("SCRIPT_KIT_NOTIFICATIONS_JSON", r#"{"ok":true,"available":true,"items":[{"title":"Alert"}]}"#);
+    std::env::set_var(
+        "SCRIPT_KIT_CALENDAR_JSON",
+        r#"{"ok":true,"available":true,"items":[{"title":"Demo"}]}"#,
+    );
+    std::env::set_var(
+        "SCRIPT_KIT_DICTATION_JSON",
+        r#"{"ok":true,"available":true,"items":[{"text":"Hello"}]}"#,
+    );
+    std::env::set_var(
+        "SCRIPT_KIT_NOTIFICATIONS_JSON",
+        r#"{"ok":true,"available":true,"items":[{"title":"Alert"}]}"#,
+    );
 
     let input = "@screenshot\n@clipboard\n@git-diff\n@git-status\n@recent-scripts\n@calendar\n@processes\n@system\n@notifications\n@dictation";
     let parsed = parse_context_mentions(input);
@@ -327,9 +339,18 @@ fn part_to_inline_token_roundtrips_all_provider_backed() {
     let prev_cal = std::env::var_os("SCRIPT_KIT_CALENDAR_JSON");
     let prev_dict = std::env::var_os("SCRIPT_KIT_DICTATION_JSON");
     let prev_notif = std::env::var_os("SCRIPT_KIT_NOTIFICATIONS_JSON");
-    std::env::set_var("SCRIPT_KIT_CALENDAR_JSON", r#"{"ok":true,"available":true,"items":[{"title":"Demo"}]}"#);
-    std::env::set_var("SCRIPT_KIT_DICTATION_JSON", r#"{"ok":true,"available":true,"items":[{"text":"Hello"}]}"#);
-    std::env::set_var("SCRIPT_KIT_NOTIFICATIONS_JSON", r#"{"ok":true,"available":true,"items":[{"title":"Alert"}]}"#);
+    std::env::set_var(
+        "SCRIPT_KIT_CALENDAR_JSON",
+        r#"{"ok":true,"available":true,"items":[{"title":"Demo"}]}"#,
+    );
+    std::env::set_var(
+        "SCRIPT_KIT_DICTATION_JSON",
+        r#"{"ok":true,"available":true,"items":[{"text":"Hello"}]}"#,
+    );
+    std::env::set_var(
+        "SCRIPT_KIT_NOTIFICATIONS_JSON",
+        r#"{"ok":true,"available":true,"items":[{"title":"Alert"}]}"#,
+    );
 
     let kinds = [
         ContextAttachmentKind::Screenshot,

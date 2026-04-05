@@ -336,10 +336,7 @@ fn reset_acp_test_probe_with_detached_target_round_trips() {
         .expect("should parse resetAcpTestProbe with AcpDetached target");
 
     let re_serialized = serde_json::to_value(&msg).expect("re-serialize");
-    assert_eq!(
-        re_serialized["type"].as_str(),
-        Some("resetAcpTestProbe")
-    );
+    assert_eq!(re_serialized["type"].as_str(), Some("resetAcpTestProbe"));
     assert_eq!(
         re_serialized["requestId"].as_str(),
         Some("probe-reset-detached-1")
@@ -359,22 +356,18 @@ fn reset_acp_test_probe_without_target_backward_compatible() {
         "requestId": "probe-reset-legacy"
     });
 
-    let msg: Message = serde_json::from_value(json)
-        .expect("should parse legacy resetAcpTestProbe without target");
+    let msg: Message =
+        serde_json::from_value(json).expect("should parse legacy resetAcpTestProbe without target");
 
     let re_serialized = serde_json::to_value(&msg).expect("re-serialize");
-    assert_eq!(
-        re_serialized["type"].as_str(),
-        Some("resetAcpTestProbe")
-    );
+    assert_eq!(re_serialized["type"].as_str(), Some("resetAcpTestProbe"));
     assert_eq!(
         re_serialized["requestId"].as_str(),
         Some("probe-reset-legacy")
     );
     // target should not be present in serialized output
     assert!(
-        re_serialized.get("target").is_none()
-            || re_serialized["target"].is_null(),
+        re_serialized.get("target").is_none() || re_serialized["target"].is_null(),
         "target should be omitted for legacy requests"
     );
 }
@@ -425,8 +418,7 @@ fn acp_state_result_without_resolved_target_omits_field() {
     let json = serde_json::to_value(&response).expect("serialize");
 
     assert!(
-        json.get("resolvedTarget").is_none()
-            || json["resolvedTarget"].is_null(),
+        json.get("resolvedTarget").is_none() || json["resolvedTarget"].is_null(),
         "resolvedTarget should be absent when None"
     );
 }
@@ -454,8 +446,8 @@ fn wait_for_with_acp_detached_target_round_trips() {
         "trace": "onFailure"
     });
 
-    let msg: Message = serde_json::from_value(json)
-        .expect("should parse waitFor with AcpDetached target");
+    let msg: Message =
+        serde_json::from_value(json).expect("should parse waitFor with AcpDetached target");
 
     let re_serialized = serde_json::to_value(&msg).expect("re-serialize");
     assert_eq!(re_serialized["type"].as_str(), Some("waitFor"));

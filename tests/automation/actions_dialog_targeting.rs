@@ -241,7 +241,11 @@ fn get_elements_with_actions_dialog_target_round_trip() {
     });
     let msg: Message = serde_json::from_value(json).expect("parse");
     match msg {
-        Message::GetElements { request_id, limit, target } => {
+        Message::GetElements {
+            request_id,
+            limit,
+            target,
+        } => {
             assert_eq!(request_id, "ge-actions-1");
             assert_eq!(limit, Some(20));
             let target = target.expect("target should be present");
@@ -266,7 +270,9 @@ fn capture_screenshot_with_actions_dialog_target_round_trip() {
     });
     let msg: Message = serde_json::from_value(json).expect("parse");
     match msg {
-        Message::CaptureScreenshot { request_id, target, .. } => {
+        Message::CaptureScreenshot {
+            request_id, target, ..
+        } => {
             assert_eq!(request_id, "ss-actions-1");
             let target = target.expect("target should be present");
             match target {

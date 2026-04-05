@@ -79,6 +79,7 @@ interface CaptureTarget {
 interface InspectionReceipt {
   automationWindowId: string;
   windowKind: string;
+  osWindowId?: number | null;
   screenshotWidth?: number | null;
   screenshotHeight?: number | null;
   pixelProbes: Array<{ x: number; y: number; r: number; g: number; b: number; a: number }>;
@@ -449,6 +450,7 @@ async function queryInspection(
   return {
     automationWindowId: String(response.windowId ?? ""),
     windowKind: String(response.windowKind ?? ""),
+    osWindowId: (response.osWindowId as number) ?? null,
     screenshotWidth: (response.screenshotWidth as number) ?? null,
     screenshotHeight: (response.screenshotHeight as number) ?? null,
     pixelProbes: (response.pixelProbes as InspectionReceipt["pixelProbes"]) ?? [],
@@ -1438,6 +1440,7 @@ if (targetJson || opts.emitVisionCrops) {
     label,
     automationWindowId: inspection?.automationWindowId ?? null,
     windowKind: inspection?.windowKind ?? null,
+    osWindowId: inspection?.osWindowId ?? null,
     probeCount: inspection?.pixelProbes.length ?? 0,
     warningCount: inspection?.warnings.length ?? 0,
   });

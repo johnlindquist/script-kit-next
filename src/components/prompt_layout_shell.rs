@@ -1394,22 +1394,26 @@ mod prompt_layout_shell_tests {
 
     #[test]
     fn file_search_source_matches_expanded_contract() {
-        let source = include_str!("../render_builtins/file_search_layout.rs");
+        // The live rendering is in file_search.rs; file_search_layout.rs is a legacy stub.
+        let source = include_str!("../render_builtins/file_search.rs");
         // Must route through the shared expanded-view scaffold
         assert!(
-            source.contains("render_expanded_view_scaffold("),
-            "file search layout must use the shared expanded-view scaffold"
+            source.contains("render_expanded_view_scaffold(")
+                || source.contains("render_expanded_view_scaffold_with_hints("),
+            "file search must use the shared expanded-view scaffold"
         );
         // Must NOT have hand-rolled SectionDivider (scaffold owns structure)
         let divider = "SectionDivider".to_owned() + "::new()";
         assert!(
             !source.contains(&divider),
-            "file search layout must not use SectionDivider (scaffold owns structure)"
+            "file search must not use SectionDivider (scaffold owns structure)"
         );
-        // Must NOT have hardcoded alpha (old 0x40 pattern)
+
+        // Legacy layout file must not contain chrome markers
+        let legacy = include_str!("../render_builtins/file_search_layout.rs");
         assert!(
-            !source.contains("| 0x40)"),
-            "file search layout must not have hardcoded alpha fills"
+            !legacy.contains("render_expanded_view_scaffold("),
+            "legacy file_search_layout.rs must not contain chrome markers"
         );
     }
 

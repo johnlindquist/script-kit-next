@@ -180,6 +180,16 @@ pub(crate) struct AcpTestProbe {
 
 use crate::protocol::ACP_TEST_PROBE_MAX_EVENTS;
 
+#[derive(Clone)]
+struct AcpKeyRouteTelemetryArgs {
+    route: crate::protocol::AcpKeyRoute,
+    cursor_before: usize,
+    cursor_after: usize,
+    caused_submit: bool,
+    consumed: bool,
+    permission_active: bool,
+}
+
 /// State for the setup-mode agent selection picker.
 #[derive(Debug, Clone)]
 struct AcpSetupAgentPickerState {
@@ -765,13 +775,17 @@ impl AcpChatView {
             );
             self.accept_mention_selection_impl(false, cx);
             let cursor_after = self.live_thread().read(cx).input.cursor();
+            let permission_active = self.live_thread().read(cx).pending_permission.is_some();
             self.emit_key_route_telemetry(
                 "tab",
-                crate::protocol::AcpKeyRoute::Picker,
-                cursor_before,
-                cursor_after,
-                false,
-                true,
+                AcpKeyRouteTelemetryArgs {
+                    route: crate::protocol::AcpKeyRoute::Picker,
+                    cursor_before,
+                    cursor_after,
+                    caused_submit: false,
+                    consumed: true,
+                    permission_active,
+                },
             );
             if let Some((trigger, label, id)) = pre_accept_item {
                 self.emit_picker_accepted_telemetry(
@@ -3614,40 +3628,28 @@ impl AcpChatView {
     ///
     /// Logged on `script_kit::acp_telemetry` target. Contains no user content —
     /// only the key name, route, indices, and booleans.
-    fn emit_key_route_telemetry(
-        &mut self,
-        key: &str,
-        route: crate::protocol::AcpKeyRoute,
-        cursor_before: usize,
-        cursor_after: usize,
-        caused_submit: bool,
-        consumed: bool,
-    ) {
+    fn emit_key_route_telemetry(&mut self, key: &str, telemetry_args: AcpKeyRouteTelemetryArgs) {
         let picker_open = self.mention_session.is_some();
-        // Note: telemetry-only field; we don't have cx here so we report
-        // based on best local knowledge. The actual permission state is
-        // checked in handle_key_down where cx is available.
-        let permission_active = false;
         let telemetry = crate::protocol::AcpKeyRouteTelemetry {
             key: key.to_string(),
-            route: route.clone(),
+            route: telemetry_args.route.clone(),
             picker_open,
-            permission_active,
-            cursor_before,
-            cursor_after,
-            caused_submit,
-            consumed,
+            permission_active: telemetry_args.permission_active,
+            cursor_before: telemetry_args.cursor_before,
+            cursor_after: telemetry_args.cursor_after,
+            caused_submit: telemetry_args.caused_submit,
+            consumed: telemetry_args.consumed,
         };
         // Build the interaction trace (no accept info yet — augmented by picker accept if it follows).
         let trace = crate::protocol::AcpLastInteractionTrace {
             key: key.to_string(),
-            route: format!("{:?}", route).to_lowercase(),
+            route: format!("{:?}", telemetry_args.route).to_lowercase(),
             picker_open_before: picker_open,
             accepted_via_key: None,
             accepted_label: None,
-            cursor_before,
-            cursor_after,
-            caused_submit,
+            cursor_before: telemetry_args.cursor_before,
+            cursor_after: telemetry_args.cursor_after,
+            caused_submit: telemetry_args.caused_submit,
         };
         self.test_probe.last_interaction_trace = Some(trace);
 
@@ -3658,13 +3660,13 @@ impl AcpChatView {
             target: "script_kit::acp_telemetry",
             event = "acp_key_routed",
             key = %key,
-            route = ?route,
+            route = ?telemetry_args.route,
             picker_open,
-            permission_active,
-            cursor_before,
-            cursor_after,
-            caused_submit,
-            consumed,
+            permission_active = telemetry_args.permission_active,
+            cursor_before = telemetry_args.cursor_before,
+            cursor_after = telemetry_args.cursor_after,
+            caused_submit = telemetry_args.caused_submit,
+            consumed = telemetry_args.consumed,
             telemetry_json = %telemetry_json,
         );
     }
@@ -4202,13 +4204,17 @@ impl AcpChatView {
                 let cursor_before = self.live_thread().read(cx).input.cursor();
                 self.accept_mention_selection_impl(false, cx);
                 let cursor_after = self.live_thread().read(cx).input.cursor();
+                let permission_active = self.live_thread().read(cx).pending_permission.is_some();
                 self.emit_key_route_telemetry(
                     key,
-                    crate::protocol::AcpKeyRoute::Picker,
-                    cursor_before,
-                    cursor_after,
-                    false,
-                    true,
+                    AcpKeyRouteTelemetryArgs {
+                        route: crate::protocol::AcpKeyRoute::Picker,
+                        cursor_before,
+                        cursor_after,
+                        caused_submit: false,
+                        consumed: true,
+                        permission_active,
+                    },
                 );
                 if let Some((trigger, label, id)) = pre_accept_item {
                     self.emit_picker_accepted_telemetry(
@@ -4257,6 +4263,7 @@ impl AcpChatView {
         // Enter submits.
         if crate::ui_foundation::is_key_enter(key) && !modifiers.shift {
             let cursor_before = self.live_thread().read(cx).input.cursor();
+            let permission_active = self.live_thread().read(cx).pending_permission.is_some();
             self.mention_session = None;
             self.sync_mention_popup_window_from_cached_parent(cx);
             let _ = self
@@ -4264,11 +4271,14 @@ impl AcpChatView {
                 .update(cx, |thread, cx| thread.submit_input(cx));
             self.emit_key_route_telemetry(
                 key,
-                crate::protocol::AcpKeyRoute::Composer,
-                cursor_before,
-                0,
-                true,
-                true,
+                AcpKeyRouteTelemetryArgs {
+                    route: crate::protocol::AcpKeyRoute::Composer,
+                    cursor_before,
+                    cursor_after: 0,
+                    caused_submit: true,
+                    consumed: true,
+                    permission_active,
+                },
             );
             cx.stop_propagation();
             return;

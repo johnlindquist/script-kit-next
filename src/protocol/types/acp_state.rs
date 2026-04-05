@@ -602,8 +602,7 @@ mod tests {
         let snap = AcpStateSnapshot::default();
         let json = serde_json::to_value(&snap).expect("serialize");
         assert!(
-            json.get("resolvedTarget").is_none()
-                || json["resolvedTarget"].is_null(),
+            json.get("resolvedTarget").is_none() || json["resolvedTarget"].is_null(),
             "resolvedTarget should be omitted when None"
         );
     }
@@ -1248,8 +1247,7 @@ mod tests {
         );
         assert_eq!(json["causedSubmit"], true);
 
-        let back: AcpLastInteractionTrace =
-            serde_json::from_value(json).expect("deserialize");
+        let back: AcpLastInteractionTrace = serde_json::from_value(json).expect("deserialize");
         assert_eq!(back, trace);
     }
 
@@ -1317,8 +1315,7 @@ mod tests {
         assert_eq!(json["lastInteractionTrace"]["acceptedViaKey"], "tab");
         assert_eq!(json["lastInteractionTrace"]["causedSubmit"], false);
 
-        let back: AcpTestProbeSnapshot =
-            serde_json::from_value(json).expect("deserialize");
+        let back: AcpTestProbeSnapshot = serde_json::from_value(json).expect("deserialize");
         assert_eq!(back.last_interaction_trace, Some(trace));
     }
 
@@ -1337,6 +1334,74 @@ mod tests {
         assert!(
             snap.last_interaction_trace.is_none(),
             "missing field should deserialize as None"
+        );
+    }
+
+    // ── Permission-active key route telemetry ────────────────────
+
+    #[test]
+    fn acp_key_route_telemetry_permission_active_true() {
+        let telemetry = AcpKeyRouteTelemetry {
+            key: "enter".to_string(),
+            route: AcpKeyRoute::Composer,
+            picker_open: false,
+            permission_active: true,
+            cursor_before: 5,
+            cursor_after: 0,
+            caused_submit: true,
+            consumed: true,
+        };
+        let json = serde_json::to_value(&telemetry).expect("serialize");
+        assert!(
+            json["permissionActive"].as_bool().expect("bool"),
+            "permissionActive must be true when a permission approval is pending"
+        );
+        let back: AcpKeyRouteTelemetry = serde_json::from_value(json).expect("deserialize");
+        assert!(back.permission_active);
+    }
+
+    #[test]
+    fn acp_key_route_telemetry_permission_active_false() {
+        let telemetry = AcpKeyRouteTelemetry {
+            key: "tab".to_string(),
+            route: AcpKeyRoute::Picker,
+            picker_open: true,
+            permission_active: false,
+            cursor_before: 1,
+            cursor_after: 9,
+            caused_submit: false,
+            consumed: true,
+        };
+        let json = serde_json::to_value(&telemetry).expect("serialize");
+        assert!(
+            !json["permissionActive"].as_bool().expect("bool"),
+            "permissionActive must be false when no permission approval is pending"
+        );
+        let back: AcpKeyRouteTelemetry = serde_json::from_value(json).expect("deserialize");
+        assert!(!back.permission_active);
+    }
+
+    #[test]
+    fn acp_key_route_telemetry_permission_active_distinguishes_states() {
+        let base = AcpKeyRouteTelemetry {
+            key: "enter".to_string(),
+            route: AcpKeyRoute::Picker,
+            picker_open: true,
+            permission_active: false,
+            cursor_before: 1,
+            cursor_after: 9,
+            caused_submit: false,
+            consumed: true,
+        };
+        let with_permission = AcpKeyRouteTelemetry {
+            permission_active: true,
+            ..base.clone()
+        };
+        let json_without = serde_json::to_value(&base).expect("serialize without");
+        let json_with = serde_json::to_value(&with_permission).expect("serialize with");
+        assert_ne!(
+            json_without["permissionActive"], json_with["permissionActive"],
+            "permission_active=false and permission_active=true must produce distinct JSON"
         );
     }
 }

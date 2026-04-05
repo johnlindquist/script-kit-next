@@ -667,6 +667,14 @@ impl ScriptListApp {
                 let key = event.keystroke.key.as_str();
                 let is_tab_key = key.eq_ignore_ascii_case("tab");
                 let has_shift = event.keystroke.modifiers.shift;
+                if confirm::consume_main_window_key_while_confirm_open(
+                    key,
+                    &event.keystroke.modifiers,
+                    cx,
+                ) {
+                    cx.stop_propagation();
+                    return;
+                }
                 // Check for Tab key (no cmd/alt/ctrl modifiers, but shift is allowed)
                 if is_tab_key
                     && !event.keystroke.modifiers.platform
@@ -898,6 +906,14 @@ impl ScriptListApp {
                 let is_down = crate::ui_foundation::is_key_down(key);
                 let is_left = crate::ui_foundation::is_key_left(key);
                 let is_right = crate::ui_foundation::is_key_right(key);
+                if confirm::consume_main_window_key_while_confirm_open(
+                    key,
+                    &event.keystroke.modifiers,
+                    cx,
+                ) {
+                    cx.stop_propagation();
+                    return;
+                }
                 let no_direction_modifiers = !event.keystroke.modifiers.platform
                     && !event.keystroke.modifiers.alt
                     && !event.keystroke.modifiers.control;
@@ -1361,6 +1377,14 @@ impl ScriptListApp {
 
                 let key = event.keystroke.key.as_str();
                 let has_platform_mod = event.keystroke.modifiers.platform; // Cmd on macOS
+                if confirm::consume_main_window_key_while_confirm_open(
+                    key,
+                    &event.keystroke.modifiers,
+                    cx,
+                ) {
+                    cx.stop_propagation();
+                    return;
+                }
 
                 // Home key or Cmd+Up → jump to first item
                 // End key or Cmd+Down → jump to last item
@@ -1432,6 +1456,14 @@ impl ScriptListApp {
                 let has_cmd = event.keystroke.modifiers.platform;
                 let has_shift = event.keystroke.modifiers.shift;
                 let key_char = event.keystroke.key_char.as_deref();
+                if confirm::consume_main_window_key_while_confirm_open(
+                    key,
+                    &event.keystroke.modifiers,
+                    cx,
+                ) {
+                    cx.stop_propagation();
+                    return;
+                }
 
                 if let Some(app) = app_entity.upgrade() {
                     app.update(cx, |this, cx| {

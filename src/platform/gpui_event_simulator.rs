@@ -55,9 +55,7 @@ fn rebase_mouse_event_to_dispatch_space(
         &crate::protocol::AutomationWindowTarget::Main,
     ))
     .map_err(|err| {
-        format!(
-            "Failed to resolve main automation window for attached-surface dispatch: {err}"
-        )
+        format!("Failed to resolve main automation window for attached-surface dispatch: {err}")
     })?;
 
     let main_bounds = main.bounds.as_ref().ok_or_else(|| {
@@ -373,7 +371,7 @@ pub(crate) fn dispatch_gpui_event(
             window_id = %resolved.id,
             "gpui_event_simulation.dispatch_exact_handle"
         );
-        return dispatch_with_any_handle(handle, request_id, &resolved.id, event_type, event, cx);
+        return dispatch_with_any_handle(handle, request_id, &resolved.id, event_type, &event, cx);
     }
 
     // 3. No exact handle — fall back to WindowRole-based dispatch.
@@ -443,7 +441,7 @@ pub(crate) fn dispatch_gpui_event(
         }
     };
 
-    dispatch_with_any_handle(handle, request_id, &resolved.id, event_type, event, cx)
+    dispatch_with_any_handle(handle, request_id, &resolved.id, event_type, &event, cx)
 }
 
 fn parse_mouse_button(button: Option<&str>) -> gpui::MouseButton {

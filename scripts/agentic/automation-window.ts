@@ -185,6 +185,7 @@ interface InspectAutomationWindowResult {
   screenshotWidth?: number | null;
   screenshotHeight?: number | null;
   pixelProbes: Array<{ x: number; y: number; r: number; g: number; b: number; a: number }>;
+  osWindowId?: number | null;
   warnings: string[];
 }
 
@@ -194,6 +195,7 @@ interface AutomationWindowInspectEnvelope {
   targetJson?: AutomationTargetJson;
   surfaceId?: string | null;
   automationWindowId?: string | null;
+  osWindowId?: number | null;
   inspect?: InspectAutomationWindowResult;
   error?: { code: string; message: string };
 }
@@ -233,6 +235,7 @@ async function inspectTarget(
   const inspect = response as unknown as InspectAutomationWindowResult;
   const automationWindowId = inspect.windowId || null;
   const windowKind = inspect.windowKind || null;
+  const osWindowId = inspect.osWindowId ?? null;
 
   // Also resolve surface ID for native input threading
   let surfaceId: string | null = null;
@@ -270,6 +273,7 @@ async function inspectTarget(
     automationWindowId,
     windowKind,
     surfaceId,
+    osWindowId,
     screenshotWidth: inspect.screenshotWidth ?? null,
     screenshotHeight: inspect.screenshotHeight ?? null,
     probeCount: inspect.pixelProbes?.length ?? 0,
@@ -282,6 +286,7 @@ async function inspectTarget(
     targetJson,
     surfaceId,
     automationWindowId,
+    osWindowId,
     inspect,
   };
 }

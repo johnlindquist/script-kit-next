@@ -33,6 +33,15 @@
                 let has_shift = event.keystroke.modifiers.shift;
                 let key_char = event.keystroke.key_char.as_deref();
 
+                if confirm::consume_main_window_key_while_confirm_open(
+                    key,
+                    &event.keystroke.modifiers,
+                    cx,
+                ) {
+                    cx.stop_propagation();
+                    return;
+                }
+
                 if let Some(app) = app_entity.upgrade() {
                     app.update(cx, |this, cx| {
                         // Handle Cmd+K to toggle actions popup (works in ScriptList, FileSearchView, ArgPrompt)

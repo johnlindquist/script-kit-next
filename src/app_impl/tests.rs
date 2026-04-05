@@ -179,3 +179,42 @@ fn quick_terminal_tab_is_written_directly_to_pty_in_standard_startup() {
         "QuickTerminal Tab handling must write raw bytes to the PTY"
     );
 }
+
+#[test]
+fn confirm_popup_guards_global_launcher_interceptors() {
+    let startup = fs::read_to_string("src/app_impl/startup.rs")
+        .expect("Failed to read src/app_impl/startup.rs");
+    let startup_new_tab = fs::read_to_string("src/app_impl/startup_new_tab.rs")
+        .expect("Failed to read src/app_impl/startup_new_tab.rs");
+    let startup_new_arrow = fs::read_to_string("src/app_impl/startup_new_arrow.rs")
+        .expect("Failed to read src/app_impl/startup_new_arrow.rs");
+    let startup_new_actions = fs::read_to_string("src/app_impl/startup_new_actions.rs")
+        .expect("Failed to read src/app_impl/startup_new_actions.rs");
+
+    for (label, source) in [
+        ("startup.rs", startup.as_str()),
+        ("startup_new_tab.rs", startup_new_tab.as_str()),
+        ("startup_new_arrow.rs", startup_new_arrow.as_str()),
+        ("startup_new_actions.rs", startup_new_actions.as_str()),
+    ] {
+        assert!(
+            source.contains("confirm::consume_main_window_key_while_confirm_open("),
+            "{label} must guard global key interceptors while a confirm popup is open"
+        );
+    }
+}
+
+#[test]
+fn render_impl_routes_modifier_aware_keys_into_confirm_popup_guard() {
+    let source = fs::read_to_string("src/main_sections/render_impl.rs")
+        .expect("Failed to read src/main_sections/render_impl.rs");
+
+    assert!(
+        source.contains("confirm::consume_main_window_key_while_confirm_open("),
+        "render_impl.rs must route root key capture through the confirm popup guard"
+    );
+    assert!(
+        source.contains("&event.keystroke.modifiers"),
+        "render_impl.rs must pass real modifiers so Shift+Tab stays inside the confirm popup"
+    );
+}

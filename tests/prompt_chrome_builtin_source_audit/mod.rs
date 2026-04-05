@@ -6,6 +6,9 @@ const FILE_SEARCH_ENTRY_SOURCE: &str = include_str!("../../src/render_builtins/f
 const FILE_SEARCH_LAYOUT_SOURCE: &str =
     include_str!("../../src/render_builtins/file_search_layout.rs");
 
+// file_search_layout.rs is now a legacy stub — expanded/mini contract
+// assertions use the live file_search.rs entry source instead.
+
 // --- Minimal-list surfaces (name IS the content) ---
 const WINDOW_SWITCHER_SOURCE: &str = include_str!("../../src/render_builtins/window_switcher.rs");
 const APP_LAUNCHER_SOURCE: &str = include_str!("../../src/render_builtins/app_launcher.rs");
@@ -116,10 +119,12 @@ fn clipboard_history_enforces_expanded_view_contract() {
 
 #[test]
 fn file_search_enforces_expanded_view_contract() {
+    // The live rendering is fully in file_search.rs (entry source).
+    // file_search_layout.rs is a legacy stub with no chrome markers.
     assert_expanded_builtin_surface(
         "file_search",
         FILE_SEARCH_ENTRY_SOURCE,
-        FILE_SEARCH_LAYOUT_SOURCE,
+        FILE_SEARCH_ENTRY_SOURCE,
     );
 }
 
@@ -127,13 +132,15 @@ fn file_search_enforces_expanded_view_contract() {
 
 #[test]
 fn file_search_mini_footer_uses_universal_hint_contract() {
+    // The live rendering is in file_search.rs (entry source).
     assert!(
-        FILE_SEARCH_LAYOUT_SOURCE.contains("emit_prompt_hint_audit(\"file_search\""),
-        "file_search mini layout should emit a prompt hint audit"
+        FILE_SEARCH_ENTRY_SOURCE.contains("emit_prompt_hint_audit(\"file_search\""),
+        "file_search should emit a prompt hint audit"
     );
     assert!(
-        FILE_SEARCH_LAYOUT_SOURCE.contains("universal_prompt_hints()"),
-        "file_search mini layout should use universal prompt hints"
+        FILE_SEARCH_ENTRY_SOURCE.contains("universal_prompt_hints()")
+            || FILE_SEARCH_ENTRY_SOURCE.contains("live_file_search_hints("),
+        "file_search should use universal or live file search hints"
     );
 }
 

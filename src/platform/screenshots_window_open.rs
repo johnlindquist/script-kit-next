@@ -425,3 +425,41 @@ pub fn capture_targeted_rgba_image(
         ))
     }
 }
+
+/// Resolve the best-matching OS window for an automation target and return its
+/// native CGWindowID.
+///
+/// Uses the same candidate scoring as `capture_targeted_rgba_image` so the
+/// returned ID is guaranteed to match the window that would be captured.
+/// Returns `None` when no candidate matches strongly enough.
+pub fn resolve_targeted_os_window_id(
+    target: Option<&crate::protocol::AutomationWindowTarget>,
+) -> Option<u32> {
+    let resolved = crate::windows::resolve_automation_window(target).ok()?;
+    let candidates = list_script_kit_candidates().ok()?;
+
+    let mut ranked: Vec<(i32, &Candidate)> = candidates
+        .iter()
+        .map(|candidate| (score_candidate(&resolved, candidate), candidate))
+        .collect();
+
+    ranked.sort_by(|(left_score, left), (right_score, right)| {
+        right_score
+            .cmp(left_score)
+            .then_with(|| right.focused.cmp(&left.focused))
+            .then_with(|| right.title.cmp(&left.title))
+    });
+
+    let (best_score, best) = ranked.first().copied()?;
+    if best_score <= 0 {
+        return None;
+    }
+    // Reject ambiguous matches
+    if let Some((second_score, _)) = ranked.get(1).copied() {
+        if second_score == best_score {
+            return None;
+        }
+    }
+
+    best.window.id().ok()
+}

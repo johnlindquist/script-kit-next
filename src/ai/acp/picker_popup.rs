@@ -399,15 +399,28 @@ impl Render for AcpMentionPopupWindow {
 }
 
 #[cfg(target_os = "macos")]
+fn flipped_ns_window_y(bounds: Bounds<Pixels>, primary_height: f64) -> f64 {
+    primary_height - f32::from(bounds.origin.y) as f64 - f32::from(bounds.size.height) as f64
+}
+
+#[cfg(target_os = "macos")]
 fn set_popup_window_bounds(window: &mut Window, bounds: Bounds<Pixels>, cx: &mut App) {
     if let Some(ns_window) = popup_ns_window(window) {
         // SAFETY: `ns_window` comes from a live GPUI popup window on the AppKit
-        // main thread. The converted frame uses screen-relative coordinates.
+        // main thread. Coordinates are converted from GPUI's screen-relative
+        // top-left origin into the bottom-left origin NSWindow expects.
         unsafe {
+            use cocoa::appkit::NSScreen;
+            use cocoa::base::nil;
+
+            let screens: cocoa::base::id = NSScreen::screens(nil);
+            let primary_screen: cocoa::base::id = msg_send![screens, objectAtIndex: 0u64];
+            let primary_frame: cocoa::foundation::NSRect = msg_send![primary_screen, frame];
+            let primary_height = primary_frame.size.height;
             let target_frame = cocoa::foundation::NSRect::new(
                 cocoa::foundation::NSPoint::new(
                     f32::from(bounds.origin.x) as f64,
-                    f32::from(bounds.origin.y) as f64,
+                    flipped_ns_window_y(bounds, primary_height),
                 ),
                 cocoa::foundation::NSSize::new(
                     f32::from(bounds.size.width) as f64,
@@ -512,5 +525,17 @@ mod tests {
         assert_eq!(f32::from(bounds.origin.y), 100.0);
         assert_eq!(f32::from(bounds.size.width), 320.0);
         assert_eq!(f32::from(bounds.size.height), 84.0);
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn popup_bounds_flip_y_for_nswindow_coordinates() {
+        let bounds = gpui::Bounds {
+            origin: gpui::point(gpui::px(124.0), gpui::px(100.0)),
+            size: gpui::size(gpui::px(320.0), gpui::px(84.0)),
+        };
+
+        let flipped_y = super::flipped_ns_window_y(bounds, 982.0);
+        assert_eq!(flipped_y, 798.0);
     }
 }

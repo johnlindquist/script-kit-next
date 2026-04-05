@@ -7,7 +7,41 @@
 use serde::{Deserialize, Serialize};
 
 /// Current schema version for automation inspect snapshots.
-pub const AUTOMATION_INSPECT_SCHEMA_VERSION: u32 = 1;
+///
+/// v2: added `resolved_bounds`, `target_bounds_in_screenshot`,
+///     `surface_hit_point`, and `suggested_hit_points`.
+pub const AUTOMATION_INSPECT_SCHEMA_VERSION: u32 = 2;
+
+/// A point in screenshot-relative coordinates.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct InspectPoint {
+    pub x: f64,
+    pub y: f64,
+}
+
+/// Bounding rectangle of the target surface inside the captured screenshot.
+///
+/// For attached surfaces (ActionsDialog, PromptPopup), this is offset from
+/// the parent window's origin. For detached windows, `(x, y)` is `(0, 0)`.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct InspectBoundsInScreenshot {
+    pub x: f64,
+    pub y: f64,
+    pub width: f64,
+    pub height: f64,
+}
+
+/// A suggested click target inside the screenshot coordinate space.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct SuggestedHitPoint {
+    pub semantic_id: String,
+    pub x: f64,
+    pub y: f64,
+    pub reason: String,
+}
 
 /// A pixel coordinate to sample from the captured screenshot.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -49,6 +83,24 @@ pub struct AutomationInspectSnapshot {
     /// Window title if available.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
+
+    /// Window bounds in screen coordinates (from automation registry).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resolved_bounds: Option<super::AutomationWindowBounds>,
+
+    /// Bounding rectangle of the target surface within the captured screenshot.
+    /// For attached surfaces this is offset from the parent; for detached windows
+    /// `(x, y)` is `(0, 0)`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target_bounds_in_screenshot: Option<InspectBoundsInScreenshot>,
+
+    /// Default click point for the surface (center of `target_bounds_in_screenshot`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub surface_hit_point: Option<InspectPoint>,
+
+    /// Suggested named click targets inside the screenshot coordinate space.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub suggested_hit_points: Vec<SuggestedHitPoint>,
 
     /// Semantic UI elements (empty when collection is unavailable for this window kind).
     #[serde(default)]
@@ -95,13 +147,16 @@ mod tests {
     use super::*;
     use crate::protocol::types::elements_actions_scriptlets::{ElementInfo, ElementType};
 
-    #[test]
-    fn snapshot_serde_roundtrip_minimal() {
-        let snapshot = AutomationInspectSnapshot {
+    fn make_minimal_snapshot() -> AutomationInspectSnapshot {
+        AutomationInspectSnapshot {
             schema_version: AUTOMATION_INSPECT_SCHEMA_VERSION,
             window_id: "main:0".to_string(),
             window_kind: "Main".to_string(),
             title: None,
+            resolved_bounds: None,
+            target_bounds_in_screenshot: None,
+            surface_hit_point: None,
+            suggested_hit_points: Vec::new(),
             elements: Vec::new(),
             total_count: 0,
             focused_semantic_id: None,
@@ -111,11 +166,15 @@ mod tests {
             pixel_probes: Vec::new(),
             os_window_id: None,
             warnings: Vec::new(),
-        };
+        }
+    }
+
+    #[test]
+    fn snapshot_serde_roundtrip_minimal() {
+        let snapshot = make_minimal_snapshot();
 
         let json = serde_json::to_string(&snapshot).expect("serialize");
-        let parsed: AutomationInspectSnapshot =
-            serde_json::from_str(&json).expect("deserialize");
+        let parsed: AutomationInspectSnapshot = serde_json::from_str(&json).expect("deserialize");
         assert_eq!(parsed, snapshot);
         // Verify camelCase
         assert!(json.contains("schemaVersion"));
@@ -130,6 +189,25 @@ mod tests {
             window_id: "notes:0".to_string(),
             window_kind: "Notes".to_string(),
             title: Some("Script Kit Notes".to_string()),
+            resolved_bounds: Some(crate::protocol::AutomationWindowBounds {
+                x: 100.0,
+                y: 200.0,
+                width: 800.0,
+                height: 600.0,
+            }),
+            target_bounds_in_screenshot: Some(InspectBoundsInScreenshot {
+                x: 0.0,
+                y: 0.0,
+                width: 800.0,
+                height: 600.0,
+            }),
+            surface_hit_point: Some(InspectPoint { x: 400.0, y: 300.0 }),
+            suggested_hit_points: vec![SuggestedHitPoint {
+                semantic_id: "input:notes-editor".to_string(),
+                x: 400.0,
+                y: 300.0,
+                reason: "surface_center".to_string(),
+            }],
             elements: vec![ElementInfo {
                 semantic_id: "panel:notes".to_string(),
                 element_type: ElementType::Panel,
@@ -144,25 +222,25 @@ mod tests {
             selected_semantic_id: None,
             screenshot_width: Some(1440),
             screenshot_height: Some(900),
-            pixel_probes: vec![
-                PixelProbeResult {
-                    x: 24,
-                    y: 24,
-                    r: 28,
-                    g: 28,
-                    b: 30,
-                    a: 255,
-                },
-            ],
+            pixel_probes: vec![PixelProbeResult {
+                x: 24,
+                y: 24,
+                r: 28,
+                g: 28,
+                b: 30,
+                a: 255,
+            }],
             os_window_id: Some(12345),
             warnings: vec!["semantic_elements_non_main_pending".to_string()],
         };
 
         let json = serde_json::to_string(&snapshot).expect("serialize");
-        let parsed: AutomationInspectSnapshot =
-            serde_json::from_str(&json).expect("deserialize");
+        let parsed: AutomationInspectSnapshot = serde_json::from_str(&json).expect("deserialize");
         assert_eq!(parsed, snapshot);
         assert!(json.contains("\"osWindowId\":12345"));
+        assert!(json.contains("\"targetBoundsInScreenshot\""));
+        assert!(json.contains("\"surfaceHitPoint\""));
+        assert!(json.contains("\"suggestedHitPoints\""));
     }
 
     #[test]
@@ -191,21 +269,7 @@ mod tests {
 
     #[test]
     fn empty_collections_skipped_in_json() {
-        let snapshot = AutomationInspectSnapshot {
-            schema_version: AUTOMATION_INSPECT_SCHEMA_VERSION,
-            window_id: "main:0".to_string(),
-            window_kind: "Main".to_string(),
-            title: None,
-            elements: Vec::new(),
-            total_count: 0,
-            focused_semantic_id: None,
-            selected_semantic_id: None,
-            screenshot_width: None,
-            screenshot_height: None,
-            pixel_probes: Vec::new(),
-            os_window_id: None,
-            warnings: Vec::new(),
-        };
+        let snapshot = make_minimal_snapshot();
         let json = serde_json::to_string(&snapshot).expect("serialize");
         // Empty vecs with skip_serializing_if should not appear
         assert!(!json.contains("pixelProbes"));
@@ -214,5 +278,34 @@ mod tests {
         assert!(!json.contains("title"));
         assert!(!json.contains("screenshotWidth"));
         assert!(!json.contains("osWindowId"));
+        // New v2 fields should also be absent when None/empty
+        assert!(!json.contains("resolvedBounds"));
+        assert!(!json.contains("targetBoundsInScreenshot"));
+        assert!(!json.contains("surfaceHitPoint"));
+        assert!(!json.contains("suggestedHitPoints"));
+    }
+
+    #[test]
+    fn backward_compat_without_os_window_id() {
+        // Verify that JSON from older schema (without osWindowId) still parses.
+        let json = r#"{"schemaVersion":1,"windowId":"main:0","windowKind":"Main","totalCount":0}"#;
+        let parsed: AutomationInspectSnapshot =
+            serde_json::from_str(json).expect("should parse without osWindowId");
+        assert_eq!(parsed.os_window_id, None);
+        assert_eq!(parsed.window_id, "main:0");
+    }
+
+    #[test]
+    fn os_window_id_present_in_json() {
+        let mut snapshot = make_minimal_snapshot();
+        snapshot.window_id = "acpDetached:thread-1".to_string();
+        snapshot.window_kind = "AcpDetached".to_string();
+        snapshot.screenshot_width = Some(800);
+        snapshot.screenshot_height = Some(600);
+        snapshot.os_window_id = Some(42);
+        let json = serde_json::to_string(&snapshot).expect("serialize");
+        assert!(json.contains("\"osWindowId\":42"));
+        let parsed: AutomationInspectSnapshot = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(parsed.os_window_id, Some(42));
     }
 }

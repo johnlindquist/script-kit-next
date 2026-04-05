@@ -812,10 +812,7 @@ fn reset_acp_test_probe_request_parses() {
         serde_json::from_str(json).expect("parse resetAcpTestProbe");
 
     match msg {
-        crate::protocol::Message::ResetAcpTestProbe {
-            request_id,
-            target,
-        } => {
+        crate::protocol::Message::ResetAcpTestProbe { request_id, target } => {
             assert_eq!(request_id, "probe-reset-1");
             assert!(target.is_none(), "legacy request should have no target");
         }
@@ -838,10 +835,7 @@ fn reset_acp_test_probe_with_target_round_trips() {
         serde_json::from_value(json).expect("parse resetAcpTestProbe with target");
 
     match &msg {
-        crate::protocol::Message::ResetAcpTestProbe {
-            request_id,
-            target,
-        } => {
+        crate::protocol::Message::ResetAcpTestProbe { request_id, target } => {
             assert_eq!(request_id, "probe-reset-targeted");
             let t = target.as_ref().expect("should have target");
             match t {

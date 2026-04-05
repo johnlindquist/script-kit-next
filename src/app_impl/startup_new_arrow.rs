@@ -25,6 +25,14 @@
                 let is_down = crate::ui_foundation::is_key_down(key);
                 let is_left = crate::ui_foundation::is_key_left(key);
                 let is_right = crate::ui_foundation::is_key_right(key);
+                if confirm::consume_main_window_key_while_confirm_open(
+                    key,
+                    &event.keystroke.modifiers,
+                    cx,
+                ) {
+                    cx.stop_propagation();
+                    return;
+                }
                 // Check for arrow keys (no modifiers except shift for selection)
                 // Left/right included for EmojiPickerView grid navigation;
                 // other views fall through to _ => {} so Input handles them normally.
@@ -598,6 +606,15 @@
 
                 let key = event.keystroke.key.as_str();
                 let has_platform_mod = event.keystroke.modifiers.platform; // Cmd on macOS
+
+                if confirm::consume_main_window_key_while_confirm_open(
+                    key,
+                    &event.keystroke.modifiers,
+                    cx,
+                ) {
+                    cx.stop_propagation();
+                    return;
+                }
 
                 // Home key or Cmd+Up → jump to first item
                 // End key or Cmd+Down → jump to last item
