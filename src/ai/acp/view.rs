@@ -374,6 +374,10 @@ impl AcpChatView {
         false
     }
 
+    pub(crate) fn has_escape_dismissible_popup(&self) -> bool {
+        self.model_selector_open || self.mention_session.is_some()
+    }
+
     /// Access the live thread entity, if in live mode.
     pub(crate) fn thread(&self) -> Option<Entity<AcpThread>> {
         match &self.session {
