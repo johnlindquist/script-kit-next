@@ -178,6 +178,40 @@ impl AcpChatView {
             .unwrap_or(text.len())
     }
 
+    /// Return the mention token range to remove for atomic deletion.
+    ///
+    /// Backspace: matches when the cursor is inside or at the trailing edge
+    /// of a token (delegating directly to `mention_range_at_cursor`).
+    ///
+    /// Delete (forward): also matches when the cursor is at the leading edge
+    /// (`cursor == range.start`), which `mention_range_at_cursor` alone
+    /// misses because it requires `cursor > range.start`.
+    fn mention_range_for_atomic_delete(
+        text: &str,
+        cursor: usize,
+        key: &str,
+    ) -> Option<std::ops::Range<usize>> {
+        if crate::ui_foundation::is_key_backspace(key) {
+            return crate::ai::context_mentions::mention_range_at_cursor(text, cursor);
+        }
+        if crate::ui_foundation::is_key_delete(key) {
+            // First try the standard interior/trailing check.
+            if let Some(range) =
+                crate::ai::context_mentions::mention_range_at_cursor(text, cursor)
+            {
+                return Some(range);
+            }
+            // Then try leading-edge: cursor sits right on the `@`, so
+            // shift by one to land inside the token and verify.
+            return crate::ai::context_mentions::mention_range_at_cursor(
+                text,
+                cursor.saturating_add(1),
+            )
+            .filter(|range| cursor == range.start);
+        }
+        None
+    }
+
     fn telemetry_item_id(item: &ContextPickerItem) -> String {
         match &item.kind {
             ContextPickerItemKind::BuiltIn(_) | ContextPickerItemKind::SlashCommand(_) => {
@@ -3061,8 +3095,9 @@ impl AcpChatView {
     }
 
     /// Confirm the currently highlighted agent in the setup picker,
-    /// persist it as the preferred agent, re-resolve the setup card, and
-    /// close the picker.
+    /// persist it synchronously as the preferred agent, re-resolve the
+    /// setup card, and close the picker. Auto-retry only when both the
+    /// synchronous persistence succeeded and the agent is ready.
     fn confirm_setup_agent_picker(&mut self, cx: &mut Context<Self>) {
         let Some(picker) = self.setup_agent_picker.take() else {
             return;
@@ -3074,8 +3109,18 @@ impl AcpChatView {
             return;
         };
 
-        // Persist selection.
-        crate::ai::acp::persist_preferred_acp_agent_id(Some(agent.id.to_string()));
+        // Persist selection synchronously so any subsequent reopen reads the
+        // correct preference immediately — no race with a background writer.
+        let persist_result = crate::ai::acp::persist_preferred_acp_agent_id_sync(
+            Some(agent.id.to_string()),
+        );
+
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "acp_setup_agent_persist_before_retry",
+            agent_id = %agent.id,
+            persisted = persist_result.is_ok(),
+        );
 
         // Re-resolve against the catalog to rebuild card title/body/actions.
         let resolution = crate::ai::acp::resolve_acp_launch_with_requirements(
@@ -3097,7 +3142,7 @@ impl AcpChatView {
             });
         }
 
-        let should_auto_retry = resolution.is_ready();
+        let should_auto_retry = resolution.is_ready() && persist_result.is_ok();
 
         tracing::info!(
             target: "script_kit::tab_ai",
@@ -3875,16 +3920,21 @@ impl AcpChatView {
         }
 
         // ── Token-atomic inline mention deletion ──────────────
-        // When backspace/delete lands inside or at the trailing edge of an
-        // inline @mention token, remove the whole token plus one trailing
-        // space (when present) instead of deleting a single character.
-        if crate::ui_foundation::is_key_backspace(key) || key == "delete" {
+        // When backspace/delete lands inside, at the trailing edge, or at
+        // the leading edge of an inline @mention token, remove the whole
+        // token plus one trailing space (when present) instead of deleting
+        // a single character.
+        if crate::ui_foundation::is_key_backspace(key)
+            || crate::ui_foundation::is_key_delete(key)
+        {
             let current_text = self.live_thread().read(cx).input.text().to_string();
             let cursor = self.live_thread().read(cx).input.cursor();
 
-            if let Some(range) =
-                crate::ai::context_mentions::mention_range_at_cursor(&current_text, cursor)
-            {
+            if let Some(range) = Self::mention_range_for_atomic_delete(
+                &current_text,
+                cursor,
+                key,
+            ) {
                 let chars: Vec<char> = current_text.chars().collect();
                 let mut end_char = range.end;
                 // Consume one trailing space when present.
@@ -3903,6 +3953,7 @@ impl AcpChatView {
                 tracing::info!(
                     target: "script_kit::tab_ai",
                     event = "acp_inline_mention_deleted_atomically",
+                    key = %key,
                     cursor,
                     token_range_start = range.start,
                     token_range_end = range.end,

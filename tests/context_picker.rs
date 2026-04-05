@@ -9,8 +9,17 @@ use script_kit_gpui::ai::{
     ContextPickerTrigger,
 };
 
+static PROVIDER_SLOT_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+fn lock_provider_slots() -> std::sync::MutexGuard<'static, ()> {
+    PROVIDER_SLOT_TEST_LOCK
+        .lock()
+        .expect("provider slot test lock must not be poisoned")
+}
+
 /// Seed provider JSON slots so provider-backed builtins appear in the picker.
 fn seed_provider_slots() {
+    script_kit_gpui::mcp_resources::clear_provider_json_slots();
     script_kit_gpui::mcp_resources::publish_dictation_json(r#"{"transcription":"test"}"#);
     script_kit_gpui::mcp_resources::publish_calendar_json(r#"{"events":[]}"#);
     script_kit_gpui::mcp_resources::publish_notifications_json(r#"{"notifications":[]}"#);
@@ -20,6 +29,10 @@ fn seed_provider_slots() {
 
 #[test]
 fn picker_ranking_is_deterministic_across_calls() {
+    let _guard = lock_provider_slots();
+    // Seed provider slots for stable state — other tests may clear/seed
+    // global provider slots concurrently in the same process.
+    seed_provider_slots();
     let items_a = build_picker_items(ContextPickerTrigger::Mention, "con");
     let items_b = build_picker_items(ContextPickerTrigger::Mention, "con");
 
@@ -37,6 +50,7 @@ fn picker_ranking_is_deterministic_across_calls() {
 
 #[test]
 fn empty_query_returns_all_builtins_deterministically() {
+    let _guard = lock_provider_slots();
     seed_provider_slots();
     let items = build_picker_items(ContextPickerTrigger::Mention, "");
     let specs = context_attachment_specs();
@@ -309,6 +323,7 @@ fn catalog_has_at_least_15_entries() {
 
 #[test]
 fn new_entries_are_queryable() {
+    let _guard = lock_provider_slots();
     seed_provider_slots();
     // @dictation
     let items = build_picker_items(ContextPickerTrigger::Mention, "dictation");
@@ -414,4 +429,124 @@ fn mention_mode_highlights_align_with_meta_text() {
             meta_bare.len()
         );
     }
+}
+
+// ---------- Provider-gated picker visibility ----------
+
+#[test]
+fn provider_backed_items_absent_when_no_provider_data() {
+    let _guard = lock_provider_slots();
+    // Clear any leftover provider slot data from other tests
+    script_kit_gpui::mcp_resources::clear_provider_json_slots();
+
+    let items = build_picker_items(ContextPickerTrigger::Mention, "");
+    let provider_kinds = [
+        ContextAttachmentKind::Dictation,
+        ContextAttachmentKind::Calendar,
+        ContextAttachmentKind::Notifications,
+    ];
+
+    for kind in &provider_kinds {
+        let found = items.iter().any(|i| matches!(&i.kind, ContextPickerItemKind::BuiltIn(k) if k == kind));
+        assert!(
+            !found,
+            "{kind:?} should NOT appear in picker when no provider data exists"
+        );
+    }
+}
+
+#[test]
+fn provider_backed_items_appear_when_provider_data_seeded() {
+    let _guard = lock_provider_slots();
+    seed_provider_slots();
+
+    let items = build_picker_items(ContextPickerTrigger::Mention, "");
+    let provider_kinds = [
+        ContextAttachmentKind::Dictation,
+        ContextAttachmentKind::Calendar,
+        ContextAttachmentKind::Notifications,
+    ];
+
+    for kind in &provider_kinds {
+        let found = items.iter().any(|i| matches!(&i.kind, ContextPickerItemKind::BuiltIn(k) if k == kind));
+        assert!(
+            found,
+            "{kind:?} should appear in picker when provider data is seeded"
+        );
+    }
+}
+
+// ---------- Inline mention provider gating ----------
+
+use script_kit_gpui::ai::{mention_range_at_cursor, parse_inline_context_mentions};
+
+#[test]
+fn inline_mention_token_skipped_when_no_provider_data() {
+    let _guard = lock_provider_slots();
+    script_kit_gpui::mcp_resources::clear_provider_json_slots();
+
+    let mentions = parse_inline_context_mentions("Check @calendar please");
+    let has_calendar = mentions.iter().any(|m| m.canonical_token == "@calendar");
+    assert!(
+        !has_calendar,
+        "@calendar inline mention should not resolve when no provider data exists"
+    );
+}
+
+#[test]
+fn inline_mention_token_resolves_when_provider_data_seeded() {
+    let _guard = lock_provider_slots();
+    seed_provider_slots();
+
+    let mentions = parse_inline_context_mentions("Check @calendar please");
+    let has_calendar = mentions.iter().any(|m| m.canonical_token == "@calendar");
+    assert!(
+        has_calendar,
+        "@calendar inline mention should resolve when provider data is seeded"
+    );
+}
+
+// ---------- Atomic delete edge cases ----------
+
+#[test]
+fn mention_range_at_cursor_backspace_trailing_edge() {
+    let _guard = lock_provider_slots();
+    seed_provider_slots();
+    let text = "Fix @browser now";
+    // @browser spans chars 4..12
+    // Backspace at trailing edge (cursor=12) should match
+    let range = mention_range_at_cursor(text, 12);
+    assert_eq!(range, Some(4..12), "Backspace at trailing edge should match");
+}
+
+#[test]
+fn mention_range_at_cursor_backspace_inside() {
+    let _guard = lock_provider_slots();
+    seed_provider_slots();
+    let text = "Fix @browser now";
+    // Cursor inside the token (e.g. cursor=8)
+    let range = mention_range_at_cursor(text, 8);
+    assert_eq!(range, Some(4..12), "Backspace inside token should match");
+}
+
+#[test]
+fn mention_range_at_cursor_does_not_match_leading_edge() {
+    let _guard = lock_provider_slots();
+    seed_provider_slots();
+    let text = "Fix @browser now";
+    // cursor=4 is the leading edge (on the @); mention_range_at_cursor
+    // requires cursor > start, so this should NOT match
+    let range = mention_range_at_cursor(text, 4);
+    assert!(range.is_none(), "mention_range_at_cursor should not match at leading edge (cursor == start)");
+}
+
+#[test]
+fn mention_range_at_cursor_leading_edge_delete_via_shift() {
+    let _guard = lock_provider_slots();
+    seed_provider_slots();
+    let text = "Fix @browser now";
+    // For leading-edge delete, the view helper shifts cursor+1 and checks
+    // start match. We verify that cursor+1=5 lands inside the token.
+    let range = mention_range_at_cursor(text, 5);
+    assert_eq!(range, Some(4..12), "cursor+1 should land inside @browser token");
 }
