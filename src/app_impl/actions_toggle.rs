@@ -163,9 +163,9 @@ impl ScriptListApp {
 
     fn spawn_open_actions_window(
         cx: &mut Context<Self>,
+        parent_window_handle: gpui::AnyWindowHandle,
         main_bounds: gpui::Bounds<gpui::Pixels>,
         display_id: Option<gpui::DisplayId>,
-        parent_window_handle: gpui::AnyWindowHandle,
         dialog: Entity<ActionsDialog>,
         position: crate::actions::WindowPosition,
         opened_log: &'static str,
@@ -395,7 +395,6 @@ impl ScriptListApp {
             // screen or at wrong coordinates when the main window was on a secondary display.
             let main_bounds = window.bounds();
             let display_id = window.display(cx).map(|d| d.id());
-            let parent_window_handle = window.window_handle();
 
             logging::log(
                 "ACTIONS",
@@ -410,9 +409,9 @@ impl ScriptListApp {
             // Open the actions window via spawn, passing the shared dialog entity and display_id
             Self::spawn_open_actions_window(
                 cx,
+                window.window_handle(),
                 main_bounds,
                 display_id,
-                parent_window_handle,
                 dialog,
                 position,
                 "Actions popup window opened",
@@ -553,14 +552,13 @@ impl ScriptListApp {
             // Get main window bounds for positioning
             let main_bounds = window.bounds();
             let display_id = window.display(cx).map(|d| d.id());
-            let parent_window_handle = window.window_handle();
 
             // Open the actions window — same as toggle_chat_actions
             Self::spawn_open_actions_window(
                 cx,
+                window.window_handle(),
                 main_bounds,
                 display_id,
-                parent_window_handle,
                 dialog,
                 crate::actions::WindowPosition::BottomRight,
                 "Webcam actions popup window opened",
@@ -626,13 +624,12 @@ impl ScriptListApp {
 
             let main_bounds = window.bounds();
             let display_id = window.display(cx).map(|d| d.id());
-            let parent_window_handle = window.window_handle();
 
             Self::spawn_open_actions_window(
                 cx,
+                window.window_handle(),
                 main_bounds,
                 display_id,
-                parent_window_handle,
                 dialog,
                 crate::actions::WindowPosition::BottomRight,
                 "Terminal actions popup window opened",
@@ -752,7 +749,6 @@ impl ScriptListApp {
             // Get main window bounds and display_id for positioning
             let main_bounds = window.bounds();
             let display_id = window.display(cx).map(|d| d.id());
-            let parent_window_handle = window.window_handle();
 
             logging::log(
                 "ACTIONS",
@@ -769,9 +765,9 @@ impl ScriptListApp {
             // Open the actions window via spawn
             Self::spawn_open_actions_window(
                 cx,
+                window.window_handle(),
                 main_bounds,
                 display_id,
-                parent_window_handle,
                 dialog,
                 position,
                 "Chat actions popup window opened",
