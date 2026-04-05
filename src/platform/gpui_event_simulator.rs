@@ -85,20 +85,120 @@ pub(crate) struct GpuiEventDispatchResult {
     pub error: Option<String>,
 }
 
+/// Dispatch a simulated event through an [`AnyWindowHandle`] via the real GPUI
+/// input pipeline and return the result.
+fn dispatch_with_any_handle(
+    handle: gpui::AnyWindowHandle,
+    request_id: &str,
+    resolved_id: &str,
+    event_type: &str,
+    event: &crate::protocol::SimulatedGpuiEvent,
+    cx: &mut gpui::App,
+) -> GpuiEventDispatchResult {
+    use crate::protocol::SimulatedGpuiEvent;
+
+    let dispatch_result = handle.update(cx, |_root, window, cx| match event {
+        SimulatedGpuiEvent::KeyDown {
+            key,
+            modifiers,
+            text,
+        } => {
+            let keystroke = build_keystroke(key, modifiers, text.as_deref());
+            window.dispatch_keystroke(keystroke, cx);
+        }
+        SimulatedGpuiEvent::MouseMove { x, y } => {
+            let position = gpui::point(gpui::px(*x as f32), gpui::px(*y as f32));
+            window.dispatch_event(
+                gpui::PlatformInput::MouseMove(gpui::MouseMoveEvent {
+                    position,
+                    pressed_button: None,
+                    modifiers: gpui::Modifiers::default(),
+                }),
+                cx,
+            );
+        }
+        SimulatedGpuiEvent::MouseDown { x, y, button } => {
+            let position = gpui::point(gpui::px(*x as f32), gpui::px(*y as f32));
+            window.dispatch_event(
+                gpui::PlatformInput::MouseDown(gpui::MouseDownEvent {
+                    button: parse_mouse_button(button.as_deref()),
+                    position,
+                    modifiers: gpui::Modifiers::default(),
+                    click_count: 1,
+                    first_mouse: false,
+                }),
+                cx,
+            );
+        }
+        SimulatedGpuiEvent::MouseUp { x, y, button } => {
+            let position = gpui::point(gpui::px(*x as f32), gpui::px(*y as f32));
+            window.dispatch_event(
+                gpui::PlatformInput::MouseUp(gpui::MouseUpEvent {
+                    button: parse_mouse_button(button.as_deref()),
+                    position,
+                    modifiers: gpui::Modifiers::default(),
+                    click_count: 1,
+                }),
+                cx,
+            );
+        }
+    });
+
+    match dispatch_result {
+        Ok(()) => {
+            tracing::info!(
+                target: "script_kit::automation",
+                request_id = %request_id,
+                window_id = %resolved_id,
+                event_type = %event_type,
+                "gpui_event_simulation.dispatch_exact_complete"
+            );
+            GpuiEventDispatchResult {
+                success: true,
+                error_code: None,
+                error: None,
+            }
+        }
+        Err(err) => {
+            let msg = format!("GPUI dispatch failed: {err}");
+            tracing::warn!(
+                target: "script_kit::automation",
+                request_id = %request_id,
+                window_id = %resolved_id,
+                error = %msg,
+                "gpui_event_simulation.failed"
+            );
+            GpuiEventDispatchResult {
+                success: false,
+                error_code: Some("dispatch_failed".to_string()),
+                error: Some(msg),
+            }
+        }
+    }
+}
+
 /// Dispatch a [`SimulatedGpuiEvent`] to the resolved target window
 /// through GPUI's real input pipeline.
 ///
-/// This function must be called on the main GPUI thread with valid
-/// `window` and `cx` references.  It resolves the target via the
-/// automation registry, maps to a `WindowRole`, fetches the window
-/// handle, and dispatches through `Window::dispatch_keystroke` (for
-/// key events) or `Window::dispatch_event` (for mouse events).
+/// **Exact-handle dispatch**: If the resolved automation target has a
+/// registered runtime handle (via [`upsert_runtime_window_handle`]),
+/// events are dispatched directly to that exact window.  This allows
+/// two visible detached ACP windows to be targeted independently by
+/// exact ID.
+///
+/// **Fallback dispatch**: When no exact runtime handle exists, the
+/// function maps the resolved kind to a [`WindowRole`] and dispatches
+/// through the unified window registry.  If more than one visible
+/// window shares the same kind and no exact handle is available,
+/// dispatch fails closed with `target_ambiguous`.
 ///
 /// # Tracing
 ///
 /// Emits structured logs at `script_kit::automation` with:
 /// - `request_id`, `window_id`, `kind`, `event_type` on entry
-/// - `success` / `error` on completion
+/// - `dispatch_exact_handle` when using the runtime handle registry
+/// - `runtime_handle_missing` when falling back to WindowRole
+/// - `dispatch_exact_complete` / `failed` on completion
 pub(crate) fn dispatch_gpui_event(
     request_id: &str,
     target: Option<&crate::protocol::AutomationWindowTarget>,
@@ -107,7 +207,7 @@ pub(crate) fn dispatch_gpui_event(
 ) -> GpuiEventDispatchResult {
     use crate::protocol::SimulatedGpuiEvent;
 
-    // 1. Resolve the target window
+    // 1. Resolve the target window via the automation metadata registry.
     let resolved = match crate::windows::resolve_automation_window(target) {
         Ok(info) => info,
         Err(err) => {
@@ -141,17 +241,35 @@ pub(crate) fn dispatch_gpui_event(
         "gpui_event_simulation.dispatch"
     );
 
-    // 2a. Ambiguity guard — fail closed whenever the resolved kind still
-    //     routes through a single WindowRole and more than one visible
-    //     window shares that kind.  This is unconditional: even an
-    //     unqualified `{"type":"kind","kind":"acpDetached"}` target is
-    //     rejected when two detached ACP windows are visible, because
-    //     GPUI dispatch cannot distinguish between them.
+    // 2. Try exact runtime handle first — this preserves the resolved
+    //    automation window identity all the way through GPUI dispatch,
+    //    so two detached ACP windows can be targeted independently.
+    if let Some(handle) = crate::windows::get_valid_runtime_window_handle(&resolved.id, cx) {
+        tracing::info!(
+            target: "script_kit::automation",
+            request_id = %request_id,
+            window_id = %resolved.id,
+            "gpui_event_simulation.dispatch_exact_handle"
+        );
+        return dispatch_with_any_handle(handle, request_id, &resolved.id, event_type, event, cx);
+    }
+
+    // 3. No exact handle — fall back to WindowRole-based dispatch.
+    tracing::warn!(
+        target: "script_kit::automation",
+        request_id = %request_id,
+        window_id = %resolved.id,
+        kind = ?resolved.kind,
+        "gpui_event_simulation.runtime_handle_missing"
+    );
+
+    // 3a. Ambiguity guard — fail closed when multiple visible windows
+    //     share the same kind and no exact runtime handle is registered.
     let visible_count = visible_window_count_for_kind(resolved.kind);
     if kind_collapses_to_single_window_role(resolved.kind) && visible_count > 1 {
         let msg = format!(
             "Resolved target {} ({:?}) is ambiguous: {} visible windows share this kind \
-             and GPUI dispatch still routes through one WindowRole",
+             and no exact runtime handle is registered",
             resolved.id, resolved.kind, visible_count
         );
         tracing::warn!(
@@ -169,7 +287,7 @@ pub(crate) fn dispatch_gpui_event(
         };
     }
 
-    // 2b. Map to WindowRole and get the handle
+    // 3b. Map to WindowRole and get the handle.
     let role = match automation_kind_to_window_role(resolved.kind) {
         Some(r) => r,
         None => {
@@ -180,7 +298,10 @@ pub(crate) fn dispatch_gpui_event(
     };
 
     let handle = match crate::windows::get_valid_window(role, cx) {
-        Some(h) => h,
+        Some(h) => {
+            let any: gpui::AnyWindowHandle = h.into();
+            any
+        }
         None => {
             let msg = format!(
                 "Window handle not available for role {:?} (kind {:?})",
@@ -200,80 +321,7 @@ pub(crate) fn dispatch_gpui_event(
         }
     };
 
-    // 3. Dispatch through the real GPUI pipeline
-    let dispatch_result = handle.update(cx, |_root, window, cx| match event {
-        SimulatedGpuiEvent::KeyDown {
-            key,
-            modifiers,
-            text,
-        } => {
-            let keystroke = build_keystroke(key, modifiers, text.as_deref());
-            window.dispatch_keystroke(keystroke, cx);
-        }
-        SimulatedGpuiEvent::MouseMove { x, y } => {
-            let position = gpui::point(gpui::px(*x as f32), gpui::px(*y as f32));
-            let platform_event = gpui::PlatformInput::MouseMove(gpui::MouseMoveEvent {
-                position,
-                pressed_button: None,
-                modifiers: gpui::Modifiers::default(),
-            });
-            window.dispatch_event(platform_event, cx);
-        }
-        SimulatedGpuiEvent::MouseDown { x, y, button } => {
-            let position = gpui::point(gpui::px(*x as f32), gpui::px(*y as f32));
-            let mouse_button = parse_mouse_button(button.as_deref());
-            let platform_event = gpui::PlatformInput::MouseDown(gpui::MouseDownEvent {
-                button: mouse_button,
-                position,
-                modifiers: gpui::Modifiers::default(),
-                click_count: 1,
-                first_mouse: false,
-            });
-            window.dispatch_event(platform_event, cx);
-        }
-        SimulatedGpuiEvent::MouseUp { x, y, button } => {
-            let position = gpui::point(gpui::px(*x as f32), gpui::px(*y as f32));
-            let mouse_button = parse_mouse_button(button.as_deref());
-            let platform_event = gpui::PlatformInput::MouseUp(gpui::MouseUpEvent {
-                button: mouse_button,
-                position,
-                modifiers: gpui::Modifiers::default(),
-                click_count: 1,
-            });
-            window.dispatch_event(platform_event, cx);
-        }
-    });
-
-    match dispatch_result {
-        Ok(()) => {
-            tracing::info!(
-                target: "script_kit::automation",
-                request_id = %request_id,
-                window_id = %resolved.id,
-                event_type = %event_type,
-                "gpui_event_simulation.complete"
-            );
-            GpuiEventDispatchResult {
-                success: true,
-                error_code: None,
-                error: None,
-            }
-        }
-        Err(err) => {
-            let msg = format!("GPUI dispatch failed: {err}");
-            tracing::warn!(
-                target: "script_kit::automation",
-                request_id = %request_id,
-                error = %msg,
-                "gpui_event_simulation.failed"
-            );
-            GpuiEventDispatchResult {
-                success: false,
-                error_code: Some("dispatch_failed".to_string()),
-                error: Some(msg),
-            }
-        }
-    }
+    dispatch_with_any_handle(handle, request_id, &resolved.id, event_type, event, cx)
 }
 
 fn parse_mouse_button(button: Option<&str>) -> gpui::MouseButton {

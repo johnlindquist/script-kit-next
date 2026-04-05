@@ -1001,6 +1001,7 @@ pub fn write_standard_audit_reports(
     let outputs = vec![
         write_prompt_chrome_consistency_report(repo_root, output_root)?,
         write_workflow_affordance_consistency_report(repo_root, output_root)?,
+        write_command_bar_consistency_report(repo_root, output_root)?,
     ];
 
     tracing::info!(
@@ -1011,6 +1012,306 @@ pub fn write_standard_audit_reports(
     );
 
     Ok(outputs)
+}
+
+// ── Command Bar Consistency Report ──────────────────────────────────
+
+const COMMAND_BAR_REPORT_SLUG: &str = "command-bar-consistency";
+const COMMAND_BAR_REPORT_TITLE: &str = "Command Bar Consistency Audit";
+
+#[derive(Clone, Copy, Debug)]
+struct CommandBarSurfaceSpec {
+    surface: &'static str,
+    audit_surface: &'static str,
+    preset_fn: &'static str,
+    files: &'static [&'static str],
+}
+
+const COMMAND_BAR_SURFACES: &[CommandBarSurfaceSpec] = &[
+    CommandBarSurfaceSpec {
+        surface: "command_bar::main_menu",
+        audit_surface: "main_menu",
+        preset_fn: "main_menu_style",
+        files: &["src/actions/command_bar.rs"],
+    },
+    CommandBarSurfaceSpec {
+        surface: "command_bar::no_search",
+        audit_surface: "no_search",
+        preset_fn: "no_search",
+        files: &["src/actions/command_bar.rs"],
+    },
+    CommandBarSurfaceSpec {
+        surface: "command_bar::notes",
+        audit_surface: "notes",
+        preset_fn: "notes_style",
+        files: &["src/actions/command_bar.rs"],
+    },
+];
+
+fn extract_function_block<'a>(source: &'a str, fn_name: &str) -> &'a str {
+    let public_marker = format!("pub fn {}(", fn_name);
+    let private_marker = format!("fn {}(", fn_name);
+    let Some(start) = source
+        .find(&public_marker)
+        .or_else(|| source.find(&private_marker))
+    else {
+        return "";
+    };
+    let tail = &source[start..];
+    let next_pub = tail[1..].find("\n    pub fn ").map(|i| i + 1).unwrap_or(tail.len());
+    let next_priv = tail[1..].find("\n    fn ").map(|i| i + 1).unwrap_or(tail.len());
+    let next_cfg = tail[1..].find("\n#[cfg(").map(|i| i + 1).unwrap_or(tail.len());
+    let end = next_pub.min(next_priv).min(next_cfg);
+    &tail[..end]
+}
+
+fn extract_command_bar_validate_arm<'a>(source: &'a str, audit_surface: &str) -> &'a str {
+    let marker = format!("\"{}\" => {{", audit_surface);
+    let Some(start) = source.find(&marker) else {
+        return "";
+    };
+    let tail = &source[start..];
+    let next_arm = tail[1..].find("\n            \"").map(|i| i + 1).unwrap_or(tail.len());
+    let next_default = tail[1..].find("\n            _ =>").map(|i| i + 1).unwrap_or(tail.len());
+    let end = next_arm.min(next_default);
+    &tail[..end]
+}
+
+fn audit_command_bar_surface(
+    spec: CommandBarSurfaceSpec,
+    repo_root: &Path,
+) -> Result<AuditSurfaceResult> {
+    let sources = read_source_files(repo_root, spec.files)?;
+    let combined = sources
+        .iter()
+        .map(|(_, source)| source.as_str())
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    let preset_fn_body = extract_function_block(&combined, spec.preset_fn);
+    let validate_arm = extract_command_bar_validate_arm(&combined, spec.audit_surface);
+
+    let has_preset_constructor = !preset_fn_body.is_empty();
+    let has_runtime_audit_emit = preset_fn_body.contains(&format!(
+        "emit_command_bar_chrome_audit(\"{}\"",
+        spec.audit_surface
+    ));
+    let has_validation_arm = !validate_arm.is_empty()
+        && validate_arm.contains("\"search_position\"")
+        && validate_arm.contains("\"section_mode\"")
+        && validate_arm.contains("\"anchor\"");
+
+    let mut findings = Vec::new();
+
+    if has_preset_constructor && has_runtime_audit_emit && has_validation_arm {
+        findings.push(info(
+            "command bar preset is reportable",
+            format!(
+                "{} is configured by `{}` with the audited search/section/anchor contract and emits `emit_command_bar_chrome_audit(\"{}\", ...)`, so the preset can be persisted into `./audit/{}.md`.",
+                spec.surface, spec.preset_fn, spec.audit_surface, COMMAND_BAR_REPORT_SLUG
+            ),
+            spec.files.iter().map(|file| file.to_string()).collect(),
+        ));
+    } else {
+        if !has_preset_constructor {
+            findings.push(warning(
+                "missing preset constructor",
+                format!(
+                    "{} is listed in the command-bar audit, but `{}` is not present in `src/actions/command_bar.rs`.",
+                    spec.surface, spec.preset_fn
+                ),
+                spec.files.iter().map(|file| file.to_string()).collect(),
+            ));
+        }
+        if has_preset_constructor && !has_runtime_audit_emit {
+            findings.push(warning(
+                "missing runtime command bar audit",
+                format!(
+                    "{} builds a preset config but does not emit `emit_command_bar_chrome_audit(\"{}\", ...)`, so runtime drift will not show up in logs or markdown.",
+                    spec.surface, spec.audit_surface
+                ),
+                spec.files.iter().map(|file| file.to_string()).collect(),
+            ));
+        }
+        if !has_validation_arm {
+            findings.push(warning(
+                "missing validation arm",
+                format!(
+                    "{} does not have a `CommandBarChromeAudit::validate()` match arm for `{}`, so the report cannot distinguish intentional from accidental drift.",
+                    spec.surface, spec.audit_surface
+                ),
+                spec.files.iter().map(|file| file.to_string()).collect(),
+            ));
+        }
+    }
+
+    findings.sort_by_key(|finding| (finding.severity.sort_rank(), finding.title));
+
+    let result = AuditSurfaceResult {
+        surface: spec.surface,
+        files: spec.files.to_vec(),
+        findings,
+    };
+
+    tracing::info!(
+        target: "script_kit::audit",
+        report_slug = COMMAND_BAR_REPORT_SLUG,
+        surface = result.surface,
+        status = result.status(),
+        finding_count = result.findings.len(),
+        "command bar surface audited"
+    );
+
+    if result.status() != "pass" {
+        tracing::warn!(
+            target: "script_kit::audit",
+            report_slug = COMMAND_BAR_REPORT_SLUG,
+            surface = result.surface,
+            status = result.status(),
+            finding_count = result.findings.len(),
+            "command bar consistency drift detected"
+        );
+    }
+
+    Ok(result)
+}
+
+pub fn build_command_bar_consistency_report(repo_root: &Path) -> Result<AuditReport> {
+    let mut surfaces = Vec::with_capacity(COMMAND_BAR_SURFACES.len());
+    for spec in COMMAND_BAR_SURFACES {
+        surfaces.push(audit_command_bar_surface(*spec, repo_root)?);
+    }
+
+    let warning_count = surfaces
+        .iter()
+        .filter(|surface| surface.status() == "warning")
+        .count();
+    let error_count = surfaces
+        .iter()
+        .filter(|surface| surface.status() == "error")
+        .count();
+    let pass_count = surfaces.len() - warning_count - error_count;
+
+    let summary = if warning_count == 0 && error_count == 0 {
+        format!(
+            "Scanned {} command bar presets. {} pass, {} warning, {} error. Every audited preset is visible in source, validated by runtime chrome rules, and persisted as markdown.",
+            surfaces.len(),
+            pass_count,
+            warning_count,
+            error_count
+        )
+    } else {
+        let drift_surfaces = surfaces
+            .iter()
+            .filter(|surface| surface.status() == "warning" || surface.status() == "error")
+            .map(|surface| surface.surface)
+            .collect::<Vec<_>>()
+            .join(", ");
+        format!(
+            "Scanned {} command bar presets. {} pass, {} warning, {} error. Highest-leverage gaps: {}.",
+            surfaces.len(),
+            pass_count,
+            warning_count,
+            error_count,
+            drift_surfaces
+        )
+    };
+
+    tracing::info!(
+        target: "script_kit::audit",
+        slug = COMMAND_BAR_REPORT_SLUG,
+        pass_count,
+        warning_count,
+        error_count,
+        "command bar audit summary built"
+    );
+
+    Ok(AuditReport {
+        slug: COMMAND_BAR_REPORT_SLUG,
+        title: COMMAND_BAR_REPORT_TITLE,
+        summary,
+        surfaces,
+    })
+}
+
+pub fn render_command_bar_consistency_markdown(report: &AuditReport) -> String {
+    let mut lines = vec![
+        format!("# {}", report.title),
+        String::new(),
+        "## Summary".to_string(),
+        report.summary.clone(),
+        String::new(),
+        "## What This Checks".to_string(),
+        "- CommandBar preset parity: constructor presence, runtime `emit_command_bar_chrome_audit(...)`, and validated search/section/anchor contract for `main_menu`, `no_search`, and `notes`.".to_string(),
+        String::new(),
+        "## Surface Status".to_string(),
+        "| Surface | Status | Files |".to_string(),
+        "| --- | --- | --- |".to_string(),
+    ];
+
+    for surface in &report.surfaces {
+        lines.push(format!(
+            "| {} | {} | `{}` |",
+            surface.surface,
+            surface.status(),
+            surface.files.join("`, `")
+        ));
+    }
+
+    lines.push(String::new());
+    lines.push("## Findings".to_string());
+
+    for surface in &report.surfaces {
+        lines.push(format!("### {}", surface.surface));
+
+        if surface.findings.is_empty() {
+            lines.push("- pass — no command-bar drift markers detected.".to_string());
+            lines.push(String::new());
+            continue;
+        }
+
+        for finding in &surface.findings {
+            lines.push(format!(
+                "- {} — **{}**",
+                finding.severity.as_str(),
+                finding.title
+            ));
+            lines.push(format!("  - {}", finding.summary));
+            if !finding.evidence.is_empty() {
+                lines.push(format!("  - Evidence: `{}`", finding.evidence.join("`, `")));
+            }
+        }
+
+        lines.push(String::new());
+    }
+
+    lines.join("\n")
+}
+
+pub fn write_command_bar_consistency_report(
+    repo_root: &Path,
+    output_root: &Path,
+) -> Result<PathBuf> {
+    let report = build_command_bar_consistency_report(repo_root)?;
+    let markdown = render_command_bar_consistency_markdown(&report);
+
+    let audit_dir = output_root.join("audit");
+    fs::create_dir_all(&audit_dir)
+        .with_context(|| format!("failed to create {}", audit_dir.display()))?;
+
+    let output_path = audit_dir.join(format!("{}.md", report.slug));
+    fs::write(&output_path, markdown)
+        .with_context(|| format!("failed to write {}", output_path.display()))?;
+
+    tracing::info!(
+        target: "script_kit::audit",
+        slug = report.slug,
+        output = %output_path.display(),
+        surface_count = report.surfaces.len(),
+        "wrote audit report"
+    );
+
+    Ok(output_path)
 }
 
 #[cfg(test)]
