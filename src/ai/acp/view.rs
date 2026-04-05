@@ -2971,12 +2971,23 @@ impl AcpChatView {
             current_setup.launch_requirements,
         );
 
+        // Update the live thread's selected agent so recovery state is
+        // immediately truthful without waiting for a reopen.
+        if let AcpChatSession::Live(thread) = &self.session {
+            let next_agent_for_thread = next_setup.selected_agent.clone();
+            thread.update(cx, |thread, cx| {
+                thread.replace_selected_agent(next_agent_for_thread, cx);
+            });
+        }
+
         tracing::info!(
             target: "script_kit::tab_ai",
-            event = "acp_setup_agent_re_resolved",
+            event = "acp_setup_agent_confirmed_for_runtime_recovery",
             agent_id = %agent.id,
             display_name = %agent.display_name,
             blocker = ?resolution.blocker,
+            needs_embedded_context = current_setup.launch_requirements.needs_embedded_context,
+            needs_image = current_setup.launch_requirements.needs_image,
             catalog_count = current_setup.catalog_entries.len(),
         );
 

@@ -177,13 +177,7 @@ pub(crate) fn parse_inline_context_mentions(text: &str) -> Vec<InlineContextMent
         let trimmed_char_len = trimmed.chars().count();
         let end = start + trimmed_char_len;
 
-        let part = if let Some(kind) =
-            crate::ai::context_contract::ContextAttachmentKind::from_mention_line(trimmed)
-        {
-            Some(kind.part())
-        } else {
-            parse_file_mention(trimmed)
-        };
+        let part = resolve_builtin_mention_token(trimmed).or_else(|| parse_file_mention(trimmed));
 
         if let Some(part) = part {
             let canonical_token =
@@ -238,16 +232,49 @@ pub(crate) fn part_to_inline_token(part: &AiContextPart) -> Option<String> {
     }
 }
 
+/// Returns `true` when the provider-backed mention kind has real data
+/// available (slot or env var), as opposed to only the static fallback.
+fn provider_backed_mention_available(
+    kind: crate::ai::context_contract::ContextAttachmentKind,
+) -> bool {
+    use crate::ai::context_contract::ContextAttachmentKind;
+    use crate::mcp_resources::ProviderJsonResourceKind;
+    match kind {
+        ContextAttachmentKind::Dictation => {
+            crate::mcp_resources::has_provider_json_resource(ProviderJsonResourceKind::Dictation)
+        }
+        ContextAttachmentKind::Calendar => {
+            crate::mcp_resources::has_provider_json_resource(ProviderJsonResourceKind::Calendar)
+        }
+        ContextAttachmentKind::Notifications => {
+            crate::mcp_resources::has_provider_json_resource(
+                ProviderJsonResourceKind::Notifications,
+            )
+        }
+        _ => true,
+    }
+}
+
+/// Resolve a built-in mention token, gating provider-backed kinds on data
+/// availability so that manual typing cannot bypass the picker's provider
+/// check.
+fn resolve_builtin_mention_token(trimmed: &str) -> Option<AiContextPart> {
+    let kind = crate::ai::context_contract::ContextAttachmentKind::from_mention_line(trimmed)?;
+    if !provider_backed_mention_available(kind) {
+        tracing::info!(
+            target: "ai",
+            event = "inline_context_token_skipped_provider_unavailable",
+            token = %trimmed,
+            kind = ?kind,
+        );
+        return None;
+    }
+    Some(kind.part())
+}
+
 fn parse_context_mention_line(line: &str) -> Option<AiContextPart> {
     let trimmed = line.trim();
-
-    if let Some(kind) =
-        crate::ai::context_contract::ContextAttachmentKind::from_mention_line(trimmed)
-    {
-        return Some(kind.part());
-    }
-
-    parse_file_mention(trimmed)
+    resolve_builtin_mention_token(trimmed).or_else(|| parse_file_mention(trimmed))
 }
 
 fn parse_file_mention(trimmed: &str) -> Option<AiContextPart> {

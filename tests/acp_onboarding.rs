@@ -268,3 +268,59 @@ fn acp_view_renders_runtime_setup_state() {
         "AcpChatView render must check thread setup_state for runtime recovery"
     );
 }
+
+// ── Launch requirements threaded into thread init ────────────────────
+
+#[test]
+fn tab_ai_mode_threads_launch_requirements_into_acp_thread_init() {
+    assert!(
+        TAB_AI_MODE_SOURCE.contains("launch_requirements: requirements"),
+        "tab_ai_mode must pass launch requirements into AcpThreadInit"
+    );
+}
+
+#[test]
+fn acp_thread_init_carries_launch_requirements() {
+    assert!(
+        ACP_THREAD_SOURCE.contains("pub launch_requirements: super::preflight::AcpLaunchRequirements"),
+        "AcpThreadInit must carry launch_requirements field"
+    );
+}
+
+// ── Runtime recovery preserves launch requirements ──────────────────
+
+#[test]
+fn runtime_setup_required_preserves_launch_requirements() {
+    assert!(
+        ACP_THREAD_SOURCE.contains("self.launch_requirements"),
+        "runtime setup recovery must preserve launch requirements instead of resetting to default"
+    );
+    assert!(
+        ACP_THREAD_SOURCE.contains("acp_runtime_setup_requirements_preserved"),
+        "runtime setup recovery must emit a structured preservation log"
+    );
+}
+
+// ── Runtime setup only suggests capable alternatives ────────────────
+
+#[test]
+fn runtime_setup_state_only_suggests_capable_alternatives() {
+    assert!(
+        SETUP_STATE_SOURCE.contains("has_launchable_capable_alternative"),
+        "runtime setup must only suggest switching to alternatives that satisfy launch requirements"
+    );
+}
+
+// ── Setup picker confirmation updates live thread ───────────────────
+
+#[test]
+fn setup_picker_confirm_updates_live_thread_selected_agent() {
+    assert!(
+        ACP_VIEW_SOURCE.contains("replace_selected_agent"),
+        "setup picker confirmation must update the live thread selected agent"
+    );
+    assert!(
+        ACP_VIEW_SOURCE.contains("acp_setup_agent_confirmed_for_runtime_recovery"),
+        "setup picker confirmation must emit a structured log"
+    );
+}

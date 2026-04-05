@@ -6,6 +6,7 @@ use script_kit_gpui::protocol::transaction_executor::{
     execute_batch, execute_wait_for, TransactionStateProvider,
 };
 use script_kit_gpui::protocol::{
+    AcpInputLayoutTelemetry, AcpPickerItemAcceptedTelemetry, AcpTestProbeSnapshot,
     BatchCommand, Message, StateMatchSpec, TransactionError, TransactionErrorCode,
     TransactionTraceMode, UiStateSnapshot, WaitCondition, WaitDetailedCondition,
     WaitNamedCondition,
@@ -23,6 +24,7 @@ struct MockProvider {
     choice_count: usize,
     visible_semantic_ids: Vec<String>,
     focused_semantic_id: Option<String>,
+    acp_probe: AcpTestProbeSnapshot,
 }
 
 impl Default for MockProvider {
@@ -39,6 +41,7 @@ impl Default for MockProvider {
                 "choice:2:gamma".to_string(),
             ],
             focused_semantic_id: Some("choice:0:alpha".to_string()),
+            acp_probe: AcpTestProbeSnapshot::default(),
         }
     }
 }
@@ -85,6 +88,10 @@ impl TransactionStateProvider for MockProvider {
         } else {
             Ok(None)
         }
+    }
+
+    fn acp_test_probe(&self, _tail: usize) -> AcpTestProbeSnapshot {
+        self.acp_probe.clone()
     }
 }
 
@@ -554,5 +561,384 @@ fn transaction_error_matches_sdk_ts_interface() {
     assert!(
         json.get("details").is_none(),
         "Rust TransactionError should not have a 'details' field"
+    );
+}
+
+// ============================================================
+// ACP proof conditions: acpAcceptedViaKey
+// ============================================================
+
+fn make_accepted_item(key: &str) -> AcpPickerItemAcceptedTelemetry {
+    AcpPickerItemAcceptedTelemetry {
+        trigger: "@".to_string(),
+        item_label: "Context".to_string(),
+        item_id: "built_in:context".to_string(),
+        accepted_via_key: key.to_string(),
+        cursor_after: 9,
+        caused_submit: false,
+    }
+}
+
+#[test]
+fn acp_accepted_via_enter_succeeds_immediately() {
+    let mut provider = MockProvider::default();
+    provider.acp_probe.accepted_items = vec![make_accepted_item("enter")];
+
+    let condition = WaitCondition::Detailed(WaitDetailedCondition::AcpAcceptedViaKey {
+        key: "enter".to_string(),
+    });
+
+    let output = execute_wait_for(
+        &mut provider,
+        "wf-enter".to_string(),
+        &condition,
+        Some(100),
+        Some(10),
+        TransactionTraceMode::Off,
+    )
+    .expect("execute_wait_for");
+
+    assert!(output.success, "acpAcceptedViaKey enter should match");
+    assert_eq!(output.elapsed, 0);
+    assert!(output.error.is_none());
+}
+
+#[test]
+fn acp_accepted_via_tab_succeeds_immediately() {
+    let mut provider = MockProvider::default();
+    provider.acp_probe.accepted_items = vec![make_accepted_item("tab")];
+
+    let condition = WaitCondition::Detailed(WaitDetailedCondition::AcpAcceptedViaKey {
+        key: "tab".to_string(),
+    });
+
+    let output = execute_wait_for(
+        &mut provider,
+        "wf-tab".to_string(),
+        &condition,
+        Some(100),
+        Some(10),
+        TransactionTraceMode::Off,
+    )
+    .expect("execute_wait_for");
+
+    assert!(output.success, "acpAcceptedViaKey tab should match");
+    assert_eq!(output.elapsed, 0);
+}
+
+#[test]
+fn acp_accepted_via_key_wrong_key_times_out() {
+    let mut provider = MockProvider::default();
+    provider.acp_probe.accepted_items = vec![make_accepted_item("tab")];
+
+    let condition = WaitCondition::Detailed(WaitDetailedCondition::AcpAcceptedViaKey {
+        key: "enter".to_string(),
+    });
+
+    let output = execute_wait_for(
+        &mut provider,
+        "wf-wrong-key".to_string(),
+        &condition,
+        Some(50),
+        Some(10),
+        TransactionTraceMode::Off,
+    )
+    .expect("execute_wait_for");
+
+    assert!(!output.success, "wrong key should not match");
+    let err = output.error.expect("should have timeout error");
+    assert_eq!(err.code, TransactionErrorCode::WaitConditionTimeout);
+}
+
+#[test]
+fn acp_accepted_via_key_empty_probe_times_out() {
+    let mut provider = MockProvider::default();
+    // acp_probe is default (empty)
+
+    let condition = WaitCondition::Detailed(WaitDetailedCondition::AcpAcceptedViaKey {
+        key: "enter".to_string(),
+    });
+
+    let output = execute_wait_for(
+        &mut provider,
+        "wf-empty-probe".to_string(),
+        &condition,
+        Some(50),
+        Some(10),
+        TransactionTraceMode::Off,
+    )
+    .expect("execute_wait_for");
+
+    assert!(!output.success, "empty probe should not satisfy condition");
+}
+
+// ============================================================
+// ACP proof conditions: acpAcceptedCursorAt
+// ============================================================
+
+#[test]
+fn acp_accepted_cursor_at_succeeds() {
+    let mut provider = MockProvider::default();
+    provider.acp_probe.accepted_items = vec![make_accepted_item("enter")];
+
+    let condition = WaitCondition::Detailed(WaitDetailedCondition::AcpAcceptedCursorAt {
+        index: 9, // matches cursor_after in make_accepted_item
+    });
+
+    let output = execute_wait_for(
+        &mut provider,
+        "wf-cursor-at".to_string(),
+        &condition,
+        Some(100),
+        Some(10),
+        TransactionTraceMode::Off,
+    )
+    .expect("execute_wait_for");
+
+    assert!(output.success, "cursor_after=9 should match index=9");
+}
+
+#[test]
+fn acp_accepted_cursor_at_wrong_index_times_out() {
+    let mut provider = MockProvider::default();
+    provider.acp_probe.accepted_items = vec![make_accepted_item("enter")];
+
+    let condition = WaitCondition::Detailed(WaitDetailedCondition::AcpAcceptedCursorAt {
+        index: 42, // does not match cursor_after=9
+    });
+
+    let output = execute_wait_for(
+        &mut provider,
+        "wf-cursor-wrong".to_string(),
+        &condition,
+        Some(50),
+        Some(10),
+        TransactionTraceMode::Off,
+    )
+    .expect("execute_wait_for");
+
+    assert!(!output.success);
+}
+
+#[test]
+fn acp_accepted_cursor_at_empty_probe_times_out() {
+    let mut provider = MockProvider::default();
+
+    let condition = WaitCondition::Detailed(WaitDetailedCondition::AcpAcceptedCursorAt {
+        index: 9,
+    });
+
+    let output = execute_wait_for(
+        &mut provider,
+        "wf-cursor-empty".to_string(),
+        &condition,
+        Some(50),
+        Some(10),
+        TransactionTraceMode::Off,
+    )
+    .expect("execute_wait_for");
+
+    assert!(
+        !output.success,
+        "empty probe should not satisfy cursor condition"
+    );
+}
+
+// ============================================================
+// ACP proof conditions: acpInputLayoutMatch
+// ============================================================
+
+#[test]
+fn acp_input_layout_match_succeeds() {
+    let mut provider = MockProvider::default();
+    provider.acp_probe.input_layout = Some(AcpInputLayoutTelemetry {
+        char_count: 20,
+        visible_start: 0,
+        visible_end: 15,
+        cursor_in_window: 9,
+    });
+
+    let condition = WaitCondition::Detailed(WaitDetailedCondition::AcpInputLayoutMatch {
+        visible_start: 0,
+        visible_end: 15,
+        cursor_in_window: 9,
+    });
+
+    let output = execute_wait_for(
+        &mut provider,
+        "wf-layout-ok".to_string(),
+        &condition,
+        Some(100),
+        Some(10),
+        TransactionTraceMode::Off,
+    )
+    .expect("execute_wait_for");
+
+    assert!(output.success, "matching layout should succeed");
+}
+
+#[test]
+fn acp_input_layout_match_partial_mismatch_times_out() {
+    let mut provider = MockProvider::default();
+    provider.acp_probe.input_layout = Some(AcpInputLayoutTelemetry {
+        char_count: 20,
+        visible_start: 0,
+        visible_end: 15,
+        cursor_in_window: 9,
+    });
+
+    // cursor_in_window differs
+    let condition = WaitCondition::Detailed(WaitDetailedCondition::AcpInputLayoutMatch {
+        visible_start: 0,
+        visible_end: 15,
+        cursor_in_window: 5,
+    });
+
+    let output = execute_wait_for(
+        &mut provider,
+        "wf-layout-mismatch".to_string(),
+        &condition,
+        Some(50),
+        Some(10),
+        TransactionTraceMode::Off,
+    )
+    .expect("execute_wait_for");
+
+    assert!(!output.success);
+}
+
+#[test]
+fn acp_input_layout_match_no_layout_times_out() {
+    let mut provider = MockProvider::default();
+    // input_layout is None (default)
+
+    let condition = WaitCondition::Detailed(WaitDetailedCondition::AcpInputLayoutMatch {
+        visible_start: 0,
+        visible_end: 15,
+        cursor_in_window: 9,
+    });
+
+    let output = execute_wait_for(
+        &mut provider,
+        "wf-layout-none".to_string(),
+        &condition,
+        Some(50),
+        Some(10),
+        TransactionTraceMode::Off,
+    )
+    .expect("execute_wait_for");
+
+    assert!(
+        !output.success,
+        "no layout data should not satisfy layout condition"
+    );
+}
+
+// ============================================================
+// Stale probe state after reset must not satisfy assertions
+// ============================================================
+
+#[test]
+fn stale_probe_state_does_not_satisfy_after_reset() {
+    let mut provider = MockProvider::default();
+
+    // Simulate a previous session: probe has accepted items and layout
+    provider.acp_probe.event_seq = 5;
+    provider.acp_probe.accepted_items = vec![make_accepted_item("enter")];
+    provider.acp_probe.input_layout = Some(AcpInputLayoutTelemetry {
+        char_count: 20,
+        visible_start: 0,
+        visible_end: 15,
+        cursor_in_window: 9,
+    });
+
+    // Verify the condition matches BEFORE reset
+    let condition = WaitCondition::Detailed(WaitDetailedCondition::AcpAcceptedViaKey {
+        key: "enter".to_string(),
+    });
+    let before_reset = execute_wait_for(
+        &mut provider,
+        "wf-pre-reset".to_string(),
+        &condition,
+        Some(100),
+        Some(10),
+        TransactionTraceMode::Off,
+    )
+    .expect("pre-reset check");
+    assert!(before_reset.success, "should match before reset");
+
+    // Simulate probe reset (what resetAcpTestProbe does)
+    provider.acp_probe = AcpTestProbeSnapshot::default();
+
+    // Verify the same condition does NOT match after reset
+    let after_reset = execute_wait_for(
+        &mut provider,
+        "wf-post-reset".to_string(),
+        &condition,
+        Some(50),
+        Some(10),
+        TransactionTraceMode::Off,
+    )
+    .expect("post-reset check");
+    assert!(
+        !after_reset.success,
+        "reset probe must not satisfy a fresh assertion"
+    );
+
+    // Also verify layout condition doesn't match
+    let layout_condition = WaitCondition::Detailed(WaitDetailedCondition::AcpInputLayoutMatch {
+        visible_start: 0,
+        visible_end: 15,
+        cursor_in_window: 9,
+    });
+    let layout_after_reset = execute_wait_for(
+        &mut provider,
+        "wf-layout-post-reset".to_string(),
+        &layout_condition,
+        Some(50),
+        Some(10),
+        TransactionTraceMode::Off,
+    )
+    .expect("layout post-reset check");
+    assert!(
+        !layout_after_reset.success,
+        "reset probe layout must not satisfy a fresh layout assertion"
+    );
+}
+
+#[test]
+fn stale_probe_accepted_label_does_not_satisfy_after_reset() {
+    let mut provider = MockProvider::default();
+    provider.acp_probe.accepted_items = vec![make_accepted_item("enter")];
+
+    let condition = WaitCondition::Detailed(WaitDetailedCondition::AcpAcceptedLabel {
+        label: "Context".to_string(),
+    });
+
+    let before = execute_wait_for(
+        &mut provider,
+        "wf-label-pre".to_string(),
+        &condition,
+        Some(100),
+        Some(10),
+        TransactionTraceMode::Off,
+    )
+    .expect("pre-reset");
+    assert!(before.success);
+
+    provider.acp_probe = AcpTestProbeSnapshot::default();
+
+    let after = execute_wait_for(
+        &mut provider,
+        "wf-label-post".to_string(),
+        &condition,
+        Some(50),
+        Some(10),
+        TransactionTraceMode::Off,
+    )
+    .expect("post-reset");
+    assert!(
+        !after.success,
+        "reset probe must not satisfy label assertion"
     );
 }

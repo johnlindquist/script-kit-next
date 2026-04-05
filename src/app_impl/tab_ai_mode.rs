@@ -1040,9 +1040,13 @@ impl ScriptListApp {
 
         // Derive capability requirements from the current entry path.
         let has_context_parts = focused_part.is_some();
+        let needs_image = focused_part
+            .as_ref()
+            .map(|part| part.source().contains("screenshot=1"))
+            .unwrap_or(false);
         let requirements = crate::ai::acp::AcpLaunchRequirements {
             needs_embedded_context: has_context_parts,
-            needs_image: false,
+            needs_image,
         };
         tracing::info!(
             target: "script_kit::tab_ai",
@@ -1167,6 +1171,7 @@ impl ScriptListApp {
                     display_name: agent_display_name.into(),
                     selected_agent: acp_launch_resolution.selected_agent.clone(),
                     available_agents: acp_launch_resolution.catalog_entries.clone(),
+                    launch_requirements: requirements,
                     available_models: agent_models,
                     selected_model_id: default_model_id,
                 },

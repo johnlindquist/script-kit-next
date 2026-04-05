@@ -252,45 +252,105 @@ bun scripts/agentic/verify-shot.ts --session default \
 | `--acp-input-match STR` | Input text matches exactly |
 | `--acp-cursor-at N` | Cursor at character index N |
 | `--acp-item-accepted` | A picker item was accepted |
+| `--acp-accepted-via KEY` | Probe confirms acceptance via enter or tab |
 | `--acp-context-ready` | Context bootstrap complete |
 
 **Exit codes:** 0 = pass, 1 = assertion failure, 2 = infrastructure error.
+
+**Strict capture:** When ACP assertions are present, `verify-shot.ts` requires
+`window.ts` quartz capture with frontmost confirmation. If focus drifts, the
+capture fails instead of silently falling back to a full-screen screenshot.
 
 **Rule:** The recipe must fail when ACP state contradicts expected picker/caret
 outcome, even if the screenshot capture itself succeeds. State receipt is the
 primary proof; screenshot is secondary visual confirmation.
 
-## Recipe Orchestrator (index.ts)
+## Recipe Orchestrator (index.ts) — Preferred ACP Verification
 
-For common multi-step flows, use the thin wrapper:
+**Always prefer the canonical CLI over ad hoc shell sequences.** The orchestrator
+encodes the correct verification order, focus enforcement, probe resets, and
+checkpoint strategy so agents do not need to reconstruct these from scratch.
+
+### Canonical ACP proof commands
+
+```bash
+# Full ACP picker accept — choose key with --key enter|tab
+bun scripts/agentic/index.ts acp-accept --session default --key enter
+bun scripts/agentic/index.ts acp-accept --session default --key tab --vision
+```
+
+What `acp-accept` guarantees:
+- Resets ACP test probe before native interaction (no stale accepted items)
+- Uses `macos-input.ts --ensure-focus` for native typing and acceptance
+- Uses **state-only** checks for ACP-ready and picker-open (no intermediate screenshots)
+- Waits for `acpAcceptedViaKey` (key-specific proof, not generic `acpItemAccepted`)
+- Keeps exactly **one final screenshot** as visual proof
+- Emits vision crops only when `--vision` is requested
+
+### Other recipes
 
 ```bash
 # Check all prerequisites
 bun scripts/agentic/index.ts preflight --session default
 
-# Open ACP and verify ready state
+# Open ACP and verify ready state (state-only, no screenshot)
 bun scripts/agentic/index.ts acp-open --session default
 
-# Full ACP picker accept golden path via Enter
+# Compatibility aliases (same as --key enter / --key tab)
 bun scripts/agentic/index.ts acp-enter-accept --session default
-
-# Full ACP picker accept golden path via Tab
 bun scripts/agentic/index.ts acp-tab-accept --session default
 ```
 
-The orchestrator uses `waitFor` protocol commands for all ACP state transitions:
-- `acp-open`: sends `show` + `triggerBuiltin tab-ai`, then `waitFor(acpReady)`
-- `acp-*-accept`: opens ACP, types `@`, `waitFor(acpPickerOpen)`, native key, `waitFor(acpItemAccepted)`
+### State-only vs screenshot checkpoints
 
-Each step surfaces the full `waitForResult` receipt (including trace on failure)
-in the per-step JSON output. The wrapper does **not** replace the lower-level
-commands — use them directly when you need finer control.
+| Checkpoint | Screenshot? | Probe? | Why |
+|------------|-------------|--------|-----|
+| ACP ready | No | No | `waitFor(acpReady)` is sufficient proof; screenshot is waste |
+| Picker open | No | No | `waitFor(acpPickerOpen)` is sufficient proof |
+| **Final accepted** | **Yes** | **Yes** | The only checkpoint that needs visual + probe evidence |
+
+**Rule:** Intermediate checkpoints use state-only verification (`--skip-screenshot --skip-probe`).
+Only the final acceptance step captures a screenshot and queries the probe.
+
+### Receipt shape
+
+Each recipe returns a machine-readable JSON receipt:
+```json
+{
+  "schemaVersion": 1,
+  "recipe": "acp-enter-accept",
+  "status": "pass",
+  "steps": [
+    { "name": "acp-open", "status": "pass" },
+    { "name": "reset-probe", "status": "pass" },
+    { "name": "type-at-trigger", "status": "pass" },
+    { "name": "wait-accepted-via-key", "status": "pass" },
+    { "name": "verify-accepted", "status": "pass" }
+  ]
+}
+```
+
+The wrapper does **not** replace the lower-level commands — use `session.sh`,
+`macos-input.ts`, `window.ts`, and `verify-shot.ts` directly when you need
+finer control.
 
 ## ACP Golden Path (Critical)
 
 The **mandatory** verification flow for any ACP interaction testing.
-Uses `waitFor` protocol commands for deterministic state transitions
-instead of fixed sleeps.
+**Prefer the canonical CLI** (`bun scripts/agentic/index.ts acp-accept`) over
+reconstructing the manual steps below.
+
+### Canonical (one command)
+
+```bash
+bash scripts/agentic/session.sh start default
+sleep 3
+bun scripts/agentic/index.ts acp-accept --session default --key enter
+# Read the final screenshot PNG to confirm visually
+bash scripts/agentic/session.sh stop default
+```
+
+### Manual (when you need finer control)
 
 ```
 1. session start                               → session alive
@@ -298,14 +358,21 @@ instead of fixed sleeps.
 3. triggerBuiltin tab-ai                       → ACP opens
 4. waitFor(acpReady, timeout=8000)             → context bootstrapped (deterministic)
 5. focus window                                → frontmost confirmed
-6. native type @ (macos-input.ts)              → open picker
+6. native type @ (macos-input.ts --ensure-focus) → open picker
 7. waitFor(acpPickerOpen, timeout=3000)        → picker open (deterministic)
-8. native Enter or Tab                         → accept picker item
-9. waitFor(acpItemAccepted, timeout=3000)      → item accepted (deterministic)
-10. getAcpState                                → state receipt (MUST come before screenshot)
-11. captureWindow                              → screenshot captured
-12. verify-shot.ts                             → assertions pass on state + visual
+8. native Enter or Tab (macos-input.ts --ensure-focus) → accept picker item
+9. waitFor(acpAcceptedViaKey, timeout=3000)    → key-specific acceptance (deterministic)
+10. verify-shot.ts with --acp-accepted-via     → state + probe + screenshot proof
 ```
+
+**Key tools in the golden path:**
+| Tool | Role |
+|------|------|
+| `session.sh` | Cross-shell session management, RPC, lifecycle |
+| `macos-input.ts` | Native macOS keyboard/mouse with `--ensure-focus` |
+| `window.ts` | Window discovery, focus, activation, quartz capture |
+| `verify-shot.ts` | State + probe + screenshot bundle with strict capture |
+| `index.ts` | Orchestrator that composes all of the above correctly |
 
 **waitFor replaces fixed sleeps.** Each `waitFor` polls at 25ms intervals
 and returns a `waitForResult` receipt with `success`, `elapsed`, and an
@@ -328,6 +395,6 @@ See [references/recipes.md](references/recipes.md) for named verification patter
 - The app window auto-hides when focus is lost. If captures fail with "Window not found", the window was dismissed.
 - `captureWindow` filters out windows under 100x100 (tray icons).
 - Always unset API keys if you need the setup card: `unset ANTHROPIC_API_KEY`.
-- For ACP picker testing, use **native macOS input** (`macos-input.ts`) instead of `simulateKey` — synthetic keys bypass GPUI's native key interception and do not faithfully exercise picker selection behavior.
+- For ACP picker testing, use **native macOS input** (`macos-input.ts --ensure-focus`) instead of `simulateKey` — synthetic keys bypass GPUI's native key interception and do not faithfully exercise picker selection behavior.
 - Use `getAcpState` to verify picker acceptance, cursor landing, and input content — do not rely solely on screenshots for ACP state verification.
 - Use `waitFor` commands via `session.sh rpc` for deterministic ACP state transitions — do not use fixed sleeps as proof of ACP state.

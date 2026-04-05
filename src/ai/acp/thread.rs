@@ -132,6 +132,10 @@ pub(crate) struct AcpThreadInit {
     pub selected_agent: Option<super::catalog::AcpAgentCatalogEntry>,
     /// Full agent catalog carried through for runtime recovery picker.
     pub available_agents: Vec<super::catalog::AcpAgentCatalogEntry>,
+    /// Capability requirements derived when the chat was opened.
+    /// Preserved through runtime recovery so agent switching stays
+    /// capability-driven.
+    pub launch_requirements: super::preflight::AcpLaunchRequirements,
 }
 
 /// One-shot context payload consumed by `prepare_turn_blocks()`.
@@ -218,6 +222,11 @@ pub(crate) struct AcpThread {
     /// Full agent catalog for runtime recovery picker.
     available_agents: Vec<super::catalog::AcpAgentCatalogEntry>,
 
+    /// Capability requirements from the original launch context.
+    /// Used during runtime recovery to ensure agent switching stays
+    /// capability-driven.
+    launch_requirements: super::preflight::AcpLaunchRequirements,
+
     /// Inline setup state armed by a runtime `SetupRequired` event.
     /// When `Some`, the view renders the setup recovery card instead of
     /// the normal chat transcript.
@@ -286,6 +295,7 @@ impl AcpThread {
             tool_call_lookup: HashMap::new(),
             selected_agent: init.selected_agent,
             available_agents: init.available_agents,
+            launch_requirements: init.launch_requirements,
             setup_state: None,
             usage_tokens: None,
             usage_cost_usd: None,
@@ -963,15 +973,24 @@ impl AcpThread {
                     auth_method_count = auth_methods.len(),
                     selected_agent_id = self.selected_agent.as_ref().map(|a| a.id.as_ref()),
                     available_agent_count = self.available_agents.len(),
+                    needs_embedded_context = self.launch_requirements.needs_embedded_context,
+                    needs_image = self.launch_requirements.needs_image,
                 );
                 self.setup_state = Some(
                     super::setup_state::AcpInlineSetupState::from_runtime_setup_required(
                         self.selected_agent.clone(),
                         self.available_agents.clone(),
-                        super::preflight::AcpLaunchRequirements::default(),
+                        self.launch_requirements,
                         &reason,
                         &auth_methods,
                     ),
+                );
+                tracing::info!(
+                    target: "script_kit::tab_ai",
+                    event = "acp_runtime_setup_requirements_preserved",
+                    selected_agent_id = self.selected_agent.as_ref().map(|a| a.id.as_ref()),
+                    needs_embedded_context = self.launch_requirements.needs_embedded_context,
+                    needs_image = self.launch_requirements.needs_image,
                 );
                 changed |= self.set_status(AcpThreadStatus::Error);
             }
@@ -1172,6 +1191,29 @@ impl AcpThread {
     }
 
     // ── Public accessors for structured session state ──────────────
+
+    /// Capability requirements preserved from the original launch context.
+    pub(crate) fn launch_requirements(&self) -> super::preflight::AcpLaunchRequirements {
+        self.launch_requirements
+    }
+
+    /// Replace the selected agent on the live thread (used during runtime
+    /// recovery when the user picks a different agent in the setup card).
+    pub(crate) fn replace_selected_agent(
+        &mut self,
+        next: Option<super::catalog::AcpAgentCatalogEntry>,
+        cx: &mut Context<Self>,
+    ) {
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "acp_thread_selected_agent_replaced",
+            selected_agent_id = next.as_ref().map(|a| a.id.as_ref()),
+            needs_embedded_context = self.launch_requirements.needs_embedded_context,
+            needs_image = self.launch_requirements.needs_image,
+        );
+        self.selected_agent = next;
+        cx.notify();
+    }
 
     /// Runtime setup state armed by `AcpEvent::SetupRequired`.
     /// When `Some`, the view should render the inline setup recovery card.
@@ -1516,6 +1558,7 @@ impl AcpThread {
             tool_call_lookup: HashMap::new(),
             selected_agent: None,
             available_agents: Vec::new(),
+            launch_requirements: crate::ai::acp::AcpLaunchRequirements::default(),
             setup_state: None,
             usage_tokens: None,
             usage_cost_usd: None,
@@ -1668,7 +1711,7 @@ impl AcpThread {
                     super::setup_state::AcpInlineSetupState::from_runtime_setup_required(
                         self.selected_agent.clone(),
                         self.available_agents.clone(),
-                        super::preflight::AcpLaunchRequirements::default(),
+                        self.launch_requirements,
                         &reason,
                         &auth_methods,
                     ),
@@ -1723,6 +1766,7 @@ mod tests {
             tool_call_lookup: HashMap::new(),
             selected_agent: None,
             available_agents: Vec::new(),
+            launch_requirements: crate::ai::acp::AcpLaunchRequirements::default(),
             setup_state: None,
             usage_tokens: None,
             usage_cost_usd: None,

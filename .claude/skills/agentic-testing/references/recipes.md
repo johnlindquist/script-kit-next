@@ -178,9 +178,26 @@ Named patterns agents select based on what they changed.
 
 **This is the definitive ACP interaction verification recipe.** Use it whenever ACP behavior needs proving. Future agents should default to this recipe for any ACP change.
 
+**Preferred: Use the canonical CLI command:**
+```bash
+bash scripts/agentic/session.sh start default
+sleep 3
+bun scripts/agentic/index.ts acp-accept --session default --key enter
+# Read the final screenshot PNG to confirm visually
+bash scripts/agentic/session.sh stop default
+```
+
+The `acp-accept` command encodes the full golden path:
+- Resets ACP test probe before native interaction
+- Uses `macos-input.ts --ensure-focus` for native typing and acceptance
+- State-only intermediate checkpoints (no wasted screenshots)
+- Waits for `acpAcceptedViaKey` (key-specific, not generic)
+- One final screenshot + probe assertion as visual proof
+- Pass `--vision` for vision crop entries
+
 **Surface rule:** This recipe verifies the real ACP runtime surface only. Screenshots from synthetic `AcpChatView` wrappers, debug-only windows, or component harnesses do not count.
 
-**Steps:**
+**Manual steps (when finer control is needed):**
 
 ```bash
 S="bash scripts/agentic/session.sh send default"
@@ -201,67 +218,62 @@ $S '{"type":"triggerBuiltin","name":"tab-ai"}'
 $R '{"type":"waitFor","requestId":"w-ready","condition":{"type":"acpReady"},"timeout":8000,"pollInterval":25,"trace":"onFailure"}' \
   --expect waitForResult --timeout 10000
 
-# 5. Verify ACP ready (state receipt BEFORE screenshot)
+# 5. State-only checkpoint: no screenshot needed
 bun scripts/agentic/verify-shot.ts --session default \
   --label acp-ready \
+  --skip-screenshot --skip-probe \
   --acp-context-ready
 
-# 6. Focus window for native input
-bun scripts/agentic/window.ts focus
-sleep 0.3  # macOS focus-settling delay
+# 6. Reset probe before native interaction
+$S '{"type":"resetAcpTestProbe","requestId":"reset-enter-1"}'
 
-# 7. Type @ to open picker (NATIVE input, not simulateKey)
-bun scripts/agentic/macos-input.ts type "@"
+# 7. Type @ to open picker (NATIVE input with focus enforcement)
+bun scripts/agentic/macos-input.ts type "@" --ensure-focus
 
 # 8. Wait for picker to open (deterministic, replaces sleep 1)
 $R '{"type":"waitFor","requestId":"w-picker","condition":{"type":"acpPickerOpen"},"timeout":3000,"pollInterval":25,"trace":"onFailure"}' \
   --expect waitForResult --timeout 5000
 
-# 9. Verify picker opened
+# 9. State-only checkpoint: no screenshot needed
 bun scripts/agentic/verify-shot.ts --session default \
   --label picker-open \
+  --skip-screenshot --skip-probe \
   --acp-picker-open
 
-# 10. Accept with native Enter (or Tab)
-bun scripts/agentic/macos-input.ts key enter
+# 10. Accept with native Enter (or Tab) with focus enforcement
+bun scripts/agentic/macos-input.ts key enter --ensure-focus
 
-# 11. Wait for item accepted (deterministic, replaces sleep 0.5)
-$R '{"type":"waitFor","requestId":"w-accepted","condition":{"type":"acpItemAccepted"},"timeout":3000,"pollInterval":25,"trace":"onFailure"}' \
+# 11. Wait for key-specific acceptance (not generic acpItemAccepted)
+$R '{"type":"waitFor","requestId":"w-accepted","condition":{"type":"acpAcceptedViaKey","key":"enter"},"timeout":3000,"pollInterval":25,"trace":"onFailure"}' \
   --expect waitForResult --timeout 5000
 
-# 12. Verify accepted: picker closed + item recorded + cursor moved
+# 12. Final proof: screenshot + probe (the only screenshot in the recipe)
 bun scripts/agentic/verify-shot.ts --session default \
-  --label item-accepted \
+  --label enter-accepted \
   --acp-picker-closed \
-  --acp-item-accepted
+  --acp-item-accepted \
+  --acp-accepted-via enter
 
 # 13. Cleanup
 bash scripts/agentic/session.sh stop default
-
-# 14. Verify cleanup succeeded before reporting
 bash scripts/agentic/session.sh status default
-```
-
-**Or use the orchestrator:**
-```bash
-bun scripts/agentic/index.ts acp-enter-accept --session default
 ```
 
 **Critical invariants:**
 - `waitFor` conditions are the primary proof of ACP state transitions — not fixed sleeps
 - `getAcpState` **must** be queried before screenshot capture at every verification point
 - The test MUST FAIL if `getAcpState` says picker is still open, even if the screenshot looks correct
-- Native macOS input (`macos-input.ts`) is required for picker acceptance testing — `simulateKey` bypasses native key routing
+- Native macOS input (`macos-input.ts --ensure-focus`) is required for picker acceptance testing
+- Intermediate checkpoints (ACP ready, picker open) use `--skip-screenshot --skip-probe`
+- Only the final acceptance checkpoint takes a screenshot and queries the probe
 - Window focus must be verified before sending native input
-- If the captured window does not match the real ACP shell/chrome/layout, stop and re-run through the actual runtime path instead of using the screenshot as evidence
-- On failure, `waitForResult` includes a trace receipt with per-poll snapshots when `trace: "onFailure"` is set
-- Cleanup is part of the recipe: do not report completion until the started session is stopped and verified dead
+- Cleanup is part of the recipe: do not report completion until the started session is stopped
 
 **Pass:** All waitFor conditions resolve, verify-shot assertions pass, cursor lands after inserted text.
 **Fail:** `waitForResult` returns `success: false` with trace receipt. Common causes:
 - `acpReady` timeout → ACP context bootstrap failed or took too long
 - `acpPickerOpen` timeout → `@` input not received or picker not triggered
-- `acpItemAccepted` timeout → Enter/Tab routed to composer submit instead of picker accept
+- `acpAcceptedViaKey` timeout → Enter/Tab routed to composer submit instead of picker accept
 - Picker still open after Enter → Enter routed to composer submit instead of picker accept
 - No `lastAcceptedItem` → picker was never open when Enter was pressed
 - Cursor at wrong index → text insertion logic off
@@ -272,12 +284,11 @@ bun scripts/agentic/index.ts acp-enter-accept --session default
 
 **When:** Specifically testing that both Tab and Enter accept picker rows correctly.
 
-**Steps:**
-1. Run `verify-acp-golden-path` with Enter (steps above)
-2. Re-open ACP, re-trigger picker with `@`
-3. Accept with native Tab instead of Enter
-4. Verify same outcome: picker closed, item accepted, cursor correct
-5. Compare cursor positions — both should produce identical caret placement
+**Preferred: Use the canonical CLI for both keys:**
+```bash
+bun scripts/agentic/index.ts acp-accept --session default --key enter
+bun scripts/agentic/index.ts acp-accept --session default --key tab
+```
 
 **Pass:** Both Tab and Enter produce the same accepted state and cursor position.
 **Fail:** One key accepts but the other doesn't. Check ACP key_down handler for picker-open branching.
