@@ -307,6 +307,28 @@ impl ContextAttachmentKind {
             .find(|spec| spec.mention == Some(trimmed) || spec.mention_aliases.contains(&trimmed))
             .map(|spec| spec.kind)
     }
+
+    /// Map to the provider JSON resource kind, if this attachment is
+    /// provider-backed (Dictation, Calendar, Notifications).
+    pub(crate) fn provider_json_kind(
+        self,
+    ) -> Option<crate::mcp_resources::ProviderJsonResourceKind> {
+        use crate::mcp_resources::ProviderJsonResourceKind;
+        match self {
+            Self::Dictation => Some(ProviderJsonResourceKind::Dictation),
+            Self::Calendar => Some(ProviderJsonResourceKind::Calendar),
+            Self::Notifications => Some(ProviderJsonResourceKind::Notifications),
+            _ => None,
+        }
+    }
+
+    /// Whether provider-backed data is available for this attachment kind.
+    /// Non-provider kinds always return `true`.
+    pub(crate) fn provider_data_available(self) -> bool {
+        self.provider_json_kind()
+            .map(crate::mcp_resources::has_provider_json_resource)
+            .unwrap_or(true)
+    }
 }
 
 pub(crate) fn is_clear_context_action(action_id: &str) -> bool {

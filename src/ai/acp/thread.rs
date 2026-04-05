@@ -1134,6 +1134,7 @@ impl AcpThread {
                 reason,
                 auth_methods,
             } => {
+                let current_requirements = self.current_setup_requirements();
                 tracing::info!(
                     target: "script_kit::tab_ai",
                     event = "acp_runtime_setup_session_armed",
@@ -1141,24 +1142,17 @@ impl AcpThread {
                     auth_method_count = auth_methods.len(),
                     selected_agent_id = self.selected_agent.as_ref().map(|a| a.id.as_ref()),
                     available_agent_count = self.available_agents.len(),
-                    needs_embedded_context = self.launch_requirements.needs_embedded_context,
-                    needs_image = self.launch_requirements.needs_image,
+                    needs_embedded_context = current_requirements.needs_embedded_context,
+                    needs_image = current_requirements.needs_image,
                 );
                 self.setup_state = Some(
                     super::setup_state::AcpInlineSetupState::from_runtime_setup_required(
                         self.selected_agent.clone(),
                         self.available_agents.clone(),
-                        self.launch_requirements,
+                        current_requirements,
                         &reason,
                         &auth_methods,
                     ),
-                );
-                tracing::info!(
-                    target: "script_kit::tab_ai",
-                    event = "acp_runtime_setup_requirements_preserved",
-                    selected_agent_id = self.selected_agent.as_ref().map(|a| a.id.as_ref()),
-                    needs_embedded_context = self.launch_requirements.needs_embedded_context,
-                    needs_image = self.launch_requirements.needs_image,
                 );
                 changed |= self.set_status(AcpThreadStatus::Error);
             }
@@ -1387,6 +1381,30 @@ impl AcpThread {
     /// When `Some`, the view should render the inline setup recovery card.
     pub(crate) fn setup_state(&self) -> Option<&super::setup_state::AcpInlineSetupState> {
         self.setup_state.as_ref()
+    }
+
+    /// Derive runtime setup requirements from the live thread state.
+    ///
+    /// Unions the original `launch_requirements` with the current pending
+    /// context parts and blocks so that later-added `@screenshot` or context
+    /// chips are reflected when the thread re-enters `SetupRequired`.
+    pub(crate) fn current_setup_requirements(
+        &self,
+    ) -> super::preflight::AcpLaunchRequirements {
+        let needs_embedded_context = self.launch_requirements.needs_embedded_context
+            || !self.pending_context_parts.is_empty()
+            || !self.pending_context_blocks.is_empty();
+
+        let needs_image = self.launch_requirements.needs_image
+            || self
+                .pending_context_parts
+                .iter()
+                .any(Self::is_explicit_screenshot_part);
+
+        super::preflight::AcpLaunchRequirements {
+            needs_embedded_context,
+            needs_image,
+        }
     }
 
     /// Replace the runtime setup state (used by the view after agent re-selection).
@@ -1875,11 +1893,12 @@ impl AcpThread {
                 reason,
                 auth_methods,
             } => {
+                let current_requirements = self.current_setup_requirements();
                 self.setup_state = Some(
                     super::setup_state::AcpInlineSetupState::from_runtime_setup_required(
                         self.selected_agent.clone(),
                         self.available_agents.clone(),
-                        self.launch_requirements,
+                        current_requirements,
                         &reason,
                         &auth_methods,
                     ),
@@ -2645,5 +2664,87 @@ mod tests {
             thread.context_bootstrap_note, None,
             "a clean follow-up submit should clear stale failure messaging"
         );
+    }
+
+    // ── current_setup_requirements tests ─────────────────────
+
+    #[test]
+    fn current_setup_requirements_default_when_empty() {
+        let thread = test_thread(Vec::new(), false);
+        let reqs = thread.current_setup_requirements();
+        assert!(
+            !reqs.needs_embedded_context,
+            "no pending parts/blocks → no embedded context"
+        );
+        assert!(!reqs.needs_image, "no screenshot parts → no image");
+    }
+
+    #[test]
+    fn current_setup_requirements_reflects_pending_blocks() {
+        let thread = test_thread(
+            vec![ContentBlock::Text(TextContent::new("some context"))],
+            false,
+        );
+        let reqs = thread.current_setup_requirements();
+        assert!(
+            reqs.needs_embedded_context,
+            "pending_context_blocks should set needs_embedded_context"
+        );
+        assert!(!reqs.needs_image, "text block should not set needs_image");
+    }
+
+    #[test]
+    fn current_setup_requirements_reflects_pending_parts() {
+        let mut thread = test_thread(Vec::new(), false);
+        thread.add_context_part_test(
+            crate::ai::message_parts::AiContextPart::ResourceUri {
+                uri: "kit://context?profile=minimal".to_string(),
+                label: "Current Context".to_string(),
+            },
+        );
+        let reqs = thread.current_setup_requirements();
+        assert!(
+            reqs.needs_embedded_context,
+            "pending_context_parts should set needs_embedded_context"
+        );
+        assert!(!reqs.needs_image, "non-screenshot part should not set needs_image");
+    }
+
+    #[test]
+    fn current_setup_requirements_detects_screenshot_part() {
+        let mut thread = test_thread(Vec::new(), false);
+        thread.add_context_part_test(
+            crate::ai::message_parts::AiContextPart::ResourceUri {
+                uri: "kit://context?screenshot=1".to_string(),
+                label: "Screenshot".to_string(),
+            },
+        );
+        let reqs = thread.current_setup_requirements();
+        assert!(reqs.needs_embedded_context, "screenshot part implies embedded context");
+        assert!(reqs.needs_image, "screenshot part should set needs_image");
+    }
+
+    #[test]
+    fn current_setup_requirements_unions_with_launch_requirements() {
+        let mut thread = test_thread(Vec::new(), false);
+        thread.launch_requirements = crate::ai::acp::AcpLaunchRequirements {
+            needs_embedded_context: true,
+            needs_image: false,
+        };
+        // No pending parts/blocks — should still reflect launch_requirements.
+        let reqs = thread.current_setup_requirements();
+        assert!(reqs.needs_embedded_context, "should preserve launch needs_embedded_context");
+        assert!(!reqs.needs_image, "no screenshot added → false");
+
+        // Now add screenshot part — should union to true.
+        thread.add_context_part_test(
+            crate::ai::message_parts::AiContextPart::ResourceUri {
+                uri: "kit://context?screenshot=1".to_string(),
+                label: "Screenshot".to_string(),
+            },
+        );
+        let reqs = thread.current_setup_requirements();
+        assert!(reqs.needs_embedded_context, "still true from launch");
+        assert!(reqs.needs_image, "screenshot part added after open → true");
     }
 }
