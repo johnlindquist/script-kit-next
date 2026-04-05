@@ -1935,7 +1935,10 @@ fn test_load_config_reloads_updated_config_ts() {
         None => std::env::remove_var("SK_PATH"),
     }
 
-    assert_eq!(second.hotkey.key, "z", "second load must see the updated key");
+    assert_eq!(
+        second.hotkey.key, "z",
+        "second load must see the updated key"
+    );
     assert_eq!(
         second.bun_path.as_deref(),
         Some("/new/bun"),

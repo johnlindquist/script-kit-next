@@ -14,9 +14,7 @@
 /// Returns `true` when GPUI dispatch still collapses all windows of this kind
 /// to a single `WindowRole`, meaning it cannot distinguish between multiple
 /// visible windows of the same kind.
-fn kind_collapses_to_single_window_role(
-    kind: crate::protocol::AutomationWindowKind,
-) -> bool {
+fn kind_collapses_to_single_window_role(kind: crate::protocol::AutomationWindowKind) -> bool {
     automation_kind_to_window_role(kind).is_some()
 }
 

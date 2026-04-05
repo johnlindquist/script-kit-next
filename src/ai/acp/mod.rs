@@ -43,8 +43,7 @@ pub(crate) use config::{
     claude_code_agent_config_cached, load_acp_agent_catalog_entries, load_acp_agent_configs,
     load_acp_agent_runtime_states, load_preferred_acp_agent_id, persist_acp_agent_runtime_state,
     persist_preferred_acp_agent_id, persist_preferred_acp_agent_id_sync, prewarm_agent_config,
-    AcpAgentConfig, AcpAgentRuntimeState,
-    AcpAgentRuntimeStateFile,
+    AcpAgentConfig, AcpAgentRuntimeState, AcpAgentRuntimeStateFile,
 };
 #[allow(deprecated)]
 pub(crate) use context::{

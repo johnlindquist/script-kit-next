@@ -351,10 +351,7 @@ impl Message {
     }
 
     /// Create a successful ACP setup action result
-    pub fn acp_setup_action_result_success(
-        request_id: String,
-        state: AcpStateSnapshot,
-    ) -> Self {
+    pub fn acp_setup_action_result_success(request_id: String, state: AcpStateSnapshot) -> Self {
         Message::AcpSetupActionResult {
             request_id,
             success: true,
@@ -364,10 +361,7 @@ impl Message {
     }
 
     /// Create a failed ACP setup action result
-    pub fn acp_setup_action_result_error(
-        request_id: String,
-        error: String,
-    ) -> Self {
+    pub fn acp_setup_action_result_error(request_id: String, error: String) -> Self {
         Message::AcpSetupActionResult {
             request_id,
             success: false,
