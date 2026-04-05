@@ -78,7 +78,10 @@ fn build_keystroke(
 pub(crate) struct GpuiEventDispatchResult {
     /// Whether the event was dispatched (even if not consumed by any handler).
     pub success: bool,
-    /// Error message if dispatch could not be attempted.
+    /// Machine-readable error category: `target_not_found`, `target_ambiguous`,
+    /// `handle_unavailable`, or `dispatch_failed`.
+    pub error_code: Option<String>,
+    /// Human-readable error message if dispatch could not be attempted.
     pub error: Option<String>,
 }
 
@@ -116,6 +119,7 @@ pub(crate) fn dispatch_gpui_event(
             );
             return GpuiEventDispatchResult {
                 success: false,
+                error_code: Some("target_not_found".to_string()),
                 error: Some(err.to_string()),
             };
         }
@@ -160,6 +164,7 @@ pub(crate) fn dispatch_gpui_event(
         );
         return GpuiEventDispatchResult {
             success: false,
+            error_code: Some("target_ambiguous".to_string()),
             error: Some(msg),
         };
     }
@@ -189,6 +194,7 @@ pub(crate) fn dispatch_gpui_event(
             );
             return GpuiEventDispatchResult {
                 success: false,
+                error_code: Some("handle_unavailable".to_string()),
                 error: Some(msg),
             };
         }
@@ -249,6 +255,7 @@ pub(crate) fn dispatch_gpui_event(
             );
             GpuiEventDispatchResult {
                 success: true,
+                error_code: None,
                 error: None,
             }
         }
@@ -262,6 +269,7 @@ pub(crate) fn dispatch_gpui_event(
             );
             GpuiEventDispatchResult {
                 success: false,
+                error_code: Some("dispatch_failed".to_string()),
                 error: Some(msg),
             }
         }

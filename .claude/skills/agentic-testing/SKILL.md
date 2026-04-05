@@ -322,10 +322,12 @@ checkpoint strategy so agents do not need to reconstruct these from scratch.
 bun scripts/agentic/index.ts acp-accept --session default --key enter
 bun scripts/agentic/index.ts acp-accept --session default --key tab --vision
 
-# Target a specific ACP window (detached/popup)
-TARGET='{"type":"kind","kind":"acpDetached","index":0}'
+# Target a specific ACP window (detached/popup) — resolve exact identity first
+RESOLVED="$(bun scripts/agentic/automation-window.ts resolve --session default --kind acpDetached --index 0)"
+TARGET="$(printf '%s' "$RESOLVED" | jq -c '.targetJson')"
+SURFACE_ID="$(printf '%s' "$RESOLVED" | jq -r '.surfaceId')"
 bun scripts/agentic/index.ts acp-accept --session default --key enter \
-  --target-json "$TARGET" --surface acp --vision
+  --target-json "$TARGET" --surface "$SURFACE_ID" --vision
 ```
 
 ### Target threading (non-negotiable for multi-window ACP)
@@ -428,11 +430,20 @@ bash scripts/agentic/session.sh stop default
 
 ### Canonical with target threading (detached/popup ACP)
 
+Resolve one exact ACP target once and reuse both the target and surfaceId for
+the full run. **Do not use loose family-level `--surface acp`** — use the
+exact surfaceId from the resolver.
+
 ```bash
 bash scripts/agentic/session.sh start default
-TARGET='{"type":"kind","kind":"acpDetached","index":0}'
+
+# Resolve exact target and surface identity once
+RESOLVED="$(bun scripts/agentic/automation-window.ts resolve --session default --kind acpDetached --index 0)"
+TARGET="$(printf '%s' "$RESOLVED" | jq -c '.targetJson')"
+SURFACE_ID="$(printf '%s' "$RESOLVED" | jq -r '.surfaceId')"
+
 bun scripts/agentic/index.ts acp-accept --session default --key enter \
-  --target-json "$TARGET" --surface acp --vision
+  --target-json "$TARGET" --surface "$SURFACE_ID" --vision
 # Confirm proofBundle.state.resolvedTarget.windowKind == "acpDetached"
 bash scripts/agentic/session.sh stop default
 ```
@@ -465,6 +476,7 @@ primary verification mechanism.
 | `macos-input.ts` | Native macOS keyboard/mouse with `--ensure-focus` |
 | `window.ts` | Window discovery, focus, activation, quartz capture |
 | `verify-shot.ts` | State + probe + screenshot bundle with strict capture |
+| `automation-window.ts` | Exact ACP target-to-surface resolver |
 | `index.ts` | Orchestrator that composes all of the above correctly |
 
 **waitFor replaces fixed sleeps.** Each `waitFor` polls at 25ms intervals

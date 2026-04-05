@@ -154,7 +154,12 @@ impl Message {
 
     /// Create a get layout info request
     pub fn get_layout_info(request_id: String) -> Self {
-        Message::GetLayoutInfo { request_id }
+        Message::GetLayoutInfo { request_id, target: None }
+    }
+
+    /// Create a get layout info request targeting a specific window
+    pub fn get_layout_info_targeted(request_id: String, target: AutomationWindowTarget) -> Self {
+        Message::GetLayoutInfo { request_id, target: Some(target) }
     }
 
     /// Create a layout info result response
@@ -549,15 +554,23 @@ impl Message {
         Message::SimulateGpuiEventResult {
             request_id,
             success: true,
+            error_code: None,
             error: None,
         }
     }
 
-    /// Create a simulateGpuiEvent error result
-    pub fn simulate_gpui_event_result_error(request_id: String, error: String) -> Self {
+    /// Create a simulateGpuiEvent error result with a machine-readable error code.
+    ///
+    /// Error codes: `target_not_found`, `target_ambiguous`, `handle_unavailable`, `dispatch_failed`.
+    pub fn simulate_gpui_event_result_error(
+        request_id: String,
+        error_code: String,
+        error: String,
+    ) -> Self {
         Message::SimulateGpuiEventResult {
             request_id,
             success: false,
+            error_code: Some(error_code),
             error: Some(error),
         }
     }

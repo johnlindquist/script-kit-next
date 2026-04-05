@@ -28,16 +28,26 @@ pub struct ScriptWatcher {
 }
 
 impl ScriptWatcher {
-    /// Create a new ScriptWatcher.
+    /// Create a new ScriptWatcher using a fresh config load.
     ///
-    /// Returns a tuple of (watcher, receiver) where receiver will emit ScriptReloadEvent
-    /// when files in the scripts directory change.
+    /// Keep this for callers that do not already have a config instance.
     pub fn new() -> (Self, Receiver<ScriptReloadEvent>) {
+        Self::with_settings(load_watcher_settings())
+    }
+
+    /// Create a new ScriptWatcher using an already-loaded config.
+    ///
+    /// This avoids an extra config.ts evaluation on startup.
+    pub(crate) fn new_with_config(
+        app_config: &crate::config::Config,
+    ) -> (Self, Receiver<ScriptReloadEvent>) {
+        Self::with_settings(super::watcher_settings_from_config(app_config))
+    }
+
+    fn with_settings(settings: WatcherSettings) -> (Self, Receiver<ScriptReloadEvent>) {
         let (tx, rx) = channel();
-        let settings = load_watcher_settings();
         let spec = ScriptWatcherSpec::new(settings);
         let watcher = GenericWatcher::new(tx, spec, to_generic_watcher_settings(settings));
-
         (Self { watcher }, rx)
     }
 

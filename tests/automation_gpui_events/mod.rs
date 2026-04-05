@@ -202,13 +202,44 @@ fn simulate_gpui_event_result_with_error_serializes() {
         "type": "simulateGpuiEventResult",
         "requestId": "gpui-ambiguous",
         "success": false,
+        "errorCode": "target_ambiguous",
         "error": "Resolved target acpDetached:thread-1 (AcpDetached) is ambiguous: 2 visible windows share this kind and GPUI dispatch still routes through one WindowRole"
     });
 
     let success = result["success"].as_bool().expect("success field");
     assert!(!success, "Ambiguous result should have success=false");
+    assert_eq!(
+        result["errorCode"].as_str().unwrap(),
+        "target_ambiguous",
+        "Ambiguous result should have errorCode=target_ambiguous"
+    );
     assert!(
         result["error"].as_str().unwrap().contains("ambiguous"),
         "Error message should mention ambiguity"
     );
+}
+
+#[test]
+fn not_found_vs_ambiguous_error_codes_are_distinguishable() {
+    // Agents need to programmatically distinguish these two failure modes
+    let not_found = script_kit_gpui::protocol::Message::simulate_gpui_event_result_error(
+        "nf-1".into(),
+        "target_not_found".into(),
+        "No automation window for kind Notes index 0".into(),
+    );
+    let ambiguous = script_kit_gpui::protocol::Message::simulate_gpui_event_result_error(
+        "amb-1".into(),
+        "target_ambiguous".into(),
+        "2 visible windows share this kind".into(),
+    );
+
+    let nf_json = serde_json::to_value(&not_found).expect("serialize");
+    let amb_json = serde_json::to_value(&ambiguous).expect("serialize");
+
+    assert_ne!(
+        nf_json["errorCode"], amb_json["errorCode"],
+        "not_found and ambiguous must have distinct error codes"
+    );
+    assert_eq!(nf_json["errorCode"], "target_not_found");
+    assert_eq!(amb_json["errorCode"], "target_ambiguous");
 }

@@ -154,6 +154,9 @@ macro_rules! protocol_message_variants_query_ops {
     GetLayoutInfo {
         #[serde(rename = "requestId")]
         request_id: String,
+        /// Optional window target (defaults to focused window).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        target: Option<AutomationWindowTarget>,
     },
 
     /// Response with full layout information
@@ -628,7 +631,11 @@ macro_rules! protocol_message_variants_query_ops {
         request_id: String,
         /// Whether the event was dispatched successfully.
         success: bool,
-        /// Error message if dispatch failed.
+        /// Machine-readable error category: `target_not_found`, `target_ambiguous`,
+        /// `handle_unavailable`, or `dispatch_failed`.
+        #[serde(rename = "errorCode", skip_serializing_if = "Option::is_none")]
+        error_code: Option<String>,
+        /// Human-readable error message if dispatch failed.
         #[serde(skip_serializing_if = "Option::is_none")]
         error: Option<String>,
     },

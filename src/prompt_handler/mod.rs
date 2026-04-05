@@ -1061,8 +1061,11 @@ impl ScriptListApp {
                     "Collecting state for request"
                 );
 
-                // Validate target if explicitly specified (non-main targets
-                // are not yet wired to secondary window state providers).
+                // Validate target if explicitly specified.
+                // Non-main targets are not yet wired to secondary window
+                // state providers, so we return an honest diagnostic with
+                // machine-readable promptType and promptId fields instead
+                // of a bare "error" string.
                 if let Some(ref t) = target {
                     if !matches!(t, protocol::AutomationWindowTarget::Main | protocol::AutomationWindowTarget::Focused) {
                         match crate::windows::resolve_automation_window(Some(t)) {
@@ -1071,16 +1074,18 @@ impl ScriptListApp {
                                     target: "script_kit::automation",
                                     request_id = %request_id,
                                     resolved_kind = ?resolved.kind,
-                                    "getState: secondary window state not yet routed, returning error"
+                                    resolved_id = %resolved.id,
+                                    "getState: secondary window state not yet routed, returning unsupported diagnostic"
                                 );
                                 if let Some(ref sender) = self.response_sender {
                                     let _ = sender.try_send(Message::state_result(
                                         request_id.clone(),
-                                        "error".to_string(),
-                                        None,
+                                        "unsupported".to_string(),
+                                        Some(format!("target_unsupported:{:?}", resolved.kind)),
                                         None,
                                         String::new(),
-                                        0, 0, -1, None, false, false,
+                                        0, 0, -1, None, false,
+                                        resolved.visible,
                                     ));
                                 }
                                 return;
@@ -1095,8 +1100,8 @@ impl ScriptListApp {
                                 if let Some(ref sender) = self.response_sender {
                                     let _ = sender.try_send(Message::state_result(
                                         request_id.clone(),
-                                        "error".to_string(),
-                                        None,
+                                        "target_resolution_failed".to_string(),
+                                        Some(format!("target_error:{}", err)),
                                         None,
                                         String::new(),
                                         0, 0, -1, None, false, false,
@@ -2142,12 +2147,36 @@ impl ScriptListApp {
                 }
             }
 
-            PromptMessage::GetLayoutInfo { request_id } => {
+            PromptMessage::GetLayoutInfo { request_id, target } => {
                 tracing::info!(
                     category = "UI",
                     request_id = %request_id,
+                    target = ?target,
                     "Collecting layout info for request"
                 );
+
+                // Reject non-main targets — layout info is only available
+                // for the main window today. Return an empty LayoutInfo
+                // with a log message so agents get honest diagnostics.
+                if target.is_some() {
+                    match resolve_main_only_target(&request_id, "getLayoutInfo", target.as_ref()) {
+                        Ok(_resolved) => { /* main window — proceed */ }
+                        Err(error) => {
+                            tracing::warn!(
+                                target: "script_kit::automation",
+                                request_id = %request_id,
+                                error = %error.message,
+                                "getLayoutInfo: target rejected"
+                            );
+                            let empty_info = crate::protocol::LayoutInfo::default();
+                            let response = Message::layout_info_result(request_id.clone(), empty_info);
+                            if let Some(ref sender) = self.response_sender {
+                                let _ = sender.try_send(response);
+                            }
+                            return;
+                        }
+                    }
+                }
 
                 // Build layout info from current window state
                 let layout_info = self.build_layout_info(cx);
@@ -3941,6 +3970,7 @@ impl ScriptListApp {
                 } else {
                     Message::simulate_gpui_event_result_error(
                         request_id,
+                        result.error_code.unwrap_or_else(|| "unknown".to_string()),
                         result.error.unwrap_or_else(|| "Unknown error".to_string()),
                     )
                 };

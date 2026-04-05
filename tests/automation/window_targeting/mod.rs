@@ -227,9 +227,10 @@ fn simulate_gpui_event_result_round_trip() {
     assert!(json.contains(r#""success":true"#));
 
     let error =
-        Message::simulate_gpui_event_result_error("res-2".into(), "Window not found".into());
+        Message::simulate_gpui_event_result_error("res-2".into(), "target_not_found".into(), "Window not found".into());
     let json = serde_json::to_string(&error).expect("serialize");
     assert!(json.contains(r#""success":false"#));
+    assert!(json.contains(r#""errorCode":"target_not_found""#));
     assert!(json.contains("Window not found"));
 }
 
@@ -340,4 +341,78 @@ fn window_bounds_survive_registry_round_trip() {
     assert!((bounds.height - 800.0).abs() < f64::EPSILON);
 
     script_kit_gpui::windows::remove_automation_window(&format!("{p}:bounded"));
+}
+
+// ============================================================
+// Machine-readable error codes — distinguishability
+// ============================================================
+
+#[test]
+fn error_codes_are_distinct_and_machine_parseable() {
+    // target_not_found
+    let not_found = Message::simulate_gpui_event_result_error(
+        "err-1".into(),
+        "target_not_found".into(),
+        "No focused automation window".into(),
+    );
+    let json = serde_json::to_value(&not_found).expect("serialize");
+    assert_eq!(json["errorCode"], "target_not_found");
+    assert_eq!(json["success"], false);
+
+    // target_ambiguous
+    let ambiguous = Message::simulate_gpui_event_result_error(
+        "err-2".into(),
+        "target_ambiguous".into(),
+        "2 visible windows share this kind".into(),
+    );
+    let json = serde_json::to_value(&ambiguous).expect("serialize");
+    assert_eq!(json["errorCode"], "target_ambiguous");
+
+    // handle_unavailable
+    let no_handle = Message::simulate_gpui_event_result_error(
+        "err-3".into(),
+        "handle_unavailable".into(),
+        "Window handle not available for role Main".into(),
+    );
+    let json = serde_json::to_value(&no_handle).expect("serialize");
+    assert_eq!(json["errorCode"], "handle_unavailable");
+
+    // dispatch_failed
+    let dispatch = Message::simulate_gpui_event_result_error(
+        "err-4".into(),
+        "dispatch_failed".into(),
+        "GPUI dispatch failed: window closed".into(),
+    );
+    let json = serde_json::to_value(&dispatch).expect("serialize");
+    assert_eq!(json["errorCode"], "dispatch_failed");
+
+    // Success has no errorCode
+    let success = Message::simulate_gpui_event_result_success("ok-1".into());
+    let json = serde_json::to_value(&success).expect("serialize");
+    assert!(json.get("errorCode").is_none());
+}
+
+#[test]
+fn error_result_round_trips_with_error_code() {
+    let msg = Message::simulate_gpui_event_result_error(
+        "rt-1".into(),
+        "target_ambiguous".into(),
+        "2 visible windows share kind AcpDetached".into(),
+    );
+    let json = serde_json::to_string(&msg).expect("serialize");
+    let back: Message = serde_json::from_str(&json).expect("deserialize");
+    match back {
+        Message::SimulateGpuiEventResult {
+            request_id,
+            success,
+            error_code,
+            error,
+        } => {
+            assert_eq!(request_id, "rt-1");
+            assert!(!success);
+            assert_eq!(error_code.as_deref(), Some("target_ambiguous"));
+            assert!(error.unwrap().contains("2 visible windows"));
+        }
+        other => panic!("Expected SimulateGpuiEventResult, got: {:?}", other),
+    }
 }

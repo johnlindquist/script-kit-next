@@ -202,6 +202,7 @@ enum PromptMessage {
     /// Request to get layout info with component tree and computed styles
     GetLayoutInfo {
         request_id: String,
+        target: Option<protocol::AutomationWindowTarget>,
     },
     /// Force submit the current prompt with a value (from SDK's submit() function)
     ForceSubmit {
