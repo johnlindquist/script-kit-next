@@ -41,6 +41,7 @@ else
     echo "   Log mode: standard verbose"
 fi
 echo "   Startup profile: ${SCRIPT_KIT_STARTUP_PROFILE}"
+echo "   Cargo dev profile: debug=0 incremental=true codegen-units=256"
 echo "   Session log: ~/.scriptkit/logs/latest-session.jsonl"
 echo "   Copy for AI: cat ~/.scriptkit/logs/latest-session.jsonl | pbcopy"
 echo "   Press Ctrl+C to stop"

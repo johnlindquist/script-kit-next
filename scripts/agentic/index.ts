@@ -11,13 +11,15 @@
  *     [--target-json '{"type":"kind","kind":"acpDetached","index":0}'] [--surface acp]
  *
  * Recipes:
- *   acp-accept         Full ACP picker accept; choose key with --key enter|tab
- *   acp-enter-accept   Compatibility alias for --key enter
- *   acp-tab-accept     Compatibility alias for --key tab
- *   acp-open           Open ACP and verify it reaches ready state
- *   acp-setup-recovery Recovery from ACP setup state; select agent with --select-agent ID
- *   preflight          Check all prerequisites (session, window, permissions)
- *   help               Show this help
+ *   acp-accept             Full ACP picker accept; choose key with --key enter|tab
+ *   acp-enter-accept       Compatibility alias for --key enter
+ *   acp-tab-accept         Compatibility alias for --key tab
+ *   acp-detached-accept    One-command detached ACP proof: resolve → accept → identity check
+ *   acp-open               Open ACP and verify it reaches ready state
+ *   acp-setup-recovery     Recovery from ACP setup state; select agent with --select-agent ID
+ *   vision-loop            Materialize visionCrops from a receipt into crop files + manifest
+ *   preflight              Check all prerequisites (session, window, permissions)
+ *   help                   Show this help
  *
  * Target threading:
  *   --target-json JSON   ACP window target for all RPCs (getAcpState, getAcpTestProbe,
@@ -241,7 +243,18 @@ function parseArgs() {
   const surface =
     surfaceIdx >= 0 && args[surfaceIdx + 1] ? args[surfaceIdx + 1] : undefined;
   const json = args.includes("--json");
-  return { recipe, session, key, vision, selectAgent, targetJson, surface, json };
+  const kindIdx = args.indexOf("--kind");
+  const kind = kindIdx >= 0 && args[kindIdx + 1] ? args[kindIdx + 1] : undefined;
+  const indexIdx = args.indexOf("--index");
+  const rawIndex = indexIdx >= 0 ? args[indexIdx + 1] : undefined;
+  if (rawIndex != null) {
+    const parsedIndex = Number(rawIndex);
+    if (!Number.isInteger(parsedIndex) || parsedIndex < 0) {
+      throw new Error(`Invalid --index: expected non-negative integer, got ${rawIndex}`);
+    }
+  }
+  const index = rawIndex != null ? Number(rawIndex) : undefined;
+  return { recipe, session, key, vision, selectAgent, targetJson, surface, json, kind, index };
 }
 
 // ---------------------------------------------------------------------------
@@ -445,7 +458,7 @@ async function recipeAcpOpen(
 async function recipeAcpPickerAccept(
   session: string,
   acceptKey: "enter" | "tab",
-  opts: { emitVision?: boolean; target?: AutomationTargetJson; surface?: string } = {}
+  opts: { emitVision?: boolean; target?: AutomationTargetJson; surface?: string; captureWindowId?: number } = {}
 ): Promise<RecipeReceipt> {
   const steps: StepReceipt[] = [];
 
@@ -600,6 +613,7 @@ async function recipeAcpPickerAccept(
     "--acp-accepted-via",
     acceptKey,
     ...(opts.emitVision ? ["--vision"] : []),
+    ...(opts.captureWindowId != null ? ["--capture-window-id", String(opts.captureWindowId)] : []),
   ];
   steps.push(
     await step("verify-accepted", () =>
@@ -877,11 +891,163 @@ async function recipeAcpSetupRecovery(
   };
 }
 
+/**
+ * Resolved identity for a detached ACP window.
+ * Threaded through the entire recipe so proof stays coherent.
+ */
+interface DetachedResolved {
+  targetJson: AutomationTargetJson;
+  surfaceId: string | null;
+  automationWindowId: string | null;
+}
+
+async function recipeAcpDetachedAccept(
+  session: string,
+  acceptKey: "enter" | "tab",
+  opts: {
+    emitVision?: boolean;
+    kind?: string;
+    index?: number;
+  } = {}
+): Promise<RecipeReceipt & { resolved?: DetachedResolved }> {
+  const steps: StepReceipt[] = [];
+  const kind = opts.kind ?? "acpDetached";
+  const index = opts.index ?? 0;
+
+  // 1. Resolve the detached ACP target to exact identity
+  const resolveStep = await step("resolve-target", () =>
+    runTool(
+      [
+        "bun",
+        "scripts/agentic/automation-window.ts",
+        "resolve",
+        "--session",
+        session,
+        "--kind",
+        kind,
+        "--index",
+        String(index),
+      ],
+      "resolve-target"
+    )
+  );
+  steps.push(resolveStep);
+
+  if (resolveStep.status !== "pass") {
+    return {
+      schemaVersion: SCHEMA_VERSION,
+      recipe: "acp-detached-accept",
+      status: "error",
+      steps,
+      summary: "Cannot proceed: target resolution failed",
+    };
+  }
+
+  // Extract resolved identity
+  const resolveOutput = resolveStep.output as Record<string, unknown>;
+  const surfaceId = (resolveOutput.surfaceId as string) ?? null;
+  const automationWindowId =
+    resolveOutput.automationWindowId != null
+      ? String(resolveOutput.automationWindowId)
+      : null;
+  const targetJson: AutomationTargetJson = (resolveOutput.targetJson as AutomationTargetJson) ?? {
+    type: "kind",
+    kind,
+    index,
+  };
+
+  const resolved: DetachedResolved = {
+    targetJson,
+    surfaceId,
+    automationWindowId,
+  };
+
+  // 2. Emit structured identity log on stderr before acceptance
+  console.error(
+    JSON.stringify({
+      event: "acp_detached_identity_resolved",
+      surfaceId,
+      automationWindowId,
+    })
+  );
+
+  // 3. Delegate to the standard picker-accept recipe with resolved identity threaded through
+  const acceptResult = await recipeAcpPickerAccept(session, acceptKey, {
+    emitVision: opts.emitVision,
+    target: targetJson,
+    surface: surfaceId ?? undefined,
+  });
+
+  // Incorporate accept steps (skip the wrapper — flatten the inner steps for transparency)
+  for (const s of acceptResult.steps) {
+    steps.push(s);
+  }
+
+  // 4. Validate identity alignment in proof bundle
+  let identityMismatch = false;
+  const proofBundle = acceptResult.proofBundle as Record<string, unknown> | undefined;
+  if (proofBundle) {
+    const captureTarget = proofBundle.captureTarget as Record<string, unknown> | undefined;
+    if (captureTarget) {
+      const requestedId = captureTarget.requestedWindowId;
+      const actualId = captureTarget.actualWindowId;
+      if (requestedId != null && actualId != null && requestedId !== actualId) {
+        identityMismatch = true;
+      }
+    }
+  }
+
+  if (identityMismatch) {
+    steps.push({
+      name: "identity-check",
+      status: "fail",
+      output: {
+        error: "captureTarget identity mismatch",
+        resolved,
+        proofBundle,
+      },
+      durationMs: 0,
+    });
+  } else {
+    steps.push({
+      name: "identity-check",
+      status: "pass",
+      output: { resolved },
+      durationMs: 0,
+    });
+  }
+
+  const allPass = !identityMismatch && acceptResult.status === "pass";
+
+  return {
+    schemaVersion: SCHEMA_VERSION,
+    recipe: "acp-detached-accept",
+    status: allPass
+      ? "pass"
+      : identityMismatch || steps.some((s) => s.status === "fail")
+        ? "fail"
+        : steps.some((s) => s.status === "error")
+          ? "error"
+          : "fail",
+    steps,
+    summary: allPass
+      ? `Detached ACP picker accepted via ${acceptKey} (window ${automationWindowId})`
+      : identityMismatch
+        ? "Identity mismatch: captureTarget.requestedWindowId != actualWindowId"
+        : `Failed at: ${steps
+            .filter((s) => s.status !== "pass")
+            .map((s) => s.name)
+            .join(", ")}`,
+    resolved,
+    ...(proofBundle ? { proofBundle } : {}),
+  };
+}
+
 // ---------------------------------------------------------------------------
 // CLI
 // ---------------------------------------------------------------------------
 
-const { recipe, session, key, vision, selectAgent, targetJson, surface } = parseArgs();
+const { recipe, session, key, vision, selectAgent, targetJson, surface, kind, index } = parseArgs();
 
 let result: RecipeReceipt;
 
@@ -918,6 +1084,14 @@ switch (recipe) {
     });
     break;
 
+  case "acp-detached-accept":
+    result = await recipeAcpDetachedAccept(session, key, {
+      emitVision: vision,
+      kind: kind ?? "acpDetached",
+      index: index ?? 0,
+    });
+    break;
+
   case "acp-setup-recovery":
     result = await recipeAcpSetupRecovery(session, selectAgent);
     break;
@@ -926,26 +1100,30 @@ switch (recipe) {
   case "--help":
     console.log(`Usage: bun scripts/agentic/index.ts <recipe> [--session NAME] [--key enter|tab] [--vision]
   [--target-json '{"type":"kind","kind":"acpDetached","index":0}'] [--surface acp]
-  [--select-agent ID]
+  [--kind KIND] [--index N] [--select-agent ID]
 
 Recipes:
-  preflight          Check prerequisites (session, window, permissions)
-  acp-open           Open ACP and verify ready state
-  acp-accept         Full ACP picker accept; choose key with --key enter|tab
-  acp-enter-accept   Compatibility alias for --key enter
-  acp-tab-accept     Compatibility alias for --key tab
-  acp-setup-recovery Recovery from ACP setup; select agent with --select-agent ID
-  help               Show this help
+  preflight              Check prerequisites (session, window, permissions)
+  acp-open               Open ACP and verify ready state
+  acp-accept             Full ACP picker accept; choose key with --key enter|tab
+  acp-enter-accept       Compatibility alias for --key enter
+  acp-tab-accept         Compatibility alias for --key tab
+  acp-detached-accept    One-command detached ACP proof: resolve → accept → identity check
+  acp-setup-recovery     Recovery from ACP setup; select agent with --select-agent ID
+  help                   Show this help
 
 Target threading:
   --target-json JSON   ACP window target for all RPCs (reused across all steps)
   --surface SURFACE    Automation surface for native input focus (main, acp, etc.)
+  --kind KIND          Target kind for acp-detached-accept (default: acpDetached)
+  --index N            Target kind index for acp-detached-accept (default: 0)
 
 Examples:
   bun scripts/agentic/index.ts acp-accept --session default --key enter
   bun scripts/agentic/index.ts acp-accept --session default --key tab --vision
   bun scripts/agentic/index.ts acp-accept --session default --key enter \\
     --target-json '{"type":"kind","kind":"acpDetached","index":0}' --surface acp --vision
+  bun scripts/agentic/index.ts acp-detached-accept --session default --kind acpDetached --index 0 --key enter --vision
   bun scripts/agentic/index.ts acp-setup-recovery --session default --select-agent opencode --json`);
     process.exit(0);
     break;

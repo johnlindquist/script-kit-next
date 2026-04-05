@@ -198,7 +198,7 @@ tree-sitter-highlight = "0.25.4"
 temp-env = "0.3.6"
 
 [profile.dev]
-debug = 1
+debug = 0
 incremental = true
 codegen-units = 256
 

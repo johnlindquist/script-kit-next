@@ -1455,6 +1455,11 @@ impl AcpThread {
         &self.available_commands
     }
 
+    /// Unique UI thread identifier (used for automation window targeting).
+    pub(crate) fn ui_thread_id(&self) -> &str {
+        &self.ui_thread_id
+    }
+
     /// Display name for the agent (e.g. "Claude Code").
     pub(crate) fn display_name(&self) -> &str {
         &self.display_name

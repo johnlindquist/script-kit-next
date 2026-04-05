@@ -4,9 +4,12 @@
 
 use anyhow::Context;
 use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::time::UNIX_EPOCH;
 use tempfile::Builder;
 use tracing::{info, instrument, warn};
 
@@ -14,6 +17,210 @@ use super::types::{Config, ScriptKitUserPreferences};
 
 fn config_ts_path() -> PathBuf {
     crate::setup::get_kit_path().join("kit").join("config.ts")
+}
+
+// ---------------------------------------------------------------------------
+// Config cache — skip Bun on warm launches when config.ts hasn't changed
+// ---------------------------------------------------------------------------
+
+const CONFIG_JSON_CACHE_SCHEMA_VERSION: u32 = 1;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct ConfigSourceFingerprint {
+    len: u64,
+    modified_ms: u64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct ConfigJsonCache {
+    schema_version: u32,
+    config_path: String,
+    len: u64,
+    modified_ms: u64,
+    json: String,
+}
+
+fn config_json_cache_path() -> PathBuf {
+    crate::setup::get_kit_path()
+        .join("cache")
+        .join("config-loader-cache.v1.json")
+}
+
+fn fingerprint_config_file(path: &Path) -> Option<ConfigSourceFingerprint> {
+    let metadata = fs::metadata(path).ok()?;
+    let modified_ms: u64 = metadata
+        .modified()
+        .ok()?
+        .duration_since(UNIX_EPOCH)
+        .ok()?
+        .as_millis()
+        .try_into()
+        .ok()?;
+    Some(ConfigSourceFingerprint {
+        len: metadata.len(),
+        modified_ms,
+    })
+}
+
+fn try_load_cached_config(
+    config_path: &Path,
+    fingerprint: ConfigSourceFingerprint,
+    correlation_id: &str,
+) -> Option<Config> {
+    let cache_path = config_json_cache_path();
+    let cache_text = match fs::read_to_string(&cache_path) {
+        Ok(text) => text,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            info!(
+                correlation_id = %correlation_id,
+                path = %cache_path.display(),
+                "CONFIG_CACHE_MISS reason=cache_file_missing"
+            );
+            return None;
+        }
+        Err(error) => {
+            warn!(
+                correlation_id = %correlation_id,
+                path = %cache_path.display(),
+                error = %error,
+                "CONFIG_CACHE_MISS reason=cache_read_failed"
+            );
+            return None;
+        }
+    };
+
+    let cache = match serde_json::from_str::<ConfigJsonCache>(&cache_text) {
+        Ok(cache) => cache,
+        Err(error) => {
+            warn!(
+                correlation_id = %correlation_id,
+                path = %cache_path.display(),
+                error = %error,
+                "CONFIG_CACHE_MISS reason=cache_json_invalid"
+            );
+            return None;
+        }
+    };
+
+    let expected_path = config_path.to_string_lossy();
+    if cache.schema_version != CONFIG_JSON_CACHE_SCHEMA_VERSION
+        || cache.config_path != expected_path
+        || cache.len != fingerprint.len
+        || cache.modified_ms != fingerprint.modified_ms
+    {
+        info!(
+            correlation_id = %correlation_id,
+            path = %cache_path.display(),
+            source = %config_path.display(),
+            cache_schema_version = cache.schema_version,
+            cache_len = cache.len,
+            cache_modified_ms = cache.modified_ms,
+            source_len = fingerprint.len,
+            source_modified_ms = fingerprint.modified_ms,
+            "CONFIG_CACHE_MISS reason=fingerprint_mismatch"
+        );
+        return None;
+    }
+
+    let parsed_json = match serde_json::from_str::<Value>(cache.json.trim()) {
+        Ok(value) => value,
+        Err(error) => {
+            warn!(
+                correlation_id = %correlation_id,
+                path = %cache_path.display(),
+                source = %config_path.display(),
+                error = %error,
+                "CONFIG_CACHE_MISS reason=cached_payload_invalid_json"
+            );
+            return None;
+        }
+    };
+
+    let config = match serde_json::from_value::<Config>(parsed_json.clone()) {
+        Ok(config) => config,
+        Err(error) => {
+            warn!(
+                correlation_id = %correlation_id,
+                path = %cache_path.display(),
+                source = %config_path.display(),
+                error = %error,
+                "Cached config parse failed; recovering valid fields"
+            );
+            recover_config_fields(parsed_json, correlation_id)
+        }
+    };
+
+    info!(
+        correlation_id = %correlation_id,
+        path = %cache_path.display(),
+        source = %config_path.display(),
+        len = fingerprint.len,
+        modified_ms = fingerprint.modified_ms,
+        "CONFIG_CACHE_HIT"
+    );
+    Some(config)
+}
+
+fn write_config_cache(
+    config_path: &Path,
+    fingerprint: ConfigSourceFingerprint,
+    json_str: &str,
+    correlation_id: &str,
+) {
+    let cache_path = config_json_cache_path();
+    let Some(parent) = cache_path.parent() else {
+        return;
+    };
+    if let Err(error) = fs::create_dir_all(parent) {
+        warn!(
+            correlation_id = %correlation_id,
+            path = %parent.display(),
+            error = %error,
+            "CONFIG_CACHE_WRITE_SKIPPED reason=create_parent_failed"
+        );
+        return;
+    }
+
+    let cache = ConfigJsonCache {
+        schema_version: CONFIG_JSON_CACHE_SCHEMA_VERSION,
+        config_path: config_path.to_string_lossy().into_owned(),
+        len: fingerprint.len,
+        modified_ms: fingerprint.modified_ms,
+        json: json_str.trim().to_string(),
+    };
+
+    let encoded = match serde_json::to_vec_pretty(&cache) {
+        Ok(encoded) => encoded,
+        Err(error) => {
+            warn!(
+                correlation_id = %correlation_id,
+                path = %cache_path.display(),
+                error = %error,
+                "CONFIG_CACHE_WRITE_SKIPPED reason=serialize_failed"
+            );
+            return;
+        }
+    };
+
+    if let Err(error) = fs::write(&cache_path, encoded) {
+        warn!(
+            correlation_id = %correlation_id,
+            path = %cache_path.display(),
+            error = %error,
+            "CONFIG_CACHE_WRITE_SKIPPED reason=write_failed"
+        );
+        return;
+    }
+
+    info!(
+        correlation_id = %correlation_id,
+        path = %cache_path.display(),
+        source = %config_path.display(),
+        len = fingerprint.len,
+        modified_ms = fingerprint.modified_ms,
+        bytes = json_str.len(),
+        "CONFIG_CACHE_WRITE"
+    );
 }
 
 fn settings_json_path() -> PathBuf {
@@ -288,6 +495,7 @@ pub fn save_user_preferences(prefs: &ScriptKitUserPreferences) -> anyhow::Result
 
 /// Load configuration from `<SK_PATH>/kit/config.ts` (or `~/.scriptkit/kit/config.ts`)
 ///
+/// Cache path: checks a fingerprinted JSON cache keyed by config path, size, and mtime.
 /// Fast path: imports config.ts directly with a single Bun process.
 /// Fallback: transpiles to a temp `.mjs` file then extracts (two Bun processes).
 ///
@@ -304,6 +512,22 @@ pub fn load_config() -> Config {
             "Config file not found, using defaults"
         );
         return Config::default();
+    }
+
+    // Fingerprint the source file for cache lookup and later cache write.
+    let fingerprint = fingerprint_config_file(&config_path);
+
+    // Cache path: try to serve from a previous Bun evaluation.
+    if let Some(fp) = fingerprint {
+        if let Some(config) = try_load_cached_config(&config_path, fp, &correlation_id) {
+            return config;
+        }
+    } else {
+        warn!(
+            correlation_id = %correlation_id,
+            path = %config_path.display(),
+            "Failed to fingerprint config.ts; skipping config cache"
+        );
     }
 
     // Fast path: import config.ts directly with one Bun process.
@@ -324,9 +548,13 @@ pub fn load_config() -> Config {
         Ok(output) if output.status.success() => {
             let json_str = String::from_utf8_lossy(&output.stdout);
             let config = parse_config_json(&json_str, &correlation_id);
+            if let Some(fp) = fingerprint {
+                write_config_cache(&config_path, fp, &json_str, &correlation_id);
+            }
             info!(
                 correlation_id = %correlation_id,
                 mode = "direct_import",
+                cache = "miss",
                 elapsed_ms = direct_start.elapsed().as_secs_f64() * 1000.0,
                 path = %config_path.display(),
                 "Loaded config"
@@ -431,9 +659,13 @@ pub fn load_config() -> Config {
         Ok(output) => {
             let json_str = String::from_utf8_lossy(&output.stdout);
             let config = parse_config_json(&json_str, &correlation_id);
+            if let Some(fp) = fingerprint {
+                write_config_cache(&config_path, fp, &json_str, &correlation_id);
+            }
             info!(
                 correlation_id = %correlation_id,
                 mode = "transpile_fallback",
+                cache = "miss",
                 elapsed_ms = fallback_start.elapsed().as_secs_f64() * 1000.0,
                 path = %config_path.display(),
                 "Loaded config"

@@ -18,6 +18,9 @@ struct ChatWindowState {
     handle: AnyWindowHandle,
     /// The live AcpChatView entity inside the detached window, if opened with a thread.
     view_entity: Option<WeakEntity<AcpChatView>>,
+    /// Automation window ID registered in the runtime handle registry.
+    /// Stored so we can remove the exact handle on close.
+    automation_id: Option<String>,
 }
 
 /// Global handle to the detached AI chat window.
@@ -44,7 +47,11 @@ pub fn is_chat_window(window: &gpui::Window) -> bool {
 pub fn clear_chat_window_handle() {
     let slot = CHAT_WINDOW.get_or_init(|| Mutex::new(None));
     if let Ok(mut g) = slot.lock() {
-        g.take();
+        if let Some(state) = g.take() {
+            if let Some(ref id) = state.automation_id {
+                crate::windows::remove_runtime_window_handle(id);
+            }
+        }
     }
 }
 
@@ -115,23 +122,35 @@ pub fn open_chat_window(cx: &mut App) -> anyhow::Result<()> {
             );
             let slot = CHAT_WINDOW.get_or_init(|| Mutex::new(None));
             if let Ok(mut g) = slot.lock() {
-                g.take();
+                if let Some(state) = g.take() {
+                    if let Some(ref id) = state.automation_id {
+                        crate::windows::remove_runtime_window_handle(id);
+                    }
+                }
             }
             true
         });
         cx.new(|_cx| ChatWindowPlaceholder)
     })?;
 
+    let any_handle: AnyWindowHandle = handle.into();
+    let automation_id = "acpDetached:placeholder".to_string();
+
     // Store the handle (placeholder has no AcpChatView entity)
     {
         let slot = CHAT_WINDOW.get_or_init(|| Mutex::new(None));
         if let Ok(mut g) = slot.lock() {
             *g = Some(ChatWindowState {
-                handle: handle.into(),
+                handle: any_handle,
                 view_entity: None,
+                automation_id: Some(automation_id.clone()),
             });
         }
     }
+
+    // Register the exact runtime handle so simulateGpuiEvent can target
+    // this window by its automation ID without collapsing to WindowRole.
+    crate::windows::upsert_runtime_window_handle(&automation_id, any_handle);
 
     tracing::info!("acp_chat_window_opened");
     Ok(())
@@ -153,6 +172,10 @@ pub fn open_chat_window_with_thread(
     }
 
     let has_inherited_bounds = inherit_bounds.is_some();
+
+    // Read the thread's UI ID before the closure moves ownership of `thread`.
+    let ui_thread_id = thread.read(cx).ui_thread_id().to_string();
+
     let view_entity_slot: std::sync::Arc<Mutex<Option<WeakEntity<AcpChatView>>>> =
         std::sync::Arc::new(Mutex::new(None));
     let view_entity_slot_inner = view_entity_slot.clone();
@@ -165,10 +188,14 @@ pub fn open_chat_window_with_thread(
                 crate::window_state::WindowRole::AcpChat,
                 wb,
             );
-            // Clear the global handle
+            // Clear the global handle and remove the runtime automation handle
             let slot = CHAT_WINDOW.get_or_init(|| Mutex::new(None));
             if let Ok(mut g) = slot.lock() {
-                g.take();
+                if let Some(state) = g.take() {
+                    if let Some(ref id) = state.automation_id {
+                        crate::windows::remove_runtime_window_handle(id);
+                    }
+                }
             }
             true // allow close
         });
@@ -184,15 +211,23 @@ pub fn open_chat_window_with_thread(
     // Extract the captured weak entity.
     let view_weak = view_entity_slot.lock().ok().and_then(|mut g| g.take());
 
+    let any_handle: AnyWindowHandle = handle.into();
+    let automation_id = format!("acpDetached:{ui_thread_id}");
+
     {
         let slot = CHAT_WINDOW.get_or_init(|| Mutex::new(None));
         if let Ok(mut g) = slot.lock() {
             *g = Some(ChatWindowState {
-                handle: handle.into(),
+                handle: any_handle,
                 view_entity: view_weak,
+                automation_id: Some(automation_id.clone()),
             });
         }
     }
+
+    // Register the exact runtime handle so simulateGpuiEvent can target
+    // this window by its automation ID without collapsing to WindowRole.
+    crate::windows::upsert_runtime_window_handle(&automation_id, any_handle);
 
     // Activate the detached window so it gets keyboard focus immediately.
     activate_chat_window(cx);
@@ -231,6 +266,11 @@ pub fn close_chat_window(cx: &mut App) {
     };
 
     if let Some(state) = existing {
+        // Remove the exact runtime handle before closing the window.
+        if let Some(ref id) = state.automation_id {
+            crate::windows::remove_runtime_window_handle(id);
+        }
+
         let _ = state.handle.update(cx, |_root, window, _cx| {
             // Save window bounds before closing
             let wb = window.window_bounds();
