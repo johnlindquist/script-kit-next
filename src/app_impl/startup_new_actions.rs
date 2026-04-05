@@ -128,14 +128,12 @@
                         }
 
                         // Handle Escape for AcpChatView (return to main menu)
-                        // When the actions popup is open, let the shared actions router
-                        // dismiss it instead of unwinding all the way back to ScriptList.
                         if crate::ui_foundation::is_key_escape(key) && !has_cmd && !has_shift
                             && !this.show_actions_popup
                             && matches!(this.current_view, AppView::AcpChatView { .. })
                         {
-                            logging::log("KEY", "Interceptor: Escape -> return to main menu from ACP chat");
                             this.close_tab_ai_harness_terminal(cx);
+                            logging::log("KEY", "Interceptor: Escape -> return to main menu from ACP chat");
                             cx.stop_propagation();
                             return;
                         }

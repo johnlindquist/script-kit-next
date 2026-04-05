@@ -319,10 +319,13 @@ fn turn_finished_returns_to_idle_from_streaming() {
 // =========================================================================
 
 const TAB_AI_MODE_SOURCE: &str = include_str!("../../app_impl/tab_ai_mode.rs");
+const ACTIONS_TOGGLE_SOURCE: &str = include_str!("../../app_impl/actions_toggle.rs");
 const STARTUP_SOURCE: &str = include_str!("../../app_impl/startup.rs");
+const STARTUP_NEW_ACTIONS_SOURCE: &str = include_str!("../../app_impl/startup_new_actions.rs");
 const STARTUP_NEW_TAB_SOURCE: &str = include_str!("../../app_impl/startup_new_tab.rs");
 const RENDER_IMPL_SOURCE: &str = include_str!("../../main_sections/render_impl.rs");
 const APP_VIEW_STATE_SOURCE: &str = include_str!("../../main_sections/app_view_state.rs");
+const APP_RUN_SETUP_SOURCE: &str = include_str!("../../main_entry/app_run_setup.rs");
 
 #[test]
 fn app_view_has_acp_chat_view_variant() {
@@ -375,6 +378,86 @@ fn startup_tab_guard_checks_acp_chat_view() {
 fn startup_new_tab_guard_checks_acp_chat_view() {
     assert!(STARTUP_NEW_TAB_SOURCE.contains("AppView::AcpChatView"));
     assert!(STARTUP_NEW_TAB_SOURCE.contains("handle_tab_key"));
+}
+
+#[test]
+fn acp_escape_defers_to_actions_dialog_before_unwinding_chat() {
+    for (name, source) in [
+        ("startup.rs", STARTUP_SOURCE),
+        ("startup_new_actions.rs", STARTUP_NEW_ACTIONS_SOURCE),
+    ] {
+        let escape_block_start = source
+            .find("// Handle Escape for AcpChatView (return to main menu)")
+            .unwrap_or_else(|| panic!("ACP escape block not found in {name}"));
+        let escape_block_end = (escape_block_start + 900).min(source.len());
+        let escape_block = &source[escape_block_start..escape_block_end];
+
+        assert!(
+            escape_block.contains("!this.show_actions_popup"),
+            "ACP escape block must defer to the actions dialog while it is open in {name}"
+        );
+        assert!(
+            escape_block.contains("this.close_tab_ai_harness_terminal(cx);"),
+            "ACP escape block must still close the ACP chat when actions are closed in {name}"
+        );
+    }
+}
+
+#[test]
+fn simulated_acp_escape_closes_actions_before_unwinding_chat() {
+    let acp_block_start = APP_RUN_SETUP_SOURCE
+        .find("AppView::AcpChatView { ref entity, .. } => {")
+        .expect("ACP simulateKey branch not found in app_run_setup.rs");
+    let acp_block_end = (acp_block_start + 2200).min(APP_RUN_SETUP_SOURCE.len());
+    let acp_block = &APP_RUN_SETUP_SOURCE[acp_block_start..acp_block_end];
+
+    let close_actions_pos = acp_block
+        .find("view.close_actions_popup(ActionsDialogHost::AcpChat, window, ctx);")
+        .expect("simulateKey ACP branch must close ACP actions popup");
+    let close_chat_pos = acp_block
+        .find("view.close_tab_ai_harness_terminal(ctx);")
+        .expect("simulateKey ACP branch must still close the ACP chat");
+
+    assert!(
+        acp_block.contains("view.show_actions_popup && key_lower == \"escape\""),
+        "simulateKey ACP branch must guard Escape with the ACP actions popup state"
+    );
+    assert!(
+        close_actions_pos < close_chat_pos,
+        "simulateKey ACP Escape should close the ACP actions popup before closing the ACP chat"
+    );
+}
+
+#[test]
+fn acp_actions_window_close_path_restores_acp_host_focus() {
+    let toggle_actions_start = ACTIONS_TOGGLE_SOURCE
+        .find("pub(crate) fn toggle_actions")
+        .expect("toggle_actions not found in actions_toggle.rs");
+    let toggle_actions_end = ACTIONS_TOGGLE_SOURCE[toggle_actions_start..]
+        .find("pub(crate) fn toggle_arg_actions")
+        .map(|offset| toggle_actions_start + offset)
+        .unwrap_or(ACTIONS_TOGGLE_SOURCE.len());
+    let toggle_actions = &ACTIONS_TOGGLE_SOURCE[toggle_actions_start..toggle_actions_end];
+
+    assert!(
+        toggle_actions.contains("let host = if is_acp_chat {")
+            && toggle_actions.contains("ActionsDialogHost::AcpChat")
+            && toggle_actions.contains("ActionsDialogHost::MainList"),
+        "toggle_actions must derive the actions host from whether ACP chat is active"
+    );
+    assert!(
+        toggle_actions.contains("self.close_actions_popup(host, window, cx);"),
+        "toggle_actions must close with the derived ACP/MainList host"
+    );
+    assert!(
+        toggle_actions.contains("Some(host_label)"),
+        "toggle_actions should emit the derived host label for popup events"
+    );
+    assert!(
+        toggle_actions.contains("Self::make_actions_window_on_close_callback(")
+            && ACTIONS_TOGGLE_SOURCE.contains("app.request_focus_restore_for_actions_host(host);"),
+        "actions window close callback must restore focus for the ACP host"
+    );
 }
 
 #[test]

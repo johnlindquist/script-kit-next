@@ -212,7 +212,7 @@ impl ScriptListApp {
         self.sync_filter_input_if_needed(window, cx);
     }
 
-    fn request_focus_restore_for_actions_host(&mut self, host: ActionsDialogHost) {
+    pub(crate) fn request_focus_restore_for_actions_host(&mut self, host: ActionsDialogHost) {
         use crate::focus_coordinator::FocusRequest;
 
         let request = match host {
