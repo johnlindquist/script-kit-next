@@ -95,7 +95,10 @@ interface ScreenshotResult {
   width: number | null;
   height: number | null;
   captureMethod: "window.ts" | "captureWindow" | null;
+  windowCaptureMethod: "quartz" | "screencapture" | null;
   windowFrontmost: boolean | null;
+  windowFocused: boolean | null;
+  windowId: number | null;
   error: string | null;
 }
 
@@ -342,6 +345,40 @@ function diag(event: string, data: Record<string, unknown> = {}): void {
   console.error(JSON.stringify({ event, ...data }));
 }
 
+function hasAcpAssertions(opts: Record<string, string | boolean>): boolean {
+  return [
+    "acpStatus",
+    "acpPickerOpen",
+    "acpPickerClosed",
+    "acpInputContains",
+    "acpInputMatch",
+    "acpCursorAt",
+    "acpItemAccepted",
+    "acpAcceptedLabel",
+    "acpAcceptedTrigger",
+    "acpAcceptedVia",
+    "acpCursorAfterAccepted",
+    "acpContextReady",
+    "acpNoSelection",
+    "acpHasSelection",
+    "acpNoPermission",
+    "acpHasPermission",
+    "acpVisibleStart",
+    "acpVisibleEnd",
+    "acpCursorInWindow",
+  ].some((key) => hasOpt(opts, key));
+}
+
+function shouldQueryProbe(
+  opts: Record<string, string | boolean>,
+  skipProbe: boolean
+): boolean {
+  return (
+    !skipProbe &&
+    (hasOpt(opts, "acpAcceptedVia") || hasOpt(opts, "acpCursorAfterAccepted"))
+  );
+}
+
 async function getImageDimensions(
   filePath: string
 ): Promise<{ width: number | null; height: number | null }> {
@@ -365,36 +402,62 @@ async function getImageDimensions(
 
 async function captureScreenshot(
   session: string,
-  outPath: string
+  outPath: string,
+  label: string,
+  opts: Record<string, string | boolean>
 ): Promise<ScreenshotResult> {
   let captureMethod: "window.ts" | "captureWindow" | null = null;
+  let windowCaptureMethod: "quartz" | "screencapture" | null = null;
   let windowFrontmost: boolean | null = null;
+  let windowFocused: boolean | null = null;
+  let windowId: number | null = null;
+
+  const strictWindowProof = hasAcpAssertions(opts);
 
   // Use the window.ts helper for reliable capture
   const windowScript = join(PROJECT_ROOT, "scripts/agentic/window.ts");
-  const proc = Bun.spawn(["bun", windowScript, "capture", outPath], {
-    stdout: "pipe",
-    stderr: "pipe",
-  });
+  const proc = Bun.spawn(
+    [
+      "bun",
+      windowScript,
+      "capture",
+      outPath,
+      "--activate-first",
+      "--retry",
+      "2",
+      "--settle-ms",
+      "200",
+    ],
+    {
+      stdout: "pipe",
+      stderr: "pipe",
+    }
+  );
   const stdout = await new Response(proc.stdout).text();
   const stderr = await new Response(proc.stderr).text();
   const code = await proc.exited;
 
   if (code === 0) {
     captureMethod = "window.ts";
-    // Parse window.ts envelope for frontmost status
     try {
-      const envelope = JSON.parse(stdout);
-      if (envelope?.data) {
-        windowFrontmost = true; // window.ts focuses before capture
-      }
+      const envelope = JSON.parse(stdout) as {
+        data?: {
+          method?: "quartz" | "screencapture";
+          frontmost?: boolean;
+          focused?: boolean;
+          windowId?: number;
+        };
+      };
+      windowCaptureMethod = envelope?.data?.method ?? null;
+      windowFrontmost = envelope?.data?.frontmost ?? null;
+      windowFocused = envelope?.data?.focused ?? null;
+      windowId = envelope?.data?.windowId ?? null;
     } catch {
-      // couldn't parse — still captured
+      // leave parsed fields null
     }
-  } else {
-    // Fallback: use session-based captureWindow
+  } else if (!strictWindowProof) {
+    // Fallback: use session-based captureWindow (only when no ACP assertions)
     captureMethod = "captureWindow";
-    windowFrontmost = null; // captureWindow doesn't guarantee frontmost
     const captureCmd = JSON.stringify({
       type: "captureWindow",
       title: "",
@@ -413,11 +476,61 @@ async function captureScreenshot(
         sizeBytes: null,
         width: null,
         height: null,
-        captureMethod: "captureWindow",
-        windowFrontmost: null,
+        captureMethod,
+        windowCaptureMethod,
+        windowFrontmost,
+        windowFocused,
+        windowId,
         error: `Capture failed. window.ts: ${stderr.trim()}. session captureWindow: ${sessErr}`,
       };
     }
+  } else {
+    // Strict mode: window.ts failed and we have ACP assertions — do not fall back
+    return {
+      captured: false,
+      path: outPath,
+      sizeBytes: null,
+      width: null,
+      height: null,
+      captureMethod: "window.ts",
+      windowCaptureMethod,
+      windowFrontmost,
+      windowFocused,
+      windowId,
+      error: `Strict window capture failed: ${stderr.trim() || stdout.trim() || "window.ts capture failed"}`,
+    };
+  }
+
+  diag("verify_shot_capture_receipt", {
+    label,
+    captureMethod,
+    windowCaptureMethod,
+    windowFrontmost,
+    windowFocused,
+    windowId,
+  });
+
+  // Strict window proof: require quartz method, frontmost, and valid windowId
+  if (
+    strictWindowProof &&
+    (windowCaptureMethod !== "quartz" ||
+      windowFrontmost !== true ||
+      windowId == null ||
+      windowId <= 0)
+  ) {
+    return {
+      captured: false,
+      path: outPath,
+      sizeBytes: null,
+      width: null,
+      height: null,
+      captureMethod,
+      windowCaptureMethod,
+      windowFrontmost,
+      windowFocused,
+      windowId,
+      error: `Strict window capture required quartz/frontmost/windowId; got method=${windowCaptureMethod ?? "null"} frontmost=${String(windowFrontmost)} windowId=${String(windowId)}`,
+    };
   }
 
   // Wait for file write
@@ -431,7 +544,10 @@ async function captureScreenshot(
       width: null,
       height: null,
       captureMethod,
+      windowCaptureMethod,
       windowFrontmost,
+      windowFocused,
+      windowId,
       error: "Screenshot file not created after capture",
     };
   }
@@ -446,7 +562,10 @@ async function captureScreenshot(
     width: dims.width,
     height: dims.height,
     captureMethod,
+    windowCaptureMethod,
     windowFrontmost,
+    windowFocused,
+    windowId,
     error: null,
   };
 }
@@ -868,7 +987,6 @@ function runProbeAssertions(
 
 function buildVisionChecks(
   screenshotResult: ScreenshotResult | null,
-  probeSnapshot: Record<string, unknown> | null,
   opts: Record<string, string | boolean>
 ): VisionCheck[] {
   if (!opts.emitVisionCrops) return [];
@@ -1012,13 +1130,9 @@ if (!skipState) {
   stateResult = await queryAcpState(session, requestId);
 }
 
-// Step 2: Query ACP test probe (unless skipped) — before screenshot
+// Step 2: Query ACP test probe only when probe assertions are requested
 let probeResult: ProbeResult | null = null;
-const needsProbe =
-  !skipProbe &&
-  (hasOpt(opts, "acpAcceptedVia") ||
-    hasOpt(opts, "acpCursorAfterAccepted") ||
-    !skipState);
+const needsProbe = shouldQueryProbe(opts, skipProbe);
 if (needsProbe) {
   const probeRequestId = `${requestId}-probe`;
   probeResult = await queryAcpTestProbe(session, probeRequestId, probeTail);
@@ -1039,7 +1153,7 @@ if (needsProbe) {
 // Step 3: Capture screenshot (unless skipped)
 let screenshotResult: ScreenshotResult | null = null;
 if (!skipScreenshot) {
-  screenshotResult = await captureScreenshot(session, outPath);
+  screenshotResult = await captureScreenshot(session, outPath, label, opts);
 }
 
 // Step 4: Run assertions against state + probe
@@ -1051,11 +1165,7 @@ const probeAssertions = runProbeAssertions(
 const assertions = [...stateAssertions, ...probeAssertions];
 
 // Step 5: Build vision checks
-const visionChecks = buildVisionChecks(
-  screenshotResult,
-  probeResult?.snapshot ?? null,
-  opts
-);
+const visionChecks = buildVisionChecks(screenshotResult, opts);
 
 // Log assertion evaluation
 for (const a of assertions) {
@@ -1077,7 +1187,7 @@ const hasInfraError =
 
 const receipt: VerifyReceipt = {
   schemaVersion: SCHEMA_VERSION,
-  status: hasInfraError && assertions.length === 0 ? "error" : allPassed ? "pass" : "fail",
+  status: hasInfraError ? "error" : allPassed ? "pass" : "fail",
   label,
   timestamp: new Date().toISOString(),
   durationMs: Date.now() - startTime,
@@ -1091,7 +1201,7 @@ const receipt: VerifyReceipt = {
 
 console.log(JSON.stringify(receipt, null, 2));
 
-if (hasInfraError && assertions.length === 0) {
+if (hasInfraError) {
   process.exit(2);
 } else {
   process.exit(allPassed ? 0 : 1);

@@ -2,16 +2,17 @@
 /**
  * scripts/agentic/index.ts
  *
- * Phase-2 thin wrapper over the lower-level agentic helpers.
+ * Thin orchestrator over the lower-level agentic helpers.
  * Orchestrates common multi-step flows without hiding the underlying
  * proof receipts from each tool.
  *
  * Usage:
- *   bun scripts/agentic/index.ts <recipe> [--session NAME] [--json]
+ *   bun scripts/agentic/index.ts <recipe> [--session NAME] [--key enter|tab] [--vision]
  *
  * Recipes:
- *   acp-enter-accept   Run the ACP picker-accept-via-Enter golden path
- *   acp-tab-accept     Run the ACP picker-accept-via-Tab golden path
+ *   acp-accept         Full ACP picker accept; choose key with --key enter|tab
+ *   acp-enter-accept   Compatibility alias for --key enter
+ *   acp-tab-accept     Compatibility alias for --key tab
  *   acp-open           Open ACP and verify it reaches ready state
  *   preflight          Check all prerequisites (session, window, permissions)
  *   help               Show this help
@@ -138,7 +139,14 @@ function parseArgs() {
   const sessionIdx = args.indexOf("--session");
   const session =
     sessionIdx >= 0 && args[sessionIdx + 1] ? args[sessionIdx + 1] : "default";
-  return { recipe, session };
+  const keyIdx = args.indexOf("--key");
+  const key =
+    keyIdx >= 0 &&
+    (args[keyIdx + 1] === "enter" || args[keyIdx + 1] === "tab")
+      ? (args[keyIdx + 1] as "enter" | "tab")
+      : "enter";
+  const vision = args.includes("--vision");
+  return { recipe, session, key, vision };
 }
 
 // ---------------------------------------------------------------------------
@@ -193,24 +201,23 @@ async function recipePreflight(session: string): Promise<RecipeReceipt> {
 async function recipeAcpOpen(session: string): Promise<RecipeReceipt> {
   const steps: StepReceipt[] = [];
 
-  // 1. Show window + trigger ACP in one batch, then waitFor acpReady
+  // 1. Show window
   steps.push(
-    await step("show-and-trigger-acp", () =>
-      send(session, '{"type":"show"}')
-    )
+    await step("show", () => send(session, '{"type":"show"}'))
   );
 
   // macOS focus-settling delay: the window needs a moment to
   // become frontmost after show before triggerBuiltin can target it.
   await Bun.sleep(300);
 
+  // 2. Trigger ACP
   steps.push(
     await step("trigger-acp", () =>
       send(session, '{"type":"triggerBuiltin","name":"tab-ai"}')
     )
   );
 
-  // 2. Wait for ACP to be ready using waitFor instead of fixed sleep
+  // 3. Wait for ACP to be ready using waitFor instead of fixed sleep
   steps.push(
     await step("wait-acp-ready", () =>
       rpc(
@@ -228,14 +235,7 @@ async function recipeAcpOpen(session: string): Promise<RecipeReceipt> {
     )
   );
 
-  // 3. Focus window
-  steps.push(
-    await step("focus-window", () =>
-      runTool(["bun", "scripts/agentic/window.ts", "focus"], "focus")
-    )
-  );
-
-  // 4. Verify ACP ready via verify-shot (state receipt before screenshot)
+  // 4. State-only verification: no screenshot, no probe
   steps.push(
     await step("verify-acp-ready", () =>
       runTool(
@@ -246,6 +246,8 @@ async function recipeAcpOpen(session: string): Promise<RecipeReceipt> {
           session,
           "--label",
           "acp-open",
+          "--skip-screenshot",
+          "--skip-probe",
           "--acp-context-ready",
         ],
         "verify-ready"
@@ -257,7 +259,11 @@ async function recipeAcpOpen(session: string): Promise<RecipeReceipt> {
   return {
     schemaVersion: SCHEMA_VERSION,
     recipe: "acp-open",
-    status: allPass ? "pass" : steps.some((s) => s.status === "error") ? "error" : "fail",
+    status: allPass
+      ? "pass"
+      : steps.some((s) => s.status === "error")
+        ? "error"
+        : "fail",
     steps,
     summary: allPass
       ? "ACP opened and context ready"
@@ -270,7 +276,8 @@ async function recipeAcpOpen(session: string): Promise<RecipeReceipt> {
 
 async function recipeAcpPickerAccept(
   session: string,
-  acceptKey: "enter" | "tab"
+  acceptKey: "enter" | "tab",
+  opts: { emitVision?: boolean } = {}
 ): Promise<RecipeReceipt> {
   const steps: StepReceipt[] = [];
 
@@ -293,24 +300,43 @@ async function recipeAcpPickerAccept(
     };
   }
 
-  // 2. Type @ to open picker (native input)
+  // 2. Reset probe before native interaction to avoid stale accepted items
+  steps.push(
+    await step("reset-probe", () =>
+      send(
+        session,
+        JSON.stringify({
+          type: "resetAcpTestProbe",
+          requestId: `reset-${acceptKey}-${Date.now()}`,
+        })
+      )
+    )
+  );
+
+  // 3. Type @ to open picker (native input with focus enforcement)
   steps.push(
     await step("type-at-trigger", () =>
       runTool(
-        ["bun", "scripts/agentic/macos-input.ts", "type", "@"],
+        [
+          "bun",
+          "scripts/agentic/macos-input.ts",
+          "type",
+          "@",
+          "--ensure-focus",
+        ],
         "type-at"
       )
     )
   );
 
-  // 3. Wait for picker to open using waitFor instead of fixed sleep
+  // 4. Wait for picker to open using waitFor instead of fixed sleep
   steps.push(
     await step("wait-picker-open", () =>
       rpc(
         session,
         JSON.stringify({
           type: "waitFor",
-          requestId: "w-picker-open",
+          requestId: `w-picker-open-${acceptKey}`,
           condition: { type: "acpPickerOpen" },
           timeout: 3000,
           pollInterval: 25,
@@ -321,7 +347,7 @@ async function recipeAcpPickerAccept(
     )
   );
 
-  // 4. Verify picker opened (state receipt first)
+  // 5. State-only verification for picker: no screenshot, no probe
   steps.push(
     await step("verify-picker-open", () =>
       runTool(
@@ -332,6 +358,8 @@ async function recipeAcpPickerAccept(
           session,
           "--label",
           "picker-open",
+          "--skip-screenshot",
+          "--skip-probe",
           "--acp-picker-open",
         ],
         "verify-picker"
@@ -339,25 +367,31 @@ async function recipeAcpPickerAccept(
     )
   );
 
-  // 5. Accept with native key
+  // 6. Accept with native key (with focus enforcement)
   steps.push(
     await step(`native-${acceptKey}`, () =>
       runTool(
-        ["bun", "scripts/agentic/macos-input.ts", "key", acceptKey],
+        [
+          "bun",
+          "scripts/agentic/macos-input.ts",
+          "key",
+          acceptKey,
+          "--ensure-focus",
+        ],
         `native-${acceptKey}`
       )
     )
   );
 
-  // 6. Wait for picker to close and item to be accepted
+  // 7. Wait for key-specific acceptance proof (not generic acpItemAccepted)
   steps.push(
-    await step("wait-item-accepted", () =>
+    await step("wait-accepted-via-key", () =>
       rpc(
         session,
         JSON.stringify({
           type: "waitFor",
-          requestId: "w-item-accepted",
-          condition: { type: "acpItemAccepted" },
+          requestId: `w-accepted-via-${acceptKey}`,
+          condition: { type: "acpAcceptedViaKey", key: acceptKey },
           timeout: 3000,
           pollInterval: 25,
           trace: "onFailure",
@@ -367,22 +401,23 @@ async function recipeAcpPickerAccept(
     )
   );
 
-  // 7. Verify picker closed + item accepted (state receipt + screenshot)
+  // 8. Final proof: screenshot + probe assertion (the only screenshot in the recipe)
+  const verifyArgs = [
+    "bun",
+    "scripts/agentic/verify-shot.ts",
+    "--session",
+    session,
+    "--label",
+    `${acceptKey}-accepted`,
+    "--acp-picker-closed",
+    "--acp-item-accepted",
+    "--acp-accepted-via",
+    acceptKey,
+    ...(opts.emitVision ? ["--emit-vision-crops"] : []),
+  ];
   steps.push(
     await step("verify-accepted", () =>
-      runTool(
-        [
-          "bun",
-          "scripts/agentic/verify-shot.ts",
-          "--session",
-          session,
-          "--label",
-          `${acceptKey}-accepted`,
-          "--acp-picker-closed",
-          "--acp-item-accepted",
-        ],
-        "verify-accepted"
-      )
+      runTool(verifyArgs, "verify-accepted")
     )
   );
 
@@ -390,7 +425,11 @@ async function recipeAcpPickerAccept(
   return {
     schemaVersion: SCHEMA_VERSION,
     recipe: `acp-${acceptKey}-accept`,
-    status: allPass ? "pass" : steps.some((s) => s.status === "error") ? "error" : "fail",
+    status: allPass
+      ? "pass"
+      : steps.some((s) => s.status === "error")
+        ? "error"
+        : "fail",
     steps,
     summary: allPass
       ? `ACP picker accepted via ${acceptKey}`
@@ -405,7 +444,7 @@ async function recipeAcpPickerAccept(
 // CLI
 // ---------------------------------------------------------------------------
 
-const { recipe, session } = parseArgs();
+const { recipe, session, key, vision } = parseArgs();
 
 let result: RecipeReceipt;
 
@@ -418,31 +457,39 @@ switch (recipe) {
     result = await recipeAcpOpen(session);
     break;
 
+  case "acp-accept":
+    result = await recipeAcpPickerAccept(session, key, {
+      emitVision: vision,
+    });
+    break;
+
   case "acp-enter-accept":
-    result = await recipeAcpPickerAccept(session, "enter");
+    result = await recipeAcpPickerAccept(session, "enter", {
+      emitVision: vision,
+    });
     break;
 
   case "acp-tab-accept":
-    result = await recipeAcpPickerAccept(session, "tab");
+    result = await recipeAcpPickerAccept(session, "tab", {
+      emitVision: vision,
+    });
     break;
 
   case "help":
   case "--help":
-    console.log(`Usage: bun scripts/agentic/index.ts <recipe> [--session NAME]
+    console.log(`Usage: bun scripts/agentic/index.ts <recipe> [--session NAME] [--key enter|tab] [--vision]
 
 Recipes:
   preflight          Check prerequisites (session, window, permissions)
   acp-open           Open ACP and verify ready state
-  acp-enter-accept   Full ACP picker accept via Enter golden path
-  acp-tab-accept     Full ACP picker accept via Tab golden path
+  acp-accept         Full ACP picker accept; choose key with --key enter|tab
+  acp-enter-accept   Compatibility alias for --key enter
+  acp-tab-accept     Compatibility alias for --key tab
   help               Show this help
 
-Each recipe returns a JSON receipt with per-step proof from the underlying tools.
-The wrapper is intentionally thin — it does not replace the lower-level commands.
-
 Examples:
-  bun scripts/agentic/index.ts preflight --session default
-  bun scripts/agentic/index.ts acp-enter-accept --session default --json`);
+  bun scripts/agentic/index.ts acp-accept --session default --key enter
+  bun scripts/agentic/index.ts acp-accept --session default --key tab --vision`);
     process.exit(0);
     break;
 
@@ -458,4 +505,6 @@ Examples:
 }
 
 console.log(JSON.stringify(result!, null, 2));
-process.exit(result!.status === "pass" ? 0 : result!.status === "error" ? 2 : 1);
+process.exit(
+  result!.status === "pass" ? 0 : result!.status === "error" ? 2 : 1
+);

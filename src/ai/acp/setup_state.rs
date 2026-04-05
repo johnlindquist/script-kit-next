@@ -71,16 +71,20 @@ impl AcpInlineSetupState {
         reason: &str,
         auth_methods: &[String],
     ) -> Self {
-        let can_switch = has_launchable_alternative(selected_agent.as_ref(), &catalog_entries);
+        let can_switch = has_launchable_capable_alternative(
+            selected_agent.as_ref(),
+            &catalog_entries,
+            launch_requirements,
+        );
 
         match reason {
             "auth_required" if can_switch => Self {
                 title: "Authentication required".into(),
                 body: if auth_methods.is_empty() {
-                    "The selected ACP agent needs authentication, but another ready agent is available.".into()
+                    "The selected ACP agent needs authentication, but another compatible ready agent is available.".into()
                 } else {
                     format!(
-                        "The selected ACP agent needs authentication ({}) but another ready agent is available.",
+                        "The selected ACP agent needs authentication ({}) but another compatible ready agent is available.",
                         auth_methods.join(", ")
                     ).into()
                 },
@@ -110,7 +114,7 @@ impl AcpInlineSetupState {
             _ if can_switch => Self {
                 title: "ACP agent setup required".into(),
                 body:
-                    "The selected ACP agent cannot continue, but another ready agent is available."
+                    "The selected ACP agent cannot continue, but another compatible ready agent is available."
                         .into(),
                 primary_action: AcpSetupAction::SelectAgent,
                 secondary_action: Some(AcpSetupAction::Retry),

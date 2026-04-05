@@ -37,6 +37,14 @@ pub trait TransactionStateProvider {
     /// Select a choice by semantic ID, optionally submitting. Returns the
     /// matched value or `None` if no element matched the semantic ID.
     fn select_by_semantic_id(&mut self, semantic_id: &str, submit: bool) -> Result<Option<String>>;
+
+    /// Return the most recent ACP test probe snapshot for proof-level
+    /// condition evaluation. Providers without ACP state return a default
+    /// (empty) snapshot, which causes all ACP proof conditions to evaluate
+    /// as not-matched.
+    fn acp_test_probe(&self, _tail: usize) -> crate::protocol::AcpTestProbeSnapshot {
+        crate::protocol::AcpTestProbeSnapshot::default()
+    }
 }
 
 // ── Condition matching ─────────────────────────────────────────────────────
@@ -61,7 +69,11 @@ fn matches_state(snapshot: &UiStateSnapshot, spec: &StateMatchSpec) -> bool {
     true
 }
 
-fn matches_condition(snapshot: &UiStateSnapshot, condition: &WaitCondition) -> (bool, Vec<String>) {
+fn matches_condition<P: TransactionStateProvider>(
+    provider: &P,
+    snapshot: &UiStateSnapshot,
+    condition: &WaitCondition,
+) -> (bool, Vec<String>) {
     match condition {
         WaitCondition::Named(WaitNamedCondition::ChoicesRendered) => {
             (snapshot.choice_count > 0, Vec::new())
@@ -100,8 +112,47 @@ fn matches_condition(snapshot: &UiStateSnapshot, condition: &WaitCondition) -> (
         WaitCondition::Detailed(WaitDetailedCondition::StateMatch { state }) => {
             (matches_state(snapshot, state), Vec::new())
         }
-        // ACP-specific conditions are not evaluated against UiStateSnapshot;
-        // they require an ACP-specific matcher. Default to not-matched here.
+
+        // ── ACP proof conditions (evaluated against test probe) ──────
+        WaitCondition::Detailed(WaitDetailedCondition::AcpAcceptedViaKey { key }) => {
+            let probe = provider.acp_test_probe(1);
+            let ok = probe
+                .accepted_items
+                .last()
+                .is_some_and(|item| item.accepted_via_key == *key);
+            (ok, Vec::new())
+        }
+        WaitCondition::Detailed(WaitDetailedCondition::AcpAcceptedLabel { label }) => {
+            let probe = provider.acp_test_probe(1);
+            let ok = probe
+                .accepted_items
+                .last()
+                .is_some_and(|item| item.item_label == *label);
+            (ok, Vec::new())
+        }
+        WaitCondition::Detailed(WaitDetailedCondition::AcpAcceptedCursorAt { index }) => {
+            let probe = provider.acp_test_probe(1);
+            let ok = probe
+                .accepted_items
+                .last()
+                .is_some_and(|item| item.cursor_after == *index);
+            (ok, Vec::new())
+        }
+        WaitCondition::Detailed(WaitDetailedCondition::AcpInputLayoutMatch {
+            visible_start,
+            visible_end,
+            cursor_in_window,
+        }) => {
+            let probe = provider.acp_test_probe(1);
+            let ok = probe.input_layout.as_ref().is_some_and(|layout| {
+                layout.visible_start == *visible_start
+                    && layout.visible_end == *visible_end
+                    && layout.cursor_in_window == *cursor_in_window
+            });
+            (ok, Vec::new())
+        }
+
+        // ACP live-state conditions (not yet wired to UiStateSnapshot).
         _ => (false, Vec::new()),
     }
 }
@@ -193,7 +244,7 @@ fn run_wait_for_command<P: TransactionStateProvider>(
     loop {
         let elapsed_ms = started.elapsed().as_millis() as u64;
         let snapshot = provider.snapshot();
-        let (ok, matched_ids) = matches_condition(&snapshot, condition);
+        let (ok, matched_ids) = matches_condition(provider, &snapshot, condition);
 
         polls.push(WaitPollObservation {
             attempt: polls.len() + 1,

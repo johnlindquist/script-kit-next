@@ -235,10 +235,16 @@ fn parse_inline_mentions_resolves_recent_scripts() {
 
 #[test]
 fn parse_inline_mentions_resolves_calendar() {
+    let prev = std::env::var_os("SCRIPT_KIT_CALENDAR_JSON");
+    std::env::set_var("SCRIPT_KIT_CALENDAR_JSON", r#"{"ok":true}"#);
     let mentions = parse_inline_context_mentions("Check @calendar");
     assert_eq!(mentions.len(), 1);
     assert_eq!(mentions[0].token, "@calendar");
     assert_eq!(mentions[0].part.source(), "kit://calendar");
+    match prev {
+        Some(v) => std::env::set_var("SCRIPT_KIT_CALENDAR_JSON", v),
+        None => std::env::remove_var("SCRIPT_KIT_CALENDAR_JSON"),
+    }
 }
 
 #[test]
@@ -267,6 +273,14 @@ fn parse_inline_mentions_resolves_system() {
 
 #[test]
 fn parse_context_mentions_handles_all_provider_backed_directives() {
+    // Set provider env vars so the gated kinds resolve.
+    let prev_cal = std::env::var_os("SCRIPT_KIT_CALENDAR_JSON");
+    let prev_dict = std::env::var_os("SCRIPT_KIT_DICTATION_JSON");
+    let prev_notif = std::env::var_os("SCRIPT_KIT_NOTIFICATIONS_JSON");
+    std::env::set_var("SCRIPT_KIT_CALENDAR_JSON", r#"{"ok":true}"#);
+    std::env::set_var("SCRIPT_KIT_DICTATION_JSON", r#"{"ok":true}"#);
+    std::env::set_var("SCRIPT_KIT_NOTIFICATIONS_JSON", r#"{"ok":true}"#);
+
     let input = "@screenshot\n@clipboard\n@git-diff\n@git-status\n@recent-scripts\n@calendar\n@processes\n@system\n@notifications\n@dictation";
     let parsed = parse_context_mentions(input);
 
@@ -282,6 +296,19 @@ fn parse_context_mentions_handles_all_provider_backed_directives() {
     assert_eq!(parsed.parts[7].label(), "System Info");
     assert_eq!(parsed.parts[8].label(), "Notifications");
     assert_eq!(parsed.parts[9].label(), "Dictation");
+
+    match prev_cal {
+        Some(v) => std::env::set_var("SCRIPT_KIT_CALENDAR_JSON", v),
+        None => std::env::remove_var("SCRIPT_KIT_CALENDAR_JSON"),
+    }
+    match prev_dict {
+        Some(v) => std::env::set_var("SCRIPT_KIT_DICTATION_JSON", v),
+        None => std::env::remove_var("SCRIPT_KIT_DICTATION_JSON"),
+    }
+    match prev_notif {
+        Some(v) => std::env::set_var("SCRIPT_KIT_NOTIFICATIONS_JSON", v),
+        None => std::env::remove_var("SCRIPT_KIT_NOTIFICATIONS_JSON"),
+    }
 }
 
 #[test]
@@ -295,6 +322,15 @@ fn parse_inline_mentions_multiple_provider_backed() {
 #[test]
 fn part_to_inline_token_roundtrips_all_provider_backed() {
     use crate::ai::context_contract::ContextAttachmentKind;
+
+    // Set provider env vars so gated kinds resolve during round-trip.
+    let prev_cal = std::env::var_os("SCRIPT_KIT_CALENDAR_JSON");
+    let prev_dict = std::env::var_os("SCRIPT_KIT_DICTATION_JSON");
+    let prev_notif = std::env::var_os("SCRIPT_KIT_NOTIFICATIONS_JSON");
+    std::env::set_var("SCRIPT_KIT_CALENDAR_JSON", r#"{"ok":true}"#);
+    std::env::set_var("SCRIPT_KIT_DICTATION_JSON", r#"{"ok":true}"#);
+    std::env::set_var("SCRIPT_KIT_NOTIFICATIONS_JSON", r#"{"ok":true}"#);
+
     let kinds = [
         ContextAttachmentKind::Screenshot,
         ContextAttachmentKind::Clipboard,
@@ -323,6 +359,19 @@ fn part_to_inline_token_roundtrips_all_provider_backed() {
             token
         );
         assert_eq!(mentions[0].part, part, "round-trip mismatch for {kind:?}");
+    }
+
+    match prev_cal {
+        Some(v) => std::env::set_var("SCRIPT_KIT_CALENDAR_JSON", v),
+        None => std::env::remove_var("SCRIPT_KIT_CALENDAR_JSON"),
+    }
+    match prev_dict {
+        Some(v) => std::env::set_var("SCRIPT_KIT_DICTATION_JSON", v),
+        None => std::env::remove_var("SCRIPT_KIT_DICTATION_JSON"),
+    }
+    match prev_notif {
+        Some(v) => std::env::set_var("SCRIPT_KIT_NOTIFICATIONS_JSON", v),
+        None => std::env::remove_var("SCRIPT_KIT_NOTIFICATIONS_JSON"),
     }
 }
 
@@ -545,4 +594,66 @@ fn part_to_inline_token_quotes_paths_with_spaces() {
         part_to_inline_token(&part),
         Some(r#"@file:"/tmp/My File.ts""#.to_string())
     );
+}
+
+// ── Provider-backed mention gating ──────────────────────────────
+
+fn restore_env(key: &str, value: Option<std::ffi::OsString>) {
+    match value {
+        Some(value) => std::env::set_var(key, value),
+        None => std::env::remove_var(key),
+    }
+}
+
+#[test]
+fn unavailable_provider_backed_mentions_do_not_resolve_inline() {
+    let prev_dictation = std::env::var_os("SCRIPT_KIT_DICTATION_JSON");
+    let prev_calendar = std::env::var_os("SCRIPT_KIT_CALENDAR_JSON");
+    let prev_notifications = std::env::var_os("SCRIPT_KIT_NOTIFICATIONS_JSON");
+    std::env::remove_var("SCRIPT_KIT_DICTATION_JSON");
+    std::env::remove_var("SCRIPT_KIT_CALENDAR_JSON");
+    std::env::remove_var("SCRIPT_KIT_NOTIFICATIONS_JSON");
+
+    let mentions = parse_inline_context_mentions("Check @dictation @calendar @notifications");
+    assert!(
+        mentions.is_empty(),
+        "manual inline mentions must not attach provider-backed fallback resources when no provider data exists"
+    );
+
+    restore_env("SCRIPT_KIT_DICTATION_JSON", prev_dictation);
+    restore_env("SCRIPT_KIT_CALENDAR_JSON", prev_calendar);
+    restore_env("SCRIPT_KIT_NOTIFICATIONS_JSON", prev_notifications);
+}
+
+#[test]
+fn available_provider_backed_mentions_still_resolve_inline() {
+    let prev_calendar = std::env::var_os("SCRIPT_KIT_CALENDAR_JSON");
+    std::env::set_var(
+        "SCRIPT_KIT_CALENDAR_JSON",
+        r#"{"schemaVersion":1,"type":"calendar","ok":true,"available":true,"source":"env","items":[{"title":"Demo"}]}"#,
+    );
+
+    let mentions = parse_inline_context_mentions("Check @calendar");
+    assert_eq!(mentions.len(), 1);
+    assert_eq!(mentions[0].token, "@calendar");
+    assert_eq!(mentions[0].part.source(), "kit://calendar");
+
+    restore_env("SCRIPT_KIT_CALENDAR_JSON", prev_calendar);
+}
+
+#[test]
+fn incomplete_file_token_does_not_attach_any_part() {
+    let mentions = parse_inline_context_mentions("Open @file:");
+    assert!(
+        mentions.is_empty(),
+        "an incomplete @file: token must not attach a stale FilePath part"
+    );
+}
+
+#[test]
+fn quoted_file_token_with_spaces_round_trips() {
+    let mentions = parse_inline_context_mentions(r#"Open @file:"/tmp/my file.rs""#);
+    assert_eq!(mentions.len(), 1);
+    let token = part_to_inline_token(&mentions[0].part).expect("round-trip token");
+    assert_eq!(token, r#"@file:"/tmp/my file.rs""#);
 }
