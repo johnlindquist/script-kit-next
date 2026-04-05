@@ -16,16 +16,16 @@ impl ParsedContextMentions {
 /// A single inline `@mention` token found in text, with its character range
 /// and the resolved `AiContextPart`.
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) struct InlineContextMention {
+pub struct InlineContextMention {
     /// Character-level range of the token in the source text.
-    pub(crate) range: std::ops::Range<usize>,
+    pub range: std::ops::Range<usize>,
     /// The raw token text (e.g. `@browser`, `@file:/tmp/demo.rs`).
-    pub(crate) token: String,
+    pub token: String,
     /// The canonical token for this mention, used for ownership tracking and
     /// highlight matching. Aliases resolve to the primary mention token.
-    pub(crate) canonical_token: String,
+    pub canonical_token: String,
     /// The resolved context part for this mention.
-    pub(crate) part: AiContextPart,
+    pub part: AiContextPart,
 }
 
 pub(crate) fn parse_context_mentions(raw_content: &str) -> ParsedContextMentions {
@@ -154,7 +154,7 @@ fn format_inline_file_token(path: &str) -> String {
 /// Scan `text` for inline `@mention` tokens and resolve each to an
 /// `AiContextPart`. Supports built-in mentions (`@browser`, `@git-status`,
 /// etc.) and file mentions (`@file:/path`), including quoted paths with spaces.
-pub(crate) fn parse_inline_context_mentions(text: &str) -> Vec<InlineContextMention> {
+pub fn parse_inline_context_mentions(text: &str) -> Vec<InlineContextMention> {
     let chars: Vec<char> = text.chars().collect();
     let mut out = Vec::new();
     let mut i = 0;
@@ -204,7 +204,7 @@ pub(crate) fn parse_inline_context_mentions(text: &str) -> Vec<InlineContextMent
 /// Return the character-level range of the inline mention token whose span
 /// covers `cursor`. Returns `None` when the cursor is not inside or at the
 /// boundary of any recognised mention.
-pub(crate) fn mention_range_at_cursor(text: &str, cursor: usize) -> Option<std::ops::Range<usize>> {
+pub fn mention_range_at_cursor(text: &str, cursor: usize) -> Option<std::ops::Range<usize>> {
     parse_inline_context_mentions(text)
         .into_iter()
         .find(|mention| cursor > mention.range.start && cursor <= mention.range.end)

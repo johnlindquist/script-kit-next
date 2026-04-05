@@ -146,3 +146,6 @@ pub use self::window::context_preflight::{
     estimate_tokens_from_text, preflight_state_from_receipt, status_from_decision,
     ContextPreflightSnapshot, ContextPreflightState, ContextPreflightStatus,
 };
+pub use self::context_mentions::{
+    mention_range_at_cursor, parse_inline_context_mentions, InlineContextMention,
+};

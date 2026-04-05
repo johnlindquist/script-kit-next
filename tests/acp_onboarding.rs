@@ -397,3 +397,67 @@ fn setup_picker_confirm_updates_live_thread_selected_agent() {
         "setup picker confirmation must emit a structured log"
     );
 }
+
+// ── Setup picker uses synchronous persistence before retry ──────────
+
+#[test]
+fn setup_picker_uses_sync_persistence_before_retry() {
+    // The confirm path must call the synchronous helper so the persisted
+    // preference is already on disk when a retry reloads it.
+    assert!(
+        ACP_VIEW_SOURCE.contains("persist_preferred_acp_agent_id_sync"),
+        "confirm_setup_agent_picker must use the synchronous persistence helper"
+    );
+    assert!(
+        !ACP_VIEW_SOURCE.contains("persist_preferred_acp_agent_id(Some(agent.id"),
+        "confirm_setup_agent_picker must NOT call the async persistence helper directly"
+    );
+}
+
+#[test]
+fn setup_picker_gates_retry_on_persistence_success() {
+    // Auto-retry must depend on both resolution readiness AND sync persistence.
+    assert!(
+        ACP_VIEW_SOURCE.contains("resolution.is_ready() && persist_result.is_ok()"),
+        "auto-retry must be gated on both resolution readiness and sync persistence success"
+    );
+}
+
+#[test]
+fn setup_picker_emits_persist_before_retry_log() {
+    assert!(
+        ACP_VIEW_SOURCE.contains("acp_setup_agent_persist_before_retry"),
+        "confirm path must emit acp_setup_agent_persist_before_retry log"
+    );
+    assert!(
+        ACP_VIEW_SOURCE.contains("persisted = persist_result.is_ok()"),
+        "persist-before-retry log must include the persisted outcome"
+    );
+}
+
+#[test]
+fn acp_config_exposes_sync_persistence_helper() {
+    assert!(
+        ACP_CONFIG_SOURCE.contains("fn persist_preferred_acp_agent_id_sync"),
+        "acp config must expose a synchronous preferred-agent persistence helper"
+    );
+}
+
+#[test]
+fn async_persistence_delegates_to_sync_helper() {
+    // The async helper must delegate to the sync helper to avoid duplicating
+    // the write logic.
+    let async_fn_start = ACP_CONFIG_SOURCE
+        .find("fn persist_preferred_acp_agent_id(agent_id")
+        .expect("async persistence helper must exist");
+    let async_fn_body = &ACP_CONFIG_SOURCE[async_fn_start..];
+    let next_fn = async_fn_body[1..]
+        .find("\npub(crate) fn ")
+        .unwrap_or(async_fn_body.len());
+    let async_fn_body = &async_fn_body[..next_fn];
+
+    assert!(
+        async_fn_body.contains("persist_preferred_acp_agent_id_sync"),
+        "async persist helper must delegate to the sync helper internally"
+    );
+}

@@ -454,26 +454,37 @@ pub(crate) fn load_preferred_acp_agent_id() -> Option<String> {
         .selected_acp_agent_id
 }
 
+/// Persist the preferred ACP agent ID to `settings.json` synchronously.
+///
+/// Returns `Ok(())` when the write succeeds, so callers can gate retry
+/// logic on a truthful persistence outcome instead of racing an async write.
+pub(crate) fn persist_preferred_acp_agent_id_sync(
+    agent_id: Option<String>,
+) -> anyhow::Result<()> {
+    let mut prefs = crate::config::load_user_preferences();
+    prefs.ai.selected_acp_agent_id = agent_id.clone();
+    crate::config::save_user_preferences(&prefs)?;
+    tracing::info!(
+        target: "script_kit::tab_ai",
+        event = "acp_agent_selection_persisted_sync",
+        ?agent_id,
+    );
+    Ok(())
+}
+
 /// Persist the preferred ACP agent ID to `settings.json` on a background thread.
 ///
-/// Logs success or failure structured events for observability.
+/// Delegates to the synchronous helper internally. Use this when the caller
+/// does not need to gate on persistence success (e.g. initial launch).
 pub(crate) fn persist_preferred_acp_agent_id(agent_id: Option<String>) {
     std::thread::Builder::new()
         .name("acp-save-agent".into())
         .spawn(move || {
-            let mut prefs = crate::config::load_user_preferences();
-            prefs.ai.selected_acp_agent_id = agent_id.clone();
-            if let Err(error) = crate::config::save_user_preferences(&prefs) {
+            if let Err(error) = persist_preferred_acp_agent_id_sync(agent_id.clone()) {
                 tracing::warn!(
                     target: "script_kit::tab_ai",
                     event = "acp_agent_selection_persist_failed",
                     error = %error,
-                    ?agent_id,
-                );
-            } else {
-                tracing::info!(
-                    target: "script_kit::tab_ai",
-                    event = "acp_agent_selection_persisted",
                     ?agent_id,
                 );
             }
