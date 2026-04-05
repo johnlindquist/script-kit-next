@@ -402,6 +402,10 @@ fn acp_escape_defers_to_actions_dialog_before_unwinding_chat() {
             "ACP escape block must defer to the actions dialog while it is open in {name}"
         );
         assert!(
+            escape_block.contains("!acp_escape_popup_open"),
+            "ACP escape block must defer to ACP-local popups while they are open in {name}"
+        );
+        assert!(
             escape_block.contains("this.close_tab_ai_harness_terminal(cx);"),
             "ACP escape block must still close the ACP chat when actions are closed in {name}"
         );
@@ -571,6 +575,7 @@ fn acp_model_selector_button_and_selection_sync_popup_window() {
 fn acp_view_exposes_escape_popup_dismiss_helper() {
     assert!(
         ACP_VIEW_SOURCE.contains("pub(crate) fn dismiss_escape_popup")
+            && ACP_VIEW_SOURCE.contains("pub(crate) fn has_escape_dismissible_popup")
             && ACP_VIEW_SOURCE.contains("self.model_selector_open = false;")
             && ACP_VIEW_SOURCE
                 .contains("self.sync_model_selector_popup_window_from_cached_parent(cx);")

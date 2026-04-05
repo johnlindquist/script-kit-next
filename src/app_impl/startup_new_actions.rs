@@ -136,9 +136,17 @@
                             return;
                         }
 
+                        let acp_escape_popup_open = match &this.current_view {
+                            AppView::AcpChatView { entity, .. } => {
+                                entity.read(cx).has_escape_dismissible_popup()
+                            }
+                            _ => false,
+                        };
+
                         // Handle Escape for AcpChatView (return to main menu)
                         if crate::ui_foundation::is_key_escape(key) && !has_cmd && !has_shift
                             && !this.show_actions_popup
+                            && !acp_escape_popup_open
                             && matches!(this.current_view, AppView::AcpChatView { .. })
                         {
                             this.close_tab_ai_harness_terminal(cx);
