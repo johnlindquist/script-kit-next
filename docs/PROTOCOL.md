@@ -2208,7 +2208,9 @@ Enumerate all automation-addressable windows.
 
 High-fidelity event simulation through GPUI's real event pipeline (unlike legacy `simulateKey` which bypasses GPUI intercepts).
 
-**Request:**
+**Ambiguity rule:** until GPUI dispatch is wired to stable per-window handles, `simulateGpuiEvent` fails closed whenever more than one visible window shares the resolved `kind`. It does not guess.
+
+**Request (single window — succeeds):**
 ```json
 {
   "type": "simulateGpuiEvent",
@@ -2221,6 +2223,26 @@ High-fidelity event simulation through GPUI's real event pipeline (unlike legacy
 **Response:**
 ```json
 {"type": "simulateGpuiEventResult", "requestId": "gpui-1", "success": true}
+```
+
+**Request (ambiguous — two detached ACP windows visible):**
+```json
+{
+  "type": "simulateGpuiEvent",
+  "requestId": "gpui-ambiguous",
+  "target": {"type": "kind", "kind": "acpDetached"},
+  "event": {"type": "keyDown", "key": "k", "modifiers": ["cmd"]}
+}
+```
+
+**Response:**
+```json
+{
+  "type": "simulateGpuiEventResult",
+  "requestId": "gpui-ambiguous",
+  "success": false,
+  "error": "Resolved target acpDetached:thread-1 (AcpDetached) is ambiguous: 2 visible windows share this kind and GPUI dispatch still routes through one WindowRole"
+}
 ```
 
 **Event types:**
@@ -2242,4 +2264,4 @@ High-fidelity event simulation through GPUI's real event pipeline (unlike legacy
 | `simulateClick` | Click in targeted window |
 | `waitFor` | Poll condition on targeted window (main-only, non-main fails closed) |
 | `batch` | Execute batch on targeted window (main-only, non-main fails closed) |
-| `simulateGpuiEvent` | GPUI event dispatch to targeted window (rejects ambiguous same-kind routing) |
+| `simulateGpuiEvent` | GPUI event dispatch to targeted window (fails closed when multiple visible windows share the resolved kind) |
