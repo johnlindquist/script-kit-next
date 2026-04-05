@@ -7,13 +7,10 @@ use serde::de::DeserializeOwned;
 use serde_json::{Map, Value};
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use tempfile::NamedTempFile;
+use tempfile::Builder;
 use tracing::{info, instrument, warn};
 
 use super::types::{Config, ScriptKitUserPreferences};
-
-const BUN_CONFIG_EXPORT_EXTRACT_SNIPPET: &str =
-    "const modulePath = process.argv[1]; const loaded = require(modulePath); console.log(JSON.stringify(loaded.default));";
 
 fn config_ts_path() -> PathBuf {
     crate::setup::get_kit_path().join("kit").join("config.ts")
@@ -25,13 +22,21 @@ fn settings_json_path() -> PathBuf {
         .join("settings.json")
 }
 
-fn build_bun_extract_config_command(transpiled_js_path: &Path) -> Command {
+/// Build a Bun command that imports a module by URL and writes its default export as JSON to stdout.
+///
+/// Uses `pathToFileURL` so paths with special characters are handled safely.
+fn build_bun_extract_command(module_path: &Path) -> Result<Command, serde_json::Error> {
+    let module_path_json =
+        serde_json::to_string(&module_path.to_string_lossy().into_owned())?;
+    let script = format!(
+        r#"const {{ pathToFileURL }} = await import("node:url");
+const moduleUrl = pathToFileURL({module_path_json}).href;
+const loaded = await import(moduleUrl);
+process.stdout.write(JSON.stringify(loaded?.default ?? {{}}));"#
+    );
     let mut command = Command::new("bun");
-    command
-        .arg("-e")
-        .arg(BUN_CONFIG_EXPORT_EXTRACT_SNIPPET)
-        .arg(transpiled_js_path);
-    command
+    command.arg("--eval").arg(script);
+    Ok(command)
 }
 
 fn parse_optional_field<T>(
@@ -284,11 +289,8 @@ pub fn save_user_preferences(prefs: &ScriptKitUserPreferences) -> anyhow::Result
 
 /// Load configuration from `<SK_PATH>/kit/config.ts` (or `~/.scriptkit/kit/config.ts`)
 ///
-/// This function:
-/// 1. Checks if the config file exists
-/// 2. Transpiles TypeScript to JavaScript using bun build
-/// 3. Executes the JS to extract the default export as JSON
-/// 4. Parses the JSON into a Config struct
+/// Fast path: imports config.ts directly with a single Bun process.
+/// Fallback: transpiles to a temp `.mjs` file then extracts (two Bun processes).
 ///
 /// Returns Config::default() if any step fails.
 #[instrument(name = "load_config")]
@@ -296,7 +298,6 @@ pub fn load_config() -> Config {
     let correlation_id = format!("config_load:{}", uuid::Uuid::new_v4());
     let config_path = config_ts_path();
 
-    // Check if config file exists
     if !config_path.exists() {
         info!(
             correlation_id = %correlation_id,
@@ -306,89 +307,146 @@ pub fn load_config() -> Config {
         return Config::default();
     }
 
-    // Step 1: Transpile TypeScript to JavaScript using bun build
-    // Use secure temporary file creation to avoid predictable paths and TOCTOU attacks
-    let tmp_js = match NamedTempFile::new() {
-        Ok(file) => file,
-        Err(e) => {
+    // Fast path: import config.ts directly with one Bun process.
+    let direct_start = std::time::Instant::now();
+    let mut direct_command = match build_bun_extract_command(&config_path) {
+        Ok(command) => command,
+        Err(error) => {
             warn!(
                 correlation_id = %correlation_id,
-                error = %e,
-                "Failed to create temporary file, using defaults"
+                error = %error,
+                "Failed to prepare direct bun config import, using defaults"
             );
             return Config::default();
         }
     };
-    let tmp_js_path = tmp_js.path();
+
+    match direct_command.output() {
+        Ok(output) if output.status.success() => {
+            let json_str = String::from_utf8_lossy(&output.stdout);
+            let config = parse_config_json(&json_str, &correlation_id);
+            info!(
+                correlation_id = %correlation_id,
+                mode = "direct_import",
+                elapsed_ms = direct_start.elapsed().as_secs_f64() * 1000.0,
+                path = %config_path.display(),
+                "Loaded config"
+            );
+            return config;
+        }
+        Ok(output) => {
+            warn!(
+                correlation_id = %correlation_id,
+                mode = "direct_import",
+                elapsed_ms = direct_start.elapsed().as_secs_f64() * 1000.0,
+                stderr = %String::from_utf8_lossy(&output.stderr),
+                "Direct bun config import failed, falling back to transpile path"
+            );
+        }
+        Err(error) => {
+            warn!(
+                correlation_id = %correlation_id,
+                mode = "direct_import",
+                elapsed_ms = direct_start.elapsed().as_secs_f64() * 1000.0,
+                error = %error,
+                "Direct bun config import failed to start, falling back to transpile path"
+            );
+        }
+    }
+
+    // Fallback: preserve the existing two-step transpile behavior for edge cases.
+    let fallback_start = std::time::Instant::now();
+    let tmp_js = match Builder::new().suffix(".mjs").tempfile() {
+        Ok(file) => file,
+        Err(error) => {
+            warn!(
+                correlation_id = %correlation_id,
+                error = %error,
+                "Failed to create temporary file for config transpile fallback, using defaults"
+            );
+            return Config::default();
+        }
+    };
 
     let build_output = Command::new("bun")
         .arg("build")
         .arg("--target=bun")
         .arg(config_path.to_string_lossy().to_string())
-        .arg(format!("--outfile={}", tmp_js_path.display()))
+        .arg(format!("--outfile={}", tmp_js.path().display()))
         .output();
 
     match build_output {
-        Err(e) => {
+        Err(error) => {
             warn!(
                 correlation_id = %correlation_id,
-                error = %e,
+                mode = "transpile_fallback",
+                error = %error,
                 "Failed to transpile config with bun, using defaults"
             );
             return Config::default();
         }
-        Ok(output) => {
-            if !output.status.success() {
-                warn!(
-                    correlation_id = %correlation_id,
-                    stderr = %String::from_utf8_lossy(&output.stderr),
-                    "bun build failed, using defaults"
-                );
-                return Config::default();
-            }
-        }
-    }
-
-    // Step 2: Execute the transpiled JS and extract the default export as JSON
-    let json_output = build_bun_extract_config_command(tmp_js_path).output();
-
-    match json_output {
-        Err(e) => {
+        Ok(output) if !output.status.success() => {
             warn!(
                 correlation_id = %correlation_id,
-                error = %e,
-                "Failed to execute bun to extract JSON, using defaults"
+                mode = "transpile_fallback",
+                stderr = %String::from_utf8_lossy(&output.stderr),
+                "bun build failed, using defaults"
+            );
+            return Config::default();
+        }
+        Ok(_) => {}
+    }
+
+    let mut fallback_command = match build_bun_extract_command(tmp_js.path()) {
+        Ok(command) => command,
+        Err(error) => {
+            warn!(
+                correlation_id = %correlation_id,
+                mode = "transpile_fallback",
+                error = %error,
+                "Failed to prepare fallback bun config extraction, using defaults"
+            );
+            return Config::default();
+        }
+    };
+
+    match fallback_command.output() {
+        Err(error) => {
+            warn!(
+                correlation_id = %correlation_id,
+                mode = "transpile_fallback",
+                error = %error,
+                "Failed to execute bun fallback extraction, using defaults"
+            );
+            Config::default()
+        }
+        Ok(output) if !output.status.success() => {
+            warn!(
+                correlation_id = %correlation_id,
+                mode = "transpile_fallback",
+                stderr = %String::from_utf8_lossy(&output.stderr),
+                "bun fallback extraction failed, using defaults"
             );
             Config::default()
         }
         Ok(output) => {
-            if !output.status.success() {
-                warn!(
-                    correlation_id = %correlation_id,
-                    stderr = %String::from_utf8_lossy(&output.stderr),
-                    "bun execution failed, using defaults"
-                );
-                Config::default()
-            } else {
-                let json_str = String::from_utf8_lossy(&output.stdout);
-                let config = parse_config_json(&json_str, &correlation_id);
-                info!(
-                    correlation_id = %correlation_id,
-                    path = %config_path.display(),
-                    "Successfully loaded config"
-                );
-                config
-            }
+            let json_str = String::from_utf8_lossy(&output.stdout);
+            let config = parse_config_json(&json_str, &correlation_id);
+            info!(
+                correlation_id = %correlation_id,
+                mode = "transpile_fallback",
+                elapsed_ms = fallback_start.elapsed().as_secs_f64() * 1000.0,
+                path = %config_path.display(),
+                "Loaded config"
+            );
+            config
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        build_bun_extract_config_command, parse_config_json, parse_user_preferences_json,
-        BUN_CONFIG_EXPORT_EXTRACT_SNIPPET,
-    };
+    use super::{build_bun_extract_command, parse_config_json, parse_user_preferences_json};
     use crate::config::HotkeyConfig;
     use std::fs;
     use std::path::Path;
@@ -549,21 +607,24 @@ mod tests {
     }
 
     #[test]
-    fn test_build_bun_extract_config_command_passes_module_path_as_argument() {
+    fn test_build_bun_extract_command_uses_eval_with_json_escaped_path() {
         let module_path = Path::new("/tmp/config-with-'quote'.js");
-        let command = build_bun_extract_config_command(module_path);
+        let command = build_bun_extract_command(module_path).expect("should build command");
 
         let args: Vec<String> = command
             .get_args()
             .map(|arg| arg.to_string_lossy().to_string())
             .collect();
 
-        assert_eq!(args[0], "-e");
-        assert_eq!(args[1], BUN_CONFIG_EXPORT_EXTRACT_SNIPPET);
-        assert_eq!(args[2], module_path.to_string_lossy());
+        assert_eq!(args[0], "--eval");
+        // The eval script should contain the JSON-escaped path, not a raw interpolation
         assert!(
-            !args[1].contains("require('"),
-            "module path should not be string-interpolated into the eval script"
+            args[1].contains("pathToFileURL"),
+            "script should use pathToFileURL for safe path handling"
+        );
+        assert!(
+            args[1].contains(r#"/tmp/config-with-'quote'.js"#),
+            "script should contain the JSON-escaped module path"
         );
     }
 }

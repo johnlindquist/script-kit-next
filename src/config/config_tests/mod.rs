@@ -1837,3 +1837,108 @@ fn normalize_builtin_identifier_strips_prefixes() {
         "clipboard-history"
     );
 }
+
+// ---------------------------------------------------------------------------
+// Real config.ts evaluation tests (require bun on PATH)
+// ---------------------------------------------------------------------------
+
+/// A process-wide mutex to serialize tests that mutate SK_PATH.
+static SK_PATH_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+/// Writes a real config.ts with an `import` and runtime evaluation,
+/// sets SK_PATH to the temp dir, calls `load_config()`, and asserts
+/// the expected hotkey and `bun_path` values come back.
+#[test]
+fn test_load_config_direct_import_reads_real_config_ts() {
+    let _lock = SK_PATH_MUTEX.lock().expect("SK_PATH_MUTEX poisoned");
+
+    let tmp = tempfile::tempdir().expect("create temp dir");
+    let kit_dir = tmp.path().join("kit");
+    std::fs::create_dir_all(&kit_dir).expect("create kit dir");
+
+    let config_ts = kit_dir.join("config.ts");
+    std::fs::write(
+        &config_ts,
+        r#"import { join } from "node:path";
+export default {
+  hotkey: { modifiers: ["cmd"], key: ";" },
+  bun_path: join("/opt", "homebrew", "bin", "bun"),
+};
+"#,
+    )
+    .expect("write config.ts");
+
+    // Point load_config() at the temp directory.
+    let prev = std::env::var("SK_PATH").ok();
+    std::env::set_var("SK_PATH", tmp.path());
+
+    let config = load_config();
+
+    // Restore env immediately.
+    match prev {
+        Some(val) => std::env::set_var("SK_PATH", val),
+        None => std::env::remove_var("SK_PATH"),
+    }
+
+    assert_eq!(config.hotkey.modifiers, vec!["cmd"]);
+    assert_eq!(config.hotkey.key, ";");
+    assert_eq!(
+        config.bun_path.as_deref(),
+        Some("/opt/homebrew/bin/bun"),
+        "bun_path should reflect the runtime join() result"
+    );
+}
+
+/// Rewrites config.ts between two `load_config()` calls and asserts
+/// the second call sees the new value, proving the fast path does not
+/// serve stale config between launches.
+#[test]
+fn test_load_config_reloads_updated_config_ts() {
+    let _lock = SK_PATH_MUTEX.lock().expect("SK_PATH_MUTEX poisoned");
+
+    let tmp = tempfile::tempdir().expect("create temp dir");
+    let kit_dir = tmp.path().join("kit");
+    std::fs::create_dir_all(&kit_dir).expect("create kit dir");
+
+    let config_ts = kit_dir.join("config.ts");
+    std::fs::write(
+        &config_ts,
+        r#"export default {
+  hotkey: { modifiers: ["ctrl"], key: "a" },
+};
+"#,
+    )
+    .expect("write initial config.ts");
+
+    let prev = std::env::var("SK_PATH").ok();
+    std::env::set_var("SK_PATH", tmp.path());
+
+    let first = load_config();
+    assert_eq!(first.hotkey.key, "a");
+
+    // Overwrite with a new value.
+    std::fs::write(
+        &config_ts,
+        r#"export default {
+  hotkey: { modifiers: ["ctrl"], key: "z" },
+  bun_path: "/new/bun",
+};
+"#,
+    )
+    .expect("rewrite config.ts");
+
+    let second = load_config();
+
+    // Restore env immediately.
+    match prev {
+        Some(val) => std::env::set_var("SK_PATH", val),
+        None => std::env::remove_var("SK_PATH"),
+    }
+
+    assert_eq!(second.hotkey.key, "z", "second load must see the updated key");
+    assert_eq!(
+        second.bun_path.as_deref(),
+        Some("/new/bun"),
+        "second load must see the newly added bun_path"
+    );
+}
