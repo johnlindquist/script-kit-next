@@ -178,40 +178,6 @@ impl AcpChatView {
             .unwrap_or(text.len())
     }
 
-    /// Return the mention token range to remove for atomic deletion.
-    ///
-    /// Backspace: matches when the cursor is inside or at the trailing edge
-    /// of a token (delegating directly to `mention_range_at_cursor`).
-    ///
-    /// Delete (forward): also matches when the cursor is at the leading edge
-    /// (`cursor == range.start`), which `mention_range_at_cursor` alone
-    /// misses because it requires `cursor > range.start`.
-    fn mention_range_for_atomic_delete(
-        text: &str,
-        cursor: usize,
-        key: &str,
-    ) -> Option<std::ops::Range<usize>> {
-        if crate::ui_foundation::is_key_backspace(key) {
-            return crate::ai::context_mentions::mention_range_at_cursor(text, cursor);
-        }
-        if crate::ui_foundation::is_key_delete(key) {
-            // First try the standard interior/trailing check.
-            if let Some(range) =
-                crate::ai::context_mentions::mention_range_at_cursor(text, cursor)
-            {
-                return Some(range);
-            }
-            // Then try leading-edge: cursor sits right on the `@`, so
-            // shift by one to land inside the token and verify.
-            return crate::ai::context_mentions::mention_range_at_cursor(
-                text,
-                cursor.saturating_add(1),
-            )
-            .filter(|range| cursor == range.start);
-        }
-        None
-    }
-
     fn telemetry_item_id(item: &ContextPickerItem) -> String {
         match &item.kind {
             ContextPickerItemKind::BuiltIn(_) | ContextPickerItemKind::SlashCommand(_) => {
@@ -480,6 +446,7 @@ impl AcpChatView {
                 visible_end,
                 cursor_in_window,
             }),
+            warnings: Vec::new(),
         }
     }
 
@@ -3287,6 +3254,7 @@ impl AcpChatView {
             accepted_items,
             input_layout: self.test_probe.input_layout.clone(),
             state: self.collect_acp_state_snapshot(cx),
+            warnings: Vec::new(),
         }
     }
 
@@ -3930,11 +3898,18 @@ impl AcpChatView {
             let current_text = self.live_thread().read(cx).input.text().to_string();
             let cursor = self.live_thread().read(cx).input.cursor();
 
-            if let Some(range) = Self::mention_range_for_atomic_delete(
+            if let Some(range) = crate::ai::context_mentions::mention_range_for_atomic_delete(
                 &current_text,
                 cursor,
-                key,
+                crate::ui_foundation::is_key_delete(key),
             ) {
+                tracing::info!(
+                    target: "script_kit::tab_ai",
+                    event = "acp_inline_mention_atomic_delete",
+                    key,
+                    range_start = range.start,
+                    range_end = range.end,
+                );
                 let chars: Vec<char> = current_text.chars().collect();
                 let mut end_char = range.end;
                 // Consume one trailing space when present.

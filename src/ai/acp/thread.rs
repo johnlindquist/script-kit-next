@@ -1367,6 +1367,11 @@ impl AcpThread {
         self.launch_requirements
     }
 
+    /// Currently selected ACP agent ID for this live thread.
+    pub(crate) fn selected_agent_id(&self) -> Option<&str> {
+        self.selected_agent.as_ref().map(|agent| agent.id.as_ref())
+    }
+
     /// Replace the selected agent on the live thread (used during runtime
     /// recovery when the user picks a different agent in the setup card).
     pub(crate) fn replace_selected_agent(

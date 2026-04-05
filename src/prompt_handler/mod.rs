@@ -13,6 +13,49 @@ fn prompt_coming_soon_warning(prompt_name: &str) -> String {
     format!("{prompt_name} prompt coming soon.")
 }
 
+/// Resolve an automation window target and reject non-main windows.
+///
+/// Main-window-only executors (getElements, waitFor, batch) call this
+/// before any collection, polling, or mutation. If the resolved target
+/// is not the main window, an `ActionFailed` error is returned so the
+/// caller can send a structured failure response without inspecting
+/// main-window state.
+fn resolve_main_only_target(
+    request_id: &str,
+    op: &'static str,
+    target: Option<&crate::protocol::AutomationWindowTarget>,
+) -> Result<crate::protocol::AutomationWindowInfo, crate::protocol::TransactionError> {
+    let resolved = crate::windows::resolve_automation_window(target).map_err(|err| {
+        tracing::warn!(
+            target: "script_kit::automation",
+            request_id = %request_id,
+            op = op,
+            error = %err,
+            "automation.target.resolve_failed"
+        );
+        crate::protocol::TransactionError::action_failed(format!(
+            "{op} target resolution failed: {err}"
+        ))
+    })?;
+
+    if resolved.kind != crate::protocol::AutomationWindowKind::Main {
+        tracing::warn!(
+            target: "script_kit::automation",
+            request_id = %request_id,
+            op = op,
+            window_id = %resolved.id,
+            kind = ?resolved.kind,
+            "automation.target.main_only_rejected"
+        );
+        return Err(crate::protocol::TransactionError::action_failed(format!(
+            "{op} currently supports only the main automation window; resolved {} ({:?})",
+            resolved.id, resolved.kind
+        )));
+    }
+
+    Ok(resolved)
+}
+
 fn resolve_ai_start_chat_provider(
     registry: &crate::ai::ProviderRegistry,
     model_id: &str,
@@ -1542,28 +1585,23 @@ impl ScriptListApp {
                     "acp_state.request"
                 );
 
-                // Validate target — if a non-main target is explicitly requested,
-                // resolve it but note that secondary ACP state routing is not yet
-                // wired (the ACP state is always collected from the main window's
-                // chat view). This logs the target for observability.
-                if let Some(ref t) = target {
-                    match crate::windows::resolve_automation_window(Some(t)) {
-                        Ok(resolved) => {
-                            tracing::info!(
-                                target: "script_kit::automation",
-                                request_id = %request_id,
-                                window_id = %resolved.id,
-                                kind = ?resolved.kind,
-                                "acp_state.target_resolved"
-                            );
-                        }
-                        Err(err) => {
-                            tracing::warn!(
-                                target: "script_kit::automation",
-                                request_id = %request_id,
-                                error = %err,
-                                "acp_state.target_resolution_failed"
-                            );
+                // Fail closed: reject non-main targets with a structured
+                // unsupported-target result instead of silently falling back
+                // to the main window's ACP state.
+                if target.is_some() {
+                    match resolve_main_only_target(&request_id, "getAcpState", target.as_ref()) {
+                        Ok(_resolved) => { /* main window — proceed */ }
+                        Err(error) => {
+                            let mut state = protocol::AcpStateSnapshot::default();
+                            state.warnings = vec![format!(
+                                "target_unsupported_non_main: {}",
+                                error.message
+                            )];
+                            let response = Message::acp_state_result(request_id.clone(), state);
+                            if let Some(ref sender) = self.response_sender {
+                                let _ = sender.try_send(response);
+                            }
+                            return;
                         }
                     }
                 }
@@ -1612,9 +1650,12 @@ impl ScriptListApp {
             }
 
             PromptMessage::ResetAcpTestProbe { request_id } => {
+                // Global-only: always resets the main window's probe.
+                // No target field — see message variant doc comment.
                 tracing::info!(
                     category = "ACP_PROBE",
                     request_id = %request_id,
+                    scope = "global",
                     "acp_test_probe.reset"
                 );
 
@@ -1655,25 +1696,23 @@ impl ScriptListApp {
                     "acp_test_probe.request"
                 );
 
-                // Log target resolution for observability
-                if let Some(ref t) = target {
-                    match crate::windows::resolve_automation_window(Some(t)) {
-                        Ok(resolved) => {
-                            tracing::info!(
-                                target: "script_kit::automation",
-                                request_id = %request_id,
-                                window_id = %resolved.id,
-                                kind = ?resolved.kind,
-                                "acp_test_probe.target_resolved"
-                            );
-                        }
-                        Err(err) => {
-                            tracing::warn!(
-                                target: "script_kit::automation",
-                                request_id = %request_id,
-                                error = %err,
-                                "acp_test_probe.target_resolution_failed"
-                            );
+                // Fail closed: reject non-main targets with a structured
+                // unsupported-target result instead of silently falling back
+                // to the main window's probe state.
+                if target.is_some() {
+                    match resolve_main_only_target(&request_id, "getAcpTestProbe", target.as_ref()) {
+                        Ok(_resolved) => { /* main window — proceed */ }
+                        Err(error) => {
+                            let mut probe = protocol::AcpTestProbeSnapshot::default();
+                            probe.warnings = vec![format!(
+                                "target_unsupported_non_main: {}",
+                                error.message
+                            )];
+                            let response = Message::acp_test_probe_result(request_id.clone(), probe);
+                            if let Some(ref sender) = self.response_sender {
+                                let _ = sender.try_send(response);
+                            }
+                            return;
                         }
                     }
                 }
@@ -1713,30 +1752,14 @@ impl ScriptListApp {
                     "ui.elements.request"
                 );
 
-                // Validate target — log resolution for observability.
-                // Currently element collection always uses the main window's
-                // current_view. Non-main targets are validated but not yet
-                // routed to secondary window element collectors.
-                if let Some(ref t) = target {
-                    match crate::windows::resolve_automation_window(Some(t)) {
-                        Ok(resolved) => {
-                            tracing::info!(
-                                target: "script_kit::automation",
-                                request_id = %request_id,
-                                window_id = %resolved.id,
-                                kind = ?resolved.kind,
-                                "ui.elements.target_resolved"
-                            );
-                        }
-                        Err(err) => {
-                            tracing::warn!(
-                                target: "script_kit::automation",
-                                request_id = %request_id,
-                                error = %err,
-                                "ui.elements.target_resolution_failed"
-                            );
-                            // Return empty elements with a warning instead of
-                            // silently falling back to the main window.
+                // Fail closed: reject non-main targets before any
+                // element collection. Legacy requests with no target
+                // field pass through (resolve_main_only_target defaults
+                // to main/focused which resolves to main).
+                if target.is_some() {
+                    match resolve_main_only_target(&request_id, "getElements", target.as_ref()) {
+                        Ok(_resolved) => { /* main window — proceed */ }
+                        Err(error) => {
                             if let Some(ref sender) = self.response_sender {
                                 let _ = sender.try_send(Message::elements_result(
                                     request_id.clone(),
@@ -1744,7 +1767,7 @@ impl ScriptListApp {
                                     0,
                                     None,
                                     None,
-                                    vec![format!("target_resolution_failed: {}", err)],
+                                    vec![format!("target_unsupported_non_main: {}", error.message)],
                                 ));
                             }
                             return;
@@ -1863,25 +1886,20 @@ impl ScriptListApp {
                 let poll_ms = poll_interval.unwrap_or(25);
                 let rid = request_id.clone();
 
-                // Log target resolution for observability
-                if let Some(ref t) = target {
-                    match crate::windows::resolve_automation_window(Some(t)) {
-                        Ok(resolved) => {
-                            tracing::info!(
-                                target: "script_kit::automation",
-                                request_id = %rid,
-                                window_id = %resolved.id,
-                                kind = ?resolved.kind,
-                                "automation.wait_for.target_resolved"
-                            );
-                        }
-                        Err(err) => {
-                            tracing::warn!(
-                                target: "script_kit::automation",
-                                request_id = %rid,
-                                error = %err,
-                                "automation.wait_for.target_resolution_failed"
-                            );
+                // Fail closed: reject non-main targets before any polling.
+                if target.is_some() {
+                    match resolve_main_only_target(&rid, "waitFor", target.as_ref()) {
+                        Ok(_resolved) => { /* main window — proceed */ }
+                        Err(error) => {
+                            if let Some(ref sender) = self.response_sender {
+                                let _ = sender.try_send(Message::wait_for_result(
+                                    request_id.clone(),
+                                    false,
+                                    0,
+                                    Some(error),
+                                ));
+                            }
+                            return;
                         }
                     }
                 }
@@ -2118,25 +2136,29 @@ impl ScriptListApp {
                 let rid = request_id.clone();
                 let sender = self.response_sender.clone();
 
-                // Log target resolution for observability
-                if let Some(ref t) = target {
-                    match crate::windows::resolve_automation_window(Some(t)) {
-                        Ok(resolved) => {
-                            tracing::info!(
-                                target: "script_kit::automation",
-                                request_id = %rid,
-                                window_id = %resolved.id,
-                                kind = ?resolved.kind,
-                                "automation.batch.target_resolved"
-                            );
-                        }
-                        Err(err) => {
-                            tracing::warn!(
-                                target: "script_kit::automation",
-                                request_id = %rid,
-                                error = %err,
-                                "automation.batch.target_resolution_failed"
-                            );
+                // Fail closed: reject non-main targets before spawning
+                // the async batch executor.
+                if target.is_some() {
+                    match resolve_main_only_target(&rid, "batch", target.as_ref()) {
+                        Ok(_resolved) => { /* main window — proceed */ }
+                        Err(error) => {
+                            if let Some(ref sender) = self.response_sender {
+                                let _ = sender.try_send(Message::batch_result(
+                                    request_id.clone(),
+                                    false,
+                                    vec![crate::protocol::BatchResultEntry {
+                                        index: 0,
+                                        success: false,
+                                        command: "batch".to_string(),
+                                        elapsed: Some(0),
+                                        value: None,
+                                        error: Some(error),
+                                    }],
+                                    Some(0),
+                                    0,
+                                ));
+                            }
+                            return;
                         }
                     }
                 }

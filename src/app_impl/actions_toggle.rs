@@ -269,28 +269,34 @@ impl ScriptListApp {
             self.begin_actions_popup_window_open(cx, window);
 
             let acp_actions = if let AppView::AcpChatView { ref entity } = self.current_view {
-                let selected_agent_id = {
+                let (selected_agent_id, catalog_entries) = {
                     let view = entity.read(cx);
                     match &view.session {
-                        crate::ai::acp::AcpChatSession::Setup(state) => {
-                            state.selected_agent.as_ref().map(|agent| agent.id.to_string())
-                        }
-                        crate::ai::acp::AcpChatSession::Live(_) => {
-                            crate::ai::acp::load_preferred_acp_agent_id()
+                        crate::ai::acp::AcpChatSession::Setup(state) => (
+                            state
+                                .selected_agent
+                                .as_ref()
+                                .map(|agent| agent.id.to_string()),
+                            state.catalog_entries.clone(),
+                        ),
+                        crate::ai::acp::AcpChatSession::Live(thread) => {
+                            let thread = thread.read(cx);
+                            (
+                                thread
+                                    .selected_agent_id()
+                                    .map(str::to_string),
+                                thread.available_agents().to_vec(),
+                            )
                         }
                     }
                 };
-                let catalog_entries = match crate::ai::acp::load_acp_agent_catalog_entries() {
-                    Ok(entries) => entries,
-                    Err(error) => {
-                        tracing::warn!(
-                            target: "script_kit::tab_ai",
-                            event = "acp_actions_catalog_load_failed",
-                            error = %error,
-                        );
-                        Vec::new()
-                    }
-                };
+
+                tracing::info!(
+                    target: "script_kit::tab_ai",
+                    event = "acp_actions_agent_context_built",
+                    selected_agent_id = ?selected_agent_id,
+                    catalog_count = catalog_entries.len(),
+                );
 
                 crate::actions::get_acp_chat_actions_with_agents(
                     &catalog_entries,

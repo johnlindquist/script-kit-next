@@ -211,6 +211,25 @@ pub fn mention_range_at_cursor(text: &str, cursor: usize) -> Option<std::ops::Ra
         .map(|mention| mention.range)
 }
 
+/// Return the character-level range of the inline mention token to remove for
+/// atomic deletion.
+///
+/// Backspace matches when the cursor is inside or at the trailing boundary.
+/// Delete matches when the cursor is inside or at the leading boundary.
+pub fn mention_range_for_atomic_delete(
+    text: &str,
+    cursor: usize,
+    delete_forward: bool,
+) -> Option<std::ops::Range<usize>> {
+    if !delete_forward {
+        return mention_range_at_cursor(text, cursor);
+    }
+    if let Some(range) = mention_range_at_cursor(text, cursor) {
+        return Some(range);
+    }
+    mention_range_at_cursor(text, cursor.saturating_add(1)).filter(|range| cursor == range.start)
+}
+
 /// Convert an `AiContextPart` back to its canonical inline `@token` form.
 ///
 /// Returns `None` for parts that have no inline mention representation

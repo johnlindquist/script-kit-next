@@ -454,6 +454,7 @@ fn acp_state_result_round_trips() {
         context_ready: true,
         has_pending_permission: false,
         input_layout: None,
+        warnings: Vec::new(),
     };
     let msg = crate::protocol::Message::acp_state_result("acp-rt".to_string(), snapshot);
     let json = serde_json::to_value(&msg).expect("serialize acpStateResult");
@@ -888,6 +889,7 @@ fn acp_test_probe_result_round_trips() {
             cursor_index: 17,
             ..Default::default()
         },
+        warnings: Vec::new(),
     };
     let msg = crate::protocol::Message::acp_test_probe_result("probe-rt".to_string(), probe);
     let json = serde_json::to_value(&msg).expect("serialize acpTestProbeResult");

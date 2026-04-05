@@ -574,6 +574,70 @@ fn mention_range_at_cursor_for_quoted_file_token() {
     assert_eq!(r.end, 29);
 }
 
+// ── mention_range_for_atomic_delete ─────────────────────────
+
+#[test]
+fn atomic_delete_backspace_at_trailing_edge() {
+    let text = "Fix @browser and @git-diff";
+    // Backspace at trailing edge of @browser (cursor=12)
+    let range = mention_range_for_atomic_delete(text, 12, false);
+    assert_eq!(range, Some(4..12));
+}
+
+#[test]
+fn atomic_delete_backspace_inside_token() {
+    let text = "Fix @browser and @git-diff";
+    let range = mention_range_for_atomic_delete(text, 8, false);
+    assert_eq!(range, Some(4..12));
+}
+
+#[test]
+fn atomic_delete_backspace_at_leading_edge_returns_none() {
+    let text = "Fix @browser and @git-diff";
+    // Backspace at leading edge (cursor=4) should NOT match
+    let range = mention_range_for_atomic_delete(text, 4, false);
+    assert_eq!(range, None);
+}
+
+#[test]
+fn atomic_delete_forward_at_leading_edge() {
+    let text = "@git-diff rest";
+    // Forward delete at cursor=0 (leading edge of @git-diff)
+    let range = mention_range_for_atomic_delete(text, 0, true);
+    assert_eq!(range, Some(0..9));
+}
+
+#[test]
+fn atomic_delete_forward_at_leading_edge_with_prefix() {
+    let text = "Fix @browser and";
+    // Forward delete at cursor=4 (leading edge of @browser)
+    let range = mention_range_for_atomic_delete(text, 4, true);
+    assert_eq!(range, Some(4..12));
+}
+
+#[test]
+fn atomic_delete_forward_inside_token() {
+    let text = "Fix @browser and";
+    let range = mention_range_for_atomic_delete(text, 8, true);
+    assert_eq!(range, Some(4..12));
+}
+
+#[test]
+fn atomic_delete_forward_outside_token_returns_none() {
+    let text = "Fix @browser and";
+    // Forward delete at cursor=3 (before the @)
+    let range = mention_range_for_atomic_delete(text, 3, true);
+    assert_eq!(range, None);
+}
+
+#[test]
+fn atomic_delete_forward_after_token_returns_none() {
+    let text = "Fix @browser and";
+    // Forward delete at cursor=13 (space after @browser)
+    let range = mention_range_for_atomic_delete(text, 13, true);
+    assert_eq!(range, None);
+}
+
 // ── Quoted @file: parse/serialize canonical tests ───────────
 
 #[test]

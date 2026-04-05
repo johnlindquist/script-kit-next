@@ -55,6 +55,13 @@ pub struct AcpStateSnapshot {
     /// Layout stability metrics for the single-line input.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub input_layout: Option<AcpInputLayoutMetrics>,
+
+    /// Machine-readable warning codes from the canonical automation vocabulary.
+    ///
+    /// Present when the request resolved but execution was degraded or rejected
+    /// (e.g. `target_unsupported_non_main` when a non-main target was requested).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub warnings: Vec<String>,
 }
 
 impl Default for AcpStateSnapshot {
@@ -73,6 +80,7 @@ impl Default for AcpStateSnapshot {
             context_ready: true,
             has_pending_permission: false,
             input_layout: None,
+            warnings: Vec::new(),
         }
     }
 }
@@ -286,6 +294,13 @@ pub struct AcpTestProbeSnapshot {
 
     /// Current ACP state snapshot at the time the probe was queried.
     pub state: AcpStateSnapshot,
+
+    /// Machine-readable warning codes from the canonical automation vocabulary.
+    ///
+    /// Present when the request resolved but execution was degraded or rejected
+    /// (e.g. `target_unsupported_non_main` when a non-main target was requested).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub warnings: Vec<String>,
 }
 
 impl Default for AcpTestProbeSnapshot {
@@ -297,6 +312,7 @@ impl Default for AcpTestProbeSnapshot {
             accepted_items: Vec::new(),
             input_layout: None,
             state: AcpStateSnapshot::default(),
+            warnings: Vec::new(),
         }
     }
 }
@@ -587,6 +603,7 @@ mod tests {
                 visible_end: 14,
                 cursor_in_window: 14,
             }),
+            warnings: Vec::new(),
         };
         let json = serde_json::to_string_pretty(&snap).expect("serialize full snapshot");
         let parsed: serde_json::Value =
@@ -864,6 +881,7 @@ mod tests {
                 cursor_index: 17,
                 ..Default::default()
             },
+            warnings: Vec::new(),
         };
         let json = serde_json::to_value(&snap).expect("serialize probe with events");
         assert_eq!(json["eventSeq"], 14);

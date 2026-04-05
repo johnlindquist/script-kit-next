@@ -226,10 +226,19 @@ pub(crate) fn empty_state_hints(
             insertion: "/help ",
         },
     ];
-    match trigger {
+    let hints = match trigger {
         ContextPickerTrigger::Mention => MENTION_HINTS,
         ContextPickerTrigger::Slash => SLASH_HINTS,
-    }
+    };
+
+    tracing::debug!(
+        target: "ai",
+        event = "ai_context_picker_empty_state_hints_selected",
+        trigger = ?trigger,
+        hint_count = hints.len(),
+    );
+
+    hints
 }
 
 // ── Cached built-in picker seeds ──────────────────────────────────────
