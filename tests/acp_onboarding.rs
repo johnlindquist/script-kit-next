@@ -461,3 +461,55 @@ fn async_persistence_delegates_to_sync_helper() {
         "async persist helper must delegate to the sync helper internally"
     );
 }
+
+// ── Post-launch persistence rule: fallback must not overwrite preference ──
+
+#[test]
+fn post_launch_persist_decision_is_conditional() {
+    // The open path must NOT unconditionally persist the selected agent.
+    // It must check whether the launch was explicit (retry), first-run,
+    // or already aligned with the saved preference.
+    assert!(
+        TAB_AI_MODE_SOURCE.contains("should_persist_selected_agent"),
+        "tab_ai_mode must compute a should_persist_selected_agent decision"
+    );
+    assert!(
+        TAB_AI_MODE_SOURCE.contains("acp_preferred_agent_post_launch_persist_decision"),
+        "tab_ai_mode must emit the post-launch persist decision tracing event"
+    );
+}
+
+#[test]
+fn fallback_launch_preserves_existing_preference() {
+    // When a capability-driven fallback selects a different agent than the
+    // saved preference, the open path must NOT overwrite the preference.
+    assert!(
+        TAB_AI_MODE_SOURCE.contains("acp_preferred_agent_preserved_during_fallback_launch"),
+        "tab_ai_mode must emit a preservation event when fallback skips persistence"
+    );
+}
+
+#[test]
+fn post_launch_persist_gates_on_retry_or_first_run_or_match() {
+    // The persistence guard must only persist when:
+    // 1. retry_request.is_some() (explicit retry)
+    // 2. preferred_agent_id.is_none() (first-run / no prior preference)
+    // 3. preferred == selected (already aligned)
+    let decision_block_start = TAB_AI_MODE_SOURCE
+        .find("should_persist_selected_agent")
+        .expect("should_persist_selected_agent must exist in tab_ai_mode");
+    let decision_context = &TAB_AI_MODE_SOURCE[decision_block_start..decision_block_start + 300];
+
+    assert!(
+        decision_context.contains("retry_request.is_some()"),
+        "persist decision must check for explicit retry request"
+    );
+    assert!(
+        decision_context.contains("preferred_agent_id.is_none()"),
+        "persist decision must check for absent prior preference (first-run)"
+    );
+    assert!(
+        decision_context.contains("preferred_agent_id.as_deref() == selected_agent_id.as_deref()"),
+        "persist decision must check whether preference already matches selection"
+    );
+}

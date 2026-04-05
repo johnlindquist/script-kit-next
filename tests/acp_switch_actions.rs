@@ -11,8 +11,12 @@ fn acp_actions_popup_uses_dynamic_agent_actions() {
         "ACP actions popup must build agent-aware actions from the catalog"
     );
     assert!(
-        ACTIONS_TOGGLE_SOURCE.contains("load_acp_agent_catalog_entries"),
-        "ACP actions popup must load the ACP agent catalog when opening"
+        ACTIONS_TOGGLE_SOURCE.contains("acp_actions_agent_context_built"),
+        "ACP actions popup must log when it builds ACP agent context from the active session"
+    );
+    assert!(
+        ACTIONS_TOGGLE_SOURCE.contains("thread.available_agents().to_vec()"),
+        "ACP actions popup must source available agents from the live ACP thread"
     );
 }
 
@@ -29,6 +33,29 @@ fn acp_action_handler_switches_agents_by_persisting_and_reopening() {
     assert!(
         ACTION_HANDLER_SOURCE.contains("self.open_tab_ai_chat(cx);"),
         "switch-agent action must reopen ACP chat after changing the agent"
+    );
+}
+
+#[test]
+fn acp_action_handler_stages_retry_payload_before_reopen() {
+    assert!(
+        ACTION_HANDLER_SOURCE.contains("stage_agent_switch_retry"),
+        "switch-agent action must stage a retry payload preserving capability requirements"
+    );
+    assert!(
+        ACTION_HANDLER_SOURCE.contains("acp_switch_agent_reopen_requested"),
+        "switch-agent action must emit acp_switch_agent_reopen_requested tracing event"
+    );
+    // The retry payload staging must happen before the close+reopen sequence.
+    let stage_pos = ACTION_HANDLER_SOURCE
+        .find("stage_agent_switch_retry")
+        .expect("stage_agent_switch_retry must exist");
+    let close_pos = ACTION_HANDLER_SOURCE
+        .find("close_tab_ai_harness_terminal")
+        .expect("close_tab_ai_harness_terminal must exist");
+    assert!(
+        stage_pos < close_pos,
+        "retry payload must be staged before closing the harness terminal"
     );
 }
 
