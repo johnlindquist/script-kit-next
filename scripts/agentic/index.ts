@@ -332,27 +332,52 @@ async function recipePreflight(session: string): Promise<RecipeReceipt> {
   };
 }
 
+/**
+ * Returns true when the target is the main window (or no target specified).
+ * Non-main targets (e.g., acpDetached) should skip show/triggerBuiltin.
+ */
+function isMainLikeTarget(target?: AutomationTargetJson): boolean {
+  if (!target) return true;
+  if (target.type === "main" || target.type === "focused") return true;
+  return false;
+}
+
 async function recipeAcpOpen(
   session: string,
   opts: { target?: AutomationTargetJson } = {}
 ): Promise<RecipeReceipt> {
   const steps: StepReceipt[] = [];
 
-  // 1. Show window
-  steps.push(
-    await step("show", () => send(session, '{"type":"show"}'))
-  );
+  if (isMainLikeTarget(opts.target)) {
+    // 1. Show window
+    steps.push(
+      await step("show", () => send(session, '{"type":"show"}'))
+    );
 
-  // macOS focus-settling delay: the window needs a moment to
-  // become frontmost after show before triggerBuiltin can target it.
-  await Bun.sleep(300);
+    // macOS focus-settling delay: the window needs a moment to
+    // become frontmost after show before triggerBuiltin can target it.
+    await Bun.sleep(300);
 
-  // 2. Trigger ACP
-  steps.push(
-    await step("trigger-acp", () =>
-      send(session, '{"type":"triggerBuiltin","name":"tab-ai"}')
-    )
-  );
+    // 2. Trigger ACP
+    steps.push(
+      await step("trigger-acp", () =>
+        send(session, '{"type":"triggerBuiltin","name":"tab-ai"}')
+      )
+    );
+  } else {
+    // Non-main target: skip show/triggerBuiltin — the detached ACP
+    // surface is assumed to already exist. We only wait/verify.
+    steps.push({
+      name: "skip-main-open",
+      status: "pass",
+      output: {
+        skipped: true,
+        reason: "non-main ACP target supplied; assuming detached target already exists",
+        target: opts.target,
+      },
+      durationMs: 0,
+    });
+  }
 
   // 3. Wait for ACP to be ready using waitFor instead of fixed sleep
   steps.push(

@@ -196,10 +196,12 @@ bash scripts/agentic/session.sh start default
 RESOLVED="$(bun scripts/agentic/automation-window.ts resolve --session default --kind acpDetached --index 0)"
 TARGET="$(printf '%s' "$RESOLVED" | jq -c '.targetJson')"
 SURFACE_ID="$(printf '%s' "$RESOLVED" | jq -r '.surfaceId')"
+WINDOW_ID="$(printf '%s' "$RESOLVED" | jq -r '.automationWindowId')"
 
 bun scripts/agentic/index.ts acp-accept --session default --key enter \
   --target-json "$TARGET" --surface "$SURFACE_ID" --vision
 # Confirm proofBundle.state.resolvedTarget.windowKind == "acpDetached"
+# Confirm proofBundle.captureTarget.requestedWindowId == proofBundle.captureTarget.actualWindowId
 # and no target warnings in proofBundle.state.warnings
 bash scripts/agentic/session.sh stop default
 ```
@@ -217,6 +219,12 @@ The `acp-accept --vision` command encodes the full golden path:
 - Waits for `acpAcceptedViaKey` (key-specific, not generic)
 - One final screenshot + probe assertion as visual proof
 - Returns a `proofBundle` with `state`, `probe`, `screenshot`, `visionCrops`
+
+**Identity invariant for detached ACP runs:** A run is invalid unless these three
+identities agree in the final receipt:
+- ACP state `resolvedTarget` (from `proofBundle.state.resolvedTarget`)
+- native input resolved `surfaceId` (from macos-input.ts `session_focus_resolved` log)
+- screenshot `captureTarget` (from `proofBundle.captureTarget.requestedWindowId == actualWindowId`)
 
 **Surface rule:** This recipe verifies the real ACP runtime surface only. Screenshots from synthetic `AcpChatView` wrappers, debug-only windows, or component harnesses do not count.
 

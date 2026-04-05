@@ -126,6 +126,11 @@ const SURFACES: &[SurfaceSpec] = &[
         accepted_hint_surfaces: &["render_prompts::term"],
     },
     SurfaceSpec {
+        surface: "prompts::path",
+        files: &["src/prompts/path/render.rs"],
+        accepted_hint_surfaces: &["prompts::path"],
+    },
+    SurfaceSpec {
         surface: "clipboard_history",
         files: &[
             "src/render_builtins/clipboard.rs",
@@ -262,11 +267,12 @@ fn audit_surface(spec: SurfaceSpec, repo_root: &Path) -> Result<AuditSurfaceResu
                 ));
             }
 
-            let has_custom_file_search_hints = contains_any(
+            // `↵ Open` / `↵ Browse` are accepted contextual primary-action labels
+            // for file search.  Only flag the OLD non-three-key hints (`⌘↵ Ask AI`,
+            // `⇥ Navigate`) that broke the canonical pattern.
+            let has_legacy_non_canonical_hints = contains_any(
                 &combined,
                 &[
-                    "\\u{21b5} Open",
-                    "\u{21b5} Open",
                     "\\u{2318}\\u{21b5} Ask AI",
                     "\u{2318}\u{21b5} Ask AI",
                     "\\u{21e5} Navigate",
@@ -274,19 +280,44 @@ fn audit_surface(spec: SurfaceSpec, repo_root: &Path) -> Result<AuditSurfaceResu
                 ],
             );
 
-            if has_custom_file_search_hints {
+            if has_legacy_non_canonical_hints {
                 findings.push(warning(
                     "non-universal footer hints",
-                    "File Search mini mode still advertises `↵ Open`, `⌘↵ Ask AI`, and `⇥ Navigate` instead of the canonical `↵ Run`, `⌘K Actions`, `Tab AI` trio.",
+                    "File Search mini mode still advertises `⌘↵ Ask AI` and/or `⇥ Navigate` instead of the canonical `⌘K Actions`, `Tab AI` slots.",
                     vec!["src/render_builtins/file_search_layout.rs".to_string()],
                 ));
             }
 
-            if has_custom_file_search_hints && !has_runtime_hint_audit {
+            if has_legacy_non_canonical_hints && !has_runtime_hint_audit {
                 findings.push(warning(
                     "missing prompt hint audit",
                     "File Search does not emit `emit_prompt_hint_audit(\"file_search\", ...)`, so its mini-mode footer drift bypasses the shared hint-contract warning path.",
                     vec!["src/render_builtins/file_search_layout.rs".to_string()],
+                ));
+            }
+
+            // Contextual primary label (`↵ Open` / `↵ Browse`) paired with
+            // `⌘K Actions` + `Tab AI` is an accepted three-key variant.
+            let has_contextual_primary = contains_any(
+                &combined,
+                &[
+                    "\\u{21b5} Open",
+                    "\u{21b5} Open",
+                    "\\u{21b5} Browse",
+                    "\u{21b5} Browse",
+                ],
+            );
+            let has_canonical_actions_and_ai = combined.contains("K Actions")
+                && combined.contains("Tab AI");
+
+            if has_contextual_primary && has_canonical_actions_and_ai && has_runtime_hint_audit {
+                findings.push(info(
+                    "contextual primary label follows three-key pattern",
+                    "File Search uses `↵ Open` / `↵ Browse` as the primary action label instead of `↵ Run`, paired with canonical `⌘K Actions` and `Tab AI`. This is an accepted contextual variant of the three-key footer pattern.",
+                    vec![
+                        "src/render_builtins/file_search.rs".to_string(),
+                        "src/render_builtins/file_search_layout.rs".to_string(),
+                    ],
                 ));
             }
         }
@@ -666,11 +697,35 @@ fn audit_workflow_affordance_surface(
             let has_expanded_layout = combined.contains("render_expanded_view_scaffold(");
             let has_layout_checkpoint = combined.contains("file_search_chrome_checkpoint");
             let has_hint_audit = combined.contains("emit_prompt_hint_audit(\"file_search\"");
+            let has_universal_hints = combined.contains("universal_prompt_hints()");
+            let has_presentation_switch =
+                combined.contains("matches!(presentation, FileSearchPresentation::Mini)");
+            let has_mini_chrome_audit =
+                combined.contains("PromptChromeAudit::minimal_list(\"file_search\"");
+            let has_expanded_chrome_audit =
+                combined.contains("PromptChromeAudit::expanded(\"file_search\"");
 
-            if has_mini_layout && has_expanded_layout && has_layout_checkpoint && has_hint_audit {
+            if has_mini_layout
+                && has_expanded_layout
+                && has_layout_checkpoint
+                && has_hint_audit
+                && has_universal_hints
+                && has_presentation_switch
+                && has_mini_chrome_audit
+                && has_expanded_chrome_audit
+            {
                 findings.push(info(
                     "mini and expanded file search are both auditable",
-                    "File Search already exposes both its compact and split-view workflows in source, including a layout checkpoint and a footer hint audit for mini mode.",
+                    "File Search already exposes both its compact and split-view workflows in source, emits distinct runtime chrome audits for each presentation, and keeps the mini footer on the canonical three-key hint strip.",
+                    vec![
+                        "src/render_builtins/file_search.rs".to_string(),
+                        "src/render_builtins/file_search_layout.rs".to_string(),
+                    ],
+                ));
+            } else if !has_hint_audit || !has_universal_hints {
+                findings.push(warning(
+                    "file search mini footer is not provably universal",
+                    "File Search should keep its mini mode on the canonical `↵ Run`, `⌘K Actions`, `Tab AI` footer and emit `emit_prompt_hint_audit(\"file_search\", ...)`, otherwise the workflow report cannot prove shortcut parity.",
                     vec![
                         "src/render_builtins/file_search.rs".to_string(),
                         "src/render_builtins/file_search_layout.rs".to_string(),
@@ -678,8 +733,8 @@ fn audit_workflow_affordance_surface(
                 ));
             } else {
                 findings.push(warning(
-                    "file search workflow parity is not fully reportable",
-                    "File Search should keep explicit evidence for both mini and expanded layouts plus its footer hint audit, otherwise the report cannot prove that both modes teach the same shortcut language.",
+                    "file search runtime chrome audit is not mode-aware",
+                    "File Search renders both mini and expanded layouts, but the audited source does not yet prove that it emits distinct `PromptChromeAudit::minimal_list(...)` and `PromptChromeAudit::expanded(...)` contracts behind the `presentation` switch.",
                     vec![
                         "src/render_builtins/file_search.rs".to_string(),
                         "src/render_builtins/file_search_layout.rs".to_string(),
@@ -989,20 +1044,24 @@ mod tests {
             .iter()
             .filter(|s| s.status() == "error")
             .count();
-        assert_eq!(report.surfaces.len(), 7, "expected 7 audited surfaces");
-        assert_eq!(warning_count, 1, "expected 1 warning");
+        assert_eq!(report.surfaces.len(), 8, "expected 8 audited surfaces");
+        assert_eq!(warning_count, 0, "expected 0 warnings");
         assert_eq!(error_count, 0, "expected 0 errors");
     }
 
     #[test]
-    fn prompt_chrome_consistency_report_file_search_warns() {
+    fn prompt_chrome_consistency_report_file_search_passes() {
         let report = report();
         let file_search = surface(&report, "file_search");
-        assert_eq!(file_search.status(), "warning");
-        assert!(file_search
-            .findings
-            .iter()
-            .any(|finding| finding.title == "non-universal footer hints"));
+        assert_eq!(file_search.status(), "pass");
+        assert!(file_search.has_only_info_findings());
+    }
+
+    #[test]
+    fn prompt_chrome_consistency_report_path_prompt_passes() {
+        let report = report();
+        let path = surface(&report, "prompts::path");
+        assert_eq!(path.status(), "pass");
     }
 
     #[test]
@@ -1025,11 +1084,11 @@ mod tests {
     }
 
     #[test]
-    fn prompt_chrome_consistency_summary_mentions_intentional_exception() {
+    fn prompt_chrome_consistency_summary_has_no_drift() {
         let report = report();
         assert!(
-            report.summary.contains("Highest-leverage current drifts: file_search"),
-            "summary should mention the current drift: {}",
+            !report.summary.contains("Highest-leverage current drifts"),
+            "summary should not mention drifts when all surfaces pass: {}",
             report.summary
         );
     }

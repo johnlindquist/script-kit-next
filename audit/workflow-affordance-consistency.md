@@ -29,7 +29,7 @@ Scanned 6 workflow surfaces. 6 pass, 0 warning, 0 error. Keyboard-first affordan
 
 ### file_search
 - info — **mini and expanded file search are both auditable**
-  - File Search already exposes both its compact and split-view workflows in source, including a layout checkpoint and a footer hint audit for mini mode.
+  - File Search already exposes both its compact and split-view workflows in source, emits distinct runtime chrome audits for each presentation, and keeps the mini footer on the canonical three-key hint strip.
   - Evidence: `src/render_builtins/file_search.rs`, `src/render_builtins/file_search_layout.rs`
 
 ### render_prompts::chat

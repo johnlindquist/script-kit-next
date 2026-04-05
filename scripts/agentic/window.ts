@@ -10,7 +10,7 @@
  *   bun scripts/agentic/window.ts find   [--title SUBSTR] [--json]
  *   bun scripts/agentic/window.ts focus  [--title SUBSTR] [--retry N] [--settle-ms MS] [--json]
  *   bun scripts/agentic/window.ts status [--json]
- *   bun scripts/agentic/window.ts capture PATH [--title SUBSTR] [--retry N] [--activate-first] [--settle-ms MS] [--json]
+ *   bun scripts/agentic/window.ts capture PATH [--title SUBSTR] [--retry N] [--activate-first] [--settle-ms MS] [--window-id N] [--json]
  *
  * All structured output is JSON on stdout. Diagnostics go to stderr as NDJSON.
  */
@@ -518,9 +518,10 @@ async function captureWindow(
   titleSubstr: string,
   retryCount: number,
   activateFirst: boolean,
-  settleMs: number
+  settleMs: number,
+  exactWindowId?: number
 ): Promise<CaptureResult> {
-  let windowId = 0;
+  let windowId = exactWindowId ?? 0;
   let captureMethod: "quartz" | "screencapture" = "screencapture";
   let attempts = 0;
   let lastFrontmost = false;
@@ -528,18 +529,23 @@ async function captureWindow(
 
   for (let attempt = 1; attempt <= retryCount; attempt++) {
     attempts = attempt;
-    stderrLog("window_capture_attempt", { attempt, retryCount, path, titleSubstr, activateFirst });
+    stderrLog("window_capture_attempt", { attempt, retryCount, path, titleSubstr, activateFirst, exactWindowId: exactWindowId ?? null });
 
     // Optionally focus first
     if (activateFirst || attempt > 1) {
       const focusResult = await focusWindow(titleSubstr, 1, settleMs);
       lastFrontmost = focusResult.frontmost;
       lastFocused = focusResult.focused;
-      windowId = focusResult.windowId;
+      // Prefer exact window ID if provided; fall back to focus-resolved ID
+      if (!exactWindowId) {
+        windowId = focusResult.windowId;
+      }
     } else {
       // Just resolve ID without activating
-      const resolved = await resolveWindowId(titleSubstr);
-      windowId = resolved.windowId;
+      if (!exactWindowId) {
+        const resolved = await resolveWindowId(titleSubstr);
+        windowId = resolved.windowId;
+      }
       const state = await checkFrontmost();
       lastFrontmost = state.frontmost;
       lastFocused = state.focused;
@@ -696,7 +702,7 @@ try {
           errorEnvelope(
             "capture",
             "MISSING_PATH",
-            "Usage: window.ts capture <path> [--title SUBSTR] [--retry N] [--activate-first] [--settle-ms MS]"
+            "Usage: window.ts capture <path> [--title SUBSTR] [--retry N] [--activate-first] [--settle-ms MS] [--window-id N]"
           )
         );
         process.exit(1);
@@ -705,7 +711,8 @@ try {
       const retry = parseIntArg(args, "--retry", DEFAULT_CAPTURE_RETRY);
       const activateFirst = hasFlag(args, "--activate-first");
       const settleMs = parseIntArg(args, "--settle-ms", DEFAULT_CAPTURE_SETTLE_MS);
-      const result = await captureWindow(capturePath, titleSubstr, retry, activateFirst, settleMs);
+      const exactWindowId = parseIntArg(args, "--window-id", 0);
+      const result = await captureWindow(capturePath, titleSubstr, retry, activateFirst, settleMs, exactWindowId > 0 ? exactWindowId : undefined);
       emit(envelope("capture", result));
       process.exit(0);
       break;
