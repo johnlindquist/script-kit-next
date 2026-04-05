@@ -609,26 +609,30 @@ impl ScriptListApp {
         };
 
         if let Some(agent_id) = crate::actions::acp_switch_agent_id_from_action(action_id) {
-            let current_selected_agent_id = {
+            let (current_selected_agent_id, available_agents) = {
                 let view = entity.read(cx);
                 match &view.session {
-                    crate::ai::acp::AcpChatSession::Setup(state) => {
-                        state.selected_agent.as_ref().map(|agent| agent.id.to_string())
-                    }
-                    crate::ai::acp::AcpChatSession::Live(_) => {
-                        crate::ai::acp::load_preferred_acp_agent_id()
+                    crate::ai::acp::AcpChatSession::Setup(state) => (
+                        state
+                            .selected_agent
+                            .as_ref()
+                            .map(|agent| agent.id.to_string()),
+                        state.catalog_entries.clone(),
+                    ),
+                    crate::ai::acp::AcpChatSession::Live(thread) => {
+                        let thread = thread.read(cx);
+                        (
+                            thread.selected_agent_id().map(str::to_string),
+                            thread.available_agents().to_vec(),
+                        )
                     }
                 }
             };
 
-            let agent_display_name = crate::ai::acp::load_acp_agent_catalog_entries()
-                .ok()
-                .and_then(|entries| {
-                    entries
-                        .into_iter()
-                        .find(|entry| entry.id.as_ref() == agent_id)
-                        .map(|entry| entry.display_name.to_string())
-                })
+            let agent_display_name = available_agents
+                .iter()
+                .find(|entry| entry.id.as_ref() == agent_id)
+                .map(|entry| entry.display_name.to_string())
                 .unwrap_or_else(|| agent_id.to_string());
 
             if current_selected_agent_id.as_deref() == Some(agent_id) {
@@ -644,12 +648,32 @@ impl ScriptListApp {
                 agent_id,
                 agent_display_name = %agent_display_name,
             );
-            crate::ai::acp::persist_preferred_acp_agent_id(Some(agent_id.to_string()));
+
+            let persist_result =
+                crate::ai::acp::persist_preferred_acp_agent_id_sync(Some(agent_id.to_string()));
+
+            tracing::info!(
+                target: "script_kit::tab_ai",
+                event = "acp_switch_agent_persist_result",
+                agent_id,
+                persisted = persist_result.is_ok(),
+            );
+
+            if let Err(error) = persist_result {
+                return DispatchOutcome::error(
+                    crate::action_helpers::ERROR_ACTION_FAILED,
+                    format!(
+                        "Failed to persist ACP agent selection for {agent_display_name}: {error}"
+                    ),
+                );
+            }
+
             self.close_tab_ai_harness_terminal(cx);
             self.open_tab_ai_chat(cx);
 
             let mut outcome = DispatchOutcome::success();
-            outcome.user_message = Some(format!("Switching ACP agent to {agent_display_name}\u{2026}"));
+            outcome.user_message =
+                Some(format!("Switching ACP agent to {agent_display_name}\u{2026}"));
             return outcome;
         }
 

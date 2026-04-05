@@ -421,6 +421,12 @@ macro_rules! protocol_message_variants_query_ops {
     // ============================================================
     /// Reset the ACP test probe ring buffer, clearing prior events.
     ///
+    /// **Global-only**: this command always resets the probe on the main
+    /// window's ACP view. It does not accept an `AutomationWindowTarget`
+    /// field. Once ACP state is truly per-window, a targeted variant will
+    /// be introduced; until then, agents must treat resets as affecting the
+    /// single shared probe ring buffer.
+    ///
     /// Agents should call this before a test sequence to get a clean
     /// baseline for verifying picker acceptance and key routing.
     #[serde(rename = "resetAcpTestProbe")]

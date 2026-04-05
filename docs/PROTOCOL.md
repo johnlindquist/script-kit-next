@@ -1530,7 +1530,65 @@ Request the current visible UI surface. Returns semantic IDs for AI-driven targe
 | `focused` | boolean? | Whether this element has focus |
 | `index` | number? | Position in list (choices only) |
 
-**Warning codes:** `panel_only_theme_chooser`, `panel_only_div_prompt`, `panel_only_form_prompt`, `panel_only_editor_prompt`, `panel_only_chat_prompt`, `panel_only_env_prompt`, `panel_only_drop_prompt`, `panel_only_template_prompt`, `panel_only_naming_prompt`, `panel_only_webcam`, `panel_only_scratch_pad`, `panel_only_quick_terminal`, `panel_only_actions_dialog`, `collector_used_current_view_fallback`
+**Warning codes (canonical vocabulary):** `panel_only_theme_chooser`, `panel_only_actions_dialog`, `panel_only_div_prompt`, `panel_only_form_prompt`, `panel_only_term_prompt`, `panel_only_editor_prompt`, `panel_only_path_prompt`, `panel_only_chat_prompt`, `panel_only_env_prompt`, `panel_only_drop_prompt`, `panel_only_template_prompt`, `panel_only_naming_prompt`, `panel_only_creation_feedback`, `panel_only_webcam`, `panel_only_scratch_pad`, `panel_only_quick_terminal`, `collector_used_current_view_fallback`, `target_unsupported_non_main`
+
+#### Fail-closed targeting
+
+If a target resolves successfully but the executor for that surface is not implemented yet, the command **does not** fall back to another window. It fails closed with a structured error.
+
+For `getElements`, the runtime returns empty elements with the `target_unsupported_non_main` warning:
+
+```json
+{
+  "type": "elementsResult",
+  "requestId": "elm-notes",
+  "elements": [],
+  "totalCount": 0,
+  "truncated": false,
+  "focusedSemanticId": null,
+  "selectedSemanticId": null,
+  "warnings": ["target_unsupported_non_main: getElements currently supports only the main automation window; resolved notes (Notes)"]
+}
+```
+
+For `waitFor`, the runtime returns `success=false` with an `actionFailed` error before any polling starts:
+
+```json
+{
+  "type": "waitForResult",
+  "requestId": "wait-notes",
+  "success": false,
+  "elapsed": 0,
+  "error": {
+    "code": "action_failed",
+    "message": "waitFor currently supports only the main automation window; resolved notes (Notes)"
+  }
+}
+```
+
+For `batch`, the runtime returns `success=false` with `failedAt=0` and a single result entry before any command mutates UI state:
+
+```json
+{
+  "type": "batchResult",
+  "requestId": "batch-notes",
+  "success": false,
+  "results": [{
+    "index": 0,
+    "success": false,
+    "command": "batch",
+    "elapsed": 0,
+    "error": {
+      "code": "action_failed",
+      "message": "batch currently supports only the main automation window; resolved notes (Notes)"
+    }
+  }],
+  "failedAt": 0,
+  "totalElapsed": 0
+}
+```
+
+Requests with **no** `target` field preserve legacy behavior and operate on the main window.
 
 ---
 
@@ -2096,10 +2154,54 @@ Enumerate all automation-addressable windows.
 {"type": "captureScreenshot", "requestId": "shot-acp", "target": {"type": "kind", "kind": "acpDetached", "index": 0}, "hiDpi": true}
 ```
 
-### Targeted getAcpState (detached ACP)
+### ACP targetability contract
+
+`getAcpState` and `getAcpTestProbe` accept an optional `target` field but currently execute only against the main window's ACP view. Non-main targets fail closed with a structured result containing the `target_unsupported_non_main` warning — they do **not** silently fall back to the main window.
+
+`resetAcpTestProbe` is **global-only**: it always resets the main window's probe ring buffer and does not accept a `target` field. Once ACP state is per-window, a targeted variant will be introduced.
+
+**Targeted getAcpState (non-main target → fail closed):**
 
 ```json
 {"type": "getAcpState", "requestId": "acp-state-1", "target": {"type": "kind", "kind": "acpDetached"}}
+```
+
+**Response:**
+```json
+{
+  "type": "acpStateResult",
+  "requestId": "acp-state-1",
+  "schemaVersion": 1,
+  "status": "idle",
+  "inputText": "",
+  "cursorIndex": 0,
+  "hasSelection": false,
+  "messageCount": 0,
+  "contextChipCount": 0,
+  "contextReady": true,
+  "hasPendingPermission": false,
+  "warnings": ["target_unsupported_non_main: getAcpState currently supports only the main automation window; resolved acpDetached (AcpDetached)"]
+}
+```
+
+**Targeted getAcpTestProbe (non-main target → fail closed):**
+
+```json
+{"type": "getAcpTestProbe", "requestId": "acp-probe-1", "target": {"type": "kind", "kind": "acpDetached"}}
+```
+
+**Response:**
+```json
+{
+  "type": "acpTestProbeResult",
+  "requestId": "acp-probe-1",
+  "schemaVersion": 1,
+  "eventSeq": 0,
+  "keyRoutes": [],
+  "acceptedItems": [],
+  "state": {"schemaVersion": 1, "status": "idle", "inputText": "", "cursorIndex": 0, "hasSelection": false, "messageCount": 0, "contextChipCount": 0, "contextReady": true, "hasPendingPermission": false},
+  "warnings": ["target_unsupported_non_main: getAcpTestProbe currently supports only the main automation window; resolved acpDetached (AcpDetached)"]
+}
 ```
 
 ### simulateGpuiEvent
@@ -2132,11 +2234,12 @@ High-fidelity event simulation through GPUI's real event pipeline (unlike legacy
 | Command | Notes |
 |---------|-------|
 | `getState` | UI state for targeted window |
-| `getElements` | Semantic elements for targeted window |
+| `getElements` | Semantic elements for targeted window (main-only, non-main fails closed) |
 | `captureScreenshot` | Screenshot of targeted window |
-| `getAcpState` | ACP state from targeted ACP window |
-| `getAcpTestProbe` | Test probe from targeted ACP window |
+| `getAcpState` | ACP state (main-only, non-main returns default + `target_unsupported_non_main` warning) |
+| `getAcpTestProbe` | Test probe (main-only, non-main returns default + `target_unsupported_non_main` warning) |
+| `resetAcpTestProbe` | **Global-only** — no `target` field, always resets main window probe |
 | `simulateClick` | Click in targeted window |
-| `waitFor` | Poll condition on targeted window |
-| `batch` | Execute batch on targeted window |
-| `simulateGpuiEvent` | GPUI event dispatch to targeted window |
+| `waitFor` | Poll condition on targeted window (main-only, non-main fails closed) |
+| `batch` | Execute batch on targeted window (main-only, non-main fails closed) |
+| `simulateGpuiEvent` | GPUI event dispatch to targeted window (rejects ambiguous same-kind routing) |

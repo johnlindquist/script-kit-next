@@ -11,6 +11,30 @@
 //! not from the library crate directly, so they appear unused to `--lib`.
 #![allow(dead_code)]
 
+/// Returns `true` when the caller explicitly asked for a specific window
+/// (by `id`, `titleContains`, or `kind` with `index > 0`), meaning dispatch
+/// must not silently collapse multiple same-kind windows into one `WindowRole`.
+fn target_needs_stable_identity(
+    target: Option<&crate::protocol::AutomationWindowTarget>,
+) -> bool {
+    match target {
+        Some(crate::protocol::AutomationWindowTarget::Id { .. }) => true,
+        Some(crate::protocol::AutomationWindowTarget::TitleContains { .. }) => true,
+        Some(crate::protocol::AutomationWindowTarget::Kind {
+            index: Some(index), ..
+        }) => *index > 0,
+        _ => false,
+    }
+}
+
+/// Count how many visible windows share the given [`AutomationWindowKind`].
+fn visible_window_count_for_kind(kind: crate::protocol::AutomationWindowKind) -> usize {
+    crate::windows::list_automation_windows()
+        .into_iter()
+        .filter(|w| w.kind == kind && w.visible)
+        .count()
+}
+
 /// Map an [`AutomationWindowKind`] to the corresponding [`WindowRole`]
 /// used by the unified window registry.
 ///
@@ -122,7 +146,31 @@ pub(crate) fn dispatch_gpui_event(
         "gpui_event_simulation.dispatch"
     );
 
-    // 2. Map to WindowRole and get the handle
+    // 2a. Ambiguity guard — reject when the target needs stable identity
+    //     but multiple visible windows share the resolved kind, because
+    //     the WindowRole mapping cannot distinguish between them.
+    let visible_count = visible_window_count_for_kind(resolved.kind);
+    if target_needs_stable_identity(target) && visible_count > 1 {
+        let msg = format!(
+            "Resolved target {} ({:?}) is ambiguous: GPUI dispatch still collapses \
+             to WindowRole and {} visible windows share this kind",
+            resolved.id, resolved.kind, visible_count
+        );
+        tracing::warn!(
+            target: "script_kit::automation",
+            request_id = %request_id,
+            window_id = %resolved.id,
+            kind = ?resolved.kind,
+            visible_count = visible_count,
+            "gpui_event_simulation.ambiguous_role"
+        );
+        return GpuiEventDispatchResult {
+            success: false,
+            error: Some(msg),
+        };
+    }
+
+    // 2b. Map to WindowRole and get the handle
     let role = match automation_kind_to_window_role(resolved.kind) {
         Some(r) => r,
         None => {

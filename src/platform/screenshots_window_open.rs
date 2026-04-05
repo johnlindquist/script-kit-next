@@ -45,47 +45,32 @@ fn capture_and_encode_png(
     Ok((png_data, width, height))
 }
 
-/// Capture a screenshot of the app window using xcap for cross-platform support.
-///
-/// Returns a tuple of (png_data, width, height) on success.
-/// The function:
-/// 1. Uses xcap::Window::all() to enumerate windows
-/// 2. Finds the Script Kit window by app name or title
-/// 3. Captures the window directly to an image buffer
-/// 4. Optionally scales down to 1x resolution if hi_dpi is false
-/// 5. Encodes to PNG in memory (no temp files)
-///
-/// # Arguments
-/// * `hi_dpi` - If true, return full retina resolution (2x). If false, scale down to 1x.
-pub fn capture_app_screenshot(
-    hi_dpi: bool,
-) -> Result<(Vec<u8>, u32, u32), Box<dyn std::error::Error + Send + Sync>> {
-    let windows = Window::all()?;
+// ── Shared candidate-selection infrastructure ───────────────────────────
 
-    struct Candidate {
-        window: Window,
-        title: String,
-        width: u32,
-        height: u32,
-    }
+#[derive(Clone)]
+struct Candidate {
+    window: Window,
+    title: String,
+    app_name: String,
+    focused: bool,
+}
 
+/// Enumerate all visible Script Kit OS windows that are large enough to be
+/// meaningful screenshot targets.
+fn list_script_kit_candidates() -> Result<Vec<Candidate>, Box<dyn std::error::Error + Send + Sync>> {
     let mut candidates = Vec::new();
-    for window in windows {
+    for window in Window::all()? {
         let title = window.title().unwrap_or_else(|_| String::new());
         let app_name = window.app_name().unwrap_or_else(|_| String::new());
+        let focused = window.is_focused().unwrap_or(false);
+        let is_minimized = window.is_minimized().unwrap_or(true);
+        let width = window.width().unwrap_or(0);
+        let height = window.height().unwrap_or(0);
 
-        // Match our app window by name
         let is_our_window = app_name.contains("script-kit-gpui")
             || app_name == "Script Kit"
             || title.contains("Script Kit");
 
-        let is_minimized = window.is_minimized().unwrap_or(true);
-
-        // Get window dimensions to filter out tiny windows (tooltips, list items, etc.)
-        let width = window.width().unwrap_or(0);
-        let height = window.height().unwrap_or(0);
-
-        // Only consider windows that are reasonably sized
         // Width >= 200 filters out small UI elements
         // Height >= 50 allows compact prompts (arg prompt without choices is ~76px)
         let is_reasonable_size = width >= 200 && height >= 50;
@@ -94,66 +79,107 @@ pub fn capture_app_screenshot(
             candidates.push(Candidate {
                 window,
                 title,
-                width,
-                height,
+                app_name,
+                focused,
             });
         }
     }
+    Ok(candidates)
+}
 
-    // Sort by size (largest first) - the main window is typically the largest
-    candidates.sort_by(|a, b| {
-        let area_a = a.width as u64 * a.height as u64;
-        let area_b = b.width as u64 * b.height as u64;
-        area_b.cmp(&area_a)
-    });
+/// Score an OS window candidate against a resolved automation target.
+///
+/// Higher scores mean a better match. The scoring deliberately avoids the
+/// historical heuristic that preferred Notes/AI windows over the actual
+/// main window — instead, the resolved target's metadata drives selection.
+fn score_candidate(
+    resolved: &crate::protocol::AutomationWindowInfo,
+    candidate: &Candidate,
+) -> i32 {
+    use crate::protocol::AutomationWindowKind;
 
-    let mut target = candidates
+    let mut score: i32 = 0;
+
+    // Exact title match is the strongest signal
+    if let Some(title) = resolved.title.as_deref() {
+        if !title.is_empty() && candidate.title == title {
+            score += 1_000;
+        } else if !title.is_empty() && candidate.title.contains(title) {
+            score += 500;
+        }
+    }
+
+    // Focus agreement
+    if resolved.focused == candidate.focused {
+        score += 100;
+    }
+
+    // For main-window targets, penalize candidates that are clearly secondary
+    // windows (Notes, AI) so we never accidentally prefer them.
+    if resolved.kind == AutomationWindowKind::Main
+        && (candidate.title.contains("Notes") || candidate.title.contains("AI"))
+    {
+        score -= 200;
+    }
+
+    score
+}
+
+/// Capture the OS window that best matches the resolved automation target.
+///
+/// Returns a hard error when no OS window matches.  Emits
+/// `automation.capture_screenshot.candidate_selected` on every successful
+/// capture so agents can audit which OS window was actually captured.
+fn capture_resolved_window(
+    resolved: &crate::protocol::AutomationWindowInfo,
+    hi_dpi: bool,
+) -> Result<(Vec<u8>, u32, u32), Box<dyn std::error::Error + Send + Sync>> {
+    let candidates = list_script_kit_candidates()?;
+
+    let best = candidates
         .iter()
-        .filter(|candidate| candidate.title.contains("Notes") || candidate.title.contains("AI"))
-        .find(|candidate| candidate.window.is_focused().unwrap_or(false))
-        .map(|candidate| candidate.window.clone());
+        .max_by_key(|c| score_candidate(resolved, c))
+        .filter(|c| score_candidate(resolved, c) > -200);
 
-    if target.is_none() {
-        target = candidates
-            .iter()
-            .find(|candidate| candidate.title.contains("Notes") || candidate.title.contains("AI"))
-            .map(|candidate| candidate.window.clone());
-    }
-
-    if target.is_none() {
-        target = candidates
-            .iter()
-            .find(|candidate| candidate.window.is_focused().unwrap_or(false))
-            .map(|candidate| candidate.window.clone());
-    }
-
-    let Some(window) =
-        target.or_else(|| candidates.first().map(|candidate| candidate.window.clone()))
-    else {
-        return Err("Script Kit window not found".into());
+    let Some(best) = best else {
+        return Err(format!(
+            "No OS window matched automation target {} ({:?})",
+            resolved.id, resolved.kind
+        )
+        .into());
     };
 
-    let title = window.title().unwrap_or_else(|_| String::new());
-    let app_name = window.app_name().unwrap_or_else(|_| String::new());
-
-    tracing::debug!(
-        app_name = %app_name,
-        title = %title,
-        hi_dpi = hi_dpi,
-        "Found Script Kit window for screenshot"
+    tracing::info!(
+        target: "script_kit::automation",
+        window_id = %resolved.id,
+        kind = ?resolved.kind,
+        requested_title = ?resolved.title,
+        selected_title = %best.title,
+        selected_app = %best.app_name,
+        selected_focused = best.focused,
+        "automation.capture_screenshot.candidate_selected"
     );
 
-    let (png_data, width, height) = capture_and_encode_png(&window, hi_dpi)?;
+    capture_and_encode_png(&best.window, hi_dpi)
+}
 
-    tracing::debug!(
-        width = width,
-        height = height,
-        hi_dpi = hi_dpi,
-        file_size = png_data.len(),
-        "Screenshot captured with xcap"
-    );
+// ── Public API ──────────────────────────────────────────────────────────
 
-    Ok((png_data, width, height))
+/// Capture a screenshot of the main app window.
+///
+/// Resolves the main automation target first, then uses the shared
+/// candidate-selection path. Does **not** preferentially capture Notes or
+/// AI windows by heuristic — the resolved target drives selection.
+///
+/// # Arguments
+/// * `hi_dpi` - If true, return full retina resolution (2x). If false, scale down to 1x.
+pub fn capture_app_screenshot(
+    hi_dpi: bool,
+) -> Result<(Vec<u8>, u32, u32), Box<dyn std::error::Error + Send + Sync>> {
+    let target = crate::protocol::AutomationWindowTarget::Main;
+    let resolved = crate::windows::resolve_automation_window(Some(&target))
+        .map_err(|err| err.to_string())?;
+    capture_resolved_window(&resolved, hi_dpi)
 }
 
 /// Capture a screenshot of a window by its title pattern.
@@ -215,18 +241,18 @@ pub fn capture_window_by_title(
 
 /// Capture a screenshot routed through the automation window target resolver.
 ///
-/// When `target` is `None` or resolves to `Main`, falls back to
-/// `capture_app_screenshot`. For all other resolved kinds, uses the
-/// resolved window's title to find the correct OS-level window.
+/// Always captures through the resolved `AutomationWindowInfo` metadata
+/// using the shared candidate-selection path. Returns a hard error when
+/// no OS window matches the resolved target — never silently falls back
+/// to the main window.
 ///
-/// Returns structured failure when the target cannot be resolved —
-/// never silently falls back to the main window.
+/// # Arguments
+/// * `target` - The automation window target. `None` defaults to `Focused`.
+/// * `hi_dpi` - If true, return full retina resolution (2x). If false, scale down to 1x.
 pub fn capture_targeted_screenshot(
     target: Option<&crate::protocol::AutomationWindowTarget>,
     hi_dpi: bool,
 ) -> Result<(Vec<u8>, u32, u32), Box<dyn std::error::Error + Send + Sync>> {
-    use crate::protocol::AutomationWindowKind;
-
     let resolved = match crate::windows::resolve_automation_window(target) {
         Ok(info) => info,
         Err(err) => {
@@ -248,14 +274,5 @@ pub fn capture_targeted_screenshot(
         "automation.capture_screenshot.targeted"
     );
 
-    match resolved.kind {
-        AutomationWindowKind::Main => capture_app_screenshot(hi_dpi),
-        _ => {
-            let title_pattern = resolved
-                .title
-                .as_deref()
-                .unwrap_or("Script Kit");
-            capture_window_by_title(title_pattern, hi_dpi)
-        }
-    }
+    capture_resolved_window(&resolved, hi_dpi)
 }
