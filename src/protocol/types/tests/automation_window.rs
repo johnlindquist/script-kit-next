@@ -34,7 +34,8 @@ fn automation_window_target_round_trip_id() {
 #[test]
 fn automation_window_target_round_trip_kind() {
     let json = r#"{"type":"kind","kind":"acpDetached","index":0}"#;
-    let parsed: AutomationWindowTarget = serde_json::from_str(json).expect("target should deserialize");
+    let parsed: AutomationWindowTarget =
+        serde_json::from_str(json).expect("target should deserialize");
     match &parsed {
         AutomationWindowTarget::Kind { kind, index } => {
             assert_eq!(*kind, AutomationWindowKind::AcpDetached);
@@ -194,7 +195,8 @@ fn simulate_gpui_event_request_round_trip() {
         "target": {"type": "kind", "kind": "acpDetached"},
         "event": {"type": "keyDown", "key": "k", "modifiers": ["cmd"]}
     }"#;
-    let msg: crate::protocol::Message = serde_json::from_str(json).expect("parse simulateGpuiEvent");
+    let msg: crate::protocol::Message =
+        serde_json::from_str(json).expect("parse simulateGpuiEvent");
     match msg {
         crate::protocol::Message::SimulateGpuiEvent {
             request_id,
@@ -301,10 +303,7 @@ fn legacy_get_state_request_still_parses_without_target() {
     let json = r#"{"type":"getState","requestId":"gs-1"}"#;
     let msg: crate::protocol::Message = serde_json::from_str(json).expect("parse");
     match msg {
-        crate::protocol::Message::GetState {
-            request_id,
-            target,
-        } => {
+        crate::protocol::Message::GetState { request_id, target } => {
             assert_eq!(request_id, "gs-1");
             assert!(target.is_none());
         }

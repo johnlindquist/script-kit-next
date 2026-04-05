@@ -271,21 +271,21 @@ impl AcpChatView {
         let entries = thread
             .available_models()
             .iter()
-            .map(|model| crate::ai::acp::model_selector_popup::AcpModelSelectorPopupEntry {
-                id: model.id.clone(),
-                display: SharedString::from(
-                    model
-                        .display_name
-                        .clone()
-                        .unwrap_or_else(|| model.id.clone()),
-                ),
-                is_selected: selected_id.as_deref() == Some(model.id.as_str()),
-            })
+            .map(
+                |model| crate::ai::acp::model_selector_popup::AcpModelSelectorPopupEntry {
+                    id: model.id.clone(),
+                    display: SharedString::from(
+                        model
+                            .display_name
+                            .clone()
+                            .unwrap_or_else(|| model.id.clone()),
+                    ),
+                    is_selected: selected_id.as_deref() == Some(model.id.as_str()),
+                },
+            )
             .collect();
 
-        Some(crate::ai::acp::model_selector_popup::AcpModelSelectorPopupSnapshot {
-            entries,
-        })
+        Some(crate::ai::acp::model_selector_popup::AcpModelSelectorPopupSnapshot { entries })
     }
 
     pub(super) fn sync_model_selector_popup_window_from_cached_parent(
@@ -2266,10 +2266,7 @@ impl AcpChatView {
         replacement: &str,
     ) -> (String, usize) {
         let content = replacement.trim();
-        let wants_trailing_space = replacement
-            .chars()
-            .last()
-            .is_some_and(char::is_whitespace);
+        let wants_trailing_space = replacement.chars().last().is_some_and(char::is_whitespace);
 
         match Self::find_active_trigger(text, cursor) {
             Some((_trigger, trigger_range, _query)) => {
@@ -2278,8 +2275,7 @@ impl AcpChatView {
                     inserted.push(' ');
                 }
                 let cursor_after = trigger_range.start + inserted.chars().count();
-                let next_text =
-                    Self::replace_text_in_char_range(text, trigger_range, &inserted);
+                let next_text = Self::replace_text_in_char_range(text, trigger_range, &inserted);
                 (next_text, cursor_after)
             }
             None => {
@@ -2294,8 +2290,7 @@ impl AcpChatView {
                     formatted.push(' ');
                 }
                 let cursor_after = cursor + formatted.trim_end().chars().count();
-                let next_text =
-                    Self::replace_text_in_char_range(text, cursor..cursor, &formatted);
+                let next_text = Self::replace_text_in_char_range(text, cursor..cursor, &formatted);
                 (next_text, cursor_after)
             }
         }
@@ -2825,9 +2820,7 @@ impl AcpChatView {
             .into_any_element()
     }
 
-    fn setup_agent_install_label(
-        state: super::catalog::AcpAgentInstallState,
-    ) -> &'static str {
+    fn setup_agent_install_label(state: super::catalog::AcpAgentInstallState) -> &'static str {
         match state {
             super::catalog::AcpAgentInstallState::Ready => "ready",
             super::catalog::AcpAgentInstallState::NeedsInstall => "install",
@@ -4551,7 +4544,10 @@ mod tests {
         let (updated, cursor) =
             AcpChatView::replace_active_trigger_or_insert_at_cursor("/he", 3, "/help ");
         assert_eq!(updated, "/help ");
-        assert_eq!(cursor, 6, "cursor should land after the preserved trailing space");
+        assert_eq!(
+            cursor, 6,
+            "cursor should land after the preserved trailing space"
+        );
     }
 
     #[test]

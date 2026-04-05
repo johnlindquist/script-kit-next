@@ -827,7 +827,9 @@ fn get_acp_test_probe_request_parses() {
         serde_json::from_value(json).expect("parse getAcpTestProbe");
 
     match msg {
-        crate::protocol::Message::GetAcpTestProbe { request_id, tail, .. } => {
+        crate::protocol::Message::GetAcpTestProbe {
+            request_id, tail, ..
+        } => {
             assert_eq!(request_id, "probe-get-1");
             assert_eq!(tail, Some(20));
         }
@@ -842,7 +844,9 @@ fn get_acp_test_probe_request_parses_without_tail() {
         serde_json::from_str(json).expect("parse getAcpTestProbe without tail");
 
     match msg {
-        crate::protocol::Message::GetAcpTestProbe { request_id, tail, .. } => {
+        crate::protocol::Message::GetAcpTestProbe {
+            request_id, tail, ..
+        } => {
             assert_eq!(request_id, "probe-get-2");
             assert_eq!(tail, None);
         }
