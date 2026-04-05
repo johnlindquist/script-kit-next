@@ -1462,14 +1462,16 @@ impl ScriptListApp {
                                     }
 
                                     // Handle GetState - needs UI state, forward to UI thread
-                                    if let Message::GetState { request_id, .. } = &msg {
+                                    if let Message::GetState { request_id, target } = &msg {
                                         tracing::info!(
                                             category = "EXEC",
                                             request_id = %request_id,
+                                            target = ?target,
                                             "GetState request"
                                         );
                                         let prompt_msg = PromptMessage::GetState {
                                             request_id: request_id.clone(),
+                                            target: target.clone(),
                                         };
                                         if tx.send_blocking(prompt_msg).is_err() {
                                             tracing::info!(
@@ -1482,16 +1484,18 @@ impl ScriptListApp {
                                     }
 
                                     // Handle GetElements - needs UI state, forward to UI thread
-                                    if let Message::GetElements { request_id, limit, .. } = &msg {
+                                    if let Message::GetElements { request_id, limit, target } = &msg {
                                         tracing::info!(
                                             category = "EXEC",
                                             request_id = %request_id,
                                             limit = ?limit,
+                                            target = ?target,
                                             "GetElements request"
                                         );
                                         let prompt_msg = PromptMessage::GetElements {
                                             request_id: request_id.clone(),
                                             limit: *limit,
+                                            target: target.clone(),
                                         };
                                         if tx.send_blocking(prompt_msg).is_err() {
                                             tracing::info!(
@@ -1504,14 +1508,16 @@ impl ScriptListApp {
                                     }
 
                                     // Handle GetAcpState - needs ACP view state, forward to UI thread
-                                    if let Message::GetAcpState { request_id, .. } = &msg {
+                                    if let Message::GetAcpState { request_id, target } = &msg {
                                         tracing::info!(
                                             category = "EXEC",
                                             request_id = %request_id,
+                                            target = ?target,
                                             "GetAcpState request"
                                         );
                                         let prompt_msg = PromptMessage::GetAcpState {
                                             request_id: request_id.clone(),
+                                            target: target.clone(),
                                         };
                                         if tx.send_blocking(prompt_msg).is_err() {
                                             tracing::info!(
@@ -1544,15 +1550,17 @@ impl ScriptListApp {
                                     }
 
                                     // Handle GetAcpTestProbe - forward to UI thread
-                                    if let Message::GetAcpTestProbe { request_id, tail, .. } = &msg {
+                                    if let Message::GetAcpTestProbe { request_id, tail, target } = &msg {
                                         tracing::info!(
                                             category = "EXEC",
                                             request_id = %request_id,
+                                            target = ?target,
                                             "GetAcpTestProbe request"
                                         );
                                         let prompt_msg = PromptMessage::GetAcpTestProbe {
                                             request_id: request_id.clone(),
                                             tail: *tail,
+                                            target: target.clone(),
                                         };
                                         if tx.send_blocking(prompt_msg).is_err() {
                                             tracing::info!(
@@ -1591,13 +1599,14 @@ impl ScriptListApp {
                                         timeout,
                                         poll_interval,
                                         trace,
-                                        ..
+                                        target,
                                     } = &msg
                                     {
                                         tracing::info!(
                                             category = "EXEC",
                                             request_id = %request_id,
                                             trace_mode = ?trace,
+                                            target = ?target,
                                             "WaitFor request"
                                         );
                                         let prompt_msg = PromptMessage::WaitFor {
@@ -1606,6 +1615,7 @@ impl ScriptListApp {
                                             timeout: *timeout,
                                             poll_interval: *poll_interval,
                                             trace: *trace,
+                                            target: target.clone(),
                                         };
                                         if tx.send_blocking(prompt_msg).is_err() {
                                             tracing::info!(
@@ -1623,7 +1633,7 @@ impl ScriptListApp {
                                         commands,
                                         options,
                                         trace,
-                                        ..
+                                        target,
                                     } = &msg
                                     {
                                         tracing::info!(
@@ -1631,6 +1641,7 @@ impl ScriptListApp {
                                             request_id = %request_id,
                                             command_count = commands.len(),
                                             trace_mode = ?trace,
+                                            target = ?target,
                                             "Batch request"
                                         );
                                         let prompt_msg = PromptMessage::Batch {
@@ -1638,6 +1649,7 @@ impl ScriptListApp {
                                             commands: commands.clone(),
                                             options: options.clone(),
                                             trace: *trace,
+                                            target: target.clone(),
                                         };
                                         if tx.send_blocking(prompt_msg).is_err() {
                                             tracing::info!(
@@ -1649,17 +1661,99 @@ impl ScriptListApp {
                                         continue;
                                     }
 
+                                    // Handle ListAutomationWindows directly (no UI needed)
+                                    if let Message::ListAutomationWindows { request_id } = &msg {
+                                        tracing::info!(
+                                            target: "script_kit::automation",
+                                            request_id = %request_id,
+                                            "automation.list_windows.request"
+                                        );
+                                        let windows = crate::windows::list_automation_windows();
+                                        let focused_id = crate::windows::focused_automation_window_id();
+                                        tracing::info!(
+                                            target: "script_kit::automation",
+                                            request_id = %request_id,
+                                            window_count = windows.len(),
+                                            focused_id = ?focused_id,
+                                            "automation.list_windows.result"
+                                        );
+                                        let response = Message::automation_window_list_result(
+                                            request_id.clone(),
+                                            windows,
+                                            focused_id,
+                                        );
+                                        if let Err(e) = reader_response_tx.send(response) {
+                                            tracing::error!(error = %e, "Failed to send automation window list response");
+                                        }
+                                        continue;
+                                    }
+
+                                    // Handle SimulateGpuiEvent - log and respond (stub: real GPUI dispatch requires window context)
+                                    if let Message::SimulateGpuiEvent { request_id, target, event } = &msg {
+                                        tracing::info!(
+                                            target: "script_kit::automation",
+                                            request_id = %request_id,
+                                            target = ?target,
+                                            event = ?event,
+                                            "gpui_event_simulation.request"
+                                        );
+                                        // Resolve the target to validate it exists
+                                        let result = crate::windows::resolve_automation_window(target.as_ref());
+                                        let response = match result {
+                                            Ok(resolved) => {
+                                                tracing::info!(
+                                                    target: "script_kit::automation",
+                                                    request_id = %request_id,
+                                                    window_id = %resolved.id,
+                                                    kind = ?resolved.kind,
+                                                    "gpui_event_simulation.resolved"
+                                                );
+                                                // First-cut stub: target resolved successfully.
+                                                // Real GPUI event dispatch requires a window handle
+                                                // and cx context, which is not available on this
+                                                // thread. For now, we validate targeting and return
+                                                // success. Full dispatch will be wired once the
+                                                // prompt handler receives SimulateGpuiEvent.
+                                                Message::simulate_gpui_event_result_success(
+                                                    request_id.clone(),
+                                                )
+                                            }
+                                            Err(err) => {
+                                                tracing::warn!(
+                                                    target: "script_kit::automation",
+                                                    request_id = %request_id,
+                                                    error = %err,
+                                                    "gpui_event_simulation.target_failed"
+                                                );
+                                                Message::simulate_gpui_event_result_error(
+                                                    request_id.clone(),
+                                                    err.to_string(),
+                                                )
+                                            }
+                                        };
+                                        if let Err(e) = reader_response_tx.send(response) {
+                                            tracing::error!(error = %e, "Failed to send GPUI event simulation response");
+                                        }
+                                        continue;
+                                    }
+
                                     // Handle CaptureScreenshot directly (no UI needed)
                                     if let Message::CaptureScreenshot {
                                         request_id,
                                         hi_dpi,
-                                        ..
+                                        target,
                                     } = &msg
                                     {
                                         let hi_dpi_mode = hi_dpi.unwrap_or(false);
-                                        tracing::info!(request_id = %request_id, hi_dpi = hi_dpi_mode, "Capturing screenshot");
+                                        tracing::info!(
+                                            target: "script_kit::automation",
+                                            request_id = %request_id,
+                                            hi_dpi = hi_dpi_mode,
+                                            target = ?target,
+                                            "automation.capture_screenshot.request"
+                                        );
 
-                                        let response = match capture_app_screenshot(hi_dpi_mode) {
+                                        let response = match capture_targeted_screenshot(target.as_ref(), hi_dpi_mode) {
                                             Ok((png_data, width, height)) => {
                                                 use base64::Engine;
                                                 let base64_data =

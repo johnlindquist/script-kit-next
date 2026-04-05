@@ -9,6 +9,19 @@ use script_kit_gpui::ai::{
     ContextPickerTrigger,
 };
 
+/// Seed provider JSON slots so provider-backed builtins appear in the picker.
+fn seed_provider_slots() {
+    script_kit_gpui::mcp_resources::publish_dictation_json(
+        r#"{"transcription":"test"}"#,
+    );
+    script_kit_gpui::mcp_resources::publish_calendar_json(
+        r#"{"events":[]}"#,
+    );
+    script_kit_gpui::mcp_resources::publish_notifications_json(
+        r#"{"notifications":[]}"#,
+    );
+}
+
 // ---------- Deterministic picker ranking ----------
 
 #[test]
@@ -30,6 +43,7 @@ fn picker_ranking_is_deterministic_across_calls() {
 
 #[test]
 fn empty_query_returns_all_builtins_deterministically() {
+    seed_provider_slots();
     let items = build_picker_items(ContextPickerTrigger::Mention, "");
     let specs = context_attachment_specs();
 
@@ -301,6 +315,7 @@ fn catalog_has_at_least_15_entries() {
 
 #[test]
 fn new_entries_are_queryable() {
+    seed_provider_slots();
     // @dictation
     let items = build_picker_items(ContextPickerTrigger::Mention, "dictation");
     assert!(
