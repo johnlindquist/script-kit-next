@@ -56,6 +56,100 @@ fn resolve_main_only_target(
     Ok(resolved)
 }
 
+/// Which window an ACP read should target.
+enum AcpReadTarget {
+    /// Read from the main window's ACP view (current behavior).
+    Main,
+    /// Read from the detached ACP chat window's entity.
+    Detached(gpui::Entity<crate::ai::acp::view::AcpChatView>),
+}
+
+/// Resolve an automation target for ACP read operations (getAcpState, getAcpTestProbe).
+///
+/// Allows `Main` and `AcpDetached` kinds. Rejects all other secondary targets
+/// with a structured error. For `AcpDetached`, returns the live entity from the
+/// detached chat window (or errors if no detached window is open).
+fn resolve_acp_read_target(
+    request_id: &str,
+    op: &'static str,
+    target: Option<&crate::protocol::AutomationWindowTarget>,
+) -> Result<AcpReadTarget, crate::protocol::TransactionError> {
+    // No explicit target → default to main window (preserves existing behavior).
+    let Some(target) = target else {
+        return Ok(AcpReadTarget::Main);
+    };
+
+    let resolved = crate::windows::resolve_automation_window(Some(target)).map_err(|err| {
+        tracing::warn!(
+            target: "script_kit::automation",
+            request_id = %request_id,
+            op = op,
+            error = %err,
+            "automation.acp_target.resolve_failed"
+        );
+        crate::protocol::TransactionError::action_failed(format!(
+            "{op} target resolution failed: {err}"
+        ))
+    })?;
+
+    match resolved.kind {
+        crate::protocol::AutomationWindowKind::Main => {
+            tracing::debug!(
+                target: "script_kit::automation",
+                request_id = %request_id,
+                op = op,
+                window_id = %resolved.id,
+                "automation.acp_target.main"
+            );
+            Ok(AcpReadTarget::Main)
+        }
+        crate::protocol::AutomationWindowKind::AcpDetached => {
+            // Try to get the live entity from the detached window.
+            match crate::ai::acp::chat_window::get_detached_acp_view_entity() {
+                Some(entity) => {
+                    tracing::info!(
+                        target: "script_kit::automation",
+                        request_id = %request_id,
+                        op = op,
+                        window_id = %resolved.id,
+                        kind = ?resolved.kind,
+                        "automation.acp_target.detached_resolved"
+                    );
+                    Ok(AcpReadTarget::Detached(entity))
+                }
+                None => {
+                    tracing::warn!(
+                        target: "script_kit::automation",
+                        request_id = %request_id,
+                        op = op,
+                        window_id = %resolved.id,
+                        "automation.acp_target.detached_no_entity"
+                    );
+                    Err(crate::protocol::TransactionError::action_failed(format!(
+                        "{op} resolved detached ACP target {} but no live view entity is available \
+                         (window may be a placeholder or closed)",
+                        resolved.id
+                    )))
+                }
+            }
+        }
+        other_kind => {
+            tracing::warn!(
+                target: "script_kit::automation",
+                request_id = %request_id,
+                op = op,
+                window_id = %resolved.id,
+                kind = ?other_kind,
+                "automation.acp_target.non_acp_rejected"
+            );
+            Err(crate::protocol::TransactionError::action_failed(format!(
+                "{op} supports only Main and AcpDetached targets; resolved {} ({:?})",
+                resolved.id, other_kind
+            )))
+        }
+    }
+}
+
 fn resolve_ai_start_chat_provider(
     registry: &crate::ai::ProviderRegistry,
     model_id: &str,
@@ -1585,28 +1679,31 @@ impl ScriptListApp {
                     "acp_state.request"
                 );
 
-                // Fail closed: reject non-main targets with a structured
-                // unsupported-target result instead of silently falling back
-                // to the main window's ACP state.
-                if target.is_some() {
-                    match resolve_main_only_target(&request_id, "getAcpState", target.as_ref()) {
-                        Ok(_resolved) => { /* main window — proceed */ }
-                        Err(error) => {
-                            let mut state = protocol::AcpStateSnapshot::default();
-                            state.warnings = vec![format!(
-                                "target_unsupported_non_main: {}",
-                                error.message
-                            )];
-                            let response = Message::acp_state_result(request_id.clone(), state);
-                            if let Some(ref sender) = self.response_sender {
-                                let _ = sender.try_send(response);
-                            }
-                            return;
+                // Resolve target: Main → main window, AcpDetached → detached entity,
+                // anything else → structured error.
+                let acp_target = match resolve_acp_read_target(&request_id, "getAcpState", target.as_ref()) {
+                    Ok(t) => t,
+                    Err(error) => {
+                        let mut state = protocol::AcpStateSnapshot::default();
+                        state.warnings = vec![format!(
+                            "target_unsupported: {}",
+                            error.message
+                        )];
+                        let response = Message::acp_state_result(request_id.clone(), state);
+                        if let Some(ref sender) = self.response_sender {
+                            let _ = sender.try_send(response);
                         }
+                        return;
                     }
-                }
+                };
 
-                let state = self.collect_acp_state(cx);
+                let state = match acp_target {
+                    AcpReadTarget::Main => self.collect_acp_state(cx),
+                    AcpReadTarget::Detached(entity) => {
+                        let view = entity.read(cx);
+                        view.collect_acp_state_snapshot(cx)
+                    }
+                };
 
                 tracing::info!(
                     target: "script_kit::acp_telemetry",
@@ -1762,28 +1859,31 @@ impl ScriptListApp {
                     "acp_test_probe.request"
                 );
 
-                // Fail closed: reject non-main targets with a structured
-                // unsupported-target result instead of silently falling back
-                // to the main window's probe state.
-                if target.is_some() {
-                    match resolve_main_only_target(&request_id, "getAcpTestProbe", target.as_ref()) {
-                        Ok(_resolved) => { /* main window — proceed */ }
-                        Err(error) => {
-                            let mut probe = protocol::AcpTestProbeSnapshot::default();
-                            probe.warnings = vec![format!(
-                                "target_unsupported_non_main: {}",
-                                error.message
-                            )];
-                            let response = Message::acp_test_probe_result(request_id.clone(), probe);
-                            if let Some(ref sender) = self.response_sender {
-                                let _ = sender.try_send(response);
-                            }
-                            return;
+                // Resolve target: Main → main window, AcpDetached → detached entity,
+                // anything else → structured error.
+                let acp_target = match resolve_acp_read_target(&request_id, "getAcpTestProbe", target.as_ref()) {
+                    Ok(t) => t,
+                    Err(error) => {
+                        let mut probe = protocol::AcpTestProbeSnapshot::default();
+                        probe.warnings = vec![format!(
+                            "target_unsupported: {}",
+                            error.message
+                        )];
+                        let response = Message::acp_test_probe_result(request_id.clone(), probe);
+                        if let Some(ref sender) = self.response_sender {
+                            let _ = sender.try_send(response);
                         }
+                        return;
                     }
-                }
+                };
 
-                let probe = self.collect_acp_test_probe(tail, cx);
+                let probe = match acp_target {
+                    AcpReadTarget::Main => self.collect_acp_test_probe(tail, cx),
+                    AcpReadTarget::Detached(entity) => {
+                        let view = entity.read(cx);
+                        view.test_probe_snapshot(tail, cx)
+                    }
+                };
                 let response = Message::acp_test_probe_result(request_id.clone(), probe);
 
                 if let Some(ref sender) = self.response_sender {
