@@ -94,6 +94,17 @@ pub(crate) struct AcpAgentCatalogEntry {
     pub config_state: AcpAgentConfigState,
     pub install_hint: Option<SharedString>,
     pub config_hint: Option<SharedString>,
+    /// Whether this agent supports embedded context blocks (e.g. desktop snapshots).
+    /// `None` means unknown — treated as capable for fallback selection.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub supports_embedded_context: Option<bool>,
+    /// Whether this agent supports image/screenshot attachments.
+    /// `None` means unknown — treated as capable for fallback selection.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub supports_image: Option<bool>,
+    /// Whether the last ACP session with this agent completed successfully.
+    #[serde(default)]
+    pub last_session_ok: bool,
     pub config: Option<AcpAgentConfig>,
 }
 
@@ -153,6 +164,9 @@ mod tests {
             config_state: AcpAgentConfigState::Valid,
             install_hint: None,
             config_hint: None,
+            supports_embedded_context: None,
+            supports_image: None,
+            last_session_ok: false,
             config: None,
         };
         assert!(entry.is_launchable());
@@ -169,6 +183,9 @@ mod tests {
             config_state: AcpAgentConfigState::Valid,
             install_hint: Some("npm i -g test".into()),
             config_hint: None,
+            supports_embedded_context: None,
+            supports_image: None,
+            last_session_ok: false,
             config: None,
         };
         assert!(!entry.is_launchable());
@@ -185,6 +202,9 @@ mod tests {
             config_state: AcpAgentConfigState::Valid,
             install_hint: None,
             config_hint: None,
+            supports_embedded_context: None,
+            supports_image: None,
+            last_session_ok: false,
             config: None,
         };
         assert!(!entry.is_launchable());
@@ -201,6 +221,9 @@ mod tests {
             config_state: AcpAgentConfigState::Missing,
             install_hint: None,
             config_hint: None,
+            supports_embedded_context: None,
+            supports_image: None,
+            last_session_ok: false,
             config: None,
         };
         assert!(!entry.is_launchable());

@@ -376,11 +376,17 @@ pub(crate) fn load_acp_agent_catalog_entries(
                 super::catalog::AcpAgentConfigState::Valid
             };
 
-            // Overlay persisted runtime auth state when available.
-            let auth_state = runtime_states
-                .get(&agent.id)
+            // Overlay persisted runtime state when available.
+            let runtime_state = runtime_states.get(&agent.id);
+            let auth_state = runtime_state
                 .and_then(|state| state.auth_state)
                 .unwrap_or(super::catalog::AcpAgentAuthState::Unknown);
+            let supports_embedded_context =
+                runtime_state.and_then(|state| state.supports_embedded_context);
+            let supports_image = runtime_state.and_then(|state| state.supports_image);
+            let last_session_ok = runtime_state
+                .map(|state| state.last_session_ok)
+                .unwrap_or(false);
 
             let source = classify_agent_source(&agent.id);
 
@@ -414,6 +420,9 @@ pub(crate) fn load_acp_agent_catalog_entries(
                 config_hint: Some(
                     "Edit ~/.scriptkit/acp/agents.json to add or fix ACP agents.".into(),
                 ),
+                supports_embedded_context,
+                supports_image,
+                last_session_ok,
                 config: Some(agent),
             }
         })

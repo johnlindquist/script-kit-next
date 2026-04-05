@@ -9,6 +9,7 @@ use agent_client_protocol::{ContentBlock, TextContent};
 
 use super::events::AcpEvent;
 use super::permission_broker::{AcpApprovalOption, AcpApprovalRequest, AcpPermissionBroker};
+use super::preflight::AcpLaunchRequirements;
 use super::thread::{AcpThread, AcpThreadMessageRole, AcpThreadStatus};
 
 // =========================================================================
@@ -727,8 +728,8 @@ fn tab_ai_mode_uses_catalog_loader_not_claude_only_loader() {
         "tab_ai_mode must use the catalog loader, not Claude-only config"
     );
     assert!(
-        TAB_AI_MODE_SOURCE.contains("resolve_default_acp_launch"),
-        "tab_ai_mode must use preflight resolution"
+        TAB_AI_MODE_SOURCE.contains("resolve_acp_launch_with_requirements"),
+        "tab_ai_mode must use capability-aware preflight resolution"
     );
 }
 
@@ -785,7 +786,10 @@ fn setup_state_from_resolution_covers_all_blockers() {
             blocker: Some(blocker.clone()),
             catalog_entries: vec![],
         };
-        let state = AcpInlineSetupState::from_resolution(&resolution);
+        let state = AcpInlineSetupState::from_resolution(
+            &resolution,
+            AcpLaunchRequirements::default(),
+        );
         assert!(
             !state.title.is_empty(),
             "setup state title must be non-empty for {:?}",
@@ -822,5 +826,119 @@ fn ai_setup_surface_no_longer_mentions_claude_only_copy() {
     assert!(
         !SETUP_RENDER_SOURCE.contains("Connect to Claude Code"),
         "setup card must NOT mention Claude Code specifically"
+    );
+}
+
+// =========================================================================
+// 6. Capability-driven ACP launch and recovery
+// =========================================================================
+
+#[test]
+fn tab_ai_mode_derives_launch_requirements() {
+    assert!(
+        TAB_AI_MODE_SOURCE.contains("AcpLaunchRequirements"),
+        "tab_ai_mode must derive AcpLaunchRequirements"
+    );
+    assert!(
+        TAB_AI_MODE_SOURCE.contains("acp_launch_requirements_derived"),
+        "tab_ai_mode must log requirements derivation"
+    );
+}
+
+#[test]
+fn setup_state_handles_capability_mismatch_with_switch() {
+    use super::preflight::{AcpLaunchBlocker, AcpLaunchResolution};
+    use super::setup_state::{AcpInlineSetupState, AcpSetupAction};
+
+    let agents = vec![
+        super::catalog::AcpAgentCatalogEntry {
+            id: "blocked".into(),
+            display_name: "Blocked".into(),
+            source: super::catalog::AcpAgentSource::ScriptKitCatalog,
+            install_state: super::catalog::AcpAgentInstallState::Ready,
+            auth_state: super::catalog::AcpAgentAuthState::Unknown,
+            config_state: super::catalog::AcpAgentConfigState::Valid,
+            install_hint: None,
+            config_hint: None,
+            supports_embedded_context: Some(false),
+            supports_image: None,
+            last_session_ok: false,
+            config: None,
+        },
+        super::catalog::AcpAgentCatalogEntry {
+            id: "ready".into(),
+            display_name: "Ready".into(),
+            source: super::catalog::AcpAgentSource::ScriptKitCatalog,
+            install_state: super::catalog::AcpAgentInstallState::Ready,
+            auth_state: super::catalog::AcpAgentAuthState::Unknown,
+            config_state: super::catalog::AcpAgentConfigState::Valid,
+            install_hint: None,
+            config_hint: None,
+            supports_embedded_context: Some(true),
+            supports_image: None,
+            last_session_ok: false,
+            config: None,
+        },
+    ];
+
+    let resolution = AcpLaunchResolution {
+        selected_agent: Some(agents[0].clone()),
+        blocker: Some(AcpLaunchBlocker::CapabilityMismatch),
+        catalog_entries: agents,
+    };
+
+    let state = AcpInlineSetupState::from_resolution(
+        &resolution,
+        AcpLaunchRequirements {
+            needs_embedded_context: true,
+            needs_image: false,
+        },
+    );
+    assert_eq!(state.title.as_ref(), "ACP capability mismatch");
+    assert_eq!(
+        state.primary_action,
+        AcpSetupAction::SelectAgent,
+        "should offer SelectAgent when a capable alternative exists"
+    );
+}
+
+#[test]
+fn setup_state_handles_capability_mismatch_without_alternative() {
+    use super::preflight::{AcpLaunchBlocker, AcpLaunchResolution};
+    use super::setup_state::{AcpInlineSetupState, AcpSetupAction};
+
+    let agents = vec![super::catalog::AcpAgentCatalogEntry {
+        id: "only-agent".into(),
+        display_name: "Only Agent".into(),
+        source: super::catalog::AcpAgentSource::ScriptKitCatalog,
+        install_state: super::catalog::AcpAgentInstallState::Ready,
+        auth_state: super::catalog::AcpAgentAuthState::Unknown,
+        config_state: super::catalog::AcpAgentConfigState::Valid,
+        install_hint: None,
+        config_hint: None,
+        supports_embedded_context: Some(false),
+        supports_image: None,
+        last_session_ok: false,
+        config: None,
+    }];
+
+    let resolution = AcpLaunchResolution {
+        selected_agent: Some(agents[0].clone()),
+        blocker: Some(AcpLaunchBlocker::CapabilityMismatch),
+        catalog_entries: agents,
+    };
+
+    let state = AcpInlineSetupState::from_resolution(
+        &resolution,
+        AcpLaunchRequirements {
+            needs_embedded_context: true,
+            needs_image: false,
+        },
+    );
+    assert_eq!(state.title.as_ref(), "ACP capability mismatch");
+    assert_eq!(
+        state.primary_action,
+        AcpSetupAction::Retry,
+        "should offer Retry when no capable alternative exists"
     );
 }

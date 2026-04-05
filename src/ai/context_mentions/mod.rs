@@ -207,6 +207,19 @@ pub(crate) fn parse_inline_context_mentions(text: &str) -> Vec<InlineContextMent
     out
 }
 
+/// Return the character-level range of the inline mention token whose span
+/// covers `cursor`. Returns `None` when the cursor is not inside or at the
+/// boundary of any recognised mention.
+pub(crate) fn mention_range_at_cursor(
+    text: &str,
+    cursor: usize,
+) -> Option<std::ops::Range<usize>> {
+    parse_inline_context_mentions(text)
+        .into_iter()
+        .find(|mention| cursor > mention.range.start && cursor <= mention.range.end)
+        .map(|mention| mention.range)
+}
+
 /// Convert an `AiContextPart` back to its canonical inline `@token` form.
 ///
 /// Returns `None` for parts that have no inline mention representation
