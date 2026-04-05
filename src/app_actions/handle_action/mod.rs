@@ -668,6 +668,18 @@ impl ScriptListApp {
                 );
             }
 
+            // Stage a retry payload preserving current capability requirements
+            // so the reopened session keeps needs_embedded_context / needs_image.
+            entity.update(cx, |view, cx| {
+                view.stage_agent_switch_retry(agent_id.to_string(), cx);
+            });
+
+            tracing::info!(
+                target: "script_kit::tab_ai",
+                event = "acp_switch_agent_reopen_requested",
+                agent_id,
+            );
+
             self.close_tab_ai_harness_terminal(cx);
             self.open_tab_ai_chat(cx);
 

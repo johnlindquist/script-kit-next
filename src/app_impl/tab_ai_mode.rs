@@ -1215,9 +1215,36 @@ impl ScriptListApp {
             total_ms = open_started_at.elapsed().as_millis() as u64,
         );
 
-        crate::ai::acp::persist_preferred_acp_agent_id(
-            acp_launch_resolution.selected_agent_id().map(str::to_string),
+        // Only persist the selected agent when the launch is explicit (retry
+        // request / first-run) or already aligned with the saved preference.
+        // Automatic capability fallback should not silently rewrite the user's
+        // preferred agent.
+        let selected_agent_id = acp_launch_resolution.selected_agent_id().map(str::to_string);
+        let should_persist_selected_agent = retry_request.is_some()
+            || preferred_agent_id.is_none()
+            || preferred_agent_id.as_deref() == selected_agent_id.as_deref();
+
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "acp_preferred_agent_post_launch_persist_decision",
+            had_retry_request = retry_request.is_some(),
+            preferred_agent_id = ?preferred_agent_id,
+            selected_agent_id = ?selected_agent_id,
+            should_persist_selected_agent,
+            needs_embedded_context = requirements.needs_embedded_context,
+            needs_image = requirements.needs_image,
         );
+
+        if should_persist_selected_agent {
+            crate::ai::acp::persist_preferred_acp_agent_id(selected_agent_id);
+        } else {
+            tracing::info!(
+                target: "script_kit::tab_ai",
+                event = "acp_preferred_agent_preserved_during_fallback_launch",
+                preferred_agent_id = ?preferred_agent_id,
+                selected_agent_id = ?acp_launch_resolution.selected_agent_id(),
+            );
+        }
 
         let stage_started_at = std::time::Instant::now();
         let view_entity = cx.new(|cx| crate::ai::acp::AcpChatView::new(thread.clone(), cx));

@@ -2560,6 +2560,7 @@ impl AcpChatView {
             parsed.iter().map(|m| m.canonical_token.clone()).collect();
         let mut new_inline_owned_tokens = HashSet::new();
         let mut removed_tokens = Vec::new();
+        let mut duplicate_tokens_skipped = Vec::new();
 
         self.live_thread().update(cx, |thread, cx| {
             // Remove stale inline parts (iterate in reverse to keep indices stable).
@@ -2585,21 +2586,28 @@ impl AcpChatView {
                 thread.remove_context_part(ix, cx);
             }
 
-            // Add new parts that aren't already attached.
-            let existing_tokens: HashSet<String> = thread
+            // Add new parts that aren't already attached. Use a mutable
+            // set so duplicate canonical tokens within the same parse pass
+            // (e.g. @context and @snapshot both mapping to the same canonical)
+            // are attached at most once.
+            let mut existing_tokens: HashSet<String> = thread
                 .pending_context_parts()
                 .iter()
                 .filter_map(part_to_inline_token)
                 .collect();
             for mention in &parsed {
-                if !existing_tokens.contains(&mention.canonical_token) {
+                if existing_tokens.insert(mention.canonical_token.clone()) {
                     thread.add_context_part(mention.part.clone(), cx);
                     new_inline_owned_tokens.insert(mention.canonical_token.clone());
+                } else {
+                    duplicate_tokens_skipped.push(mention.canonical_token.clone());
                 }
             }
         });
 
         let added_tokens: Vec<String> = new_inline_owned_tokens.iter().cloned().collect();
+        duplicate_tokens_skipped.sort();
+        duplicate_tokens_skipped.dedup();
 
         self.inline_owned_context_tokens
             .retain(|token| desired_tokens.contains(token));
@@ -2613,8 +2621,10 @@ impl AcpChatView {
             canonical_count = desired_tokens.len(),
             added_count = added_tokens.len(),
             removed_count = removed_tokens.len(),
+            duplicate_count = duplicate_tokens_skipped.len(),
             added_tokens = ?added_tokens,
             removed_tokens = ?removed_tokens,
+            duplicate_tokens_skipped = ?duplicate_tokens_skipped,
             text_len = text.len(),
         );
     }
@@ -3031,6 +3041,41 @@ impl AcpChatView {
     /// to consume an explicit relaunch payload ahead of fallback preference.
     pub(crate) fn take_retry_request(&mut self) -> Option<AcpRetryRequest> {
         self.pending_retry_request.take()
+    }
+
+    /// Derive current launch requirements from whichever session mode is active.
+    fn current_retry_launch_requirements(
+        &self,
+        cx: &mut Context<Self>,
+    ) -> super::preflight::AcpLaunchRequirements {
+        match &self.session {
+            AcpChatSession::Setup(setup) => setup.launch_requirements,
+            AcpChatSession::Live(thread) => thread.read(cx).current_setup_requirements(),
+        }
+    }
+
+    /// Stage a retry request for an action-surface agent switch.
+    ///
+    /// Preserves the active session's capability requirements so the next
+    /// ACP open path can consume them instead of re-deriving from scratch.
+    pub(crate) fn stage_agent_switch_retry(
+        &mut self,
+        next_agent_id: String,
+        cx: &mut Context<Self>,
+    ) {
+        let launch_requirements = self.current_retry_launch_requirements(cx);
+        self.pending_retry_request = Some(AcpRetryRequest {
+            preferred_agent_id: Some(next_agent_id.clone()),
+            launch_requirements,
+        });
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "acp_switch_agent_retry_payload_staged",
+            agent_id = %next_agent_id,
+            needs_embedded_context = launch_requirements.needs_embedded_context,
+            needs_image = launch_requirements.needs_image,
+        );
+        cx.notify();
     }
 
     /// Queue an explicit relaunch payload from the current setup state.
