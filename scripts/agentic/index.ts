@@ -900,7 +900,7 @@ async function recipeAcpSetupRecovery(
 interface DetachedResolved {
   targetJson: AutomationTargetJson;
   surfaceId: string | null;
-  automationWindowId: string | null;
+  automationWindowId: number | null;
 }
 
 async function recipeAcpDetachedAccept(
@@ -911,13 +911,13 @@ async function recipeAcpDetachedAccept(
     kind?: string;
     index?: number;
   } = {}
-): Promise<RecipeReceipt & { resolved?: DetachedResolved }> {
+): Promise<RecipeReceipt> {
   const steps: StepReceipt[] = [];
   const kind = opts.kind ?? "acpDetached";
   const index = opts.index ?? 0;
 
   // 1. Resolve the detached ACP target to exact identity
-  const resolveStep = await step("resolve-target", () =>
+  const resolveStep = await step("resolve-detached-target", () =>
     runTool(
       [
         "bun",
@@ -948,9 +948,18 @@ async function recipeAcpDetachedAccept(
   // Extract resolved identity
   const resolveOutput = resolveStep.output as Record<string, unknown>;
   const surfaceId = (resolveOutput.surfaceId as string) ?? null;
+  const rawWindowId = resolveOutput.automationWindowId;
+  const parsedWindowId =
+    typeof rawWindowId === "number"
+      ? rawWindowId
+      : rawWindowId != null
+        ? Number(rawWindowId)
+        : null;
   const automationWindowId =
-    resolveOutput.automationWindowId != null
-      ? String(resolveOutput.automationWindowId)
+    typeof parsedWindowId === "number" &&
+    Number.isFinite(parsedWindowId) &&
+    parsedWindowId > 0
+      ? parsedWindowId
       : null;
   const targetJson: AutomationTargetJson = (resolveOutput.targetJson as AutomationTargetJson) ?? {
     type: "kind",
@@ -978,6 +987,7 @@ async function recipeAcpDetachedAccept(
     emitVision: opts.emitVision,
     target: targetJson,
     surface: surfaceId ?? undefined,
+    captureWindowId: automationWindowId ?? undefined,
   });
 
   // Incorporate accept steps (skip the wrapper — flatten the inner steps for transparency)
@@ -1021,6 +1031,11 @@ async function recipeAcpDetachedAccept(
 
   const allPass = !identityMismatch && acceptResult.status === "pass";
 
+  // Build proofBundle with resolvedTarget always present
+  const mergedProofBundle: Record<string, unknown> = proofBundle
+    ? { ...proofBundle, resolvedTarget: resolved }
+    : { resolvedTarget: resolved };
+
   return {
     schemaVersion: SCHEMA_VERSION,
     recipe: "acp-detached-accept",
@@ -1040,8 +1055,7 @@ async function recipeAcpDetachedAccept(
             .filter((s) => s.status !== "pass")
             .map((s) => s.name)
             .join(", ")}`,
-    resolved,
-    ...(proofBundle ? { proofBundle } : {}),
+    proofBundle: mergedProofBundle,
   };
 }
 
