@@ -6009,13 +6009,15 @@ globalThis.captureScreenshot = async function captureScreenshot(
   options?: ScreenshotOptions
 ): Promise<ScreenshotData> {
   const requestId = nextId();
+  const hiDpi = options?.hiDpi ?? false;
 
-  // Mock screenshot data for auto-submit mode
+  // Deterministic placeholder screenshot for auto-submit mode so CI can
+  // exercise screenshot flows without depending on a live window capture.
   const mockScreenshotResult = {
     type: 'screenshotResult',
-    data: '', // Empty base64 data
-    width: 800,
-    height: 600,
+    data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a5c8AAAAASUVORK5CYII=',
+    width: hiDpi ? 1600 : 800,
+    height: hiDpi ? 1200 : 600,
   };
 
   return new Promise((resolve, reject) => {
@@ -6053,7 +6055,7 @@ globalThis.captureScreenshot = async function captureScreenshot(
     const message: CaptureScreenshotMessage = {
       type: 'captureScreenshot',
       requestId,
-      hiDpi: options?.hiDpi ?? false,
+      hiDpi,
     };
     
     send(message);

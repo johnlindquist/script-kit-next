@@ -29,8 +29,8 @@ impl AcpAgentCatalogEntry {
     /// `None` (unknown) is treated as capable — optimistic default so that
     /// agents without persisted runtime facts are not excluded prematurely.
     pub(crate) fn satisfies_requirements(&self, requirements: AcpLaunchRequirements) -> bool {
-        let embedded_ok = !requirements.needs_embedded_context
-            || self.supports_embedded_context.unwrap_or(true);
+        let embedded_ok =
+            !requirements.needs_embedded_context || self.supports_embedded_context.unwrap_or(true);
         let image_ok = !requirements.needs_image || self.supports_image.unwrap_or(true);
         embedded_ok && image_ok
     }
@@ -523,8 +523,7 @@ mod tests {
             needs_embedded_context: true,
             needs_image: false,
         };
-        let result =
-            resolve_acp_launch_with_requirements(&agents, Some("claude-code"), reqs);
+        let result = resolve_acp_launch_with_requirements(&agents, Some("claude-code"), reqs);
         assert_eq!(
             result.selected_agent_id(),
             Some("opencode"),
@@ -557,8 +556,7 @@ mod tests {
             needs_embedded_context: true,
             needs_image: false,
         };
-        let result =
-            resolve_acp_launch_with_requirements(&agents, Some("claude-code"), reqs);
+        let result = resolve_acp_launch_with_requirements(&agents, Some("claude-code"), reqs);
         assert_eq!(result.selected_agent_id(), Some("claude-code"));
         assert!(result.is_ready());
     }
@@ -616,8 +614,7 @@ mod tests {
             ),
         ];
         let reqs = AcpLaunchRequirements::default();
-        let result =
-            resolve_acp_launch_with_requirements(&agents, Some("agent-a"), reqs);
+        let result = resolve_acp_launch_with_requirements(&agents, Some("agent-a"), reqs);
         assert_eq!(
             result.selected_agent_id(),
             Some("agent-a"),

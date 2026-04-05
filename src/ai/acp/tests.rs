@@ -545,7 +545,14 @@ fn acp_test_probe_records_input_layout() {
     probe.event_seq += 1;
     probe.input_layout = Some(event.clone());
     assert!(probe.input_layout.is_some());
-    assert_eq!(probe.input_layout.as_ref().expect("layout").cursor_in_window, 17);
+    assert_eq!(
+        probe
+            .input_layout
+            .as_ref()
+            .expect("layout")
+            .cursor_in_window,
+        17
+    );
 }
 
 #[test]
@@ -557,16 +564,18 @@ fn acp_test_probe_bounded_at_max_events() {
         if probe.key_routes.len() >= max {
             probe.key_routes.pop_front();
         }
-        probe.key_routes.push_back(crate::protocol::AcpKeyRouteTelemetry {
-            key: format!("key-{i}"),
-            route: crate::protocol::AcpKeyRoute::Composer,
-            picker_open: false,
-            permission_active: false,
-            cursor_before: i,
-            cursor_after: i + 1,
-            caused_submit: false,
-            consumed: true,
-        });
+        probe
+            .key_routes
+            .push_back(crate::protocol::AcpKeyRouteTelemetry {
+                key: format!("key-{i}"),
+                route: crate::protocol::AcpKeyRoute::Composer,
+                picker_open: false,
+                permission_active: false,
+                cursor_before: i,
+                cursor_after: i + 1,
+                caused_submit: false,
+                consumed: true,
+            });
     }
 
     assert_eq!(
@@ -583,24 +592,28 @@ fn acp_test_probe_reset_clears_all() {
     let mut probe = super::view::AcpTestProbe::default();
 
     probe.event_seq = 42;
-    probe.key_routes.push_back(crate::protocol::AcpKeyRouteTelemetry {
-        key: "tab".to_string(),
-        route: crate::protocol::AcpKeyRoute::Picker,
-        picker_open: true,
-        permission_active: false,
-        cursor_before: 1,
-        cursor_after: 9,
-        caused_submit: false,
-        consumed: true,
-    });
-    probe.accepted_items.push_back(crate::protocol::AcpPickerItemAcceptedTelemetry {
-        trigger: "@".to_string(),
-        item_label: "context".to_string(),
-        item_id: "built_in:context".to_string(),
-        accepted_via_key: "tab".to_string(),
-        cursor_after: 9,
-        caused_submit: false,
-    });
+    probe
+        .key_routes
+        .push_back(crate::protocol::AcpKeyRouteTelemetry {
+            key: "tab".to_string(),
+            route: crate::protocol::AcpKeyRoute::Picker,
+            picker_open: true,
+            permission_active: false,
+            cursor_before: 1,
+            cursor_after: 9,
+            caused_submit: false,
+            consumed: true,
+        });
+    probe
+        .accepted_items
+        .push_back(crate::protocol::AcpPickerItemAcceptedTelemetry {
+            trigger: "@".to_string(),
+            item_label: "context".to_string(),
+            item_id: "built_in:context".to_string(),
+            accepted_via_key: "tab".to_string(),
+            cursor_after: 9,
+            caused_submit: false,
+        });
     probe.input_layout = Some(crate::protocol::AcpInputLayoutTelemetry {
         char_count: 10,
         visible_start: 0,
@@ -786,10 +799,8 @@ fn setup_state_from_resolution_covers_all_blockers() {
             blocker: Some(blocker.clone()),
             catalog_entries: vec![],
         };
-        let state = AcpInlineSetupState::from_resolution(
-            &resolution,
-            AcpLaunchRequirements::default(),
-        );
+        let state =
+            AcpInlineSetupState::from_resolution(&resolution, AcpLaunchRequirements::default());
         assert!(
             !state.title.is_empty(),
             "setup state title must be non-empty for {:?}",

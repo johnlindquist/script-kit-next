@@ -3581,7 +3581,7 @@ fn download_progress_percentage_ranges() {
 fn download_phase_variants_are_distinct() {
     use crate::dictation::download::DownloadPhase;
 
-    let phases = vec![
+    let phases = [
         DownloadPhase::Downloading,
         DownloadPhase::Extracting,
         DownloadPhase::Complete,
@@ -3661,7 +3661,7 @@ fn runtime_uses_parakeet_only() {
 fn dictation_model_status_variants() {
     use crate::dictation::types::DictationModelStatus;
 
-    let statuses = vec![
+    let statuses = [
         DictationModelStatus::Available,
         DictationModelStatus::NotDownloaded,
         DictationModelStatus::Downloading {
