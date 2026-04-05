@@ -22,7 +22,6 @@ pub(crate) mod context;
 pub(crate) mod events;
 pub(crate) mod handlers;
 pub(crate) mod history;
-pub(crate) mod model_selector_popup;
 pub(crate) mod permission_broker;
 pub(crate) mod picker_popup;
 pub(crate) mod preflight;
@@ -67,4 +66,4 @@ pub(crate) use thread::{
     AcpContextBootstrapState, AcpThread, AcpThreadInit, AcpThreadMessage, AcpThreadStatus,
     AcpToolCallState,
 };
-pub(crate) use view::{AcpChatSession, AcpChatView};
+pub(crate) use view::{AcpChatSession, AcpChatView, AcpRetryRequest};

@@ -923,6 +923,20 @@ impl ScriptListApp {
     /// capture result is consumed as ambient context. Otherwise, deferred
     /// capture is skipped and only the focused chip is staged.
     ///
+    /// Extract a pending retry request from the current ACP chat view.
+    ///
+    /// Returns `None` if the current view is not an `AcpChatView` or if no
+    /// retry request has been queued.
+    fn take_acp_retry_request_from_current_view(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) -> Option<crate::ai::acp::AcpRetryRequest> {
+        let AppView::AcpChatView { entity } = &self.current_view else {
+            return None;
+        };
+        entity.update(cx, |view, _cx| view.take_retry_request())
+    }
+
     /// **Contract:** `AppView::AcpChatView` and `cx.notify()` happen
     /// *before* any deferred-capture await. The user sees the chat surface
     /// within one frame.
@@ -1011,6 +1025,7 @@ impl ScriptListApp {
                     error = %error,
                 );
                 let setup = crate::ai::acp::AcpInlineSetupState {
+                    reason_code: "catalogLoadFailed",
                     title: "Failed to load ACP catalog".into(),
                     body: format!("{error}").into(),
                     primary_action: crate::ai::acp::AcpSetupAction::OpenCatalog,
@@ -1036,21 +1051,35 @@ impl ScriptListApp {
             }
         };
 
-        let preferred_agent_id = crate::ai::acp::load_preferred_acp_agent_id();
+        // Check for an explicit retry payload from a setup card before
+        // falling back to persisted preference and entry-path derivation.
+        let retry_request = self.take_acp_retry_request_from_current_view(cx);
 
-        // Derive capability requirements from the current entry path.
-        let has_context_parts = focused_part.is_some();
-        let needs_image = focused_part
+        let preferred_agent_id = retry_request
             .as_ref()
-            .map(|part| part.source().contains("screenshot=1"))
-            .unwrap_or(false);
-        let requirements = crate::ai::acp::AcpLaunchRequirements {
-            needs_embedded_context: has_context_parts,
-            needs_image,
-        };
+            .and_then(|req| req.preferred_agent_id.clone())
+            .or_else(crate::ai::acp::load_preferred_acp_agent_id);
+
+        let requirements = retry_request
+            .as_ref()
+            .map(|req| req.launch_requirements)
+            .unwrap_or_else(|| {
+                let has_context_parts = focused_part.is_some();
+                let needs_image = focused_part
+                    .as_ref()
+                    .map(|part| part.source().contains("screenshot=1"))
+                    .unwrap_or(false);
+                crate::ai::acp::AcpLaunchRequirements {
+                    needs_embedded_context: has_context_parts,
+                    needs_image,
+                }
+            });
+
         tracing::info!(
             target: "script_kit::tab_ai",
-            event = "acp_launch_requirements_derived",
+            event = "acp_open_retry_request_consumed",
+            had_retry_request = retry_request.is_some(),
+            preferred_agent_id = ?preferred_agent_id,
             needs_embedded_context = requirements.needs_embedded_context,
             needs_image = requirements.needs_image,
         );

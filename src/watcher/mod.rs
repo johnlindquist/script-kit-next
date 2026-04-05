@@ -74,6 +74,23 @@ fn load_watcher_settings() -> WatcherSettings {
     let app_config = config::load_config();
     watcher_settings_from_config(&app_config)
 }
+fn log_watcher_settings_start(
+    label: &'static str,
+    settings_source: &'static str,
+    settings: WatcherSettings,
+) {
+    info!(
+        watcher = label,
+        settings_source,
+        debounce_ms = settings.debounce_ms,
+        storm_threshold = settings.storm_threshold,
+        initial_backoff_ms = settings.initial_backoff_ms,
+        max_backoff_ms = settings.max_backoff_ms,
+        max_notify_errors = settings.max_notify_errors,
+        health_check_interval_ms = settings.health_check_interval_ms,
+        "Starting watcher with settings"
+    );
+}
 fn is_relevant_event_kind(kind: &notify::EventKind) -> bool {
     !matches!(kind, notify::EventKind::Access(_))
 }
@@ -183,13 +200,36 @@ impl ConfigWatcher {
         )
     }
 
-    /// Start watching the config file for changes.
+    /// Start watching the config file for changes using a fresh config load.
+    ///
+    /// Keep this for callers that do not already have a config instance.
     pub fn start(&mut self) -> NotifyResult<()> {
+        self.start_with_settings(load_watcher_settings(), "load_config")
+    }
+
+    /// Start watching the config file for changes using an already-loaded config.
+    ///
+    /// This avoids an extra config.ts evaluation on startup.
+    pub(crate) fn start_with_config(
+        &mut self,
+        app_config: &config::Config,
+    ) -> NotifyResult<()> {
+        self.start_with_settings(
+            watcher_settings_from_config(app_config),
+            "startup_preloaded_config",
+        )
+    }
+
+    fn start_with_settings(
+        &mut self,
+        settings: WatcherSettings,
+        settings_source: &'static str,
+    ) -> NotifyResult<()> {
         let tx = self
             .tx
             .take()
             .ok_or_else(|| std::io::Error::other("watcher already started"))?;
-        let settings = load_watcher_settings();
+        log_watcher_settings_start("config", settings_source, settings);
         let target_path = crate::setup::get_kit_path().join("kit").join("config.ts");
 
         let mut watcher = build_single_file_reload_watcher(

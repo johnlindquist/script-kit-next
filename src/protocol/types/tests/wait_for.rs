@@ -454,6 +454,7 @@ fn acp_state_result_round_trips() {
         context_ready: true,
         has_pending_permission: false,
         input_layout: None,
+        setup: None,
         warnings: Vec::new(),
     };
     let msg = crate::protocol::Message::acp_state_result("acp-rt".to_string(), snapshot);

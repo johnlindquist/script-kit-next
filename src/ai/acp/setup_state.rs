@@ -8,6 +8,7 @@ use gpui::SharedString;
 
 use super::catalog::AcpAgentCatalogEntry;
 use super::preflight::{AcpLaunchBlocker, AcpLaunchRequirements, AcpLaunchResolution};
+use crate::protocol::{AcpSetupActionKind, AcpSetupSnapshot};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum AcpSetupAction {
@@ -18,8 +19,39 @@ pub(crate) enum AcpSetupAction {
     SelectAgent,
 }
 
+impl AcpSetupAction {
+    /// Convert to the protocol-layer action kind for serialization.
+    pub(crate) fn to_protocol_kind(self) -> AcpSetupActionKind {
+        match self {
+            Self::Retry => AcpSetupActionKind::Retry,
+            Self::Install => AcpSetupActionKind::Install,
+            Self::Authenticate => AcpSetupActionKind::Authenticate,
+            Self::OpenCatalog => AcpSetupActionKind::OpenCatalog,
+            Self::SelectAgent => AcpSetupActionKind::SelectAgent,
+        }
+    }
+
+    /// Convert from the protocol-layer action kind.
+    pub(crate) fn from_protocol_kind(kind: AcpSetupActionKind) -> Self {
+        match kind {
+            AcpSetupActionKind::Retry => Self::Retry,
+            AcpSetupActionKind::Install => Self::Install,
+            AcpSetupActionKind::Authenticate => Self::Authenticate,
+            AcpSetupActionKind::OpenCatalog => Self::OpenCatalog,
+            AcpSetupActionKind::SelectAgent => Self::SelectAgent,
+            // Automation-only variants map to SelectAgent as the closest
+            // internal equivalent; the picker open/close is handled at the
+            // view layer via `perform_setup_automation_action`.
+            AcpSetupActionKind::OpenAgentPicker
+            | AcpSetupActionKind::CloseAgentPicker => Self::SelectAgent,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct AcpInlineSetupState {
+    /// Machine-readable reason code for the setup blocker.
+    pub reason_code: &'static str,
     pub title: SharedString,
     pub body: SharedString,
     pub primary_action: AcpSetupAction,
@@ -90,6 +122,7 @@ impl AcpInlineSetupState {
 
         match reason {
             "auth_required" if can_switch => Self {
+                reason_code: "authenticationRequired",
                 title: "Authentication required".into(),
                 body: if auth_methods.is_empty() {
                     "The selected ACP agent needs authentication, but another compatible ready agent is available.".into()
@@ -106,6 +139,7 @@ impl AcpInlineSetupState {
                 launch_requirements,
             },
             "auth_required" => Self {
+                reason_code: "authenticationRequired",
                 title: "Authentication required".into(),
                 body: if auth_methods.is_empty() {
                     "Authenticate the selected ACP agent, then retry this chat.".into()
@@ -123,6 +157,7 @@ impl AcpInlineSetupState {
                 launch_requirements,
             },
             _ if can_switch => Self {
+                reason_code: "runtimeSetupRequired",
                 title: "ACP agent setup required".into(),
                 body:
                     "The selected ACP agent cannot continue, but another compatible ready agent is available."
@@ -134,6 +169,7 @@ impl AcpInlineSetupState {
                 launch_requirements,
             },
             _ => Self {
+                reason_code: "runtimeSetupRequired",
                 title: "ACP agent setup required".into(),
                 body: format!("Agent reported setup requirement: {reason}").into(),
                 primary_action: AcpSetupAction::Retry,
@@ -171,6 +207,7 @@ impl AcpInlineSetupState {
 
         match resolution.blocker {
             Some(AcpLaunchBlocker::NoAgentsAvailable) => Self {
+                reason_code: "noAgentsAvailable",
                 title: "No ACP agents available".into(),
                 body: "Add an ACP agent in ~/.scriptkit/acp/agents.json, then retry.".into(),
                 primary_action: AcpSetupAction::OpenCatalog,
@@ -180,6 +217,7 @@ impl AcpInlineSetupState {
                 launch_requirements,
             },
             Some(AcpLaunchBlocker::AgentNotInstalled) if can_switch_capable => Self {
+                reason_code: "agentNotInstalled",
                 title: "Agent install required".into(),
                 body: "The preferred ACP agent is not installed, but another compatible ready agent is available.".into(),
                 primary_action: AcpSetupAction::SelectAgent,
@@ -189,6 +227,7 @@ impl AcpInlineSetupState {
                 launch_requirements,
             },
             Some(AcpLaunchBlocker::AgentNotInstalled) if can_switch => Self {
+                reason_code: "agentNotInstalled",
                 title: "Agent install required".into(),
                 body: format!(
                     "The preferred ACP agent is not installed. {}",
@@ -201,6 +240,7 @@ impl AcpInlineSetupState {
                 launch_requirements,
             },
             Some(AcpLaunchBlocker::AgentNotInstalled) => Self {
+                reason_code: "agentNotInstalled",
                 title: "Agent install required".into(),
                 body: selected_agent
                     .as_ref()
@@ -213,6 +253,7 @@ impl AcpInlineSetupState {
                 launch_requirements,
             },
             Some(AcpLaunchBlocker::AuthenticationRequired) if can_switch_capable => Self {
+                reason_code: "authenticationRequired",
                 title: "Authentication required".into(),
                 body: "The selected ACP agent needs authentication, but another compatible ready agent is available.".into(),
                 primary_action: AcpSetupAction::SelectAgent,
@@ -222,6 +263,7 @@ impl AcpInlineSetupState {
                 launch_requirements,
             },
             Some(AcpLaunchBlocker::AuthenticationRequired) if can_switch => Self {
+                reason_code: "authenticationRequired",
                 title: "Authentication required".into(),
                 body: format!(
                     "Authenticate the selected ACP agent to continue this request. {}",
@@ -234,6 +276,7 @@ impl AcpInlineSetupState {
                 launch_requirements,
             },
             Some(AcpLaunchBlocker::AuthenticationRequired) => Self {
+                reason_code: "authenticationRequired",
                 title: "Authentication required".into(),
                 body: "Authenticate the selected ACP agent, then retry this chat.".into(),
                 primary_action: AcpSetupAction::Authenticate,
@@ -243,6 +286,7 @@ impl AcpInlineSetupState {
                 launch_requirements,
             },
             Some(AcpLaunchBlocker::AgentMisconfigured) if can_switch_capable => Self {
+                reason_code: "agentMisconfigured",
                 title: "Agent configuration required".into(),
                 body: "The selected ACP agent is misconfigured, but another compatible ready agent is available.".into(),
                 primary_action: AcpSetupAction::SelectAgent,
@@ -252,6 +296,7 @@ impl AcpInlineSetupState {
                 launch_requirements,
             },
             Some(AcpLaunchBlocker::AgentMisconfigured) if can_switch => Self {
+                reason_code: "agentMisconfigured",
                 title: "Agent configuration required".into(),
                 body: format!(
                     "Fix the selected ACP agent configuration to continue this request. {}",
@@ -264,6 +309,7 @@ impl AcpInlineSetupState {
                 launch_requirements,
             },
             Some(AcpLaunchBlocker::AgentMisconfigured) => Self {
+                reason_code: "agentMisconfigured",
                 title: "Agent configuration required".into(),
                 body: "Fix the agent configuration in ~/.scriptkit/acp/agents.json, then retry."
                     .into(),
@@ -274,6 +320,7 @@ impl AcpInlineSetupState {
                 launch_requirements,
             },
             Some(AcpLaunchBlocker::UnsupportedAgent) => Self {
+                reason_code: "unsupportedAgent",
                 title: "Unsupported ACP agent".into(),
                 body: "The selected ACP agent is not available on this machine.".into(),
                 primary_action: AcpSetupAction::SelectAgent,
@@ -283,6 +330,7 @@ impl AcpInlineSetupState {
                 launch_requirements,
             },
             Some(AcpLaunchBlocker::CapabilityMismatch) if can_switch_capable => Self {
+                reason_code: "capabilityMismatch",
                 title: "ACP capability mismatch".into(),
                 body: "The selected ACP agent cannot satisfy this request, but another ready compatible agent is available.".into(),
                 primary_action: AcpSetupAction::SelectAgent,
@@ -292,6 +340,7 @@ impl AcpInlineSetupState {
                 launch_requirements,
             },
             Some(AcpLaunchBlocker::CapabilityMismatch) => Self {
+                reason_code: "capabilityMismatch",
                 title: "ACP capability mismatch".into(),
                 body: capability_gap_message(launch_requirements).into(),
                 primary_action: AcpSetupAction::Retry,
@@ -301,6 +350,7 @@ impl AcpInlineSetupState {
                 launch_requirements,
             },
             None => Self {
+                reason_code: "ready",
                 title: "ACP ready".into(),
                 body: "The selected ACP agent is ready to launch.".into(),
                 primary_action: AcpSetupAction::Retry,
@@ -309,6 +359,43 @@ impl AcpInlineSetupState {
                 catalog_entries,
                 launch_requirements,
             },
+        }
+    }
+
+    /// Build a protocol-layer setup snapshot for agentic inspection.
+    ///
+    /// `agent_picker_open` and `agent_picker_selected_id` are passed in from
+    /// the view's `setup_agent_picker` state since the setup state itself
+    /// does not own the picker overlay.
+    pub(crate) fn to_protocol_snapshot(
+        &self,
+        agent_picker_open: bool,
+        agent_picker_selected_id: Option<String>,
+    ) -> AcpSetupSnapshot {
+        let compatible_agent_ids: Vec<String> = self
+            .catalog_entries
+            .iter()
+            .filter(|entry| entry.satisfies_requirements(self.launch_requirements))
+            .map(|entry| entry.id.to_string())
+            .collect();
+
+        AcpSetupSnapshot {
+            reason_code: self.reason_code.to_string(),
+            title: self.title.to_string(),
+            body: self.body.to_string(),
+            primary_action: self.primary_action.to_protocol_kind(),
+            secondary_action: self.secondary_action.map(|a| a.to_protocol_kind()),
+            selected_agent_id: self.selected_agent.as_ref().map(|a| a.id.to_string()),
+            catalog_agent_ids: self
+                .catalog_entries
+                .iter()
+                .map(|entry| entry.id.to_string())
+                .collect(),
+            compatible_agent_ids,
+            needs_image: self.launch_requirements.needs_image,
+            needs_embedded_context: self.launch_requirements.needs_embedded_context,
+            agent_picker_open,
+            agent_picker_selected_id,
         }
     }
 }

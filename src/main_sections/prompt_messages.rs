@@ -291,4 +291,11 @@ enum PromptMessage {
         target: Option<protocol::AutomationWindowTarget>,
         event: protocol::SimulatedGpuiEvent,
     },
+    /// Perform a setup action on the ACP setup card
+    PerformAcpSetupAction {
+        request_id: String,
+        action: protocol::AcpSetupActionKind,
+        agent_id: Option<String>,
+        target: Option<protocol::AutomationWindowTarget>,
+    },
 }

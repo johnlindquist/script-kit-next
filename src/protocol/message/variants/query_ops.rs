@@ -462,6 +462,43 @@ macro_rules! protocol_message_variants_query_ops {
     },
 
     // ============================================================
+    // ACP SETUP ACTIONS
+    // ============================================================
+    /// Perform a setup action on the ACP setup card.
+    ///
+    /// Agents use this to drive setup recovery deterministically instead of
+    /// simulating Tab/Enter keystrokes. Every success response includes a
+    /// fresh `AcpStateSnapshot` so the agent can verify the effect.
+    #[serde(rename = "performAcpSetupAction")]
+    PerformAcpSetupAction {
+        #[serde(rename = "requestId")]
+        request_id: String,
+        /// The action to perform.
+        action: AcpSetupActionKind,
+        /// Agent ID for `selectAgent` action.
+        #[serde(rename = "agentId", default, skip_serializing_if = "Option::is_none")]
+        agent_id: Option<String>,
+        /// Optional window target (defaults to focused window).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        target: Option<AutomationWindowTarget>,
+    },
+
+    /// Result of a `performAcpSetupAction` request.
+    #[serde(rename = "acpSetupActionResult")]
+    AcpSetupActionResult {
+        #[serde(rename = "requestId")]
+        request_id: String,
+        /// Whether the action succeeded.
+        success: bool,
+        /// Error message if the action failed.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        error: Option<String>,
+        /// Fresh ACP state snapshot after the action.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        state: Option<AcpStateSnapshot>,
+    },
+
+    // ============================================================
     // WAIT / BATCH — Deterministic Transaction Layer
     // ============================================================
     /// Poll until a UI condition is satisfied or timeout expires.

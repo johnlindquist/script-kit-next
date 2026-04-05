@@ -1649,6 +1649,72 @@ impl ScriptListApp {
                 }
             }
 
+            PromptMessage::PerformAcpSetupAction {
+                request_id,
+                action,
+                agent_id,
+                target,
+            } => {
+                tracing::info!(
+                    category = "ACP_SETUP_ACTION",
+                    request_id = %request_id,
+                    action = ?action,
+                    agent_id = ?agent_id,
+                    target = ?target,
+                    "acp_setup_action.request"
+                );
+
+                // Reject non-main targets.
+                if target.is_some() {
+                    if let Err(error) =
+                        resolve_main_only_target(&request_id, "performAcpSetupAction", target.as_ref())
+                    {
+                        let response = Message::acp_setup_action_result_error(
+                            request_id.clone(),
+                            format!("target_unsupported_non_main: {}", error.message),
+                        );
+                        if let Some(ref sender) = self.response_sender {
+                            let _ = sender.try_send(response);
+                        }
+                        return;
+                    }
+                }
+
+                // Dispatch the action to the ACP view.
+                let result = match &self.current_view {
+                    AppView::AcpChatView { entity } => {
+                        entity.update(cx, |view, cx| {
+                            view.perform_setup_automation_action(action, agent_id.as_deref(), cx)
+                        })
+                    }
+                    _ => Err("current view is not AcpChatView".to_string()),
+                };
+
+                let state = self.collect_acp_state(cx);
+
+                let response = match result {
+                    Ok(()) => Message::acp_setup_action_result_success(request_id.clone(), state),
+                    Err(error_msg) => {
+                        tracing::warn!(
+                            category = "ACP_SETUP_ACTION",
+                            request_id = %request_id,
+                            error = %error_msg,
+                            "acp_setup_action.failed"
+                        );
+                        Message::AcpSetupActionResult {
+                            request_id: request_id.clone(),
+                            success: false,
+                            error: Some(error_msg),
+                            state: Some(state),
+                        }
+                    }
+                };
+
+                if let Some(ref sender) = self.response_sender {
+                    let _ = sender.try_send(response);
+                }
+            }
+
             PromptMessage::ResetAcpTestProbe { request_id } => {
                 // Global-only: always resets the main window's probe.
                 // No target field — see message variant doc comment.
@@ -3732,6 +3798,43 @@ impl ScriptListApp {
                             && layout.visible_end == *visible_end
                             && layout.cursor_in_window == *cursor_in_window
                     })
+                }
+                // ── ACP setup wait conditions ─────────────────────
+                protocol::WaitDetailedCondition::AcpSetupVisible => {
+                    let state = self.collect_acp_state(cx);
+                    state.setup.is_some()
+                }
+                protocol::WaitDetailedCondition::AcpSetupReasonCode { reason_code } => {
+                    let state = self.collect_acp_state(cx);
+                    state
+                        .setup
+                        .as_ref()
+                        .is_some_and(|s| s.reason_code == *reason_code)
+                }
+                protocol::WaitDetailedCondition::AcpSetupPrimaryAction { action } => {
+                    let state = self.collect_acp_state(cx);
+                    state
+                        .setup
+                        .as_ref()
+                        .is_some_and(|s| s.primary_action == *action)
+                }
+                protocol::WaitDetailedCondition::AcpSetupAgentPickerOpen => {
+                    let state = self.collect_acp_state(cx);
+                    state
+                        .setup
+                        .as_ref()
+                        .is_some_and(|s| s.agent_picker_open)
+                }
+                protocol::WaitDetailedCondition::AcpSetupSelectedAgent { agent_id } => {
+                    let state = self.collect_acp_state(cx);
+                    state
+                        .setup
+                        .as_ref()
+                        .is_some_and(|s| {
+                            s.selected_agent_id
+                                .as_ref()
+                                .is_some_and(|id| id == agent_id)
+                        })
                 }
             },
         }

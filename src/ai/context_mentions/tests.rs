@@ -638,6 +638,13 @@ fn atomic_delete_forward_after_token_returns_none() {
     assert_eq!(range, None);
 }
 
+#[test]
+fn atomic_delete_forward_respects_quoted_file_token_boundaries() {
+    let text = r#"Open @file:"/tmp/my file.rs" now"#;
+    let range = mention_range_for_atomic_delete(text, 5, true);
+    assert_eq!(range, Some(5..28));
+}
+
 // ── Quoted @file: parse/serialize canonical tests ───────────
 
 #[test]

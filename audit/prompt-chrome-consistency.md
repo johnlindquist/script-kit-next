@@ -1,7 +1,11 @@
 # Prompt Chrome Consistency Audit
 
 ## Summary
-Scanned 7 prompt/builtin surfaces. 7 pass, 0 warning, 0 error. No current drift markers were detected.
+Scanned 7 prompt/builtin surfaces. 7 pass, 0 warning, 0 error. 1 intentional exception documented: render_prompts::term.
+
+## Scope Notes
+- Scope: prompt and builtin chrome surfaces only. Excluded this pass: ACP compact-chat popup surfaces (for example src/ai/acp/model_selector_popup.rs).
+- Intentional exception: render_prompts::term.
 
 ## Surface Status
 | Surface | Status | Files |
@@ -37,25 +41,3 @@ Scanned 7 prompt/builtin surfaces. 7 pass, 0 warning, 0 error. No current drift 
 
 ### file_search
 - pass — no drift markers detected in the audited source files.
-
-## Verification
-
-Use `scripts/agentic/session.sh` to verify runtime chrome emissions:
-
-```bash
-bash scripts/agentic/session.sh start default
-bash scripts/agentic/session.sh send default '{"type":"show"}'
-bash scripts/agentic/session.sh send default '{"type":"triggerBuiltin","name":"clipboard"}'
-sleep 1
-bash scripts/agentic/session.sh send default '{"type":"triggerBuiltin","name":"file-search"}'
-sleep 1
-bash scripts/agentic/session.sh status default
-bash scripts/agentic/session.sh stop default
-```
-
-Expected runtime log output:
-- `clipboard_history_chrome_checkpoint`
-- `prompt_hint_audit` with `surface=clipboard_history hint_count=3 is_universal=true`
-- `file_search_chrome_checkpoint`
-- `prompt_hint_audit` with `surface=file_search hint_count=3 is_universal=true` (when mini mode is exercised)
-- `file_search_state_rendered` with `state=loading_skeleton`, `state=results`, or `state=empty_no_results`

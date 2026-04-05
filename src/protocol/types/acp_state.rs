@@ -56,6 +56,10 @@ pub struct AcpStateSnapshot {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub input_layout: Option<AcpInputLayoutMetrics>,
 
+    /// Structured setup card state, present when `status == "setup"`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub setup: Option<AcpSetupSnapshot>,
+
     /// Machine-readable warning codes from the canonical automation vocabulary.
     ///
     /// Present when the request resolved but execution was degraded or rejected
@@ -80,6 +84,7 @@ impl Default for AcpStateSnapshot {
             context_ready: true,
             has_pending_permission: false,
             input_layout: None,
+            setup: None,
             warnings: Vec::new(),
         }
     }
@@ -138,6 +143,74 @@ pub struct AcpInputLayoutMetrics {
 
     /// Cursor position within the visible window (0-based from visible_start).
     pub cursor_in_window: usize,
+}
+
+/// Kind of action available on the ACP setup card.
+///
+/// Maps 1:1 to `crate::ai::acp::setup_state::AcpSetupAction` but lives in
+/// the protocol layer so agents can inspect and trigger actions by name.
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum AcpSetupActionKind {
+    Retry,
+    Install,
+    Authenticate,
+    OpenCatalog,
+    SelectAgent,
+    /// Automation-only: open the agent picker overlay.
+    OpenAgentPicker,
+    /// Automation-only: close the agent picker overlay.
+    CloseAgentPicker,
+}
+
+/// Machine-readable snapshot of the ACP setup card state.
+///
+/// Populated whenever `AcpStateSnapshot::status == "setup"`. Agents use this
+/// to inspect the setup blocker, available recovery actions, and agent picker
+/// state without screenshots or log scraping.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct AcpSetupSnapshot {
+    /// Machine-readable reason code for the setup blocker.
+    pub reason_code: String,
+
+    /// Human-readable title for the setup card.
+    pub title: String,
+
+    /// Human-readable body text explaining the blocker or recovery path.
+    pub body: String,
+
+    /// Primary action the user can take to resolve the blocker.
+    pub primary_action: AcpSetupActionKind,
+
+    /// Optional secondary action.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub secondary_action: Option<AcpSetupActionKind>,
+
+    /// ID of the currently selected agent, if any.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub selected_agent_id: Option<String>,
+
+    /// IDs of all agents in the catalog.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub catalog_agent_ids: Vec<String>,
+
+    /// IDs of agents that satisfy the current launch requirements.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub compatible_agent_ids: Vec<String>,
+
+    /// Whether the current launch path requires image/screenshot support.
+    pub needs_image: bool,
+
+    /// Whether the current launch path requires embedded context support.
+    pub needs_embedded_context: bool,
+
+    /// Whether the agent picker overlay is currently open.
+    pub agent_picker_open: bool,
+
+    /// ID of the agent highlighted in the picker, if open.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub agent_picker_selected_id: Option<String>,
 }
 
 /// ACP-specific wait condition variants.
@@ -603,6 +676,7 @@ mod tests {
                 visible_end: 14,
                 cursor_in_window: 14,
             }),
+            setup: None,
             warnings: Vec::new(),
         };
         let json = serde_json::to_string_pretty(&snap).expect("serialize full snapshot");
@@ -904,5 +978,96 @@ mod tests {
     #[test]
     fn acp_test_probe_max_events_constant() {
         assert_eq!(ACP_TEST_PROBE_MAX_EVENTS, 32);
+    }
+
+    // ── AcpSetupActionKind serde ──────────────────────────────
+
+    #[test]
+    fn acp_setup_action_kind_round_trips() {
+        let kinds = vec![
+            (AcpSetupActionKind::Retry, "retry"),
+            (AcpSetupActionKind::Install, "install"),
+            (AcpSetupActionKind::Authenticate, "authenticate"),
+            (AcpSetupActionKind::OpenCatalog, "openCatalog"),
+            (AcpSetupActionKind::SelectAgent, "selectAgent"),
+            (AcpSetupActionKind::OpenAgentPicker, "openAgentPicker"),
+            (AcpSetupActionKind::CloseAgentPicker, "closeAgentPicker"),
+        ];
+        for (kind, expected) in kinds {
+            let json = serde_json::to_value(&kind).expect("serialize");
+            assert_eq!(json.as_str().unwrap_or(""), expected);
+            let back: AcpSetupActionKind = serde_json::from_value(json).expect("deserialize");
+            assert_eq!(back, kind);
+        }
+    }
+
+    // ── AcpSetupSnapshot serde ────────────────────────────────
+
+    #[test]
+    fn acp_setup_snapshot_round_trips() {
+        let snap = AcpSetupSnapshot {
+            reason_code: "capabilityMismatch".to_string(),
+            title: "ACP capability mismatch".to_string(),
+            body: "No compatible agent".to_string(),
+            primary_action: AcpSetupActionKind::Retry,
+            secondary_action: Some(AcpSetupActionKind::OpenCatalog),
+            selected_agent_id: Some("claude-code".to_string()),
+            catalog_agent_ids: vec!["claude-code".to_string(), "opencode".to_string()],
+            compatible_agent_ids: vec![],
+            needs_image: true,
+            needs_embedded_context: false,
+            agent_picker_open: false,
+            agent_picker_selected_id: None,
+        };
+        let json = serde_json::to_value(&snap).expect("serialize setup snapshot");
+        assert_eq!(json["reasonCode"], "capabilityMismatch");
+        assert_eq!(json["primaryAction"], "retry");
+        assert_eq!(json["secondaryAction"], "openCatalog");
+        assert_eq!(json["selectedAgentId"], "claude-code");
+        assert_eq!(json["needsImage"], true);
+        assert_eq!(json["agentPickerOpen"], false);
+
+        let back: AcpSetupSnapshot = serde_json::from_value(json).expect("deserialize");
+        assert_eq!(back, snap);
+    }
+
+    #[test]
+    fn acp_state_snapshot_with_setup_round_trips() {
+        let snap = AcpStateSnapshot {
+            status: "setup".to_string(),
+            setup: Some(AcpSetupSnapshot {
+                reason_code: "agentNotInstalled".to_string(),
+                title: "Agent install required".to_string(),
+                body: "Install the agent".to_string(),
+                primary_action: AcpSetupActionKind::Install,
+                secondary_action: Some(AcpSetupActionKind::SelectAgent),
+                selected_agent_id: Some("opencode".to_string()),
+                catalog_agent_ids: vec!["opencode".to_string()],
+                compatible_agent_ids: vec![],
+                needs_image: false,
+                needs_embedded_context: false,
+                agent_picker_open: false,
+                agent_picker_selected_id: None,
+            }),
+            ..Default::default()
+        };
+        let json = serde_json::to_value(&snap).expect("serialize with setup");
+        assert_eq!(json["status"], "setup");
+        assert!(json["setup"].is_object());
+        assert_eq!(json["setup"]["reasonCode"], "agentNotInstalled");
+        assert_eq!(json["setup"]["primaryAction"], "install");
+
+        let back: AcpStateSnapshot = serde_json::from_value(json).expect("deserialize");
+        assert_eq!(back, snap);
+    }
+
+    #[test]
+    fn acp_state_snapshot_setup_none_omitted_in_json() {
+        let snap = AcpStateSnapshot::default();
+        let json = serde_json::to_value(&snap).expect("serialize");
+        assert!(
+            json.get("setup").is_none(),
+            "setup field should be omitted when None"
+        );
     }
 }

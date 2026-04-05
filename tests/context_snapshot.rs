@@ -658,3 +658,103 @@ fn focused_item_diagnostics_returns_meta() {
     assert_eq!(value["meta"]["hasFocusedItem"], false);
     assert!(value["meta"]["warningCount"].as_u64().unwrap_or(0) > 0);
 }
+
+// =======================================================
+// Provider-backed resource integration tests
+// =======================================================
+
+fn restore_env(key: &str, value: Option<std::ffi::OsString>) {
+    match value {
+        Some(v) => unsafe { std::env::set_var(key, v) },
+        None => unsafe { std::env::remove_var(key) },
+    }
+}
+
+#[test]
+fn provider_resources_are_listed_and_empty_fallbacks_are_stable() {
+    // Save and clear env vars + slots to ensure empty-fallback path
+    let prev_dictation = std::env::var_os("SCRIPT_KIT_DICTATION_JSON");
+    let prev_calendar = std::env::var_os("SCRIPT_KIT_CALENDAR_JSON");
+    let prev_notifications = std::env::var_os("SCRIPT_KIT_NOTIFICATIONS_JSON");
+    unsafe {
+        std::env::remove_var("SCRIPT_KIT_DICTATION_JSON");
+        std::env::remove_var("SCRIPT_KIT_CALENDAR_JSON");
+        std::env::remove_var("SCRIPT_KIT_NOTIFICATIONS_JSON");
+    }
+    script_kit_gpui::mcp_resources::clear_provider_json_slots();
+
+    let resources = script_kit_gpui::mcp_resources::get_resource_definitions();
+    for uri in ["kit://dictation", "kit://calendar", "kit://notifications"] {
+        assert!(
+            resources.iter().any(|r| r.uri == uri),
+            "{uri} should be listed in resource definitions"
+        );
+    }
+
+    let scripts: Vec<std::sync::Arc<script_kit_gpui::scripts::Script>> = Vec::new();
+    let scriptlets: Vec<std::sync::Arc<script_kit_gpui::scripts::Scriptlet>> = Vec::new();
+
+    for (uri, kind, env_key) in [
+        ("kit://dictation", "dictation", "SCRIPT_KIT_DICTATION_JSON"),
+        ("kit://calendar", "calendar", "SCRIPT_KIT_CALENDAR_JSON"),
+        (
+            "kit://notifications",
+            "notifications",
+            "SCRIPT_KIT_NOTIFICATIONS_JSON",
+        ),
+    ] {
+        let content =
+            script_kit_gpui::mcp_resources::read_resource(uri, &scripts, &scriptlets, None)
+                .expect("provider resource should resolve");
+
+        let json: serde_json::Value =
+            serde_json::from_str(&content.text).expect("provider resource must be valid JSON");
+        assert_eq!(json["schemaVersion"], 1, "{uri} schemaVersion");
+        assert_eq!(json["type"], kind, "{uri} type");
+        assert_eq!(json["ok"], true, "{uri} ok");
+        assert_eq!(json["available"], false, "{uri} available");
+        assert_eq!(json["source"], "empty-fallback", "{uri} source");
+        assert_eq!(json["items"], serde_json::json!([]), "{uri} items");
+        assert!(
+            json["nextStep"]
+                .as_str()
+                .unwrap_or_default()
+                .contains(env_key),
+            "nextStep for {uri} should mention {env_key}"
+        );
+    }
+
+    restore_env("SCRIPT_KIT_DICTATION_JSON", prev_dictation);
+    restore_env("SCRIPT_KIT_CALENDAR_JSON", prev_calendar);
+    restore_env("SCRIPT_KIT_NOTIFICATIONS_JSON", prev_notifications);
+}
+
+#[test]
+fn provider_resources_report_slot_source_when_data_published() {
+    // Use the slot-based API (mutex-protected) to avoid env-var races with
+    // parallel tests. Slots take priority over env vars in resolution.
+    script_kit_gpui::mcp_resources::clear_provider_json_slots();
+    script_kit_gpui::mcp_resources::publish_calendar_json(
+        r#"{"schemaVersion":1,"type":"calendar","ok":true,"available":true,"source":"slot","items":[{"title":"Demo"}]}"#,
+    );
+
+    let scripts: Vec<std::sync::Arc<script_kit_gpui::scripts::Script>> = Vec::new();
+    let scriptlets: Vec<std::sync::Arc<script_kit_gpui::scripts::Scriptlet>> = Vec::new();
+
+    let content = script_kit_gpui::mcp_resources::read_resource(
+        "kit://calendar",
+        &scripts,
+        &scriptlets,
+        None,
+    )
+    .expect("kit://calendar should resolve");
+
+    let json: serde_json::Value =
+        serde_json::from_str(&content.text).expect("calendar resource must be valid JSON");
+    assert_eq!(json["source"], "slot");
+    assert_eq!(json["available"], true);
+    assert_eq!(json["items"][0]["title"], "Demo");
+
+    // Clean up
+    script_kit_gpui::mcp_resources::clear_provider_json_slots();
+}
